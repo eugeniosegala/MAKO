@@ -13,7 +13,7 @@
 
 | Component | Recommended for | Releases |
 |-----------|-----------------|----------|
-| **MAKO Decky** | Steam Deck and Decky Loader users | [Download MAKO Decky](https://github.com/eugeniosegala/MAKO/releases/tag/plugin-v1.0.0) |
+| **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users | [Download MAKO Decky](https://github.com/eugeniosegala/MAKO/releases/tag/plugin-v1.0.0) |
 | **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Download MAKO Renderer](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.0.0) |
 
 > [!NOTE]
