@@ -1,6 +1,7 @@
 # Flatpak guide
 
-MAKO Renderer ships separate Vulkan runtime extensions for Freedesktop 23.08, 24.08, and 25.08. Install the bundle matching the target application's runtime.
+MAKO Renderer ships separate Vulkan runtime extensions for Freedesktop 23.08,
+24.08, and 25.08. Install the bundle matching the target application's runtime.
 
 ## Packaged extensions
 

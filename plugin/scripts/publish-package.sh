@@ -99,16 +99,10 @@ read -r archive_name engine_version package_version github_repository has_flatpa
   ' "$project_dir/package.json"
 )
 
-notes_package_version="0.13.0-experimental.25"
-notes_engine_version="2.0.0-dev28-experimental.25"
-notes_previous_package_version="0.13.0-experimental.24"
 plugin_release_tag="plugin-v$package_version"
-notes_previous_package_tag=""
 notes_package_tag_pattern="plugin-v*"
-if [[ "$package_version" != "$notes_package_version" || "$engine_version" != "$notes_engine_version" ]]; then
-  echo "Release notes still describe plugin $notes_package_version with engine $notes_engine_version. Update them before publishing." >&2
-  exit 1
-fi
+git -C "$project_dir" fetch origin --tags --quiet
+
 latest_previous_package_tag=""
 while IFS= read -r candidate_tag; do
   if [[ "$candidate_tag" != "$plugin_release_tag" ]]; then
@@ -116,22 +110,15 @@ while IFS= read -r candidate_tag; do
     break
   fi
 done < <(git -C "$project_dir" tag --merged HEAD --list "$notes_package_tag_pattern" --sort=-version:refname)
-if [[ -n "$notes_previous_package_tag" ]]; then
-  if ! git -C "$project_dir" rev-parse -q --verify "refs/tags/$notes_previous_package_tag" >/dev/null; then
-    echo "Release-note baseline tag $notes_previous_package_tag is missing." >&2
-    exit 1
-  fi
-  if ! git -C "$project_dir" merge-base --is-ancestor "$notes_previous_package_tag" HEAD; then
-    echo "Release-note baseline $notes_previous_package_tag is not an ancestor of HEAD." >&2
-    exit 1
-  fi
-  if [[ "$latest_previous_package_tag" != "$notes_previous_package_tag" ]]; then
-    echo "Release notes use $notes_previous_package_tag, but the latest prior MAKO Decky tag is ${latest_previous_package_tag:-missing}. Update the baseline and change list before publishing." >&2
-    exit 1
-  fi
-elif [[ -n "$latest_previous_package_tag" ]]; then
-  echo "The MAKO Decky release track already contains $latest_previous_package_tag. Set notes_previous_package_tag before publishing another plugin-v release." >&2
-  exit 1
+if [[ -n "$latest_previous_package_tag" ]]; then
+  release_notes_heading="What’s new since \`$latest_previous_package_tag\`"
+  release_changes="$(git -C "$repository_root" log --no-merges --format='- %s (%h)' "$latest_previous_package_tag"..HEAD -- plugin README.md)"
+else
+  release_notes_heading="What’s new in MAKO Decky \`$package_version\`"
+  release_changes="$(git -C "$repository_root" log --no-merges --format='- %s (%h)' HEAD -- plugin README.md)"
+fi
+if [[ -z "$release_changes" ]]; then
+  release_changes='- No Decky- or shared-documentation changes were recorded after the previous tag.'
 fi
 if [[ "$archive_url" == local-only://* || "$engine_release_tag" == local-only-* ]]; then
   echo "Refusing to publish a package pinned to a local-only engine payload." >&2
@@ -211,27 +198,22 @@ notes_file="$notes_dir/release-notes.md"
 printf '%s\n' \
   '> Looking for the standalone Vulkan layer? See the [MAKO Renderer releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Arender-v).' \
   '' \
-  "## What’s new since \`$notes_previous_package_version\`" \
+  "## $release_notes_heading" \
   '' \
-  '- **Engine update:** Bundles checksum-verified MAKO Renderer `2.0.0-dev28-experimental.25`. Complete the required in-plugin engine-update step after installing the ZIP.' \
-  '- **HDR foundation — in progress:** The bundled engine contains HDR10/PQ and linear-scRGB colour-pipeline groundwork, Gamescope feedback, packed HDR10 boundary transport, and safe passthrough. HDR activation and frame generation are not exposed by this Decky release while cross-game presentation, colour, and performance validation continues.' \
-  '- **64-bit and 32-bit Vulkan support:** Installs architecture-matched host and Flatpak layers. Vulkan selects the correct layer for each game process, so genuine 32-bit Vulkan games no longer need the old WoW64 option; existing wrappers are migrated away from stale `PROTON_USE_WOW64` exports.' \
-  '- **Safer live reconfiguration and stall recovery:** Transient partial configuration writes are retried. Frame Generation and Adaptive Target, Maximum Multiplier, and Smooth Cadence can update in place when resources permit; resource-shape and model settings are deferred, so restart the game to guarantee those changes. A transient backend stall keeps native presentation active and warms temporal history before generation resumes.' \
-  '- **Private layer discovery migration:** The `.25` wrapper regenerates older launchers and retains the uniquely named MAKO Renderer layer on the proven SDR path. Heroic Flatpak launches explicitly retain Gamescope WSI ahead of MAKO Renderer; Flatpak cleanup recognises both historical isolated and additive layouts.' \
-  '- **Diagnostic log presets:** Installs `~/.local/bin/mako-diagnostics` with focused HDR, Adaptive, recovery, performance, lifecycle, startup, layer, and error filters.' \
-  '- **Monorepo engine packaging:** Maintainers can build a Decky ZIP directly from the sibling MAKO Renderer checkout. The generated ZIP records the exact commit, dirty state, filenames, and checksums without changing the tracked public release pin.' \
-  '- **Documentation:** Expands HDR, dual-architecture, diagnostics, Flatpak migration, local packaging, and community-coverage guidance.' \
+  "$release_changes" \
   '' \
-  '## 🎮 In-game considerations' \
+  'The list above is generated from every non-merge commit that changed MAKO Decky or the shared README after the previous Decky tag.' \
   '' \
-  '> [!TIP]' \
-  '> **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.' \
+  '## Before you play' \
   '' \
-  'Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. For most games, fullscreen is the best starting point for performance and frame pacing. Keep the configuration that feels best for that game.' \
+  '- This is experimental: test each game before relying on it.' \
+  '- Confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery.' \
+  '- Try the game’s V-Sync both on and off; its FPS cap, VRR, and compositor can affect frame pacing.' \
   '' \
-  'See the [Configuration guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/CONFIGURATION.md) and [Troubleshooting guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/TROUBLESHOOTING.md) for the full behaviour and per-game controls.' \
+  "## Bundled MAKO Renderer \`$engine_version\`" \
   '' \
-  '> ⚠️ **Required renderer-update step:** Installing the ZIP updates MAKO Decky, but does **not** by itself replace MAKO Renderer. Open Mako and select **Install MAKO Renderer (developer build)** to install the version bundled in the new ZIP.' \
+  "- Includes checksum-verified \`$archive_name\`." \
+  '- Installing the ZIP does not replace the private Renderer by itself. Open Mako and select **Install MAKO Renderer (developer build)** afterwards.' \
   '' \
   '> [!IMPORTANT]' \
   '> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer (developer build)** in the plugin.' \
@@ -265,24 +247,16 @@ printf '%s\n' \
   '3. In Game Mode, open Decky Loader’s settings, choose **Developer** > **Install Plugin from Zip**, then select the newer ZIP.' \
   '4. Restart your Steam Deck or Steam Machine.' \
   '5. ⚠️ **Required:** Open Mako and select **Install MAKO Renderer (developer build)** to install the version bundled in the new ZIP.' \
-  '6. If you use Heroic, select **Flatpak Setup**, then select **Update** for Heroic’s matching runtime extension (usually **25.08**). This replaces its Flatpak layer with the engine bundled in the new ZIP; Heroic preparation and per-game Wrapper commands remain unchanged.' \
+  '6. In **Flatpak Setup**, select **Update** for every prepared application’s matching runtime extension. This replaces its Flatpak layer with the engine bundled in the new ZIP while preserving its preparation and per-game Wrapper commands.' \
   '' \
   'Experimental profiles and Steam launch options are retained. The private native renderer and launcher are re-created in step 5; shared Flatpak extensions are retained, then refreshed in step 6.' \
   '' \
-  "## Known limitations of MAKO Renderer $engine_version" \
+  '## Known limitations' \
   '' \
   '- **HDR is in progress and unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
   '- **Adaptive targets are not hard frame limiters:** Adaptive varies generated-frame count toward an average target. It cannot reduce a native framerate already above the target, exceed the configured multiplier/GPU/compositor capacity, or guarantee an unreachable output rate.' \
   '- **Image-quality and latency trade-offs remain game-dependent:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness.' \
   '' \
-  '## Before you play' \
-  '' \
-  '- This is experimental: test each game before relying on it.' \
-  '- Confirm the detected `Lossless.dll` path before launching. Leaving it blank permits upstream discovery.' \
-  '' \
-  '## Engine payload' \
-  '' \
-  "- Bundles checksum-verified \`$archive_name\`." \
   >> "$notes_file"
 
 echo "Publishing $plugin_release_tag to $github_repository..."

@@ -1,118 +1,95 @@
-# Configuration Options
+# Configuration
 
-Configuring MAKO Renderer is done either through **mako-ui** (graphical interface) or by manually editing the configuration file located at `~/.config/mako-render/conf.toml`.
+Configure MAKO Renderer with `mako-ui` or by editing
+`~/.config/mako-render/conf.toml`. The UI writes the same TOML file. MAKO
+creates profiles so different games can use different settings.
 
-Regardless of the method you choose, the concept of profiles remains the same.
-- **Profiles**: Profiles allow you to create different sets of configurations for different applications or use cases. A profile can automatically be selected through the "active_in" property.
-- **Profile Settings**: Settings related to a profile are stored under the "Profile Settings" or `[[profile]]` section.
-- **Global Settings**: Any settings in the "Global Settings" or `[global]` section apply to all profiles.
+## Profiles
 
-### All Configuration Options
+Each `[[profile]]` section is a game profile. `active_in` can match a Linux
+binary name, Windows executable, process name, or the end of an executable
+path. Use `MAKO_PROFILE` when you need to select a profile explicitly instead
+of matching it automatically.
 
-Below is a list of all available **global** configuration options:
-- **Path to Lossless Scaling / `dll`**: By default, MAKO Renderer will search certain directories for Lossless Scaling. If you have Lossless Scaling installed in a custom location, you can specify the full path to the "Lossless.dll" file inside of Lossless Scaling here.
-- **Allow half-precision / `allow_fp16`**: If enabled, this will allow MAKO Renderer to take advantage of half-precision shader operations if supported by the GPU. This has a giant performance uplift on AMD GPUs, but does not affect NVIDIA GPUs (GTX 1000-series or older cards will actually see a big performance **decrease**). This option **does not** influence quality. (Default: `true`)
+```toml
+[[profile]]
+name = "My game"
+active_in = ["Game.exe"]
+multiplier = 2
+frame_generation_enabled = true
+```
 
-Next is a list of all available **profile** configuration options:
-- **Profile Name / `name`**: The name of the profile, displayed in **mako-ui**. Additionally, this is used when selecting a profile through the `MAKO_PROFILE` environment variable.
-- **Active In / `active_in`**: A list of 1) linux binary names, such as `mpv`, 2) windows executables, such as `GenshinImpact.exe` and 3) process names, such as `GameThread`. It is also possible to specify the last part of a path (e.g. `Ghostrunner2/Binaries/Win64/Ghostrunner2-Win64-Shipping.exe`). When a process matching one of these rules is detected, this profile will be activated.
-- **Multiplier / `multiplier`**: The frame generation multiplier. A value of 3 means that for every frame rendered by the application, MAKO Renderer will generate 2 additional frames. (Default: `2`)
-- **Frame Generation / `frame_generation_enabled`**: Live synthesis switch. Set this to `false` to present the game's
-  real frames directly without model scheduling or per-swapchain interpolation resources. The Vulkan layer and shared
-  backend remain loaded so the selected Fixed or Adaptive mode can resume when this returns to `true`. (Default:
-  `true`)
-- **Adaptive Frame Generation / `adaptive`**: Experimental opt-in mode that varies between zero and three generated
-  frames per real frame to approach `target_fps` as an average. Fixed `multiplier` is ignored while this is enabled.
-  This independent Vulkan-layer scheduler does not include Lossless Scaling's Windows Queue Target modes. It cannot
-  reduce a game already rendering above the target and cannot exceed the configured maximum multiplier or 4x the
-  base framerate. (Default: `false`)
-- **Adaptive Target / `target_fps`**: Desired displayed framerate for Adaptive mode. Cap the game separately if its
-  real framerate can exceed this value. Targets above the configured multiplier limit cannot be reached. (Default: `120`)
-- **Maximum Adaptive Multiplier / `adaptive_max_multiplier`**: Limits Adaptive mode to 2x, 3x, or 4x total output.
-  Every real frame is still presented. If the target would require a higher ratio, output remains below the target
-  instead of adding the more artifact-prone generated frames. Adaptive also ramps toward this limit after startup or
-  recovery and can temporarily reduce it when added generation load harms real-frame throughput. If the compositor's
-  cadence divisor makes the first step misleading, it can make one bounded bridge test at the next step. Rejected
-  first-step probes wait 15 seconds; interrupted probes can rearm after two seconds of stable cadence. Repeated
-  failures at a higher multiplier back off progressively from 5 to 15, 30, and then 60 seconds, unless the measured
-  base rate improves by at least 15%. After a generated-image recovery, Adaptive preserves the last validated level
-  through the safety warm-up and waits five seconds before probing a higher level. Multiplier policy is frozen while
-  generated output is bypassed, so recovery cannot falsely accept a level that was not actually running. When Smooth
-  Cadence is enabled, a modest fractional target such as 60 -> 90 can validate a constant cadence to avoid alternating
-  real-only and generated frames; it returns to strict target scheduling if the higher constant workload is not
-  sustainable. An abrupt menu, focus, or display transition preserves the previous real-rate baseline and proven
-  generation level. Adaptive restores that level only after one second at least 90% of the earlier base rate; after
-  five seconds without recovery it discards the stale baseline and ramps cleanly from zero. After restoration, the
-  recovered real-only rate remains the delayed-load baseline; if the restored level then collapses throughput,
-  Adaptive measures one second without generated work and returns to the lower proven level. A validated level that
-  reaches at least 95% of the target is treated as sufficient, and a remaining deficit must persist for one second
-  before a higher multiplier is tested. (Default: `3`)
-- **Smooth Cadence / `adaptive_stable_cadence`**: When enabled, Adaptive may use the validated constant-cadence policy
-  described above instead of alternating generated-frame counts to match a fractional target exactly. Strict scheduling
-  settles first, and constant cadence is considered only when it already needs at least 95% of the corresponding integer
-  output count. A severe sustained collapse starts one second of real-only measurement; Adaptive then resumes fractional
-  scheduling or tests one higher level when the configured maximum permits it. Rescue has a 15-second cooldown and never
-  exceeds the selected maximum. Constant cadence can lower the real-frame presentation rate and feel less responsive,
-  even when displayed motion is smoother. Leave Smooth Cadence disabled to use strict target scheduling while retaining
-  the remaining Adaptive recovery, load shedding, multiplier limits, and retry backoff. (Default: `false`)
-- **Flow Scale / `flow_scale`**: The resolution scale at which the motion vectors are calculated. A lower value means better performance, but worse quality. (Default: `1.0`)
-- **Performance Mode / `performance_mode`**: When enabled, a significantly lighter frame generation model is used. This has a minor quality impact, but greatly improves performance.
-(Default: `false`)
-- **Pacing Mode / `pacing`**: This option is explained in greater detail below. Supported values are **None / `none`**.
-- **GPU / `gpu`**: The GPU to use for frame generation. This MUST be the **same GPU** as the one being used by the application. **Dual GPU is NOT supported**. You can identify a GPU through its name (e.g. `NVIDIA GeForce RTX 3080`), uppercase-only ID (e.g. `0x10DE:0x2C02`) or PCI bus ID (e.g. `3:0.0`). If not specified, the primary GPU will be used, which may lead to issues.
+## Global settings
 
-"Frame Generation", Fixed/Adaptive mode, "Multiplier", "Adaptive Target", "Maximum Adaptive Multiplier", and "Smooth Cadence" can be **hot-reloaded** when the active context has the required reserved capacity. Fixed and Adaptive share one private output set, so these ordinary controls do not invalidate or recreate the game-owned swapchain. Flow Scale, Performance Mode, GPU selection, a capacity increase beyond the reserved set, and an HDR encoding change remain pending until the game naturally recreates its swapchain; restart the game when an immediate deterministic change is required. The layer never returns an out-of-date result merely because a Decky setting changed. Global DLL and FP16 changes still require a process restart because they alter the shared backend instance.
+- **`dll`**: Optional full path to `Lossless.dll`. Leave it unset to use
+  MAKO's normal Steam-library discovery.
+- **`allow_fp16`**: Enables half-precision acceleration where it is useful.
+  It is normally beneficial on AMD hardware; disable it for older NVIDIA GPUs
+  if performance is worse.
 
-HDR10 transport packing is automatic and has no setting. When both the application and backend Vulkan devices report
-the exact external-image and packed-storage capabilities required by the engine, the private source/output exchange
-images use 32-bit packed HDR10 instead of 64-bit float. PQ decoding, the frame-generation model, and all temporal working images
-remain linear 16-bit float. If either capability check fails, the validated float HDR10 transport remains in use.
+## Profile settings
 
-### Pacing Modes
+- **`name`**: Display name and value accepted by `MAKO_PROFILE`.
+- **`active_in`**: Executables or process names that select this profile.
+- **`multiplier`**: Fixed frame-generation multiplier, from 2x upward. The
+  direct Renderer default is `2`.
+- **`frame_generation_enabled`**: Live on/off switch. `false` presents real
+  frames while keeping the layer loaded. Default: `true`.
+- **`base_fps_cap`**: Caps the game's real frame rate before generation. `0`
+  disables the cap; direct configuration accepts 1–1000 FPS.
+- **`adaptive`**: Enables Adaptive Frame Generation. It varies generated
+  frames toward `target_fps` and ignores the fixed `multiplier`. Default:
+  `false`.
+- **`adaptive_auto_base_fps_cap`**: In Adaptive mode, caps the real frame rate
+  to half of `target_fps` for an even 2x baseline. It can trade real-frame
+  headroom and responsiveness for steadier output. Default: `false`.
+- **`target_fps`**: Adaptive displayed-frame-rate target. It is not a frame
+  limiter; MAKO cannot reduce a game already rendering above the target or
+  exceed the selected ceiling. Direct configuration accepts 10–1000. Default:
+  `120`.
+- **`adaptive_max_multiplier`**: Adaptive ceiling of 2x, 3x, or 4x. Start at
+  2x for image quality; use a higher ceiling only when the game benefits.
+  Default: `3`.
+- **`adaptive_stable_cadence`**: Prefers a constant interpolation cadence when
+  it is sustainable. It can look smoother but may increase input lag. Default:
+  `false`.
+- **`flow_scale`**: Motion-vector resolution from 0.25 to 1.0. Lower is faster;
+  higher favours image quality. Default: `1.0`.
+- **`performance_mode`**: Uses a lighter model for lower GPU cost and more
+  artifacts. Default: `false`.
+- **`pacing`**: Presentation policy. `none` is the only supported value.
+- **`gpu`**: Optional GPU name, vendor/device ID, or PCI bus ID. It must name
+  the GPU used by the game; multi-GPU frame generation is not supported.
 
-**Pacing modes** determine how MAKO Renderer synchronizes frame generation with the application's frame rate.
+MAKO Decky uses its own safer UI defaults—90 FPS Adaptive target, 0.90 Flow
+Scale, and Smooth Cadence enabled—when it creates a profile. Those defaults do
+not change the direct Renderer defaults above.
 
-V-Sync can help when it gives MAKO Renderer more evenly spaced real frames to work with, which can make generated output feel
-smoother. It can also add input lag or work poorly with a game's FPS cap, VRR, or compositor, so test it enabled and
-disabled for each game and keep the setting that feels best.
+## Applying changes
 
-For the normal SDR path, `none` uses MAKO Renderer's private FIFO output transport. The layer reserves swapchain capacity for
-generated images and presents the generated/real sequence in order. That output ordering is separate from the game's
-V-Sync setting. HDR-capable Gamescope swapchains preserve their separate WSI presentation contract, so this SDR detail
-does not describe the experimental HDR path.
+Frame Generation, Fixed/Adaptive mode, multiplier within existing capacity,
+Adaptive target/ceiling, and Smooth Cadence can usually apply while the game is
+running. Restart the game after changing the DLL path, FP16 policy, GPU, Flow
+Scale, Performance Mode, HDR-related settings, or a setting that requires more
+private GPU resources.
 
-Here are all available pacing modes:
-- `none`: Uses the established ordered SDR FIFO transport. It may require workarounds on some compositors.
-- *... there are no other pacing modes yet ...*
+Test V-Sync both on and off for each game. It can steady the real-frame cadence,
+but can also add latency or conflict with an FPS cap, VRR, or the compositor.
 
-### Environment Variables
+## Environment variables
 
-The following environment variables affect MAKO Renderer:
-- `ENABLE_MAKO`: Set to `1` in the MAKO launch wrapper to scope its uniquely named
-  implicit Vulkan layer to that game.
-- `DISABLE_MAKO`: If set to `1`, MAKO Renderer will be completely disabled.
-- `MAKO_CONFIG`: Path to the configuration file.
-- `MAKO_PROFILE`: Name of the profile to use. If set, this will override automatic profile detection.
-- `MAKO_DISABLE_HDR_EXPOSURE`: Set to `1` by the companion Decky plugin's default restart-time SDR launch, or by a
-  direct launcher that wants the same hard boundary. It overrides Gamescope/DXVK HDR capability and keeps every HDR
-  evidence path disabled for that process. HDR-capable launches do not
-  force the engine into HDR: application colour-space feedback or HDR metadata must still confirm application intent.
-- `MAKO_PRESENT_ACQUIRE_TIMEOUT_MS`: Optional timeout for generated-image acquisition. A timeout enters the
-  Gamescope presentation fallback; unset or `0` keeps the normal unbounded acquisition path.
-- `MAKO_PRESENT_DIAGNOSTICS`: Set to `1` to log slow presentation operations.
-- `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS`: Minimum duration in milliseconds reported by presentation diagnostics.
+`ENABLE_MAKO=1` activates MAKO's implicit Vulkan layer only for the launched
+process. `DISABLE_MAKO=1` disables it. `MAKO_CONFIG` chooses a TOML file and
+`MAKO_PROFILE` chooses a named profile.
 
-If you do not wish to use a configuration file, you can also set configuration options through environment variables. To do this, set `MAKO_ENV=1` and then any of the following variables:
-- `MAKO_DLL_PATH`: Path to Lossless Scaling DLL.
-- `MAKO_NO_FP16`: If set to `1`, half-precision will be disabled.
-- `MAKO_MULTIPLIER`: Frame generation multiplier.
-- `MAKO_FRAME_GENERATION_ENABLED`: Set to `0` for live real-frame passthrough. Unlike
-  `DISABLE_MAKO`, the layer remains loaded.
-- `MAKO_ADAPTIVE`: Set to `1` to enable Adaptive Frame Generation.
-- `MAKO_TARGET_FPS`: Adaptive displayed-framerate target.
-- `MAKO_ADAPTIVE_MAX_MULTIPLIER`: Maximum Adaptive multiplier from `2` to `4`.
-- `MAKO_ADAPTIVE_STABLE_CADENCE`: Set to `1` to enable Smooth Cadence in Adaptive mode. It defaults to disabled.
-- `MAKO_FLOW_SCALE`: Flow scale value.
-- `MAKO_PERFORMANCE_MODE`: If set to `1`, performance mode will be enabled.
-- `MAKO_PACING`: Pacing mode to use.
-- `MAKO_GPU`: GPU to use for frame generation.
+For a configuration that comes entirely from environment variables, set
+`MAKO_ENV=1` and use any of the following:
+
+- `MAKO_DLL_PATH`, `MAKO_NO_FP16`, `MAKO_GPU`
+- `MAKO_MULTIPLIER`, `MAKO_FRAME_GENERATION_ENABLED`, `MAKO_BASE_FPS_CAP`
+- `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`,
+  `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`
+- `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`
+
+`MAKO_DISABLE_HDR_EXPOSURE=1` keeps MAKO's unfinished HDR path disabled. It is
+the normal boundary used by the current Decky workflow.

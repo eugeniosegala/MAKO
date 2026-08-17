@@ -1,143 +1,84 @@
 # Configuration guide
 
-The defaults are a good starting point: fixed **2x**, Flow Scale **0.90**, Performance Mode disabled, and FP16 allowed
-where supported. Adaptive mode defaults to a **90 FPS** target with **Smooth Cadence** enabled. Adaptive settings can be
-changed while a game is running, but the layer briefly resets its timing and stability calculations afterwards. Let it
-settle for a few seconds before judging performance. Fixed and Adaptive reserve one shared generated-frame capacity,
-so switching between them applies live when the selected multiplier/ceiling fits that capacity. The layer never forces
-the game to rebuild its swapchain for a UI change. The engine includes a private HDR/SDR resource transition for future
-HDR work, but this Decky release keeps HDR exposure locked off and therefore remains on the SDR resource path.
-Other GPU-backend, flow-scale, or performance-mode changes that cannot be applied safely remain pending until the game
-naturally recreates its swapchain or is restarted.
+The default profile is a good starting point: Fixed **2x**, Flow Scale **0.90**,
+Performance Mode off, and FP16 allowed where it is supported. Adaptive mode
+defaults to a **90 FPS** target, 3x ceiling, and Smooth Cadence on.
 
-## In-game V-Sync
+Test one change at a time. Games, displays, VRR, and compositors differ; try
+the game's V-Sync both on and off and keep the setting that feels smoother and
+more responsive.
 
-V-Sync can make MAKO Renderer feel smoother by giving it more evenly spaced real frames to work with. It can also add input
-lag or clash with a game's FPS cap, VRR, or compositor. Every game is different, so test V-Sync both on and off and
-keep the option that feels smoother and more responsive.
+## Frame generation
 
-For reference, Decky's established SDR path keeps generated and real frames in order before they reach the display.
-That engine detail is separate from the V-Sync option inside the game.
+- **Frame Generation (Live On/Off):** Turns synthesis on or off without losing
+  the selected Fixed or Adaptive settings.
+- **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Start at 2x for the
+  best balance of image quality and latency.
+- **Adaptive Frame Generation:** Varies the generated-frame count toward a
+  target. It is a target, not a game FPS limiter: it cannot reduce a game
+  already above target or exceed the selected ceiling.
+- **Target FPS:** Desired Adaptive output rate, from 30 to 240 FPS in Decky.
+- **Prefer Even 2x Baseline:** Caps real frames to half the Adaptive target for
+  steadier 2x-like motion. Adaptive can still use 3x or 4x when performance
+  falls. It can discard real-frame headroom and increase input latency, so it
+  is off by default.
+- **Maximum Adaptive Multiplier:** The 2x, 3x, or 4x Adaptive ceiling. 2x
+  usually looks best; 4x can help reach a higher target at the cost of more
+  generated frames.
+- **Smooth Cadence:** Prefers a sustainable constant interpolation cadence. It
+  can improve displayed motion but may reduce responsiveness. It is on by
+  default; disable it if the game feels better with stricter target scheduling.
+- **Base FPS Cap:** Caps real frames before generation. It applies live and is
+  disabled while **Prefer Even 2x Baseline** controls the cap.
 
-## Frame-generation mode
-
-- **Frame Generation (Live On/Off):** Leave this control on to use either Fixed or Adaptive Frame Generation. When
-  it is off, neither mode generates frames; your selected mode and settings remain saved for when you turn it back on.
-- **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Use the live **Frame Generation** switch to pass through real
-  frames without changing the selected mode. Under Gamescope, the engine uses the confirmed display refresh as a
-  delivery budget:
-  it suppresses synthetic frames that cannot be scanned out rather than letting a nominal 2x/3x/4x sequence run above
-  the display rate. This does not cap the game's real frames.
-- **Adaptive Frame Generation:** Optional mode that estimates the real frame rate and schedules zero to three generated
-  frames to approach the selected target. It replaces the fixed multiplier controls for that profile. Target, ceiling,
-  and Smooth Cadence changes apply live; expect a short settling period while Adaptive recalculates its timing.
-
-  **Live-change settling period:** Changing an Adaptive setting while a game is running resets its timing and stability
-  calculations. Give it a few seconds to settle before judging image quality, smoothness, or input responsiveness;
-  normal play can continue once it has settled.
-- **Target FPS:** 30–240 FPS. This setting is used only by Adaptive mode. It is a target, not a limiter: it cannot
-  reduce a game already running above target,
-  exceed the selected ceiling, or overcome GPU/model/compositor limits.
-- **Maximum Adaptive Multiplier:** Ceiling for generated frames: 2x, 3x, or 4x. 3x is the balanced default; 2x usually
-  gives the best image quality, while 4x gives Adaptive more headroom to reach the target. Test per game.
-- **Smooth Cadence:** Enabled by default in Adaptive mode. Strict scheduling settles first and constant cadence is
-  considered only when the target already needs nearly every matching cadence slot. It can make displayed motion look
-  smoother, but does so by holding a continuous generation level; this can lower the real-frame presentation cadence and
-  increase input lag. Leave it enabled where its visual smoothness is worthwhile; disable it when strict target
-  scheduling or responsiveness matters more for that game. After a severe sustained slowdown, Adaptive briefly
-  measures the real-only rate and either resumes fractional
-  scheduling or tests one higher level when **Maximum Adaptive Multiplier** permits it. Rescue never exceeds that
-  maximum and has a cooldown to avoid repeated switching.
-
-  **Per-game tuning:** There is no universal best mode. Compare Fixed 2x with Adaptive, then try Adaptive with Smooth
-  Cadence both enabled and disabled. The best choice depends on a game's frame pacing, real-frame headroom, display
-  refresh, and responsiveness, so change one setting at a time and let Adaptive settle before comparing results.
-
-Adaptive also has an automatic Steam-menu discontinuity safeguard, independent of **Smooth Cadence**. After a hard
-cadence stall, it temporarily presents real frames, waits for the measured base cadence to remain healthy for one
-second, and then restores the last proven generation level. If the old cadence does not recover within five seconds,
-Adaptive discards that stale baseline and ramps again from zero. A sustained gameplay cadence drop instead stabilizes
-for one second and rebases at the new measured rate, avoiding a five-second wait for an old rate that is no longer
-achievable. This can briefly reduce displayed FPS after leaving a menu, but avoids treating its transient frame rate as
-normal gameplay. After 2x has already proved stable, an isolated short gameplay hitch instead refreshes three real
-history frames and resumes 2x immediately. Fixed mode does not use these Adaptive policies.
+Adaptive target, ceiling, and cadence changes normally apply while a game is
+running. Give the game a few seconds to settle before judging the result.
+Changes that need a different GPU backend or larger private resources can wait
+for a natural swapchain recreation; restarting the game applies them directly.
 
 ## Profiles and per-game selection
 
-The plugin stores multiple MAKO Renderer profiles in its private `conf.toml`; it does not create a separate layer install or
-config file for every game. In the plugin's **Profile** section, choose **New Profile**, enter a name, and the plugin
-copies the selected profile's settings, then switches to the new profile. Configure it normally afterwards.
+Choose **New Profile** to copy the current profile, then adjust it for a game.
+Set **Active In** to the game's executable or process name to select that
+profile automatically at launch. It accepts comma-separated names, including
+Linux binaries and Windows `.exe` names.
 
-To select engine settings automatically for a game, enter its executable/process name in **Active In**. MAKO Renderer then
-matches the appropriate profile at launch. Once at least one profile has an **Active In** value, the wrapper leaves
-engine-profile selection to MAKO Renderer; you can return the UI selector to **Default** without breaking automatic matching.
-The following settings are profile-based and support that automatic match:
-
-- Live Frame Generation, Fixed multiplier or Adaptive mode, Target FPS, Maximum Adaptive Multiplier, and Smooth Cadence
-- Flow Scale, Performance Mode, GPU matching, and Active In
-
-The `Lossless.dll` path and FP16 permission are shared globally because they apply to the installed engine, not to an
-individual game.
-
-Decky also keeps the launcher compatibility options per profile—Disable MAKO Renderer on Next Launch, Disable
-Experimental HDR (Restart), Base FPS Cap, Steam Deck Mode, and Zink. They are saved in this plugin's private profile state and
-are restored when you select that profile in Decky. They cannot follow **Active In** automatically: those variables must
-be set by the wrapper before MAKO Renderer sees the game's process name. Select the profile manually before launching a game
-that needs one of those compatibility options, then restart the game after changing profiles.
+The frame-generation, quality, GPU, and Active In settings follow automatic
+profile matching. The DLL path and FP16 permission are global. Launcher
+compatibility settings—such as **Disable MAKO Renderer on Next Launch**,
+**Disable Experimental HDR**, Steam Deck Mode, and Zink—are selected before
+MAKO sees the game's process, so choose their Decky profile manually before
+launching when they differ between games.
 
 ## Quality and matching
 
-- **Flow Scale:** 0.25–1.0. Lower values generally reduce GPU cost; higher values favour optical-flow quality.
-- **Performance Mode:** Uses a lighter model with lower GPU overhead and more artifacts. For the best v2 image quality,
-  start with it disabled.
-- **Allow FP16:** Allows half-precision processing on supported GPUs. It can improve performance; results vary by game
-  and driver.
-- **Lossless.dll Path:** Override detection when necessary. Leaving it blank allows MAKO Renderer discovery.
-- **Active In:** Optional comma-separated executable/process matching. If set, MAKO Renderer selects matching profiles
-  automatically.
-- **GPU:** Optional GPU identifier for multi-GPU systems.
+- **Flow Scale:** 0.25–1.0. Lower values reduce GPU cost; higher values favour
+  optical-flow quality.
+- **Performance Mode:** Uses a lighter model with lower GPU overhead and more
+  visible artifacts.
+- **Allow FP16:** Usually improves performance on AMD. Disable it if an older
+  NVIDIA GPU performs worse.
+- **Lossless.dll Path:** Overrides automatic discovery. Leave it empty for
+  normal Steam-library discovery.
+- **GPU:** Optional GPU name, vendor/device ID, or PCI bus ID. It must identify
+  the GPU used by the game; dual-GPU frame generation is not supported.
 
-## Compatibility options
+## Compatibility and HDR
 
-The bundled engine includes matching 64-bit and 32-bit Vulkan layers. The Vulkan loader selects the correct layer for
-the game's process, so native 32-bit Vulkan games do not require a WoW64 launcher option. The CLI and configuration UI
-remain 64-bit because they are not loaded into the game process.
+The package includes 64-bit and 32-bit Vulkan layers. Vulkan chooses the right
+layer for the game process; the CLI and configuration UI are 64-bit only.
 
-- **Disable MAKO Renderer on Next Launch:** Compatibility troubleshooting only. Prevents the MAKO Renderer
-  Vulkan layer from loading when the game next starts, so you can test without it or bypass a startup/attachment
-  problem. This requires a game restart. It is different from **Frame Generation**, which switches synthesis on or off
-  live while the layer remains loaded.
-- **Base FPS Cap:** Optionally caps the base DirectX framerate before multiplication.
-- **Steam Deck Mode:** A per-game compatibility path.
-- **Zink:** Optional Vulkan-based OpenGL path for OpenGL games.
+- **Disable MAKO Renderer on Next Launch:** Troubleshooting control that stops
+  the layer loading after restart. Use **Frame Generation** for a live on/off
+  test instead.
+- **Steam Deck Mode:** Per-game compatibility path.
+- **Zink:** Vulkan-based OpenGL path for OpenGL games.
 
-Gamescope WSI and MangoHud controls are deliberately not shown. The wrapper enables MAKO Renderer's uniquely named
-layer for that game. In this release, **Disable Experimental HDR
-(Restart)** is checked and read-only: the wrapper exports `MAKO_DISABLE_HDR_EXPOSURE=1` and leaves DXVK at its normal
-SDR default. Heroic Flatpak launches explicitly keep Gamescope WSI ahead of MAKO Renderer so compositor
-presentation and frame limiting remain available. Existing profiles that previously opted into HDR are normalized back
-to this stable SDR boundary when loaded or saved.
+HDR frame generation remains under development. **Disable Experimental HDR
+(Restart)** is intentionally checked and read-only: MAKO Decky keeps the
+renderer on its validated SDR path without changing the game's normal DXVK or
+Gamescope policy. Do not add HDR environment variables manually for ordinary
+launches. Use **Disable MAKO Renderer on Next Launch** if the layer itself is
+the suspected problem.
 
-### HDR launch boundary
-
-These controls belong to different components and are deliberately kept separate:
-
-| Setting | Owner | Behaviour in this release |
-| --- | --- | --- |
-| `MAKO_DISABLE_HDR_EXPOSURE=1` | MAKO Renderer | Blocks this layer's unfinished HDR exposure and transition path. It does not configure the game's renderer or system HDR. |
-| `DXVK_HDR` | DXVK | The wrapper unsets it instead of forcing `0`, leaving DXVK at its normal SDR default and avoiding a plugin-wide renderer override. |
-| `ENABLE_GAMESCOPE_WSI` | Gamescope | The wrapper preserves the launcher's value and keeps Gamescope's manifest available in Heroic. It never disables Gamescope to enforce MAKO Renderer's HDR boundary. |
-
-This means the plugin can keep its own HDR work disabled without changing DXVK policy or removing Gamescope's normal
-presentation and frame-limiting integration. Users should not add any of these variables manually for an ordinary SDR
-launch.
-
-HDR frame generation remains under development. The pinned engine contains format classification, HDR10/PQ and
-linear-scRGB conversion, Gamescope feedback, packed-boundary transport, and safe-passthrough groundwork, but the Decky
-launcher does not expose that path in `.25`. In-game HDR controls may therefore be disabled; this is expected. A future
-release will unlock the control only after activation, presentation, colour, and performance are validated across
-games. Use
-**Disable MAKO Renderer on Next Launch** when the layer itself is the suspected cause. The plugin
-writes `pacing = 'none'` and does not expose a
-dual-GPU control. See
-[Troubleshooting](TROUBLESHOOTING.md) and the release notes for build-specific compatibility guidance.
+See [Troubleshooting](TROUBLESHOOTING.md) for diagnostics and update recovery.
