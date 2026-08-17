@@ -24,6 +24,9 @@ CONFIG_FILENAME = "conf.toml"
 # The engine reads conf.toml directly, so Decky-only launcher settings must be
 # stored separately rather than adding unknown keys to an upstream profile.
 WRAPPER_PROFILE_SETTINGS_FILENAME = "profile-wrapper-settings.json"
+# Friendly game identity and Steam app matching for Decky's versioned profile
+# model. Renderer settings remain in conf.toml, their canonical engine format.
+PROFILE_METADATA_FILENAME = "profile-metadata.json"
 # Bundled MAKO Renderer payload filenames. The archive name is read from the packaged
 # package.json remote_binary record so the release pin has one source of truth.
 LIB_FILENAME = "libmako-render.so"

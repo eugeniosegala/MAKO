@@ -4,7 +4,7 @@ import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
 import { ConfigurationData } from "../config/configSchema";
 import {
   ACTIVE_IN, ALLOW_FP16, DISABLE_MAKO, DLL, FLOW_SCALE, GPU,
-  BASE_FPS_CAP, DISABLE_STEAMDECK_MODE, ENABLE_ZINK
+  BASE_FPS_CAP, DISABLE_STEAMDECK_MODE, ENABLE_ZINK, FORCE_ALSA_AUDIO
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
 
@@ -75,21 +75,21 @@ export function ConfigurationSection({
       <PanelSectionRow>
         <div
           style={{
-            fontSize: "16px",
+            fontSize: "14px",
             fontWeight: "bold",
-            marginTop: "24px",
-            marginBottom: "8px",
+            marginTop: "18px",
+            marginBottom: "4px",
             color: "white"
           }}
         >
-          {t("CONFIG_SECTION_TITLE", "Config")}
+          {t("CONFIG_SECTION_TITLE", "Advanced Renderer Settings")}
         </div>
       </PanelSectionRow>
 
       <PanelSectionRow>
         <div
           className="MAKO_ConfigCollapseButton_Container"
-          style={{ marginTop: "4px", marginBottom: "8px" }}
+          style={{ marginTop: "2px", marginBottom: "4px" }}
         >
           <ButtonItem
             layout="below"
@@ -111,15 +111,6 @@ export function ConfigurationSection({
 
       {!configCollapsed && (
         <>
-          <PanelSectionRow>
-            <TextField
-              label={t("CONFIG_DLL_PATH", "Lossless.dll Path")}
-              description={t("CONFIG_DLL_PATH_DESC", "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.")}
-              value={config.dll}
-              onChange={(event) => onConfigChange(DLL, event.currentTarget.value)}
-            />
-          </PanelSectionRow>
-
           <PanelSectionRow>
             <SliderField
               label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round(config.flow_scale * 100)}%)`}
@@ -164,20 +155,27 @@ export function ConfigurationSection({
           </PanelSectionRow>
 
           <PanelSectionRow>
-            <div style={{ paddingTop: "12px" }}>
-              <TextField
-                label={t("CONFIG_GPU", "GPU")}
-                description={t("CONFIG_GPU_DESC", "Optional GPU name, vendor:device ID, or PCI bus ID.")}
-                value={config.gpu}
-                onChange={(event) => onConfigChange(GPU, event.currentTarget.value)}
-              />
-            </div>
+            <TextField
+              label={t("CONFIG_DLL_PATH", "Lossless.dll Path")}
+              description={t("CONFIG_DLL_PATH_DESC", "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.")}
+              value={config.dll}
+              onChange={(event) => onConfigChange(DLL, event.currentTarget.value)}
+            />
           </PanelSectionRow>
 
           <PanelSectionRow>
             <TextField
-              label={t("CONFIG_ACTIVE_IN", "Active In")}
-              description={t("CONFIG_ACTIVE_IN_DESC", "Executable/process names, separated by commas. This automatically matches the MAKO Renderer engine profile; wrapper-only compatibility options use the selected Decky profile.")}
+              label={t("CONFIG_GPU", "GPU")}
+              description={t("CONFIG_GPU_DESC", "Optional GPU name, vendor:device ID, or PCI bus ID.")}
+              value={config.gpu}
+              onChange={(event) => onConfigChange(GPU, event.currentTarget.value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <TextField
+              label={t("CONFIG_ACTIVE_IN", "Matched Processes")}
+              description={t("CONFIG_ACTIVE_IN_DESC", "Executable or process names separated by commas. Running-game capture fills these automatically; edit them only when a launcher or emulator needs an additional process alias.")}
               value={config.active_in}
               onChange={(event) => onConfigChange(ACTIVE_IN, event.currentTarget.value)}
             />
@@ -189,10 +187,10 @@ export function ConfigurationSection({
       <PanelSectionRow>
         <div
           style={{
-            fontSize: "16px",
+            fontSize: "14px",
             fontWeight: "bold",
-            marginTop: "24px",
-            marginBottom: "8px",
+            marginTop: "18px",
+            marginBottom: "4px",
             color: "white"
           }}
         >
@@ -203,7 +201,7 @@ export function ConfigurationSection({
       <PanelSectionRow>
         <div
           className="MAKO_WorkaroundsCollapseButton_Container"
-          style={{ marginTop: "4px", marginBottom: "8px" }}
+          style={{ marginTop: "2px", marginBottom: "4px" }}
         >
           <ButtonItem
             layout="below"
@@ -250,6 +248,15 @@ export function ConfigurationSection({
               description={t("CONFIG_ENABLE_ZINK_DESC", "Uses the Vulkan-based OpenGL implementation for OpenGL games. May cause crashes or freezes in some games.")}
               checked={config.enable_zink}
               onChange={(value) => onConfigChange(ENABLE_ZINK, value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_FORCE_ALSA_AUDIO", "Force ALSA Audio (Restart)")}
+              description={t("CONFIG_FORCE_ALSA_AUDIO_DESC", "For this profile only. May improve audio compatibility in some native and Proton games. Disable to remove MAKO's override and restore normal Steam/Proton audio defaults.")}
+              checked={config.force_alsa_audio}
+              onChange={(value) => onConfigChange(FORCE_ALSA_AUDIO, value)}
             />
           </PanelSectionRow>
         </>

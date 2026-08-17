@@ -224,6 +224,17 @@ class Plugin:
         """
         return self.configuration_service.rename_profile(old_name, new_name)
 
+    async def capture_game_profile(
+            self,
+            app_id: str,
+            display_name: str,
+            source_profile: str = None,
+    ) -> Dict[str, Any]:
+        """Create or refresh a profile from the currently running game."""
+        return self.configuration_service.capture_game_profile(
+            app_id, display_name, source_profile
+        )
+
     async def set_current_profile(self, profile_name: str) -> Dict[str, Any]:
         """Set the current active profile
 
@@ -234,6 +245,10 @@ class Plugin:
             ProfileResponse dict with success status
         """
         return self.configuration_service.set_current_profile(profile_name)
+
+    async def sync_current_profile(self, app_id: str = "") -> Dict[str, Any]:
+        """Select a live app's saved profile, or restore the default profile."""
+        return self.configuration_service.sync_current_profile(app_id)
 
     async def update_profile_config(self, profile_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
         """Update configuration for a specific profile
@@ -418,6 +433,11 @@ class Plugin:
         Any initialization code should go here.
         """
         decky.logger.info("mako plugin loaded")
+        try:
+            if self.configuration_service.migrate_profile_metadata_if_needed():
+                decky.logger.info("Initialized game/process profile metadata")
+        except (OSError, ValueError) as error:
+            decky.logger.warning("Could not initialize profile metadata: %s", error)
         try:
             if self.configuration_service.migrate_wrapper_profile_settings_if_needed():
                 decky.logger.info("Migrated wrapper-only settings into the active profile")

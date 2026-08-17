@@ -33,7 +33,8 @@ def get_env_var_name(field_name: str) -> str:
         "disable_mako": "DISABLE_MAKO",
         "disable_hdr_exposure": "MAKO_DISABLE_HDR_EXPOSURE",
         "disable_steamdeck_mode": "SteamDeck",
-        "enable_zink": "ZINK_ENABLE"
+        "enable_zink": "ZINK_ENABLE",
+        "force_alsa_audio": "SDL_AUDIODRIVER"
     }
     return env_map.get(field_name, field_name.upper())
 
@@ -78,6 +79,9 @@ def generate_script_parsing() -> str:
                 lines.append(f'                    elif key == "MESA_LOADER_DRIVER_OVERRIDE" and value == "zink":')
                 lines.append(f'                        script_values["{field_name}"] = True')
                 lines.append(f'                    elif key == "GALLIUM_DRIVER" and value == "zink":')
+                lines.append(f'                        script_values["{field_name}"] = True')
+            elif field_name == "force_alsa_audio":
+                lines.append(f'                    elif key == "{env_var}" and value == "alsa":')
                 lines.append(f'                        script_values["{field_name}"] = True')
             else:
                 lines.append(f'                    elif key == "{env_var}":')
@@ -126,6 +130,22 @@ def generate_script_generation() -> str:
                 lines.append(f'            lines.append("export __GLX_VENDOR_LIBRARY_NAME=mesa")')
                 lines.append(f'            lines.append("export MESA_LOADER_DRIVER_OVERRIDE=zink")')
                 lines.append(f'            lines.append("export GALLIUM_DRIVER=zink")')
+            elif field_name == "force_alsa_audio":
+                # SDL honours the native ALSA driver. Wine/Proton honours the
+                # DLL override while retaining any caller-provided overrides.
+                # When disabled, emit nothing so platform defaults are restored.
+                lines.append(f'        if config.get("{field_name}", False):')
+                lines.append('            lines.extend([')
+                lines.append('                "export SDL_AUDIODRIVER=alsa",')
+                lines.append('                \'case ";${WINEDLLOVERRIDES:-};" in\',')
+                lines.append('                \'    *";winepulse.drv=d;"*) ;;\',')
+                lines.append('                \'    *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winepulse.drv=d" ;;\',')
+                lines.append('                "esac",')
+                lines.append('                \'case ";${WINEDLLOVERRIDES:-};" in\',')
+                lines.append('                \'    *";winealsa.drv=b;"*) ;;\',')
+                lines.append('                \'    *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winealsa.drv=b" ;;\',')
+                lines.append('                "esac",')
+                lines.append('            ])')
             else:
                 lines.append(f'        if config.get("{field_name}", False):')
                 lines.append(f'            lines.append("export {env_var}=1")')

@@ -120,10 +120,19 @@ export interface FlatpakOperationResult {
 }
 
 // Profile management interfaces
+export interface ProfileDetails {
+  profile_name: string;
+  display_name: string;
+  kind: "default" | "game" | "process" | "manual" | string;
+  steam_app_id?: string | null;
+  processes: string[];
+}
+
 export interface ProfilesResult {
   success: boolean;
   profiles?: string[];
   current_profile?: string;
+  profile_details?: ProfileDetails[];
   message?: string;
   error?: string;
 }
@@ -131,6 +140,8 @@ export interface ProfilesResult {
 export interface ProfileResult {
   success: boolean;
   profile_name?: string;
+  profile?: ProfileDetails;
+  changed?: boolean;
   message?: string;
   error?: string;
 }
@@ -173,5 +184,7 @@ export const getProfiles = callable<[], ProfilesResult>("get_profiles");
 export const createProfile = callable<[string, string?], ProfileResult>("create_profile");
 export const deleteProfile = callable<[string], ProfileResult>("delete_profile");
 export const renameProfile = callable<[string, string], ProfileResult>("rename_profile");
+export const captureGameProfile = callable<[string, string, string?], ProfileResult>("capture_game_profile");
 export const setCurrentProfile = callable<[string], ProfileResult>("set_current_profile");
+export const syncCurrentProfile = callable<[string], ProfileResult>("sync_current_profile");
 export const updateProfileConfig = callable<[string, ConfigurationData], ConfigUpdateResult>("update_profile_config");

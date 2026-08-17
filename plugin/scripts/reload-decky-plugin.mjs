@@ -1,10 +1,23 @@
 #!/usr/bin/env node
 
+import { readFileSync } from "node:fs";
+
 const DEFAULT_DECKY_URL = "http://127.0.0.1:1337";
-const DEFAULT_PLUGIN_NAME = "MAKO Decky";
+const DEFAULT_PLUGIN_NAME = "MAKO - Frame Generation";
 const REQUEST_TIMEOUT_MS = 15_000;
 
-const pluginName = process.argv[2] || DEFAULT_PLUGIN_NAME;
+function installedPluginName() {
+  const manifestPath =
+    process.env.DECKY_PLUGIN_MANIFEST ||
+    `${process.env.HOME}/homebrew/plugins/Mako/plugin.json`;
+  try {
+    return JSON.parse(readFileSync(manifestPath, "utf8")).name;
+  } catch {
+    return undefined;
+  }
+}
+
+const pluginName = process.argv[2] || installedPluginName() || DEFAULT_PLUGIN_NAME;
 const deckyUrl = process.env.DECKY_LOADER_URL || DEFAULT_DECKY_URL;
 
 function websocketUrl(baseUrl, token) {

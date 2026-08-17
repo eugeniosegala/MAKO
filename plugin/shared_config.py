@@ -174,6 +174,14 @@ CONFIG_SCHEMA_DEF = {
         "default": False,
         "description": "Enable Zink (Vulkan-based OpenGL implementation) for OpenGL games",
         "location": "script"
+    },
+
+    "force_alsa_audio": {
+        "name": "force_alsa_audio",
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "force ALSA for this game after restart; disable to restore Steam and Proton audio defaults",
+        "location": "script"
     }
 }
 

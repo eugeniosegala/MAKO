@@ -21,6 +21,9 @@ class PluginLifecycleTests(unittest.TestCase):
         calls = []
         plugin = Plugin.__new__(Plugin)
         plugin.configuration_service = SimpleNamespace(
+            migrate_profile_metadata_if_needed=lambda: calls.append(
+                "profile-metadata"
+            ) or False,
             migrate_wrapper_profile_settings_if_needed=lambda: calls.append(
                 "wrapper-settings"
             ) or False,
@@ -43,6 +46,7 @@ class PluginLifecycleTests(unittest.TestCase):
         asyncio.run(plugin._main())
 
         self.assertEqual(calls, [
+            "profile-metadata",
             "wrapper-settings",
             "base-fps-cap",
             "vkbasalt",

@@ -28,14 +28,16 @@ from .constants import (
     FLATPAK_IMPLICIT_LAYER_DIR,
     PRESENT_ACQUIRE_TIMEOUT_MS,
 )
+from .process_detection import detect_processes_for_steam_app
 from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 
 
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 31"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 32"
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
+    _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
         "export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS=",
         "export MAKO_PRESENT_DIAGNOSTICS=",
@@ -146,6 +148,121 @@ class ConfigurationService(BaseService):
             settings.update(stored_settings)
         return self._normalize_wrapper_settings(settings)
 
+    @staticmethod
+    def _processes_for_config(config: Dict[str, Any]) -> list[str]:
+        active_in = config.get("active_in", "")
+        if isinstance(active_in, (list, tuple)):
+            values = active_in
+        else:
+            values = str(active_in).split(",")
+        return [str(value).strip() for value in values if str(value).strip()]
+
+    @classmethod
+    def _default_profile_metadata(
+            cls, profile_data: ProfileData) -> Dict[str, Dict[str, Any]]:
+        metadata: Dict[str, Dict[str, Any]] = {}
+        for profile_name, config in profile_data["profiles"].items():
+            processes = cls._processes_for_config(config)
+            metadata[profile_name] = {
+                "display_name": "Default" if profile_name == DEFAULT_PROFILE_NAME else profile_name,
+                "kind": (
+                    "default" if profile_name == DEFAULT_PROFILE_NAME
+                    else "process" if processes
+                    else "manual"
+                ),
+                "steam_app_id": None,
+                "captured_processes": [],
+            }
+        return metadata
+
+    def _write_profile_metadata(
+            self, metadata: Dict[str, Dict[str, Any]]) -> None:
+        payload = {
+            "version": self._PROFILE_METADATA_VERSION,
+            "profiles": metadata,
+        }
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self._write_file(
+            self.profile_metadata_path,
+            json.dumps(payload, indent=2, sort_keys=True) + "\n",
+            0o644,
+        )
+
+    def _read_profile_metadata(
+            self, profile_data: ProfileData = None) -> Dict[str, Dict[str, Any]]:
+        profile_data = profile_data or self._get_profile_data()
+        if not self.profile_metadata_path.exists():
+            return self._default_profile_metadata(profile_data)
+
+        payload = json.loads(self.profile_metadata_path.read_text(encoding="utf-8"))
+        if not isinstance(payload, dict):
+            raise ValueError("profile metadata must be a JSON object")
+        if payload.get("version") != self._PROFILE_METADATA_VERSION:
+            raise ValueError("unsupported profile metadata version")
+        raw_profiles = payload.get("profiles")
+        if not isinstance(raw_profiles, dict):
+            raise ValueError("profile metadata profiles must be an object")
+
+        defaults = self._default_profile_metadata(profile_data)
+        metadata: Dict[str, Dict[str, Any]] = {}
+        for profile_name in profile_data["profiles"]:
+            fallback = defaults[profile_name]
+            raw_entry = raw_profiles.get(profile_name, {})
+            if not isinstance(raw_entry, dict):
+                raw_entry = {}
+            steam_app_id = raw_entry.get("steam_app_id")
+            raw_captured = raw_entry.get("captured_processes", [])
+            if not isinstance(raw_captured, list):
+                raw_captured = []
+            metadata[profile_name] = {
+                "display_name": str(
+                    raw_entry.get("display_name") or fallback["display_name"]
+                ),
+                "kind": str(raw_entry.get("kind") or fallback["kind"]),
+                "steam_app_id": (
+                    str(steam_app_id).strip() if steam_app_id is not None else None
+                ) or None,
+                "captured_processes": [
+                    str(process).strip()
+                    for process in raw_captured
+                    if str(process).strip()
+                ],
+            }
+        return metadata
+
+    def migrate_profile_metadata_if_needed(self) -> bool:
+        """Create/synchronise the first public game/process profile model."""
+        profile_data = self._get_profile_data()
+        metadata = self._read_profile_metadata(profile_data)
+        expected_payload = {
+            "version": self._PROFILE_METADATA_VERSION,
+            "profiles": metadata,
+        }
+        if self.profile_metadata_path.exists():
+            current_payload = json.loads(
+                self.profile_metadata_path.read_text(encoding="utf-8")
+            )
+            if current_payload == expected_payload:
+                return False
+        self._write_profile_metadata(metadata)
+        return True
+
+    def _profile_details(
+            self,
+            profile_data: ProfileData,
+            metadata: Dict[str, Dict[str, Any]],
+    ) -> list[Dict[str, Any]]:
+        return [
+            {
+                "profile_name": profile_name,
+                "display_name": metadata[profile_name]["display_name"],
+                "kind": metadata[profile_name]["kind"],
+                "steam_app_id": metadata[profile_name]["steam_app_id"],
+                "processes": self._processes_for_config(config),
+            }
+            for profile_name, config in profile_data["profiles"].items()
+        ]
+
     def _config_for_profile(
             self,
             profile_data: ProfileData,
@@ -173,9 +290,13 @@ class ConfigurationService(BaseService):
             return False
 
         try:
-            script_values = ConfigurationManager.parse_script_content(
-                self.mako_script_path.read_text(encoding="utf-8")
-            )
+            script_content = self.mako_script_path.read_text(encoding="utf-8")
+            # Format 32 contains a branch for every profile. It is not a safe
+            # source from which to reconstruct a missing settings database.
+            # Only the pre-profile wrappers represented one selected profile.
+            if self._WRAPPER_FORMAT_MARKER in script_content:
+                return False
+            script_values = ConfigurationManager.parse_script_content(script_content)
             profile_data = self._get_profile_data()
             self._write_wrapper_profile_settings({
                 profile_data["current_profile"]: self._normalize_wrapper_settings(script_values)
@@ -458,7 +579,7 @@ class ConfigurationService(BaseService):
             f"# Current profile: {current_profile}",
         ]
 
-        lines.extend(self._script_configuration_lines(merged_config))
+        lines.extend(self._wrapper_profile_configuration_lines(profile_data))
         lines.extend(self._generate_layer_environment_lines())
         # Never export MAKO_PROFILE once any profile uses Active In: the
         # environment override takes precedence over upstream's executable
@@ -472,6 +593,93 @@ class ConfigurationService(BaseService):
         lines.extend(self._generate_game_launch_lines())
 
         return "\n".join(lines) + "\n"
+
+    def _wrapper_profile_configuration_lines(
+            self, profile_data: ProfileData) -> list[str]:
+        """Select launcher-only settings by explicit profile or Steam app ID."""
+        current_profile = profile_data["current_profile"]
+        profile_settings = self._read_wrapper_profile_settings()
+        metadata = self._read_profile_metadata(profile_data)
+        app_profiles = [
+            (entry.get("steam_app_id"), profile_name)
+            for profile_name, entry in metadata.items()
+            if re.fullmatch(r"\d+", str(entry.get("steam_app_id") or ""))
+        ]
+        process_profiles = [
+            (profile_name, self._processes_for_config(config))
+            for profile_name, config in profile_data["profiles"].items()
+            if profile_name != DEFAULT_PROFILE_NAME
+            and self._processes_for_config(config)
+        ]
+
+        lines = [
+            'mako_wrapper_profile="${MAKO_PROFILE:-}"',
+            "mako_wrapper_profile_from_identity=0",
+            'mako_wrapper_app_id="${SteamAppId:-${SteamGameId:-${STEAM_COMPAT_APP_ID:-}}}"',
+            'if [ -z "$mako_wrapper_profile" ]; then',
+            '    if [ -n "$mako_wrapper_app_id" ]; then',
+            '        case "$mako_wrapper_app_id" in',
+        ]
+        for app_id, profile_name in app_profiles:
+            lines.extend([
+                f"            {app_id})",
+                f"                mako_wrapper_profile={shlex.quote(profile_name)}",
+                "                mako_wrapper_profile_from_identity=1",
+                "                ;;",
+            ])
+        lines.extend([
+            "            *)",
+            f"                mako_wrapper_profile={shlex.quote(DEFAULT_PROFILE_NAME if DEFAULT_PROFILE_NAME in profile_data['profiles'] else current_profile)}",
+            "                ;;",
+            "        esac",
+            "    else",
+            '        case " $* " in',
+        ])
+        for profile_name, processes in process_profiles:
+            patterns = "|".join(
+                f"*{shlex.quote(process_name)}*" for process_name in processes
+            )
+            lines.extend([
+                f"            {patterns})",
+                f"                mako_wrapper_profile={shlex.quote(profile_name)}",
+                "                mako_wrapper_profile_from_identity=1",
+                "                ;;",
+            ])
+        lines.extend([
+            "            *)",
+            f"                mako_wrapper_profile={shlex.quote(current_profile)}",
+            "                ;;",
+            "        esac",
+            "    fi",
+            "fi",
+            'case "$mako_wrapper_profile" in',
+        ])
+
+        for profile_name in profile_data["profiles"]:
+            config = self._config_for_profile(
+                profile_data, profile_name, profile_settings
+            )
+            lines.append(f"    {shlex.quote(profile_name)})")
+            lines.extend(
+                f"        {line}" for line in self._script_configuration_lines(config)
+            )
+            lines.append("        ;;")
+
+        fallback_config = self._config_for_profile(
+            profile_data, current_profile, profile_settings
+        )
+        lines.append("    *)")
+        lines.extend(
+            f"        {line}" for line in self._script_configuration_lines(fallback_config)
+        )
+        lines.extend([
+            "        ;;",
+            "esac",
+            'if [ "$mako_wrapper_profile_from_identity" = "1" ]; then',
+            '    export MAKO_PROFILE="$mako_wrapper_profile"',
+            "fi",
+        ])
+        return lines
 
     @classmethod
     def _script_configuration_lines(cls, config: ConfigurationData) -> list[str]:
@@ -558,7 +766,9 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Format 31 removes duplicate generated compatibility exports. Format 30
+        Format 32 selects per-game compatibility settings from persistent Steam
+        app identity before launch. Format 31 removes duplicate generated
+        compatibility exports. Format 30
         applies a build-flavour-aware presentation-diagnostics
         default. Local development packages enable it while published packages
         remain quiet, and either build still honours an explicit caller value.
@@ -592,7 +802,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO launch wrapper to format 31")
+            self.log.info("Upgraded installed MAKO launch wrapper to format 32")
             return True
         except OSError:
             raise
@@ -656,17 +866,23 @@ class ConfigurationService(BaseService):
         """
         try:
             profile_data = self._get_profile_data()
+            self.migrate_profile_metadata_if_needed()
+            metadata = self._read_profile_metadata(profile_data)
 
             return self._success_response(ProfilesResponse,
                                         "Profiles retrieved successfully",
                                         profiles=list(profile_data["profiles"].keys()),
-                                        current_profile=profile_data["current_profile"])
+                                        current_profile=profile_data["current_profile"],
+                                        profile_details=self._profile_details(
+                                            profile_data, metadata
+                                        ))
 
         except Exception as e:
             error_msg = f"Error getting profiles: {str(e)}"
             self.log.error(error_msg)
             return self._error_response(ProfilesResponse, str(e),
-                                       profiles=None, current_profile=None)
+                                       profiles=None, current_profile=None,
+                                       profile_details=None)
 
     def create_profile(self, profile_name: str, source_profile: str = None) -> ProfileResponse:
         """Create a new profile
@@ -681,6 +897,8 @@ class ConfigurationService(BaseService):
         try:
             self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
+            self.migrate_profile_metadata_if_needed()
+            metadata = self._read_profile_metadata(profile_data)
 
             if not source_profile:
                 source_profile = profile_data["current_profile"]
@@ -693,8 +911,15 @@ class ConfigurationService(BaseService):
             profile_settings[normalized_name] = dict(
                 self._wrapper_settings_for_profile(source_profile, profile_settings)
             )
+            metadata[normalized_name] = {
+                "display_name": profile_name.strip(),
+                "kind": "process",
+                "steam_app_id": None,
+                "captured_processes": [],
+            }
             self._save_profile_data(new_profile_data)
             self._write_wrapper_profile_settings(profile_settings)
+            self._write_profile_metadata(metadata)
 
             self.log.info(f"Created profile '{normalized_name}' from '{source_profile}'")
 
@@ -724,12 +949,16 @@ class ConfigurationService(BaseService):
         try:
             self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
+            self.migrate_profile_metadata_if_needed()
+            metadata = self._read_profile_metadata(profile_data)
             profile_settings = self._read_wrapper_profile_settings()
             new_profile_data = ConfigurationManager.delete_profile(profile_data, profile_name)
             profile_settings.pop(profile_name, None)
+            metadata.pop(profile_name, None)
             self._save_profile_data(new_profile_data)
             if self.wrapper_profile_settings_path.exists() or profile_settings:
                 self._write_wrapper_profile_settings(profile_settings)
+            self._write_profile_metadata(metadata)
 
             script_result = self.update_mako_script_from_profile_data(new_profile_data)
             if not script_result["success"]:
@@ -763,6 +992,8 @@ class ConfigurationService(BaseService):
         try:
             self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
+            self.migrate_profile_metadata_if_needed()
+            metadata = self._read_profile_metadata(profile_data)
 
             # Get the normalized name that will be used for storage
             normalized_name = ConfigurationManager.normalize_profile_name(new_name)
@@ -771,9 +1002,13 @@ class ConfigurationService(BaseService):
             profile_settings = self._read_wrapper_profile_settings()
             if old_name in profile_settings:
                 profile_settings[normalized_name] = profile_settings.pop(old_name)
+            if old_name in metadata:
+                metadata[normalized_name] = metadata.pop(old_name)
+                metadata[normalized_name]["display_name"] = new_name.strip()
             self._save_profile_data(new_profile_data)
             if self.wrapper_profile_settings_path.exists() or profile_settings:
                 self._write_wrapper_profile_settings(profile_settings)
+            self._write_profile_metadata(metadata)
 
             script_result = self.update_mako_script_from_profile_data(new_profile_data)
             if not script_result["success"]:
@@ -794,6 +1029,141 @@ class ConfigurationService(BaseService):
             error_msg = f"Error renaming profile: {str(e)}"
             self.log.error(error_msg)
             return self._error_response(ProfileResponse, str(e), profile_name=None)
+
+    def capture_game_profile(
+            self,
+            app_id: str,
+            display_name: str,
+            source_profile: str = None,
+    ) -> ProfileResponse:
+        """Create or refresh a persistent profile for one running Steam app."""
+        normalized_app_id = str(app_id).strip()
+        friendly_name = str(display_name).strip()
+        if not re.fullmatch(r"\d+", normalized_app_id) or not friendly_name:
+            return self._error_response(
+                ProfileResponse,
+                "The running game identity is incomplete",
+                profile_name=None,
+                profile=None,
+            )
+
+        processes = detect_processes_for_steam_app(normalized_app_id)
+        if not processes:
+            return self._error_response(
+                ProfileResponse,
+                "No game process was detected yet. Wait until gameplay has loaded, then try again.",
+                profile_name=None,
+                profile=None,
+            )
+
+        try:
+            self.migrate_wrapper_profile_settings_if_needed()
+            profile_data = self._get_profile_data()
+            self.migrate_profile_metadata_if_needed()
+            metadata = self._read_profile_metadata(profile_data)
+            profile_settings = self._read_wrapper_profile_settings()
+
+            target_profile = next((
+                profile_name
+                for profile_name, entry in metadata.items()
+                if entry.get("steam_app_id") == normalized_app_id
+            ), None)
+
+            detected_names = {name.casefold() for name in processes}
+            if target_profile is None:
+                for profile_name, config in profile_data["profiles"].items():
+                    if profile_name == DEFAULT_PROFILE_NAME:
+                        continue
+                    configured_names = {
+                        name.casefold() for name in self._processes_for_config(config)
+                    }
+                    if configured_names & detected_names:
+                        target_profile = profile_name
+                        break
+
+            created = target_profile is None
+            if created:
+                source = (
+                    source_profile
+                    if source_profile in profile_data["profiles"]
+                    else profile_data["current_profile"]
+                )
+                base_name = ConfigurationManager.normalize_profile_name(friendly_name)
+                if not ConfigurationManager.validate_profile_name(base_name):
+                    base_name = f"game-{normalized_app_id}"
+                if base_name == DEFAULT_PROFILE_NAME:
+                    base_name = f"{base_name}-game"
+                target_profile = base_name
+                suffix = 2
+                while target_profile in profile_data["profiles"]:
+                    target_profile = f"{base_name}-{suffix}"
+                    suffix += 1
+                profile_data = ConfigurationManager.create_profile(
+                    profile_data, target_profile, source
+                )
+                profile_settings[target_profile] = dict(
+                    self._wrapper_settings_for_profile(source, profile_settings)
+                )
+
+            existing_processes = self._processes_for_config(
+                profile_data["profiles"][target_profile]
+            )
+            previous_captured = {
+                name.casefold()
+                for name in metadata.get(target_profile, {}).get(
+                    "captured_processes", []
+                )
+            }
+            # Refresh automatically captured identities, while retaining any
+            # aliases the user added manually in Matched Processes.
+            merged_processes = [
+                name for name in existing_processes
+                if name.casefold() not in previous_captured
+            ]
+            known = {name.casefold() for name in merged_processes}
+            for process_name in processes:
+                if process_name.casefold() not in known:
+                    merged_processes.append(process_name)
+                    known.add(process_name.casefold())
+            profile_data["profiles"][target_profile]["active_in"] = ", ".join(
+                merged_processes
+            )
+            profile_data = ConfigurationManager.set_current_profile(
+                profile_data, target_profile
+            )
+            metadata[target_profile] = {
+                "display_name": friendly_name,
+                "kind": "game",
+                "steam_app_id": normalized_app_id,
+                "captured_processes": processes,
+            }
+
+            self._save_profile_data(profile_data)
+            self._write_wrapper_profile_settings(profile_settings)
+            self._write_profile_metadata(metadata)
+            script_result = self.update_mako_script_from_profile_data(profile_data)
+            if not script_result["success"]:
+                raise OSError(script_result.get("error") or "could not update launch wrapper")
+
+            detail = next(
+                item for item in self._profile_details(profile_data, metadata)
+                if item["profile_name"] == target_profile
+            )
+            action = "created" if created else "updated"
+            return self._success_response(
+                ProfileResponse,
+                f"Profile for '{friendly_name}' {action} successfully",
+                profile_name=target_profile,
+                profile=detail,
+            )
+        except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
+            self.log.error("Error capturing game profile: %s", error)
+            return self._error_response(
+                ProfileResponse,
+                str(error),
+                profile_name=None,
+                profile=None,
+            )
 
     def set_current_profile(self, profile_name: str) -> ProfileResponse:
         """Set the current active profile
@@ -830,6 +1200,97 @@ class ConfigurationService(BaseService):
             error_msg = f"Error setting current profile: {str(e)}"
             self.log.error(error_msg)
             return self._error_response(ProfileResponse, str(e), profile_name=None)
+
+    def sync_current_profile(self, app_id: str = "") -> ProfileResponse:
+        """Select the saved profile matching a live Steam app process.
+
+        A Steam running-app record can outlive its game process briefly. Never
+        retain or select a game profile from the app ID alone: require at least
+        one live process carrying that ID, then prefer the previously captured
+        app profile and fall back to matching its configured process aliases.
+        With no live match, restore the default profile.
+        """
+        try:
+            self.migrate_wrapper_profile_settings_if_needed()
+            profile_data = self._get_profile_data()
+            self.migrate_profile_metadata_if_needed()
+            metadata = self._read_profile_metadata(profile_data)
+
+            normalized_app_id = str(app_id or "").strip()
+            detected_processes = []
+            if re.fullmatch(r"\d+", normalized_app_id) and normalized_app_id != "0":
+                detected_processes = detect_processes_for_steam_app(
+                    normalized_app_id
+                )
+
+            target_profile = DEFAULT_PROFILE_NAME
+            if detected_processes:
+                target_profile = next((
+                    profile_name
+                    for profile_name, entry in metadata.items()
+                    if profile_name != DEFAULT_PROFILE_NAME
+                    and entry.get("steam_app_id") == normalized_app_id
+                ), None)
+
+                if target_profile is None:
+                    detected_names = {
+                        process_name.casefold()
+                        for process_name in detected_processes
+                    }
+                    target_profile = next((
+                        profile_name
+                        for profile_name, config in profile_data["profiles"].items()
+                        if profile_name != DEFAULT_PROFILE_NAME
+                        and detected_names & {
+                            process_name.casefold()
+                            for process_name in self._processes_for_config(config)
+                        }
+                    ), DEFAULT_PROFILE_NAME)
+
+            changed = profile_data["current_profile"] != target_profile
+            if changed:
+                profile_data = ConfigurationManager.set_current_profile(
+                    profile_data, target_profile
+                )
+                self._save_profile_data(profile_data)
+                script_result = self.update_mako_script_from_profile_data(
+                    profile_data
+                )
+                if not script_result["success"]:
+                    raise OSError(
+                        script_result.get("error")
+                        or "could not update launch wrapper"
+                    )
+                self.log.info(
+                    "Automatically selected profile '%s' for app '%s'",
+                    target_profile,
+                    normalized_app_id or "none",
+                )
+
+            detail = next(
+                item for item in self._profile_details(profile_data, metadata)
+                if item["profile_name"] == target_profile
+            )
+            return self._success_response(
+                ProfileResponse,
+                (
+                    f"Selected profile '{target_profile}'"
+                    if changed
+                    else f"Profile '{target_profile}' is already selected"
+                ),
+                profile_name=target_profile,
+                profile=detail,
+                changed=changed,
+            )
+        except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
+            self.log.error("Error synchronising current profile: %s", error)
+            return self._error_response(
+                ProfileResponse,
+                str(error),
+                profile_name=None,
+                profile=None,
+                changed=False,
+            )
 
     def update_profile_config(self, profile_name: str, config: ConfigurationData) -> ConfigurationResponse:
         """Update configuration for a specific profile

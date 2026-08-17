@@ -35,19 +35,30 @@ running. Give the game a few seconds to settle before judging the result.
 Changes that need a different GPU backend or larger private resources can wait
 for a natural swapchain recreation; restarting the game applies them directly.
 
-## Profiles and per-game selection
+## Game / Process Profiles
 
-Choose **New Profile** to copy the current profile, then adjust it for a game.
-Set **Active In** to the game's executable or process name to select that
-profile automatically at launch. It accepts comma-separated names, including
-Linux binaries and Windows `.exe` names.
+For a Steam game or shortcut, start the game and choose **Save profile for
+&lt;game&gt;** in MAKO Decky after gameplay has loaded. MAKO records only processes
+carrying that running Steam app ID, saves their executable names under
+**Matched Processes**, and keeps the profile for later launches. Choosing the
+same action again updates the existing profile instead of creating a duplicate.
 
-The frame-generation, quality, GPU, and Active In settings follow automatic
-profile matching. The DLL path and FP16 permission are global. Launcher
-compatibility settings—such as **Disable MAKO Renderer on Next Launch**,
-**Disable HDR**, Steam Deck Mode, and Zink—are selected before
-MAKO sees the game's process, so choose their Decky profile manually before
-launching when they differ between games.
+The saved Steam app ID selects launcher compatibility settings before the game
+starts. The captured process names select the same renderer profile once its
+Vulkan process loads. Unrecognised Steam games use the Default profile, so a
+setting saved for one game does not leak into another game or plugin.
+
+For launchers and emulators, start the title from its Steam or Game Mode
+shortcut and use the same running-game capture action. Profile creation is not
+available while no game is running: MAKO relies on process discovery instead
+of asking you to guess an executable name. After capture, edit **Matched
+Processes** only if a launcher or emulator needs an additional process alias.
+Linux binary names and Windows `.exe` names are supported.
+
+Frame-generation, quality, GPU, and matched-process settings belong to the
+selected profile. Launcher compatibility settings—including **Disable MAKO
+Renderer on Next Launch**, **Disable HDR**, Steam Deck Mode, Zink, and ALSA—are
+also stored per profile. The DLL path and FP16 permission remain global.
 
 ## Quality and matching
 
@@ -72,6 +83,12 @@ layer for the game process; the CLI and configuration UI are 64-bit only.
   test instead.
 - **Steam Deck Mode:** Per-game compatibility path.
 - **Zink:** Vulkan-based OpenGL path for OpenGL games.
+- **Force ALSA Audio (Restart):** Forces the native SDL ALSA driver, disables
+  Wine/Proton's Pulse driver, and enables its built-in ALSA driver for the
+  selected profile. This may improve audio compatibility for some games. Leave
+  it disabled by default. Turning it off
+  removes MAKO's audio override entirely and restores normal Steam/Proton
+  behaviour; restart the game after changing it.
 
 HDR frame generation is unavailable in this release. **Disable HDR (Restart)**
 is intentionally checked and read-only: MAKO Decky keeps the

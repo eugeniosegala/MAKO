@@ -32,6 +32,7 @@ DISABLE_MAKO = "disable_mako"
 DISABLE_HDR_EXPOSURE = "disable_hdr_exposure"
 DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode"
 ENABLE_ZINK = "enable_zink"
+FORCE_ALSA_AUDIO = "force_alsa_audio"
 
 
 class ConfigurationData(TypedDict):
@@ -55,6 +56,7 @@ class ConfigurationData(TypedDict):
     disable_hdr_exposure: bool
     disable_steamdeck_mode: bool
     enable_zink: bool
+    force_alsa_audio: bool
 
 
 def get_script_parsing_logic():
@@ -84,6 +86,8 @@ def get_script_parsing_logic():
                         script_values["enable_zink"] = True
                 if key == "GALLIUM_DRIVER" and value == "zink":
                         script_values["enable_zink"] = True
+                if key == "SDL_AUDIODRIVER" and value == "alsa":
+                        script_values["force_alsa_audio"] = True
 
         return script_values
     return parse_script_values
@@ -103,8 +107,20 @@ def get_script_generation_logic():
             lines.append("export __GLX_VENDOR_LIBRARY_NAME=mesa")
             lines.append("export MESA_LOADER_DRIVER_OVERRIDE=zink")
             lines.append("export GALLIUM_DRIVER=zink")
+        if config.get("force_alsa_audio", False):
+            lines.extend([
+                "export SDL_AUDIODRIVER=alsa",
+                'case ";${WINEDLLOVERRIDES:-};" in',
+                '    *";winepulse.drv=d;"*) ;;',
+                '    *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winepulse.drv=d" ;;',
+                "esac",
+                'case ";${WINEDLLOVERRIDES:-};" in',
+                '    *";winealsa.drv=b;"*) ;;',
+                '    *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winealsa.drv=b" ;;',
+                "esac",
+            ])
         return lines
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'disable_steamdeck_mode', 'enable_zink']
+ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']

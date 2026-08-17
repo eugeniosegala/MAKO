@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   getProfiles,
-  createProfile,
   deleteProfile,
   renameProfile,
   setCurrentProfile,
+  syncCurrentProfile,
   updateProfileConfig,
   type ProfilesResult,
   type ProfileResult,
@@ -40,31 +40,6 @@ export function useProfileManagement() {
       return { success: false, error: String(error) };
     }
   }, []);
-
-  // Create a new profile
-  const handleCreateProfile = useCallback(async (profileName: string, sourceProfile?: string) => {
-    setIsLoading(true);
-    try {
-      const result: ProfileResult = await createProfile(profileName, sourceProfile || currentProfile);
-      if (result.success) {
-        // Use the normalized name returned from backend (spaces converted to dashes)
-        const actualProfileName = result.profile_name || profileName;
-        showSuccessToast(t('PROFILE_CREATED', 'Profile created'), `${t('PROFILE_CREATED_DESC', 'Created profile:')} ${actualProfileName}`);
-        await loadProfiles();
-        return result;
-      } else {
-        console.error("Failed to create profile:", result.error);
-        showErrorToast(t('PROFILE_CREATE_FAILED', 'Failed to create profile'), result.error || t('PROFILE_UNKNOWN_ERROR', 'Unknown error'));
-        return result;
-      }
-    } catch (error) {
-      console.error("Error creating profile:", error);
-      showErrorToast(t('PROFILE_CREATE_ERROR', 'Error creating profile'), String(error));
-      return { success: false, error: String(error) };
-    } finally {
-      setIsLoading(false);
-    }
-  }, [currentProfile, loadProfiles]);
 
   // Delete a profile
   const handleDeleteProfile = useCallback(async (profileName: string) => {
@@ -155,6 +130,21 @@ export function useProfileManagement() {
     }
   }, []);
 
+  const handleSyncCurrentProfile = useCallback(async (appId?: string) => {
+    try {
+      const result: ProfileResult = await syncCurrentProfile(appId || "");
+      if (result.success && result.profile_name) {
+        setCurrentProfileState(result.profile_name);
+      } else if (!result.success) {
+        console.error("Failed to synchronise current profile:", result.error);
+      }
+      return result;
+    } catch (error) {
+      console.error("Error synchronising current profile:", error);
+      return { success: false, changed: false, error: String(error) };
+    }
+  }, []);
+
   // Update configuration for a specific profile
   const handleUpdateProfileConfig = useCallback(async (profileName: string, config: ConfigurationData) => {
     setIsLoading(true);
@@ -186,10 +176,10 @@ export function useProfileManagement() {
     currentProfile,
     isLoading,
     loadProfiles,
-    createProfile: handleCreateProfile,
     deleteProfile: handleDeleteProfile,
     renameProfile: handleRenameProfile,
     setCurrentProfile: handleSetCurrentProfile,
+    syncCurrentProfile: handleSyncCurrentProfile,
     updateProfileConfig: handleUpdateProfileConfig
   };
 }

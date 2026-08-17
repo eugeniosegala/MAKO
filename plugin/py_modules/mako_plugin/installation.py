@@ -386,6 +386,8 @@ class InstallationService(BaseService):
         config_service.local_share_dir = self.local_share_dir
         config_service.config_dir = self.config_dir
         config_service.config_file_path = self.config_file_path
+        config_service.wrapper_profile_settings_path = self.wrapper_profile_settings_path
+        config_service.profile_metadata_path = self.profile_metadata_path
         config_service.mako_script_path = self.mako_launch_script_path
 
         profile_data = config_service._get_profile_data()

@@ -159,7 +159,7 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as source:
     print(json.load(source).get("name", ""))
 ' "$plugin_dir/plugin.json")"
-if [[ "$plugin_name" != "Mako" ]]; then
+if [[ "$plugin_name" != "Mako" && "$plugin_name" != "MAKO - Frame Generation" ]]; then
   echo "Refusing to modify a different Decky plugin: $plugin_dir" >&2
   exit 1
 fi
@@ -169,6 +169,10 @@ copy_file() {
   local destination_path="$2"
   local destination_dir
   local temporary_path
+
+  if [[ -f "$destination_path" ]] && cmp -s "$source_path" "$destination_path"; then
+    return
+  fi
 
   destination_dir="$(dirname "$destination_path")"
   mkdir -p "$destination_dir"
@@ -316,6 +320,13 @@ if [[ "$deploy_frontend" == true ]]; then
   MAKO_DEV_BUILD_INFO_PATH="$dev_build_info_path" \
     node "$project_dir/scripts/build-frontend.mjs"
   copy_file "$project_dir/dist/index.js" "$plugin_dir/dist/index.js"
+  if cmp -s "$project_dir/plugin.json" "$plugin_dir/plugin.json"; then
+    :
+  elif [[ -w "$plugin_dir" || -w "$plugin_dir/plugin.json" ]]; then
+    copy_file "$project_dir/plugin.json" "$plugin_dir/plugin.json"
+  else
+    echo "Skipped protected Decky manifest; reinstall the next ZIP to apply manifest changes."
+  fi
   if [[ -f "$project_dir/dist/index.js.map" ]]; then
     copy_file "$project_dir/dist/index.js.map" "$plugin_dir/dist/index.js.map"
   fi

@@ -22,6 +22,7 @@ from .constants import (
     CONFIG_DIR,
     CONFIG_FILENAME,
     WRAPPER_PROFILE_SETTINGS_FILENAME,
+    PROFILE_METADATA_FILENAME,
 )
 
 ResponseType = TypeVar('ResponseType', bound=Dict[str, Any])
@@ -54,6 +55,7 @@ class BaseService:
         self.config_dir = self.user_home / CONFIG_DIR
         self.config_file_path = self.config_dir / CONFIG_FILENAME
         self.wrapper_profile_settings_path = self.config_dir / WRAPPER_PROFILE_SETTINGS_FILENAME
+        self.profile_metadata_path = self.config_dir / PROFILE_METADATA_FILENAME
 
     def _ensure_directories(self) -> None:
         """Create necessary directories if they don't exist"""

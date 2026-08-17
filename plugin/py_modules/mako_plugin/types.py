@@ -76,6 +76,7 @@ class ProfilesResponse(BaseResponse):
     """Response for profile operations"""
     profiles: Optional[List[str]]
     current_profile: Optional[str]
+    profile_details: Optional[List[Dict[str, Any]]]
     message: Optional[str]
     error: Optional[str]
 
@@ -83,5 +84,7 @@ class ProfilesResponse(BaseResponse):
 class ProfileResponse(BaseResponse):
     """Response for single profile operations"""
     profile_name: Optional[str]
+    profile: Optional[Dict[str, Any]]
+    changed: Optional[bool]
     message: Optional[str]
     error: Optional[str]

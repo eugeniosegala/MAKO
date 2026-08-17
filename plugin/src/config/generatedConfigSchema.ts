@@ -27,6 +27,7 @@ export const DISABLE_MAKO = "disable_mako" as const;
 export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
+export const FORCE_ALSA_AUDIO = "force_alsa_audio" as const;
 
 // Configuration field definition
 export interface ConfigField {
@@ -152,6 +153,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: false,
     description: "Enable Zink (Vulkan-based OpenGL implementation) for OpenGL games"
   },
+  force_alsa_audio: {
+    name: "force_alsa_audio",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "force ALSA for this game after restart; disable to restore Steam and Proton audio defaults"
+  },
 };
 
 // Type-safe configuration data structure
@@ -175,6 +182,7 @@ export interface ConfigurationData {
   disable_hdr_exposure: boolean;
   disable_steamdeck_mode: boolean;
   enable_zink: boolean;
+  force_alsa_audio: boolean;
 }
 
 // Helper functions
@@ -203,6 +211,7 @@ export function getDefaults(): ConfigurationData {
     disable_hdr_exposure: true,
     disable_steamdeck_mode: false,
     enable_zink: false,
+    force_alsa_audio: false,
   };
 }
 
@@ -227,5 +236,6 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     disable_hdr_exposure: ConfigFieldType.BOOLEAN,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,
+    force_alsa_audio: ConfigFieldType.BOOLEAN,
   };
 }

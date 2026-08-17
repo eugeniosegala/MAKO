@@ -42,7 +42,8 @@ export function Content() {
   const {
     currentProfile,
     updateProfileConfig,
-    loadProfiles
+    loadProfiles,
+    syncCurrentProfile
   } = useProfileManagement();
 
   const { isInstalling, isUninstalling, handleInstall, handleUninstall } = useInstallationActions();
@@ -54,14 +55,34 @@ export function Content() {
   }, [isInstalled, loadMakoConfig]);
 
   useEffect(() => {
-    const checkRunningApp = () => {
-      setMainRunningApp(Router.MainRunningApp);
+    let cancelled = false;
+    let syncInFlight = false;
+
+    const checkRunningApp = async () => {
+      const runningApp = Router.MainRunningApp;
+      setMainRunningApp(runningApp);
+      if (syncInFlight) return;
+
+      syncInFlight = true;
+      try {
+        const result = await syncCurrentProfile(
+          runningApp ? String(runningApp.appid) : undefined
+        );
+        if (!cancelled && result.success && result.changed) {
+          await loadMakoConfig();
+        }
+      } finally {
+        syncInFlight = false;
+      }
     };
 
-    checkRunningApp();
-    const interval = setInterval(checkRunningApp, 2000);
-    return () => clearInterval(interval);
-  }, []);
+    void checkRunningApp();
+    const interval = setInterval(() => void checkRunningApp(), 2000);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [loadMakoConfig, syncCurrentProfile]);
 
   const handleConfigChange = async (fieldName: keyof ConfigurationData, value: boolean | number | string) => {
     if (currentProfile) {
@@ -238,7 +259,7 @@ export function Content() {
               overflowWrap: "anywhere"
             }}
           >
-            <strong>{mainRunningApp.display_name}</strong> {t('CONTENT_RUNNING', 'running.')}{" "}{t('PROFILE_CLOSE_GAME', 'Close game to change profile.')}
+            <strong>{mainRunningApp.display_name}</strong> {t('CONTENT_RUNNING', 'running.')} {t('PROFILE_CAPTURE_READY', 'MAKO selects saved profiles automatically. If this game is new, save it below; restart the game after changing restart-only settings.')}
           </div>
         </PanelSectionRow>
       )}
@@ -292,14 +313,25 @@ export function Content() {
       )}
 
       {isInstalled && (
+        <ProfileManagement
+          currentProfile={currentProfile}
+          mainRunningApp={mainRunningApp}
+          onProfileChange={async () => {
+            await loadProfiles();
+            await loadMakoConfig();
+          }}
+        />
+      )}
+
+      {isInstalled && (
         <>
           <PanelSectionRow>
             <div
               style={{
                 fontSize: "14px",
                 fontWeight: "bold",
-                marginTop: "24px",
-                marginBottom: "8px",
+                marginTop: "18px",
+                marginBottom: "6px",
                 color: "white"
               }}
             >
@@ -312,17 +344,6 @@ export function Content() {
             onConfigChange={handleConfigChange}
           />
         </>
-      )}
-
-      {isInstalled && (
-        <ProfileManagement
-          currentProfile={currentProfile}
-          mainRunningApp={mainRunningApp}
-          onProfileChange={async () => {
-            await loadProfiles();
-            await loadMakoConfig();
-          }}
-        />
       )}
 
       {isInstalled && (

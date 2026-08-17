@@ -5,7 +5,7 @@
 </p>
 
 > [!IMPORTANT]
-> **Decky LSFG-VK and LSFG-VK are now MAKO.** This repository is their new home and continuation. Future development, releases, documentation, and issue tracking happen here.
+> **[Decky LSFG-VK](https://github.com/xXJSONDeruloXx/decky-lsfg-vk) and [LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) are now MAKO.** This repository is their new home and continuation. Future development, releases, documentation, and issue tracking happen here.
 
 > **Independent project and Lossless Scaling requirement:** MAKO is an independent Steam Deck and Steam Machine project comprising MAKO Decky and MAKO Renderer. It brings Lossless Scaling frame generation to SteamOS today, with scaling support planned as the project expands. MAKO requires the `Lossless.dll` supplied by a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation but does not bundle, copy, or modify that proprietary library. Test it per game; MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
 
@@ -30,6 +30,7 @@
 | 🧩 | **64-bit and 32-bit Vulkan**       | Ships architecture-matched host and Flatpak layers so Vulkan can select the correct library for each game process. |
 | 🛡️ | **Gamescope recovery**            | Bounded presentation recovery preserves native presentation and resumes generation only after the game cadence becomes stable again. |
 | ⏯️ | **Live frame-generation switch**  | Turns frame generation on or off without discarding the selected Fixed or Adaptive settings. |
+| 🗂️ | **Dedicated game/process profiles** | Capture a running game once and keep its renderer and compatibility settings. MAKO automatically selects it by Steam app ID or process, with isolated per-profile controls including ALSA audio. |
 | 🎮 | **Per-game Heroic and EmuDeck support** | Enables MAKO only for the Heroic games and EmuDeck titles you choose, using the same private configuration and engine as native Steam games. |
 
 ## What MAKO is

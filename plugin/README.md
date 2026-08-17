@@ -5,7 +5,7 @@
 </p>
 
 > [!NOTE]
-> **Decky LSFG-VK is now MAKO Decky.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
+> **[Decky LSFG-VK](https://github.com/xXJSONDeruloXx/decky-lsfg-vk) is now MAKO Decky.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
 MAKO Decky is the Decky Loader component of MAKO. It provides per-game controls, installation, updates, Flatpak preparation, and game launch integration for MAKO Renderer on Steam Deck and compatible Linux systems.
 
@@ -24,7 +24,7 @@ For direct Vulkan-layer installation without Decky, use the separate
 
 - Installs the private MAKO Renderer Vulkan layer for the current user.
 - Generates the `~/.local/bin/mako-run` per-game launcher.
-- Stores MAKO Renderer profiles in `~/.config/mako-render/conf.toml`.
+- Stores renderer settings in `~/.config/mako-render/conf.toml` and versioned game/process identity separately for automatic per-game selection.
 - Supports fixed and adaptive frame generation with live per-game controls.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Launches selected games through MAKO's private renderer and configuration.
