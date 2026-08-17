@@ -204,5 +204,4 @@ unpublished/mismatched Renderer tag.
 Release entry points:
 
 - [Latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest)
-- [All MAKO Decky releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Aplugin-v)
-- [All MAKO Renderer releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Arender-v)
+- [All MAKO releases](https://github.com/eugeniosegala/MAKO/releases)

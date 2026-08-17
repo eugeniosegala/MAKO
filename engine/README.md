@@ -14,7 +14,7 @@ The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and r
 ## Downloads
 
 Standalone Linux and Flatpak archives are published on the
-[MAKO Renderer release track](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Arender-v).
+[MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
 Steam Deck users who want the managed workflow should install the
 [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
