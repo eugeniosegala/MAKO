@@ -16,6 +16,9 @@
 | **MAKO Decky** | Steam Deck and Decky Loader users | [Download the latest Decky ZIP](https://github.com/eugeniosegala/MAKO/releases/latest) · [All MAKO Decky releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Aplugin-v) |
 | **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Browse MAKO Renderer releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Arender-v) |
 
+> [!NOTE]
+> Check these release pages regularly for updates. MAKO Decky and MAKO Renderer are published independently.
+
 MAKO Decky releases are normal GitHub releases and the current one is marked
 **Latest**. MAKO Renderer builds are separate prereleases. Legacy experimental
 packages remain available under their old project names, but their wrapper
