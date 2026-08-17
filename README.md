@@ -13,10 +13,10 @@
 
 | Component | Recommended for | Releases |
 |-----------|-----------------|----------|
-| **MAKO Decky** | Steam Deck and Decky Loader users | **[Download the latest Decky ZIP](https://github.com/eugeniosegala/MAKO/releases/latest)** · [All MAKO Decky releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Aplugin-v) |
-| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | **[Browse MAKO Renderer releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Arender-v)** |
+| **MAKO Decky** | Steam Deck and Decky Loader users | MAKO-branded ZIPs are not published yet · [Legacy experimental releases](https://github.com/eugeniosegala/decky-lsfg-vk-experimental/releases) |
+| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | MAKO-branded archives are not published yet · [Legacy renderer releases](https://github.com/eugeniosegala/lsfg-vk-experimental/releases) |
 
-MAKO Decky releases use `plugin-v…` tags and own the repository's **Latest** release. Standalone MAKO Renderer releases use `render-v…` tags and remain on their filtered release track.
+The first MAKO-branded Decky ZIP and Renderer archive have not been released yet. The legacy release tracks above remain available for the previous experimental projects, but their packages, wrapper names, and instructions still use the old LSFG-VK identities. This README describes MAKO and will link to its own release tracks once the first MAKO packages are published.
 
 ## ✨ Highlights
 
@@ -51,7 +51,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 1. **Install Decky Loader** if needed. Switch to Desktop Mode and follow the [official Decky Loader installation guide](https://github.com/SteamDeckHomebrew/decky-loader#-installation), then return to Game Mode.
 2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam.** MAKO needs the licensed installation's `Lossless.dll`.
-3. **Download the latest MAKO Decky ZIP** from the [latest Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
+3. **Wait for the first MAKO Decky ZIP.** MAKO-branded packages are not published yet; see the release-status note above before installing a legacy experimental package.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
 5. Open **Mako** and select **Install MAKO Renderer (developer build)**. This required step installs the renderer bundled in the ZIP into MAKO's private location.
 6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal starting point; Adaptive Frame Generation is optional.
