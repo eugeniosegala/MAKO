@@ -11,7 +11,7 @@ import { UsageInstructions } from "./UsageInstructions";
 import { SmartClipboardButton } from "./SmartClipboardButton";
 import { FgmodClipboardButton } from "./FgmodClipboardButton";
 import { FpsMultiplierControl } from "./FpsMultiplierControl";
-import { NerdStuffModal } from "./NerdStuffModal";
+import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
 import { ConfigurationData } from "../config/configSchema";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
@@ -84,8 +84,8 @@ export function Content() {
     handleUninstall(setIsInstalled, setInstallationStatus);
   };
 
-  const handleShowNerdStuff = () => {
-    showModal(<NerdStuffModal />);
+  const handleShowAdvancedDetails = () => {
+    showModal(<AdvancedDetailsModal />);
   };
 
   const handleShowFlatpaks = () => {
@@ -345,9 +345,9 @@ export function Content() {
         <div style={{ marginTop: "24px" }}>
           <ButtonItem
             layout="below"
-            onClick={handleShowNerdStuff}
+            onClick={handleShowAdvancedDetails}
           >
-            {t("CONTENT_NERD_STUFF", "Nerd Stuff")}
+            {t("CONTENT_ADVANCED_DETAILS", "Advanced Details")}
           </ButtonItem>
         </div>
       </PanelSectionRow>

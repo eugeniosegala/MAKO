@@ -1,6 +1,8 @@
-import { useState, useEffect } from "react";
+import { CSSProperties, useState, useEffect } from "react";
 import {
   ModalRoot,
+  DialogBody,
+  DialogHeader,
   Field,
   Focusable,
   DialogControlsSection,
@@ -10,11 +12,11 @@ import {
 import { getDllStats, DllStatsResult, getConfigFileContent, getLaunchScriptContent, FileContentResult } from "../api/makoApi";
 import t from '../i18n/i18n';
 
-interface NerdStuffModalProps {
+interface AdvancedDetailsModalProps {
   closeModal?: () => void;
 }
 
-export function NerdStuffModal({ closeModal }: NerdStuffModalProps) {
+export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) {
   const [dllStats, setDllStats] = useState<DllStatsResult | null>(null);
   const [configContent, setConfigContent] = useState<FileContentResult | null>(null);
   const [scriptContent, setScriptContent] = useState<FileContentResult | null>(null);
@@ -38,7 +40,7 @@ export function NerdStuffModal({ closeModal }: NerdStuffModalProps) {
         setConfigContent(configResult);
         setScriptContent(scriptResult);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t('NERD_FAILED_LOAD_DATA', 'Failed to load data'));
+        setError(err instanceof Error ? err.message : t('ADVANCED_DETAILS_FAILED_LOAD_DATA', 'Failed to load data'));
       } finally {
         setLoading(false);
       }
@@ -61,46 +63,81 @@ export function NerdStuffModal({ closeModal }: NerdStuffModalProps) {
     }
   };
 
+  const copyableValueStyle: CSSProperties = {
+    display: "block",
+    minWidth: 0,
+    maxWidth: "100%",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word"
+  };
+
+  const pathStyle: CSSProperties = {
+    ...copyableValueStyle,
+    marginBottom: "8px",
+    fontSize: "0.9em",
+    opacity: 0.8
+  };
+
+  const codeBlockStyle: CSSProperties = {
+    boxSizing: "border-box",
+    width: "100%",
+    maxWidth: "100%",
+    maxHeight: "180px",
+    margin: 0,
+    padding: "8px",
+    overflow: "auto",
+    borderRadius: "4px",
+    background: "rgba(255, 255, 255, 0.1)",
+    fontSize: "0.8em",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word"
+  };
+
   return (
-    <ModalRoot onCancel={closeModal} onOK={closeModal}>
-      {loading && (
-        <div>{t('NERD_LOADING', 'Loading information...')}</div>
-      )}
+    <ModalRoot closeModal={closeModal}>
+      <DialogHeader>{t("CONTENT_ADVANCED_DETAILS", "Advanced Details")}</DialogHeader>
+      <DialogBody>
+        {loading && (
+          <div>{t('ADVANCED_DETAILS_LOADING', 'Loading information...')}</div>
+        )}
 
-      {error && (
-        <div>{t('NERD_ERROR_PREFIX', 'Error:')} {error}</div>
-      )}
+        {error && (
+          <div style={copyableValueStyle}>{t('ADVANCED_DETAILS_ERROR_PREFIX', 'Error:')} {error}</div>
+        )}
 
-      {!loading && !error && (
-        <>
+        {!loading && !error && (
+          <Focusable flow-children="vertical">
           {/* DLL Stats Section */}
           {dllStats && (
             <>
               {!dllStats.success ? (
-                <div>{dllStats.error || t('NERD_FAILED_DLL_STATS', 'Failed to get DLL stats')}</div>
+                <div style={copyableValueStyle}>{dllStats.error || t('ADVANCED_DETAILS_FAILED_DLL_STATS', 'Failed to get DLL stats')}</div>
               ) : (
                 <div>
-                  <Field label={t('NERD_DLL_PATH', 'DLL Path')}>
+                  <Field label={t('ADVANCED_DETAILS_DLL_PATH', 'DLL Path')}>
                     <Focusable
                       onClick={() => dllStats.dll_path && copyToClipboard(dllStats.dll_path)}
                       onActivate={() => dllStats.dll_path && copyToClipboard(dllStats.dll_path)}
+                      style={copyableValueStyle}
                     >
-                      {dllStats.dll_path || t('NERD_NOT_AVAILABLE', 'Not available')}
+                      {dllStats.dll_path || t('ADVANCED_DETAILS_NOT_AVAILABLE', 'Not available')}
                     </Focusable>
                   </Field>
 
-                  <Field label={t('NERD_DLL_HASH', 'DLL SHA256 Hash')}>
+                  <Field label={t('ADVANCED_DETAILS_DLL_HASH', 'DLL SHA256 Hash')}>
                     <Focusable
                       onClick={() => dllStats.dll_sha256 && copyToClipboard(dllStats.dll_sha256)}
                       onActivate={() => dllStats.dll_sha256 && copyToClipboard(dllStats.dll_sha256)}
+                      style={copyableValueStyle}
                     >
-                      {dllStats.dll_sha256 ? formatSHA256(dllStats.dll_sha256) : t('NERD_NOT_AVAILABLE', 'Not available')}
+                      {dllStats.dll_sha256 ? formatSHA256(dllStats.dll_sha256) : t('ADVANCED_DETAILS_NOT_AVAILABLE', 'Not available')}
                     </Focusable>
                   </Field>
 
                   {dllStats.dll_source && (
-                    <Field label={t('NERD_DETECTION_SOURCE', 'Detection Source')}>
-                      <div>{dllStats.dll_source}</div>
+                    <Field label={t('ADVANCED_DETAILS_DETECTION_SOURCE', 'Detection Source')}>
+                      <div style={copyableValueStyle}>{dllStats.dll_source}</div>
                     </Field>
                   )}
                 </div>
@@ -110,28 +147,20 @@ export function NerdStuffModal({ closeModal }: NerdStuffModalProps) {
 
           {/* Launch Script Section */}
           {scriptContent && (
-            <Field label={t('NERD_LAUNCH_SCRIPT', 'Launch Script')}>
+            <Field label={t('ADVANCED_DETAILS_LAUNCH_SCRIPT', 'Launch Script')}>
               {!scriptContent.success ? (
-                <div>{t('NERD_SCRIPT_NOT_FOUND_PREFIX', 'Script not found:')} {scriptContent.error}</div>
+                <div style={copyableValueStyle}>{t('ADVANCED_DETAILS_SCRIPT_NOT_FOUND_PREFIX', 'Script not found:')} {scriptContent.error}</div>
               ) : (
-                <div>
-                  <div style={{ marginBottom: "8px", fontSize: "0.9em", opacity: 0.8 }}>
-                    {t('NERD_PATH_PREFIX', 'Path:')} {scriptContent.path}
+                <div style={{ minWidth: 0 }}>
+                  <div style={pathStyle}>
+                    {t('ADVANCED_DETAILS_PATH_PREFIX', 'Path:')} {scriptContent.path}
                   </div>
                   <Focusable
                     onClick={() => scriptContent.content && copyToClipboard(scriptContent.content)}
                     onActivate={() => scriptContent.content && copyToClipboard(scriptContent.content)}
                   >
-                    <pre style={{
-                      background: "rgba(255, 255, 255, 0.1)",
-                      padding: "8px",
-                      borderRadius: "4px",
-                      fontSize: "0.8em",
-                      whiteSpace: "pre-wrap",
-                      overflow: "auto",
-                      maxHeight: "150px"
-                    }}>
-                      {scriptContent.content || t('NERD_NO_CONTENT', 'No content')}
+                    <pre style={codeBlockStyle}>
+                      {scriptContent.content || t('ADVANCED_DETAILS_NO_CONTENT', 'No content')}
                     </pre>
                   </Focusable>
                 </div>
@@ -141,27 +170,20 @@ export function NerdStuffModal({ closeModal }: NerdStuffModalProps) {
 
           {/* Config File Section */}
           {configContent && (
-            <Field label={t('NERD_CONFIG_FILE', 'Configuration File')}>
+            <Field label={t('ADVANCED_DETAILS_CONFIG_FILE', 'Configuration File')}>
               {!configContent.success ? (
-                <div>{t('NERD_CONFIG_NOT_FOUND_PREFIX', 'Config not found:')} {configContent.error}</div>
+                <div style={copyableValueStyle}>{t('ADVANCED_DETAILS_CONFIG_NOT_FOUND_PREFIX', 'Config not found:')} {configContent.error}</div>
               ) : (
-                <div>
-                  <div style={{ marginBottom: "8px", fontSize: "0.9em", opacity: 0.8 }}>
-                    {t('NERD_PATH_PREFIX', 'Path:')} {configContent.path}
+                <div style={{ minWidth: 0 }}>
+                  <div style={pathStyle}>
+                    {t('ADVANCED_DETAILS_PATH_PREFIX', 'Path:')} {configContent.path}
                   </div>
                   <Focusable
                     onClick={() => configContent.content && copyToClipboard(configContent.content)}
                     onActivate={() => configContent.content && copyToClipboard(configContent.content)}
                   >
-                    <pre style={{
-                      background: "rgba(255, 255, 255, 0.1)",
-                      padding: "8px",
-                      borderRadius: "4px",
-                      fontSize: "0.8em",
-                      whiteSpace: "pre-wrap",
-                      overflow: "auto"
-                    }}>
-                      {configContent.content || t('NERD_NO_CONTENT', 'No content')}
+                    <pre style={codeBlockStyle}>
+                      {configContent.content || t('ADVANCED_DETAILS_NO_CONTENT', 'No content')}
                     </pre>
                   </Focusable>
                 </div>
@@ -176,12 +198,13 @@ export function NerdStuffModal({ closeModal }: NerdStuffModalProps) {
                 layout="below"
                 onClick={closeModal}
               >
-                {t('NERD_CLOSE', 'Close')}
+                {t('ADVANCED_DETAILS_CLOSE', 'Close')}
               </ButtonItem>
             </PanelSectionRow>
           </DialogControlsSection>
-        </>
-      )}
+          </Focusable>
+        )}
+      </DialogBody>
     </ModalRoot>
   );
 }
