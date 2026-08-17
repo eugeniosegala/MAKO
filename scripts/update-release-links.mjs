@@ -22,12 +22,12 @@ const componentDetails = {
   decky: {
     name: "MAKO Decky",
     tag: `plugin-v${version}`,
-    text: `Download MAKO Decky v${version}`,
+    text: "Download MAKO Decky",
   },
   renderer: {
     name: "MAKO Renderer",
     tag: `render-v${version}`,
-    text: `Download MAKO Renderer v${version}`,
+    text: "Download MAKO Renderer",
   },
 }[component];
 

@@ -1,6 +1,6 @@
 {
   "name": "mako-plugin",
-  "version": "0.13.0-experimental.25",
+  "version": "1.0.0",
   "description": "MAKO Decky controls for Steam Deck and compatible Linux systems",
   "type": "module",
   "scripts": {

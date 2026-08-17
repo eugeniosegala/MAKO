@@ -175,7 +175,7 @@ the selected range.
    ./scripts/publish-package.sh
    ```
 
-   This creates the `render-v<version>` prerelease, uploads the native and
+   This creates the normal `render-v<version>` release, uploads the native and
    Flatpak archives, updates the MAKO Renderer link in the root Downloads
    table in a documentation-only commit, and updates `plugin/package.json` with
    verified checksums.
@@ -195,10 +195,9 @@ After a successful release, it updates the MAKO Decky link in the root
 Downloads table, commits that documentation-only change, and pushes it. It
 never moves an existing published tag to newer code.
 
-GitHub does not allow prereleases to own the Latest pointer, so MAKO Decky is
-published as a normal GitHub release even when its component version contains
-a prerelease suffix. MAKO Renderer releases remain GitHub prereleases and
-are explicitly published with `--latest=false`.
+Both components are published as normal GitHub releases. The Renderer publisher
+uses `--latest=false` so the Decky release can remain the repository's Latest
+release.
 
 The Decky publisher requires `plugin/package.json` to pin the matching
 checksum-verified Renderer assets. It refuses a local-only payload or an

@@ -26,7 +26,7 @@ FIXTURE = """\
 [Vulkan Loader] Loading VK_LAYER_MAKO_frame_generation
 [Vulkan Loader] Loading VK_LAYER_MAKO_render
 [Gamescope WSI] HDR output available
-mako: render layer active; identity=VK_LAYER_MAKO_render; build=2.0.0-dev28-experimental.25
+mako: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0
 mako: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
 mako: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
 mako: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1

@@ -103,7 +103,7 @@ cat > "$notes_file" <<EOF
 
 ## MAKO Renderer Linux build
 
-This is a MAKO Renderer prerelease. Test it game by game and retain a known-good rollback path.
+MAKO Renderer v$version is a stable release. Test it game by game and retain a known-good rollback path.
 
 ## $release_notes_heading
 
@@ -166,7 +166,6 @@ if gh release view "$tag" --repo "$release_repository" >/dev/null 2>&1; then
         --repo "$release_repository" \
         --title "MAKO Renderer v$version" \
         --notes-file "$notes_file" \
-        --prerelease \
         --latest=false
     gh release upload "$tag" "$archive" "$flatpak_archive" \
         --repo "$release_repository" \
@@ -175,7 +174,6 @@ else
     gh release create "$tag" "$archive" "$flatpak_archive" \
         --repo "$release_repository" \
         --title "MAKO Renderer v$version" \
-        --prerelease \
         --latest=false \
         --notes-file "$notes_file" \
         --verify-tag

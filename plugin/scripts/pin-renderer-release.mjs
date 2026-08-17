@@ -72,6 +72,7 @@ const binary = manifest.remote_binary[0];
 const releaseBase = `https://github.com/${repository}/releases/download/${releaseTag}`;
 binary.name = archiveName;
 binary.version = version;
+binary.lineage_version = version;
 binary.source_repository = `https://github.com/${repository}`;
 binary.release_tag = releaseTag;
 binary.source_commit = sourceCommit;
