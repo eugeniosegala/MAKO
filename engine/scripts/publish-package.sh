@@ -101,7 +101,7 @@ trap cleanup EXIT
 cat > "$notes_file" <<EOF
 > Looking for the Decky plugin? Download the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
-## Experimental Linux build
+## MAKO Renderer Linux build
 
 This is a MAKO Renderer prerelease. Test it game by game and retain a known-good rollback path.
 
@@ -141,7 +141,7 @@ The host archive includes 64-bit and 32-bit Vulkan layers; the CLI and Qt UI are
 
 ### Flatpak extensions
 
-Download and extract \`$(basename "$flatpak_archive")\`. It contains one self-contained experimental extension for each supported Flatpak runtime. Install the extension matching the application runtime, for example:
+Download and extract \`$(basename "$flatpak_archive")\`. It contains one self-contained MAKO extension for each supported Flatpak runtime. Install the extension matching the application runtime, for example:
 
 \`\`\`bash
 flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.flatpak

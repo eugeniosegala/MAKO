@@ -206,17 +206,17 @@ printf '%s\n' \
   '' \
   '## Before you play' \
   '' \
-  '- This is experimental: test each game before relying on it.' \
+  '- Test each game before relying on it.' \
   '- Confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery.' \
   '- Try the game’s V-Sync both on and off; its FPS cap, VRR, and compositor can affect frame pacing.' \
   '' \
   "## Bundled MAKO Renderer \`$engine_version\`" \
   '' \
   "- Includes checksum-verified \`$archive_name\`." \
-  '- Installing the ZIP does not replace the private Renderer by itself. Open Mako and select **Install MAKO Renderer (developer build)** afterwards.' \
+  '- Installing the ZIP does not replace the private Renderer by itself. Open Mako and select **Install MAKO Renderer** afterwards.' \
   '' \
   '> [!IMPORTANT]' \
-  '> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer (developer build)** in the plugin.' \
+  '> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in the plugin.' \
   '' \
   > "$notes_file"
 
@@ -235,10 +235,10 @@ printf '%s\n' \
   "1. Download \`$(basename "$output_path")\` below." \
   "2. On the Steam OS, open Decky Loader's settings and enable **Developer Mode**." \
   '3. Choose **Developer** > **Install Plugin from Zip**, then select the downloaded ZIP.' \
-  '4. In Mako, select **Install MAKO Renderer (developer build)**. For native Steam/Proton games, add `~/.local/bin/mako-run %command%` to the game’s Steam launch options.' \
+  '4. In Mako, select **Install MAKO Renderer**. For native Steam/Proton games, add `~/.local/bin/mako-run %command%` to the game’s Steam launch options.' \
   '' \
   '> [!IMPORTANT]' \
-  '> If Decky does not show or reload the plugin after installing a ZIP, uninstall **Mako** from Decky, install the ZIP again, then restart your Steam Deck or Steam Machine. Open Mako afterwards and select **Install MAKO Renderer (developer build)** again.' \
+  '> If Decky does not show or reload the plugin after installing a ZIP, uninstall **Mako** from Decky, install the ZIP again, then restart your Steam Deck or Steam Machine. Open Mako afterwards and select **Install MAKO Renderer** again.' \
   '' \
   '## Updating an existing MAKO Decky installation' \
   '' \
@@ -246,14 +246,14 @@ printf '%s\n' \
   "2. Uninstall **Mako** from Decky, then download the newer ZIP from [MAKO Decky v$package_version](https://github.com/$github_repository/releases/tag/$plugin_release_tag)." \
   '3. In Game Mode, open Decky Loader’s settings, choose **Developer** > **Install Plugin from Zip**, then select the newer ZIP.' \
   '4. Restart your Steam Deck or Steam Machine.' \
-  '5. ⚠️ **Required:** Open Mako and select **Install MAKO Renderer (developer build)** to install the version bundled in the new ZIP.' \
+  '5. ⚠️ **Required:** Open Mako and select **Install MAKO Renderer** to install the version bundled in the new ZIP.' \
   '6. In **Flatpak Setup**, select **Update** for every prepared application’s matching runtime extension. This replaces its Flatpak layer with the engine bundled in the new ZIP while preserving its preparation and per-game Wrapper commands.' \
   '' \
-  'Experimental profiles and Steam launch options are retained. The private native renderer and launcher are re-created in step 5; shared Flatpak extensions are retained, then refreshed in step 6.' \
+  'Existing profiles and Steam launch options are retained. The private native renderer and launcher are re-created in step 5; shared Flatpak extensions are retained, then refreshed in step 6.' \
   '' \
   '## Known limitations' \
   '' \
-  '- **HDR is in progress and unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
+  '- **HDR is unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
   '- **Adaptive targets are not hard frame limiters:** Adaptive varies generated-frame count toward an average target. It cannot reduce a native framerate already above the target, exceed the configured multiplier/GPU/compositor capacity, or guarantee an unreachable output rate.' \
   '- **Image-quality and latency trade-offs remain game-dependent:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness.' \
   '' \

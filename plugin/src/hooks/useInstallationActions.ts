@@ -18,7 +18,7 @@ export function useInstallationActions() {
     reloadConfig?: () => Promise<void>
   ) => {
     setIsInstalling(true);
-    setInstallationStatus(t("STATUS_ENGINE_INSTALLING", "Installing MAKO Renderer (developer build)..."));
+    setInstallationStatus(t("STATUS_ENGINE_INSTALLING", "Installing MAKO Renderer..."));
 
     try {
       const result = await installMako();

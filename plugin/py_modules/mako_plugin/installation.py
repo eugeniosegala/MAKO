@@ -256,7 +256,7 @@ class InstallationService(BaseService):
         for layer_binary in layer_binaries:
             if MAKO_LAYER_BUILD_MARKER not in layer_binary.read_bytes():
                 raise OSError(
-                    f"Experimental layer build marker is missing from {layer_binary}"
+                    f"MAKO layer build marker is missing from {layer_binary}"
                 )
 
     def _copy_and_fix_json_file(

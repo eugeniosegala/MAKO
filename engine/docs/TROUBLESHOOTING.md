@@ -67,7 +67,7 @@ For a Steam game, replace `your-game-command` with `%command%`. Steam captures
 the renderer's output in `~/.steam/steam/logs/console-linux.txt`; a direct
 desktop launch writes it to the terminal or launcher log.
 
-`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` is an experimental recovery diagnostic. Leave
+`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` is a recovery diagnostic. Leave
 it unset for normal play. If you are reproducing a presentation stall, set a
 small value such as `25` and include the resulting log with the report.
 

@@ -80,7 +80,7 @@ applicable. It does not tag, push, or publish the monorepo.
 ## Fast direct SteamOS iteration
 
 When the MAKO monorepo is on the SteamOS machine, do not create a ZIP for every
-edit. Install the plugin and use its **Install MAKO Renderer (developer build)**
+edit. Install the plugin and use its **Install MAKO Renderer**
 action once first, then run these commands from `plugin/`:
 
 ```bash
@@ -197,7 +197,7 @@ never moves an existing published tag to newer code.
 
 GitHub does not allow prereleases to own the Latest pointer, so MAKO Decky is
 published as a normal GitHub release even when its component version contains
-an `experimental` suffix. MAKO Renderer releases remain GitHub prereleases and
+a prerelease suffix. MAKO Renderer releases remain GitHub prereleases and
 are explicitly published with `--latest=false`.
 
 The Decky publisher requires `plugin/package.json` to pin the matching

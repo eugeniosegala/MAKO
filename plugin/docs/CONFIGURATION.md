@@ -18,10 +18,9 @@ more responsive.
   target. It is a target, not a game FPS limiter: it cannot reduce a game
   already above target or exceed the selected ceiling.
 - **Target FPS:** Desired Adaptive output rate, from 30 to 240 FPS in Decky.
-- **Prefer Even 2x Baseline:** Caps real frames to half the Adaptive target for
-  steadier 2x-like motion. Adaptive can still use 3x or 4x when performance
-  falls. It can discard real-frame headroom and increase input latency, so it
-  is off by default.
+- **Adaptive FPS Cap:** Automatically caps the game's real FPS at half the
+  Adaptive target for steadier 2x frame generation. Turn it off to use the
+  regular **Base FPS Cap** instead.
 - **Maximum Adaptive Multiplier:** The 2x, 3x, or 4x Adaptive ceiling. 2x
   usually looks best; 4x can help reach a higher target at the cost of more
   generated frames.
@@ -29,7 +28,7 @@ more responsive.
   can improve displayed motion but may reduce responsiveness. It is on by
   default; disable it if the game feels better with stricter target scheduling.
 - **Base FPS Cap:** Caps real frames before generation. It applies live and is
-  disabled while **Prefer Even 2x Baseline** controls the cap.
+  disabled while **Adaptive FPS Cap** controls the cap.
 
 Adaptive target, ceiling, and cadence changes normally apply while a game is
 running. Give the game a few seconds to settle before judging the result.
@@ -46,7 +45,7 @@ Linux binaries and Windows `.exe` names.
 The frame-generation, quality, GPU, and Active In settings follow automatic
 profile matching. The DLL path and FP16 permission are global. Launcher
 compatibility settings—such as **Disable MAKO Renderer on Next Launch**,
-**Disable Experimental HDR**, Steam Deck Mode, and Zink—are selected before
+**Disable HDR**, Steam Deck Mode, and Zink—are selected before
 MAKO sees the game's process, so choose their Decky profile manually before
 launching when they differ between games.
 
@@ -74,8 +73,8 @@ layer for the game process; the CLI and configuration UI are 64-bit only.
 - **Steam Deck Mode:** Per-game compatibility path.
 - **Zink:** Vulkan-based OpenGL path for OpenGL games.
 
-HDR frame generation remains under development. **Disable Experimental HDR
-(Restart)** is intentionally checked and read-only: MAKO Decky keeps the
+HDR frame generation is unavailable in this release. **Disable HDR (Restart)**
+is intentionally checked and read-only: MAKO Decky keeps the
 renderer on its validated SDR path without changing the game's normal DXVK or
 Gamescope policy. Do not add HDR environment variables manually for ordinary
 launches. Use **Disable MAKO Renderer on Next Launch** if the layer itself is

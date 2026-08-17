@@ -227,6 +227,7 @@ export function Content() {
         <PanelSectionRow>
           <div
             style={{
+              marginTop: localDevelopmentBuildInfo ? "8px" : undefined,
               padding: "8px 12px",
               width: "100%",
               boxSizing: "border-box",
@@ -265,7 +266,7 @@ export function Content() {
               onClick={onInstall}
               disabled={isInstalling || isUninstalling}
             >
-              {t('CONTENT_REINSTALL_EXPERIMENTAL', 'Reinstall MAKO Renderer')}
+              {t('CONTENT_REINSTALL_RENDERER', 'Reinstall MAKO Renderer')}
             </ButtonItem>
           </div>
         </PanelSectionRow>

@@ -134,7 +134,7 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertFalse(self.service.json32_file.exists())
         self.assertFalse(self.service.registered_json32_file.exists())
 
-    def test_rejects_payload_without_experimental_build_marker(self):
+    def test_rejects_payload_without_build_marker(self):
         archive_path = self._archive()
         replacement = self.root / "unidentified.tar.xz"
         with tarfile.open(archive_path, "r:xz") as source, tarfile.open(

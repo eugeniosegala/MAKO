@@ -5,7 +5,7 @@
 </p>
 
 > [!NOTE]
-> **LSFG-VK Experimental is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
+> **LSFG-VK is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
 MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Lossless Scaling frame generation—and, as the project expands, scaling—to Steam Deck and desktop Linux.
 
@@ -22,7 +22,7 @@ Steam Deck users who want the managed workflow should install the
 
 ### Steam Deck or Steam Machine: use MAKO Decky
 
-For SteamOS, the companion **MAKO Decky** plugin is the recommended installation path. It installs the renderer in a private location, creates the `mako-run` launcher, and prepares supported Flatpak applications. Install the Decky ZIP, open **Mako**, and select **Install MAKO Renderer (developer build)**. For a native Steam or Proton game, set its Steam launch option to:
+For SteamOS, the companion **MAKO Decky** plugin is the recommended installation path. It installs the renderer in a private location, creates the `mako-run` launcher, and prepares supported Flatpak applications. Install the Decky ZIP, open **Mako**, and select **Install MAKO Renderer**. For a native Steam or Proton game, set its Steam launch option to:
 
 ```text
 ~/.local/bin/mako-run %command%

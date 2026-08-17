@@ -99,7 +99,7 @@ namespace {
             pipeline.generationSupported = false;
             pipeline.name = "hdr-exposure-disabled";
             pipeline.reason =
-                "experimental HDR frame generation is disabled for this process";
+                "HDR frame generation is disabled for this process";
             return pipeline;
         }
         if (gamescopeManaged && !gamescopeHdrActive &&

@@ -38,7 +38,7 @@ export const ToastMessages = {
   get INSTALL_SUCCESS() {
     return {
       title: t("TOAST_INSTALL_COMPLETE", "Installation Complete"),
-      body: t("TOAST_INSTALL_COMPLETE_DESC", "MAKO Renderer developer build installed privately")
+      body: t("TOAST_INSTALL_COMPLETE_DESC", "MAKO Renderer installed privately")
     };
   },
   get INSTALL_ERROR() {

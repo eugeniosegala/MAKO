@@ -59,7 +59,7 @@ export function UsageInstructions() {
             marginTop: "8px"
           }}
         >
-          {t('USAGE_EXPERIMENTAL_CONFIG_NOTE', 'MAKO uses its own Vulkan layer and configuration at ~/.config/mako-render/conf.toml. It is selected only for games launched through this command.')}
+          {t('USAGE_MAKO_CONFIG_NOTE', 'MAKO uses its own Vulkan layer and configuration at ~/.config/mako-render/conf.toml. It is selected only for games launched through this command.')}
         </div>
       </PanelSectionRow>
 

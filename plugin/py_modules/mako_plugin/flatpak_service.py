@@ -125,7 +125,7 @@ class FlatpakService(BaseService):
         return env
 
     def _get_extension_id(self, version: str) -> Optional[str]:
-        """Return the isolated experimental extension reference for a runtime."""
+        """Return the isolated MAKO extension reference for a runtime."""
         extension_ids = {
             "23.08": self.extension_id_23_08,
             "24.08": self.extension_id_24_08,
@@ -207,7 +207,7 @@ class FlatpakService(BaseService):
         return None
 
     def _is_extension_installed(self, version: str) -> bool:
-        """Check whether the isolated experimental extension is installed."""
+        """Check whether the isolated MAKO extension is installed."""
         extension_id = self._get_extension_id(version)
         if extension_id is None:
             return False
@@ -334,7 +334,7 @@ class FlatpakService(BaseService):
             if not flatpak_path.is_file():
                 return self._error_response(
                     BaseResponse,
-                    "Experimental Flatpak bundle is missing from this plugin package. "
+                    "Flatpak bundle is missing from this plugin package. "
                     "Install a release that includes Flatpak support.",
                 )
 
@@ -448,7 +448,7 @@ class FlatpakService(BaseService):
             return self._error_response(FlatpakAppInfo, error_msg, apps=[], total_apps=0)
 
     def _check_app_override_status(self, app_id: str) -> Dict[str, bool]:
-        """Check whether an app has the required experimental layer access."""
+        """Check whether an app has the required MAKO layer access."""
         try:
             result = self._run_flatpak_command(
                 ["override", "--user", "--show", app_id],
@@ -590,14 +590,14 @@ class FlatpakService(BaseService):
                 return self._error_response(
                     FlatpakOverrideResponse,
                     "Could not determine a supported Flatpak runtime for this application. "
-                    "Install the matching experimental runtime extension first.",
+                    "Install the matching MAKO runtime extension first.",
                     app_id=app_id,
                     operation="set",
                 )
             if not self._is_extension_installed(runtime_version):
                 return self._error_response(
                     FlatpakOverrideResponse,
-                    f"Install the experimental {runtime_version} runtime extension before enabling this application.",
+                    f"Install the MAKO {runtime_version} runtime extension before enabling this application.",
                     app_id=app_id,
                     operation="set",
                 )
@@ -663,9 +663,9 @@ class FlatpakService(BaseService):
                     return self._error_response(FlatpakOverrideResponse, error_msg,
                                               app_id=app_id, operation="set")
 
-            self.log.info(f"Prepared experimental mako Flatpak access for {app_id}")
+            self.log.info(f"Prepared MAKO Flatpak access for {app_id}")
             return self._success_response(FlatpakOverrideResponse,
-                                        f"Experimental mako access prepared for {app_id}",
+                                        f"MAKO access prepared for {app_id}",
                                         app_id=app_id, operation="set")
 
         except Exception as e:

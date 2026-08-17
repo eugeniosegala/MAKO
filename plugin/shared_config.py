@@ -71,7 +71,7 @@ CONFIG_SCHEMA_DEF = {
         "name": "adaptive_auto_base_fps_cap",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "prefer an even 2x Adaptive baseline by capping input to half the target",
+        "description": "automatically cap real FPS at half the target for steadier 2x frame generation",
         "location": "toml"
     },
 
@@ -154,7 +154,7 @@ CONFIG_SCHEMA_DEF = {
         "name": "disable_hdr_exposure",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
-        "description": "required SDR safety boundary while HDR support is under development",
+        "description": "required SDR safety boundary while HDR is unavailable",
         "location": "script"
     },
 

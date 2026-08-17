@@ -8,6 +8,7 @@ import {
   ADAPTIVE_STABLE_CADENCE,
   FRAME_GENERATION_ENABLED,
   MULTIPLIER,
+  PERFORMANCE_MODE,
   TARGET_FPS
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
@@ -62,8 +63,17 @@ export function FpsMultiplierControl({
 
       <PanelSectionRow>
         <ToggleField
+          label={t("CONFIG_PERFORMANCE_MODE", "Performance Mode")}
+          description={t("CONFIG_PERFORMANCE_MODE_DESC", "Can improve performance at the cost of ghosting. Start disabled; enable it only if your device struggles, then test it per game.")}
+          checked={config.performance_mode}
+          onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
+        />
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ToggleField
           label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
-          description={t("ADAPTIVE_DESC", "Experimental. Adaptive settings apply live when the current swapchain has enough reserved capacity. Increasing the multiplier ceiling may require a game restart. Let timing settle before judging performance.")}
+          description={t("ADAPTIVE_DESC", "Adaptive settings apply live when the current swapchain has enough reserved capacity. Increasing the multiplier ceiling may require a game restart. Let timing settle before judging performance.")}
           checked={config.adaptive}
           onChange={(value) => onConfigChange(ADAPTIVE, value)}
         />
@@ -84,8 +94,8 @@ export function FpsMultiplierControl({
           </PanelSectionRow>
           <PanelSectionRow>
             <ToggleField
-              label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Prefer Even 2x Baseline")} (${automaticBaseFpsCapLabel} FPS)`}
-              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "Caps real frames to half the target for Fixed-like even 2x motion, then lets Adaptive use 3x/4x if performance falls. This can discard real-frame headroom and increase input latency. The manual Base FPS Cap is preserved when off.")}
+              label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Adaptive FPS Cap")} (${automaticBaseFpsCapLabel} FPS)`}
+              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "Automatically caps the game's real FPS at half the target for steadier 2x frame generation. Turn it off to use the Base FPS Cap instead.")}
               checked={config.adaptive_auto_base_fps_cap ?? false}
               onChange={(value) => onConfigChange(ADAPTIVE_AUTO_BASE_FPS_CAP, value)}
             />

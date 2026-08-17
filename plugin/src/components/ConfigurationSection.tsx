@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
 import { ConfigurationData } from "../config/configSchema";
 import {
-  ACTIVE_IN, ALLOW_FP16, DISABLE_MAKO, DLL, FLOW_SCALE, GPU, PERFORMANCE_MODE,
+  ACTIVE_IN, ALLOW_FP16, DISABLE_MAKO, DLL, FLOW_SCALE, GPU,
   BASE_FPS_CAP, DISABLE_STEAMDECK_MODE, ENABLE_ZINK
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
@@ -134,15 +134,6 @@ export function ConfigurationSection({
 
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_PERFORMANCE_MODE", "Performance Mode")}
-              description={t("CONFIG_PERFORMANCE_MODE_DESC", "Uses a lighter FG model to reduce GPU overhead, at the cost of more visual artifacts.")}
-              checked={config.performance_mode}
-              onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <ToggleField
               label={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH", "Disable MAKO Renderer on Next Launch")}
               description={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC", "Troubleshooting only. Stops MAKO Renderer loading after restart. Use Frame Generation above for live on/off.")}
               checked={config.disable_mako}
@@ -194,7 +185,7 @@ export function ConfigurationSection({
         </>
       )}
 
-      {/* Workarounds Section */}
+      {/* Compatibility Settings Section */}
       <PanelSectionRow>
         <div
           style={{
@@ -205,7 +196,7 @@ export function ConfigurationSection({
             color: "white"
           }}
         >
-          {t("CONFIG_WORKAROUNDS_TITLE", "Workarounds")}
+          {t("CONFIG_WORKAROUNDS_TITLE", "Compatibility Settings")}
         </div>
       </PanelSectionRow>
 
@@ -236,8 +227,8 @@ export function ConfigurationSection({
         <>
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable Experimental HDR (Restart)")}
-              description={t("CONFIG_DISABLE_HDR_EXPOSURE_DESC", "HDR is under development. This required setting keeps the stable SDR path active.")}
+              label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR (Restart)")}
+              description={t("CONFIG_DISABLE_HDR_EXPOSURE_DESC", "HDR is unavailable in this release. This required setting keeps the stable SDR path active.")}
               checked={true}
               disabled={true}
               onChange={() => undefined}

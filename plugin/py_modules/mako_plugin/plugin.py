@@ -436,19 +436,19 @@ class Plugin:
 
         try:
             if self.installation_service.remove_obsolete_hdr_meta_layer_if_needed():
-                decky.logger.info("Removed the retired experimental HDR meta-layer")
+                decky.logger.info("Removed the retired HDR meta-layer")
         except OSError as error:
-            decky.logger.warning("Could not remove the retired experimental HDR meta-layer: %s", error)
+            decky.logger.warning("Could not remove the retired HDR meta-layer: %s", error)
 
         try:
             if self.configuration_service.migrate_launch_script_if_needed():
-                decky.logger.info("Upgraded installed experimental launch wrapper to the current format")
+                decky.logger.info("Upgraded installed MAKO launch wrapper to the current format")
         except OSError as error:
-            decky.logger.warning("Could not upgrade experimental launch wrapper: %s", error)
+            decky.logger.warning("Could not upgrade MAKO launch wrapper: %s", error)
 
         try:
             if self.installation_service.migrate_diagnostics_helper_if_needed():
-                decky.logger.info("Installed the experimental diagnostics helper")
+                decky.logger.info("Installed the diagnostics helper")
         except OSError as error:
             decky.logger.warning("Could not install the diagnostics helper: %s", error)
 

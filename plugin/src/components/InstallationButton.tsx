@@ -40,7 +40,7 @@ export function InstallationButton({
       return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <FaTrash />
-          <div>{t("INSTALL_REMOVE_EXPERIMENTAL", "Remove MAKO Renderer")}</div>
+          <div>{t("INSTALL_REMOVE_RENDERER", "Remove MAKO Renderer")}</div>
         </div>
       );
     }
@@ -48,7 +48,7 @@ export function InstallationButton({
     return (
       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
         <FaDownload />
-        <div>{t("INSTALL_EXPERIMENTAL", "Install MAKO Renderer (developer build)")}</div>
+        <div>{t("INSTALL_RENDERER", "Install MAKO Renderer")}</div>
       </div>
     );
   };

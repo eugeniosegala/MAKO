@@ -406,10 +406,10 @@ done
 
 if [[ -n "$flatpak_archive_name" ]]; then
   if [[ -n "$flatpak_archive_path" ]]; then
-    echo "Using local experimental Flatpak extensions..."
+    echo "Using local MAKO Flatpak extensions..."
     cp "$flatpak_archive_path" "$package_dir/bin/$flatpak_archive_name"
   else
-    echo "Downloading verified experimental Flatpak extensions..."
+    echo "Downloading verified MAKO Flatpak extensions..."
     curl --fail --location --silent --show-error "$flatpak_archive_url" \
       --output "$package_dir/bin/$flatpak_archive_name"
   fi

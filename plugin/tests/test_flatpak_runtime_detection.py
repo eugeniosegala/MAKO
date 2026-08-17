@@ -95,7 +95,7 @@ versions=26.08;25.08;24.08
         app_id = "org.DolphinEmu.dolphin-emu"
         with tempfile.TemporaryDirectory() as temp_dir:
             temporary_path = Path(temp_dir)
-            wrapper = temporary_path / "mako-experimental"
+            wrapper = temporary_path / "mako-run"
             wrapper.touch()
             self.service.config_dir = temporary_path / "config"
             self.service.mako_launch_script_path = wrapper
@@ -156,7 +156,7 @@ versions=26.08;25.08;24.08
         app_id = "com.heroicgameslauncher.hgl"
         with tempfile.TemporaryDirectory() as temp_dir:
             temporary_path = Path(temp_dir)
-            wrapper = temporary_path / "mako-experimental"
+            wrapper = temporary_path / "mako-run"
             wrapper.touch()
             self.service.config_dir = temporary_path / "config"
             self.service.mako_launch_script_path = wrapper

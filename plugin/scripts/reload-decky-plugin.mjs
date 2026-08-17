@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 const DEFAULT_DECKY_URL = "http://127.0.0.1:1337";
-const DEFAULT_PLUGIN_NAME = "Decky MAKO Experimental";
+const DEFAULT_PLUGIN_NAME = "MAKO Decky";
 const REQUEST_TIMEOUT_MS = 15_000;
 
 const pluginName = process.argv[2] || DEFAULT_PLUGIN_NAME;

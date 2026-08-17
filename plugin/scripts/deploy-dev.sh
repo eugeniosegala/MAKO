@@ -242,7 +242,7 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   for installed_path in "$installed_layer_64" "$installed_layer_32"; do
     if [[ -n "$installed_path" && ! -f "$installed_path" ]]; then
       echo "MAKO Renderer is not installed yet: $installed_path" >&2
-      echo "Use MAKO Decky's 'Install MAKO Renderer (developer build)' action once before deploying host layers." >&2
+      echo "Use MAKO Decky's 'Install MAKO Renderer' action once before deploying host layers." >&2
       exit 1
     fi
   done
@@ -264,7 +264,7 @@ if [[ "$deploy_flatpaks" == true ]]; then
     flatpak_tmp_root="$engine_repo/$flatpak_tmp_root"
   fi
   mkdir -p "$flatpak_tmp_root"
-  echo "Building all experimental Flatpak runtime bundles..."
+  echo "Building all MAKO Flatpak runtime bundles..."
   TMPDIR="$flatpak_tmp_root" MAKO_FLATPAK_CACHE_ROOT="$flatpak_cache_root" \
     "$engine_repo/scripts/package-flatpaks.sh" "$flatpak_archive"
   flatpak_unpack_dir="$(mktemp -d "${TMPDIR:-/tmp}/mako-flatpaks.XXXXXX")"
@@ -353,5 +353,5 @@ fi
 if [[ "$reload_plugin" == true ]]; then
   node "$project_dir/scripts/reload-decky-plugin.mjs" "$plugin_name"
 else
-  echo "Reload Decky MAKO Experimental from Decky's Developer menu before testing."
+  echo "Reload MAKO Decky from Decky's Developer menu before testing."
 fi

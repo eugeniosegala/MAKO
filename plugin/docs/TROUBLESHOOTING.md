@@ -5,8 +5,8 @@ builds.
 
 ## HDR is unavailable by design
 
-HDR frame generation is still under development. **Disable Experimental HDR
-(Restart)** is checked, read-only, and enforced by the backend. The launcher
+HDR frame generation is unavailable in this release. **Disable HDR (Restart)**
+is checked, read-only, and enforced by the backend. The launcher
 uses MAKO's validated SDR path, so an HDR option being unavailable in a game is
 expected and does not mean the ZIP installed incorrectly.
 
@@ -21,7 +21,7 @@ to test whether the layer is the cause of a startup or presentation problem.
    ~/.local/bin/mako-run %command%
    ```
 
-2. Open Mako and select **Install MAKO Renderer (developer build)**. Installing
+2. Open Mako and select **Install MAKO Renderer**. Installing
    a Decky ZIP alone does not replace the private Renderer payload.
 3. Check the selected profile's `Lossless.dll` path, GPU choice, and **Active
    In** rule. Start with Fixed 2x before testing Adaptive settings.
@@ -72,7 +72,7 @@ Use the clean update path for every newer local ZIP:
 2. Uninstall **Mako** from Decky and install the newer ZIP through
    **Developer > Install Plugin from Zip**.
 3. Restart the Steam Deck or Steam Machine.
-4. Open Mako and select **Install MAKO Renderer (developer build)**.
+4. Open Mako and select **Install MAKO Renderer**.
 5. In **Flatpak Setup**, select **Update** for every prepared application's
    matching runtime extension, such as Heroic or Dolphin.
 

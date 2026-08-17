@@ -1,6 +1,6 @@
 # Featured In
 
-Community creators have covered, tested, and explained the experimental Decky LSFG-VK plugin. Thank you for helping
+Community creators have covered, tested, and explained the Decky LSFG-VK plugin. Thank you for helping
 more SteamOS users discover and evaluate the project.
 
 ## Videos
@@ -13,9 +13,9 @@ more SteamOS users discover and evaluate the project.
 - [ADAPATIVE Frame Gen Is A GAME CHANGER For The Steam Deck! 5 AAA Games TESTED!](https://www.youtube.com/watch?v=FPMydqK4b2Q)
   by [Gaming On Steam](https://www.youtube.com/@gaming_onsteam): testing Adaptive Frame Generation across five AAA
   Steam Deck games.
-- [Lossless Scaling gets even better with Decky LSFG-VK Experimental / How to Install and Use / SteamOS](https://www.youtube.com/watch?v=d_Po25-MXas)
+- [SteamOS installation and usage guide](https://www.youtube.com/watch?v=d_Po25-MXas)
   by [NotAGameAddict](https://www.youtube.com/@NotAGameAddict): SteamOS installation and usage guide for the
-  experimental plugin.
+  earlier plugin.
 - [Adaptive Frame Generation fürs Steam Deck – Mehr FPS mit neuesten Decky Plugin! - Lossless Scaling!](https://www.youtube.com/watch?v=2X5k4QjJObQ)
   by [Steam Deck Checker](https://www.youtube.com/@SteamDeckChecker): German-language coverage of Adaptive Frame
   Generation and the latest Decky plugin.
@@ -27,9 +27,9 @@ more SteamOS users discover and evaluate the project.
   Generation on Steam Deck.
 - [Lossless Scaling V.2 установка пошагово.](https://www.youtube.com/watch?v=sR3PXcudM5E)
   by [Андрей-Канал Солянка](https://www.youtube.com/@Andrey_6777): Russian-language step-by-step installation guide.
-- [스팀덱-오리 화면 잔상 최대 80% 감소! Lossless Scaling(오리) v2 실험판 설치 및 게임 적용 가이드](https://www.youtube.com/watch?v=2DX4B81gtK0)
+- [Korean-language installation and game-setup guide](https://www.youtube.com/watch?v=2DX4B81gtK0)
   by [더 히트 THE HEAT](https://www.youtube.com/@%EB%8D%94%ED%9E%88%ED%8A%B8TheHeat): Korean-language installation and
-  game-setup guide for the v2 experimental build.
+  game-setup guide for the v2 build.
 - [FSR 4.1 + LSFG-VK 2.0 on Steam Deck - Together! Test + Installation Setup Guide](https://www.youtube.com/watch?v=NJjgoa3zplg)
   by [Deck Madness](https://www.youtube.com/@deck_madness): a test and setup guide for combining FSR 4.1 with
   LSFG-VK 2.0 on Steam Deck.

@@ -5,7 +5,7 @@
 </p>
 
 > [!IMPORTANT]
-> **Decky LSFG-VK Experimental and LSFG-VK Experimental are now MAKO.** This repository is the new home and continuation of [Decky LSFG-VK Experimental](https://github.com/eugeniosegala/decky-lsfg-vk-experimental) and [LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental). Future development, releases, documentation, and issue tracking happen here.
+> **Decky LSFG-VK and LSFG-VK are now MAKO.** This repository is their new home and continuation. Future development, releases, documentation, and issue tracking happen here.
 
 > **Independent project and Lossless Scaling requirement:** MAKO is an independent Steam Deck and Steam Machine project comprising MAKO Decky and MAKO Renderer. It brings Lossless Scaling frame generation to SteamOS today, with scaling support planned as the project expands. MAKO requires the `Lossless.dll` supplied by a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation but does not bundle, copy, or modify that proprietary library. Test it per game; MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
 
@@ -13,14 +13,14 @@
 
 | Component | Recommended for | Releases |
 |-----------|-----------------|----------|
-| **MAKO Decky** | Steam Deck and Decky Loader users | [Download MAKO Decky v0.13.0-experimental.25](https://github.com/eugeniosegala/MAKO/releases/tag/plugin-v0.13.0-experimental.25) |
-| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Download MAKO Renderer v2.0.0-dev28-experimental.25](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0-dev28-experimental.25) |
+| **MAKO Decky** | Steam Deck and Decky Loader users | [Download MAKO Decky](https://github.com/eugeniosegala/MAKO/releases/latest) |
+| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Browse MAKO Renderer releases](https://github.com/eugeniosegala/MAKO/releases) |
 
 > [!NOTE]
 > Check these release pages regularly for updates. MAKO Decky and MAKO Renderer are published independently.
 
 MAKO Decky releases are normal GitHub releases and the current one is marked
-**Latest**. MAKO Renderer builds are separate prereleases. Legacy experimental
+**Latest**. MAKO Renderer builds are separate prereleases. Legacy
 packages remain available under their old project names, but their wrapper
 names and instructions do not describe MAKO.
 
@@ -59,7 +59,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam.** MAKO needs the licensed installation's `Lossless.dll`.
 3. **Download the latest MAKO Decky ZIP** from the release link above.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
-5. Open **Mako** and select **Install MAKO Renderer (developer build)**. This required step installs the renderer bundled in the ZIP into MAKO's private location.
+5. Open **Mako** and select **Install MAKO Renderer**. This required step installs the renderer bundled in the ZIP into MAKO's private location.
 6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal starting point; Adaptive Frame Generation is optional.
 7. For a native Steam or Proton game, add this under **Steam Properties > Launch Options**:
 
@@ -131,13 +131,13 @@ The clean update path avoids Decky retaining an older backend or bundled payload
 1. Quit games using `~/.local/bin/mako-run`.
 2. Uninstall Mako from Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart your Steam Deck or Steam Machine.
-4. Open Mako and select **Install MAKO Renderer (developer build)** to install the native renderer bundled in the ZIP.
+4. Open Mako and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
 5. If you use Heroic or EmuDeck Flatpak emulators, open **Flatpak Setup** and select
    **Update** for each prepared application's matching runtime extension shown
    by Mako.
 
 > [!IMPORTANT]
-> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer (developer build)** in the plugin.
+> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in the plugin.
 
 Profiles and Steam launch options are retained. The private native engine and launcher are recreated in step 4; shared Flatpak extensions are retained and then refreshed in step 5.
 

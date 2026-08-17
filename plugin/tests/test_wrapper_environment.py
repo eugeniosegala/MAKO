@@ -41,7 +41,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
     def _evaluate(self, extra_environment=None, config=None):
         lines = []
         if config is not None:
-            lines.extend(self.service._experimental_hdr_activation_lines(config))
+            lines.extend(self.service._hdr_activation_lines(config))
         lines.extend(self.service._generate_layer_environment_lines())
         script = "\n".join(lines + [
             'printf "ADD=%s\\n" "${VK_ADD_IMPLICIT_LAYER_PATH:-}"',
@@ -83,7 +83,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "VK_LAYER_existing_one:VK_LAYER_existing_two",
         )
 
-    def test_caller_requested_experimental_instance_layer_is_untouched(self):
+    def test_caller_requested_instance_layer_is_untouched(self):
         values = self._evaluate({
             "VK_INSTANCE_LAYERS":
                 "VK_LAYER_existing:VK_LAYER_MAKO_render",
@@ -193,7 +193,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         lines = get_script_generation_logic()({"disable_hdr_exposure": True})
         self.assertIn("export MAKO_DISABLE_HDR_EXPOSURE=1", lines)
 
-    def test_experimental_hdr_is_blocked_by_default(self):
+    def test_hdr_is_blocked_by_default(self):
         self.assertTrue(CONFIG_SCHEMA["disable_hdr_exposure"].default)
         settings = self.service._wrapper_settings_defaults()
         self.assertTrue(settings["disable_hdr_exposure"])
@@ -205,7 +205,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertTrue(settings["disable_hdr_exposure"])
 
     def test_explicit_hdr_test_opt_in_remains_blocked(self):
-        lines = self.service._experimental_hdr_activation_lines({
+        lines = self.service._hdr_activation_lines({
             "disable_hdr_exposure": False,
         })
         self.assertEqual(lines, [
@@ -234,7 +234,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
 
     def test_default_sdr_profile_never_exports_hdr_bootstrap(self):
-        lines = self.service._experimental_hdr_activation_lines({
+        lines = self.service._hdr_activation_lines({
             "disable_hdr_exposure": True,
         })
         self.assertEqual(lines, [
@@ -253,7 +253,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
 
     def test_full_layer_disable_keeps_hdr_exposure_blocked(self):
-        lines = self.service._experimental_hdr_activation_lines({
+        lines = self.service._hdr_activation_lines({
             "disable_hdr_exposure": False,
             "disable_mako": True,
         })
