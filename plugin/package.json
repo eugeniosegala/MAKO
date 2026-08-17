@@ -67,13 +67,13 @@
       "lineage_version": "2.0.0-dev28",
       "source_repository": "https://github.com/eugeniosegala/MAKO",
       "release_tag": "render-v2.0.0-dev28-experimental.25",
-      "source_commit": "8ed1cdbe7f5496fade8ad01d85ac3d671957fcac",
+      "source_commit": "0c9e2eb08e7c45894c9be51930f446e201bf365e",
       "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0-dev28-experimental.25/mako-render-v2.0.0-dev28-experimental.25-linux.tar.xz",
-      "sha256hash": "cbabc615e3307032f6d13c53d6b7813d7aafb5ab84e86af480e939b508f675aa",
+      "sha256hash": "88f06e721f10bc9b2f259b49cef38871ff3641122717899c494d86651b071880",
       "flatpak_bundle": {
         "name": "mako-render-v2.0.0-dev28-experimental.25-flatpaks.tar.xz",
         "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0-dev28-experimental.25/mako-render-v2.0.0-dev28-experimental.25-flatpaks.tar.xz",
-        "sha256hash": "57100c19d93e125c301c29c9c5debef26f252cd77326d22ba85404f0f60304d3"
+        "sha256hash": "9eff1d4e44c42a9d472271b72e9967a8f30b2e36304ce928435b153359979af2"
       }
     }
   ]
