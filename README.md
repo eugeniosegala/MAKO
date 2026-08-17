@@ -109,6 +109,9 @@ The clean update path avoids Decky retaining an older backend or bundled payload
 4. Open Mako and select **Install MAKO Renderer (developer build)** to install the native renderer bundled in the ZIP.
 5. If you use Heroic, open **Flatpak Setup** and select **Update** for Heroic's matching runtime extension, usually **25.08**.
 
+> [!IMPORTANT]
+> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer (developer build)** in the plugin.
+
 Profiles and Steam launch options are retained. The private native engine and launcher are recreated in step 4; shared Flatpak extensions are retained and then refreshed in step 5.
 
 ## Documentation
