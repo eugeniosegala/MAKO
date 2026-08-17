@@ -7,6 +7,7 @@ version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
 default_output="$repo_root/out/mako-render-$version-linux.tar.xz"
 output_path=""
 build_32_bit=true
+use_container="${MAKO_PACKAGE_USE_CONTAINER:-0}"
 
 usage() {
     cat <<'EOF'
@@ -52,9 +53,14 @@ if [[ -z "$version" ]]; then
     exit 1
 fi
 
-if [[ "$(uname -s)" != "Linux" ]]; then
-    if ! command -v docker >/dev/null 2>&1; then
-        echo "Packaging needs Linux. Install Docker Desktop or run this script on Linux." >&2
+if [[ "$(uname -s)" != "Linux" || "$use_container" == "1" ]]; then
+    container_runtime=""
+    if command -v docker >/dev/null 2>&1; then
+        container_runtime="docker"
+    elif command -v podman >/dev/null 2>&1; then
+        container_runtime="podman"
+    else
+        echo "Container packaging needs Docker or Podman." >&2
         exit 1
     fi
 
@@ -68,12 +74,12 @@ if [[ "$(uname -s)" != "Linux" ]]; then
             ;;
     esac
 
-    echo "Using local linux/amd64 Docker packaging environment..."
+    echo "Using local linux/amd64 $container_runtime packaging environment..."
     docker_64_only=0
     if [[ "$build_32_bit" == false ]]; then
         docker_64_only=1
     fi
-    exec docker run --rm --platform linux/amd64 \
+    exec "$container_runtime" run --rm --platform linux/amd64 \
         -e MAKO_PACKAGE_64_ONLY="$docker_64_only" \
         -v "$monorepo_root:/workspace" \
         -w /workspace/engine \
