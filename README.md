@@ -7,7 +7,7 @@
 > [!IMPORTANT]
 > **Decky LSFG-VK Experimental and LSFG-VK Experimental are now MAKO.** This repository is the new home and continuation of [Decky LSFG-VK Experimental](https://github.com/eugeniosegala/decky-lsfg-vk-experimental) and [LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental). Future development, releases, documentation, and issue tracking happen here.
 
-> **Independent project and Lossless Scaling requirement:** MAKO is an independent Linux graphics project comprising MAKO Decky and MAKO Renderer. It brings Lossless Scaling frame generation to Steam Deck and desktop Linux today, with scaling support planned as the project expands. MAKO requires the `Lossless.dll` supplied by a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation but does not bundle, copy, or modify that proprietary library. Test it per game; MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
+> **Independent project and Lossless Scaling requirement:** MAKO is an independent Steam Deck and Steam Machine project comprising MAKO Decky and MAKO Renderer. It brings Lossless Scaling frame generation to SteamOS today, with scaling support planned as the project expands. MAKO requires the `Lossless.dll` supplied by a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation but does not bundle, copy, or modify that proprietary library. Test it per game; MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
 
 ## Downloads
 
