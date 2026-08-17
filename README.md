@@ -13,11 +13,11 @@
 
 | Component | Recommended for | Releases |
 |-----------|-----------------|----------|
-| **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users | [Download MAKO Decky](https://github.com/eugeniosegala/MAKO/releases/tag/plugin-v1.0.0) |
+| **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users | [Download latest MAKO Decky ZIP](https://github.com/eugeniosegala/MAKO/releases/download/plugin-v1.0.0/MAKO-Decky-v1.0.0.zip) |
 | **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Download MAKO Renderer](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.0.0) |
 
 > [!NOTE]
-> Check these release pages regularly for updates. MAKO Decky and MAKO Renderer are published independently.
+> Check the Downloads table regularly for updates. MAKO Decky and MAKO Renderer are published independently.
 
 ## ✨ Highlights
 
@@ -52,7 +52,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 1. **Install Decky Loader** if needed. Switch to Desktop Mode and follow the [official Decky Loader installation guide](https://github.com/SteamDeckHomebrew/decky-loader#-installation), then return to Game Mode.
 2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam.** MAKO needs the licensed installation's `Lossless.dll`.
-3. **Download the latest MAKO Decky ZIP** from the release link above.
+3. **Download the latest MAKO Decky ZIP** from the Downloads table above.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
 5. Open **Mako** and select **Install MAKO Renderer**. This required step installs the renderer bundled in the ZIP into MAKO's private location.
 6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal starting point; Adaptive Frame Generation is optional.
@@ -138,24 +138,25 @@ Profiles and Steam launch options are retained. The private native engine and la
 
 ## Use MAKO Renderer directly
 
-Decky is optional. Linux users can build and install MAKO Renderer directly as an implicit Vulkan layer:
+Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
+
+1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam.
+2. Open the MAKO Renderer link in the [Downloads table](#downloads) and download its versioned Linux archive, named `mako-render-v<version>-linux.tar.xz`.
+3. Extract it into your user-local prefix:
 
 ```bash
-cmake -S engine -B engine/build \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DMAKO_BUILD_UI=On \
-  -DMAKO_INSTALL_XDG_FILES=On
-cmake --build engine/build
-sudo cmake --install engine/build
+mkdir -p ~/.local
+tar -xJf mako-render-v<version>-linux.tar.xz -C ~/.local
 ```
 
-Configure the licensed `Lossless.dll` path with `mako-ui` or `~/.config/mako-render/conf.toml`, then activate the layer only for the game process. In Steam launch options, use:
+4. Open **MAKO Renderer Configuration** from the application launcher or run `~/.local/bin/mako-ui`.
+5. Add a game profile, then activate MAKO only for that game. In Steam launch options, use:
 
 ```text
 ENABLE_MAKO=1 %command%
 ```
 
-See [Building from Source](engine/docs/BUILDING-FROM-SOURCE.md), [Configuration](engine/docs/CONFIGURATION.md), and [Troubleshooting](engine/docs/TROUBLESHOOTING.md) for the complete standalone workflow.
+The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications need the separate runtime extension. See the dedicated [MAKO Renderer installation and usage guide](engine/README.md) for Qt requirements, manual configuration, validation, benchmarking, Flatpak setup, source builds, and troubleshooting.
 
 ## Documentation
 

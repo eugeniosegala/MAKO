@@ -18,7 +18,7 @@ Standalone Linux and Flatpak archives are published on the
 Steam Deck users who want the managed workflow should install the
 [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
-## Install
+## Installation
 
 ### Steam Deck or Steam Machine: use MAKO Decky
 
@@ -30,19 +30,42 @@ For SteamOS, the companion **MAKO Decky** plugin is the recommended installation
 
 See the [main MAKO installation guide](../README.md#install-and-use) for the complete Decky, Heroic, and EmuDeck setup.
 
-### Desktop Linux: install a Renderer archive
+### Direct Linux installation
 
-Download the Linux archive from the Renderer release and extract it into your
-user-local prefix:
+1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` but does not bundle, copy, or modify it.
+2. Open the [MAKO releases page](https://github.com/eugeniosegala/MAKO/releases), select the newest **MAKO Renderer** release, and download its versioned Linux archive: `mako-render-v<version>-linux.tar.xz`.
+3. Optionally save the archive's file list so you know exactly what was installed, then extract it into your user-local prefix:
 
 ```bash
 mkdir -p ~/.local
-tar -xJf mako-render-<version>-linux.tar.xz -C ~/.local
+tar -tJf mako-render-v<version>-linux.tar.xz > mako-render-v<version>-files.txt
+tar -xJf mako-render-v<version>-linux.tar.xz -C ~/.local
 ```
 
-The archive installs the `mako-ui` configuration application, `mako-cli`, Vulkan manifests, and the 64-bit layer. Release archives also include the matching 32-bit layer for 32-bit games. If `~/.local/bin` is not on your `PATH`, run the tools with their full paths, for example `~/.local/bin/mako-ui`.
+The archive installs `mako-ui`, `mako-cli`, XDG desktop files, Vulkan manifests, and matching 64-bit and 32-bit layers. The Vulkan loader selects the correct layer for each game; the UI and CLI remain 64-bit applications. If `~/.local/bin` is not on your `PATH`, run tools with their full paths, such as `~/.local/bin/mako-ui`.
 
-Install a licensed copy of [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam before launching a game. MAKO normally finds `Lossless.dll` in common Steam locations; choose its location explicitly in the UI or configuration file if your Steam library is elsewhere.
+MAKO normally finds `Lossless.dll` in common Steam locations. Choose it explicitly in the UI or configuration file if your Steam library is elsewhere.
+
+#### Qt requirements for the graphical interface
+
+The Vulkan layer and `mako-cli` do not require Qt. The `mako-ui` graphical interface requires Qt 6, Qt Quick, and Qt Quick Controls. If those runtime components are not already installed, run only the command for your distribution:
+
+```bash
+# Debian or Ubuntu
+sudo apt install qt6-qpa-plugins libqt6quick6 \
+  qml6-module-qtquick qml6-module-qtquick-controls \
+  qml6-module-qtquick-layouts qml6-module-qtquick-window \
+  qml6-module-qtquick-dialogs qml6-module-qtqml-workerscript \
+  qml6-module-qtquick-templates
+
+# Arch Linux or SteamOS
+sudo pacman -S qt6-base qt6-declarative
+
+# Fedora
+sudo dnf install qt6-qtbase qt6-qtdeclarative
+```
+
+Steam Deck and Steam Machine users following the MAKO Decky workflow do not need to perform this direct UI setup.
 
 ### Build and install from source
 
@@ -68,11 +91,15 @@ This installs a native layer for the architecture being built. The full [buildin
 
 For a Flatpak game or emulator, install the matching MAKO Vulkan runtime extension and grant that application access to MAKO's configuration and the Steam library. MAKO Decky performs this setup through **Flatpak Setup**; direct installs can follow the [Flatpak guide](docs/FLATPAK-GUIDE.md).
 
-## Configure and use
+## Usage
 
-1. Start `mako-ui` (or `~/.local/bin/mako-ui` from an extracted archive), choose the Lossless Scaling DLL if MAKO did not find it automatically, and add a profile for the game.
-2. Set the profile's **Active In** entry to the game's Linux binary or Windows executable name. Start with fixed **2x** frame generation and adjust from there.
-3. Launch only the game through MAKO. For a Steam game, use this launch option:
+### Graphical configuration
+
+Open **MAKO Renderer Configuration** from the application launcher or run `~/.local/bin/mako-ui`.
+
+1. Choose the licensed Lossless Scaling DLL if MAKO did not find it automatically, then create a profile for the game.
+2. Set **Active In** to the game's Linux binary, Windows executable, or process name. Start with fixed **2x** frame generation and adjust one setting at a time.
+3. Launch only the selected game through MAKO. For a Steam game, use this launch option:
 
    ```text
    ENABLE_MAKO=1 %command%
@@ -84,7 +111,9 @@ For a Flatpak game or emulator, install the matching MAKO Vulkan runtime extensi
    ENABLE_MAKO=1 your-game-command
    ```
 
-4. Start the game normally. MAKO's implicit Vulkan layer remains off for every other process.
+4. Start the game normally. MAKO's implicit Vulkan layer remains off for every other process. Do not combine MAKO with another Lossless Scaling Vulkan wrapper for the same game.
+
+### Manual configuration
 
 You can configure MAKO without the UI by editing `~/.config/mako-render/conf.toml`. This minimal profile selects a Windows game executable and enables 2x frame generation:
 
@@ -96,20 +125,20 @@ multiplier = 2
 frame_generation_enabled = true
 ```
 
-Use the game's own frame limiter and test V-Sync both on and off; the smoother result is game- and compositor-dependent. See [Configuration](docs/CONFIGURATION.md) for every setting, profile matching, adaptive frame generation, and environment-variable overrides.
+See [Configuration](docs/CONFIGURATION.md) for every setting, profile matching, Adaptive Frame Generation, and environment-variable overrides.
 
-### Validate the configuration
+### Validation
 
 After installing the command-line tool, validate the default configuration with:
 
 ```bash
-mako-cli validate
+~/.local/bin/mako-cli validate
 ```
 
 Use an explicit file when needed:
 
 ```bash
-mako-cli validate --config ~/.config/mako-render/conf.toml
+~/.local/bin/mako-cli validate --config ~/.config/mako-render/conf.toml
 ```
 
 For a layer-activation check on a Vulkan-capable system with `vulkaninfo` installed:
@@ -117,6 +146,23 @@ For a layer-activation check on a Vulkan-capable system with `vulkaninfo` instal
 ```bash
 ENABLE_MAKO=1 vulkaninfo | grep -i VK_LAYER_MAKO_render
 ```
+
+### Benchmarking
+
+Run the built-in frame-generation benchmark with:
+
+```bash
+~/.local/bin/mako-cli benchmark
+```
+
+The default duration is 10 seconds. Run `~/.local/bin/mako-cli` without a subcommand to see benchmark options for the DLL path, resolution, Flow Scale, multiplier, Performance Mode, GPU, and duration.
+
+## In-game considerations
+
+> [!TIP]
+> Try the game's V-Sync setting both on and off. It can make frame delivery feel steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep whichever setting feels smoother and more responsive for that game.
+
+Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart the game after major display, DLL, GPU, Flow Scale, Performance Mode, or model changes.
 
 ## Identity
 

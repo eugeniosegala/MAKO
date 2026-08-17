@@ -22,7 +22,8 @@ const componentDetails = {
   decky: {
     name: "MAKO Decky",
     tag: `plugin-v${version}`,
-    text: "Download MAKO Decky",
+    text: "Download latest MAKO Decky ZIP",
+    asset: `MAKO-Decky-v${version}.zip`,
   },
   renderer: {
     name: "MAKO Renderer",
@@ -43,7 +44,9 @@ const rowPattern = new RegExp(
   `^(\\| \\*\\*${escapedName}\\*\\* \\| [^|]+ \\| )\\[[^\\]]+\\]\\([^)]+\\)( \\|)$`,
   "m",
 );
-const releaseUrl = `https://github.com/${repository}/releases/tag/${componentDetails.tag}`;
+const releaseUrl = componentDetails.asset
+  ? `https://github.com/${repository}/releases/download/${componentDetails.tag}/${componentDetails.asset}`
+  : `https://github.com/${repository}/releases/tag/${componentDetails.tag}`;
 const updated = original.replace(
   rowPattern,
   `$1[${componentDetails.text}](${releaseUrl})$2`,
