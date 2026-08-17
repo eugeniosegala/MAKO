@@ -121,10 +121,6 @@ Profiles and Steam launch options are retained. The private native engine and la
 - [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
 - [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.
 
-## Featured in
-
-Community creators have covered and tested the project on Steam Deck hardware. See [Featured In](plugin/docs/FEATURED_IN.md) for video links, channels, and coverage details.
-
 ## Use MAKO Renderer directly
 
 Decky is optional. Linux users can build and install MAKO Renderer directly as an implicit Vulkan layer:
@@ -146,6 +142,10 @@ See [Building from Source](engine/docs/BUILDING-FROM-SOURCE.md), [Configuration]
 ## License
 
 MAKO is distributed under [GPL-3.0-or-later](LICENSE.md). The root license also preserves the BSD-3-Clause and MIT notices required by incorporated upstream code.
+
+## Featured in
+
+Community creators have covered and tested the project on Steam Deck hardware. See [Featured In](plugin/docs/FEATURED_IN.md) for video links, channels, and coverage details.
 
 ## Credits and project lineage
 
