@@ -158,17 +158,17 @@ compiler prerequisites in the [source-build guide](../../engine/docs/BUILDING-FR
 
 ## Publish a GitHub release
 
-> [!IMPORTANT]
-> No MAKO Renderer or MAKO Decky release has been published yet. This is the
-> future release procedure; do not run it for a local test ZIP.
-
 Publish from a clean `main` worktree and authenticate once with
 `gh auth login -h github.com`. Both publishers intentionally refuse another
 branch or uncommitted changes.
 
-1. Update the Renderer version and its version-specific release-note values in
-   `engine/scripts/publish-package.sh`, then commit the intended Renderer
-   release on `main`.
+Both publishers fetch the remote component tags and generate a release-note
+commit list from the latest earlier tag. Review that list before publishing; it
+contains every non-merge commit that touched the component or shared README in
+the selected range.
+
+1. Update the Renderer version and commit the intended Renderer release on
+   `main`.
 2. From `engine/`, run:
 
    ```bash
@@ -178,8 +178,8 @@ branch or uncommitted changes.
    This creates the `render-v<version>` prerelease, uploads the native and
    Flatpak archives, and updates `plugin/package.json` with their verified
    checksums.
-3. Review and commit that generated Renderer pin. Update the Decky version and
-   its version-specific release-note values in `plugin/scripts/publish-package.sh`.
+3. Review and commit that generated Renderer pin, then update and commit the
+   Decky version.
 4. From `plugin/`, run:
 
 ```bash
@@ -201,7 +201,7 @@ The Decky publisher requires `plugin/package.json` to pin the matching
 checksum-verified Renderer assets. It refuses a local-only payload or an
 unpublished/mismatched Renderer tag.
 
-After the first release, the release entry points will be:
+Release entry points:
 
 - [Latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest)
 - [All MAKO Decky releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Aplugin-v)

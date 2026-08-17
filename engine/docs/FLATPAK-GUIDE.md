@@ -1,14 +1,11 @@
 # Flatpak guide
 
-MAKO Renderer builds separate Vulkan runtime extensions for Freedesktop 23.08,
-24.08, and 25.08. MAKO-branded Flatpak archives are not published yet; build
-them from this repository for direct use. When archives are published, install
-the bundle matching the target application's runtime.
+MAKO Renderer ships separate Vulkan runtime extensions for Freedesktop 23.08,
+24.08, and 25.08. Install the bundle matching the target application's runtime.
 
 ## Packaged extensions
 
-Extract a published or locally built MAKO Renderer Flatpak archive and install
-the matching bundle:
+Extract a MAKO Renderer Flatpak archive and install the matching bundle:
 
 ```bash
 tar -xJf mako-render-<version>-flatpaks.tar.xz

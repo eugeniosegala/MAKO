@@ -11,13 +11,14 @@ MAKO Decky is the Decky Loader component of MAKO. It provides per-game controls,
 
 MAKO is an independent community project bringing Lossless Scaling frame generation to Linux today, with scaling support planned. It requires a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Decky does not bundle, copy, or modify that proprietary library.
 
-## Release status
+## Download
 
-MAKO Decky ZIPs are not published yet. The previous
-[Decky LSFG-VK Experimental releases](https://github.com/eugeniosegala/decky-lsfg-vk-experimental/releases)
-remain available, but their ZIPs, package names, and instructions use the old
-identity. Build a local MAKO ZIP with the development workflow below until the
-first MAKO release is available.
+Download the ZIP from the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
+Previous Decky releases are available on the
+[`plugin-v…` release track](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Aplugin-v).
+
+For direct Vulkan-layer installation without Decky, use the separate
+[MAKO Renderer release track](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Arender-v).
 
 ## What it manages
 

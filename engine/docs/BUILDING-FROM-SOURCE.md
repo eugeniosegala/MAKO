@@ -118,8 +118,7 @@ git clone https://github.com/eugeniosegala/MAKO.git
 cd MAKO/engine
 ```
 
-After the first MAKO Renderer release, you can optionally check out a specific
-release tag:
+Optionally, you can check out a specific Renderer release tag:
 ```bash
 git checkout tags/render-vX.Y.Z
 ```

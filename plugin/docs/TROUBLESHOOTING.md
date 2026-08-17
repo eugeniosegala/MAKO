@@ -1,7 +1,7 @@
 # Troubleshooting
 
-These instructions apply to local MAKO Decky ZIPs until the first MAKO release
-is published.
+These instructions apply to both published MAKO Decky ZIPs and local developer
+builds.
 
 ## HDR is unavailable by design
 

@@ -11,9 +11,12 @@ MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Loss
 
 The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. It requires a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer does not bundle or replace that proprietary library.
 
-## Release status
+## Downloads
 
-MAKO-branded Renderer archives are not published yet. The previous [LSFG-VK Experimental releases](https://github.com/eugeniosegala/lsfg-vk-experimental/releases) remain available, but their archives, wrapper names, and instructions use the old project identity. Build MAKO Renderer from this repository for the current standalone workflow; this page will link to MAKO archives once they are released.
+Standalone Linux and Flatpak archives are published on the
+[MAKO Renderer release track](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Arender-v).
+Steam Deck users who want the managed workflow should install the
+[latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
 ## Install
 
@@ -25,11 +28,12 @@ For SteamOS, the companion **MAKO Decky** plugin is the recommended installation
 ~/.local/bin/mako-run %command%
 ```
 
-See the [main MAKO installation guide](../README.md#install-and-use) for the complete Decky, Heroic, EmuDeck, and Dolphin setup. The first MAKO-branded Decky ZIP has not been published yet; do not mistake an empty MAKO release page for an installer.
+See the [main MAKO installation guide](../README.md#install-and-use) for the complete Decky, Heroic, EmuDeck, and Dolphin setup.
 
 ### Desktop Linux: install a Renderer archive
 
-Once MAKO Renderer archives are published, download the Linux archive and extract it into your user-local prefix:
+Download the Linux archive from the Renderer release and extract it into your
+user-local prefix:
 
 ```bash
 mkdir -p ~/.local
