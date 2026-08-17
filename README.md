@@ -116,25 +116,15 @@ optional MAKO profile. This is different from Heroic: do not use Heroic's
      /usr/bin
      ```
 
-   - **Launch Options**
+   - **Launch Options:** leave the EmuDeck-generated value unchanged. It already
+     contains the correct emulator ID, ROM path, and flags for that shortcut.
 
-     ```text
-     vblank_mode=0 %command% /usr/bin/flatpak run <your-emulator-app-id> <the shortcut's existing arguments>
-     ```
-
-   Keep the emulator ID and arguments from the shortcut EmuDeck created; only
-   place `vblank_mode=0 %command%` before `/usr/bin/flatpak`. The wrapper
-   belongs in **Target**. Do not put this command in a Heroic Wrapper field.
-
-   For example, a Dolphin GameCube shortcut uses:
-
-   ```text
-   vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
-   ```
+   The wrapper belongs in **Target**. Do not put it in a Heroic Wrapper field.
 
    `MAKO_PROFILE` is optional. Without it, the wrapper uses Mako's selected
    profile (or an **Active In** match). Use it only when a specific EmuDeck
-   shortcut needs to override that choice. For example:
+   shortcut needs to override that choice: prefix its existing Launch Options
+   with `MAKO_PROFILE=profile-name `. For example:
 
    ```text
    MAKO_PROFILE=dolphin-my-game vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
