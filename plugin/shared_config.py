@@ -43,6 +43,14 @@ CONFIG_SCHEMA_DEF = {
         "location": "toml"
     },
 
+    "base_fps_cap": {
+        "name": "base_fps_cap",
+        "fieldType": ConfigFieldType.INTEGER,
+        "default": 0,
+        "description": "backend-independent real framerate cap applied before frame generation",
+        "location": "toml"
+    },
+
     "multiplier": {
         "name": "multiplier",
         "fieldType": ConfigFieldType.INTEGER,
@@ -56,6 +64,14 @@ CONFIG_SCHEMA_DEF = {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "dynamically vary generated frames to approach a target framerate",
+        "location": "toml"
+    },
+
+    "adaptive_auto_base_fps_cap": {
+        "name": "adaptive_auto_base_fps_cap",
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "prefer an even 2x Adaptive baseline by capping input to half the target",
         "location": "toml"
     },
 
@@ -143,14 +159,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     # Unsupported controls are intentionally omitted from the current schema.
-
-    "dxvk_frame_rate": {
-        "name": "dxvk_frame_rate",
-        "fieldType": ConfigFieldType.INTEGER,
-        "default": 0,
-        "description": "base framerate cap for DirectX games before frame multiplier",
-        "location": "script"
-    },
 
     "disable_steamdeck_mode": {
         "name": "disable_steamdeck_mode",

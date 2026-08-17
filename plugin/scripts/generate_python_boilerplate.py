@@ -31,7 +31,6 @@ def get_env_var_name(field_name: str) -> str:
     """Convert field name to environment variable name"""
     env_map = {
         "disable_mako": "DISABLE_MAKO",
-        "dxvk_frame_rate": "DXVK_FRAME_RATE",
         "disable_hdr_exposure": "MAKO_DISABLE_HDR_EXPOSURE",
         "disable_steamdeck_mode": "SteamDeck",
         "enable_zink": "ZINK_ENABLE"
@@ -132,15 +131,9 @@ def generate_script_generation() -> str:
                 lines.append(f'            lines.append("export {env_var}=1")')
         elif field_type in [ConfigFieldType.INTEGER, ConfigFieldType.FLOAT]:
             default = field_def["default"]
-            if field_name == "dxvk_frame_rate":
-                # Special handling for DXVK_FRAME_RATE (only export if > 0)
-                lines.append(f'        {field_name} = config.get("{field_name}", {default})')
-                lines.append(f'        if {field_name} > 0:')
-                lines.append(f'            lines.append(f"export {env_var}={{{field_name}}}")')
-            else:
-                lines.append(f'        {field_name} = config.get("{field_name}", {default})')
-                lines.append(f'        if {field_name} != {default}:')
-                lines.append(f'            lines.append(f"export {env_var}={{{field_name}}}")')
+            lines.append(f'        {field_name} = config.get("{field_name}", {default})')
+            lines.append(f'        if {field_name} != {default}:')
+            lines.append(f'            lines.append(f"export {env_var}={{{field_name}}}")')
         elif field_type == ConfigFieldType.STRING:
             lines.append(f'        {field_name} = config.get("{field_name}", "")')
             lines.append(f'        if {field_name}:')

@@ -90,7 +90,9 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
   };
 
   const handleAppOverrideToggle = async (app: FlatpakApp) => {
-    const hasOverrides = app.has_filesystem_override && app.has_wrapper_override;
+    const hasOverrides = app.has_filesystem_override
+      && app.has_wrapper_override
+      && app.has_required_env_override !== false;
     const operationId = `app-${app.app_id}`;
     setOperationInProgress(operationId);
     setAppErrors((current) => {
@@ -272,7 +274,9 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
             {flatpakApps && flatpakApps.success ? (
               flatpakApps.apps.length > 0 ? (
                 flatpakApps.apps.map((app) => {
-                  const hasOverrides = app.has_filesystem_override && app.has_wrapper_override;
+                  const hasOverrides = app.has_filesystem_override
+                    && app.has_wrapper_override
+                    && app.has_required_env_override !== false;
                   const partialOverrides = app.has_filesystem_override || app.has_wrapper_override || app.has_env_override;
 
                   let statusColor = 'red';

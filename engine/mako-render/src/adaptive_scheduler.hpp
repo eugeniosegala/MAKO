@@ -156,6 +156,8 @@ namespace mako::layer {
             std::string_view) {}
         virtual void twoXGameplayHitchRecovery(size_t, double,
             std::chrono::steady_clock::duration) {}
+        virtual void sdrGameplayHitchBridge(size_t, double,
+            std::chrono::steady_clock::duration) {}
         virtual void cadenceRefresh(std::string_view, size_t, size_t) {}
         virtual void loadShed(size_t, size_t, double, double,
             std::string_view) {}
@@ -278,6 +280,16 @@ namespace mako::layer {
         size_t adaptiveStableCadenceOnTimeGeneratedFrames{0};
         size_t adaptiveRampPreviousLimit{0};
         size_t adaptiveCadenceDropFrames{0};
+        // Ordered SDR keeps updating temporal history while native frames are
+        // presented. Once a hard cadence stall has already requested that
+        // refresh, do not restart the same warm-up on every sub-10-FPS frame.
+        // Resume normal policy only after several clearly viable intervals.
+        bool adaptiveSdrCadenceStallBypass{false};
+        size_t adaptiveSdrCadenceResumeFrames{0};
+        // An accepted Smooth Cadence 2x policy can bridge one short gameplay
+        // hitch. A second consecutive stall must use normal history recovery
+        // so loading screens and genuinely collapsed cadence remain safe.
+        bool adaptiveSdrIsolatedHitchBridged{false};
         double adaptiveRampBaselineBaseFps{0.0};
         bool adaptiveBridgeActive{false};
         size_t adaptiveBridgeBaselineLimit{0};

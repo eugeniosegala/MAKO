@@ -37,8 +37,12 @@ namespace ls {
         size_t multiplier{2};
         /// allow frame synthesis to be toggled live without changing its mode
         bool frame_generation_enabled{true};
+        /// maximum application-present rate before frame generation; zero disables it
+        uint32_t base_fps_cap{0};
         /// dynamically vary the generated-frame count toward a target framerate
         bool adaptive{false};
+        /// cap Adaptive's real-frame input to half its target for even 2x cadence
+        bool adaptive_auto_base_fps_cap{false};
         /// desired displayed framerate when adaptive mode is enabled
         uint32_t target_fps{120};
         /// maximum total multiplier Adaptive may use

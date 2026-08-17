@@ -129,6 +129,59 @@ int main() {
     expect(!generatedDeliveryHealthy(20, 18),
         "persistent delivery pressure was incorrectly tolerated");
 
+    RealFramePacer framePacer;
+    const auto pacingStart = RealFramePacer::TimePoint{};
+    expect(framePacer.schedule(pacingStart, 60) == pacingStart,
+        "the first capped frame must not be delayed");
+    const auto secondDeadline = framePacer.schedule(
+        pacingStart + 16ms, 60
+    );
+    const auto thirdDeadline = framePacer.schedule(
+        pacingStart + 32ms, 60
+    );
+    expect(secondDeadline > pacingStart + 16ms &&
+            secondDeadline < pacingStart + 17ms,
+        "60 FPS pacing did not schedule a 16.67 ms second frame");
+    expect(thirdDeadline > pacingStart + 33ms &&
+            thirdDeadline < pacingStart + 34ms,
+        "early application frames did not remain on the absolute 60 FPS cadence");
+
+    const auto afterStall = framePacer.schedule(pacingStart + 200ms, 60);
+    expect(afterStall == pacingStart + 200ms,
+        "a late frame was delayed for stale pacing debt");
+    const auto afterStallDeadline = framePacer.schedule(
+        pacingStart + 205ms, 60
+    );
+    expect(afterStallDeadline > pacingStart + 216ms &&
+            afterStallDeadline < pacingStart + 217ms,
+        "pacing did not rebase after a loading stall");
+
+    expect(framePacer.schedule(pacingStart + 210ms, 0) ==
+            pacingStart + 210ms,
+        "disabling the cap delayed an application frame");
+    expect(framePacer.schedule(pacingStart + 211ms, 60) ==
+            pacingStart + 211ms,
+        "re-enabling the cap retained a stale deadline");
+    expect(framePacer.schedule(pacingStart + 220ms, 30) ==
+            pacingStart + 220ms,
+        "changing the cap retained the previous cadence");
+    const auto thirtyFpsDeadline = framePacer.schedule(
+        pacingStart + 230ms, 30
+    );
+    expect(thirtyFpsDeadline > pacingStart + 253ms &&
+            thirtyFpsDeadline < pacingStart + 254ms,
+        "30 FPS pacing did not establish a new 33.33 ms cadence");
+
+    framePacer.reset();
+    expect(framePacer.schedule(pacingStart, 82.5) == pacingStart,
+        "the first fractionally capped frame must not be delayed");
+    const auto fractionalDeadline = framePacer.schedule(
+        pacingStart + 12ms, 82.5
+    );
+    expect(fractionalDeadline > pacingStart + 12ms &&
+            fractionalDeadline < pacingStart + 13ms,
+        "82.5 FPS pacing did not retain its fractional interval");
+
     FixedRefreshBudget budget;
     const auto start = FixedRefreshBudget::TimePoint{};
     size_t generated = 0;

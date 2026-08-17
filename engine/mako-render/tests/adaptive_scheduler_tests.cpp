@@ -160,6 +160,15 @@ namespace {
             });
         }
 
+        void sdrGameplayHitchBridge(size_t generationLimit, double,
+                std::chrono::steady_clock::duration) override {
+            this->events.push_back({
+                .operation = "sdr-hitch-bridge",
+                .reason = {},
+                .testedLimit = generationLimit,
+            });
+        }
+
         void cadenceRefresh(std::string_view reason, size_t retainedLimit,
                 size_t historyFrames) override {
             this->events.push_back({
@@ -648,10 +657,45 @@ namespace {
         harness.scheduler.consumeHistoryWarmupFrame(harness.now);
         harness.now += 22ms;
         harness.scheduler.consumeHistoryWarmupFrame(harness.now);
-        const auto firstResumedPlan = harness.frameAtFps(45.0);
-        const auto secondResumedPlan = harness.frameAtFps(45.0);
-        require(firstResumedPlan.size() == 1 || secondResumedPlan.size() == 1,
-            "SDR did not resume its validated 2x level after two history frames");
+        require(harness.frameAtFps(45.0).empty(),
+            "SDR resumed before recovered cadence was confirmed");
+        require(harness.frameAtFps(45.0).empty(),
+            "SDR resumed before three healthy cadence samples");
+        const auto thirdResumedPlan = harness.frameAtFps(45.0);
+        const auto fourthResumedPlan = harness.frameAtFps(45.0);
+        require(thirdResumedPlan.size() == 1 || fourthResumedPlan.size() == 1,
+            "SDR did not resume its validated 2x level after confirmed recovery");
+    }
+
+    void testSdrStableTwoXBridgesIsolatedGameplayHitch() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+        harness.runAtFps(60.0, 12s);
+        const auto before = harness.scheduler.snapshot();
+        require(before.phase == AdaptiveSchedulerPhase::StableCadence &&
+                before.stableCadenceLimit == 1 &&
+                before.validatedGenerationLimit == 1,
+            "precondition failed: SDR Smooth Cadence 2x was not accepted");
+
+        const auto hitchPlan = harness.frame(150ms);
+        require(hitchPlan.size() == 1,
+            "isolated SDR gameplay hitch dropped the generated midpoint");
+        requireNear(hitchPlan.front(), 0.5F, 0.0001F,
+            "isolated SDR gameplay hitch changed the midpoint timestamp");
+        require(!harness.scheduler.historyWarmupActive(),
+            "isolated SDR gameplay hitch unnecessarily refreshed history");
+        const auto* bridge = harness.diagnostics.last("sdr-hitch-bridge");
+        require(bridge && bridge->testedLimit == 1,
+            "isolated SDR gameplay hitch bridge was not observable");
+
+        require(harness.frameAtFps(60.0).size() == 1,
+            "healthy frame after an isolated SDR hitch lost interpolation");
+        require(harness.frame(150ms).size() == 1,
+            "a later isolated SDR hitch did not rearm after healthy cadence");
+        require(harness.diagnostics.count("cadence-refresh") == 0,
+            "isolated SDR gameplay hitches entered cadence recovery");
     }
 
     void testSdrCadenceDropRefreshesHistoryWithoutFullStabilization() {
@@ -674,6 +718,61 @@ namespace {
         const auto* refresh = harness.diagnostics.last("cadence-refresh");
         require(refresh && refresh->reason == "cadence-drop",
             "SDR cadence-drop refresh was not observable");
+    }
+
+    void testSdrSustainedHardStallDoesNotRestartHistoryRefresh() {
+        Harness harness(120, 2, true, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(60.0, 12s);
+        require(harness.scheduler.snapshot().phase ==
+                    AdaptiveSchedulerPhase::StableCadence &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: SDR Smooth Cadence 2x was not accepted");
+
+        // A hard interval starts the short SDR refresh, then the following real
+        // frames remain too slow for generation. They must remain
+        // native/history-only rather than scheduling another two-frame refresh
+        // indefinitely.
+        require(harness.frame(150ms).size() == 1,
+            "first short SDR stall did not use the isolated-hitch bridge");
+        require(harness.frame(150ms).empty(),
+            "consecutive SDR stall bypassed history recovery");
+        require(harness.diagnostics.count("sdr-hitch-bridge") == 1,
+            "consecutive SDR stalls used more than one isolated-hitch bridge");
+        for (size_t frame = 0; frame < 2; ++frame) {
+            harness.now += 150ms;
+            harness.scheduler.consumeHistoryWarmupFrame(harness.now);
+        }
+        for (size_t frame = 0; frame < 8; ++frame) {
+            require(harness.frame(150ms).empty(),
+                "sustained hard SDR stall generated output");
+        }
+        require(harness.diagnostics.count("cadence-refresh") == 1,
+            "sustained hard SDR stall restarted the history refresh");
+        require(!harness.scheduler.historyWarmupActive(),
+            "sustained hard SDR stall left history warm-up active");
+
+        // Hovering around the old 10-FPS boundary must neither restart the
+        // refresh nor count as a confirmed recovery. This is the remaining
+        // boundary chatter that remains after the refresh-loop fix.
+        for (size_t frame = 0; frame < 4; ++frame) {
+            require(harness.frame(90ms).empty(),
+                "near-boundary SDR cadence resumed generation");
+            require(harness.frame(110ms).empty(),
+                "near-boundary SDR cadence generated output");
+        }
+        require(harness.diagnostics.count("cadence-refresh") == 1,
+            "near-boundary SDR cadence restarted the history refresh");
+
+        require(harness.frameAtFps(60.0).empty(),
+            "SDR resumed on the first healthy recovery sample");
+        require(harness.frameAtFps(60.0).empty(),
+            "SDR resumed before recovery hysteresis completed");
+        const auto thirdRecoveredPlan = harness.frameAtFps(60.0);
+        const auto fourthRecoveredPlan = harness.frameAtFps(60.0);
+        require(thirdRecoveredPlan.size() == 1 ||
+                fourthRecoveredPlan.size() == 1,
+            "SDR did not resume its retained 2x level after confirmed recovery");
     }
 
     void testImpossibleFastBurstDoesNotCorruptCadence() {
@@ -1138,7 +1237,9 @@ int main() {
         {"discontinuity timeout restarts from zero", testDiscontinuityRecoveryTimesOutToFreshRamp},
         {"gameplay cadence drop rebases", testSustainedCadenceDropRebasesWithoutMenuRecovery},
         {"SDR long hitch keeps validated level", testSdrLongHitchRefreshesHistoryWithoutDroppingValidatedLevel},
+        {"SDR stable 2x bridges isolated hitch", testSdrStableTwoXBridgesIsolatedGameplayHitch},
         {"SDR cadence drop uses short refresh", testSdrCadenceDropRefreshesHistoryWithoutFullStabilization},
+        {"SDR hard stall avoids refresh loop", testSdrSustainedHardStallDoesNotRestartHistoryRefresh},
         {"fast-present burst preserves cadence", testImpossibleFastBurstDoesNotCorruptCadence},
         {"harmful first probe enters rearm", testRejectedFirstProbeEntersBoundedRearm},
         {"interrupted probe rearms promptly", testInterruptedProbeRearmsWithoutFailurePenalty},

@@ -424,6 +424,11 @@ class Plugin:
         except OSError as error:
             decky.logger.warning("Could not migrate wrapper-only profile settings: %s", error)
         try:
+            if self.configuration_service.migrate_legacy_base_fps_caps_if_needed():
+                decky.logger.info("Migrated Base FPS Cap into the engine profile")
+        except OSError as error:
+            decky.logger.warning("Could not migrate Base FPS Cap: %s", error)
+        try:
             if self.configuration_service.remove_legacy_vkbasalt_exports():
                 decky.logger.info("Removed obsolete vkBasalt exports from isolated launcher")
         except OSError as error:

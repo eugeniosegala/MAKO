@@ -143,6 +143,7 @@ namespace mako::layer {
         std::optional<std::chrono::steady_clock::time_point>
             colorTransitionRetryAt;
         FixedRefreshBudget fixedRefreshBudget;
+        RealFramePacer realFramePacer;
         std::optional<std::chrono::steady_clock::time_point> lastPresentStarted;
         std::optional<std::chrono::steady_clock::duration> recentRealInterval;
 

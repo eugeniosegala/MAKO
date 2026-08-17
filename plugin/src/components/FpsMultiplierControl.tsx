@@ -3,6 +3,7 @@ import { PanelSectionRow, DialogButton, Focusable, SliderField, ToggleField } fr
 import { ConfigurationData } from "../config/configSchema";
 import {
   ADAPTIVE,
+  ADAPTIVE_AUTO_BASE_FPS_CAP,
   ADAPTIVE_MAX_MULTIPLIER,
   ADAPTIVE_STABLE_CADENCE,
   FRAME_GENERATION_ENABLED,
@@ -22,6 +23,10 @@ export function FpsMultiplierControl({
 }: FpsMultiplierControlProps) {
   const [focusedControl, setFocusedControl] = useState<"decrease" | "increase" | null>(null);
   const adaptiveMaxMultiplier = config.adaptive_max_multiplier ?? 3;
+  const automaticBaseFpsCap = Math.max(10, config.target_fps / 2);
+  const automaticBaseFpsCapLabel = Number.isInteger(automaticBaseFpsCap)
+    ? automaticBaseFpsCap.toFixed(0)
+    : automaticBaseFpsCap.toFixed(1);
 
   const multiplierButtonStyle = (isFocused: boolean) => ({
     height: "34px",
@@ -58,7 +63,7 @@ export function FpsMultiplierControl({
       <PanelSectionRow>
         <ToggleField
           label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
-          description={t("ADAPTIVE_DESC", "Experimental. Adaptive settings apply live. Restart the game after switching between Fixed and Adaptive so its swapchain has the correct capacity, then let timing settle before judging performance.")}
+          description={t("ADAPTIVE_DESC", "Experimental. Adaptive settings apply live when the current swapchain has enough reserved capacity. Increasing the multiplier ceiling may require a game restart. Let timing settle before judging performance.")}
           checked={config.adaptive}
           onChange={(value) => onConfigChange(ADAPTIVE, value)}
         />
@@ -75,6 +80,14 @@ export function FpsMultiplierControl({
               max={240}
               step={1}
               onChange={(value) => onConfigChange(TARGET_FPS, value)}
+            />
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <ToggleField
+              label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Prefer Even 2x Baseline")} (${automaticBaseFpsCapLabel} FPS)`}
+              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "Caps real frames to half the target for Fixed-like even 2x motion, then lets Adaptive use 3x/4x if performance falls. This can discard real-frame headroom and increase input latency. The manual Base FPS Cap is preserved when off.")}
+              checked={config.adaptive_auto_base_fps_cap ?? false}
+              onChange={(value) => onConfigChange(ADAPTIVE_AUTO_BASE_FPS_CAP, value)}
             />
           </PanelSectionRow>
           <PanelSectionRow>

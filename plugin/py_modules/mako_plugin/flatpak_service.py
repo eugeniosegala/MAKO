@@ -4,6 +4,7 @@ Flatpak service for managing MAKO Renderer Flatpak runtime extensions.
 
 import subprocess
 import os
+import re
 from pathlib import Path
 from typing import Dict, Any, List, Optional
 
@@ -16,8 +17,28 @@ from .constants import (
     FLATPAK_25_08_FILENAME,
     FLATPAK_EXTENSION_NAME,
     FLATPAK_IMPLICIT_LAYER_DIR,
+    MAKO_LAYER_ENABLE_ENV,
 )
 from .types import BaseResponse
+
+
+_SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS = ("23.08", "24.08", "25.08")
+_FREEDESKTOP_VULKAN_LAYER_EXTENSION = (
+    "org.freedesktop.Platform.VulkanLayer"
+)
+# Heroic starts each game in a child compatibility environment. Its per-game
+# wrapper must set MAKO values there, rather than enabling the layer for the
+# entire Heroic UI. Direct Flatpak launches (such as EmuDeck's Dolphin
+# shortcuts) do not have that child boundary: Flatpak's persisted
+# ``unset-environment`` rules otherwise clear the wrapper's config and Vulkan
+# path before the app starts.
+_PER_GAME_WRAPPER_FLATPAK_APPS = {"com.heroicgameslauncher.hgl"}
+_LAYER_ENVIRONMENT_VARIABLES = (
+    "MAKO_CONFIG",
+    MAKO_LAYER_ENABLE_ENV,
+    "VK_IMPLICIT_LAYER_PATH",
+    "VK_ADD_IMPLICIT_LAYER_PATH",
+)
 
 
 class FlatpakExtensionStatus(BaseResponse):
@@ -113,7 +134,14 @@ class FlatpakService(BaseService):
         return extension_ids.get(version)
 
     def _get_app_runtime_version(self, app_id: str) -> Optional[str]:
-        """Return a supported Flatpak runtime branch for an application."""
+        """Return the Freedesktop Vulkan-layer version usable by an app.
+
+        Applications based directly on Freedesktop use the runtime branch as
+        their layer-extension version. Derived runtimes, including KDE 6.10
+        used by current Dolphin Flatpaks, expose the inherited VulkanLayer
+        extension point in their runtime metadata. That point declares the
+        matching Freedesktop base version (for example, KDE 6.10 -> 25.08).
+        """
         result = self._run_flatpak_command(
             ["info", "--show-runtime", app_id],
             capture_output=True, text=True
@@ -122,8 +150,59 @@ class FlatpakService(BaseService):
             return None
 
         runtime = result.stdout.strip()
-        for version in ("23.08", "24.08", "25.08"):
-            if runtime.endswith(f"/{version}") or runtime.endswith(f"//{version}"):
+        if runtime.startswith("org.freedesktop.Platform/"):
+            version = runtime.rsplit("/", 1)[-1]
+            if version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS:
+                return version
+
+        metadata_result = self._run_flatpak_command(
+            ["info", "--show-metadata", runtime],
+            capture_output=True,
+            text=True,
+        )
+        if metadata_result.returncode != 0:
+            self.log.debug(
+                "Could not inspect Flatpak runtime metadata for %s: %s",
+                runtime,
+                metadata_result.stderr,
+            )
+            return None
+
+        version = self._get_inherited_vulkan_layer_version(metadata_result.stdout)
+        if version is not None:
+            self.log.debug(
+                "Flatpak app %s uses runtime %s with Freedesktop VulkanLayer %s",
+                app_id,
+                runtime,
+                version,
+            )
+        return version
+
+    @staticmethod
+    def _get_inherited_vulkan_layer_version(metadata: str) -> Optional[str]:
+        """Read the compatible Freedesktop Vulkan-layer branch from metadata."""
+        section = re.search(
+            rf"(?ms)^\[Extension {re.escape(_FREEDESKTOP_VULKAN_LAYER_EXTENSION)}\]$"
+            r"(.*?)(?=^\[|\Z)",
+            metadata,
+        )
+        if section is None:
+            return None
+
+        values = {}
+        for line in section.group(1).splitlines():
+            key, separator, value = line.partition("=")
+            if separator:
+                values[key.strip()] = value.strip()
+
+        candidates = []
+        if "version" in values:
+            candidates.append(values["version"])
+        if "versions" in values:
+            candidates.extend(values["versions"].split(";"))
+
+        for version in candidates:
+            if version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS:
                 return version
         return None
 
@@ -356,6 +435,7 @@ class FlatpakService(BaseService):
                         "has_filesystem_override": override_status["filesystem"],
                         "has_wrapper_override": override_status["wrapper"],
                         "has_env_override": override_status["legacy_env"],
+                        "has_required_env_override": override_status["required_env"],
                     })
 
             return self._success_response(FlatpakAppInfo,
@@ -368,7 +448,7 @@ class FlatpakService(BaseService):
             return self._error_response(FlatpakAppInfo, error_msg, apps=[], total_apps=0)
 
     def _check_app_override_status(self, app_id: str) -> Dict[str, bool]:
-        """Check whether an app can execute the per-game experimental wrapper."""
+        """Check whether an app has the required experimental layer access."""
         try:
             result = self._run_flatpak_command(
                 ["override", "--user", "--show", app_id],
@@ -376,7 +456,12 @@ class FlatpakService(BaseService):
             )
 
             if result.returncode != 0:
-                return {"filesystem": False, "wrapper": False, "legacy_env": False}
+                return {
+                    "filesystem": False,
+                    "wrapper": False,
+                    "legacy_env": False,
+                    "required_env": False,
+                }
 
             output = result.stdout
             config_path, dll_directory = self._get_mako_paths()
@@ -401,8 +486,7 @@ class FlatpakService(BaseService):
 
             filesystem_override = has_config_fs and has_dll_fs
 
-            has_mako_config_env = False
-            has_isolated_layer_env = False
+            environment_values = {}
             in_environment = False
 
             for line in output.split('\n'):
@@ -411,37 +495,53 @@ class FlatpakService(BaseService):
                     in_environment = True
                 elif line.startswith("[") and line != "[Environment]":
                     in_environment = False
-                elif in_environment and line.startswith(f"MAKO_CONFIG={config_path}/conf.toml"):
-                    has_mako_config_env = True
-                elif in_environment and (
-                    line.startswith(f"VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}")
-                    or line.startswith(f"VK_ADD_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}")
-                ):
-                    has_isolated_layer_env = True
+                elif in_environment:
+                    key, separator, value = line.partition("=")
+                    if separator:
+                        environment_values[key] = value
 
-            legacy_env_override = has_mako_config_env or has_isolated_layer_env
+            legacy_env_override = any(
+                variable in environment_values
+                for variable in _LAYER_ENVIRONMENT_VARIABLES
+            )
+            required_env_override = (
+                app_id in _PER_GAME_WRAPPER_FLATPAK_APPS
+                or (
+                    environment_values.get("MAKO_CONFIG") ==
+                    f"{config_path}/conf.toml"
+                    and environment_values.get(MAKO_LAYER_ENABLE_ENV) == "1"
+                    and environment_values.get("VK_IMPLICIT_LAYER_PATH") ==
+                    FLATPAK_IMPLICIT_LAYER_DIR
+                )
+            )
 
             self.log.debug(
-                "Override status for %s: resources=%s (%s/%s), wrapper=%s, legacy_env=%s (%s/%s)",
+                "Override status for %s: resources=%s (%s/%s), wrapper=%s, "
+                "environment=%s, required_environment=%s",
                 app_id,
                 filesystem_override,
                 has_config_fs,
                 has_dll_fs,
                 has_wrapper_fs,
                 legacy_env_override,
-                has_mako_config_env,
-                has_isolated_layer_env,
+                required_env_override,
             )
 
             return {
                 "filesystem": filesystem_override,
                 "wrapper": has_wrapper_fs,
                 "legacy_env": legacy_env_override,
+                "required_env": required_env_override,
             }
 
         except Exception as e:
             self.log.error(f"Error checking override status for {app_id}: {e}")
-            return {"filesystem": False, "wrapper": False, "legacy_env": False}
+            return {
+                "filesystem": False,
+                "wrapper": False,
+                "legacy_env": False,
+                "required_env": False,
+            }
 
     def _filesystem_override_present(self, filesystem_section: str, host_path: str) -> bool:
         """Match Flatpak's absolute or home-relative permission representation.
@@ -529,26 +629,43 @@ class FlatpakService(BaseService):
                     return self._error_response(FlatpakOverrideResponse, error_msg,
                                               app_id=app_id, operation="set")
 
-            # Older experimental versions activated the layer globally for the
-            # Flatpak app. Remove those values during upgrade: the mounted
-            # wrapper now applies them only to an individual Heroic game.
-            for variable in (
-                "MAKO_CONFIG",
-                "VK_IMPLICIT_LAYER_PATH",
-                "VK_ADD_IMPLICIT_LAYER_PATH",
-            ):
+            if app_id in _PER_GAME_WRAPPER_FLATPAK_APPS:
+                # Heroic starts each game in a child compatibility environment.
+                # Keep its layer activation in the selected game's wrapper so
+                # preparing Heroic cannot enable frame generation in every game.
+                environment_overrides = [
+                    f"--unset-env={variable}"
+                    for variable in _LAYER_ENVIRONMENT_VARIABLES
+                ]
+            else:
+                # Flatpak applies persisted unset-environment entries after a
+                # host-side Steam wrapper exports variables. Direct Flatpak
+                # applications therefore need the config and isolated manifest
+                # path in their app override; otherwise the wrapper launches
+                # successfully but the Vulkan layer never attaches. Keep the
+                # MAKO must remain enabled for direct Flatpak applications,
+                # including helper Vulkan processes launched after the host-side
+                # wrapper environment is filtered.
+                environment_overrides = [
+                    f"--env=MAKO_CONFIG={config_path}/conf.toml",
+                    f"--env={MAKO_LAYER_ENABLE_ENV}=1",
+                    f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
+                    "--unset-env=VK_ADD_IMPLICIT_LAYER_PATH",
+                ]
+
+            for override in environment_overrides:
                 result = self._run_flatpak_command(
-                    ["override", "--user", f"--unset-env={variable}", app_id],
+                    ["override", "--user", override, app_id],
                     capture_output=True, text=True
                 )
                 if result.returncode != 0:
-                    error_msg = f"Failed to clear legacy environment override {variable}: {result.stderr}"
+                    error_msg = f"Failed to set environment override {override}: {result.stderr}"
                     return self._error_response(FlatpakOverrideResponse, error_msg,
                                               app_id=app_id, operation="set")
 
-            self.log.info(f"Prepared per-game MAKO Renderer wrapper access for {app_id}")
+            self.log.info(f"Prepared experimental mako Flatpak access for {app_id}")
             return self._success_response(FlatpakOverrideResponse,
-                                        f"MAKO Renderer per-game wrapper access prepared for {app_id}",
+                                        f"Experimental mako access prepared for {app_id}",
                                         app_id=app_id, operation="set")
 
         except Exception as e:
@@ -585,11 +702,7 @@ class FlatpakService(BaseService):
                 if result.returncode != 0:
                     removal_errors.append(f"{override}: {result.stderr}")
 
-            for variable in (
-                "MAKO_CONFIG",
-                "VK_IMPLICIT_LAYER_PATH",
-                "VK_ADD_IMPLICIT_LAYER_PATH",
-            ):
+            for variable in _LAYER_ENVIRONMENT_VARIABLES:
                 result = self._run_flatpak_command(
                     ["override", "--user", f"--unset-env={variable}", app_id],
                     capture_output=True, text=True
@@ -599,7 +712,17 @@ class FlatpakService(BaseService):
                     removal_errors.append(f"unset-env {variable}: {result.stderr}")
 
             if removal_errors:
-                self.log.warning(f"Some override removals had issues for {app_id}: {'; '.join(removal_errors)}")
+                error_msg = (
+                    f"Could not remove every mako override for {app_id}: "
+                    f"{'; '.join(removal_errors)}"
+                )
+                self.log.warning(error_msg)
+                return self._error_response(
+                    FlatpakOverrideResponse,
+                    error_msg,
+                    app_id=app_id,
+                    operation="remove",
+                )
 
             self.log.info(f"Completed override removal for {app_id}")
             return self._success_response(FlatpakOverrideResponse,

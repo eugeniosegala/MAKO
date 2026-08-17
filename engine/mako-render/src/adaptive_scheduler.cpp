@@ -13,6 +13,8 @@ namespace {
     constexpr size_t adaptiveHistoryWarmupFrames = 3;
     constexpr size_t adaptiveSdrCadenceRefreshFrames = 2;
     constexpr double adaptiveMinimumBaseFps = 10.0;
+    constexpr double adaptiveSdrCadenceResumeBaseFps = 12.0;
+    constexpr size_t adaptiveSdrCadenceResumeFrameCount = 3;
     constexpr double adaptiveIntervalSmoothing = 0.25;
     constexpr double adaptiveCadenceDropRatio = 2.0;
     constexpr size_t adaptiveCadenceDropFrameCount = 3;
@@ -232,6 +234,11 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
     if (rawIntervalSeconds <= 0.0) {
         finishFastCadenceBurst();
         if (this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr) {
+            if (this->adaptiveSdrCadenceStallBypass) {
+                this->adaptiveSdrCadenceResumeFrames = 0;
+                this->adaptiveOutputCredit = 0.0;
+                return {};
+            }
             this->beginCadenceRefresh(now, "cadence-stall");
             return {};
         }
@@ -243,6 +250,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
         ? 1.0 / this->adaptiveSmoothedIntervalSeconds
         : 0.0;
     const double instantaneousBaseFps = 1.0 / rawIntervalSeconds;
+    if (rawIntervalSeconds <= 1.0 / adaptiveMinimumBaseFps)
+        this->adaptiveSdrIsolatedHitchBridged = false;
     const double fastBurstThresholdFps = std::max(
         baselineBaseFps * adaptiveTransientFastBurstCadenceRatio,
         static_cast<double>(this->config.targetFps) *
@@ -276,6 +285,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
         this->adaptiveStrictLoadCollapseSince.reset();
         this->adaptiveStableCadenceOutsideRangeSince.reset();
         this->adaptiveDiscontinuityStableSince.reset();
+        if (this->adaptiveSdrCadenceStallBypass)
+            this->adaptiveSdrCadenceResumeFrames = 0;
 
         if (!this->adaptiveLastFastBurstDiagnostic ||
                 now - *this->adaptiveLastFastBurstDiagnostic >=
@@ -297,6 +308,49 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
 
     if (rawIntervalSeconds > 1.0 / adaptiveMinimumBaseFps) {
         if (this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr) {
+            const size_t validatedGenerationLimit =
+                this->validatedGenerationLimit();
+            const bool acceptedStableTwoX =
+                this->adaptiveStableCadenceLimit == 1 &&
+                !this->adaptiveStableCadenceEvaluationAt;
+            const bool isolatedGameplayHitch =
+                acceptedStableTwoX &&
+                validatedGenerationLimit == 1 &&
+                !this->adaptiveSdrCadenceStallBypass &&
+                !this->adaptiveSdrIsolatedHitchBridged &&
+                rawInterval <= adaptiveTwoXGameplayHitchMaximumDuration;
+            if (isolatedGameplayHitch) {
+                // Fixed 2x already demonstrates that one midpoint remains
+                // useful across an isolated source hitch.
+                // Suppressing interpolation here amplified one long source
+                // interval into four native-only frames. Preserve the proven
+                // cadence once; a consecutive stall takes the refresh path.
+                this->adaptiveSdrIsolatedHitchBridged = true;
+                this->adaptiveOutputCredit = 0.0;
+                this->adaptiveCadenceDropFrames = 0;
+                this->diagnostics->sdrGameplayHitchBridge(
+                    validatedGenerationLimit,
+                    baselineBaseFps,
+                    rawInterval
+                );
+                AdaptiveFramePlan plan;
+                plan.values.front() = 0.5F;
+                plan.count = 1;
+                return plan;
+            }
+            if (this->adaptiveSdrCadenceStallBypass) {
+                // The initial refresh already left the backend receiving a
+                // history-only update for every real frame. Repeating that
+                // two-frame warm-up while a game is temporarily below the
+                // useful cadence threshold turns one stall into a visible
+                // recovery loop. Keep the real frames flowing until timing is
+                // viable again, then re-establish the normal policy below.
+                this->adaptiveSmoothedIntervalSeconds = rawIntervalSeconds;
+                this->adaptiveCadenceDropFrames = 0;
+                this->adaptiveOutputCredit = 0.0;
+                this->adaptiveSdrCadenceResumeFrames = 0;
+                return {};
+            }
             this->beginCadenceRefresh(now, "cadence-stall");
             return {};
         }
@@ -330,6 +384,32 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
 
         this->beginStabilization(now, "cadence-stall");
         return {};
+    }
+
+    if (this->adaptiveSdrCadenceStallBypass) {
+        // A cadence hovering around the 10-FPS stall boundary is not a real
+        // recovery. Require a small run above a separate resume threshold so
+        // one short interval cannot resume generation and immediately start
+        // another history refresh on the next long interval.
+        this->adaptiveSmoothedIntervalSeconds = rawIntervalSeconds;
+        this->adaptiveCadenceDropFrames = 0;
+        this->adaptiveOutputCredit = 0.0;
+        if (instantaneousBaseFps < adaptiveSdrCadenceResumeBaseFps) {
+            this->adaptiveSdrCadenceResumeFrames = 0;
+            return {};
+        }
+
+        this->adaptiveSdrCadenceResumeFrames++;
+        if (this->adaptiveSdrCadenceResumeFrames <
+                adaptiveSdrCadenceResumeFrameCount) {
+            return {};
+        }
+
+        // Discard the pre-stall estimate. The confirmed recovered cadence is
+        // now the baseline, so a recovered 60-FPS game cannot be mistaken for
+        // a fresh cadence drop.
+        this->adaptiveSdrCadenceStallBypass = false;
+        this->adaptiveSdrCadenceResumeFrames = 0;
     }
 
     // A sustained interval jump can be a menu/focus transition, but it can
@@ -1111,6 +1191,9 @@ void AdaptiveScheduler::beginCadenceRefresh(
     this->adaptiveRampPlannedGeneratedFrames = 0;
     this->adaptiveRampOnTimeGeneratedFrames = 0;
     this->adaptiveCadenceDropFrames = 0;
+    this->adaptiveSdrCadenceStallBypass = reason == "cadence-stall";
+    this->adaptiveSdrCadenceResumeFrames = 0;
+    this->adaptiveSdrIsolatedHitchBridged = false;
 
     this->restoreGenerationLimit(
         now,
@@ -1305,6 +1388,9 @@ void AdaptiveScheduler::beginStabilization(
     this->adaptiveStrictLoadBaselineBaseFps = 0.0;
     this->adaptiveStrictLoadCollapseSince.reset();
     this->adaptiveCadenceDropFrames = 0;
+    this->adaptiveSdrCadenceStallBypass = false;
+    this->adaptiveSdrCadenceResumeFrames = 0;
+    this->adaptiveSdrIsolatedHitchBridged = false;
     this->adaptiveLastDiagnostic.reset();
     this->resetTiming(now);
     if (!alreadyStabilizing)

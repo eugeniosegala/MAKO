@@ -42,7 +42,9 @@ active_in = [ # see the wiki for more info
 # gpu = 'NVIDIA GeForce RTX 5080' # see the wiki for more info
 multiplier = 4
 frame_generation_enabled = true
+base_fps_cap = 0
 adaptive = false
+adaptive_auto_base_fps_cap = false
 target_fps = 120
 adaptive_max_multiplier = 3
 adaptive_stable_cadence = false
@@ -74,7 +76,9 @@ ConfigFile::ConfigFile() {
         },
         .multiplier = 4,
         .frame_generation_enabled = true,
+        .base_fps_cap = 0,
         .adaptive = false,
+        .adaptive_auto_base_fps_cap = false,
         .target_fps = 120,
         .adaptive_max_multiplier = 3,
         .adaptive_stable_cadence = false,
@@ -138,7 +142,10 @@ namespace {
             .gpu = tbl["gpu"].value<std::string>(),
             .multiplier = tbl["multiplier"].value_or(2U),
             .frame_generation_enabled = tbl["frame_generation_enabled"].value_or(true),
+            .base_fps_cap = tbl["base_fps_cap"].value_or(0U),
             .adaptive = tbl["adaptive"].value_or(false),
+            .adaptive_auto_base_fps_cap =
+                tbl["adaptive_auto_base_fps_cap"].value_or(false),
             .target_fps = tbl["target_fps"].value_or(120U),
             .adaptive_max_multiplier = tbl["adaptive_max_multiplier"].value_or(3U),
             .adaptive_stable_cadence = tbl["adaptive_stable_cadence"].value_or(false),
@@ -149,6 +156,8 @@ namespace {
 
         if (conf.multiplier <= 1)
             throw ls::error("multiplier must be greater than 1");
+        if (conf.base_fps_cap > 1000)
+            throw ls::error("base_fps_cap must be 0 or between 1 and 1000");
         if (conf.target_fps < 10 || conf.target_fps > 1000)
             throw ls::error("target_fps must be between 10 and 1000");
         if (conf.adaptive_max_multiplier < 2 || conf.adaptive_max_multiplier > 4)
@@ -186,7 +195,9 @@ namespace {
 
             .multiplier = 2,
             .frame_generation_enabled = true,
+            .base_fps_cap = 0,
             .adaptive = false,
+            .adaptive_auto_base_fps_cap = false,
             .target_fps = 120,
             .adaptive_max_multiplier = 3,
             .adaptive_stable_cadence = false,
@@ -202,8 +213,17 @@ namespace {
         const char* frame_generation_enabled = std::getenv("MAKO_FRAME_GENERATION_ENABLED");
         if (frame_generation_enabled)
             conf.frame_generation_enabled = std::string(frame_generation_enabled) != "0";
+        const char* base_fps_cap = std::getenv("MAKO_BASE_FPS_CAP");
+        if (base_fps_cap)
+            conf.base_fps_cap = static_cast<uint32_t>(std::stoul(base_fps_cap));
         const char* adaptive = std::getenv("MAKO_ADAPTIVE");
         if (adaptive) conf.adaptive = std::string(adaptive) == "1";
+        const char* adaptive_auto_base_fps_cap =
+            std::getenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");
+        if (adaptive_auto_base_fps_cap) {
+            conf.adaptive_auto_base_fps_cap =
+                std::string(adaptive_auto_base_fps_cap) != "0";
+        }
         const char* target_fps = std::getenv("MAKO_TARGET_FPS");
         if (target_fps) conf.target_fps = static_cast<uint32_t>(std::stoul(target_fps));
         const char* adaptive_max_multiplier = std::getenv("MAKO_ADAPTIVE_MAX_MULTIPLIER");
@@ -221,6 +241,8 @@ namespace {
 
         if (conf.multiplier <= 1)
             throw ls::error("multiplier must be greater than 1");
+        if (conf.base_fps_cap > 1000)
+            throw ls::error("base_fps_cap must be 0 or between 1 and 1000");
         if (conf.target_fps < 10 || conf.target_fps > 1000)
             throw ls::error("target_fps must be between 10 and 1000");
         if (conf.adaptive_max_multiplier < 2 || conf.adaptive_max_multiplier > 4)
@@ -284,7 +306,11 @@ void ConfigFile::write(const std::filesystem::path& path) const {
             profile.insert("gpu", conf.gpu.value_or(""));
         profile.insert("multiplier", static_cast<int64_t>(conf.multiplier));
         profile.insert("frame_generation_enabled", conf.frame_generation_enabled);
+        profile.insert("base_fps_cap", static_cast<int64_t>(conf.base_fps_cap));
         profile.insert("adaptive", conf.adaptive);
+        profile.insert(
+            "adaptive_auto_base_fps_cap", conf.adaptive_auto_base_fps_cap
+        );
         profile.insert("target_fps", static_cast<int64_t>(conf.target_fps));
         profile.insert("adaptive_max_multiplier", static_cast<int64_t>(conf.adaptive_max_multiplier));
         profile.insert("adaptive_stable_cadence", conf.adaptive_stable_cadence);

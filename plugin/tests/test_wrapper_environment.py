@@ -1,5 +1,6 @@
 """Deterministic tests for the generated Vulkan-layer search environment."""
 
+import json
 import os
 from pathlib import Path
 import subprocess
@@ -17,7 +18,10 @@ class _Logger:
 sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 
 from py_modules.mako_plugin import configuration as configuration_module  # noqa: E402
-from py_modules.mako_plugin.configuration import ConfigurationService  # noqa: E402
+from py_modules.mako_plugin.configuration import (  # noqa: E402
+    ConfigurationManager,
+    ConfigurationService,
+)
 from py_modules.mako_plugin.config_schema import CONFIG_SCHEMA  # noqa: E402
 from py_modules.mako_plugin.config_schema_generated import (  # noqa: E402
     ALL_FIELDS,
@@ -28,7 +32,10 @@ from py_modules.mako_plugin.config_schema_generated import (  # noqa: E402
 
 class WrapperEnvironmentTests(unittest.TestCase):
     def setUp(self):
-        self.service = ConfigurationService(logger=_Logger())
+        self.service = ConfigurationService(
+            logger=_Logger(),
+            development_build=False,
+        )
         self.service.local_share_dir = Path("/private/mako/implicit_layer.d")
 
     def _evaluate(self, extra_environment=None, config=None):
@@ -85,6 +92,42 @@ class WrapperEnvironmentTests(unittest.TestCase):
             values["INSTANCE"],
             "VK_LAYER_existing:VK_LAYER_MAKO_render",
         )
+
+    def _evaluate_profile_selection(self, lines, extra_environment=None):
+        script = "\n".join(lines + ['printf "PROFILE=%s\\n" "${MAKO_PROFILE:-}"'])
+        result = subprocess.run(
+            ["bash", "-c", script],
+            check=True,
+            capture_output=True,
+            text=True,
+            env={"PATH": os.environ.get("PATH", ""), **(extra_environment or {})},
+        )
+        return dict(line.split("=", 1) for line in result.stdout.splitlines())
+
+    def test_caller_profile_wins_over_the_decky_selected_profile(self):
+        lines = self.service._profile_selection_lines(
+            "decky-mako",
+            {"active_in": ""},
+            automatic_matching_enabled=False,
+        )
+
+        values = self._evaluate_profile_selection(
+            lines,
+            {"MAKO_PROFILE": "dolphin-starfox"},
+        )
+
+        self.assertEqual(values["PROFILE"], "dolphin-starfox")
+
+    def test_selected_profile_is_the_fallback_without_a_caller_override(self):
+        lines = self.service._profile_selection_lines(
+            "decky-mako",
+            {"active_in": ""},
+            automatic_matching_enabled=False,
+        )
+
+        values = self._evaluate_profile_selection(lines)
+
+        self.assertEqual(values["PROFILE"], "decky-mako")
 
     def test_existing_additional_paths_are_untouched_on_host(self):
         values = self._evaluate({
@@ -237,11 +280,75 @@ class WrapperEnvironmentTests(unittest.TestCase):
         lines = get_script_generation_logic()({"enable_wow64": True})
         self.assertNotIn("export PROTON_USE_WOW64=1", lines)
 
+    def test_base_fps_cap_is_engine_owned(self):
+        self.assertIn("base_fps_cap", ALL_FIELDS)
+        self.assertNotIn("dxvk_frame_rate", ALL_FIELDS)
+        lines = get_script_generation_logic()({"base_fps_cap": 60})
+        self.assertNotIn("export DXVK_FRAME_RATE=60", lines)
+
+    def test_adaptive_auto_cap_is_engine_owned_and_serialized(self):
+        self.assertIn("adaptive_auto_base_fps_cap", ALL_FIELDS)
+        config = ConfigurationManager.get_defaults()
+        self.assertFalse(config["adaptive_auto_base_fps_cap"])
+        config["adaptive"] = True
+        config["adaptive_auto_base_fps_cap"] = True
+        config["target_fps"] = 165
+        toml = ConfigurationManager.generate_toml_content(config)
+        self.assertIn("adaptive_auto_base_fps_cap = true", toml)
+        self.assertIn("target_fps = 165", toml)
+        self.assertNotIn("ADAPTIVE_AUTO_BASE_FPS_CAP", "\n".join(
+            get_script_generation_logic()(config)
+        ))
+
     def test_wrapper_never_exports_obsolete_recreation_request(self):
         lines = self.service._generate_layer_environment_lines()
         self.assertFalse(any(
             "MAKO_PRESENT_RECOVERY_RECREATE" in line for line in lines
         ))
+
+    def test_published_wrapper_keeps_diagnostics_opt_in(self):
+        lines = self.service._generate_layer_environment_lines()
+        self.assertIn(
+            'export MAKO_PRESENT_DIAGNOSTICS="${MAKO_PRESENT_DIAGNOSTICS:-0}"',
+            lines,
+        )
+        self.assertEqual(
+            self.service._diagnostics_default_marker(),
+            "# development presentation diagnostics default: disabled",
+        )
+
+    def test_development_wrapper_enables_diagnostics_by_default(self):
+        service = ConfigurationService(
+            logger=_Logger(),
+            development_build=True,
+        )
+        lines = service._generate_layer_environment_lines()
+        self.assertIn(
+            'export MAKO_PRESENT_DIAGNOSTICS="${MAKO_PRESENT_DIAGNOSTICS:-1}"',
+            lines,
+        )
+        self.assertEqual(
+            service._diagnostics_default_marker(),
+            "# development presentation diagnostics default: enabled",
+        )
+
+    def test_diagnostics_default_marker_change_regenerates_wrapper(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    self.service._WRAPPER_FORMAT_MARKER,
+                    "# development presentation diagnostics default: enabled",
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
 
     def test_obsolete_wow64_profile_setting_is_discarded(self):
         settings = self.service._normalize_wrapper_settings({
@@ -286,6 +393,56 @@ class WrapperEnvironmentTests(unittest.TestCase):
             )
 
             self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_legacy_dxvk_cap_migrates_into_engine_profile(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            self.service.config_dir = temp_path
+            self.service.config_file_path = temp_path / "conf.toml"
+            self.service.wrapper_profile_settings_path = temp_path / "wrapper.json"
+            self.service.mako_script_path = temp_path / "wrapper"
+            self.service.config_file_path.write_text(
+                "\n".join([
+                    "version = 2",
+                    '# decky-current-profile = "decky-mako"',
+                    "[global]",
+                    "allow_fp16 = true",
+                    "[[profile]]",
+                    'name = "decky-mako"',
+                    "multiplier = 2",
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+            self.service.wrapper_profile_settings_path.write_text(
+                json.dumps({
+                    "version": 1,
+                    "profiles": {
+                        "decky-mako": {
+                            "dxvk_frame_rate": 60,
+                            "disable_hdr_exposure": True,
+                        },
+                    },
+                }),
+                encoding="utf-8",
+            )
+            self.service.mako_script_path.write_text(
+                "export DXVK_FRAME_RATE=60\n",
+                encoding="utf-8",
+            )
+
+            self.assertTrue(
+                self.service.migrate_legacy_base_fps_caps_if_needed()
+            )
+            profile_data = self.service._get_profile_data()
+            self.assertEqual(
+                profile_data["profiles"]["decky-mako"]["base_fps_cap"],
+                60,
+            )
+            self.assertNotIn(
+                "DXVK_FRAME_RATE",
+                self.service.mako_script_path.read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":

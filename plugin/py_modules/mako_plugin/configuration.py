@@ -2,9 +2,11 @@
 
 import json
 from pathlib import Path
+import re
 import shlex
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
+from .build_flavor import LOCAL_DEVELOPMENT_BUILD
 from .base_service import BaseService
 from .config_schema import (
     ConfigurationManager,
@@ -32,19 +34,38 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 28"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 30"
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
         "export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS=",
+        "export MAKO_PRESENT_DIAGNOSTICS=",
         f"export {MAKO_LAYER_ENABLE_ENV}=1",
+        "export DISABLE_MAKO=1",
+        "export DISABLE_MAKO=1",
         "mako_diagnostics_default=",
     )
     _OBSOLETE_WRAPPER_EXPORTS = (
+        "DXVK_FRAME_RATE",
         "PROTON_USE_WOW64",
         "MAKO_PRESENT_RECOVERY_RECREATE",
         "MAKO_EXPERIMENTAL_HDR",
         "VK_INSTANCE_LAYERS",
     )
+
+    def __init__(
+            self,
+            logger: Optional[Any] = None,
+            development_build: Optional[bool] = None):
+        super().__init__(logger=logger)
+        self.development_build = (
+            LOCAL_DEVELOPMENT_BUILD
+            if development_build is None
+            else development_build
+        )
+
+    def _diagnostics_default_marker(self) -> str:
+        default = "enabled" if self.development_build else "disabled"
+        return f"# development presentation diagnostics default: {default}"
 
     @staticmethod
     def _wrapper_settings_defaults() -> Dict[str, Any]:
@@ -170,6 +191,84 @@ class ConfigurationService(BaseService):
             self.log.warning("Could not migrate wrapper-only profile settings: %s", error)
             return False
 
+    def migrate_legacy_base_fps_caps_if_needed(self) -> bool:
+        """Move the former DXVK-only wrapper cap into engine profiles.
+
+        Wrapper format 27 stored ``dxvk_frame_rate`` outside TOML and exported
+        ``DXVK_FRAME_RATE``. Format 28 uses the engine's backend-independent
+        ``base_fps_cap`` instead. Preserve a non-zero cap once, then remove the
+        legacy export so DirectX games are not limited twice.
+        """
+        raw_profiles: Dict[str, Dict[str, Any]] = {}
+        legacy_artifact_found = False
+        if self.wrapper_profile_settings_path.exists():
+            try:
+                payload = json.loads(
+                    self.wrapper_profile_settings_path.read_text(encoding="utf-8")
+                )
+                stored_profiles = payload.get("profiles", {})
+                if isinstance(stored_profiles, dict):
+                    for profile_name, raw_settings in stored_profiles.items():
+                        if isinstance(profile_name, str) and isinstance(raw_settings, dict):
+                            raw_profiles[profile_name] = dict(raw_settings)
+                            legacy_artifact_found = (
+                                "dxvk_frame_rate" in raw_settings or
+                                legacy_artifact_found
+                            )
+            except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
+                self.log.warning(
+                    "Could not inspect legacy Base FPS Cap settings: %s", error
+                )
+
+        profile_data = self._get_profile_data()
+        legacy_caps: Dict[str, int] = {}
+        for profile_name, raw_settings in raw_profiles.items():
+            raw_cap = raw_settings.pop("dxvk_frame_rate", 0)
+            try:
+                cap = int(raw_cap)
+            except (TypeError, ValueError):
+                continue
+            if 0 < cap <= 240:
+                legacy_caps[profile_name] = cap
+
+        if self.mako_script_path.exists():
+            try:
+                script_content = self.mako_script_path.read_text(encoding="utf-8")
+                match = re.search(
+                    r"^\s*export\s+DXVK_FRAME_RATE=(\d+)\s*$",
+                    script_content,
+                    flags=re.MULTILINE,
+                )
+                if match:
+                    legacy_artifact_found = True
+                    cap = int(match.group(1))
+                    if 0 < cap <= 240:
+                        legacy_caps.setdefault(
+                            profile_data["current_profile"], cap
+                        )
+            except (OSError, IOError, ValueError):
+                pass
+
+        profile_changed = False
+        for profile_name, cap in legacy_caps.items():
+            profile = profile_data["profiles"].get(profile_name)
+            if profile is None or profile.get("base_fps_cap", 0) != 0:
+                continue
+            profile["base_fps_cap"] = cap
+            profile_changed = True
+
+        if not legacy_artifact_found and not profile_changed:
+            return False
+
+        if profile_changed:
+            self._save_profile_data(profile_data)
+        if self.wrapper_profile_settings_path.exists() or raw_profiles:
+            self._write_wrapper_profile_settings(raw_profiles)
+        result = self.update_mako_script_from_profile_data(profile_data)
+        if not result["success"]:
+            raise OSError(result.get("error") or "could not migrate Base FPS Cap")
+        return True
+
     @staticmethod
     def _has_active_in(config: ConfigurationData) -> bool:
         """Return whether an engine profile can select itself by process name."""
@@ -187,9 +286,12 @@ class ConfigurationService(BaseService):
     ) -> list[str]:
         """Choose between Decky's selected profile and automatic matching.
 
-        ``MAKO_PROFILE`` deliberately overrides MAKO Renderer's ``active_in`` matching.
-        Keep Decky's selected-profile behaviour for profiles without activation rules,
-        but let MAKO Renderer perform its native automatic selection when rules are present.
+        A caller-provided ``MAKO_PROFILE`` deliberately overrides both Decky's
+        selected profile and mako's ``active_in`` matching. This lets a Steam
+        shortcut select an engine profile per game. Without a caller override,
+        keep Decky's selected-profile behaviour for profiles without activation
+        rules, but let mako perform its native automatic selection when rules
+        are present.
         """
         if automatic_matching_enabled is None:
             automatic_matching_enabled = cls._has_active_in(config)
@@ -198,7 +300,12 @@ class ConfigurationService(BaseService):
             return [
                 "# An active_in profile is configured; MAKO Renderer will select a matching profile automatically.",
             ]
-        return [f"export MAKO_PROFILE={shlex.quote(profile_name)}"]
+        return [
+            "# A Steam shortcut may set MAKO_PROFILE to select a per-game profile.",
+            'if [ -z "${MAKO_PROFILE:-}" ]; then',
+            f"    export MAKO_PROFILE={shlex.quote(profile_name)}",
+            "fi",
+        ]
 
     def get_config(self) -> ConfigurationResponse:
         """Read current TOML configuration merged with launch script environment variables
@@ -318,8 +425,9 @@ class ConfigurationService(BaseService):
         lines = [
             "#!/bin/bash",
             self._WRAPPER_FORMAT_MARKER,
-            "# MAKO Renderer launch script generated by mako plugin",
-            "# This script sets up the environment for MAKO Renderer to work with the plugin configuration",
+            self._diagnostics_default_marker(),
+            "# mako launch script generated by decky-mako-experimental plugin",
+            "# This script sets up the environment for mako to work with the plugin configuration",
         ]
 
         generate_script_lines = get_script_generation_logic()
@@ -350,6 +458,7 @@ class ConfigurationService(BaseService):
         lines = [
             "#!/bin/bash",
             self._WRAPPER_FORMAT_MARKER,
+            self._diagnostics_default_marker(),
             f"# Current profile: {current_profile}",
         ]
 
@@ -400,8 +509,13 @@ class ConfigurationService(BaseService):
         boundary is enforced separately.
         """
         diagnostics_log_path = self.config_dir / "present-diagnostics.log"
+        diagnostics_default = "1" if self.development_build else "0"
         return [
             f'export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS="${{MAKO_PRESENT_ACQUIRE_TIMEOUT_MS:-{PRESENT_ACQUIRE_TIMEOUT_MS}}}"',
+            # Local development packages collect the current test run without
+            # requiring per-game launch-option edits. An explicit caller value
+            # always wins, including 0 to turn diagnostics off for profiling.
+            f'export MAKO_PRESENT_DIAGNOSTICS="${{MAKO_PRESENT_DIAGNOSTICS:-{diagnostics_default}}}"',
             f"export {MAKO_LAYER_ENABLE_ENV}=1",
             f"if [ -d {shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)} ]; then",
             f"    mako_implicit_layer_path={shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)}",
@@ -440,11 +554,13 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Wrapper format 28 uses MAKO-only activation and configuration names.
-        It preserves Heroic's Gamescope WSI manifest, carries MAKO Renderer
-        through UMU with the explicit Flatpak search path, and retains the
-        restart-time SDR safety boundary. Older formats are regenerated when
-        their marker or required exports no longer match this contract.
+        Format 30 applies a build-flavour-aware presentation-diagnostics
+        default. Local development packages enable it while published packages
+        remain quiet, and either build still honours an explicit caller value.
+        Format 29 preserves a caller-provided profile for per-shortcut selection.
+        Format 28 moved Base FPS Cap from the DXVK-only wrapper export into the
+        engine. Regenerate any older or incomplete wrapper while retaining user
+        profiles and rejecting obsolete environment exports.
         """
         if not self.mako_script_path.exists():
             return False
@@ -453,6 +569,7 @@ class ConfigurationService(BaseService):
             current_content = self.mako_script_path.read_text(encoding="utf-8")
             wrapper_is_current = (
                 self._WRAPPER_FORMAT_MARKER in current_content
+                and self._diagnostics_default_marker() in current_content
                 and all(
                     export in current_content
                     for export in self._REQUIRED_WRAPPER_EXPORTS
@@ -470,7 +587,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO Renderer launch wrapper to format 28")
+            self.log.info("Upgraded installed mako experimental launch wrapper to format 30")
             return True
         except OSError:
             raise

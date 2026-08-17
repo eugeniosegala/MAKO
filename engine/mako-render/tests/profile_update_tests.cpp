@@ -22,7 +22,9 @@ namespace {
             .active_in = {"game"},
             .multiplier = 2,
             .frame_generation_enabled = true,
+            .base_fps_cap = 0,
             .adaptive = true,
+            .adaptive_auto_base_fps_cap = false,
             .target_fps = 90,
             .adaptive_max_multiplier = 3,
             .adaptive_stable_cadence = false,
@@ -58,6 +60,35 @@ int main() {
     decision = classifyProfileUpdate(current, next, 2, true);
     expect(decision.action == ProfileUpdateAction::DeferUntilSwapchainRecreation,
         "Adaptive capacity growth must be deferred when images are unavailable");
+
+    next = current;
+    next.base_fps_cap = 60;
+    decision = classifyProfileUpdate(current, next, 3, true);
+    expect(decision.action == ProfileUpdateAction::ApplyLive,
+        "Base FPS cap changes must not rebuild GPU resources");
+    expect(decision.baseFpsCapChanged,
+        "Base FPS cap changes must reset presentation timing");
+
+    next = current;
+    next.adaptive_auto_base_fps_cap = true;
+    decision = classifyProfileUpdate(current, next, 3, true);
+    expect(decision.action == ProfileUpdateAction::ApplyLive,
+        "Adaptive auto-cap changes must apply without rebuilding resources");
+    expect(decision.baseFpsCapChanged,
+        "Adaptive auto-cap changes must reset presentation timing");
+    expect(effectiveBaseFpsCap(next) == 45.0,
+        "Adaptive auto-cap did not derive half of the 90 FPS target");
+
+    auto oddTarget = next;
+    oddTarget.target_fps = 165;
+    expect(effectiveBaseFpsCap(oddTarget) == 82.5,
+        "Adaptive auto-cap lost a fractional half-target cadence");
+
+    auto fixedAutoCap = next;
+    fixedAutoCap.adaptive = false;
+    fixedAutoCap.base_fps_cap = 30;
+    expect(effectiveBaseFpsCap(fixedAutoCap) == 30.0,
+        "Adaptive auto-cap incorrectly overrode Fixed mode's manual cap");
 
     next = current;
     next.frame_generation_enabled = false;

@@ -11,8 +11,10 @@ export enum ConfigFieldType {
 export const DLL = "dll" as const;
 export const ALLOW_FP16 = "allow_fp16" as const;
 export const FRAME_GENERATION_ENABLED = "frame_generation_enabled" as const;
+export const BASE_FPS_CAP = "base_fps_cap" as const;
 export const MULTIPLIER = "multiplier" as const;
 export const ADAPTIVE = "adaptive" as const;
+export const ADAPTIVE_AUTO_BASE_FPS_CAP = "adaptive_auto_base_fps_cap" as const;
 export const TARGET_FPS = "target_fps" as const;
 export const ADAPTIVE_MAX_MULTIPLIER = "adaptive_max_multiplier" as const;
 export const ADAPTIVE_STABLE_CADENCE = "adaptive_stable_cadence" as const;
@@ -23,7 +25,6 @@ export const ACTIVE_IN = "active_in" as const;
 export const GPU = "gpu" as const;
 export const DISABLE_MAKO = "disable_mako" as const;
 export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
-export const DXVK_FRAME_RATE = "dxvk_frame_rate" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
 
@@ -55,6 +56,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: true,
     description: "live on/off switch; leave on for fixed or adaptive generation, off stops both modes"
   },
+  base_fps_cap: {
+    name: "base_fps_cap",
+    fieldType: ConfigFieldType.INTEGER,
+    default: 0,
+    description: "backend-independent real framerate cap applied before frame generation"
+  },
   multiplier: {
     name: "multiplier",
     fieldType: ConfigFieldType.INTEGER,
@@ -66,6 +73,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
     description: "dynamically vary generated frames to approach a target framerate"
+  },
+  adaptive_auto_base_fps_cap: {
+    name: "adaptive_auto_base_fps_cap",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "prefer an even 2x Adaptive baseline by capping input to half the target"
   },
   target_fps: {
     name: "target_fps",
@@ -127,12 +140,6 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: true,
     description: "required SDR safety boundary while HDR support is under development"
   },
-  dxvk_frame_rate: {
-    name: "dxvk_frame_rate",
-    fieldType: ConfigFieldType.INTEGER,
-    default: 0,
-    description: "base framerate cap for DirectX games before frame multiplier"
-  },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",
     fieldType: ConfigFieldType.BOOLEAN,
@@ -152,8 +159,10 @@ export interface ConfigurationData {
   dll: string;
   allow_fp16: boolean;
   frame_generation_enabled: boolean;
+  base_fps_cap: number;
   multiplier: number;
   adaptive: boolean;
+  adaptive_auto_base_fps_cap: boolean;
   target_fps: number;
   adaptive_max_multiplier: number;
   adaptive_stable_cadence: boolean;
@@ -164,7 +173,6 @@ export interface ConfigurationData {
   gpu: string;
   disable_mako: boolean;
   disable_hdr_exposure: boolean;
-  dxvk_frame_rate: number;
   disable_steamdeck_mode: boolean;
   enable_zink: boolean;
 }
@@ -179,8 +187,10 @@ export function getDefaults(): ConfigurationData {
     dll: "",
     allow_fp16: true,
     frame_generation_enabled: true,
+    base_fps_cap: 0,
     multiplier: 2,
     adaptive: false,
+    adaptive_auto_base_fps_cap: false,
     target_fps: 90,
     adaptive_max_multiplier: 3,
     adaptive_stable_cadence: true,
@@ -191,7 +201,6 @@ export function getDefaults(): ConfigurationData {
     gpu: "",
     disable_mako: false,
     disable_hdr_exposure: true,
-    dxvk_frame_rate: 0,
     disable_steamdeck_mode: false,
     enable_zink: false,
   };
@@ -202,8 +211,10 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     dll: ConfigFieldType.STRING,
     allow_fp16: ConfigFieldType.BOOLEAN,
     frame_generation_enabled: ConfigFieldType.BOOLEAN,
+    base_fps_cap: ConfigFieldType.INTEGER,
     multiplier: ConfigFieldType.INTEGER,
     adaptive: ConfigFieldType.BOOLEAN,
+    adaptive_auto_base_fps_cap: ConfigFieldType.BOOLEAN,
     target_fps: ConfigFieldType.INTEGER,
     adaptive_max_multiplier: ConfigFieldType.INTEGER,
     adaptive_stable_cadence: ConfigFieldType.BOOLEAN,
@@ -214,7 +225,6 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     gpu: ConfigFieldType.STRING,
     disable_mako: ConfigFieldType.BOOLEAN,
     disable_hdr_exposure: ConfigFieldType.BOOLEAN,
-    dxvk_frame_rate: ConfigFieldType.INTEGER,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,
   };

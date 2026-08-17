@@ -51,9 +51,11 @@ unnecessary 3x load from remaining slower than a capable fixed 2x path while avo
 
 ## Collecting diagnostics
 
-Diagnostics are off by default. They are written to the plugin-private file below, rather than Steam's cumulative
-console log. Starting a game with diagnostics enabled replaces the previous diagnostic file, so it contains one current
-test run.
+Published builds keep diagnostics off by default. Local development ZIPs made with `--local-plugin`,
+`package:local-engine`, or `package:local-engine-fast`, and direct `dev:*` deployments, enable them automatically.
+They are written to the plugin-private file below, rather than Steam's cumulative console log. Starting a game with
+diagnostics enabled replaces the previous diagnostic file, so it contains one current test run. Set
+`MAKO_PRESENT_DIAGNOSTICS=0` in a game's environment when a development build needs a clean profiling run.
 
 For a Steam game, temporarily replace the normal launch option with:
 
@@ -125,7 +127,7 @@ grep -aE 'mako: present diagnostics: operation=(runtime-transition-pending|runti
 ```
 
 Remove the temporary Steam launch variables or Heroic environment rows afterwards: diagnostics can generate substantial
-log traffic.
+log traffic. Local development builds return to automatic collection when that explicit override is removed.
 
 ## Update and Flatpak checks
 

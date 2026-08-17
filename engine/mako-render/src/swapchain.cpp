@@ -28,6 +28,7 @@
 #include <sstream>
 #include <span>
 #include <string_view>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -622,6 +623,25 @@ namespace {
                   << '\n';
     }
 
+    void logAdaptiveSdrGameplayHitchBridge(size_t generationLimit,
+            double baselineBaseFps,
+            const std::chrono::steady_clock::duration rawInterval) {
+        if (!presentDiagnosticsEnabled())
+            return;
+
+        std::cerr << "mako-render: present diagnostics: operation="
+                  << "adaptive-sdr-gameplay-hitch-bridged"
+                  << " context=" << activeDiagnosticsContextId
+                  << " generated_limit=" << generationLimit
+                  << " baseline_base_fps=" << baselineBaseFps
+                  << " raw_interval_ms="
+                  << std::chrono::duration<double, std::milli>(
+                         rawInterval
+                     ).count()
+                  << " action=retain-generated-frame"
+                  << '\n';
+    }
+
     void logAdaptiveCadenceRefresh(std::string_view reason,
             size_t retainedGenerationLimit, size_t historyFrames) {
         if (!presentDiagnosticsEnabled())
@@ -819,6 +839,13 @@ namespace {
                 generationLimit, baselineBaseFps, rawInterval
             );
         }
+        void sdrGameplayHitchBridge(size_t generationLimit,
+                double baselineBaseFps,
+                std::chrono::steady_clock::duration rawInterval) override {
+            logAdaptiveSdrGameplayHitchBridge(
+                generationLimit, baselineBaseFps, rawInterval
+            );
+        }
         void cadenceRefresh(std::string_view reason,
                 size_t retainedGenerationLimit,
                 size_t historyFrames) override {
@@ -959,6 +986,11 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                   << " adaptive=" << this->profile.adaptive
                   << " target_fps=" << this->profile.target_fps
                   << " multiplier=" << this->profile.multiplier
+                  << " base_fps_cap=" << this->profile.base_fps_cap
+                  << " adaptive_auto_base_fps_cap="
+                  << this->profile.adaptive_auto_base_fps_cap
+                  << " effective_base_fps_cap="
+                  << effectiveBaseFpsCap(this->profile)
                   << " adaptive_max_multiplier="
                   << this->profile.adaptive_max_multiplier
                   << " stable_cadence="
@@ -1426,13 +1458,15 @@ ProfileUpdateAction Swapchain::updateProfile(
         this->profile.multiplier, this->destinationImages.size()
     );
     if (decision.generationModeChanged || decision.fixedMultiplierChanged ||
-            enabling || disabling) {
+            decision.baseFpsCapChanged || enabling || disabling) {
         this->fixedRefreshBudget.reset();
         this->fixedDiagnosticWindowStarted.reset();
         this->fixedDiagnosticRealFrames = 0;
         this->fixedDiagnosticGeneratedFrames = 0;
         this->fixedDiagnosticSkippedFrames = 0;
     }
+    if (decision.baseFpsCapChanged)
+        this->realFramePacer.reset();
 
     if (disabling) {
         this->configurationHistoryWarmupRemaining = 0;
@@ -1450,7 +1484,8 @@ ProfileUpdateAction Swapchain::updateProfile(
 
     if (this->profile.adaptive &&
             (decision.adaptivePolicyChanged ||
-             decision.generationModeChanged || enabling)) {
+             decision.generationModeChanged ||
+             decision.baseFpsCapChanged || enabling)) {
         this->adaptiveScheduler.emplace(
             AdaptiveSchedulerConfig{
                 .targetFps = this->profile.target_fps,
@@ -1480,6 +1515,11 @@ ProfileUpdateAction Swapchain::updateProfile(
                   << " adaptive=" << this->profile.adaptive
                   << " target_fps=" << this->profile.target_fps
                   << " multiplier=" << this->profile.multiplier
+                  << " base_fps_cap=" << this->profile.base_fps_cap
+                  << " adaptive_auto_base_fps_cap="
+                  << this->profile.adaptive_auto_base_fps_cap
+                  << " effective_base_fps_cap="
+                  << effectiveBaseFpsCap(this->profile)
                   << " adaptive_max_multiplier="
                   << this->profile.adaptive_max_multiplier
                   << " stable_cadence="
@@ -1712,6 +1752,13 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     );
     const bool gamescopeHdrTransport =
         this->gamescopeManaged && !this->privateOrderedTransport;
+
+    const auto limiterArrival = DiagnosticsClock::now();
+    const auto limiterDeadline = this->realFramePacer.schedule(
+        limiterArrival, effectiveBaseFpsCap(this->profile)
+    );
+    if (limiterDeadline > limiterArrival)
+        std::this_thread::sleep_until(limiterDeadline);
 
     const auto presentNow = DiagnosticsClock::now();
     const auto presentStarted = startPresentDiagnostic();

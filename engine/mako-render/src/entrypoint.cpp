@@ -222,11 +222,7 @@ namespace {
         if (it != instance_info->handles.end())
             instance_info->handles.erase(it);
 
-        // destroy instance info if no handles remain
-        if (instance_info->handles.empty()) {
-            delete instance_info; // NOLINT (memory management)
-            instance_info = nullptr;
-        }
+        const bool lastInstance = instance_info->handles.empty();
 
         // destroy instance
         auto vkDestroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(
@@ -234,10 +230,31 @@ namespace {
         if (!vkDestroyInstance) {
             std::cerr << "mako: failed to get next layer's vkDestroyInstance, "
                 "the previous layer does not follow spec\n";
+
+            if (lastInstance) {
+                delete instance_info; // NOLINT (memory management)
+                instance_info = nullptr;
+                delete layer_info; // NOLINT (memory management)
+                layer_info = nullptr;
+            }
             return;
         }
 
         vkDestroyInstance(instance, alloc);
+
+        // The Vulkan loader may unload this shared object as soon as the final
+        // vkDestroyInstance() wrapper returns. Root owns a Gamescope feedback
+        // monitor thread, so leaving the process-global LayerInfo allocated
+        // lets that worker resume inside unmapped layer code after dlclose().
+        // Destroy all layer-owned state, including joining the monitor, while
+        // our code is still resident. A later loader negotiation can recreate
+        // the state if the application opens another Vulkan instance.
+        if (lastInstance) {
+            delete instance_info; // NOLINT (memory management)
+            instance_info = nullptr;
+            delete layer_info; // NOLINT (memory management)
+            layer_info = nullptr;
+        }
     }
 
     // get optional function pointer override

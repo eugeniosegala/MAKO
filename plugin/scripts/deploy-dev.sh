@@ -10,6 +10,7 @@ deploy_backend=false
 deploy_engine=false
 deploy_engine_32=false
 deploy_flatpaks=false
+reload_plugin=false
 action_selected=false
 
 usage() {
@@ -30,12 +31,14 @@ Options:
   --flatpaks              Deploy Decky plus Flatpak runtimes 23.08, 24.08, and 25.08.
   --e2e                   Deploy Decky, both host layers, and all Flatpak runtime bundles.
   --all                   Deploy frontend, backend, and engine.
+  --reload                Reload only this plugin through Decky after deployment.
   --plugin-dir PATH       Installed Decky plugin directory.
   --engine-repo PATH      MAKO Renderer source directory for --engine.
   -h, --help              Show this help.
 
 The plugin must first have installed its engine normally. Quit the test game
-before --engine, then reload this plugin from Decky's Developer menu.
+before --engine. Reload it from Decky's Developer menu after deployment, or
+pass --reload to reload only this plugin automatically.
 EOF
 }
 
@@ -83,6 +86,9 @@ while (($#)); do
       deploy_backend=true
       deploy_engine=true
       action_selected=true
+      ;;
+    --reload)
+      reload_plugin=true
       ;;
     --plugin-dir)
       if (($# < 2)); then
@@ -295,6 +301,12 @@ if [[ -n "$built_layer_64" || -n "$built_layer_32" || -n "$flatpak_archive" ]]; 
 fi
 node "$project_dir/scripts/generate-dev-build-info.mjs" "${dev_build_info_args[@]}"
 
+# Direct development deployments use the same runtime flag as local ZIPs.
+# Copy only this generated flavour override; published packages retain the
+# tracked default from py_modules/mako_plugin/build_flavor.py.
+copy_file "$project_dir/defaults/build_flavor.dev.py" \
+  "$plugin_dir/py_modules/mako_plugin/build_flavor.py"
+
 if [[ "$deploy_frontend" == true ]]; then
   if [[ "$deploy_backend" == true ]]; then
     echo "Generating configuration bindings..."
@@ -315,6 +327,8 @@ if [[ "$deploy_backend" == true ]]; then
   copy_file "$project_dir/main.py" "$plugin_dir/main.py"
   copy_file "$project_dir/shared_config.py" "$plugin_dir/shared_config.py"
   cp -a "$project_dir/py_modules/." "$plugin_dir/py_modules/"
+  copy_file "$project_dir/defaults/build_flavor.dev.py" \
+    "$plugin_dir/py_modules/mako_plugin/build_flavor.py"
   find "$plugin_dir/py_modules" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
   find "$plugin_dir/py_modules" -type d -name '__pycache__' -prune -exec rm -rf {} +
   echo "Deployed Decky Python backend."
@@ -336,4 +350,8 @@ if [[ -n "$flatpak_archive" ]]; then
   echo "Deployed Flatpak runtime bundles 23.08, 24.08, and 25.08."
 fi
 
-echo "Reload Mako from Decky's Developer menu before testing."
+if [[ "$reload_plugin" == true ]]; then
+  node "$project_dir/scripts/reload-decky-plugin.mjs" "$plugin_name"
+else
+  echo "Reload Decky MAKO Experimental from Decky's Developer menu before testing."
+fi

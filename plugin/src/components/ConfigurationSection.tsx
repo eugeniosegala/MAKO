@@ -4,7 +4,7 @@ import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
 import { ConfigurationData } from "../config/configSchema";
 import {
   ACTIVE_IN, ALLOW_FP16, DISABLE_MAKO, DLL, FLOW_SCALE, GPU, PERFORMANCE_MODE,
-  DXVK_FRAME_RATE, DISABLE_STEAMDECK_MODE, ENABLE_ZINK
+  BASE_FPS_CAP, DISABLE_STEAMDECK_MODE, ENABLE_ZINK
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
 
@@ -152,13 +152,14 @@ export function ConfigurationSection({
 
           <PanelSectionRow>
             <SliderField
-              label={`${t("CONFIG_BASE_FPS_CAP", "Base FPS Cap")}${config.dxvk_frame_rate > 0 ? ` (${config.dxvk_frame_rate} FPS)` : ` (${t("CONFIG_BASE_FPS_CAP_OFF", "Off")})`}`}
-              description={t("CONFIG_BASE_FPS_CAP_DESC", "Base framerate cap for DirectX games, before frame multiplication. Requires a game restart to apply.")}
-              value={config.dxvk_frame_rate}
+              label={`${t("CONFIG_BASE_FPS_CAP", "Base FPS Cap")}${config.base_fps_cap > 0 ? ` (${config.base_fps_cap} FPS)` : ` (${t("CONFIG_BASE_FPS_CAP_OFF", "Off")})`}`}
+              description={t("CONFIG_BASE_FPS_CAP_DESC", "Caps real application frames before frame generation. Works with DirectX, OpenGL through Zink, and Vulkan; changes apply live.")}
+              value={config.base_fps_cap}
               min={0}
               max={60}
               step={1}
-              onChange={(value) => onConfigChange(DXVK_FRAME_RATE, value)}
+              disabled={config.adaptive && (config.adaptive_auto_base_fps_cap ?? false)}
+              onChange={(value) => onConfigChange(BASE_FPS_CAP, value)}
             />
           </PanelSectionRow>
 

@@ -1,5 +1,5 @@
 import { useEffect, useState, type FocusEvent } from "react";
-import { AppOverview, ButtonItem, PanelSection, PanelSectionRow, Router, showModal } from "@decky/ui";
+import { AppOverview, ButtonItem, DialogButton, PanelSection, PanelSectionRow, Router, showModal } from "@decky/ui";
 import { useInstallationStatus, useDllDetection, useMakoConfig } from "../hooks/useMakoHooks";
 import { useProfileManagement } from "../hooks/useProfileManagement";
 import { useInstallationActions } from "../hooks/useInstallationActions";
@@ -19,6 +19,7 @@ import t from "../i18n/i18n";
 
 export function Content() {
   const [mainRunningApp, setMainRunningApp] = useState<AppOverview | undefined>(undefined);
+  const [showDevelopmentDetails, setShowDevelopmentDetails] = useState(false);
   const {
     isInstalled,
     installationStatus,
@@ -115,53 +116,110 @@ export function Content() {
           <div
             style={{
               padding: "8px 12px",
+              width: "100%",
+              boxSizing: "border-box",
               backgroundColor: "rgba(33, 150, 243, 0.16)",
               borderRadius: "4px",
               border: "1px solid rgba(33, 150, 243, 0.5)",
               color: "#a8d8ff",
-              fontSize: "13px"
+              fontSize: "13px",
+              overflow: "hidden"
             }}
           >
-            <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
-              🧪 Local development deployment
-            </div>
-            <div style={{ marginBottom: "10px", color: "#d6ecff" }}>
-              <span style={{ color: "#83bff0" }}>Deployed</span>{" "}
-              {new Date(localDevelopmentBuildInfo.generatedAt).toLocaleString()}
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-              <div>
-                <div style={{ color: "#83bff0", fontWeight: "600" }}>Mako</div>
-                <div>Commit: <code>{localDevelopmentBuildInfo.plugin.commit}</code>{localDevelopmentBuildInfo.plugin.dirty ? " + local edits" : ""}</div>
-                <div>Frontend: {localDevelopmentBuildInfo.plugin.frontendDeployed ? "deployed" : "unchanged"}</div>
-                <div>Backend: {localDevelopmentBuildInfo.plugin.backendDeployed ? "deployed" : "unchanged"}</div>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                minWidth: 0
+              }}
+            >
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: "bold" }}>
+                  🧪 Local development deployment
+                </div>
+                <div
+                  style={{
+                    marginTop: "2px",
+                    color: "#d6ecff",
+                    fontSize: "11px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis"
+                  }}
+                >
+                  Decky <code>{localDevelopmentBuildInfo.plugin.commit}</code>
+                  {localDevelopmentBuildInfo.plugin.dirty ? "*" : ""}
+                  {" · MAKO "}
+                  {localDevelopmentBuildInfo.engine
+                    ? <code>{localDevelopmentBuildInfo.engine.commit}</code>
+                    : "unchanged"}
+                  {localDevelopmentBuildInfo.engine?.dirty ? "*" : ""}
+                </div>
               </div>
-              <div>
-                <div style={{ color: "#83bff0", fontWeight: "600" }}>MAKO Renderer</div>
-                {localDevelopmentBuildInfo.engine ? (
-                  <>
-                    <div>Commit: <code>{localDevelopmentBuildInfo.engine.commit}</code>{localDevelopmentBuildInfo.engine.dirty ? " + local edits" : ""}</div>
-                    <div>
-                      64-bit layer: {localDevelopmentBuildInfo.engine.layer64Sha256
-                        ? <>deployed · SHA-256 <code>{localDevelopmentBuildInfo.engine.layer64Sha256.slice(0, 12)}</code></>
-                        : "unchanged"}
-                    </div>
-                    <div>
-                      32-bit layer: {localDevelopmentBuildInfo.engine.layer32Sha256
-                        ? <>deployed · SHA-256 <code>{localDevelopmentBuildInfo.engine.layer32Sha256.slice(0, 12)}</code></>
-                        : "unchanged"}
-                    </div>
-                    <div>
-                      Flatpak bundles: {localDevelopmentBuildInfo.engine.flatpakArchiveSha256
-                        ? <>23.08, 24.08, 25.08 deployed · SHA-256 <code>{localDevelopmentBuildInfo.engine.flatpakArchiveSha256.slice(0, 12)}</code></>
-                        : "unchanged"}
-                    </div>
-                  </>
-                ) : (
-                  <div>Unchanged by this deployment</div>
-                )}
-              </div>
+              <DialogButton
+                aria-expanded={showDevelopmentDetails}
+                style={{
+                  width: "72px",
+                  minWidth: "72px",
+                  height: "30px",
+                  padding: "4px 8px",
+                  fontSize: "12px"
+                }}
+                onClick={() => setShowDevelopmentDetails((current) => !current)}
+              >
+                {showDevelopmentDetails ? "Hide" : "Details"}
+              </DialogButton>
             </div>
+            {showDevelopmentDetails && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  marginTop: "8px",
+                  paddingTop: "8px",
+                  borderTop: "1px solid rgba(33, 150, 243, 0.35)",
+                  overflowWrap: "anywhere"
+                }}
+              >
+                <div style={{ color: "#d6ecff" }}>
+                  <span style={{ color: "#83bff0" }}>Deployed</span>{" "}
+                  {new Date(localDevelopmentBuildInfo.generatedAt).toLocaleString()}
+                </div>
+                <div>
+                  <div style={{ color: "#83bff0", fontWeight: "600" }}>Decky</div>
+                  <div>Commit: <code>{localDevelopmentBuildInfo.plugin.commit}</code>{localDevelopmentBuildInfo.plugin.dirty ? " + local edits" : ""}</div>
+                  <div>Frontend: {localDevelopmentBuildInfo.plugin.frontendDeployed ? "deployed" : "unchanged"}</div>
+                  <div>Backend: {localDevelopmentBuildInfo.plugin.backendDeployed ? "deployed" : "unchanged"}</div>
+                </div>
+                <div>
+                  <div style={{ color: "#83bff0", fontWeight: "600" }}>MAKO</div>
+                  {localDevelopmentBuildInfo.engine ? (
+                    <>
+                      <div>Commit: <code>{localDevelopmentBuildInfo.engine.commit}</code>{localDevelopmentBuildInfo.engine.dirty ? " + local edits" : ""}</div>
+                      <div>
+                        64-bit layer: {localDevelopmentBuildInfo.engine.layer64Sha256
+                          ? <>deployed · SHA-256 <code>{localDevelopmentBuildInfo.engine.layer64Sha256.slice(0, 12)}</code></>
+                          : "unchanged"}
+                      </div>
+                      <div>
+                        32-bit layer: {localDevelopmentBuildInfo.engine.layer32Sha256
+                          ? <>deployed · SHA-256 <code>{localDevelopmentBuildInfo.engine.layer32Sha256.slice(0, 12)}</code></>
+                          : "unchanged"}
+                      </div>
+                      <div>
+                        Flatpak bundles: {localDevelopmentBuildInfo.engine.flatpakArchiveSha256
+                          ? <>23.08, 24.08, 25.08 deployed · SHA-256 <code>{localDevelopmentBuildInfo.engine.flatpakArchiveSha256.slice(0, 12)}</code></>
+                          : "unchanged"}
+                      </div>
+                    </>
+                  ) : (
+                    <div>Unchanged by this deployment</div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </PanelSectionRow>
       )}
@@ -170,10 +228,13 @@ export function Content() {
           <div
             style={{
               padding: "8px 12px",
+              width: "100%",
+              boxSizing: "border-box",
               backgroundColor: "rgba(0, 255, 0, 0.1)",
               borderRadius: "4px",
               border: "1px solid rgba(0, 255, 0, 0.3)",
-              fontSize: "13px"
+              fontSize: "13px",
+              overflowWrap: "anywhere"
             }}
           >
             <strong>{mainRunningApp.display_name}</strong> {t('CONTENT_RUNNING', 'running.')}{" "}{t('PROFILE_CLOSE_GAME', 'Close game to change profile.')}

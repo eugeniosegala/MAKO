@@ -134,8 +134,8 @@ For a live-compatible in-game configuration change, `runtime-state-applied trans
 revision and the active mode. If a change needs different private GPU resources or HDR encoding,
 `runtime-transition-pending action=wait-for-natural-swapchain-recreation` records that it was deliberately not forced;
 the next naturally-created context reports `runtime-state-applied` with the same or a newer `state_revision`. Its
-`adaptive`, `target_fps`, multiplier, Smooth Cadence, and `hdr` fields are the authoritative engine state; a Decky UI
-value alone does not prove the active context changed.
+`adaptive`, `target_fps`, multiplier, manual and effective Base FPS Cap, Adaptive Auto-Cap, Smooth Cadence, and `hdr`
+fields are the authoritative engine state; a Decky UI value alone does not prove the active context changed.
 
 Disable the diagnostic variables after collecting the trace. Remove the acquire-timeout and recreation variables too
 if you do not want to continue testing the recovery path.

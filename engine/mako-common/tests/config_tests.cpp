@@ -35,6 +35,8 @@ allow_fp16 = true
 name = "test"
 active_in = "game"
 adaptive = true
+base_fps_cap = 60
+adaptive_auto_base_fps_cap = true
 target_fps = 144
 adaptive_max_multiplier = 4
 )";
@@ -86,6 +88,10 @@ int main() {
         "The accepted configuration must replace the previous profile set");
     expect(config.get().profiles().front().target_fps == 144,
         "The accepted configuration must expose its new policy");
+    expect(config.get().profiles().front().base_fps_cap == 60,
+        "The accepted configuration must expose its base FPS cap");
+    expect(config.get().profiles().front().adaptive_auto_base_fps_cap,
+        "The accepted configuration must expose Adaptive auto-cap");
 
     std::filesystem::remove_all(directory);
     std::cout << "configuration watcher tests passed\n";

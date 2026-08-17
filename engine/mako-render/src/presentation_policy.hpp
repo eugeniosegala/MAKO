@@ -227,6 +227,57 @@ namespace mako::layer {
         return planned - clampedDelivered <= toleratedMisses;
     }
 
+    /// Limits application presents before frame-generation policy observes
+    /// them. Deadlines stay on an absolute cadence while the application is
+    /// early, but any late frame rebases immediately so a loading stall cannot
+    /// create a burst of catch-up presents.
+    class RealFramePacer {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        [[nodiscard]] TimePoint schedule(
+                const TimePoint now, const double framesPerSecond) {
+            if (!std::isfinite(framesPerSecond) || framesPerSecond <= 0.0) {
+                this->reset();
+                return now;
+            }
+
+            if (this->activeFramesPerSecond != framesPerSecond) {
+                this->nextFrameAt.reset();
+                this->activeFramesPerSecond = framesPerSecond;
+            }
+
+            const auto interval = std::chrono::duration_cast<Clock::duration>(
+                std::chrono::duration<double>(
+                    1.0 / framesPerSecond
+                )
+            );
+            if (!this->nextFrameAt) {
+                this->nextFrameAt = now + interval;
+                return now;
+            }
+
+            if (now >= *this->nextFrameAt) {
+                this->nextFrameAt = now + interval;
+                return now;
+            }
+
+            const auto deadline = *this->nextFrameAt;
+            *this->nextFrameAt += interval;
+            return deadline;
+        }
+
+        void reset() {
+            this->nextFrameAt.reset();
+            this->activeFramesPerSecond = 0.0;
+        }
+
+    private:
+        double activeFramesPerSecond{0.0};
+        std::optional<TimePoint> nextFrameAt;
+    };
+
     /// Deterministically suppress synthetic frames which cannot be scanned out
     /// at the confirmed Gamescope refresh rate. Fixed mode remains at its full
     /// multiplier whenever that output fits the display budget.

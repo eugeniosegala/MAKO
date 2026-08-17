@@ -16,8 +16,10 @@ from shared_config import CONFIG_SCHEMA_DEF, ConfigFieldType
 DLL = "dll"
 ALLOW_FP16 = "allow_fp16"
 FRAME_GENERATION_ENABLED = "frame_generation_enabled"
+BASE_FPS_CAP = "base_fps_cap"
 MULTIPLIER = "multiplier"
 ADAPTIVE = "adaptive"
+ADAPTIVE_AUTO_BASE_FPS_CAP = "adaptive_auto_base_fps_cap"
 TARGET_FPS = "target_fps"
 ADAPTIVE_MAX_MULTIPLIER = "adaptive_max_multiplier"
 ADAPTIVE_STABLE_CADENCE = "adaptive_stable_cadence"
@@ -28,7 +30,6 @@ ACTIVE_IN = "active_in"
 GPU = "gpu"
 DISABLE_MAKO = "disable_mako"
 DISABLE_HDR_EXPOSURE = "disable_hdr_exposure"
-DXVK_FRAME_RATE = "dxvk_frame_rate"
 DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode"
 ENABLE_ZINK = "enable_zink"
 
@@ -38,8 +39,10 @@ class ConfigurationData(TypedDict):
     dll: str
     allow_fp16: bool
     frame_generation_enabled: bool
+    base_fps_cap: int
     multiplier: int
     adaptive: bool
+    adaptive_auto_base_fps_cap: bool
     target_fps: int
     adaptive_max_multiplier: int
     adaptive_stable_cadence: bool
@@ -50,7 +53,6 @@ class ConfigurationData(TypedDict):
     gpu: str
     disable_mako: bool
     disable_hdr_exposure: bool
-    dxvk_frame_rate: int
     disable_steamdeck_mode: bool
     enable_zink: bool
 
@@ -74,11 +76,6 @@ def get_script_parsing_logic():
                         script_values["disable_mako"] = value == "1"
                 if key == "MAKO_DISABLE_HDR_EXPOSURE":
                         script_values["disable_hdr_exposure"] = value == "1"
-                if key == "DXVK_FRAME_RATE":
-                        try:
-                            script_values["dxvk_frame_rate"] = int(value)
-                        except ValueError:
-                            pass
                 if key == "SteamDeck":
                         script_values["disable_steamdeck_mode"] = value == "0"
                 if key == "__GLX_VENDOR_LIBRARY_NAME" and value == "mesa":
@@ -100,9 +97,6 @@ def get_script_generation_logic():
             lines.append("export DISABLE_MAKO=1")
         if config.get("disable_hdr_exposure", False):
             lines.append("export MAKO_DISABLE_HDR_EXPOSURE=1")
-        dxvk_frame_rate = config.get("dxvk_frame_rate", 0)
-        if dxvk_frame_rate > 0:
-            lines.append(f"export DXVK_FRAME_RATE={dxvk_frame_rate}")
         if config.get("disable_steamdeck_mode", False):
             lines.append("export SteamDeck=0")
         if config.get("enable_zink", False):
@@ -113,4 +107,4 @@ def get_script_generation_logic():
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'multiplier', 'adaptive', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'dxvk_frame_rate', 'disable_steamdeck_mode', 'enable_zink']
+ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'disable_steamdeck_mode', 'enable_zink']

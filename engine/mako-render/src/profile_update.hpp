@@ -22,7 +22,21 @@ namespace mako::layer {
         bool adaptivePolicyChanged{false};
         bool generationModeChanged{false};
         bool fixedMultiplierChanged{false};
+        bool baseFpsCapChanged{false};
     };
+
+    /// Auto-cap aligns the common healthy path with an exact 2x cadence.
+    /// Adaptive can still raise its multiplier when the game falls below this
+    /// ceiling. Keep the engine's 10 FPS policy floor for unusually low targets.
+    [[nodiscard]] inline double effectiveBaseFpsCap(
+            const ls::GameConf& profile) {
+        if (profile.adaptive && profile.adaptive_auto_base_fps_cap) {
+            return std::max(
+                10.0, static_cast<double>(profile.target_fps) / 2.0
+            );
+        }
+        return static_cast<double>(profile.base_fps_cap);
+    }
 
     /// Reserve one private output set that can serve both Fixed and Adaptive.
     /// Keeping the game-owned swapchain shape independent from the selected
@@ -57,6 +71,8 @@ namespace mako::layer {
             current.frame_generation_enabled != next.frame_generation_enabled;
         const bool generationModeChanged = current.adaptive != next.adaptive;
         const bool fixedMultiplierChanged = current.multiplier != next.multiplier;
+        const bool baseFpsCapChanged =
+            effectiveBaseFpsCap(current) != effectiveBaseFpsCap(next);
         const bool adaptivePolicyChanged = current.adaptive && next.adaptive && (
             current.target_fps != next.target_fps ||
             current.adaptive_max_multiplier != next.adaptive_max_multiplier ||
@@ -82,17 +98,20 @@ namespace mako::layer {
                 .adaptivePolicyChanged = adaptivePolicyChanged,
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,
+                .baseFpsCapChanged = baseFpsCapChanged,
             };
         }
 
         if (frameGenerationChanged || adaptivePolicyChanged ||
-                generationModeChanged || fixedMultiplierChanged) {
+                generationModeChanged || fixedMultiplierChanged ||
+                baseFpsCapChanged) {
             return {
                 .action = ProfileUpdateAction::ApplyLive,
                 .frameGenerationChanged = frameGenerationChanged,
                 .adaptivePolicyChanged = adaptivePolicyChanged,
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,
+                .baseFpsCapChanged = baseFpsCapChanged,
             };
         }
 

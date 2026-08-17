@@ -37,8 +37,8 @@ SCRIPT_ONLY_FIELDS = {
     if definition["location"] == "script"
 }
 PROFILE_TOML_FIELDS = {
-    "active_in", "gpu", "frame_generation_enabled", "multiplier", "adaptive", "target_fps", "adaptive_max_multiplier",
-    "adaptive_stable_cadence",
+    "active_in", "gpu", "frame_generation_enabled", "base_fps_cap", "multiplier", "adaptive", "target_fps", "adaptive_max_multiplier",
+    "adaptive_auto_base_fps_cap", "adaptive_stable_cadence",
     "flow_scale", "performance_mode", "pacing"
 }
 DEFAULT_PROFILE_NAME = "mako"
@@ -102,6 +102,8 @@ class ConfigurationManager:
 
         if validated["multiplier"] < 2:
             raise ValueError("multiplier must be 2 or greater")
+        if not 0 <= validated["base_fps_cap"] <= 240:
+            raise ValueError("base_fps_cap must be between 0 and 240")
         if not 30 <= validated["target_fps"] <= 240:
             raise ValueError("target_fps must be between 30 and 240")
         if not 2 <= validated["adaptive_max_multiplier"] <= 4:
@@ -161,8 +163,10 @@ class ConfigurationManager:
                 lines.append(f"gpu = {_toml_string(config['gpu'])}")
             lines.extend([
                 f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
+                f"base_fps_cap = {config['base_fps_cap']}",
                 f"multiplier = {config['multiplier']}",
                 f"adaptive = {str(config['adaptive']).lower()}",
+                f"adaptive_auto_base_fps_cap = {str(config['adaptive_auto_base_fps_cap']).lower()}",
                 f"target_fps = {config['target_fps']}",
                 f"adaptive_max_multiplier = {config['adaptive_max_multiplier']}",
                 f"adaptive_stable_cadence = {str(config['adaptive_stable_cadence']).lower()}",

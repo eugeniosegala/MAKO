@@ -487,6 +487,10 @@ elif [[ "$local_plugin_mode" == true ]]; then
 fi
 cp -R "$project_dir/dist/." "$package_dir/dist/"
 cp -R "$project_dir/py_modules/." "$package_dir/py_modules/"
+if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
+  cp "$project_dir/defaults/build_flavor.dev.py" \
+    "$package_dir/py_modules/mako_plugin/build_flavor.py"
+fi
 
 # Python bytecode is host-version-specific and is regenerated on Steam OS.
 find "$package_dir/py_modules" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete

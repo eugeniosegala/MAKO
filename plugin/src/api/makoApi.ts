@@ -100,6 +100,7 @@ export interface FlatpakApp {
   has_filesystem_override: boolean;
   has_wrapper_override: boolean;
   has_env_override: boolean;
+  has_required_env_override: boolean;
 }
 
 export interface FlatpakAppInfo {
