@@ -116,20 +116,28 @@ Dolphin.
    - **Launch Options**
 
      ```text
-     MAKO_PROFILE=dolphin-my-game vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
+     vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
      ```
 
-   Replace `dolphin-my-game` with a profile you created in Mako and replace
-   the ROM path with that shortcut's existing ROM path. The wrapper belongs in
-   **Target**; keep `/usr/bin/flatpak` after `%command%` in **Launch Options**.
-   Do not put this command in a Heroic Wrapper field.
+   Replace the ROM path with that shortcut's existing ROM path. The wrapper
+   belongs in **Target**; keep `/usr/bin/flatpak` after `%command%` in **Launch
+   Options**. Do not put this command in a Heroic Wrapper field.
+
+   `MAKO_PROFILE` is optional. Without it, the wrapper uses Mako's selected
+   profile (or an **Active In** match). Use it only when a specific Dolphin
+   shortcut needs to override that choice. For example:
+
+   ```text
+   MAKO_PROFILE=dolphin-my-game vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
+   ```
 
 Preparing Dolphin grants it access to MAKO's configuration and `Lossless.dll`,
 then enables the private Vulkan layer only inside Dolphin's Flatpak sandbox.
-`MAKO_PROFILE` passes the selected per-game profile through that sandbox, so
-each EmuDeck Steam shortcut can use its own frame-generation, multiplier, FPS
-cap, Adaptive, Flow Scale, and Performance Mode settings. Launcher-only
-compatibility settings remain shared from Mako's selected profile.
+When supplied, `MAKO_PROFILE` passes a selected per-game profile through that
+sandbox, so an EmuDeck Steam shortcut can override the selected profile's
+frame-generation, multiplier, FPS cap, Adaptive, Flow Scale, and Performance
+Mode settings. Launcher-only compatibility settings remain shared from Mako's
+selected profile.
 
 > [!IMPORTANT]
 > After updating MAKO, return to **Flatpak Setup** and select **Update** for Dolphin's matching runtime extension as well.

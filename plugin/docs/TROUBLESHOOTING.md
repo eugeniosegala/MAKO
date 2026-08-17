@@ -31,8 +31,9 @@ to test whether the layer is the cause of a startup or presentation problem.
 For Heroic, keep the **Wrapper** as `/home/deck/.local/bin/mako-run`, leave
 **Arguments** empty, and add no `%command%`. For an EmuDeck Dolphin Steam
 shortcut, prepare Dolphin in **Flatpak Setup**, then put the wrapper in the
-shortcut's **Target** and the game's `MAKO_PROFILE=...` and `flatpak run ...`
-command in **Launch Options**. See the [EmuDeck and Dolphin setup](../../README.md#emudeck-and-dolphin).
+shortcut's **Target** and the `flatpak run ...` command in **Launch Options**.
+Add `MAKO_PROFILE=...` there only to override Mako's selected profile. See the
+[EmuDeck and Dolphin setup](../../README.md#emudeck-and-dolphin).
 
 ## Collect diagnostics
 
