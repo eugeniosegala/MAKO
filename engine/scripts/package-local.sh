@@ -108,12 +108,116 @@ if [[ "$(uname -s)" != "Linux" ]]; then
         '
 fi
 
-for command in cmake ninja clang++ strings tar; do
+for command in cmake ninja clang++ strings tar sha256sum; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         exit 1
     fi
 done
+
+has_usable_qt_prefix() {
+    local prefix="$1"
+    [[ -f "$prefix/lib/cmake/Qt6/Qt6Config.cmake" &&
+       -f "$prefix/include/qt6/QtCore/QtCore" &&
+       -f "$prefix/include/GL/gl.h" &&
+       -e "$prefix/lib/libOpenGL.so" ]]
+}
+
+bootstrap_native_qt_sdk() {
+    local prefix_list="/usr"
+    local candidate_prefix
+    local configured_prefixes
+    local -a prefix_candidates=()
+
+    if [[ -n "${CMAKE_PREFIX_PATH:-}" ]]; then
+        configured_prefixes="${CMAKE_PREFIX_PATH//;/:}"
+        IFS=':' read -r -a prefix_candidates <<< "$configured_prefixes"
+        for candidate_prefix in "${prefix_candidates[@]}"; do
+            if [[ -n "$candidate_prefix" ]] && has_usable_qt_prefix "${candidate_prefix%/}"; then
+                return
+            fi
+        done
+    fi
+    if has_usable_qt_prefix "$prefix_list"; then
+        return
+    fi
+
+    for command in pacman curl bsdtar; do
+        if ! command -v "$command" >/dev/null 2>&1; then
+            echo "MAKO's release UI needs Qt 6 development files, but $command is unavailable." >&2
+            echo "Install the Qt development packages, or run the package script on a Pacman-based SteamOS host." >&2
+            exit 1
+        fi
+    done
+
+    local sdk_cache_dir="${MAKO_NATIVE_SDK_DIR:-$repo_root/build/native-sdk}"
+    if [[ "$sdk_cache_dir" != /* ]]; then
+        sdk_cache_dir="$repo_root/$sdk_cache_dir"
+    fi
+    local package_cache_dir="$sdk_cache_dir/packages"
+    local package_urls
+    if ! package_urls="$(pacman -Sp qt6-base qt6-declarative libglvnd)"; then
+        echo "Could not resolve the SteamOS packages needed for MAKO's native Qt SDK." >&2
+        exit 1
+    fi
+
+    local -a package_names=(qt6-base qt6-declarative libglvnd)
+    local -a package_files=()
+    local package_name
+    local package_url
+    local package_file
+    local -A package_sources=()
+    while IFS= read -r package_url; do
+        package_file="${package_url##*/}"
+        for package_name in "${package_names[@]}"; do
+            if [[ "$package_file" == "$package_name"-*.pkg.tar.* ]]; then
+                package_sources["$package_name"]="$package_url"
+            fi
+        done
+    done <<< "$package_urls"
+
+    for package_name in "${package_names[@]}"; do
+        package_url="${package_sources[$package_name]:-}"
+        if [[ -z "$package_url" ]]; then
+            echo "Pacman did not provide a download URL for $package_name." >&2
+            exit 1
+        fi
+        package_file="${package_url##*/}"
+        package_files+=("$package_file")
+        mkdir -p "$package_cache_dir"
+        if [[ ! -s "$package_cache_dir/$package_file" ]]; then
+            echo "Caching $package_name for MAKO's native release builds..."
+            curl --fail --location --retry 3 \
+                --output "$package_cache_dir/$package_file.part" \
+                "$package_url"
+            mv "$package_cache_dir/$package_file.part" "$package_cache_dir/$package_file"
+        fi
+    done
+
+    local sdk_key
+    sdk_key="$(printf '%s\n' "${package_files[@]}" | sha256sum | awk '{print substr($1, 1, 16)}')"
+    local sdk_root="$sdk_cache_dir/$sdk_key"
+    if [[ ! -f "$sdk_root/.ready" ]]; then
+        echo "Preparing isolated native Qt SDK at $sdk_root..."
+        mkdir -p "$sdk_root"
+        for package_file in "${package_files[@]}"; do
+            bsdtar -xf "$package_cache_dir/$package_file" -C "$sdk_root"
+        done
+        touch "$sdk_root/.ready"
+    fi
+
+    local sdk_prefix="$sdk_root/usr"
+    if ! has_usable_qt_prefix "$sdk_prefix"; then
+        echo "The cached MAKO native Qt SDK is incomplete: $sdk_root" >&2
+        echo "Remove that SDK directory and run the package command again." >&2
+        exit 1
+    fi
+
+    export CMAKE_PREFIX_PATH="$sdk_prefix${CMAKE_PREFIX_PATH:+:$CMAKE_PREFIX_PATH}"
+    echo "Using cached isolated native Qt SDK: $sdk_prefix"
+}
+
+bootstrap_native_qt_sdk
 
 build_root="$(mktemp -d "${TMPDIR:-/tmp}/mako-package.XXXXXX")"
 cleanup() {

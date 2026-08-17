@@ -56,6 +56,21 @@ then builds a second layer with `-m32`. It installs the two layer libraries in
 `lib` and `lib32` with architecture-tagged Vulkan manifests. Direct CMake builds
 produce one layer for the compiler architecture selected for that build.
 
+### Reusable SteamOS release-build SDK
+
+`scripts/package-local.sh` normally uses the host Qt development installation.
+On a Pacman-based SteamOS host where Qt appears installed but its headers or
+CMake files are missing, the packager automatically downloads the exact
+`qt6-base`, `qt6-declarative`, and `libglvnd` packages selected by Pacman into
+`engine/build/native-sdk/`. It extracts and reuses that isolated SDK on later
+release builds, without Docker, Podman, root access, or changes to the SteamOS
+installation. The first fallback build needs network access; later builds reuse
+the cached files.
+
+This fallback applies only to `scripts/package-local.sh`. Manual CMake builds
+still use the system development packages. Set `MAKO_NATIVE_SDK_DIR` to place
+the reusable package cache somewhere other than `engine/build/native-sdk/`.
+
 ### Fast SteamOS development build
 
 For native Steam-game iteration, use the persistent incremental build instead
