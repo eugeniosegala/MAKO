@@ -13,16 +13,11 @@
 
 | Component | Recommended for | Releases |
 |-----------|-----------------|----------|
-| **MAKO Decky** | Steam Deck and Decky Loader users | [Download MAKO Decky](https://github.com/eugeniosegala/MAKO/releases/latest) |
-| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Browse MAKO Renderer releases](https://github.com/eugeniosegala/MAKO/releases) |
+| **MAKO Decky** | Steam Deck and Decky Loader users | [Download MAKO Decky](https://github.com/eugeniosegala/MAKO/releases/tag/plugin-v0.13.0-experimental.25) |
+| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Download MAKO Renderer](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0-dev28-experimental.25) |
 
 > [!NOTE]
 > Check these release pages regularly for updates. MAKO Decky and MAKO Renderer are published independently.
-
-MAKO Decky releases are normal GitHub releases and the current one is marked
-**Latest**. MAKO Renderer builds are separate prereleases. Legacy
-packages remain available under their old project names, but their wrapper
-names and instructions do not describe MAKO.
 
 ## ✨ Highlights
 
@@ -141,13 +136,6 @@ The clean update path avoids Decky retaining an older backend or bundled payload
 
 Profiles and Steam launch options are retained. The private native engine and launcher are recreated in step 4; shared Flatpak extensions are retained and then refreshed in step 5.
 
-## Documentation
-
-- [Configuration guide](plugin/docs/CONFIGURATION.md): Fixed and Adaptive modes, quality and performance settings, profiles, and compatibility options.
-- [Troubleshooting](plugin/docs/TROUBLESHOOTING.md): Gamescope recovery, HDR compatibility, and diagnostic logs.
-- [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
-- [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.
-
 ## Use MAKO Renderer directly
 
 Decky is optional. Linux users can build and install MAKO Renderer directly as an implicit Vulkan layer:
@@ -168,6 +156,13 @@ ENABLE_MAKO=1 %command%
 ```
 
 See [Building from Source](engine/docs/BUILDING-FROM-SOURCE.md), [Configuration](engine/docs/CONFIGURATION.md), and [Troubleshooting](engine/docs/TROUBLESHOOTING.md) for the complete standalone workflow.
+
+## Documentation
+
+- [Configuration guide](plugin/docs/CONFIGURATION.md): Fixed and Adaptive modes, quality and performance settings, profiles, and compatibility options.
+- [Troubleshooting](plugin/docs/TROUBLESHOOTING.md): Gamescope recovery, HDR compatibility, and diagnostic logs.
+- [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
+- [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.
 
 ## Featured in
 
