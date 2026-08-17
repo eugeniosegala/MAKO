@@ -91,15 +91,10 @@ The wrapper applies only to the selected Heroic games and enables the private MA
 
 ### EmuDeck
 
-MAKO's Flatpak workflow applies to **any EmuDeck emulator installed as a
-Flatpak**, not only Dolphin. **Flatpak Setup** prepares that emulator's
-sandbox, while its Steam shortcuts carry the game-specific launch command and
-optional MAKO profile. This is different from Heroic: do not use Heroic's
-**Wrapper** field for EmuDeck emulators.
+For any EmuDeck emulator installed as a Flatpak:
 
 1. In Mako, select **Flatpak Setup** and prepare the emulator you use. Install
-   its matching runtime extension when prompted. Current EmuDeck Dolphin builds
-   commonly use **25.08** through the KDE runtime.
+   its matching runtime extension when prompted.
 2. Select **Vulkan** as that emulator's graphics backend when it offers one.
 3. In Desktop Mode, open the Steam shortcut for each EmuDeck game you want to
    configure, then set these fields under **Properties > Shortcut**:
@@ -118,25 +113,6 @@ optional MAKO profile. This is different from Heroic: do not use Heroic's
 
    - **Launch Options:** leave the EmuDeck-generated value unchanged. It already
      contains the correct emulator ID, ROM path, and flags for that shortcut.
-
-   The wrapper belongs in **Target**. Do not put it in a Heroic Wrapper field.
-
-   `MAKO_PROFILE` is optional. Without it, the wrapper uses Mako's selected
-   profile (or an **Active In** match). Use it only when a specific EmuDeck
-   shortcut needs to override that choice: prefix its existing Launch Options
-   with `MAKO_PROFILE=profile-name `. For example:
-
-   ```text
-   MAKO_PROFILE=dolphin-my-game vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
-   ```
-
-Preparing an emulator grants it access to MAKO's configuration and `Lossless.dll`,
-then enables the private Vulkan layer only inside that emulator's Flatpak sandbox.
-When supplied, `MAKO_PROFILE` passes a selected per-game profile through that
-sandbox, so any EmuDeck Steam shortcut can override the selected profile's
-frame-generation, multiplier, FPS cap, Adaptive, Flow Scale, and Performance
-Mode settings. Launcher-only compatibility settings remain shared from Mako's
-selected profile.
 
 If EmuDeck installed an emulator as a native application or AppImage instead,
 it is not a Flatpak workflow: use the normal Steam launch option

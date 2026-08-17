@@ -32,8 +32,7 @@ For Heroic, keep the **Wrapper** as `/home/deck/.local/bin/mako-run`, leave
 **Arguments** empty, and add no `%command%`. For an EmuDeck Flatpak emulator
 shortcut, prepare that emulator in **Flatpak Setup**, then put the wrapper in
 the shortcut's **Target** and leave EmuDeck's existing **Launch Options**
-unchanged. Add `MAKO_PROFILE=...` at the beginning only to override Mako's
-selected profile. See the [EmuDeck setup](../../README.md#emudeck).
+unchanged. See the [EmuDeck setup](../../README.md#emudeck).
 
 ## Collect diagnostics
 
