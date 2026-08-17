@@ -28,7 +28,7 @@ For SteamOS, the companion **MAKO Decky** plugin is the recommended installation
 ~/.local/bin/mako-run %command%
 ```
 
-See the [main MAKO installation guide](../README.md#install-and-use) for the complete Decky, Heroic, EmuDeck, and Dolphin setup.
+See the [main MAKO installation guide](../README.md#install-and-use) for the complete Decky, Heroic, and EmuDeck setup.
 
 ### Desktop Linux: install a Renderer archive
 
