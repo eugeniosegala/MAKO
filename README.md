@@ -30,7 +30,7 @@
 | 🧩 | **64-bit and 32-bit Vulkan**       | Ships architecture-matched host and Flatpak layers so Vulkan can select the correct library for each game process. |
 | 🛡️ | **Gamescope recovery**            | Bounded presentation recovery preserves native presentation and resumes generation only after the game cadence becomes stable again. |
 | ⏯️ | **Live frame-generation switch**  | Turns frame generation on or off without discarding the selected Fixed or Adaptive settings. |
-| 🎮 | **Per-game Heroic support**        | Enables MAKO only for the Heroic games you choose, using the same private configuration and engine as native Steam games. |
+| 🎮 | **Per-game Heroic and EmuDeck support** | Enables MAKO only for the Heroic games and EmuDeck titles you choose, using the same private configuration and engine as native Steam games. |
 
 ## What MAKO is
 
