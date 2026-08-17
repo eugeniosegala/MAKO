@@ -126,7 +126,10 @@ Profiles and Steam launch options are retained. The private native engine and la
 Decky is optional. Linux users can build and install MAKO Renderer directly as an implicit Vulkan layer:
 
 ```bash
-cmake -S engine -B engine/build -DCMAKE_BUILD_TYPE=Release
+cmake -S engine -B engine/build \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DMAKO_BUILD_UI=On \
+  -DMAKO_INSTALL_XDG_FILES=On
 cmake --build engine/build
 sudo cmake --install engine/build
 ```

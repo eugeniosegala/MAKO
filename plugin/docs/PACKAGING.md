@@ -2,18 +2,21 @@
 
 ## Build a local installation ZIP
 
-Install pnpm and dependencies once. With Volta, run `volta install pnpm` first.
+Run the commands in this guide from the `plugin/` directory. Install pnpm and
+dependencies once; with Volta, run `volta install pnpm` first.
 
 ```bash
 pnpm install --frozen-lockfile
 pnpm run package:local
 ```
 
-This creates `out/Mako.zip`. The packager regenerates configuration bindings, builds the
-frontend, builds the sibling MAKO Renderer engine, verifies its payload, and creates a Decky ZIP. It
-does not tag, push, or publish anything.
+This creates a versioned local ZIP under `out/`, named
+`Mako-local.<engine-and-source-identity>.zip`. The packager regenerates
+configuration bindings, builds the frontend and sibling MAKO Renderer engine,
+verifies its payload, and creates a Decky ZIP. It does not tag, push, or
+publish anything.
 
-`Mako.zip`, the ZIP's `Mako/` directory, and the installed
+The ZIP's `Mako/` directory and the installed
 `~/homebrew/plugins/Mako` directory match the **Mako** name displayed inside
 Decky. The component is officially named **MAKO Decky** within the wider MAKO
 project.
@@ -24,15 +27,21 @@ Pass a path to choose the output location:
 pnpm run package:local -- /path/to/Mako.zip
 ```
 
-To test an engine candidate before its GitHub release exists, provide locally built native and Flatpak archives. Their
-checksums must still match the pin in `package.json`:
+To reuse local copies of the *already pinned* Renderer and Flatpak archives,
+provide both archives directly. Their filenames and checksums must match the
+pin in `package.json`:
 
 ```bash
-pnpm run package:local -- \
+scripts/package-local.sh \
   --engine-archive /path/to/mako-render-<version>-linux.tar.xz \
   --flatpak-archive /path/to/mako-render-<version>-flatpaks.tar.xz \
   /path/to/Mako-local-test.zip
 ```
+
+For an engine candidate that differs from the pin, use
+`pnpm run package:local-engine` or `scripts/package-local.sh --local-engine-repo
+/path/to/MAKO/engine`. That workflow creates and records a local payload
+identity in the ZIP instead of pretending it is a released archive.
 
 ### Build directly from a local engine checkout
 
@@ -149,8 +158,29 @@ compiler prerequisites in the [source-build guide](../../engine/docs/BUILDING-FR
 
 ## Publish a GitHub release
 
-Commit the intended version and release changes on a clean branch, authenticate once with
-`gh auth login -h github.com`, then run:
+> [!IMPORTANT]
+> No MAKO Renderer or MAKO Decky release has been published yet. This is the
+> future release procedure; do not run it for a local test ZIP.
+
+Publish from a clean `main` worktree and authenticate once with
+`gh auth login -h github.com`. Both publishers intentionally refuse another
+branch or uncommitted changes.
+
+1. Update the Renderer version and its version-specific release-note values in
+   `engine/scripts/publish-package.sh`, then commit the intended Renderer
+   release on `main`.
+2. From `engine/`, run:
+
+   ```bash
+   ./scripts/publish-package.sh
+   ```
+
+   This creates the `render-v<version>` prerelease, uploads the native and
+   Flatpak archives, and updates `plugin/package.json` with their verified
+   checksums.
+3. Review and commit that generated Renderer pin. Update the Decky version and
+   its version-specific release-note values in `plugin/scripts/publish-package.sh`.
+4. From `plugin/`, run:
 
 ```bash
 pnpm run package:publish
@@ -167,15 +197,11 @@ published as a normal GitHub release even when its component version contains
 an `experimental` suffix. MAKO Renderer releases remain GitHub prereleases and
 are explicitly published with `--latest=false`.
 
-The publisher requires `plugin/package.json` to pin checksum-verified
-`mako-render-v<version>-linux.tar.xz` and
-`mako-render-v<version>-flatpaks.tar.xz` assets from the matching
-`render-v<version>` release in this repository. Publish MAKO Renderer first,
-then review and commit the renderer publisher's automatic `plugin/package.json`
-update before publishing MAKO Decky. The generated pin records the renderer
-tag, source commit, repository, asset names, URLs, and SHA-256 checksums.
+The Decky publisher requires `plugin/package.json` to pin the matching
+checksum-verified Renderer assets. It refuses a local-only payload or an
+unpublished/mismatched Renderer tag.
 
-Release entry points:
+After the first release, the release entry points will be:
 
 - [Latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest)
 - [All MAKO Decky releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Aplugin-v)

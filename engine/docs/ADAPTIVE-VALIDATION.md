@@ -32,11 +32,17 @@ The suite currently locks down:
 - timestamp ordering, capacity bounds, and deterministic trace replay.
 
 `adaptive-scheduler-matrix` also runs 120 combinations of base cadence, target,
-multiplier ceiling, and Smooth Cadence. It checks output bounds and emits CSV
-when run directly:
+multiplier ceiling, and Smooth Cadence. It checks output bounds and can emit
+CSV when built in a persistent directory and run directly:
 
 ```bash
-build/mako-render/mako-adaptive-matrix > adaptive-policy-matrix.csv
+cmake -S . -B build/adaptive-policy \
+  -DMAKO_BUILD_VK_LAYER=OFF \
+  -DMAKO_BUILD_UI=OFF \
+  -DMAKO_BUILD_CLI=OFF \
+  -DBUILD_TESTING=ON
+cmake --build build/adaptive-policy --target mako-adaptive-matrix
+build/adaptive-policy/mako-render/mako-adaptive-matrix > adaptive-policy-matrix.csv
 ```
 
 The CSV includes average generated frames, generated-frame share, and frame-count
