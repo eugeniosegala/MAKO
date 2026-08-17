@@ -7,10 +7,10 @@ export default definePlugin(() => {
   console.log("MAKO Decky initializing");
 
   return {
-    // Keep the Decky-facing name aligned with plugin.json. MAKO Decky is the
-    // official component name; the product is displayed simply as Mako in Decky.
+    // Keep the plugin identity aligned with plugin.json while using a more
+    // descriptive title inside the Decky UI.
     name: "Mako",
-    titleView: <div className={staticClasses.Title}>Mako</div>,
+    titleView: <div className={staticClasses.Title}>MAKO - Frame Generation</div>,
     alwaysRender: true,
     content: <Content />,
     icon: <GiSharkFin />,

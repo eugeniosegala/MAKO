@@ -1,7 +1,7 @@
 # MAKO Decky
 
 <p align="center">
-  <img src="assets/mako-logo.png" width="256" alt="MAKO Decky logo" />
+  <img src="assets/mako-logo.webp" width="256" alt="MAKO Decky logo" />
 </p>
 
 > [!NOTE]

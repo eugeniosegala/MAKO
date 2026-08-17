@@ -1,7 +1,7 @@
 # MAKO Renderer
 
 <p align="center">
-  <img src="assets/mako-render-logo.png" width="256" alt="MAKO Renderer logo" />
+  <img src="assets/mako-render-logo.webp" width="256" alt="MAKO Renderer logo" />
 </p>
 
 > [!NOTE]

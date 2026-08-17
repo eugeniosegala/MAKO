@@ -1,7 +1,7 @@
-# MAKO
+# MAKO - Frame Generation
 
 <p align="center">
-  <img src="plugin/assets/mako-logo.png" width="256" alt="MAKO logo" />
+  <img src="plugin/assets/mako-logo.webp" width="256" alt="MAKO logo" />
 </p>
 
 > [!IMPORTANT]
