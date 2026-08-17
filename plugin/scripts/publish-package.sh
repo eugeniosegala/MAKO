@@ -196,7 +196,7 @@ trap cleanup EXIT
 notes_file="$notes_dir/release-notes.md"
 
 printf '%s\n' \
-  '> Looking for the standalone Vulkan layer? See the [MAKO Renderer releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Arender-v).' \
+  "> Looking for the standalone Vulkan layer? See [MAKO Renderer v$engine_version](https://github.com/$github_repository/releases/tag/$engine_release_tag)." \
   '' \
   "## $release_notes_heading" \
   '' \
@@ -243,7 +243,7 @@ printf '%s\n' \
   '## Updating an existing MAKO Decky installation' \
   '' \
   '1. Quit any game currently using `~/.local/bin/mako-run`.' \
-  '2. Uninstall **Mako** from Decky, then download the newer ZIP from [MAKO Decky releases](https://github.com/eugeniosegala/MAKO/releases?q=tag%3Aplugin-v).' \
+  "2. Uninstall **Mako** from Decky, then download the newer ZIP from [MAKO Decky v$package_version](https://github.com/$github_repository/releases/tag/$plugin_release_tag)." \
   '3. In Game Mode, open Decky Loader’s settings, choose **Developer** > **Install Plugin from Zip**, then select the newer ZIP.' \
   '4. Restart your Steam Deck or Steam Machine.' \
   '5. ⚠️ **Required:** Open Mako and select **Install MAKO Renderer (developer build)** to install the version bundled in the new ZIP.' \
@@ -276,6 +276,14 @@ else
     --notes-file "$notes_file" \
     --latest \
     --verify-tag
+fi
+
+node "$repository_root/scripts/update-release-links.mjs" \
+  decky "$package_version" "$github_repository"
+if ! git -C "$repository_root" diff --quiet -- README.md; then
+  git -C "$repository_root" add README.md
+  git -C "$repository_root" commit -m "docs: link MAKO Decky v$package_version"
+  git -C "$repository_root" push origin "$current_branch"
 fi
 
 echo "Published: https://github.com/$github_repository/releases/tag/$plugin_release_tag"

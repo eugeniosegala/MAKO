@@ -192,5 +192,14 @@ node "$repo_root/../plugin/scripts/pin-renderer-release.mjs" \
     "$flatpak_archive" \
     "$flatpak_checksum"
 
+repository_root="$repo_root/.."
+node "$repository_root/scripts/update-release-links.mjs" \
+    renderer "$version" "$release_repository"
+if ! git -C "$repository_root" diff --quiet -- README.md; then
+    git -C "$repository_root" add README.md
+    git -C "$repository_root" commit -m "docs: link MAKO Renderer v$version"
+    git -C "$repository_root" push "$release_remote" "$release_branch"
+fi
+
 echo "Published: https://github.com/$release_repository/releases/tag/$tag"
 echo "Updated plugin/package.json with the published renderer assets. Review and commit that pin before publishing MAKO Decky."

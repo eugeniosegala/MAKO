@@ -176,8 +176,9 @@ the selected range.
    ```
 
    This creates the `render-v<version>` prerelease, uploads the native and
-   Flatpak archives, and updates `plugin/package.json` with their verified
-   checksums.
+   Flatpak archives, updates the MAKO Renderer link in the root Downloads
+   table in a documentation-only commit, and updates `plugin/package.json` with
+   verified checksums.
 3. Review and commit that generated Renderer pin, then update and commit the
    Decky version.
 4. From `plugin/`, run:
@@ -190,7 +191,9 @@ The script verifies and builds `MAKO-Decky-v<package-version>.zip`, creates or
 verifies the matching `plugin-v<package-version>` tag, pushes the branch and
 tag, generates release notes, and creates or updates the GitHub release. A
 MAKO Decky release is explicitly marked as the repository's **Latest** release.
-It never moves an existing published tag to newer code.
+After a successful release, it updates the MAKO Decky link in the root
+Downloads table, commits that documentation-only change, and pushes it. It
+never moves an existing published tag to newer code.
 
 GitHub does not allow prereleases to own the Latest pointer, so MAKO Decky is
 published as a normal GitHub release even when its component version contains
