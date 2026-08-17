@@ -139,10 +139,6 @@ ENABLE_MAKO=1 %command%
 
 See [Building from Source](engine/docs/BUILDING-FROM-SOURCE.md), [Configuration](engine/docs/CONFIGURATION.md), and [Troubleshooting](engine/docs/TROUBLESHOOTING.md) for the complete standalone workflow.
 
-## License
-
-MAKO is distributed under [GPL-3.0-or-later](LICENSE.md). The root license also preserves the BSD-3-Clause and MIT notices required by incorporated upstream code.
-
 ## Featured in
 
 Community creators have covered and tested the project on Steam Deck hardware. See [Featured In](plugin/docs/FEATURED_IN.md) for video links, channels, and coverage details.
@@ -157,3 +153,7 @@ MAKO is built on the work of two open-source projects and their communities:
 MAKO also thanks the **Lossless Scaling developers** for the frame-generation and scaling technology accessed through each user's licensed installation, and the **Decky Loader team**, community contributors, testers, guide authors, and creators who helped make the project possible.
 
 The original copyright and license notices are preserved in [LICENSE.md](LICENSE.md). MAKO is an independent community project and is not affiliated with or endorsed by Lossless Scaling, Decky Loader, or either upstream project.
+
+## License
+
+MAKO is distributed under [GPL-3.0-or-later](LICENSE.md). The root license also preserves the BSD-3-Clause and MIT notices required by incorporated upstream code.
