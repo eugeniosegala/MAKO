@@ -89,16 +89,19 @@ The wrapper applies only to the selected Heroic games and enables the private MA
 > [!IMPORTANT]
 > After installing a newer MAKO ZIP, return to **Flatpak Setup** and select **Update** for Heroic's matching runtime extension. This replaces Heroic's Flatpak engine with the version bundled in the new ZIP while preserving its preparation and per-game Wrapper commands.
 
-### EmuDeck and Dolphin
+### EmuDeck
 
-EmuDeck's Dolphin is a Flatpak application. **Flatpak Setup** prepares the
-Dolphin sandbox, but the Steam shortcut still carries the per-game MAKO profile.
-This is different from Heroic: do not use Heroic's **Wrapper** field for
-Dolphin.
+MAKO's Flatpak workflow applies to **any EmuDeck emulator installed as a
+Flatpak**, not only Dolphin. **Flatpak Setup** prepares that emulator's
+sandbox, while its Steam shortcuts carry the game-specific launch command and
+optional MAKO profile. This is different from Heroic: do not use Heroic's
+**Wrapper** field for EmuDeck emulators.
 
-1. In Mako, select **Flatpak Setup** and prepare **Dolphin Emulator**. Install the matching runtime extension when prompted; current EmuDeck Dolphin builds commonly use **25.08** through the KDE runtime.
-2. In Dolphin, set **Graphics > General > Backend** to **Vulkan**.
-3. In Desktop Mode, open the Steam shortcut for each Dolphin game you want to
+1. In Mako, select **Flatpak Setup** and prepare the emulator you use. Install
+   its matching runtime extension when prompted. Current EmuDeck Dolphin builds
+   commonly use **25.08** through the KDE runtime.
+2. Select **Vulkan** as that emulator's graphics backend when it offers one.
+3. In Desktop Mode, open the Steam shortcut for each EmuDeck game you want to
    configure, then set these fields under **Properties > Shortcut**:
 
    - **Target**
@@ -116,31 +119,41 @@ Dolphin.
    - **Launch Options**
 
      ```text
-     vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
+     vblank_mode=0 %command% /usr/bin/flatpak run <your-emulator-app-id> <the shortcut's existing arguments>
      ```
 
-   Replace the ROM path with that shortcut's existing ROM path. The wrapper
-   belongs in **Target**; keep `/usr/bin/flatpak` after `%command%` in **Launch
-   Options**. Do not put this command in a Heroic Wrapper field.
+   Keep the emulator ID and arguments from the shortcut EmuDeck created; only
+   place `vblank_mode=0 %command%` before `/usr/bin/flatpak`. The wrapper
+   belongs in **Target**. Do not put this command in a Heroic Wrapper field.
+
+   For example, a Dolphin GameCube shortcut uses:
+
+   ```text
+   vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
+   ```
 
    `MAKO_PROFILE` is optional. Without it, the wrapper uses Mako's selected
-   profile (or an **Active In** match). Use it only when a specific Dolphin
+   profile (or an **Active In** match). Use it only when a specific EmuDeck
    shortcut needs to override that choice. For example:
 
    ```text
    MAKO_PROFILE=dolphin-my-game vblank_mode=0 %command% /usr/bin/flatpak run org.DolphinEmu.dolphin-emu -b -e "/home/deck/Emulation/roms/gc/Your Game.iso"
    ```
 
-Preparing Dolphin grants it access to MAKO's configuration and `Lossless.dll`,
-then enables the private Vulkan layer only inside Dolphin's Flatpak sandbox.
+Preparing an emulator grants it access to MAKO's configuration and `Lossless.dll`,
+then enables the private Vulkan layer only inside that emulator's Flatpak sandbox.
 When supplied, `MAKO_PROFILE` passes a selected per-game profile through that
-sandbox, so an EmuDeck Steam shortcut can override the selected profile's
+sandbox, so any EmuDeck Steam shortcut can override the selected profile's
 frame-generation, multiplier, FPS cap, Adaptive, Flow Scale, and Performance
 Mode settings. Launcher-only compatibility settings remain shared from Mako's
 selected profile.
 
+If EmuDeck installed an emulator as a native application or AppImage instead,
+it is not a Flatpak workflow: use the normal Steam launch option
+`~/.local/bin/mako-run %command%` for that shortcut.
+
 > [!IMPORTANT]
-> After updating MAKO, return to **Flatpak Setup** and select **Update** for Dolphin's matching runtime extension as well.
+> After updating MAKO, return to **Flatpak Setup** and select **Update** for every prepared emulator's matching runtime extension.
 
 ### Updating MAKO Decky
 
@@ -150,9 +163,9 @@ The clean update path avoids Decky retaining an older backend or bundled payload
 2. Uninstall Mako from Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart your Steam Deck or Steam Machine.
 4. Open Mako and select **Install MAKO Renderer (developer build)** to install the native renderer bundled in the ZIP.
-5. If you use Heroic or EmuDeck Dolphin, open **Flatpak Setup** and select
-   **Update** for each prepared application's matching runtime extension,
-   usually **25.08**.
+5. If you use Heroic or EmuDeck Flatpak emulators, open **Flatpak Setup** and select
+   **Update** for each prepared application's matching runtime extension shown
+   by Mako.
 
 > [!IMPORTANT]
 > **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer (developer build)** in the plugin.
