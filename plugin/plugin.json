@@ -5,7 +5,7 @@
   "api_version": 1,
   "publish": {
     "tags": ["installer", "vulkan", "mako", "framegen", "lossless-scaling", "scaling", "steam-machine"],
-    "description": "Next-generation Vulkan-powered graphics for Linux gaming, bringing Lossless Scaling frame generation and scaling to Steam Deck and desktop Linux.",
+    "description": "MAKO brings Vulkan-powered Lossless Scaling frame generation to Steam Deck, Steam Machine, and SteamOS gaming.",
     "image": "https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/plugin/assets/mako-logo.png"
   }
 }
