@@ -3,6 +3,7 @@ set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 script_dir="$project_dir/scripts"
+repository_root="$(cd "$project_dir/.." && pwd)"
 output_path=""
 output_path_set=false
 
@@ -163,7 +164,21 @@ elif [[ "$output_path" != /* ]]; then
   output_path="$project_dir/$output_path"
 fi
 
-"$script_dir/package-local.sh" "$output_path"
+package_args=()
+local_engine_archive="$repository_root/engine/out/$archive_name"
+local_flatpak_archive="$repository_root/engine/out/$flatpak_archive_name"
+if [[ -f "$local_engine_archive" ]]; then
+  echo "Using the checksum-pinned MAKO Renderer archive from the monorepo build output."
+  package_args+=(--engine-archive "$local_engine_archive")
+  if [[ "$has_flatpak_bundle" == "true" ]]; then
+    if [[ ! -f "$local_flatpak_archive" ]]; then
+      echo "The native MAKO Renderer archive is local, but its matching Flatpak archive is missing: $local_flatpak_archive" >&2
+      exit 1
+    fi
+    package_args+=(--flatpak-archive "$local_flatpak_archive")
+  fi
+fi
+"$script_dir/package-local.sh" "${package_args[@]}" "$output_path"
 
 current_branch="$(git -C "$project_dir" branch --show-current)"
 if [[ -z "$current_branch" ]]; then
