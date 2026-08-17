@@ -4,6 +4,9 @@
   <img src="assets/mako-render-logo.png" width="256" alt="MAKO Renderer logo" />
 </p>
 
+> [!NOTE]
+> **LSFG-VK Experimental is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
+
 MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Lossless Scaling frame generation—and, as the project expands, scaling—to Steam Deck and desktop Linux.
 
 The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. It requires a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer does not bundle or replace that proprietary library.
