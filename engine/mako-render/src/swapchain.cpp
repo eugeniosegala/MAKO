@@ -1132,7 +1132,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
             );
         }
     } catch (const std::exception& e) {
-        // Swapchain creation belongs to the game. A failure in LSFG's optional
+        // Swapchain creation belongs to the game. A failure in MAKO's optional
         // interpolation resources must not turn a valid game swapchain into a
         // startup failure, especially when a driver exposes an HDR format that
         // cannot be initialized on this device. Keep the native swapchain and
@@ -1146,7 +1146,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         this->colorPipeline.generationSupported = false;
         this->colorPipeline.name = "initialization-fallback";
         this->colorPipeline.reason =
-            "LSFG frame-generation initialization failed; native presentation retained";
+            "MAKO frame-generation initialization failed; native presentation retained";
         std::cerr << "mako: " << this->colorPipeline.reason
                   << ": " << e.what() << '\n';
     }

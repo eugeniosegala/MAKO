@@ -23,8 +23,6 @@ Standalone Linux and Flatpak archives are published on the [`render-v…` MAKO R
 - Activation: `ENABLE_MAKO=1`
 - Deactivation: `DISABLE_MAKO=1`
 
-The `DISABLE_LSFGVK` and `DISABLE_LSFG` environment variables remain intentionally supported by the MAKO launcher to prevent competing public layers from loading into the same game process.
-
 ## Build
 
 MAKO Renderer uses CMake and requires Vulkan development headers. The optional desktop interface also requires Qt 6.
@@ -49,7 +47,7 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 For development outside Decky, activate only the MAKO layer for the launched process:
 
 ```bash
-ENABLE_MAKO=1 DISABLE_LSFGVK=1 DISABLE_LSFG=1 your-game-command
+ENABLE_MAKO=1 your-game-command
 ```
 
 Most Steam Deck users should use MAKO Decky and its `~/.local/bin/mako-run` wrapper instead of managing layer paths manually.

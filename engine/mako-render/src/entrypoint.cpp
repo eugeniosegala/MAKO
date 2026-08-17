@@ -420,7 +420,7 @@ namespace {
         }
 
         // Preserve a genuine game/driver out-of-date result across a
-        // multi-swapchain present. LSFG itself does not manufacture this
+        // multi-swapchain present. MAKO itself does not manufacture this
         // result for configuration or recovery transitions.
         return swapchainOutOfDate ? VK_ERROR_OUT_OF_DATE_KHR : result;
 #pragma clang diagnostic pop

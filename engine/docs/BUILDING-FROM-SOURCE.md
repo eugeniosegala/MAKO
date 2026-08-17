@@ -164,6 +164,4 @@ sudo cmake --install build
 
 Keep track of the installed files, in order to uninstall them later if needed.
 
-The installed manifest is wrapper-scoped. Start a direct game with
-`ENABLE_MAKO=1`; if either public LSFG implementation is installed alongside it, also set
-`DISABLE_LSFGVK=1 DISABLE_LSFG=1` for that game. MAKO Decky manages these guards automatically.
+The installed manifest is wrapper-scoped. Start a direct game with `ENABLE_MAKO=1`.

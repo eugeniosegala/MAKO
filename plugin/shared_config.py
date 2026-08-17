@@ -123,8 +123,8 @@ CONFIG_SCHEMA_DEF = {
         "location": "profile"
     },
 
-    "disable_lsfgvk": {
-        "name": "disable_lsfgvk",
+    "disable_mako": {
+        "name": "disable_mako",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "troubleshooting: prevent MAKO Renderer loading after restart",

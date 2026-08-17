@@ -11,7 +11,7 @@ tar -xJf mako-render-<version>-flatpaks.tar.xz
 flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.flatpak
 ```
 
-The extension ID is `org.freedesktop.Platform.VulkanLayer.makorender`. It is separate from the public `lsfgvk` extension and does not overwrite it.
+The extension ID is `org.freedesktop.Platform.VulkanLayer.makorender` and uses its own dedicated installation path.
 
 ## Building extensions
 
@@ -33,7 +33,7 @@ appid=APP_ID
 flatpak override --user --filesystem="$HOME/.config/mako-render:rw" "$appid"
 flatpak override --user --filesystem="$HOME/.local/share/Steam/steamapps/common:ro" "$appid"
 flatpak override --user --env=MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" "$appid"
-flatpak override --user --env=ENABLE_MAKO=1 --env=DISABLE_LSFGVK=1 --env=DISABLE_LSFG=1 "$appid"
+flatpak override --user --env=ENABLE_MAKO=1 "$appid"
 ```
 
-The extension remains inactive unless `ENABLE_MAKO=1` is set for the application. `DISABLE_LSFGVK` and `DISABLE_LSFG` prevent competing public Lossless Scaling layers from entering the same process.
+The extension remains inactive unless `ENABLE_MAKO=1` is set for the application.

@@ -23,7 +23,7 @@ export function InstallationButton({
     if (isInstalling) {
       return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div>{t("INSTALL_INSTALLING", "Installing experimental LSFG-VK...")}</div>
+          <div>{t("INSTALL_INSTALLING", "Installing MAKO Renderer...")}</div>
         </div>
       );
     }
@@ -31,7 +31,7 @@ export function InstallationButton({
     if (isUninstalling) {
       return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div>{t("INSTALL_UNINSTALLING", "Removing experimental LSFG-VK...")}</div>
+          <div>{t("INSTALL_UNINSTALLING", "Removing MAKO Renderer...")}</div>
         </div>
       );
     }

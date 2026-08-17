@@ -30,7 +30,7 @@ def get_python_type(field_type: ConfigFieldType) -> str:
 def get_env_var_name(field_name: str) -> str:
     """Convert field name to environment variable name"""
     env_map = {
-        "disable_lsfgvk": "DISABLE_MAKO",
+        "disable_mako": "DISABLE_MAKO",
         "dxvk_frame_rate": "DXVK_FRAME_RATE",
         "disable_hdr_exposure": "MAKO_DISABLE_HDR_EXPOSURE",
         "disable_steamdeck_mode": "SteamDeck",

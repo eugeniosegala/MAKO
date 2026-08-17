@@ -89,7 +89,7 @@ layer::SwapchainColorPipeline layer::classifySwapchainColor(
     }
 
     // Gamescope WSI consumes the application's HDR colour space and sends an
-    // sRGB-normalized copy of VkSwapchainCreateInfoKHR to lower layers. LSFG
+    // sRGB-normalized copy of VkSwapchainCreateInfoKHR to lower layers. MAKO
     // must remain below Gamescope so Wine's WSI bridge can translate its
     // dispatchable handles before they reach us. Recover the transfer
     // function only when Gamescope's application feedback confirms that the
@@ -149,7 +149,7 @@ layer::SwapchainColorPipeline layer::classifySwapchainColor(
     return {
         .generationSupported = false,
         .name = "unsupported-sdr-format",
-        .reason = "the swapchain format has no validated LSFG transport",
+        .reason = "the swapchain format has no validated MAKO transport",
     };
 }
 

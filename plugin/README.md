@@ -51,6 +51,6 @@ After installing the ZIP through Decky developer settings, open Mako and install
 ~/.local/bin/mako-run %command%
 ```
 
-Use only one Lossless Scaling wrapper for a game. MAKO's wrapper activates `VK_LAYER_MAKO_render` and suppresses competing public LSFG layer identities for that process only.
+MAKO's wrapper activates `VK_LAYER_MAKO_render` only for the selected game process.
 
 See [Configuration](docs/CONFIGURATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), and [Packaging](docs/PACKAGING.md) for detailed workflows.

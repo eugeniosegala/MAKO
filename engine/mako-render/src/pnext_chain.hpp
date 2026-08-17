@@ -9,7 +9,7 @@ namespace mako::layer {
     /// Temporarily remove one optional structure from a Vulkan pNext chain.
     ///
     /// Gamescope prepends maintenance1 present-mode nodes advertising its
-    /// driver-facing MAILBOX transport. When LSFG deliberately creates the
+    /// driver-facing MAILBOX transport. When MAKO deliberately creates the
     /// private ordered SDR transport, forwarding that node beside a FIFO base
     /// mode would describe an inconsistent swapchain. We filter the node from
     /// the lower-facing copy instead of modifying Gamescope's mode array, which

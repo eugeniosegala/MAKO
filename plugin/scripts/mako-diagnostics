@@ -24,9 +24,9 @@ Presets:
   performance  fixed-rate telemetry plus slow presentation and GPU operations
   lifecycle    swapchain creation/destruction and colour-pipeline selection
   startup      layer discovery, context creation, HDR selection, and failures
-  layers       Vulkan-loader, Gamescope WSI, MAKO, and LSFG layer discovery
+  layers       Vulkan-loader, Gamescope WSI, and MAKO layer discovery
   errors       failures, timeouts, fallbacks, passthrough, and Vulkan errors
-  all          every relevant MAKO, LSFG, Vulkan-loader, and Gamescope WSI line
+  all          every relevant MAKO, Vulkan-loader, and Gamescope WSI line
                (alias: everything)
 
 Options:
@@ -123,7 +123,7 @@ add_pattern 'mako: render layer active; identity=VK_LAYER_MAKO_render; build='
 for preset in "${presets[@]}"; do
   case "$preset" in
     hdr)
-      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|LSFG frame-generation initialization failed)'
+      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|MAKO frame-generation initialization failed)'
       add_pattern 'mako: Gamescope application HDR feedback'
       add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)'
       ;;
@@ -144,24 +144,24 @@ for preset in "${presets[@]}"; do
     lifecycle)
       add_pattern 'mako: present diagnostics: operation=swapchain-context-(create|destroy)'
       add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)'
-      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|LSFG frame-generation initialization failed)'
+      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|MAKO frame-generation initialization failed)'
       ;;
     startup)
-      add_pattern '(VK_LAYER_MAKO_render|VK_LAYER_LSFGVK(_experimental)?_frame_generation|VK_LAYER_LS_frame_generation|VkLayer_(MAKO_render|LSFGVK(_experimental)?_frame_generation)|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
       add_pattern 'mako: present diagnostics: operation=swapchain-context-create'
       add_pattern 'mako: Gamescope application HDR feedback'
       add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)'
-      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|LSFG frame-generation initialization failed)'
+      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|MAKO frame-generation initialization failed)'
       ;;
     layers)
-      add_pattern '(VK_LAYER_MAKO_render|VK_LAYER_LSFGVK(_experimental)?_frame_generation|VK_LAYER_LS_frame_generation|VkLayer_(MAKO_render|LSFGVK(_experimental)?_frame_generation)|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
       ;;
     errors)
       add_pattern 'mako:.*(failed|failure|error|timeout|fallback|passthrough|disabled|VK_ERROR|VK_TIMEOUT|VK_NOT_READY|device lost)'
       add_pattern '(Vulkan Loader|Gamescope WSI).*(ERROR|Error|error|WARNING|Warning|warning)'
       ;;
     all|everything)
-      add_pattern '(mako:|VK_LAYER_MAKO_render|VK_LAYER_LSFGVK(_experimental)?_frame_generation|VK_LAYER_LS_frame_generation|VkLayer_(MAKO_render|LSFGVK(_experimental)?_frame_generation)|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      add_pattern '(mako:|VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
       ;;
     *)
       echo "Unknown preset: $preset" >&2

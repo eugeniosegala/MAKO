@@ -445,18 +445,11 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
         const auto& global = this->config.get().global();
 
         try {
-            // The backend owns a separate Vulkan instance. Prevent this
-            // experimental layer and either public LSFG identity from entering
-            // that internal instance, while preserving caller-provided values
-            // for the rest of the game process.
-            const ScopedEnvironmentOverride disableExperimental(
+            // The backend owns a separate Vulkan instance. Prevent MAKO
+            // Renderer from entering that internal instance while preserving
+            // caller-provided values for the rest of the game process.
+            const ScopedEnvironmentOverride disableMako(
                 "DISABLE_MAKO", "1"
-            );
-            const ScopedEnvironmentOverride disablePublic(
-                "DISABLE_LSFGVK", "1"
-            );
-            const ScopedEnvironmentOverride disableLegacy(
-                "DISABLE_LSFG", "1"
             );
             std::string dll{};
             if (global.dll.has_value())

@@ -15,7 +15,6 @@ from .config_schema import (
 )
 from .config_schema_generated import (
     ConfigurationData,
-    DISABLE_LSFGVK,
     DISABLE_HDR_EXPOSURE,
     get_script_generation_logic,
 )
@@ -33,23 +32,18 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 27"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 28"
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
         "export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS=",
         f"export {MAKO_LAYER_ENABLE_ENV}=1",
-        "export DISABLE_LSFGVK=1",
-        "export DISABLE_LSFG=1",
         "mako_diagnostics_default=",
     )
     _OBSOLETE_WRAPPER_EXPORTS = (
         "PROTON_USE_WOW64",
         "MAKO_PRESENT_RECOVERY_RECREATE",
-        "LSFGVK_PRESENT_RECOVERY_RECREATE",
         "MAKO_EXPERIMENTAL_HDR",
-        "LSFGVK_EXPERIMENTAL_HDR",
         "VK_INSTANCE_LAYERS",
-        "VK_LAYER_DECKY_LSFGVK_experimental_hdr_stack_x86_64",
     )
 
     @staticmethod
@@ -409,8 +403,6 @@ class ConfigurationService(BaseService):
         return [
             f'export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS="${{MAKO_PRESENT_ACQUIRE_TIMEOUT_MS:-{PRESENT_ACQUIRE_TIMEOUT_MS}}}"',
             f"export {MAKO_LAYER_ENABLE_ENV}=1",
-            "export DISABLE_LSFGVK=1",
-            "export DISABLE_LSFG=1",
             f"if [ -d {shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)} ]; then",
             f"    mako_implicit_layer_path={shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)}",
             f"    if [ -d {shlex.quote(FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR)} ]; then",
@@ -448,41 +440,11 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Wrapper format 27 keeps Heroic's Gamescope WSI manifest and activation
-        contract while using the explicit Flatpak search path required to carry
-        LSFG through UMU. Format 26 restored LSFG attachment but still removed
-        Gamescope from ordinary SDR launches. Format 25 used
-        VK_ADD_IMPLICIT_LAYER_PATH, but Heroic's UMU child did not retain that
-        addition and frame generation never loaded. HDR remains blocked by the
-        separate restart-time SDR boundary.
-        Formats 19 to 22
-        attempted to order components through VK_INSTANCE_LAYERS or a Vulkan
-        meta-layer and could leave Gamescope or LSFG unattached.
-        Format 15 forced only LSFG and could break Wine swapchain dispatch;
-        marker validation therefore still regenerates it. Formats 16 through
-        18 returned to implicit discovery, which worked only when the loader
-        happened to choose the required Gamescope -> LSFG order. Format 14
-        activated a uniquely named, wrapper-scoped experimental
-        manifest from Vulkan's normal per-user registry. It disables both
-        public LSFG layer identities for this game and no longer relies on
-        additive search ordering that Pressure Vessel resolves before the
-        wrapper starts. Format 13 removed the obsolete PROTON_USE_WOW64 export
-        now
-        that the engine ships architecture-matched Vulkan layers. Format 12
-        added an opt-in legacy-isolation recovery path for
-        games that cannot start when Gamescope advertises HDR. Format 11 added
-        the private experimental manifest ahead of the normal implicit-layer
-        search path instead of replacing that path. Format 14 supersedes that
-        ordering-based selection while preserving Gamescope WSI discovery for
-        HDR-capable games. It
-        Format 17 retains format 10's automatic Active In matching, selected-profile
-        compatibility settings, plugin-private diagnostics log, in-place
-        presentation recovery, explicit caller overrides, validated 50 ms
-        acquisition timeout, and experimental Flatpak manifest selection.
-        Format 17 removes the obsolete layer-initiated swapchain-recreation
-        export. Validate the required exports as well as the marker so an
-        intermediate locally generated wrapper cannot be mistaken for the
-        completed format.
+        Wrapper format 28 uses MAKO-only activation and configuration names.
+        It preserves Heroic's Gamescope WSI manifest, carries MAKO Renderer
+        through UMU with the explicit Flatpak search path, and retains the
+        restart-time SDR safety boundary. Older formats are regenerated when
+        their marker or required exports no longer match this contract.
         """
         if not self.mako_script_path.exists():
             return False
@@ -508,7 +470,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO Renderer experimental launch wrapper to format 27")
+            self.log.info("Upgraded installed MAKO Renderer launch wrapper to format 28")
             return True
         except OSError:
             raise

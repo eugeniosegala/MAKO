@@ -23,7 +23,6 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     MAKO_LAYER_ENABLE_ENV,
     MAKO_LAYER_BUILD_MARKER,
     MAKO_LAYER_NAME,
-    HDR_META_JSON_FILENAME_64,
     JSON32_FILENAME,
     JSON_FILENAME,
     LIB_FILENAME,
@@ -46,9 +45,6 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.user_vulkan_layer_dir = registered_dir
         self.service.registered_json_file = registered_dir / JSON_FILENAME
         self.service.registered_json32_file = registered_dir / JSON32_FILENAME
-        explicit_dir = self.root / "registered/vulkan/explicit_layer.d"
-        self.service.user_vulkan_explicit_layer_dir = explicit_dir
-        self.service.hdr_meta_json_file = explicit_dir / HDR_META_JSON_FILENAME_64
         self.service.cli_file = self.root / "bin/mako-cli"
 
     def tearDown(self):
@@ -119,28 +115,6 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertEqual(
             registered32["layer"]["library_path"], str(self.service.lib32_file)
         )
-
-    def test_removes_only_obsolete_private_manifests(self):
-        legacy64 = self.service.local_share_dir / "VkLayer_LSFGVK_frame_generation.json"
-        legacy32 = self.service.local_share_dir / "VkLayer_LSFGVK_frame_generation.x86.json"
-        unrelated = self.service.local_share_dir / "keep-me.json"
-        self.service.local_share_dir.mkdir(parents=True, exist_ok=True)
-        legacy64.write_text("legacy", encoding="utf-8")
-        legacy32.write_text("legacy", encoding="utf-8")
-        unrelated.write_text("unrelated", encoding="utf-8")
-
-        self.service._remove_legacy_private_manifests()
-
-        self.assertFalse(legacy64.exists())
-        self.assertFalse(legacy32.exists())
-        self.assertTrue(unrelated.exists())
-
-    def test_obsolete_hdr_meta_layer_cleanup_is_idempotent(self):
-        self.service.hdr_meta_json_file.parent.mkdir(parents=True, exist_ok=True)
-        self.service.hdr_meta_json_file.write_text("obsolete", encoding="utf-8")
-
-        self.assertTrue(self.service.remove_obsolete_hdr_meta_layer_if_needed())
-        self.assertFalse(self.service.remove_obsolete_hdr_meta_layer_if_needed())
 
     def test_installs_64bit_only_archive_and_removes_stale_32bit_files(self):
         self.service.lib32_file.parent.mkdir(parents=True, exist_ok=True)

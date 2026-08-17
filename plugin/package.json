@@ -33,7 +33,6 @@
     "deck",
     "lossless-scaling",
     "frame-generation",
-    "lsfg-vk",
     "framegen"
   ],
   "author": "Eugenio Segala",
@@ -63,18 +62,18 @@
   "remote_binary_bundling": true,
   "remote_binary": [
     {
-      "name": "lsfg-vk-2.0.0-dev28-experimental.25-linux.tar.xz",
+      "name": "mako-render-v2.0.0-dev28-experimental.25-linux.tar.xz",
       "version": "2.0.0-dev28-experimental.25",
       "lineage_version": "2.0.0-dev28",
-      "source_repository": "https://github.com/eugeniosegala/lsfg-vk-experimental",
-      "release_tag": "v2.0.0-dev28-experimental.25",
-      "source_commit": "5a293c428409a866bbe91be9eb54b49e71521e14",
-      "url": "https://github.com/eugeniosegala/lsfg-vk-experimental/releases/download/v2.0.0-dev28-experimental.25/lsfg-vk-2.0.0-dev28-experimental.25-linux.tar.xz",
-      "sha256hash": "ca72768003b85e32fe4c43cb54cb8c984f9ddd1c24a53771546309b4853806ec",
+      "source_repository": "https://github.com/eugeniosegala/MAKO",
+      "release_tag": "render-v2.0.0-dev28-experimental.25",
+      "source_commit": "8ed1cdbe7f5496fade8ad01d85ac3d671957fcac",
+      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0-dev28-experimental.25/mako-render-v2.0.0-dev28-experimental.25-linux.tar.xz",
+      "sha256hash": "cbabc615e3307032f6d13c53d6b7813d7aafb5ab84e86af480e939b508f675aa",
       "flatpak_bundle": {
-        "name": "lsfg-vk-2.0.0-dev28-experimental.25-flatpaks.tar.xz",
-        "url": "https://github.com/eugeniosegala/lsfg-vk-experimental/releases/download/v2.0.0-dev28-experimental.25/lsfg-vk-2.0.0-dev28-experimental.25-flatpaks.tar.xz",
-        "sha256hash": "49a32ffe11bb5d88f6ad700dc3ffafb39e9d5511bb095f2c5bd04c455ab0806c"
+        "name": "mako-render-v2.0.0-dev28-experimental.25-flatpaks.tar.xz",
+        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0-dev28-experimental.25/mako-render-v2.0.0-dev28-experimental.25-flatpaks.tar.xz",
+        "sha256hash": "57100c19d93e125c301c29c9c5debef26f252cd77326d22ba85404f0f60304d3"
       }
     }
   ]

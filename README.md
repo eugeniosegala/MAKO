@@ -81,7 +81,7 @@ The Steam launch wrapper cannot enter a Flatpak sandbox directly, so configure H
    Leave **Arguments** empty. Do not use `%command%` in Heroic.
 4. Start that game normally from Heroic or its Steam shortcut.
 
-The wrapper applies only to the selected Heroic games. It enables the private MAKO Renderer Flatpak layer and disables both known public LSFG identities for that game.
+The wrapper applies only to the selected Heroic games and enables the private MAKO Renderer Flatpak layer for that game.
 
 > [!IMPORTANT]
 > After installing a newer MAKO ZIP, return to **Flatpak Setup** and select **Update** for Heroic's matching runtime extension. This replaces Heroic's Flatpak engine with the version bundled in the new ZIP while preserving its preparation and per-game Wrapper commands.
@@ -122,10 +122,10 @@ sudo cmake --install engine/build
 Configure the licensed `Lossless.dll` path with `mako-ui` or `~/.config/mako-render/conf.toml`, then activate the layer only for the game process. In Steam launch options, use:
 
 ```text
-ENABLE_MAKO=1 DISABLE_LSFGVK=1 DISABLE_LSFG=1 %command%
+ENABLE_MAKO=1 %command%
 ```
 
-`DISABLE_LSFGVK` and `DISABLE_LSFG` prevent competing public layers from loading into the same process; they do not uninstall or globally disable them. See [Building from Source](engine/docs/BUILDING-FROM-SOURCE.md), [Configuration](engine/docs/CONFIGURATION.md), and [Troubleshooting](engine/docs/TROUBLESHOOTING.md) for the complete standalone workflow.
+See [Building from Source](engine/docs/BUILDING-FROM-SOURCE.md), [Configuration](engine/docs/CONFIGURATION.md), and [Troubleshooting](engine/docs/TROUBLESHOOTING.md) for the complete standalone workflow.
 
 ## License
 

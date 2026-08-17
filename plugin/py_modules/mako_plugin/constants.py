@@ -9,7 +9,6 @@ LOCAL_LIB = f"{MAKO_ROOT}/lib"
 LOCAL_LIB32 = f"{MAKO_ROOT}/lib32"
 VULKAN_LAYER_DIR = f"{MAKO_ROOT}/vulkan/implicit_layer.d"
 USER_VULKAN_LAYER_DIR = ".local/share/vulkan/implicit_layer.d"
-USER_VULKAN_EXPLICIT_LAYER_DIR = ".local/share/vulkan/explicit_layer.d"
 CONFIG_DIR = ".config/mako-render"
 
 SCRIPT_NAME = ".local/bin/mako-run"
@@ -29,9 +28,6 @@ WRAPPER_PROFILE_SETTINGS_FILENAME = "profile-wrapper-settings.json"
 # package.json remote_binary record so the release pin has one source of truth.
 LIB_FILENAME = "libmako-render.so"
 MAKO_LAYER_NAME = "VK_LAYER_MAKO_render"
-# Obsolete format-22 explicit meta-layer. Retain only its filename so upgrades
-# and uninstall can remove it; HDR now uses SteamOS' normal implicit WSI path.
-HDR_META_JSON_FILENAME_64 = "VkLayer_DECKY_LSFGVK_experimental_hdr_stack.x86_64.json"
 MAKO_LAYER_ENABLE_ENV = "ENABLE_MAKO"
 MAKO_LAYER_DISABLE_ENV = "DISABLE_MAKO"
 MAKO_LAYER_BUILD_MARKER = (
@@ -40,18 +36,12 @@ MAKO_LAYER_BUILD_MARKER = (
 )
 JSON_FILENAME = "VkLayer_MAKO_render.json"
 JSON32_FILENAME = "VkLayer_MAKO_render.x86.json"
-LEGACY_PRIVATE_JSON_FILENAMES = (
-    "VkLayer_LSFGVK_frame_generation.json",
-    "VkLayer_LSFGVK_frame_generation.x86.json",
-)
 CLI_FILENAME = "mako-cli"
 CLI_DIR = f"{MAKO_ROOT}/bin"
 
 BIN_DIR = "bin"
 
-# Flatpak must load the MAKO Renderer extension rather than the public LSFG-VK
-# layer. A distinct extension ID and mount point keep
-# both plugins installable without one overwriting the other.
+# Flatpak uses a dedicated MAKO Renderer extension ID and mount point.
 FLATPAK_EXTENSION_NAME = "org.freedesktop.Platform.VulkanLayer.makorender"
 FLATPAK_EXTENSION_PREFIX = "/usr/lib/extensions/vulkan/makorender"
 FLATPAK_IMPLICIT_LAYER_DIR = f"{FLATPAK_EXTENSION_PREFIX}/share/vulkan/implicit_layer.d"
@@ -59,7 +49,7 @@ FLATPAK_IMPLICIT_LAYER_DIR = f"{FLATPAK_EXTENSION_PREFIX}/share/vulkan/implicit_
 # When the per-game UMU wrapper must use VK_IMPLICIT_LAYER_PATH to carry this
 # MAKO Renderer layer into Pressure Vessel, keep Gamescope's manifest in that
 # explicit search set as well. Removing it changes ordinary SDR presentation,
-# frame limiting, and window integration before LSFG creates a swapchain.
+# frame limiting, and window integration before MAKO creates a swapchain.
 FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR = (
     "/usr/lib/extensions/vulkan/gamescope/share/vulkan/implicit_layer.d"
 )
@@ -75,6 +65,6 @@ ARMADA_GAME_LAUNCH = Path("/usr/libexec/armada/armada-game-launch")
 STEAM_COMMON_PATH = Path("steamapps/common/Lossless Scaling")
 LOSSLESS_DLL_NAME = "Lossless.dll"
 
-ENV_LSFG_DLL_PATH = "LSFG_DLL_PATH"
+ENV_MAKO_DLL_PATH = "MAKO_DLL_PATH"
 ENV_XDG_DATA_HOME = "XDG_DATA_HOME"
 ENV_HOME = "HOME"

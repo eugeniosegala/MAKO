@@ -401,7 +401,7 @@ class FlatpakService(BaseService):
 
             filesystem_override = has_config_fs and has_dll_fs
 
-            has_lsfg_config_env = False
+            has_mako_config_env = False
             has_isolated_layer_env = False
             in_environment = False
 
@@ -412,14 +412,14 @@ class FlatpakService(BaseService):
                 elif line.startswith("[") and line != "[Environment]":
                     in_environment = False
                 elif in_environment and line.startswith(f"MAKO_CONFIG={config_path}/conf.toml"):
-                    has_lsfg_config_env = True
+                    has_mako_config_env = True
                 elif in_environment and (
                     line.startswith(f"VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}")
                     or line.startswith(f"VK_ADD_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}")
                 ):
                     has_isolated_layer_env = True
 
-            legacy_env_override = has_lsfg_config_env or has_isolated_layer_env
+            legacy_env_override = has_mako_config_env or has_isolated_layer_env
 
             self.log.debug(
                 "Override status for %s: resources=%s (%s/%s), wrapper=%s, legacy_env=%s (%s/%s)",
@@ -429,7 +429,7 @@ class FlatpakService(BaseService):
                 has_dll_fs,
                 has_wrapper_fs,
                 legacy_env_override,
-                has_lsfg_config_env,
+                has_mako_config_env,
                 has_isolated_layer_env,
             )
 

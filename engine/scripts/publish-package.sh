@@ -136,14 +136,14 @@ This \`.25\` release consolidates the tested SDR runtime, safer live configurati
 
 - Ships architecture-matched ELF64 and ELF32 Vulkan layers and manifests in the host archive. The CLI and Qt UI remain 64-bit.
 - Ships both layer architectures in each Freedesktop 23.08, 24.08, and 25.08 Flatpak extension and verifies the deployed bundle paths before publishing.
-- Uses the uniquely named, environment-gated MAKO Renderer layer so it can coexist with the public LSFG-VK installation without overwriting or accidentally enabling it.
+- Uses the uniquely named, environment-gated MAKO Renderer layer with an isolated installation path.
 
 #### HDR foundation for future releases
 
 - Classifies the complete Vulkan format/colour-space pair, with separate SDR 8-bit, SDR high-precision, HDR10/PQ, and linear-scRGB pipelines.
 - Includes explicit BT.2020/PQ to linear scRGB conversion around the model, plus a capability-validated packed HDR10 boundary transport that leaves model and temporal images at 16-bit float.
 - Resolves Gamescope application feedback away from the presentation hot path and requires application colour-space feedback or HDR metadata. Display HDR capability alone never promotes an SDR swapchain.
-- Keeps unsupported or unconfirmed encodings on real-frame passthrough. The companion Decky plugin sets \`MAKO_DISABLE_HDR_EXPOSURE=1\` as the engine's hard SDR boundary and leaves DXVK at its normal SDR default; direct launchers can set the same LSFG variable.
+- Keeps unsupported or unconfirmed encodings on real-frame passthrough. The companion Decky plugin sets \`MAKO_DISABLE_HDR_EXPOSURE=1\` as the engine's hard SDR boundary and leaves DXVK at its normal SDR default; direct launchers can set the same MAKO variable.
 - Treats this code as architecture and diagnostic groundwork. Cross-game HDR activation, colour validation, presentation and performance still require future hardware testing.
 
 ### Important limitations
@@ -155,7 +155,7 @@ This \`.25\` release consolidates the tested SDR runtime, safer live configurati
 - HLG, Dolby Vision, and unvalidated wide-colour combinations intentionally use real-frame passthrough. A game still needs its own HDR renderer and an HDR-capable SteamOS/Gamescope session.
 - Lossless Scaling and \`Lossless.dll\` must already be installed through Steam; neither release archive includes or modifies it.
 - Gamescope generated-image admission is nonblocking and native-first. Recovery remains inside the existing context; the layer does not force game-owned swapchain recreation for a setting change or recovery decision.
-- Flatpak extensions for 23.08, 24.08, and 25.08 are packaged separately in \`$(basename "$flatpak_archive")\` under a dedicated experimental ID that can coexist with the public Flathub layer.
+- Flatpak extensions for 23.08, 24.08, and 25.08 are packaged separately in \`$(basename "$flatpak_archive")\` under the dedicated MAKO Renderer extension ID.
 
 ### Included files
 
@@ -220,7 +220,7 @@ flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.fla
 
 - Source commit: \`$source_commit\`
 - SHA-256: \`$checksum\`
-- Upstream lineage: lsfg-vk \`2.0.0-dev28\`
+- Renderer lineage version: \`2.0.0-dev28\`
 EOF
 
 if [[ "$tag_exists" == false ]]; then

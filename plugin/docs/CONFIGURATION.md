@@ -12,7 +12,7 @@ naturally recreates its swapchain or is restarted.
 
 ## In-game V-Sync
 
-V-Sync can make LSFG-VK feel smoother by giving it more evenly spaced real frames to work with. It can also add input
+V-Sync can make MAKO Renderer feel smoother by giving it more evenly spaced real frames to work with. It can also add input
 lag or clash with a game's FPS cap, VRR, or compositor. Every game is different, so test V-Sync both on and off and
 keep the option that feels smoother and more responsive.
 
@@ -112,7 +112,7 @@ remain 64-bit because they are not loaded into the game process.
 - **Zink:** Optional Vulkan-based OpenGL path for OpenGL games.
 
 Gamescope WSI and MangoHud controls are deliberately not shown. The wrapper enables MAKO Renderer's uniquely named
-layer and disables both public LSFG identities for that game. In this release, **Disable Experimental HDR
+layer for that game. In this release, **Disable Experimental HDR
 (Restart)** is checked and read-only: the wrapper exports `MAKO_DISABLE_HDR_EXPOSURE=1` and leaves DXVK at its normal
 SDR default. Heroic Flatpak launches explicitly keep Gamescope WSI ahead of MAKO Renderer so compositor
 presentation and frame limiting remain available. Existing profiles that previously opted into HDR are normalized back
@@ -126,7 +126,7 @@ These controls belong to different components and are deliberately kept separate
 | --- | --- | --- |
 | `MAKO_DISABLE_HDR_EXPOSURE=1` | MAKO Renderer | Blocks this layer's unfinished HDR exposure and transition path. It does not configure the game's renderer or system HDR. |
 | `DXVK_HDR` | DXVK | The wrapper unsets it instead of forcing `0`, leaving DXVK at its normal SDR default and avoiding a plugin-wide renderer override. |
-| `ENABLE_GAMESCOPE_WSI` | Gamescope | The wrapper preserves the launcher's value and keeps Gamescope's manifest available in Heroic. It never disables Gamescope to enforce LSFG's HDR boundary. |
+| `ENABLE_GAMESCOPE_WSI` | Gamescope | The wrapper preserves the launcher's value and keeps Gamescope's manifest available in Heroic. It never disables Gamescope to enforce MAKO Renderer's HDR boundary. |
 
 This means the plugin can keep its own HDR work disabled without changing DXVK policy or removing Gamescope's normal
 presentation and frame-limiting integration. Users should not add any of these variables manually for an ordinary SDR

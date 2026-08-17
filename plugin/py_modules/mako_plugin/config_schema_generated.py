@@ -26,7 +26,7 @@ PERFORMANCE_MODE = "performance_mode"
 PACING = "pacing"
 ACTIVE_IN = "active_in"
 GPU = "gpu"
-DISABLE_LSFGVK = "disable_lsfgvk"
+DISABLE_MAKO = "disable_mako"
 DISABLE_HDR_EXPOSURE = "disable_hdr_exposure"
 DXVK_FRAME_RATE = "dxvk_frame_rate"
 DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode"
@@ -48,7 +48,7 @@ class ConfigurationData(TypedDict):
     pacing: str
     active_in: str
     gpu: str
-    disable_lsfgvk: bool
+    disable_mako: bool
     disable_hdr_exposure: bool
     dxvk_frame_rate: int
     disable_steamdeck_mode: bool
@@ -71,7 +71,7 @@ def get_script_parsing_logic():
 
                 # Auto-generated parsing logic:
                 if key == "DISABLE_MAKO":
-                        script_values["disable_lsfgvk"] = value == "1"
+                        script_values["disable_mako"] = value == "1"
                 if key == "MAKO_DISABLE_HDR_EXPOSURE":
                         script_values["disable_hdr_exposure"] = value == "1"
                 if key == "DXVK_FRAME_RATE":
@@ -96,7 +96,7 @@ def get_script_generation_logic():
     """Return the script generation logic as a callable"""
     def generate_script_lines(config):
         lines = []
-        if config.get("disable_lsfgvk", False):
+        if config.get("disable_mako", False):
             lines.append("export DISABLE_MAKO=1")
         if config.get("disable_hdr_exposure", False):
             lines.append("export MAKO_DISABLE_HDR_EXPOSURE=1")
@@ -113,4 +113,4 @@ def get_script_generation_logic():
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'multiplier', 'adaptive', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_lsfgvk', 'disable_hdr_exposure', 'dxvk_frame_rate', 'disable_steamdeck_mode', 'enable_zink']
+ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'multiplier', 'adaptive', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'dxvk_frame_rate', 'disable_steamdeck_mode', 'enable_zink']

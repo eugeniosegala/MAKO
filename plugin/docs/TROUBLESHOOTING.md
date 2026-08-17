@@ -106,7 +106,7 @@ presets to produce a smaller report:
 # Combine related views without collecting unrelated Adaptive policy traffic.
 ~/.local/bin/mako-diagnostics hdr config adaptive recovery performance errors
 
-# Every relevant LSFG, Vulkan-loader, and Gamescope WSI line from the run.
+# Every relevant MAKO, Vulkan-loader, and Gamescope WSI line from the run.
 ~/.local/bin/mako-diagnostics --lines 2000 all > ~/mako-report.txt
 ```
 
@@ -118,7 +118,7 @@ If the helper is unavailable, these raw commands provide the two most common rep
 
 ```bash
 # HDR selection, private transition, and safe fallback.
-grep -aE 'mako: (Gamescope application HDR feedback|swapchain colour pipeline|HDR10 transport|frame generation disabled|LSFG frame-generation initialization failed)|mako: present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)' ~/.config/mako-render/present-diagnostics.log | tail -n 200
+grep -aE 'mako: (Gamescope application HDR feedback|swapchain colour pipeline|HDR10 transport|frame generation disabled|MAKO frame-generation initialization failed)|mako: present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)' ~/.config/mako-render/present-diagnostics.log | tail -n 200
 
 # Adaptive policy and Gamescope recovery.
 grep -aE 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied|generated-delivery-miss|fixed-plan|adaptive-|skip-generated-frames|resume-generated-frames|generated-image-recovered|history-warmup|swapchain-recreation-suppressed|swapchain-context-create|swapchain-context-destroy)' ~/.config/mako-render/present-diagnostics.log | tail -n 800

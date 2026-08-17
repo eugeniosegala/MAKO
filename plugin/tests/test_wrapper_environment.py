@@ -29,7 +29,7 @@ from py_modules.mako_plugin.config_schema_generated import (  # noqa: E402
 class WrapperEnvironmentTests(unittest.TestCase):
     def setUp(self):
         self.service = ConfigurationService(logger=_Logger())
-        self.service.local_share_dir = Path("/private/lsfg/implicit_layer.d")
+        self.service.local_share_dir = Path("/private/mako/implicit_layer.d")
 
     def _evaluate(self, extra_environment=None, config=None):
         lines = []
@@ -40,9 +40,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "ADD=%s\\n" "${VK_ADD_IMPLICIT_LAYER_PATH:-}"',
             'printf "IMPLICIT=%s\\n" "${VK_IMPLICIT_LAYER_PATH:-}"',
             'printf "ENABLE=%s\\n" "${ENABLE_MAKO:-}"',
-            'printf "DISABLE_PUBLIC=%s\\n" "${DISABLE_LSFGVK:-}"',
-            'printf "DISABLE_LEGACY=%s\\n" "${DISABLE_LSFG:-}"',
-            'printf "DISABLE_EXPERIMENTAL=%s\\n" "${DISABLE_MAKO:-}"',
+            'printf "DISABLE_MAKO=%s\\n" "${DISABLE_MAKO:-}"',
             'printf "DISABLE_GAMESCOPE=%s\\n" "${DISABLE_GAMESCOPE_WSI:-}"',
             'printf "ENABLE_GAMESCOPE=%s\\n" "${ENABLE_GAMESCOPE_WSI:-}"',
             'printf "HDR_EXPOSURE_DISABLED=%s\\n" "${MAKO_DISABLE_HDR_EXPOSURE:-}"',
@@ -67,8 +65,6 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["ADD"], "")
         self.assertEqual(values["IMPLICIT"], "")
         self.assertEqual(values["ENABLE"], "1")
-        self.assertEqual(values["DISABLE_PUBLIC"], "1")
-        self.assertEqual(values["DISABLE_LEGACY"], "1")
         self.assertEqual(values["INSTANCE"], "")
 
     def test_existing_instance_layer_order_is_preserved(self):
@@ -113,7 +109,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "VK_IMPLICIT_LAYER_PATH": "/caller/override",
             "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
         })
-        self.assertEqual(values["IMPLICIT"], "/private/lsfg/implicit_layer.d")
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
         self.assertEqual(values["ADD"], "")
 
     def test_flatpak_adds_wrapper_scoped_extension_without_hiding_other_layers(self):
@@ -128,8 +124,6 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["ADD"], temp_dir)
         self.assertEqual(values["IMPLICIT"], "")
         self.assertEqual(values["ENABLE"], "1")
-        self.assertEqual(values["DISABLE_PUBLIC"], "1")
-        self.assertEqual(values["DISABLE_LEGACY"], "1")
 
     def test_flatpak_sdr_boundary_uses_explicit_umu_manifest_path(self):
         with tempfile.TemporaryDirectory() as temp_dir, tempfile.TemporaryDirectory() as gamescope_dir:
@@ -193,7 +187,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
         self.assertEqual(values["HDR_EXPOSURE_DISABLED"], "1")
         self.assertEqual(values["DXVK_HDR"], "")
-        self.assertEqual(values["DISABLE_EXPERIMENTAL"], "")
+        self.assertEqual(values["DISABLE_MAKO"], "")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
 
     def test_default_sdr_profile_never_exports_hdr_bootstrap(self):
@@ -212,34 +206,31 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["HDR_EXPOSURE_DISABLED"], "1")
         self.assertEqual(values["DXVK_HDR"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
-        self.assertEqual(values["DISABLE_EXPERIMENTAL"], "")
+        self.assertEqual(values["DISABLE_MAKO"], "")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
 
     def test_full_layer_disable_keeps_hdr_exposure_blocked(self):
         lines = self.service._experimental_hdr_activation_lines({
             "disable_hdr_exposure": False,
-            "disable_lsfgvk": True,
+            "disable_mako": True,
         })
         self.assertIn("unset DXVK_HDR", lines)
         self.assertNotIn("VK_INSTANCE_LAYERS", "\n".join(lines))
 
-    def test_full_layer_disable_targets_only_experimental_identity(self):
-        lines = get_script_generation_logic()({"disable_lsfgvk": True})
+    def test_full_layer_disable_targets_mako_identity(self):
+        lines = get_script_generation_logic()({"disable_mako": True})
         self.assertIn("export DISABLE_MAKO=1", lines)
-        self.assertNotIn("export DISABLE_LSFGVK=1", lines)
 
-    def test_public_isolation_exports_do_not_enable_full_layer_toggle(self):
+    def test_mako_disable_export_enables_full_layer_toggle(self):
         values = get_script_parsing_logic()([
             "export ENABLE_MAKO=1",
-            "export DISABLE_LSFGVK=1",
-            "export DISABLE_LSFG=1",
         ])
-        self.assertNotIn("disable_lsfgvk", values)
+        self.assertNotIn("disable_mako", values)
 
         values = get_script_parsing_logic()([
             "export DISABLE_MAKO=1",
         ])
-        self.assertTrue(values["disable_lsfgvk"])
+        self.assertTrue(values["disable_mako"])
 
     def test_wrapper_never_exports_obsolete_wow64_workaround(self):
         self.assertNotIn("enable_wow64", ALL_FIELDS)

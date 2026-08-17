@@ -39,7 +39,7 @@ mako: present diagnostics: operation=acquire-generated-image context=1 duration_
 mako: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
 mako: present diagnostics: operation=pipeline-busy-bypass context=1 consecutive_frames=1 total_bypassed_frames=16 duration_ms=0 planned=1 history_action=preserved action=native-present
 mako: present diagnostics: operation=pipeline-busy-recovered context=1 bypassed_frames=1 total_recoveries=16 duration_ms=8 history_warmup_requested=0
-mako: LSFG frame-generation initialization failed; native presentation retained: test failure
+mako: MAKO frame-generation initialization failed; native presentation retained: test failure
 unrelated application output
 """
 

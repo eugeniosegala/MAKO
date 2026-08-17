@@ -15,9 +15,9 @@ namespace mako::layer {
     /// SteamOS/Gamescope integration boundary.
     ///
     /// This is not a general Vulkan rule that Linux SDR requires FIFO and HDR
-    /// requires MAILBOX. Gamescope's WSI layer runs above LSFG, implements the
+    /// requires MAILBOX. Gamescope's WSI layer runs above MAKO, implements the
     /// application's pacing there, then forwards a MAILBOX lower swapchain.
-    /// LSFG runs below that hook and expands one application present into
+    /// MAKO runs below that hook and expands one application present into
     /// synthetic present(s) plus the original, so those injected presents do
     /// not pass through Gamescope's upper QueuePresent policy individually.
     ///
@@ -32,7 +32,7 @@ namespace mako::layer {
         GamescopeHdr,
     };
 
-    /// Gamescope can normalize the colour space before LSFG sees it, so the
+    /// Gamescope can normalize the colour space before MAKO sees it, so the
     /// HDR-capable create-time format is the stable discriminator while live
     /// application-HDR feedback is still provisional. Live feedback may
     /// rebuild colour resources; it must not change the transport underneath

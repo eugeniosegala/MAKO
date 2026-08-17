@@ -65,7 +65,7 @@ Next is a list of all available **profile** configuration options:
 
 HDR10 transport packing is automatic and has no setting. When both the application and backend Vulkan devices report
 the exact external-image and packed-storage capabilities required by the engine, the private source/output exchange
-images use 32-bit packed HDR10 instead of 64-bit float. PQ decoding, the LSFG model, and all temporal working images
+images use 32-bit packed HDR10 instead of 64-bit float. PQ decoding, the frame-generation model, and all temporal working images
 remain linear 16-bit float. If either capability check fails, the validated float HDR10 transport remains in use.
 
 ### Pacing Modes
@@ -91,8 +91,6 @@ The following environment variables affect MAKO Renderer:
 - `ENABLE_MAKO`: Set to `1` in the MAKO launch wrapper to scope its uniquely named
   implicit Vulkan layer to that game.
 - `DISABLE_MAKO`: If set to `1`, MAKO Renderer will be completely disabled.
-- `DISABLE_LSFGVK` and `DISABLE_LSFG`: Disable the two public LSFG layer identities. The MAKO Decky wrapper
-  sets both so only its private engine is active for the wrapped game.
 - `MAKO_CONFIG`: Path to the configuration file.
 - `MAKO_PROFILE`: Name of the profile to use. If set, this will override automatic profile detection.
 - `MAKO_DISABLE_HDR_EXPOSURE`: Set to `1` by the companion Decky plugin's default restart-time SDR launch, or by a

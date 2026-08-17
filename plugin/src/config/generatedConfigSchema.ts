@@ -21,7 +21,7 @@ export const PERFORMANCE_MODE = "performance_mode" as const;
 export const PACING = "pacing" as const;
 export const ACTIVE_IN = "active_in" as const;
 export const GPU = "gpu" as const;
-export const DISABLE_LSFGVK = "disable_lsfgvk" as const;
+export const DISABLE_MAKO = "disable_mako" as const;
 export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
 export const DXVK_FRAME_RATE = "dxvk_frame_rate" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
@@ -115,8 +115,8 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: "",
     description: "optional GPU name, vendor:device ID, or PCI bus ID"
   },
-  disable_lsfgvk: {
-    name: "disable_lsfgvk",
+  disable_mako: {
+    name: "disable_mako",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
     description: "troubleshooting: prevent MAKO Renderer loading after restart"
@@ -162,7 +162,7 @@ export interface ConfigurationData {
   pacing: string;
   active_in: string;
   gpu: string;
-  disable_lsfgvk: boolean;
+  disable_mako: boolean;
   disable_hdr_exposure: boolean;
   dxvk_frame_rate: number;
   disable_steamdeck_mode: boolean;
@@ -189,7 +189,7 @@ export function getDefaults(): ConfigurationData {
     pacing: "none",
     active_in: "",
     gpu: "",
-    disable_lsfgvk: false,
+    disable_mako: false,
     disable_hdr_exposure: true,
     dxvk_frame_rate: 0,
     disable_steamdeck_mode: false,
@@ -212,7 +212,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     pacing: ConfigFieldType.STRING,
     active_in: ConfigFieldType.STRING,
     gpu: ConfigFieldType.STRING,
-    disable_lsfgvk: ConfigFieldType.BOOLEAN,
+    disable_mako: ConfigFieldType.BOOLEAN,
     disable_hdr_exposure: ConfigFieldType.BOOLEAN,
     dxvk_frame_rate: ConfigFieldType.INTEGER,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,

@@ -88,7 +88,7 @@
   "CLIPBOARD_COPIED": "클립보드에 복사됨",
   "CLIPBOARD_COPYING": "복사 중...",
   "CLIPBOARD_COPY_LAUNCH": "실행 옵션 복사",
-  "CLIPBOARD_LSFG_FGMOD": "LSFG + DeckyFG",
+  "CLIPBOARD_MAKO_FGMOD": "MAKO + DeckyFG",
   "CONTENT_RUNNING": "실행 중입니다.",
   "CONTENT_ENGINE_UPDATE_REQUIRED": "MAKO Renderer 업데이트 필요",
   "CONTENT_ENGINE_INSTALLED": "설치됨:",

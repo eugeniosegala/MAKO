@@ -17,7 +17,7 @@ from .constants import (
     LIB_FILENAME, JSON_FILENAME, JSON32_FILENAME, CLI_FILENAME, CLI_DIR, BIN_DIR,
     DIAGNOSTICS_HELPER_FILENAME, MAKO_LAYER_NAME,
     MAKO_LAYER_ENABLE_ENV, MAKO_LAYER_DISABLE_ENV,
-    MAKO_LAYER_BUILD_MARKER, LEGACY_PRIVATE_JSON_FILENAMES,
+    MAKO_LAYER_BUILD_MARKER,
 )
 from .config_schema import ConfigurationManager
 from .types import InstallationResponse, UninstallationResponse, InstallationCheckResponse
@@ -64,11 +64,8 @@ class InstallationService(BaseService):
             # Register a uniquely named, wrapper-scoped manifest in Vulkan's normal
             # per-user discovery directory. Steam's Pressure Vessel snapshots
             # that directory before the per-game wrapper starts, so relying on
-            # a wrapper-only additive search path can select a public layer
-            # with the same historical name instead of this private payload.
+            # a wrapper-only additive search path can miss the private payload.
             self._register_layer_manifests()
-            self.remove_obsolete_hdr_meta_layer_if_needed()
-            self._remove_legacy_private_manifests()
 
             self._create_config_file()
 
@@ -326,15 +323,6 @@ class InstallationService(BaseService):
         else:
             self._remove_if_exists(self.registered_json32_file)
 
-    def remove_obsolete_hdr_meta_layer_if_needed(self) -> bool:
-        """Remove the retired format-22 explicit HDR meta-layer."""
-        return self._remove_if_exists(self.hdr_meta_json_file)
-
-    def _remove_legacy_private_manifests(self) -> None:
-        """Remove only obsolete manifests inside this plugin's private directory."""
-        for filename in LEGACY_PRIVATE_JSON_FILENAMES:
-            self._remove_if_exists(self.local_share_dir / filename)
-
     def _create_config_file(self) -> None:
         """Create or update this plugin's private TOML config with detected DLL path.
 
@@ -405,7 +393,7 @@ class InstallationService(BaseService):
 
         # Write the script file
         self._write_file(self.mako_launch_script_path, script_content, 0o755)
-        self.log.info(f"Created lsfg launch script at {self.mako_launch_script_path}")
+        self.log.info(f"Created MAKO launch script at {self.mako_launch_script_path}")
 
     def _install_diagnostics_helper(self, plugin_dir: Path) -> None:
         """Install the packaged read-only diagnostic filter beside the wrapper."""
@@ -444,7 +432,7 @@ class InstallationService(BaseService):
         return True
 
     def get_launch_script_path(self) -> str:
-        """Get the path to the lsfg launch script
+        """Get the path to the MAKO launch script.
 
         Returns:
             String path to the launch script file
@@ -540,14 +528,9 @@ class InstallationService(BaseService):
             files_to_remove = [
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
                 self.registered_json_file, self.registered_json32_file,
-                self.hdr_meta_json_file,
                 self.cli_file, self.engine_state_file, self.mako_launch_script_path,
                 self.diagnostics_script_path,
             ]
-            files_to_remove.extend(
-                self.local_share_dir / filename
-                for filename in LEGACY_PRIVATE_JSON_FILENAMES
-            )
 
             for file_path in files_to_remove:
                 if self._remove_if_exists(file_path):
@@ -597,14 +580,9 @@ class InstallationService(BaseService):
             files_to_remove = [
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
                 self.registered_json_file, self.registered_json32_file,
-                self.hdr_meta_json_file,
                 self.cli_file, self.engine_state_file, self.mako_launch_script_path,
                 self.mako_script_path, self.diagnostics_script_path,
             ]
-            files_to_remove.extend(
-                self.local_share_dir / filename
-                for filename in LEGACY_PRIVATE_JSON_FILENAMES
-            )
 
             for file_path in files_to_remove:
                 try:

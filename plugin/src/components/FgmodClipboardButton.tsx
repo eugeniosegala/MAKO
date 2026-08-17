@@ -95,7 +95,7 @@ export function FgmodClipboardButton() {
             color: showSuccess ? "#4CAF50" : "inherit",
             fontWeight: showSuccess ? "bold" : "normal"
           }}>
-            {showSuccess ? t('CLIPBOARD_COPIED', 'Copied to clipboard') : isLoading ? t('CLIPBOARD_COPYING', 'Copying...') : t('CLIPBOARD_LSFG_FGMOD', 'LSFG + DeckyFG')}
+            {showSuccess ? t('CLIPBOARD_COPIED', 'Copied to clipboard') : isLoading ? t('CLIPBOARD_COPYING', 'Copying...') : t('CLIPBOARD_MAKO_FGMOD', 'MAKO + DeckyFG')}
           </div>
         </div>
       </ButtonItem>

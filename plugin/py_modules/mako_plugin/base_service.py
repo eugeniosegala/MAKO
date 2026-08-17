@@ -15,10 +15,8 @@ from .constants import (
     LOCAL_LIB32,
     VULKAN_LAYER_DIR,
     USER_VULKAN_LAYER_DIR,
-    USER_VULKAN_EXPLICIT_LAYER_DIR,
     JSON_FILENAME,
     JSON32_FILENAME,
-    HDR_META_JSON_FILENAME_64,
     SCRIPT_NAME,
     DIAGNOSTICS_SCRIPT_NAME,
     CONFIG_DIR,
@@ -48,12 +46,8 @@ class BaseService:
         self.local_lib32_dir = self.user_home / LOCAL_LIB32
         self.local_share_dir = self.user_home / VULKAN_LAYER_DIR
         self.user_vulkan_layer_dir = self.user_home / USER_VULKAN_LAYER_DIR
-        self.user_vulkan_explicit_layer_dir = self.user_home / USER_VULKAN_EXPLICIT_LAYER_DIR
         self.registered_json_file = self.user_vulkan_layer_dir / JSON_FILENAME
         self.registered_json32_file = self.user_vulkan_layer_dir / JSON32_FILENAME
-        self.hdr_meta_json_file = (
-            self.user_vulkan_explicit_layer_dir / HDR_META_JSON_FILENAME_64
-        )
         self.mako_script_path = self.user_home / SCRIPT_NAME
         self.mako_launch_script_path = self.user_home / SCRIPT_NAME
         self.diagnostics_script_path = self.user_home / DIAGNOSTICS_SCRIPT_NAME

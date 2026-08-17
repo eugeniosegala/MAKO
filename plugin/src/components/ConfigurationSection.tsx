@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
 import { ConfigurationData } from "../config/configSchema";
 import {
-  ACTIVE_IN, ALLOW_FP16, DISABLE_LSFGVK, DLL, FLOW_SCALE, GPU, PERFORMANCE_MODE,
+  ACTIVE_IN, ALLOW_FP16, DISABLE_MAKO, DLL, FLOW_SCALE, GPU, PERFORMANCE_MODE,
   DXVK_FRAME_RATE, DISABLE_STEAMDECK_MODE, ENABLE_ZINK
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
@@ -60,12 +60,12 @@ export function ConfigurationSection({
     <>
       <style>
         {`
-        .LSFG_ConfigCollapseButton_Container > div > div > div > button,
-        .LSFG_ConfigCollapseButton_Container > div > div > div > div > button,
-        .LSFG_WorkaroundsCollapseButton_Container > div > div > div > button {
+        .MAKO_ConfigCollapseButton_Container > div > div > div > button,
+        .MAKO_ConfigCollapseButton_Container > div > div > div > div > button,
+        .MAKO_WorkaroundsCollapseButton_Container > div > div > div > button {
           height: 10px !important;
         }
-        .LSFG_WorkaroundsCollapseButton_Container > div > div > div > div > button {
+        .MAKO_WorkaroundsCollapseButton_Container > div > div > div > div > button {
           height: 10px !important;
         }
         `}
@@ -88,7 +88,7 @@ export function ConfigurationSection({
 
       <PanelSectionRow>
         <div
-          className="LSFG_ConfigCollapseButton_Container"
+          className="MAKO_ConfigCollapseButton_Container"
           style={{ marginTop: "4px", marginBottom: "8px" }}
         >
           <ButtonItem
@@ -145,8 +145,8 @@ export function ConfigurationSection({
             <ToggleField
               label={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH", "Disable MAKO Renderer on Next Launch")}
               description={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC", "Troubleshooting only. Stops MAKO Renderer loading after restart. Use Frame Generation above for live on/off.")}
-              checked={config.disable_lsfgvk}
-              onChange={(value) => onConfigChange(DISABLE_LSFGVK, value)}
+              checked={config.disable_mako}
+              onChange={(value) => onConfigChange(DISABLE_MAKO, value)}
             />
           </PanelSectionRow>
 
@@ -210,7 +210,7 @@ export function ConfigurationSection({
 
       <PanelSectionRow>
         <div
-          className="LSFG_WorkaroundsCollapseButton_Container"
+          className="MAKO_WorkaroundsCollapseButton_Container"
           style={{ marginTop: "4px", marginBottom: "8px" }}
         >
           <ButtonItem

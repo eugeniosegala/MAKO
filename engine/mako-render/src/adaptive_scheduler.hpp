@@ -21,7 +21,7 @@ namespace mako::layer {
     /// Cadence recovery follows the presentation transport selected when the
     /// swapchain was created; it is not selected from live HDR feedback.
     ///
-    /// Ordered SDR has FIFO ordering/backpressure under LSFG's control, so a
+    /// Ordered SDR has FIFO ordering/backpressure under MAKO's control, so a
     /// discontinuity only needs a short temporal-history refresh and can keep
     /// the last multiplier that was proven stable. The Gamescope HDR bridge
     /// preserves Gamescope's lower transport and admits synthetic images

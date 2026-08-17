@@ -127,7 +127,7 @@ class Plugin:
             }
 
     async def get_mako_config(self) -> Dict[str, Any]:
-        """Read current lsfg script configuration
+        """Read the current MAKO Renderer configuration.
 
         Returns:
             ConfigurationResponse dict with current configuration or error
@@ -169,7 +169,7 @@ class Plugin:
             }
 
     async def update_mako_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
-        """Update lsfg TOML configuration using object-based API (single source of truth)
+        """Update MAKO Renderer TOML configuration using the object API.
 
         Args:
             config: Configuration data dictionary containing all settings
@@ -258,7 +258,7 @@ class Plugin:
         return {
             "launch_option": "~/.local/bin/mako-run %command%",
             "instructions": "Add this to your game's launch options in Steam Properties",
-            "explanation": "The isolated launcher is created during installation, enables this plugin's uniquely named private Vulkan layer, disables public LSFG layers for this game, and selects the private configuration"
+            "explanation": "The launcher is created during installation, enables MAKO Renderer's Vulkan layer for this game, and selects its private configuration"
         }
 
     async def get_config_file_content(self) -> Dict[str, Any]:

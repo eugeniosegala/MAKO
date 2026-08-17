@@ -15,8 +15,6 @@ If MAKO Renderer does not seem to be doing *anything*:
 - Launch the game with the environment variable `VK_LOADER_DEBUG=layer` set.
   - Look for `VK_LAYER_MAKO_render` and the
     `mako: render layer active` build marker between `<Loader>` and `<Device>`.
-  - If a public layer (`VK_LAYER_LSFGVK_frame_generation` or `VK_LAYER_LS_frame_generation`) is inserted for the same
-    game, add `DISABLE_LSFGVK=1 DISABLE_LSFG=1`. MAKO Decky adds both guards automatically.
   - If you can't find any, try again using `MAKO_ENV=1`.
     - If it still doesn't show up, you may be running in flatpak.
     - If it does show up, then the `active_in` property of your profile is likely misconfigured. Reconfigure it, then try again without `MAKO_ENV=1`.
@@ -96,7 +94,7 @@ The recovery record includes the total number of frames whose output work was by
 
 Every successful Adaptive recovery probe stays in the current swapchain and performs the normal three-frame history
 warm-up. Diagnostics report `swapchain-recreation-suppressed reason=in-place-only` and
-`generated-image-recovered recovery_action=in-place`. LSFG does not return `VK_ERROR_OUT_OF_DATE_KHR` to apply a
+`generated-image-recovered recovery_action=in-place`. MAKO Renderer does not return `VK_ERROR_OUT_OF_DATE_KHR` to apply a
 setting or recovery decision; this avoids game/Wine-specific swapchain rebuild failures. Fixed mode resumes in place
 without the Adaptive history-policy reset.
 
