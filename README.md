@@ -86,6 +86,19 @@ The wrapper applies only to the selected Heroic games and enables the private MA
 > [!IMPORTANT]
 > After installing a newer MAKO ZIP, return to **Flatpak Setup** and select **Update** for Heroic's matching runtime extension. This replaces Heroic's Flatpak engine with the version bundled in the new ZIP while preserving its preparation and per-game Wrapper commands.
 
+### EmuDeck and Dolphin
+
+EmuDeck's Dolphin is a Flatpak application, so it uses the same **Flatpak Setup** screen but does not need Heroic's per-game Wrapper field:
+
+1. In Mako, select **Flatpak Setup** and prepare **Dolphin Emulator**. Install the matching runtime extension when prompted; current EmuDeck Dolphin builds commonly use **25.08** through the KDE runtime.
+2. In Dolphin, set **Graphics > General > Backend** to **Vulkan**.
+3. Launch your game normally from EmuDeck or its Steam shortcut. Do **not** add `~/.local/bin/mako-run`, `%command%`, or a Wrapper field for Dolphin.
+
+Preparing Dolphin grants it access to MAKO's configuration and `Lossless.dll`, then enables the private Vulkan layer only inside Dolphin's Flatpak sandbox. The setting applies to Dolphin launches generally; use MAKO profiles if you need different renderer settings for different games.
+
+> [!IMPORTANT]
+> After updating MAKO, return to **Flatpak Setup** and select **Update** for Dolphin's matching runtime extension as well.
+
 ### Updating MAKO Decky
 
 The clean update path avoids Decky retaining an older backend or bundled payload:
