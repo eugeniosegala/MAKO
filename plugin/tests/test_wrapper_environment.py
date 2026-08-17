@@ -193,6 +193,33 @@ class WrapperEnvironmentTests(unittest.TestCase):
         lines = get_script_generation_logic()({"disable_hdr_exposure": True})
         self.assertIn("export MAKO_DISABLE_HDR_EXPOSURE=1", lines)
 
+    def test_full_wrapper_emits_forced_hdr_disable_once(self):
+        script = self.service._generate_script_content(
+            ConfigurationManager.get_defaults()
+        )
+        self.assertEqual(
+            script.count("export MAKO_DISABLE_HDR_EXPOSURE=1"),
+            1,
+        )
+
+    def test_required_wrapper_markers_are_unique(self):
+        self.assertEqual(
+            len(self.service._REQUIRED_WRAPPER_EXPORTS),
+            len(set(self.service._REQUIRED_WRAPPER_EXPORTS)),
+        )
+
+    def test_freshly_generated_default_wrapper_is_current(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                self.service._generate_script_content(
+                    ConfigurationManager.get_defaults()
+                ),
+                encoding="utf-8",
+            )
+
+            self.assertFalse(self.service.migrate_launch_script_if_needed())
+
     def test_hdr_is_blocked_by_default(self):
         self.assertTrue(CONFIG_SCHEMA["disable_hdr_exposure"].default)
         settings = self.service._wrapper_settings_defaults()
@@ -339,6 +366,24 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 "\n".join([
                     self.service._WRAPPER_FORMAT_MARKER,
                     "# development presentation diagnostics default: enabled",
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_format_30_wrapper_is_regenerated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "# mako-wrapper-format: 30",
+                    self.service._diagnostics_default_marker(),
                     *self.service._REQUIRED_WRAPPER_EXPORTS,
                 ]),
                 encoding="utf-8",

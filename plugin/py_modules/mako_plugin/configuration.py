@@ -34,14 +34,12 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 30"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 31"
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
         "export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS=",
         "export MAKO_PRESENT_DIAGNOSTICS=",
         f"export {MAKO_LAYER_ENABLE_ENV}=1",
-        "export DISABLE_MAKO=1",
-        "export DISABLE_MAKO=1",
         "mako_diagnostics_default=",
     )
     _OBSOLETE_WRAPPER_EXPORTS = (
@@ -430,9 +428,7 @@ class ConfigurationService(BaseService):
             "# This script sets up the environment for mako to work with the plugin configuration",
         ]
 
-        generate_script_lines = get_script_generation_logic()
-        lines.extend(generate_script_lines(config))
-        lines.extend(self._hdr_activation_lines(config))
+        lines.extend(self._script_configuration_lines(config))
         lines.extend(self._generate_layer_environment_lines())
         lines.extend(self._profile_selection_lines(DEFAULT_PROFILE_NAME, config))
         lines.extend(self._generate_game_launch_lines())
@@ -462,9 +458,7 @@ class ConfigurationService(BaseService):
             f"# Current profile: {current_profile}",
         ]
 
-        generate_script_lines = get_script_generation_logic()
-        lines.extend(generate_script_lines(merged_config))
-        lines.extend(self._hdr_activation_lines(merged_config))
+        lines.extend(self._script_configuration_lines(merged_config))
         lines.extend(self._generate_layer_environment_lines())
         # Never export MAKO_PROFILE once any profile uses Active In: the
         # environment override takes precedence over upstream's executable
@@ -478,6 +472,15 @@ class ConfigurationService(BaseService):
         lines.extend(self._generate_game_launch_lines())
 
         return "\n".join(lines) + "\n"
+
+    @classmethod
+    def _script_configuration_lines(cls, config: ConfigurationData) -> list[str]:
+        """Generate wrapper settings without repeating forced compatibility exports."""
+        lines = get_script_generation_logic()(config)
+        for line in cls._hdr_activation_lines(config):
+            if line not in lines:
+                lines.append(line)
+        return lines
 
     @staticmethod
     def _hdr_activation_lines(config: Dict[str, Any]) -> list[str]:
@@ -555,7 +558,8 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Format 30 applies a build-flavour-aware presentation-diagnostics
+        Format 31 removes duplicate generated compatibility exports. Format 30
+        applies a build-flavour-aware presentation-diagnostics
         default. Local development packages enable it while published packages
         remain quiet, and either build still honours an explicit caller value.
         Format 29 preserves a caller-provided profile for per-shortcut selection.
@@ -588,7 +592,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO launch wrapper to format 30")
+            self.log.info("Upgraded installed MAKO launch wrapper to format 31")
             return True
         except OSError:
             raise

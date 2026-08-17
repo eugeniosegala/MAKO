@@ -435,12 +435,6 @@ class Plugin:
             decky.logger.warning("Could not remove obsolete vkBasalt exports: %s", error)
 
         try:
-            if self.installation_service.remove_obsolete_hdr_meta_layer_if_needed():
-                decky.logger.info("Removed the retired HDR meta-layer")
-        except OSError as error:
-            decky.logger.warning("Could not remove the retired HDR meta-layer: %s", error)
-
-        try:
             if self.configuration_service.migrate_launch_script_if_needed():
                 decky.logger.info("Upgraded installed MAKO launch wrapper to the current format")
         except OSError as error:

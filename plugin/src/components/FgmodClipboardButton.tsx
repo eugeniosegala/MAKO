@@ -75,6 +75,7 @@ export function FgmodClipboardButton() {
     <PanelSectionRow>
       <ButtonItem
         layout="below"
+        bottomSeparator="none"
         onClick={copyToClipboard}
         disabled={isLoading || showSuccess}
       >

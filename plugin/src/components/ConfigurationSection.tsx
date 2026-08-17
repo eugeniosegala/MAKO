@@ -75,7 +75,7 @@ export function ConfigurationSection({
       <PanelSectionRow>
         <div
           style={{
-            fontSize: "14px",
+            fontSize: "16px",
             fontWeight: "bold",
             marginTop: "24px",
             marginBottom: "8px",
@@ -133,15 +133,6 @@ export function ConfigurationSection({
           </PanelSectionRow>
 
           <PanelSectionRow>
-            <ToggleField
-              label={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH", "Disable MAKO Renderer on Next Launch")}
-              description={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC", "Troubleshooting only. Stops MAKO Renderer loading after restart. Use Frame Generation above for live on/off.")}
-              checked={config.disable_mako}
-              onChange={(value) => onConfigChange(DISABLE_MAKO, value)}
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
             <SliderField
               label={`${t("CONFIG_BASE_FPS_CAP", "Base FPS Cap")}${config.base_fps_cap > 0 ? ` (${config.base_fps_cap} FPS)` : ` (${t("CONFIG_BASE_FPS_CAP_OFF", "Off")})`}`}
               description={t("CONFIG_BASE_FPS_CAP_DESC", "Caps real application frames before frame generation. Works with DirectX, OpenGL through Zink, and Vulkan; changes apply live.")}
@@ -160,6 +151,15 @@ export function ConfigurationSection({
               description={t("CONFIG_ALLOW_FP16_DESC", "Improves performance on AMD; disable for older NVIDIA GPUs.")}
               checked={config.allow_fp16}
               onChange={(value) => onConfigChange(ALLOW_FP16, value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH", "Disable MAKO Renderer on Next Launch")}
+              description={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC", "Troubleshooting only. Stops MAKO Renderer loading after restart. Use Frame Generation above for live on/off.")}
+              checked={config.disable_mako}
+              onChange={(value) => onConfigChange(DISABLE_MAKO, value)}
             />
           </PanelSectionRow>
 
@@ -189,7 +189,7 @@ export function ConfigurationSection({
       <PanelSectionRow>
         <div
           style={{
-            fontSize: "14px",
+            fontSize: "16px",
             fontWeight: "bold",
             marginTop: "24px",
             marginBottom: "8px",

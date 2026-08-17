@@ -339,7 +339,7 @@ export function ProfileManagement({ currentProfile, onProfileChange, mainRunning
       <PanelSectionRow>
         <div
           style={{
-            fontSize: "14px",
+            fontSize: "16px",
             fontWeight: "bold",
             marginTop: "24px",
             marginBottom: "8px",

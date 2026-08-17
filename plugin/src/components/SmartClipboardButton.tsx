@@ -57,6 +57,7 @@ export function SmartClipboardButton() {
     <PanelSectionRow>
       <ButtonItem
         layout="below"
+        bottomSeparator="none"
         onClick={copyToClipboard}
         disabled={isLoading || showSuccess}
       >

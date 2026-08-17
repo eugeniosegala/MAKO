@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PanelSectionRow, DialogButton, Focusable, SliderField, ToggleField } from "@decky/ui";
 import { ConfigurationData } from "../config/configSchema";
 import {
@@ -13,6 +13,8 @@ import {
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
 
+const TARGET_FPS_SAVE_DELAY_MS = 250;
+
 interface FpsMultiplierControlProps {
   config: ConfigurationData;
   onConfigChange: (fieldName: keyof ConfigurationData, value: boolean | number | string) => Promise<void>;
@@ -23,11 +25,50 @@ export function FpsMultiplierControl({
   onConfigChange
 }: FpsMultiplierControlProps) {
   const [focusedControl, setFocusedControl] = useState<"decrease" | "increase" | null>(null);
+  const [targetFps, setTargetFps] = useState(config.target_fps);
+  const pendingTargetFps = useRef<{
+    value: number;
+    save: FpsMultiplierControlProps["onConfigChange"];
+  } | null>(null);
+  const targetFpsSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const adaptiveMaxMultiplier = config.adaptive_max_multiplier ?? 3;
-  const automaticBaseFpsCap = Math.max(10, config.target_fps / 2);
+  const automaticBaseFpsCap = Math.max(10, targetFps / 2);
   const automaticBaseFpsCapLabel = Number.isInteger(automaticBaseFpsCap)
     ? automaticBaseFpsCap.toFixed(0)
     : automaticBaseFpsCap.toFixed(1);
+
+  useEffect(() => {
+    if (pendingTargetFps.current === null) {
+      setTargetFps(config.target_fps);
+    }
+  }, [config.target_fps]);
+
+  useEffect(() => () => {
+    if (targetFpsSaveTimer.current !== null) {
+      clearTimeout(targetFpsSaveTimer.current);
+    }
+    if (pendingTargetFps.current !== null) {
+      const pendingChange = pendingTargetFps.current;
+      pendingTargetFps.current = null;
+      void pendingChange.save(TARGET_FPS, pendingChange.value);
+    }
+  }, []);
+
+  const handleTargetFpsChange = (value: number) => {
+    setTargetFps(value);
+    pendingTargetFps.current = { value, save: onConfigChange };
+    if (targetFpsSaveTimer.current !== null) {
+      clearTimeout(targetFpsSaveTimer.current);
+    }
+    targetFpsSaveTimer.current = setTimeout(() => {
+      const pendingChange = pendingTargetFps.current;
+      pendingTargetFps.current = null;
+      targetFpsSaveTimer.current = null;
+      if (pendingChange !== null) {
+        void pendingChange.save(TARGET_FPS, pendingChange.value);
+      }
+    }, TARGET_FPS_SAVE_DELAY_MS);
+  };
 
   const multiplierButtonStyle = (isFocused: boolean) => ({
     height: "34px",
@@ -83,19 +124,19 @@ export function FpsMultiplierControl({
         <>
           <PanelSectionRow>
             <SliderField
-              label={`${t("ADAPTIVE_TARGET_FPS", "Target FPS")} (${config.target_fps})`}
+              label={`${t("ADAPTIVE_TARGET_FPS", "Target FPS")} (${targetFps})`}
               description={t("ADAPTIVE_TARGET_FPS_DESC", "Desired output rate. The multiplier limit may intentionally keep output below this target.")}
-              value={config.target_fps}
+              value={targetFps}
               min={30}
               max={240}
               step={1}
-              onChange={(value) => onConfigChange(TARGET_FPS, value)}
+              onChange={handleTargetFpsChange}
             />
           </PanelSectionRow>
           <PanelSectionRow>
             <ToggleField
               label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Adaptive FPS Cap")} (${automaticBaseFpsCapLabel} FPS)`}
-              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "Automatically caps the game's real FPS at half the target for steadier 2x frame generation. Turn it off to use the Base FPS Cap instead.")}
+              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "Locks the game's real FPS to half the target, giving frame generation a steadier cadence. Best for uneven frame rates; test per game. Turn it off to use the Base FPS Cap.")}
               checked={config.adaptive_auto_base_fps_cap ?? false}
               onChange={(value) => onConfigChange(ADAPTIVE_AUTO_BASE_FPS_CAP, value)}
             />
@@ -129,14 +170,14 @@ export function FpsMultiplierControl({
       <PanelSectionRow>
         <div
           style={{
-            fontSize: "14px",
+            fontSize: "16px",
             fontWeight: "bold",
             marginTop: config.adaptive ? "24px" : "8px",
             marginBottom: "8px",
             color: "white"
           }}
         >
-          {t("MULTIPLIER_TITLE", "FPS Multiplier")}
+          {t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
         </div>
       </PanelSectionRow>
 

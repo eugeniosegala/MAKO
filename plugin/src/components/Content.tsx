@@ -332,22 +332,16 @@ export function Content() {
         />
       )}
 
-      {isInstalled && (
-        <>
-          <SmartClipboardButton />
-          <FgmodClipboardButton />
-        </>
-      )}
-
       <UsageInstructions />
 
       <PanelSectionRow>
         <div style={{ marginTop: "24px" }}>
           <ButtonItem
             layout="below"
-            onClick={handleShowAdvancedDetails}
+            bottomSeparator="none"
+            onClick={handleShowFlatpaks}
           >
-            {t("CONTENT_ADVANCED_DETAILS", "Advanced Details")}
+            {t("CONTENT_FLATPAK_SETUP", "Flatpak Setup")}
           </ButtonItem>
         </div>
       </PanelSectionRow>
@@ -356,12 +350,20 @@ export function Content() {
         <div>
           <ButtonItem
             layout="below"
-            onClick={handleShowFlatpaks}
+            bottomSeparator="none"
+            onClick={handleShowAdvancedDetails}
           >
-            {t("CONTENT_FLATPAK_SETUP", "Flatpak Setup")}
+            {t("CONTENT_ADVANCED_DETAILS", "Advanced Details")}
           </ButtonItem>
         </div>
       </PanelSectionRow>
+
+      {isInstalled && (
+        <>
+          <SmartClipboardButton />
+          <FgmodClipboardButton />
+        </>
+      )}
 
       {isInstalled && (
         <>
