@@ -64,18 +64,18 @@
   "remote_binary_bundling": true,
   "remote_binary": [
     {
-      "name": "mako-render-v2.0.0-dev28-experimental.25-linux.tar.xz",
-      "version": "2.0.0-dev28-experimental.25",
-      "lineage_version": "2.0.0-dev28",
+      "name": "mako-render-v1.0.0-linux.tar.xz",
+      "version": "1.0.0",
+      "lineage_version": "1.0.0",
       "source_repository": "https://github.com/eugeniosegala/MAKO",
-      "release_tag": "render-v2.0.0-dev28-experimental.25",
-      "source_commit": "0c9e2eb08e7c45894c9be51930f446e201bf365e",
-      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0-dev28-experimental.25/mako-render-v2.0.0-dev28-experimental.25-linux.tar.xz",
-      "sha256hash": "88f06e721f10bc9b2f259b49cef38871ff3641122717899c494d86651b071880",
+      "release_tag": "render-v1.0.0",
+      "source_commit": "f2133c4a3bc883a56f42936187d9b53f207658b5",
+      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.0.0/mako-render-v1.0.0-linux.tar.xz",
+      "sha256hash": "ed2e723d2ae254594e474d1ddf8ad3eb52635165e53b3f8c1b9e28c972a40565",
       "flatpak_bundle": {
-        "name": "mako-render-v2.0.0-dev28-experimental.25-flatpaks.tar.xz",
-        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0-dev28-experimental.25/mako-render-v2.0.0-dev28-experimental.25-flatpaks.tar.xz",
-        "sha256hash": "9eff1d4e44c42a9d472271b72e9967a8f30b2e36304ce928435b153359979af2"
+        "name": "mako-render-v1.0.0-flatpaks.tar.xz",
+        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.0.0/mako-render-v1.0.0-flatpaks.tar.xz",
+        "sha256hash": "c7b831ea62ed9eff6e74be2e0ce28bc3bb7697485b0bd71e676b7acc955f277a"
       }
     }
   ]
