@@ -1,0 +1,497 @@
+"""
+Main plugin class for the MAKO Decky Loader plugin.
+
+This plugin provides services for installing and managing the MAKO Renderer
+Vulkan layer for frame generation and scaling on SteamOS.
+"""
+
+import os
+import subprocess
+import hashlib
+from typing import Dict, Any
+from pathlib import Path
+
+import decky
+
+from .installation import InstallationService
+from .dll_detection import DllDetectionService
+from .configuration import ConfigurationService
+from .config_schema import ConfigurationManager
+from .flatpak_service import FlatpakService
+
+
+class Plugin:
+    """
+    Main plugin class for MAKO Decky and MAKO Renderer management.
+
+    This class provides a unified interface for installation, configuration,
+    and DLL detection services. It implements the Decky Loader plugin lifecycle
+    methods (_main, _unload, _uninstall, _migration).
+    """
+
+    def __init__(self):
+        """Initialize the plugin with all necessary services"""
+        self.installation_service = InstallationService()
+        self.dll_detection_service = DllDetectionService()
+        self.configuration_service = ConfigurationService()
+        self.flatpak_service = FlatpakService()
+
+    async def install_mako(self) -> Dict[str, Any]:
+        """Install MAKO Renderer by extracting the zip file to ~/.local
+
+        Returns:
+            InstallationResponse dict with success status and message/error
+        """
+        return self.installation_service.install()
+
+    async def check_mako_installed(self) -> Dict[str, Any]:
+        """Check if MAKO Renderer is already installed
+
+        Returns:
+            InstallationCheckResponse dict with installation status and paths
+        """
+        return self.installation_service.check_installation()
+
+    async def uninstall_mako(self) -> Dict[str, Any]:
+        """Uninstall MAKO Renderer by removing the installed files
+
+        Returns:
+            UninstallationResponse dict with success status and removed files
+        """
+        return self.installation_service.uninstall()
+
+    async def check_lossless_scaling_dll(self) -> Dict[str, Any]:
+        """Check if Lossless Scaling DLL is available at the expected paths
+
+        Returns:
+            DllDetectionResponse dict with detection status and path info
+        """
+        return self.dll_detection_service.check_lossless_scaling_dll()
+
+    async def get_dll_stats(self) -> Dict[str, Any]:
+        """Get detailed statistics about the detected DLL
+
+        Returns:
+            Dict containing DLL path, SHA256 hash, and other stats
+        """
+        try:
+            dll_result = self.dll_detection_service.check_lossless_scaling_dll()
+
+            if not dll_result.get("detected") or not dll_result.get("path"):
+                return {
+                    "success": False,
+                    "error": "DLL not detected",
+                    "dll_path": None,
+                    "dll_sha256": None
+                }
+
+            dll_path = dll_result["path"]
+            if dll_path is None:
+                return {
+                    "success": False,
+                    "error": "DLL path is None",
+                    "dll_path": None,
+                    "dll_sha256": None
+                }
+
+            dll_path_obj = Path(dll_path)
+
+            sha256_hash = hashlib.sha256()
+            try:
+                with open(dll_path_obj, "rb") as f:
+                    for chunk in iter(lambda: f.read(4096), b""):
+                        sha256_hash.update(chunk)
+                dll_sha256 = sha256_hash.hexdigest()
+            except Exception as e:
+                return {
+                    "success": False,
+                    "error": f"Failed to calculate SHA256: {str(e)}",
+                    "dll_path": dll_path,
+                    "dll_sha256": None
+                }
+
+            return {
+                "success": True,
+                "dll_path": dll_path,
+                "dll_sha256": dll_sha256,
+                "dll_source": dll_result.get("source"),
+                "error": None
+            }
+
+        except Exception as e:
+            return {
+                "success": False,
+                "error": f"Failed to get DLL stats: {str(e)}",
+                "dll_path": None,
+                "dll_sha256": None
+            }
+
+    async def get_mako_config(self) -> Dict[str, Any]:
+        """Read current lsfg script configuration
+
+        Returns:
+            ConfigurationResponse dict with current configuration or error
+        """
+        return self.configuration_service.get_config()
+
+    async def get_config_schema(self) -> Dict[str, Any]:
+        """Get configuration schema information for frontend
+
+        Returns:
+            Dict with field names, types, defaults, and profile information
+        """
+        try:
+            profiles_response = self.configuration_service.get_profiles()
+
+            schema_data = {
+                "field_names": ConfigurationManager.get_field_names(),
+                "field_types": {name: field_type.value for name, field_type in ConfigurationManager.get_field_types().items()},
+                "defaults": ConfigurationManager.get_defaults()
+            }
+
+            if profiles_response.get("success"):
+                schema_data["profiles"] = profiles_response.get("profiles", [])
+                schema_data["current_profile"] = profiles_response.get("current_profile")
+            else:
+                schema_data["profiles"] = ["mako"]
+                schema_data["current_profile"] = "mako"
+
+            return schema_data
+
+        except (ValueError, KeyError, AttributeError) as e:
+            self.configuration_service.log.warning(f"Failed to get full schema, using fallback: {e}")
+            return {
+                "field_names": ConfigurationManager.get_field_names(),
+                "field_types": {name: field_type.value for name, field_type in ConfigurationManager.get_field_types().items()},
+                "defaults": ConfigurationManager.get_defaults(),
+                "profiles": ["mako"],
+                "current_profile": "mako"
+            }
+
+    async def update_mako_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Update lsfg TOML configuration using object-based API (single source of truth)
+
+        Args:
+            config: Configuration data dictionary containing all settings
+
+        Returns:
+            ConfigurationResponse dict with success status
+        """
+        validated_config = ConfigurationManager.validate_config(config)
+
+        return self.configuration_service.update_config_from_dict(validated_config)
+
+    async def get_profiles(self) -> Dict[str, Any]:
+        """Get list of all profiles and current profile
+
+        Returns:
+            ProfilesResponse dict with profile list and current profile
+        """
+        return self.configuration_service.get_profiles()
+
+    async def create_profile(self, profile_name: str, source_profile: str = None) -> Dict[str, Any]:
+        """Create a new profile
+
+        Args:
+            profile_name: Name for the new profile
+            source_profile: Optional source profile to copy from (default: current profile)
+
+        Returns:
+            ProfileResponse dict with success status
+        """
+        return self.configuration_service.create_profile(profile_name, source_profile)
+
+    async def delete_profile(self, profile_name: str) -> Dict[str, Any]:
+        """Delete a profile
+
+        Args:
+            profile_name: Name of the profile to delete
+
+        Returns:
+            ProfileResponse dict with success status
+        """
+        return self.configuration_service.delete_profile(profile_name)
+
+    async def rename_profile(self, old_name: str, new_name: str) -> Dict[str, Any]:
+        """Rename a profile
+
+        Args:
+            old_name: Current profile name
+            new_name: New profile name
+
+        Returns:
+            ProfileResponse dict with success status
+        """
+        return self.configuration_service.rename_profile(old_name, new_name)
+
+    async def set_current_profile(self, profile_name: str) -> Dict[str, Any]:
+        """Set the current active profile
+
+        Args:
+            profile_name: Name of the profile to set as current
+
+        Returns:
+            ProfileResponse dict with success status
+        """
+        return self.configuration_service.set_current_profile(profile_name)
+
+    async def update_profile_config(self, profile_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
+        """Update configuration for a specific profile
+
+        Args:
+            profile_name: Name of the profile to update
+            config: Configuration data dictionary containing settings
+
+        Returns:
+            ConfigurationResponse dict with success status
+        """
+        validated_config = ConfigurationManager.validate_config(config)
+
+        return self.configuration_service.update_profile_config(profile_name, validated_config)
+
+    async def get_launch_option(self) -> Dict[str, Any]:
+        """Get the launch option that users need to set for their games
+
+        Returns:
+            Dict containing the launch option string and instructions
+        """
+        return {
+            "launch_option": "~/.local/bin/mako-run %command%",
+            "instructions": "Add this to your game's launch options in Steam Properties",
+            "explanation": "The isolated launcher is created during installation, enables this plugin's uniquely named private Vulkan layer, disables public LSFG layers for this game, and selects the private configuration"
+        }
+
+    async def get_config_file_content(self) -> Dict[str, Any]:
+        """Get the current config file content
+
+        Returns:
+            Dict containing the config file content or error message
+        """
+        try:
+            config_path = self.configuration_service.config_file_path
+            if not config_path.exists():
+                return {
+                    "success": False,
+                    "content": None,
+                    "path": str(config_path),
+                    "error": "Config file does not exist"
+                }
+
+            content = config_path.read_text(encoding='utf-8')
+            return {
+                "success": True,
+                "content": content,
+                "path": str(config_path),
+                "error": None
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "content": None,
+                "path": str(config_path) if 'config_path' in locals() else "unknown",
+                "error": f"Error reading config file: {str(e)}"
+            }
+
+    async def get_launch_script_content(self) -> Dict[str, Any]:
+        """Get the content of the launch script file
+
+        Returns:
+            FileContentResponse dict with file content or error information
+        """
+        try:
+            script_path = self.installation_service.get_launch_script_path()
+
+            if not os.path.exists(script_path):
+                return {
+                    "success": False,
+                    "error": f"Launch script not found at {script_path}",
+                    "path": str(script_path)
+                }
+
+            with open(script_path, 'r') as file:
+                content = file.read()
+
+            return {
+                "success": True,
+                "content": content,
+                "path": str(script_path)
+            }
+
+        except Exception as e:
+            decky.logger.error(f"Error reading launch script: {e}")
+            return {
+                "success": False,
+                "error": str(e)
+            }
+
+    async def check_fgmod_directory(self) -> Dict[str, Any]:
+        """Check if the fgmod directory exists in the home directory
+
+        Returns:
+            Dict with exists status and directory path
+        """
+        try:
+            home_path = Path(decky.DECKY_USER_HOME)
+            fgmod_path = home_path / "fgmod"
+
+            exists = fgmod_path.exists() and fgmod_path.is_dir()
+
+            return {
+                "success": True,
+                "exists": exists,
+                "path": str(fgmod_path)
+            }
+
+        except Exception as e:
+            decky.logger.error(f"Error checking fgmod directory: {e}")
+            return {
+                "success": False,
+                "exists": False,
+                "error": str(e)
+            }
+
+    async def check_flatpak_extension_status(self) -> Dict[str, Any]:
+        """Check status of MAKO Renderer Flatpak runtime extensions
+
+        Returns:
+            FlatpakExtensionStatus dict with installation status for both runtime versions
+        """
+        return self.flatpak_service.get_extension_status()
+
+    async def install_flatpak_extension(self, version: str) -> Dict[str, Any]:
+        """Install MAKO Renderer Flatpak runtime extension
+
+        Args:
+            version: Runtime version to install ("23.08" or "24.08")
+
+        Returns:
+            BaseResponse dict with success status and message/error
+        """
+        return self.flatpak_service.install_extension(version)
+
+    async def uninstall_flatpak_extension(self, version: str) -> Dict[str, Any]:
+        """Uninstall MAKO Renderer Flatpak runtime extension
+
+        Args:
+            version: Runtime version to uninstall ("23.08" or "24.08")
+
+        Returns:
+            BaseResponse dict with success status and message/error
+        """
+        return self.flatpak_service.uninstall_extension(version)
+
+    async def get_flatpak_apps(self) -> Dict[str, Any]:
+        """Get list of installed Flatpak apps and their MAKO Renderer override status
+
+        Returns:
+            FlatpakAppInfo dict with apps list and override status
+        """
+        return self.flatpak_service.get_flatpak_apps()
+
+    async def set_flatpak_app_override(self, app_id: str) -> Dict[str, Any]:
+        """Set MAKO Renderer overrides for a Flatpak app
+
+        Args:
+            app_id: Flatpak application ID
+
+        Returns:
+            FlatpakOverrideResponse dict with operation result
+        """
+        return self.flatpak_service.set_app_override(app_id)
+
+    async def remove_flatpak_app_override(self, app_id: str) -> Dict[str, Any]:
+        """Remove MAKO Renderer overrides for a Flatpak app
+
+        Args:
+            app_id: Flatpak application ID
+
+        Returns:
+            FlatpakOverrideResponse dict with operation result
+        """
+        return self.flatpak_service.remove_app_override(app_id)
+
+    async def _main(self):
+        """
+        Main entry point for the plugin.
+
+        This method is called by Decky Loader when the plugin is loaded.
+        Any initialization code should go here.
+        """
+        decky.logger.info("mako plugin loaded")
+        try:
+            if self.configuration_service.migrate_wrapper_profile_settings_if_needed():
+                decky.logger.info("Migrated wrapper-only settings into the active profile")
+        except OSError as error:
+            decky.logger.warning("Could not migrate wrapper-only profile settings: %s", error)
+        try:
+            if self.configuration_service.remove_legacy_vkbasalt_exports():
+                decky.logger.info("Removed obsolete vkBasalt exports from isolated launcher")
+        except OSError as error:
+            decky.logger.warning("Could not remove obsolete vkBasalt exports: %s", error)
+
+        try:
+            if self.installation_service.remove_obsolete_hdr_meta_layer_if_needed():
+                decky.logger.info("Removed the retired experimental HDR meta-layer")
+        except OSError as error:
+            decky.logger.warning("Could not remove the retired experimental HDR meta-layer: %s", error)
+
+        try:
+            if self.configuration_service.migrate_launch_script_if_needed():
+                decky.logger.info("Upgraded installed experimental launch wrapper to the current format")
+        except OSError as error:
+            decky.logger.warning("Could not upgrade experimental launch wrapper: %s", error)
+
+        try:
+            if self.installation_service.migrate_diagnostics_helper_if_needed():
+                decky.logger.info("Installed the experimental diagnostics helper")
+        except OSError as error:
+            decky.logger.warning("Could not install the diagnostics helper: %s", error)
+
+    async def _unload(self):
+        """
+        Cleanup tasks when the plugin is unloaded.
+
+        This method is called by Decky Loader when the plugin is being unloaded.
+        Any cleanup code should go here.
+        """
+        decky.logger.info("mako plugin unloaded")
+
+    async def _uninstall(self):
+        """
+        Called when the plugin is uninstalled.
+
+        This method is called by Decky Loader when the plugin is being uninstalled.
+        Performs cleanup of this plugin's private files.
+        """
+        decky.logger.info("mako plugin being uninstalled")
+
+        # Clean up MAKO Renderer files when the plugin is uninstalled
+        self.installation_service.cleanup_on_uninstall()
+
+        # Flatpak runtime extensions are shared by every MAKO Renderer installation.
+        # Never remove them automatically: another plugin may still depend on one.
+        decky.logger.info("Leaving shared Flatpak runtime extensions installed")
+
+        decky.logger.info("mako plugin uninstall cleanup completed")
+
+    async def _migration(self):
+        """
+        Migrations that should be performed before entering `_main()`.
+
+        This method is called by Decky Loader for plugin migrations.
+        Currently migrates logs, settings, and runtime data from old locations.
+        """
+        decky.logger.info("Running mako plugin migrations")
+
+        decky.migrate_logs(os.path.join(decky.DECKY_USER_HOME,
+                                       ".config", "decky-lossless-scaling-vk", "lossless-scaling-vk.log"))
+
+        decky.migrate_settings(
+            os.path.join(decky.DECKY_HOME, "settings", "lossless-scaling-vk.json"),
+            os.path.join(decky.DECKY_USER_HOME, ".config", "decky-lossless-scaling-vk"))
+
+        decky.migrate_runtime(
+            os.path.join(decky.DECKY_HOME, "lossless-scaling-vk"),
+            os.path.join(decky.DECKY_USER_HOME, ".local", "share", "decky-lossless-scaling-vk"))
+
+        decky.logger.info("mako plugin migrations completed")

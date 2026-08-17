@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+# Filter one MAKO Renderer test run into a focused, shareable diagnostic trace.
+set -euo pipefail
+
+default_plugin_log="${HOME}/.config/mako-render/present-diagnostics.log"
+default_steam_log="${HOME}/.steam/steam/logs/console-linux.txt"
+log_path="${MAKO_PRESENT_DIAGNOSTICS_LOG:-}"
+line_count=800
+presets=()
+
+usage() {
+  cat <<'EOF'
+Usage: mako-diagnostics [options] [PRESET ...]
+
+Filters the current MAKO Renderer diagnostics log. Multiple presets may be combined.
+The plugin-private log is preferred; Steam's console log is used when the
+private log does not exist.
+
+Presets:
+  hdr          HDR/scRGB selection, transport packing, passthrough, and initialization
+  config       Decky reloads and pending/applied safe runtime transitions
+  adaptive     Adaptive policy, stabilization, ramp, rescue, and cadence
+  recovery     generated-image fallback, history warm-up, and in-place recovery
+  performance  fixed-rate telemetry plus slow presentation and GPU operations
+  lifecycle    swapchain creation/destruction and colour-pipeline selection
+  startup      layer discovery, context creation, HDR selection, and failures
+  layers       Vulkan-loader, Gamescope WSI, MAKO, and LSFG layer discovery
+  errors       failures, timeouts, fallbacks, passthrough, and Vulkan errors
+  all          every relevant MAKO, LSFG, Vulkan-loader, and Gamescope WSI line
+               (alias: everything)
+
+Options:
+  --log PATH   Read PATH instead of automatically selecting a log
+  --lines N    Return at most the last N matching lines (default: 800)
+  --list       List presets
+  -h, --help   Show this help
+
+Examples:
+  mako-diagnostics hdr
+  mako-diagnostics adaptive recovery
+  mako-diagnostics --lines 2000 all > mako-report.txt
+EOF
+}
+
+list_presets() {
+  printf '%s\n' hdr config adaptive recovery performance lifecycle startup layers errors all
+}
+
+while (($#)); do
+  case "$1" in
+    --log)
+      if (($# < 2)); then
+        echo "--log requires a path" >&2
+        exit 2
+      fi
+      log_path="$2"
+      shift 2
+      ;;
+    --lines)
+      if (($# < 2)); then
+        echo "--lines requires a positive integer" >&2
+        exit 2
+      fi
+      line_count="$2"
+      shift 2
+      ;;
+    --list)
+      list_presets
+      exit 0
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --*)
+      echo "Unknown option: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      presets+=("$1")
+      shift
+      ;;
+  esac
+done
+
+if [[ ! "$line_count" =~ ^[1-9][0-9]*$ ]]; then
+  echo "--lines must be a positive integer" >&2
+  exit 2
+fi
+
+if ((${#presets[@]} == 0)); then
+  presets=(all)
+fi
+
+if [[ -z "$log_path" ]]; then
+  if [[ -f "$default_plugin_log" ]]; then
+    log_path="$default_plugin_log"
+  else
+    log_path="$default_steam_log"
+  fi
+fi
+
+if [[ ! -f "$log_path" ]]; then
+  echo "Diagnostics log not found: $log_path" >&2
+  echo "Enable MAKO_PRESENT_DIAGNOSTICS=1, reproduce the issue, and quit the game first." >&2
+  exit 1
+fi
+
+pattern=""
+add_pattern() {
+  if [[ -n "$pattern" ]]; then
+    pattern+="|"
+  fi
+  pattern+="($1)"
+}
+
+# Every report should identify the exact engine that produced it. This makes a
+# missing render layer visible even when the user selects only a focused
+# preset such as HDR or performance.
+add_pattern 'mako: render layer active; identity=VK_LAYER_MAKO_render; build='
+
+for preset in "${presets[@]}"; do
+  case "$preset" in
+    hdr)
+      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|LSFG frame-generation initialization failed)'
+      add_pattern 'mako: Gamescope application HDR feedback'
+      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)'
+      ;;
+    config)
+      add_pattern 'mako: (updated mako configuration in place|configuration changes requiring GPU resource reconstruction|global backend construction changed)'
+      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)'
+      ;;
+    adaptive)
+      add_pattern 'mako: present diagnostics: operation=adaptive-'
+      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)'
+      ;;
+    recovery)
+      add_pattern 'mako: present diagnostics: operation=(skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-applied)'
+      ;;
+    performance)
+      add_pattern 'mako: present diagnostics: operation=(fixed-plan|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|gamescope-refresh-rate-applied|present-|schedule-|submit-|acquire-|wait-|copy-|render-)'
+      ;;
+    lifecycle)
+      add_pattern 'mako: present diagnostics: operation=swapchain-context-(create|destroy)'
+      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)'
+      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|LSFG frame-generation initialization failed)'
+      ;;
+    startup)
+      add_pattern '(VK_LAYER_MAKO_render|VK_LAYER_LSFGVK(_experimental)?_frame_generation|VK_LAYER_LS_frame_generation|VkLayer_(MAKO_render|LSFGVK(_experimental)?_frame_generation)|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      add_pattern 'mako: present diagnostics: operation=swapchain-context-create'
+      add_pattern 'mako: Gamescope application HDR feedback'
+      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)'
+      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|LSFG frame-generation initialization failed)'
+      ;;
+    layers)
+      add_pattern '(VK_LAYER_MAKO_render|VK_LAYER_LSFGVK(_experimental)?_frame_generation|VK_LAYER_LS_frame_generation|VkLayer_(MAKO_render|LSFGVK(_experimental)?_frame_generation)|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      ;;
+    errors)
+      add_pattern 'mako:.*(failed|failure|error|timeout|fallback|passthrough|disabled|VK_ERROR|VK_TIMEOUT|VK_NOT_READY|device lost)'
+      add_pattern '(Vulkan Loader|Gamescope WSI).*(ERROR|Error|error|WARNING|Warning|warning)'
+      ;;
+    all|everything)
+      add_pattern '(mako:|VK_LAYER_MAKO_render|VK_LAYER_LSFGVK(_experimental)?_frame_generation|VK_LAYER_LS_frame_generation|VkLayer_(MAKO_render|LSFGVK(_experimental)?_frame_generation)|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      ;;
+    *)
+      echo "Unknown preset: $preset" >&2
+      echo "Available presets:" >&2
+      list_presets >&2
+      exit 2
+      ;;
+  esac
+done
+
+echo "MAKO Renderer diagnostics source: $log_path" >&2
+echo "presets: ${presets[*]}; last matching lines: $line_count" >&2
+
+{ grep -aE "$pattern" "$log_path" || true; } | tail -n "$line_count"

@@ -1,0 +1,70 @@
+# Operating-system metadata
+.DS_Store
+Thumbs.db
+
+# Editors and local tooling
+.idea/
+*.iml
+*.sublime-project
+*.sublime-workspace
+*.swp
+*~
+**/.vscode/settings.json
+**/.vscode/.ropeproject
+/engine/.vscode/
+/engine/.zed/
+/engine/.clangd/
+/engine/.ccls
+/engine/.cache/
+
+# Local environment and secrets
+.env
+
+# Python artifacts
+**/__pycache__/
+*.py[cod]
+*.pyd
+.pytest_cache/
+*.egg-info/
+.coverage
+htmlcov/
+.tox/
+
+# Logs, temporary files, and generic build artifacts
+*.seed
+*.log
+*.csv
+*.dat
+*.out
+*.pid
+*.gz
+*.tmp
+*.temp
+
+# MAKO Renderer (CMake and packaging)
+/engine/build/
+/engine/out/
+/engine/.flatpak-builder/
+
+# MAKO Decky plugin (pnpm, generated output, and packaging)
+/plugin/node_modules/
+/plugin/bower_components/
+/plugin/.pnpm-store/
+/plugin/dist/
+/plugin/src/config/devBuildInfo.generated.ts
+/plugin/.dev-build-info.json
+/plugin/.yalc/
+/plugin/yalc.lock
+/plugin/backend/out/
+/plugin/decky_plugin.py
+/plugin/out/
+/plugin/upstream-archive-cache/
+/plugin/cli/
+/plugin/lib-cov/
+/plugin/pids/
+/plugin/logs/
+/plugin/results/
+/plugin/tmp/
+/plugin/coverage/
+/plugin/.eslintcache
+/plugin/.turbo/

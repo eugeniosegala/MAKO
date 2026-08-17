@@ -1,0 +1,176 @@
+import { callable } from "@decky/api";
+import { ConfigurationData } from "../config/configSchema";
+
+// Type definitions for API responses
+export interface InstallationResult {
+  success: boolean;
+  error?: string;
+  message?: string;
+  removed_files?: string[];
+}
+
+export interface InstallationStatus {
+  installed: boolean;
+  lib_exists: boolean;
+  json_exists: boolean;
+  script_exists: boolean;
+  lib_path: string;
+  json_path: string;
+  script_path: string;
+  installed_engine_version?: string;
+  expected_engine_version?: string;
+  engine_version_known?: boolean;
+  engine_update_required?: boolean;
+  error?: string;
+}
+
+export interface DllDetectionResult {
+  detected: boolean;
+  path?: string;
+  source?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface DllStatsResult {
+  success: boolean;
+  dll_path?: string;
+  dll_sha256?: string;
+  dll_source?: string;
+  error?: string;
+}
+
+// Use centralized configuration data type
+export type MakoConfig = ConfigurationData;
+
+export interface ConfigResult {
+  success: boolean;
+  config?: MakoConfig;
+  error?: string;
+}
+
+export interface ConfigUpdateResult {
+  success: boolean;
+  message?: string;
+  error?: string;
+}
+
+export interface ConfigSchemaResult {
+  field_names: string[];
+  field_types: Record<string, string>;
+  defaults: ConfigurationData;
+  profiles?: string[];
+  current_profile?: string;
+}
+
+export interface LaunchOptionResult {
+  launch_option: string;
+  instructions: string;
+  explanation: string;
+}
+
+export interface FileContentResult {
+  success: boolean;
+  content?: string;
+  path?: string;
+  error?: string;
+}
+
+export interface FgmodCheckResult {
+  success: boolean;
+  exists: boolean;
+  path?: string;
+  error?: string;
+}
+
+// Flatpak management interfaces
+export interface FlatpakExtensionStatus {
+  success: boolean;
+  message: string;
+  error?: string;
+  installed_23_08: boolean;
+  installed_24_08: boolean;
+  installed_25_08: boolean;
+}
+
+export interface FlatpakApp {
+  app_id: string;
+  app_name: string;
+  wrapper_path: string;
+  has_filesystem_override: boolean;
+  has_wrapper_override: boolean;
+  has_env_override: boolean;
+}
+
+export interface FlatpakAppInfo {
+  success: boolean;
+  message: string;
+  error?: string;
+  apps: FlatpakApp[];
+  total_apps: number;
+}
+
+export interface FlatpakOperationResult {
+  success: boolean;
+  message: string;
+  error?: string;
+  app_id?: string;
+  operation?: string;
+}
+
+// Profile management interfaces
+export interface ProfilesResult {
+  success: boolean;
+  profiles?: string[];
+  current_profile?: string;
+  message?: string;
+  error?: string;
+}
+
+export interface ProfileResult {
+  success: boolean;
+  profile_name?: string;
+  message?: string;
+  error?: string;
+}
+
+// API functions
+export const installMako = callable<[], InstallationResult>("install_mako");
+export const uninstallMako = callable<[], InstallationResult>("uninstall_mako");
+export const checkMakoInstalled = callable<[], InstallationStatus>("check_mako_installed");
+export const checkLosslessScalingDll = callable<[], DllDetectionResult>("check_lossless_scaling_dll");
+export const getDllStats = callable<[], DllStatsResult>("get_dll_stats");
+export const getMakoConfig = callable<[], ConfigResult>("get_mako_config");
+export const getConfigSchema = callable<[], ConfigSchemaResult>("get_config_schema");
+export const getLaunchOption = callable<[], LaunchOptionResult>("get_launch_option");
+export const getConfigFileContent = callable<[], FileContentResult>("get_config_file_content");
+export const getLaunchScriptContent = callable<[], FileContentResult>("get_launch_script_content");
+export const checkFgmodDirectory = callable<[], FgmodCheckResult>("check_fgmod_directory");
+
+// Flatpak management API functions
+export const checkFlatpakExtensionStatus = callable<[], FlatpakExtensionStatus>("check_flatpak_extension_status");
+export const installFlatpakExtension = callable<[string], FlatpakOperationResult>("install_flatpak_extension");
+export const uninstallFlatpakExtension = callable<[string], FlatpakOperationResult>("uninstall_flatpak_extension");
+export const getFlatpakApps = callable<[], FlatpakAppInfo>("get_flatpak_apps");
+export const setFlatpakAppOverride = callable<[string], FlatpakOperationResult>("set_flatpak_app_override");
+export const removeFlatpakAppOverride = callable<[string], FlatpakOperationResult>("remove_flatpak_app_override");
+
+// Updated config function using object-based configuration (single source of truth)
+export const updateMakoConfig = callable<
+  [ConfigurationData],
+  ConfigUpdateResult
+>("update_mako_config");
+
+// Object-based configuration helper
+export const updateMakoConfigFromObject = async (config: ConfigurationData): Promise<ConfigUpdateResult> => {
+  return updateMakoConfig(config);
+};
+
+// Self-updater API functions
+// Profile management API functions
+export const getProfiles = callable<[], ProfilesResult>("get_profiles");
+export const createProfile = callable<[string, string?], ProfileResult>("create_profile");
+export const deleteProfile = callable<[string], ProfileResult>("delete_profile");
+export const renameProfile = callable<[string, string], ProfileResult>("rename_profile");
+export const setCurrentProfile = callable<[string], ProfileResult>("set_current_profile");
+export const updateProfileConfig = callable<[string, ConfigurationData], ConfigUpdateResult>("update_profile_config");

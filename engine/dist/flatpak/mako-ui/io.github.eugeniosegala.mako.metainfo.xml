@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.eugeniosegala.mako</id>
+
+  <name>MAKO Renderer</name>
+  <summary>Lossless Scaling frame generation and scaling on Linux</summary>
+  <developer id="io.github.eugeniosegala">
+    <name>Eugenio Segala</name>
+  </developer>
+
+  <url type="homepage">https://github.com/eugeniosegala/MAKO</url>
+  <url type="bugtracker">https://github.com/eugeniosegala/MAKO</url>
+  <url type="faq">https://github.com/eugeniosegala/MAKO</url>
+  <url type="help">https://github.com/eugeniosegala/MAKO</url>
+
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <description>
+    <p>MAKO Renderer brings Lossless Scaling frame generation and scaling to Linux through a Vulkan graphics layer.</p>
+  </description>
+
+  <releases>
+    <release date="2025-08-28" version="2.0.0-dev" />
+    <release date="2025-07-30" version="1.0.0" />
+  </releases>
+
+  <launchable type="desktop-id">io.github.eugeniosegala.mako.desktop</launchable>
+  <content_rating type="oars-1.1" />
+</component>

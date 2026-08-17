@@ -1,0 +1,58 @@
+id: org.freedesktop.Platform.VulkanLayer.makorender
+default-branch: develop
+
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+branch: '24.08'
+build-extension: true
+
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.llvm20
+  - org.freedesktop.Sdk.Compat.i386
+  - org.freedesktop.Sdk.Extension.toolchain-i386
+
+build-options:
+  prefix: /usr/lib/extensions/vulkan/makorender
+  append-path: /usr/lib/sdk/llvm20/bin
+  prepend-ld-library-path: /usr/lib/sdk/llvm20/lib
+
+modules:
+  - name: mako
+    buildsystem: cmake-ninja
+    subdir: engine
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=ON
+      - -DCMAKE_CXX_COMPILER=clang++
+      - -DCMAKE_INSTALL_LIBDIR=lib64
+      - -DBUILD_TESTING=OFF
+      - -DMAKO_BUILD_VK_LAYER=ON
+      - -DMAKO_BUILD_UI=OFF
+      - -DMAKO_BUILD_CLI=OFF
+      - -DMAKO_LAYER_LIBRARY_PATH=/usr/lib/extensions/vulkan/makorender/lib64/libmako-render.so
+    sources:
+      - type: dir
+        path: ../../../..
+
+  - name: mako-32bit
+    buildsystem: cmake-ninja
+    subdir: engine
+    build-options:
+      append-path: /usr/lib/sdk/toolchain-i386/bin
+      env:
+        CC: i686-unknown-linux-gnu-gcc
+        CXX: i686-unknown-linux-gnu-g++
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DCMAKE_CXX_COMPILER=i686-unknown-linux-gnu-g++
+      - -DCMAKE_INSTALL_LIBDIR=lib/i386-linux-gnu
+      - -DBUILD_TESTING=OFF
+      - -DMAKO_BUILD_VK_LAYER=ON
+      - -DMAKO_BUILD_UI=OFF
+      - -DMAKO_BUILD_CLI=OFF
+      - -DMAKO_LAYER_MANIFEST_SUFFIX=.x86
+      - -DMAKO_LAYER_LIBRARY_PATH=/usr/lib/extensions/vulkan/makorender/lib/i386-linux-gnu/libmako-render.so
+    sources:
+      - type: dir
+        path: ../../../..

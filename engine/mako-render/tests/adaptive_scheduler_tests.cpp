@@ -1,0 +1,1183 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+#include "adaptive_scheduler.hpp"
+#include "presentation_policy.hpp"
+
+#include <chrono>
+#include <cmath>
+#include <cstdlib>
+#include <iostream>
+#include <stdexcept>
+#include <string>
+#include <string_view>
+#include <vector>
+
+using namespace mako::layer;
+using namespace std::chrono_literals;
+
+namespace {
+    using TimePoint = AdaptiveScheduler::TimePoint;
+
+    struct TestFailure {
+        std::string message;
+    };
+
+    void require(const bool condition, std::string message) {
+        if (!condition)
+            throw TestFailure{std::move(message)};
+    }
+
+    void requireNear(const float actual, const float expected,
+            const float tolerance, std::string message) {
+        if (std::abs(actual - expected) > tolerance) {
+            message += ": expected " + std::to_string(expected) +
+                ", got " + std::to_string(actual);
+            throw TestFailure{std::move(message)};
+        }
+    }
+
+    struct RecordingDiagnostics final : AdaptiveSchedulerDiagnostics {
+        struct Event {
+            std::string operation;
+            std::string reason;
+            bool accepted{false};
+            size_t previousLimit{0};
+            size_t testedLimit{0};
+        };
+
+        std::vector<Event> events;
+
+        [[nodiscard]] bool enabled() const override { return true; }
+
+        void stabilization(const std::string_view reason,
+                std::chrono::steady_clock::duration) override {
+            this->events.push_back({
+                .operation = "stabilization",
+                .reason = std::string(reason),
+            });
+        }
+
+        void ramp(const size_t previousLimit, const size_t testedLimit,
+                double) override {
+            this->events.push_back({
+                .operation = "ramp",
+                .reason = {},
+                .previousLimit = previousLimit,
+                .testedLimit = testedLimit,
+            });
+        }
+
+        void rampResult(const bool accepted, const size_t previousLimit,
+                const size_t testedLimit, double, double, double,
+                double) override {
+            this->events.push_back({
+                .operation = "ramp-result",
+                .reason = {},
+                .accepted = accepted,
+                .previousLimit = previousLimit,
+                .testedLimit = testedLimit,
+            });
+        }
+
+        void probeAborted(std::string_view reason, size_t testedLimit) override {
+            this->events.push_back({
+                .operation = "probe-aborted",
+                .reason = std::string(reason),
+                .testedLimit = testedLimit,
+            });
+        }
+
+        void bridge(size_t previousLimit, size_t testedLimit,
+                size_t bridgeLimit, double, double, double, double) override {
+            this->events.push_back({
+                .operation = "bridge",
+                .reason = {},
+                .previousLimit = previousLimit,
+                .testedLimit = bridgeLimit,
+            });
+            static_cast<void>(testedLimit);
+        }
+
+        void bridgeResult(bool accepted, size_t baselineLimit,
+                size_t testedLimit, double, double, double, double) override {
+            this->events.push_back({
+                .operation = "bridge-result",
+                .reason = {},
+                .accepted = accepted,
+                .previousLimit = baselineLimit,
+                .testedLimit = testedLimit,
+            });
+        }
+
+        void rearm(std::string_view operation, std::string_view reason,
+                size_t, size_t, std::chrono::steady_clock::duration,
+                double, double, std::string_view) override {
+            this->events.push_back({
+                .operation = std::string(operation),
+                .reason = std::string(reason),
+            });
+        }
+
+        void rampBackoff(size_t testedLimit, size_t failures, double,
+                std::chrono::steady_clock::duration) override {
+            this->events.push_back({
+                .operation = "ramp-backoff",
+                .reason = {},
+                .previousLimit = failures,
+                .testedLimit = testedLimit,
+            });
+        }
+
+        void rampEarlyRetry(size_t testedLimit, double, double) override {
+            this->events.push_back({
+                .operation = "ramp-early-retry",
+                .reason = {},
+                .testedLimit = testedLimit,
+            });
+        }
+
+        void fastCadenceBurst(double, double, double, size_t, size_t,
+                std::chrono::steady_clock::duration) override {
+            this->events.push_back({
+                .operation = "fast-burst",
+                .reason = {},
+            });
+        }
+
+        void fastCadenceBurstComplete(size_t,
+                std::chrono::steady_clock::duration) override {
+            this->events.push_back({
+                .operation = "fast-burst-complete",
+                .reason = {},
+            });
+        }
+
+        void twoXGameplayHitchRecovery(size_t, double,
+                std::chrono::steady_clock::duration) override {
+            this->events.push_back({
+                .operation = "2x-hitch-recovery",
+                .reason = {},
+            });
+        }
+
+        void cadenceRefresh(std::string_view reason, size_t retainedLimit,
+                size_t historyFrames) override {
+            this->events.push_back({
+                .operation = "cadence-refresh",
+                .reason = std::string(reason),
+                .previousLimit = retainedLimit,
+                .testedLimit = historyFrames,
+            });
+        }
+
+        void loadShed(size_t previousLimit, size_t resumedLimit,
+                double, double, std::string_view reason) override {
+            this->events.push_back({
+                .operation = "load-shed",
+                .reason = std::string(reason),
+                .previousLimit = previousLimit,
+                .testedLimit = resumedLimit,
+            });
+        }
+
+        void stableCadence(const std::string_view operation, size_t, double,
+                double, const std::string_view reason) override {
+            this->events.push_back({
+                .operation = std::string(operation),
+                .reason = std::string(reason),
+            });
+        }
+
+        void rescueStart(size_t previousLimit, double, double, double,
+                std::string_view reason) override {
+            this->events.push_back({
+                .operation = "rescue-start",
+                .reason = std::string(reason),
+                .previousLimit = previousLimit,
+            });
+        }
+
+        void rescueComplete(size_t previousLimit, size_t resumedLimit,
+                size_t, size_t, double, double,
+                std::string_view decision) override {
+            this->events.push_back({
+                .operation = "rescue-complete",
+                .reason = std::string(decision),
+                .previousLimit = previousLimit,
+                .testedLimit = resumedLimit,
+            });
+        }
+
+        void discontinuityRecoveryComplete(size_t previousLimit, double,
+                double, std::string_view decision) override {
+            this->events.push_back({
+                .operation = "discontinuity-complete",
+                .reason = std::string(decision),
+                .previousLimit = previousLimit,
+            });
+        }
+
+        [[nodiscard]] bool contains(const std::string_view operation) const {
+            for (const auto& event : this->events) {
+                if (event.operation == operation)
+                    return true;
+            }
+            return false;
+        }
+
+        [[nodiscard]] const Event* last(const std::string_view operation) const {
+            for (auto event = this->events.rbegin();
+                    event != this->events.rend(); ++event) {
+                if (event->operation == operation)
+                    return &*event;
+            }
+            return nullptr;
+        }
+
+        [[nodiscard]] size_t count(const std::string_view operation) const {
+            size_t result = 0;
+            for (const auto& event : this->events) {
+                if (event.operation == operation)
+                    result++;
+            }
+            return result;
+        }
+    };
+
+    struct Harness {
+        RecordingDiagnostics diagnostics;
+        AdaptiveScheduler scheduler;
+        TimePoint now{};
+
+        Harness(const uint32_t targetFps, const size_t maximumMultiplier,
+                const bool stableCadence = false,
+                const AdaptiveRecoveryPolicy recoveryPolicy =
+                    AdaptiveRecoveryPolicy::ConservativeHdr) :
+            scheduler(
+                AdaptiveSchedulerConfig{
+                    .targetFps = targetFps,
+                    .maximumMultiplier = maximumMultiplier,
+                    .generatedFrameCapacity = 3,
+                    .stableCadence = stableCadence,
+                    .recoveryPolicy = recoveryPolicy,
+                },
+                &this->diagnostics
+            ) {}
+
+        void start() {
+            this->scheduler.beginStabilization(this->now, "startup");
+            for (size_t i = 0;
+                    i < AdaptiveScheduler::historyWarmupFrameCount(); ++i) {
+                this->now += 16ms;
+                this->scheduler.consumeHistoryWarmupFrame(this->now);
+            }
+        }
+
+        AdaptiveFramePlan frame(const std::chrono::nanoseconds interval,
+                const bool acquireBackoff = false) {
+            this->now += interval;
+            return this->scheduler.planFrame(this->now, acquireBackoff);
+        }
+
+        AdaptiveFramePlan frameAtFps(const double fps,
+                const bool acquireBackoff = false) {
+            return this->frame(std::chrono::duration_cast<std::chrono::nanoseconds>(
+                std::chrono::duration<double>(1.0 / fps)
+            ), acquireBackoff);
+        }
+
+        AdaptiveFramePlan runAtFps(const double fps,
+                const std::chrono::seconds duration) {
+            AdaptiveFramePlan result;
+            const size_t frames = static_cast<size_t>(
+                std::ceil(fps * static_cast<double>(duration.count()))
+            );
+            for (size_t i = 0; i < frames; ++i)
+                result = this->frameAtFps(fps);
+            return result;
+        }
+    };
+
+    void requireValidTimestamps(const AdaptiveFramePlan& timestamps,
+            const size_t capacity) {
+        require(timestamps.size() <= capacity,
+            "generated timestamps exceeded destination capacity");
+        float previous = 0.0F;
+        for (const float timestamp : timestamps) {
+            require(timestamp > previous,
+                "generated timestamps were not strictly increasing");
+            require(timestamp < 1.0F,
+                "generated timestamp reached or exceeded the real frame");
+            previous = timestamp;
+        }
+    }
+
+    void testStartupWarmupIsExplicit() {
+        Harness harness(120, 3);
+        require(harness.scheduler.historyWarmupRemaining() == 3,
+            "Adaptive must start with three temporal-history frames");
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::HistoryWarmup,
+            "startup history warm-up was not exposed as scheduler state");
+        harness.start();
+        require(!harness.scheduler.historyWarmupActive(),
+            "startup history warm-up did not complete deterministically");
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::Stabilizing,
+            "scheduler left startup stabilization too early");
+    }
+
+    void testBusyWarmupNotificationIsIdempotent() {
+        Harness harness(120, 3);
+        harness.scheduler.consumeHistoryWarmupFrame(harness.now + 16ms);
+        require(harness.scheduler.historyWarmupRemaining() == 2,
+            "precondition failed: initial warm-up did not advance");
+        harness.scheduler.ensureHistoryWarmup(3, true);
+        require(harness.scheduler.historyWarmupRemaining() == 2,
+            "a repeated busy notification restarted active warm-up");
+        harness.scheduler.consumeHistoryWarmupFrame(harness.now + 32ms);
+        require(harness.scheduler.historyWarmupRemaining() == 1,
+            "warm-up did not continue after an intermittent busy frame");
+    }
+
+    void testTransientBusyFrameDoesNotRearmCompletedWarmup() {
+        Harness harness(120, 3);
+        PipelineBusyRecovery pipelineBusy;
+
+        for (size_t frame = 0;
+                frame < AdaptiveScheduler::historyWarmupFrameCount(); ++frame) {
+            harness.now += 16ms;
+            harness.scheduler.consumeHistoryWarmupFrame(harness.now);
+
+            const auto busy = pipelineBusy.reportBusy(harness.now + 8ms);
+            if (busy.requestHistoryWarmup) {
+                harness.scheduler.ensureHistoryWarmup(
+                    AdaptiveScheduler::historyWarmupFrameCount(), true
+                );
+            }
+            static_cast<void>(pipelineBusy.reportReady(harness.now + 16ms));
+        }
+
+        require(!harness.scheduler.historyWarmupActive(),
+            "normal GPU overlap rearmed a completed Adaptive warm-up");
+        require(harness.scheduler.historyWarmupRemaining() == 0,
+            "Adaptive warm-up did not reach a generation-eligible state");
+    }
+
+    void testInvalidConfigurationIsRejectedAtBoundary() {
+        bool invalidTargetRejected = false;
+        try {
+            AdaptiveScheduler scheduler({
+                .targetFps = 0,
+                .maximumMultiplier = 3,
+                .generatedFrameCapacity = 3,
+            });
+            static_cast<void>(scheduler);
+        } catch (const std::invalid_argument&) {
+            invalidTargetRejected = true;
+        }
+        require(invalidTargetRejected,
+            "scheduler accepted an invalid target FPS");
+
+        bool invalidMultiplierRejected = false;
+        try {
+            AdaptiveScheduler scheduler({
+                .targetFps = 120,
+                .maximumMultiplier = 5,
+                .generatedFrameCapacity = 3,
+            });
+            static_cast<void>(scheduler);
+        } catch (const std::invalid_argument&) {
+            invalidMultiplierRejected = true;
+        }
+        require(invalidMultiplierRejected,
+            "scheduler accepted an invalid maximum multiplier");
+
+        bool invalidCapacityRejected = false;
+        try {
+            AdaptiveScheduler scheduler({
+                .targetFps = 120,
+                .maximumMultiplier = 4,
+                .generatedFrameCapacity = 4,
+            });
+            static_cast<void>(scheduler);
+        } catch (const std::invalid_argument&) {
+            invalidCapacityRejected = true;
+        }
+        require(invalidCapacityRejected,
+            "scheduler accepted more than three generated-frame slots");
+    }
+
+    void testSteadySixtyRampsToTwoXFor120Target() {
+        Harness harness(120, 3);
+        harness.start();
+        const auto timestamps = harness.runAtFps(60.0, 7s);
+        requireValidTimestamps(timestamps, 3);
+        require(timestamps.size() == 1,
+            "60 FPS toward 120 FPS should settle at one generated frame");
+        requireNear(timestamps.front(), 0.5F, 0.0001F,
+            "2x interpolation timestamp changed");
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.validatedGenerationLimit == 1,
+            "2x level was not validated after its evaluation window");
+        require(!snapshot.rampEvaluationActive,
+            "steady 2x policy remained in a transient probe");
+    }
+
+    void testIsolatedGeneratedFrameMissDoesNotRejectRamp() {
+        Harness harness(120, 2);
+        harness.start();
+        bool reportedMiss = false;
+        for (size_t frame = 0; frame < 600; ++frame) {
+            const auto plan = harness.frameAtFps(60.0);
+            if (harness.scheduler.snapshot().rampEvaluationActive &&
+                    !reportedMiss && !plan.empty()) {
+                harness.scheduler.reportGeneratedFrameDelivery(
+                    plan.size(), plan.size() - 1
+                );
+                reportedMiss = true;
+            } else {
+                harness.scheduler.reportGeneratedFrameDelivery(
+                    plan.size(), plan.size()
+                );
+            }
+            if (reportedMiss && harness.diagnostics.contains("ramp-result"))
+                break;
+        }
+        const auto* result = harness.diagnostics.last("ramp-result");
+        require(reportedMiss && result && result->accepted,
+            "one isolated compositor admission miss rejected a healthy ramp");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "healthy delivery with one isolated miss was not validated");
+    }
+
+    void testPersistentGeneratedFrameMissesRejectRamp() {
+        Harness harness(120, 2);
+        harness.start();
+        bool reportedPressure = false;
+        for (size_t frame = 0; frame < 600; ++frame) {
+            const auto plan = harness.frameAtFps(60.0);
+            if (harness.scheduler.snapshot().rampEvaluationActive &&
+                    !plan.empty()) {
+                harness.scheduler.reportGeneratedFrameDelivery(plan.size(), 0);
+                reportedPressure = true;
+            } else {
+                harness.scheduler.reportGeneratedFrameDelivery(
+                    plan.size(), plan.size()
+                );
+            }
+            if (reportedPressure && harness.diagnostics.contains("ramp-result"))
+                break;
+        }
+        const auto* result = harness.diagnostics.last("ramp-result");
+        require(reportedPressure && result && !result->accepted,
+            "persistent compositor admission loss did not reject the ramp");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 0,
+            "persistent delivery loss was retained as a validated multiplier");
+    }
+
+    void testFourXPlanUsesEvenInterpolationTimestamps() {
+        Harness harness(120, 4);
+        harness.start();
+        const auto timestamps = harness.runAtFps(30.0, 10s);
+        requireValidTimestamps(timestamps, 3);
+        require(timestamps.size() == 3,
+            "30 FPS toward 120 FPS did not settle at the 4x ceiling");
+        requireNear(timestamps[0], 0.25F, 0.0001F,
+            "first 4x interpolation timestamp changed");
+        requireNear(timestamps[1], 0.50F, 0.0001F,
+            "second 4x interpolation timestamp changed");
+        requireNear(timestamps[2], 0.75F, 0.0001F,
+            "third 4x interpolation timestamp changed");
+    }
+
+    void testSchedulerCannotReduceAboveTargetCadence() {
+        Harness harness(120, 4);
+        harness.start();
+        const auto timestamps = harness.runAtFps(144.0, 6s);
+        require(timestamps.empty(),
+            "scheduler generated frames when real cadence exceeded target");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 0,
+            "above-target cadence raised the validated generation level");
+    }
+
+    void testAcquireBackoffDoesNotAdvancePolicy() {
+        Harness harness(120, 3);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+        const auto before = harness.scheduler.snapshot();
+        for (size_t i = 0; i < 120; ++i) {
+            const auto timestamps = harness.frameAtFps(60.0, true);
+            require(timestamps.size() == 1,
+                "acquire backoff must perform exactly one availability probe");
+            requireNear(timestamps.front(), 0.5F, 0.0001F,
+                "acquire-backoff probe timestamp changed");
+        }
+        const auto after = harness.scheduler.snapshot();
+        require(after.generationLimit == before.generationLimit,
+            "acquire backoff advanced generation policy");
+        require(after.validatedGenerationLimit ==
+                before.validatedGenerationLimit,
+            "acquire backoff changed the validated level");
+    }
+
+    void testValidatedTwoXSurvivesShortGameplayHitch() {
+        Harness harness(90, 2);
+        harness.start();
+        harness.runAtFps(45.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: 2x was not validated");
+
+        const auto hitchPlan = harness.frame(200ms);
+        require(hitchPlan.empty(),
+            "short hitch recovery generated from stale temporal history");
+        require(harness.scheduler.historyWarmupRemaining() == 3,
+            "short 2x hitch did not request a full history refresh");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "short 2x hitch discarded its validated policy");
+        require(harness.diagnostics.contains("2x-hitch-recovery"),
+            "short 2x hitch recovery was not observable");
+    }
+
+    // On the Gamescope HDR transport a long gap is ambiguous: it can be a
+    // menu/focus transition, a colour-pipeline transition, or compositor
+    // admission pressure. Do not resume generated work until cadence is proven.
+    void testHdrLongHitchUsesConservativeDiscontinuityRecovery() {
+        Harness harness(90, 2);
+        harness.start();
+        harness.runAtFps(45.0, 7s);
+        const auto hitchPlan = harness.frame(400ms);
+        require(hitchPlan.empty(),
+            "long hitch unexpectedly generated a frame");
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.discontinuityRecoveryActive,
+            "long hitch bypassed menu/focus discontinuity recovery");
+        require(snapshot.generationLimit == 0,
+            "long hitch retained generated load during stabilization");
+    }
+
+    void testRecoveredCadenceRestoresValidatedLevel() {
+        Harness harness(90, 2);
+        harness.start();
+        harness.runAtFps(45.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: 2x was not validated");
+        harness.frame(400ms);
+        require(harness.scheduler.discontinuityRecoveryActive(),
+            "precondition failed: long hitch did not start recovery");
+
+        harness.runAtFps(45.0, 3s);
+        const auto snapshot = harness.scheduler.snapshot();
+        require(!snapshot.discontinuityRecoveryActive,
+            "healthy cadence did not complete discontinuity recovery");
+        require(snapshot.validatedGenerationLimit == 1,
+            "healthy cadence did not restore the proven 2x level");
+        require(harness.frameAtFps(45.0).size() == 1,
+            "restored 2x policy did not resume generation");
+    }
+
+    void testDiscontinuityRecoveryTimesOutToFreshRamp() {
+        Harness harness(90, 2);
+        harness.start();
+        harness.runAtFps(45.0, 7s);
+        harness.frame(400ms);
+        require(harness.scheduler.discontinuityRecoveryActive(),
+            "precondition failed: long hitch did not start recovery");
+
+        for (size_t frame = 0;
+                frame < 160 &&
+                    !harness.diagnostics.contains("discontinuity-complete");
+                ++frame) {
+            harness.frameAtFps(20.0);
+        }
+        const auto* completion = harness.diagnostics.last(
+            "discontinuity-complete"
+        );
+        require(completion && completion->reason == "timeout-ramp-from-zero",
+            "unrecovered cadence did not take the bounded timeout path");
+        const auto snapshot = harness.scheduler.snapshot();
+        require(!snapshot.discontinuityRecoveryActive,
+            "expired discontinuity recovery remained active");
+        require(snapshot.generationLimit == 0,
+            "expired discontinuity recovery retained stale generated load");
+    }
+
+    void testSustainedCadenceDropRebasesWithoutMenuRecovery() {
+        Harness harness(120, 3);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: 2x was not validated");
+
+        harness.frameAtFps(30.0);
+        harness.frameAtFps(30.0);
+        harness.frameAtFps(30.0);
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.phase == AdaptiveSchedulerPhase::Stabilizing,
+            "sustained gameplay cadence drop did not rebase through stabilization");
+        require(!snapshot.discontinuityRecoveryActive,
+            "ordinary gameplay cadence drop was mistaken for a menu discontinuity");
+        require(snapshot.generationLimit == 0,
+            "cadence rebase retained load before measuring the new scene");
+    }
+
+    void testSdrLongHitchRefreshesHistoryWithoutDroppingValidatedLevel() {
+        // Ordered FIFO delivery makes an SDR hitch a temporal-history problem,
+        // not evidence that the previously validated multiplier is unsafe.
+        Harness harness(90, 2, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(45.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: SDR 2x was not validated");
+
+        require(harness.frame(400ms).empty(),
+            "SDR cadence refresh generated from stale history");
+        auto snapshot = harness.scheduler.snapshot();
+        require(!snapshot.discontinuityRecoveryActive,
+            "ordinary SDR hitch entered HDR-style discontinuity recovery");
+        require(snapshot.validatedGenerationLimit == 1,
+            "ordinary SDR hitch discarded the validated 2x level");
+        require(snapshot.historyWarmupRemaining == 2,
+            "ordinary SDR hitch did not request the short history refresh");
+        const auto* refresh = harness.diagnostics.last("cadence-refresh");
+        require(refresh && refresh->reason == "cadence-stall" &&
+                refresh->previousLimit == 1 && refresh->testedLimit == 2,
+            "SDR cadence refresh was not reported accurately");
+
+        harness.now += 22ms;
+        harness.scheduler.consumeHistoryWarmupFrame(harness.now);
+        harness.now += 22ms;
+        harness.scheduler.consumeHistoryWarmupFrame(harness.now);
+        const auto firstResumedPlan = harness.frameAtFps(45.0);
+        const auto secondResumedPlan = harness.frameAtFps(45.0);
+        require(firstResumedPlan.size() == 1 || secondResumedPlan.size() == 1,
+            "SDR did not resume its validated 2x level after two history frames");
+    }
+
+    void testSdrCadenceDropRefreshesHistoryWithoutFullStabilization() {
+        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: SDR 2x was not validated");
+
+        harness.frameAtFps(30.0);
+        harness.frameAtFps(30.0);
+        harness.frameAtFps(30.0);
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.phase == AdaptiveSchedulerPhase::HistoryWarmup,
+            "SDR cadence drop did not use a short history refresh");
+        require(snapshot.validatedGenerationLimit == 1,
+            "SDR cadence drop discarded the validated multiplier");
+        require(!snapshot.discontinuityRecoveryActive,
+            "SDR cadence drop entered discontinuity recovery");
+        const auto* refresh = harness.diagnostics.last("cadence-refresh");
+        require(refresh && refresh->reason == "cadence-drop",
+            "SDR cadence-drop refresh was not observable");
+    }
+
+    void testImpossibleFastBurstDoesNotCorruptCadence() {
+        Harness harness(120, 3);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+        const auto before = harness.scheduler.snapshot();
+        for (size_t i = 0; i < 30; ++i)
+            require(harness.frame(1ms).empty(),
+                "impossible fast-present burst generated interpolation work");
+        harness.frameAtFps(60.0);
+        const auto after = harness.scheduler.snapshot();
+        require(after.validatedGenerationLimit ==
+                before.validatedGenerationLimit,
+            "fast-present burst corrupted the proven generation level");
+        require(after.smoothedBaseFps < 80.0,
+            "fast-present burst polluted the gameplay cadence estimate");
+        require(harness.diagnostics.contains("fast-burst-complete"),
+            "fast-present burst completion was not observable");
+    }
+
+    void testRejectedFirstProbeEntersBoundedRearm() {
+        Harness harness(180, 2);
+        harness.start();
+        for (size_t frame = 0;
+                frame < 600 &&
+                    !harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(60.0);
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "precondition failed: initial multiplier probe did not begin");
+        // 34 FPS is slow enough to make 2x counterproductive against the
+        // 60 FPS baseline, but not slow enough to trip the separate 2x raw
+        // cadence-discontinuity detector before the one-second probe ends.
+        harness.runAtFps(34.0, 2s);
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.rearmRequired,
+            "harmful first multiplier probe did not enter rearm cooldown");
+        require(snapshot.validatedGenerationLimit == 0,
+            "rejected first probe was incorrectly treated as validated");
+        const auto* result = harness.diagnostics.last("ramp-result");
+        require(result && !result->accepted,
+            "rejected probe result was not emitted deterministically");
+    }
+
+    void testInterruptedProbeRearmsWithoutFailurePenalty() {
+        Harness harness(180, 3);
+        harness.start();
+        for (size_t frame = 0;
+                frame < 600 &&
+                    !harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(60.0);
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "precondition failed: multiplier probe did not begin");
+
+        harness.frame(400ms);
+        auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.rearmRequired,
+            "interrupted probe did not enter bounded rearm");
+        const auto* scheduled = harness.diagnostics.last(
+            "adaptive-rearm-scheduled"
+        );
+        require(scheduled && scheduled->reason == "probe-interrupted",
+            "interrupted probe was recorded as a throughput rejection");
+
+        harness.runAtFps(60.0, 4s);
+        snapshot = harness.scheduler.snapshot();
+        require(!snapshot.rearmRequired,
+            "stable cadence did not rearm an interrupted probe promptly");
+        const auto* ready = harness.diagnostics.last("adaptive-rearm-ready");
+        require(ready && ready->reason == "probe-interrupted",
+            "interrupted probe rearm decision was not observable");
+    }
+
+    void testBridgeProbeCanRecoverMisleadingFirstStep() {
+        Harness harness(180, 3);
+        harness.start();
+        for (size_t frame = 0;
+                frame < 600 &&
+                    !harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(60.0);
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "precondition failed: initial multiplier probe did not begin");
+
+        harness.runAtFps(31.0, 3s);
+        require(harness.diagnostics.contains("bridge"),
+            "counterproductive-looking first step did not start a bridge probe");
+        const auto* result = harness.diagnostics.last("bridge-result");
+        require(result && result->accepted,
+            "useful bridge multiplier was not accepted");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "accepted bridge multiplier was not retained as validated");
+    }
+
+    void testRejectedHigherLevelRetainsProvenLoadAndBacksOff() {
+        Harness harness(180, 3);
+        harness.start();
+        for (size_t frame = 0;
+                frame < 900;
+                ++frame) {
+            harness.frameAtFps(60.0);
+            const auto snapshot = harness.scheduler.snapshot();
+            if (snapshot.rampEvaluationActive &&
+                    snapshot.generationLimit == 2 &&
+                    snapshot.validatedGenerationLimit == 1) {
+                break;
+            }
+        }
+        auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.rampEvaluationActive &&
+                snapshot.generationLimit == 2 &&
+                snapshot.validatedGenerationLimit == 1,
+            "precondition failed: higher-level probe did not begin from proven 2x");
+
+        harness.runAtFps(35.0, 2s);
+        snapshot = harness.scheduler.snapshot();
+        require(!snapshot.rampEvaluationActive,
+            "counterproductive higher-level probe did not finish");
+        require(snapshot.validatedGenerationLimit == 1,
+            "rejected higher-level probe discarded the proven 2x load");
+        const auto* backoff = harness.diagnostics.last("ramp-backoff");
+        require(backoff && backoff->testedLimit == 2 &&
+                backoff->previousLimit == 1,
+            "higher-level rejection did not schedule first bounded retry delay");
+    }
+
+    void testSmoothCadenceSettlesNearIntegerDemand() {
+        Harness harness(90, 2, true);
+        harness.start();
+        const auto timestamps = harness.runAtFps(47.0, 12s);
+        require(timestamps.size() == 1,
+            "Smooth Cadence did not settle on constant 2x output");
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::StableCadence,
+            "accepted Smooth Cadence was not exposed as scheduler state");
+        require(harness.diagnostics.contains(
+                "adaptive-stable-cadence-accepted"),
+            "Smooth Cadence acceptance was not observable");
+    }
+
+    void testPersistentDeliveryLossRejectsSmoothCadenceProbe() {
+        Harness harness(90, 2, true);
+        harness.start();
+        bool reportedPressure = false;
+        for (size_t frame = 0; frame < 1000; ++frame) {
+            const auto plan = harness.frameAtFps(47.0);
+            const bool probeStarted = harness.diagnostics.contains(
+                "adaptive-stable-cadence-probe"
+            );
+            if (probeStarted && !plan.empty()) {
+                harness.scheduler.reportGeneratedFrameDelivery(
+                    plan.size(), 0
+                );
+                reportedPressure = true;
+            } else {
+                harness.scheduler.reportGeneratedFrameDelivery(
+                    plan.size(), plan.size()
+                );
+            }
+            if (reportedPressure && harness.diagnostics.contains(
+                    "adaptive-stable-cadence-rejected"))
+                break;
+        }
+        require(reportedPressure && harness.diagnostics.contains(
+                "adaptive-stable-cadence-rejected"),
+            "persistent display admission loss did not reject Smooth Cadence");
+        require(harness.scheduler.snapshot().phase !=
+                AdaptiveSchedulerPhase::StableCadence,
+            "Smooth Cadence retained a persistently delivery-late multiplier");
+    }
+
+    void testSmoothCadenceReturnsToTargetAfterBaseRecovery() {
+        Harness harness(100, 2, true);
+        harness.start();
+        harness.runAtFps(50.0, 12s);
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::StableCadence,
+            "precondition failed: 50 FPS did not settle on 2x for a 100 FPS target");
+
+        harness.runAtFps(60.0, 3s);
+        require(harness.scheduler.snapshot().phase !=
+                AdaptiveSchedulerPhase::StableCadence,
+            "Smooth Cadence retained stale 2x output after native cadence recovered");
+        const auto* disabled = harness.diagnostics.last(
+            "adaptive-stable-cadence-disabled"
+        );
+        require(disabled && disabled->reason == "outside-useful-range",
+            "native cadence recovery did not report a bounded Smooth Cadence exit");
+
+        size_t outputs = 0;
+        constexpr size_t sampleFrames = 600;
+        for (size_t frame = 0; frame < sampleFrames; ++frame)
+            outputs += 1 + harness.frameAtFps(60.0).size();
+        const double estimatedOutputFps =
+            static_cast<double>(outputs) / 10.0;
+        require(std::abs(estimatedOutputFps - 100.0) <= 0.2,
+            "strict scheduling did not return recovered cadence to the 100 FPS target");
+    }
+
+    void testSmoothCadenceDoesNotChatterOnOscillatingLoad() {
+        Harness harness(110, 3, true);
+        harness.start();
+        harness.runAtFps(55.0, 10s);
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::StableCadence,
+            "precondition failed: stable 55 FPS did not settle on Smooth Cadence");
+
+        harness.runAtFps(68.0, 2s);
+        require(harness.scheduler.snapshot().phase !=
+                AdaptiveSchedulerPhase::StableCadence,
+            "native cadence recovery did not leave Smooth Cadence");
+
+        const size_t probesBeforeOscillation = harness.diagnostics.count(
+            "adaptive-stable-cadence-probe"
+        );
+        for (size_t cycle = 0; cycle < 6; ++cycle) {
+            harness.runAtFps(55.0, 4s);
+            harness.runAtFps(68.0, 2s);
+        }
+        const size_t probesAfterOscillation = harness.diagnostics.count(
+            "adaptive-stable-cadence-probe"
+        );
+        require(probesAfterOscillation - probesBeforeOscillation <= 2,
+            "oscillating load repeatedly toggled Smooth Cadence workload");
+    }
+
+    // The HDR bridge measures real-only cadence before deciding whether a
+    // collapse was model load or compositor/colour-pipeline pressure.
+    void testHdrStrictLoadCollapseMeasuresBeforeFallback() {
+        Harness harness(180, 3);
+        harness.start();
+        harness.runAtFps(60.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: 3x was not validated");
+
+        for (size_t frame = 0;
+                frame < 160 && !harness.diagnostics.contains("rescue-start");
+                ++frame) {
+            harness.frameAtFps(40.0);
+        }
+        const auto* rescueStart = harness.diagnostics.last("rescue-start");
+        require(rescueStart && rescueStart->reason == "strict-load-collapse",
+            "sustained high-multiplier throughput collapse did not start rescue");
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::RescueMeasurement,
+            "strict-load rescue was not exposed as scheduler state");
+
+        harness.runAtFps(60.0, 2s);
+        const auto* rescueComplete = harness.diagnostics.last("rescue-complete");
+        require(rescueComplete &&
+                rescueComplete->reason == "strict-load-restored",
+            "real-only throughput recovery did not select the cheaper proven level");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "strict-load rescue did not restore the validated lower load");
+    }
+
+    void testSdrStrictLoadCollapseKeepsGeneratedFallbackActive() {
+        // SDR's ordered transport can shed directly to the lower proven load;
+        // a real-only second would be the visible 120-to-60 FPS regression.
+        Harness harness(180, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(60.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: SDR 3x was not validated");
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0;
+                frame < 160 && !harness.diagnostics.contains("load-shed");
+                ++frame) {
+            plan = harness.frameAtFps(40.0);
+        }
+        const auto* loadShed = harness.diagnostics.last("load-shed");
+        require(loadShed && loadShed->reason == "sdr-direct-fallback" &&
+                loadShed->previousLimit == 2 && loadShed->testedLimit == 1,
+            "SDR collapse did not select its cheaper proven multiplier");
+        require(harness.scheduler.snapshot().phase !=
+                AdaptiveSchedulerPhase::RescueMeasurement,
+            "SDR collapse entered a disruptive real-only measurement");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "SDR collapse did not retain the proven generated fallback");
+        require(plan.size() == 1,
+            "SDR load shed dropped the transition frame to native-only");
+    }
+
+    void testSdrTwoXCollapseRetainsMinimumGeneratedPolicy() {
+        Harness harness(180, 2, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(60.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: SDR 2x was not validated");
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0;
+                frame < 160 && !harness.diagnostics.contains("load-shed");
+                ++frame) {
+            plan = harness.frameAtFps(30.0);
+        }
+        const auto* loadShed = harness.diagnostics.last("load-shed");
+        require(loadShed && loadShed->reason == "sdr-retain-2x" &&
+                loadShed->previousLimit == 1 && loadShed->testedLimit == 1,
+            "SDR 2x collapse did not retain its minimum generated policy");
+        require(harness.scheduler.snapshot().phase !=
+                AdaptiveSchedulerPhase::RescueMeasurement,
+            "SDR 2x collapse entered a disruptive real-only measurement");
+        require(plan.size() == 1,
+            "SDR 2x collapse dropped the transition frame to native-only");
+    }
+
+    void testSmoothCadenceCollapseUsesRealOnlyMeasurement() {
+        Harness harness(90, 2, true);
+        harness.start();
+        harness.runAtFps(47.0, 12s);
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::StableCadence,
+            "precondition failed: Smooth Cadence did not settle");
+
+        for (size_t frame = 0;
+                frame < 120 && !harness.diagnostics.contains("rescue-start");
+                ++frame) {
+            harness.frameAtFps(30.0);
+        }
+        const auto* rescueStart = harness.diagnostics.last("rescue-start");
+        require(rescueStart &&
+                rescueStart->reason == "stable-cadence-collapse",
+            "collapsed Smooth Cadence did not start real-only measurement");
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::RescueMeasurement,
+            "Smooth Cadence rescue was not exposed as scheduler state");
+        require(harness.frameAtFps(30.0).empty(),
+            "Smooth Cadence rescue generated during real-only measurement");
+    }
+
+    void testRestoredDiscontinuityLoadRetainsCollapseGuard() {
+        Harness harness(110, 3);
+        harness.start();
+        harness.runAtFps(50.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: 3x was not validated before interruption");
+
+        harness.frame(400ms);
+        require(harness.scheduler.discontinuityRecoveryActive(),
+            "precondition failed: menu-like interruption did not start recovery");
+        harness.runAtFps(64.0, 3s);
+        require(!harness.scheduler.discontinuityRecoveryActive() &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "healthy real-only cadence did not restore the validated 3x level");
+
+        for (size_t frame = 0;
+                frame < 160 && !harness.diagnostics.contains("rescue-start");
+                ++frame) {
+            harness.frameAtFps(35.0);
+        }
+        const auto* rescueStart = harness.diagnostics.last("rescue-start");
+        require(rescueStart && rescueStart->reason == "strict-load-collapse",
+            "restored 3x load lost its delayed-collapse guard");
+
+        harness.runAtFps(64.0, 2s);
+        const auto* rescueComplete = harness.diagnostics.last("rescue-complete");
+        require(rescueComplete &&
+                rescueComplete->reason == "strict-load-restored",
+            "real-only recovery did not back off the harmful restored level");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "harmful restored 3x load did not fall back to proven 2x");
+    }
+
+    void testGeneratedImageRecoveryRetainsCollapseGuard() {
+        Harness harness(110, 3);
+        harness.start();
+        harness.runAtFps(50.0, 10s);
+        const size_t recoveredLimit =
+            harness.scheduler.snapshot().validatedGenerationLimit;
+        const auto loadBaseline =
+            harness.scheduler.generationLoadBaseline();
+        require(recoveredLimit == 2 &&
+                loadBaseline.fallbackGenerationLimit == 1 &&
+                loadBaseline.baseFps > 0.0,
+            "precondition failed: higher load had no lower-level baseline");
+
+        harness.scheduler.beginStabilization(
+            harness.now, "generated-image-recovery"
+        );
+        harness.scheduler.restoreGenerationLimit(
+            harness.now,
+            recoveredLimit,
+            "generated-image-recovery",
+            loadBaseline.fallbackGenerationLimit,
+            loadBaseline.baseFps
+        );
+
+        for (size_t frame = 0;
+                frame < 160 && !harness.diagnostics.contains("rescue-start");
+                ++frame) {
+            harness.frameAtFps(35.0);
+        }
+        const auto* rescueStart = harness.diagnostics.last("rescue-start");
+        require(rescueStart && rescueStart->reason == "strict-load-collapse",
+            "in-place image recovery cleared the delayed-collapse guard");
+
+        harness.runAtFps(64.0, 2s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "image recovery did not return harmful 3x load to proven 2x");
+    }
+
+    void testDeterministicReplay() {
+        Harness first(120, 4, true);
+        Harness second(120, 4, true);
+        first.start();
+        second.start();
+
+        const std::vector<std::chrono::nanoseconds> trace{
+            17ms, 16ms, 17ms, 16ms, 50ms, 16ms, 17ms, 200ms,
+            16ms, 16ms, 17ms, 1ms, 1ms, 16ms, 33ms, 34ms,
+        };
+        for (size_t replay = 0; replay < 40; ++replay) {
+            for (const auto interval : trace) {
+                const auto firstPlan = first.frame(interval);
+                const auto secondPlan = second.frame(interval);
+                require(firstPlan == secondPlan,
+                    "identical cadence trace produced different plans");
+                requireValidTimestamps(firstPlan, 3);
+            }
+        }
+
+        const auto firstSnapshot = first.scheduler.snapshot();
+        const auto secondSnapshot = second.scheduler.snapshot();
+        require(firstSnapshot.phase == secondSnapshot.phase &&
+                firstSnapshot.generationLimit ==
+                    secondSnapshot.generationLimit &&
+                firstSnapshot.validatedGenerationLimit ==
+                    secondSnapshot.validatedGenerationLimit &&
+                firstSnapshot.historyWarmupRemaining ==
+                    secondSnapshot.historyWarmupRemaining,
+            "identical cadence trace produced different final state");
+    }
+
+    struct TestCase {
+        std::string_view name;
+        void (*run)();
+    };
+}
+
+int main() {
+    const std::vector<TestCase> tests{
+        {"startup warm-up is explicit", testStartupWarmupIsExplicit},
+        {"busy warm-up notification is idempotent", testBusyWarmupNotificationIsIdempotent},
+        {"transient busy frame does not rearm warm-up", testTransientBusyFrameDoesNotRearmCompletedWarmup},
+        {"invalid configuration is rejected", testInvalidConfigurationIsRejectedAtBoundary},
+        {"60 to 120 settles at 2x", testSteadySixtyRampsToTwoXFor120Target},
+        {"isolated delivery miss keeps ramp", testIsolatedGeneratedFrameMissDoesNotRejectRamp},
+        {"persistent delivery loss rejects ramp", testPersistentGeneratedFrameMissesRejectRamp},
+        {"4x timestamps remain evenly spaced", testFourXPlanUsesEvenInterpolationTimestamps},
+        {"above-target cadence remains real-only", testSchedulerCannotReduceAboveTargetCadence},
+        {"acquire backoff freezes policy", testAcquireBackoffDoesNotAdvancePolicy},
+        {"validated 2x survives short hitch", testValidatedTwoXSurvivesShortGameplayHitch},
+        {"HDR long hitch uses conservative recovery", testHdrLongHitchUsesConservativeDiscontinuityRecovery},
+        {"healthy cadence restores validated level", testRecoveredCadenceRestoresValidatedLevel},
+        {"discontinuity timeout restarts from zero", testDiscontinuityRecoveryTimesOutToFreshRamp},
+        {"gameplay cadence drop rebases", testSustainedCadenceDropRebasesWithoutMenuRecovery},
+        {"SDR long hitch keeps validated level", testSdrLongHitchRefreshesHistoryWithoutDroppingValidatedLevel},
+        {"SDR cadence drop uses short refresh", testSdrCadenceDropRefreshesHistoryWithoutFullStabilization},
+        {"fast-present burst preserves cadence", testImpossibleFastBurstDoesNotCorruptCadence},
+        {"harmful first probe enters rearm", testRejectedFirstProbeEntersBoundedRearm},
+        {"interrupted probe rearms promptly", testInterruptedProbeRearmsWithoutFailurePenalty},
+        {"bridge probe handles misleading first step", testBridgeProbeCanRecoverMisleadingFirstStep},
+        {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
+        {"Smooth Cadence settles near integer demand", testSmoothCadenceSettlesNearIntegerDemand},
+        {"persistent loss rejects Smooth Cadence", testPersistentDeliveryLossRejectsSmoothCadenceProbe},
+        {"Smooth Cadence exits after native recovery", testSmoothCadenceReturnsToTargetAfterBaseRecovery},
+        {"Smooth Cadence resists oscillating-load chatter", testSmoothCadenceDoesNotChatterOnOscillatingLoad},
+        {"HDR strict load collapse measures real-only", testHdrStrictLoadCollapseMeasuresBeforeFallback},
+        {"SDR load shed keeps generated fallback", testSdrStrictLoadCollapseKeepsGeneratedFallbackActive},
+        {"SDR 2x load shed stays generated", testSdrTwoXCollapseRetainsMinimumGeneratedPolicy},
+        {"Smooth Cadence collapse measures real-only", testSmoothCadenceCollapseUsesRealOnlyMeasurement},
+        {"restored load keeps collapse guard", testRestoredDiscontinuityLoadRetainsCollapseGuard},
+        {"image recovery keeps collapse guard", testGeneratedImageRecoveryRetainsCollapseGuard},
+        {"cadence replay is deterministic", testDeterministicReplay},
+    };
+
+    size_t failures = 0;
+    for (const auto& test : tests) {
+        try {
+            test.run();
+            std::cout << "PASS: " << test.name << '\n';
+        } catch (const TestFailure& failure) {
+            failures++;
+            std::cerr << "FAIL: " << test.name << ": "
+                      << failure.message << '\n';
+        } catch (const std::exception& error) {
+            failures++;
+            std::cerr << "FAIL: " << test.name
+                      << ": unexpected exception: " << error.what() << '\n';
+        }
+    }
+
+    if (failures) {
+        std::cerr << failures << " adaptive scheduler test(s) failed\n";
+        return EXIT_FAILURE;
+    }
+
+    std::cout << tests.size() << " adaptive scheduler tests passed\n";
+    return EXIT_SUCCESS;
+}

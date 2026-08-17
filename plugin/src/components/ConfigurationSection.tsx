@@ -1,0 +1,267 @@
+import { PanelSectionRow, ToggleField, SliderField, ButtonItem, TextField } from "@decky/ui";
+import { useState, useEffect } from "react";
+import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
+import { ConfigurationData } from "../config/configSchema";
+import {
+  ACTIVE_IN, ALLOW_FP16, DISABLE_LSFGVK, DLL, FLOW_SCALE, GPU, PERFORMANCE_MODE,
+  DXVK_FRAME_RATE, DISABLE_STEAMDECK_MODE, ENABLE_ZINK
+} from "../config/generatedConfigSchema";
+import t from "../i18n/i18n";
+
+interface ConfigurationSectionProps {
+  config: ConfigurationData;
+  onConfigChange: (fieldName: keyof ConfigurationData, value: boolean | number | string) => Promise<void>;
+}
+
+const WORKAROUNDS_COLLAPSED_KEY = "mako-workarounds-collapsed";
+const CONFIG_COLLAPSED_KEY = "mako-config-collapsed";
+
+export function ConfigurationSection({
+  config,
+  onConfigChange
+}: ConfigurationSectionProps) {
+  // Initialize with localStorage value, fallback to true if not found
+  const [configCollapsed, setConfigCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CONFIG_COLLAPSED_KEY);
+      return saved !== null ? JSON.parse(saved) : false;
+    } catch {
+      return false;
+    }
+  });
+
+  const [workaroundsCollapsed, setWorkaroundsCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem(WORKAROUNDS_COLLAPSED_KEY);
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
+  // Persist workarounds collapse state to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(CONFIG_COLLAPSED_KEY, JSON.stringify(configCollapsed));
+    } catch (error) {
+      console.warn("Failed to save config collapse state:", error);
+    }
+  }, [configCollapsed]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(WORKAROUNDS_COLLAPSED_KEY, JSON.stringify(workaroundsCollapsed));
+    } catch (error) {
+      console.warn("Failed to save workarounds collapse state:", error);
+    }
+  }, [workaroundsCollapsed]);
+
+  return (
+    <>
+      <style>
+        {`
+        .LSFG_ConfigCollapseButton_Container > div > div > div > button,
+        .LSFG_ConfigCollapseButton_Container > div > div > div > div > button,
+        .LSFG_WorkaroundsCollapseButton_Container > div > div > div > button {
+          height: 10px !important;
+        }
+        .LSFG_WorkaroundsCollapseButton_Container > div > div > div > div > button {
+          height: 10px !important;
+        }
+        `}
+      </style>
+
+      {/* Config Section */}
+      <PanelSectionRow>
+        <div
+          style={{
+            fontSize: "14px",
+            fontWeight: "bold",
+            marginTop: "24px",
+            marginBottom: "8px",
+            color: "white"
+          }}
+        >
+          {t("CONFIG_SECTION_TITLE", "Config")}
+        </div>
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <div
+          className="LSFG_ConfigCollapseButton_Container"
+          style={{ marginTop: "4px", marginBottom: "8px" }}
+        >
+          <ButtonItem
+            layout="below"
+            bottomSeparator={configCollapsed ? "standard" : "none"}
+            onClick={() => setConfigCollapsed(!configCollapsed)}
+          >
+            {configCollapsed ? (
+              <RiArrowDownSFill
+                style={{ transform: "translate(0, -13px)", fontSize: "1.5em" }}
+              />
+            ) : (
+              <RiArrowUpSFill
+                style={{ transform: "translate(0, -12px)", fontSize: "1.5em" }}
+              />
+            )}
+          </ButtonItem>
+        </div>
+      </PanelSectionRow>
+
+      {!configCollapsed && (
+        <>
+          <PanelSectionRow>
+            <TextField
+              label={t("CONFIG_DLL_PATH", "Lossless.dll Path")}
+              description={t("CONFIG_DLL_PATH_DESC", "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.")}
+              value={config.dll}
+              onChange={(event) => onConfigChange(DLL, event.currentTarget.value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <SliderField
+              label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round(config.flow_scale * 100)}%)`}
+              description={t("CONFIG_FLOW_SCALE_DESC", "Lowers internal motion estimation resolution, improving performance slightly.")}
+              value={config.flow_scale}
+              min={0.25}
+              max={1.0}
+              step={0.01}
+              onChange={(value) => onConfigChange(FLOW_SCALE, value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_PERFORMANCE_MODE", "Performance Mode")}
+              description={t("CONFIG_PERFORMANCE_MODE_DESC", "Uses a lighter FG model to reduce GPU overhead, at the cost of more visual artifacts.")}
+              checked={config.performance_mode}
+              onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH", "Disable MAKO Renderer on Next Launch")}
+              description={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC", "Troubleshooting only. Stops MAKO Renderer loading after restart. Use Frame Generation above for live on/off.")}
+              checked={config.disable_lsfgvk}
+              onChange={(value) => onConfigChange(DISABLE_LSFGVK, value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <SliderField
+              label={`${t("CONFIG_BASE_FPS_CAP", "Base FPS Cap")}${config.dxvk_frame_rate > 0 ? ` (${config.dxvk_frame_rate} FPS)` : ` (${t("CONFIG_BASE_FPS_CAP_OFF", "Off")})`}`}
+              description={t("CONFIG_BASE_FPS_CAP_DESC", "Base framerate cap for DirectX games, before frame multiplication. Requires a game restart to apply.")}
+              value={config.dxvk_frame_rate}
+              min={0}
+              max={60}
+              step={1}
+              onChange={(value) => onConfigChange(DXVK_FRAME_RATE, value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_ALLOW_FP16", "Allow FP16")}
+              description={t("CONFIG_ALLOW_FP16_DESC", "Improves performance on AMD; disable for older NVIDIA GPUs.")}
+              checked={config.allow_fp16}
+              onChange={(value) => onConfigChange(ALLOW_FP16, value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <div style={{ paddingTop: "12px" }}>
+              <TextField
+                label={t("CONFIG_GPU", "GPU")}
+                description={t("CONFIG_GPU_DESC", "Optional GPU name, vendor:device ID, or PCI bus ID.")}
+                value={config.gpu}
+                onChange={(event) => onConfigChange(GPU, event.currentTarget.value)}
+              />
+            </div>
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <TextField
+              label={t("CONFIG_ACTIVE_IN", "Active In")}
+              description={t("CONFIG_ACTIVE_IN_DESC", "Executable/process names, separated by commas. This automatically matches the MAKO Renderer engine profile; wrapper-only compatibility options use the selected Decky profile.")}
+              value={config.active_in}
+              onChange={(event) => onConfigChange(ACTIVE_IN, event.currentTarget.value)}
+            />
+          </PanelSectionRow>
+        </>
+      )}
+
+      {/* Workarounds Section */}
+      <PanelSectionRow>
+        <div
+          style={{
+            fontSize: "14px",
+            fontWeight: "bold",
+            marginTop: "24px",
+            marginBottom: "8px",
+            color: "white"
+          }}
+        >
+          {t("CONFIG_WORKAROUNDS_TITLE", "Workarounds")}
+        </div>
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <div
+          className="LSFG_WorkaroundsCollapseButton_Container"
+          style={{ marginTop: "4px", marginBottom: "8px" }}
+        >
+          <ButtonItem
+            layout="below"
+            bottomSeparator={workaroundsCollapsed ? "standard" : "none"}
+            onClick={() => setWorkaroundsCollapsed(!workaroundsCollapsed)}
+          >
+            {workaroundsCollapsed ? (
+              <RiArrowDownSFill
+                style={{ transform: "translate(0, -13px)", fontSize: "1.5em" }}
+              />
+            ) : (
+              <RiArrowUpSFill
+                style={{ transform: "translate(0, -12px)", fontSize: "1.5em" }}
+              />
+            )}
+          </ButtonItem>
+        </div>
+      </PanelSectionRow>
+
+      {!workaroundsCollapsed && (
+        <>
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable Experimental HDR (Restart)")}
+              description={t("CONFIG_DISABLE_HDR_EXPOSURE_DESC", "HDR is under development. This required setting keeps the stable SDR path active.")}
+              checked={true}
+              disabled={true}
+              onChange={() => undefined}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_DISABLE_STEAMDECK_MODE", "Disable Steam Deck Mode")}
+              description={t("CONFIG_DISABLE_STEAMDECK_MODE_DESC", "Disables Steam Deck mode. Unlocks hidden settings in some games.")}
+              checked={config.disable_steamdeck_mode}
+              onChange={(value) => onConfigChange(DISABLE_STEAMDECK_MODE, value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_ENABLE_ZINK", "Enable Zink for OpenGL Games")}
+              description={t("CONFIG_ENABLE_ZINK_DESC", "Uses the Vulkan-based OpenGL implementation for OpenGL games. May cause crashes or freezes in some games.")}
+              checked={config.enable_zink}
+              onChange={(value) => onConfigChange(ENABLE_ZINK, value)}
+            />
+          </PanelSectionRow>
+        </>
+      )}
+    </>
+  );
+}

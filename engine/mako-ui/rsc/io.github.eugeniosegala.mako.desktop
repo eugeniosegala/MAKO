@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=MAKO Renderer Configuration
+Comment=Configure MAKO Renderer for Linux games.
+Exec=mako-ui %U
+Icon=io.github.eugeniosegala.mako
+Terminal=false
+Categories=Settings;
+Keywords=gaming;graphics;configuration;
+StartupNotify=true
+StartupWMClass=io.github.eugeniosegala.mako
+MimeType=application/x-mako-profile;

@@ -1,0 +1,12 @@
+export {
+  ConfigFieldType,
+  ConfigField,
+  CONFIG_SCHEMA,
+  ConfigurationData,
+  getFieldNames,
+  getDefaults,
+  getFieldTypes,
+  DLL, ALLOW_FP16, FRAME_GENERATION_ENABLED, MULTIPLIER, ADAPTIVE, TARGET_FPS, ADAPTIVE_MAX_MULTIPLIER, FLOW_SCALE, PERFORMANCE_MODE, PACING, ACTIVE_IN, GPU, DISABLE_LSFGVK,
+  DXVK_FRAME_RATE,
+  DISABLE_STEAMDECK_MODE, ENABLE_ZINK
+} from './generatedConfigSchema';

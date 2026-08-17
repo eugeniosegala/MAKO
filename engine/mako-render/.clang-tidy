@@ -1,0 +1,32 @@
+UseColor: true
+Checks:
+# COMMON: Usually, we keep all checks enabled
+- "bugprone-*"
+- "clang-analyzer-*"
+- "cppcoreguidelines-*"
+- "misc-*"
+- "modernize-*"
+- "performance-*"
+- "portability-*"
+- "readability-*"
+# COMMON: Some checks related purely to code-style are disabled
+- -modernize-use-designated-initializers
+- -modernize-use-trailing-return-type
+- -modernize-deprecated-headers
+- -readability-function-cognitive-complexity
+- -readability-math-missing-parentheses
+- -readability-braces-around-statements
+- -readability-implicit-bool-conversion
+- -readability-identifier-length
+- -readability-magic-numbers
+- -cppcoreguidelines-avoid-magic-numbers
+- -cppcoreguidelines-macro-usage
+- -bugprone-easily-swappable-parameters
+- -portability-avoid-pragma-once
+# Vulkan requires the use of reinterpret/const casts in many places
+- -cppcoreguidelines-pro-type-reinterpret-cast
+- -cppcoreguidelines-pro-type-const-cast
+# Vulkan layers often require C-style memory access
+- -cppcoreguidelines-pro-bounds-pointer-arithmetic
+- -cppcoreguidelines-pro-type-union-access
+- -clang-diagnostic-unsafe-buffer-usage

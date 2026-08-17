@@ -1,0 +1,81 @@
+{
+  "name": "mako-plugin",
+  "version": "0.13.0-experimental.25",
+  "description": "MAKO Decky controls for Steam Deck and compatible Linux systems",
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build-frontend.mjs",
+    "watch": "rollup -c -w",
+    "package:local": "./scripts/package-local.sh --local-engine-repo ../engine",
+    "package:local-engine": "./scripts/package-local.sh --local-engine-repo ../engine",
+    "package:local-engine-fast": "./scripts/package-local.sh --local-engine-repo ../engine --native-only --64-bit-only",
+    "dev:deploy": "./scripts/deploy-dev.sh",
+    "dev:frontend": "./scripts/deploy-dev.sh --frontend",
+    "dev:backend": "./scripts/deploy-dev.sh --backend",
+    "dev:engine": "./scripts/deploy-dev.sh --engine",
+    "dev:all": "./scripts/deploy-dev.sh --all",
+    "dev:host": "./scripts/deploy-dev.sh --host",
+    "dev:flatpaks": "./scripts/deploy-dev.sh --flatpaks",
+    "dev:e2e": "./scripts/deploy-dev.sh --e2e",
+    "dev:prune-flatpak-cache": "../engine/scripts/prune-steamos-flatpak-cache.sh",
+    "package:publish": "./scripts/publish-package.sh",
+    "test": "python3 -m unittest discover -s tests -p 'test_*.py'"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eugeniosegala/MAKO.git"
+  },
+  "keywords": [
+    "decky",
+    "plugin",
+    "steam-deck",
+    "steam-machine",
+    "deck",
+    "lossless-scaling",
+    "frame-generation",
+    "lsfg-vk",
+    "framegen"
+  ],
+  "author": "Eugenio Segala",
+  "license": "GPL-3.0-or-later",
+  "bugs": {
+    "url": "https://github.com/eugeniosegala/MAKO/issues"
+  },
+  "homepage": "https://github.com/eugeniosegala/MAKO#readme",
+  "devDependencies": {
+    "@decky/rollup": "^1.0.1",
+    "@decky/ui": "^4.7.2",
+    "@types/react": "18.3.3",
+    "@types/react-dom": "18.3.0",
+    "@types/webpack": "^5.28.5",
+    "rollup": "^4.22.5",
+    "typescript": "^5.6.2"
+  },
+  "dependencies": {
+    "@decky/api": "^1.1.2",
+    "react-icons": "^5.3.0",
+    "tslib": "^2.7.0"
+  },
+  "optionalDependencies": {
+    "@rollup/rollup-linux-x64-gnu": "4.22.5",
+    "@rollup/rollup-linux-x64-musl": "4.22.5"
+  },
+  "remote_binary_bundling": true,
+  "remote_binary": [
+    {
+      "name": "lsfg-vk-2.0.0-dev28-experimental.25-linux.tar.xz",
+      "version": "2.0.0-dev28-experimental.25",
+      "lineage_version": "2.0.0-dev28",
+      "source_repository": "https://github.com/eugeniosegala/lsfg-vk-experimental",
+      "release_tag": "v2.0.0-dev28-experimental.25",
+      "source_commit": "5a293c428409a866bbe91be9eb54b49e71521e14",
+      "url": "https://github.com/eugeniosegala/lsfg-vk-experimental/releases/download/v2.0.0-dev28-experimental.25/lsfg-vk-2.0.0-dev28-experimental.25-linux.tar.xz",
+      "sha256hash": "ca72768003b85e32fe4c43cb54cb8c984f9ddd1c24a53771546309b4853806ec",
+      "flatpak_bundle": {
+        "name": "lsfg-vk-2.0.0-dev28-experimental.25-flatpaks.tar.xz",
+        "url": "https://github.com/eugeniosegala/lsfg-vk-experimental/releases/download/v2.0.0-dev28-experimental.25/lsfg-vk-2.0.0-dev28-experimental.25-flatpaks.tar.xz",
+        "sha256hash": "49a32ffe11bb5d88f6ad700dc3ffafb39e9d5511bb095f2c5bd04c455ab0806c"
+      }
+    }
+  ]
+}

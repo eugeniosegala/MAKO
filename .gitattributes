@@ -1,0 +1,21 @@
+* text=auto eol=lf
+
+*.cpp diff=cpp
+*.hpp diff=cpp
+*.c diff=cpp
+*.h diff=cpp
+*.md diff=markdown
+*.py diff=python
+
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+*.dll binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.so binary
+*.spv binary
+*.tar binary
+*.xz binary
+*.zip binary

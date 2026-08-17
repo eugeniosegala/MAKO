@@ -1,0 +1,40 @@
+#version 450
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 16) uniform sampler sourceSampler;
+layout(set = 0, binding = 32) uniform texture2D sourceTexture;
+layout(rgba16f, set = 0, binding = 48) uniform writeonly image2D destinationImage;
+
+const float pqM1 = 2610.0 / 16384.0;
+const float pqM2 = 2523.0 / 32.0;
+const float pqC1 = 3424.0 / 4096.0;
+const float pqC2 = 2413.0 / 128.0;
+const float pqC3 = 2392.0 / 128.0;
+
+vec3 linearToPq(vec3 linearValue) {
+    vec3 p = pow(clamp(linearValue, 0.0, 1.0), vec3(pqM1));
+    return pow(
+        (vec3(pqC1) + vec3(pqC2) * p) /
+        (vec3(1.0) + vec3(pqC3) * p),
+        vec3(pqM2)
+    );
+}
+
+void main() {
+    ivec2 pixel = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 size = imageSize(destinationImage);
+    if (any(greaterThanEqual(pixel, size)))
+        return;
+
+    vec4 scrgb = texelFetch(sampler2D(sourceTexture, sourceSampler), pixel, 0);
+    const mat3 bt709ToBt2020 = mat3(
+        0.627404, 0.069097, 0.016391,
+        0.329283, 0.919540, 0.088013,
+        0.043313, 0.011362, 0.895595
+    );
+
+    // Convert scRGB's 80-nit unit to ST 2084's 10,000-nit normalization.
+    vec3 linear2020 = max(bt709ToBt2020 * scrgb.rgb / 125.0, vec3(0.0));
+    imageStore(destinationImage, pixel, vec4(linearToPq(linear2020), scrgb.a));
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Mako",
+  "author": "Eugenio Segala",
+  "flags": [],
+  "api_version": 1,
+  "publish": {
+    "tags": ["installer", "vulkan", "lsfg", "framegen", "lossless", "scaling", "steam-machine"],
+    "description": "Next-generation Vulkan-powered graphics for Linux gaming, bringing Lossless Scaling frame generation and scaling to Steam Deck and desktop Linux.",
+    "image": "https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/plugin/assets/mako-logo.png"
+  }
+}
