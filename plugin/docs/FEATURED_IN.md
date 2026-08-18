@@ -1,6 +1,6 @@
 # Featured In
 
-Community creators have covered, tested, and explained the Decky LSFG-VK plugin. Thank you for helping
+Community creators have covered, tested, and explained the Decky LSFG-VK Experimental plugin. Thank you for helping
 more SteamOS users discover and evaluate the project.
 
 ## Videos
