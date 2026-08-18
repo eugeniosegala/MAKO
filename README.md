@@ -53,7 +53,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 1. **Install Decky Loader** if needed. Switch to Desktop Mode and follow the [official Decky Loader installation guide](https://github.com/SteamDeckHomebrew/decky-loader#-installation), then return to Game Mode.
 2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam.** MAKO needs the licensed installation's `Lossless.dll`.
-3. **[Download the latest MAKO Decky ZIP](https://github.com/eugeniosegala/MAKO/releases/download/plugin-v1.0.0/MAKO-Decky-v1.0.0.zip)** from the Downloads table above.
+3. **[Download the latest MAKO Decky ZIP](https://github.com/eugeniosegala/MAKO/releases/download/plugin-v1.0.0/MAKO-Decky-v1.0.0.zip)**.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
 5. Open **Mako** and select **Install MAKO Renderer**. This required step installs the renderer bundled in the ZIP into MAKO's private location.
 6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal starting point; Adaptive Frame Generation is optional.

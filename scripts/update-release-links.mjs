@@ -47,17 +47,29 @@ const rowPattern = new RegExp(
 const releaseUrl = componentDetails.asset
   ? `https://github.com/${repository}/releases/download/${componentDetails.tag}/${componentDetails.asset}`
   : `https://github.com/${repository}/releases/tag/${componentDetails.tag}`;
-const updated = original.replace(
+if (!rowPattern.test(original)) {
+  throw new Error(`Could not find the ${componentDetails.name} Downloads row in ${readmePath}`);
+}
+
+let updated = original.replace(
   rowPattern,
   `$1[${componentDetails.text}](${releaseUrl})$2`,
 );
 
-if (updated === original) {
-  if (!rowPattern.test(original)) {
-    throw new Error(`Could not find the ${componentDetails.name} Downloads row in ${readmePath}`);
+if (component === "decky") {
+  const installationLinkPattern = /^(3\. \*\*\[Download the latest MAKO Decky ZIP\]\()[^)]+(\)\*\*\.)$/m;
+  if (!installationLinkPattern.test(original)) {
+    throw new Error(`Could not find the MAKO Decky installation link in ${readmePath}`);
   }
-  console.log(`README already links ${componentDetails.name} to ${componentDetails.tag}.`);
+  updated = updated.replace(
+    installationLinkPattern,
+    (_match, prefix, suffix) => `${prefix}${releaseUrl}${suffix}`,
+  );
+}
+
+if (updated === original) {
+  console.log(`README already links every ${componentDetails.name} download to ${componentDetails.tag}.`);
 } else {
   writeFileSync(readmePath, updated, "utf8");
-  console.log(`Updated README link for ${componentDetails.name} to ${componentDetails.tag}.`);
+  console.log(`Updated every README link for ${componentDetails.name} to ${componentDetails.tag}.`);
 }
