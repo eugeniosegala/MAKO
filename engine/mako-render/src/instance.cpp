@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "instance.hpp"
+#include "device_selection.hpp"
 #include "mako-common/helpers/paths.hpp"
 #include "swapchain.hpp"
 #include "mako-common/configuration/detection.hpp"
@@ -9,6 +10,7 @@
 #include "pnext_chain.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
@@ -34,6 +36,66 @@ namespace {
         "mako: render layer active; identity="
         "VK_LAYER_MAKO_render; build="
         MAKO_BUILD_VERSION;
+
+    std::string toHexId(const uint32_t id) {
+        constexpr char digits[] = "0123456789ABCDEF";
+        std::string value = "0x0000";
+        value.at(2) = digits[(id >> 12U) & 0xFU];
+        value.at(3) = digits[(id >> 8U) & 0xFU];
+        value.at(4) = digits[(id >> 4U) & 0xFU];
+        value.at(5) = digits[id & 0xFU];
+        return value;
+    }
+
+    PhysicalDeviceIdentity identifyApplicationDevice(const vk::Vulkan& vk) {
+        const auto& funcs = vk.fi();
+        const auto physicalDevice = vk.physdev();
+
+        uint32_t extensionCount{};
+        funcs.EnumerateDeviceExtensionProperties(
+            physicalDevice, nullptr, &extensionCount, VK_NULL_HANDLE
+        );
+        std::vector<VkExtensionProperties> extensions(extensionCount);
+        funcs.EnumerateDeviceExtensionProperties(
+            physicalDevice, nullptr, &extensionCount, extensions.data()
+        );
+        const bool hasPciInfo = std::ranges::find_if(
+            extensions,
+            [](const VkExtensionProperties& extension) {
+                return std::string(extension.extensionName)
+                    == VK_EXT_PCI_BUS_INFO_EXTENSION_NAME;
+            }
+        ) != extensions.end();
+
+        VkPhysicalDevicePCIBusInfoPropertiesEXT pciInfo{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PCI_BUS_INFO_PROPERTIES_EXT
+        };
+        VkPhysicalDeviceProperties2 properties{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
+            .pNext = hasPciInfo ? &pciInfo : nullptr
+        };
+        funcs.GetPhysicalDeviceProperties2(physicalDevice, &properties);
+
+        std::array<char, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE> deviceName{};
+        std::copy_n(
+            properties.properties.deviceName,
+            deviceName.size() - 1,
+            deviceName.begin()
+        );
+
+        return {
+            .name = deviceName.data(),
+            .vendorId = toHexId(properties.properties.vendorID),
+            .deviceId = toHexId(properties.properties.deviceID),
+            .pci = hasPciInfo
+                ? std::optional<std::string>{
+                    std::to_string(pciInfo.pciBus) + ":" +
+                    std::to_string(pciInfo.pciDevice) + "." +
+                    std::to_string(pciInfo.pciFunction)
+                }
+                : std::nullopt,
+        };
+    }
 
     class ScopedEnvironmentOverride {
     public:
@@ -493,18 +555,33 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
             else
                 dll = ls::findShaderDll();
 
+            const auto applicationDevice = identifyApplicationDevice(vk);
+            if (profile.gpu) {
+                std::cerr << "mako: backend GPU selection: configured="
+                          << *profile.gpu << '\n';
+            } else {
+                std::cerr << "mako: backend GPU selection: following game device="
+                          << applicationDevice.name << " ("
+                          << applicationDevice.vendorId << ":"
+                          << applicationDevice.deviceId << ")\n";
+            }
+
             this->backend.emplace(
-                [gpu = profile.gpu](
+                [gpu = profile.gpu, applicationDevice](
                     const std::string& deviceName,
                     std::pair<const std::string&, const std::string&> ids,
                     const std::optional<std::string>& pci
                 ) {
-                    if (!gpu)
-                        return true;
-
-                    return (deviceName == *gpu)
-                        || (ids.first + ":" + ids.second == *gpu)
-                        || (pci && *pci == *gpu);
+                    return matchesBackendDevice(
+                        {
+                            .name = deviceName,
+                            .vendorId = ids.first,
+                            .deviceId = ids.second,
+                            .pci = pci,
+                        },
+                        gpu,
+                        applicationDevice
+                    );
                 },
                 dll, global.allow_fp16
             );

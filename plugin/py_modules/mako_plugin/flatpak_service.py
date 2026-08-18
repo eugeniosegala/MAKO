@@ -86,9 +86,10 @@ class FlatpakService(BaseService):
         load Lossless Scaling. If the user selected a custom DLL path, grant that
         DLL's directory instead.
         """
-        home_path = os.path.expanduser("~")
         config_path = str(self.config_dir)
-        dll_directory = f"{home_path}/.local/share/Steam/steamapps/common"
+        dll_directory = str(
+            self.user_home / ".local" / "share" / "Steam" / "steamapps" / "common"
+        )
 
         if not self.config_file_path.exists():
             return config_path, dll_directory
@@ -235,12 +236,12 @@ class FlatpakService(BaseService):
         self.log.info(f"HOME: {os.environ.get('HOME', 'Not set')}")
         self.log.info(f"USER: {os.environ.get('USER', 'Not set')}")
 
-        flatpak_paths = [
+        flatpak_paths = dict.fromkeys([
             "flatpak",
             "/usr/bin/flatpak",
             "/var/lib/flatpak/exports/bin/flatpak",
-            "/home/deck/.local/bin/flatpak"
-        ]
+            str(self.user_home / ".local" / "bin" / "flatpak"),
+        ])
 
         for flatpak_path in flatpak_paths:
             try:

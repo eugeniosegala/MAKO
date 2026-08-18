@@ -28,6 +28,23 @@ from .constants import (
 ResponseType = TypeVar('ResponseType', bound=Dict[str, Any])
 
 
+def resolve_user_home() -> Path:
+    """Return the real Decky user's home directory.
+
+    Decky can run plugins with a service environment whose ``HOME`` does not
+    describe the logged-in user.  ``DECKY_USER_HOME`` is the supported source
+    for that path and also covers systems such as Bazzite where the user is not
+    named ``deck``.  The fallback keeps tests and older Decky versions working.
+    """
+    decky_user_home = getattr(decky, "DECKY_USER_HOME", None)
+    if decky_user_home:
+        candidate = Path(str(decky_user_home)).expanduser()
+        if candidate.is_absolute():
+            return candidate
+
+    return Path.home()
+
+
 class BaseService:
     """Base service class with common functionality"""
 
@@ -42,7 +59,7 @@ class BaseService:
         else:
             self.log = logger
 
-        self.user_home = Path.home()
+        self.user_home = resolve_user_home()
         self.local_lib_dir = self.user_home / LOCAL_LIB
         self.local_lib32_dir = self.user_home / LOCAL_LIB32
         self.local_share_dir = self.user_home / VULKAN_LAYER_DIR

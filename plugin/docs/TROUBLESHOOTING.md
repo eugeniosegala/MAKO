@@ -28,11 +28,25 @@ to test whether the layer is the cause of a startup or presentation problem.
 4. Test the game's V-Sync both on and off. Its own FPS limiter, VRR, or
    compositor configuration can affect frame pacing.
 
-For Heroic, keep the **Wrapper** as `/home/deck/.local/bin/mako-run`, leave
-**Arguments** empty, and add no `%command%`. For an EmuDeck Flatpak emulator
-shortcut, prepare that emulator in **Flatpak Setup**, then put the wrapper in
-the shortcut's **Target** and leave EmuDeck's existing **Launch Options**
-unchanged. See the [EmuDeck setup](../../README.md#emudeck).
+For Heroic on SteamOS, use `/home/deck/.local/bin/mako-run` as the **Wrapper**,
+leave **Arguments** empty, and add no `%command%`. For an EmuDeck Flatpak
+emulator shortcut, prepare that emulator in **Flatpak Setup**, then use the
+same path as the shortcut's **Target** and leave EmuDeck's existing **Launch
+Options** unchanged. If **Wrapper path for this device** shows a different
+path, use the displayed value instead. See the
+[EmuDeck setup](../../README.md#emudeck).
+
+## Bazzite and multi-GPU systems
+
+MAKO reads Decky's actual user home and generates the copyable launch command
+and Flatpak wrapper path for that device. Do not substitute `/home/deck` on a
+system whose displayed path is different.
+
+With no **GPU** value configured, MAKO Renderer follows the Vulkan device used
+by the game instead of choosing the first GPU reported by the driver. A saved
+GPU value remains an explicit override. If a multi-GPU game still fails, clear
+that field first so automatic selection can follow the game, then collect the
+`startup` and `errors` diagnostics below.
 
 ## Collect diagnostics
 

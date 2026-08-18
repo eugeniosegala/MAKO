@@ -116,11 +116,14 @@ need `flatpak-builder`. The source-build guide gives the exact SteamOS commands
 for the former; for the latter use `sudo pacman -S flatpak-builder` while the
 SteamOS filesystem is temporarily writable.
 
-The Flatpak command retains its downloaded dependency cache in
-`engine/build/steamos-flatpak-cache` and stages builds under
-`engine/build/steamos-flatpak-tmp`. This avoids SteamOS's comparatively small
-`/tmp` filesystem and lets later builds reuse downloaded runtimes. Set
-`MAKO_FLATPAK_CACHE_ROOT` or `MAKO_FLATPAK_TMP_ROOT` to move either location.
+All reusable MAKO build data uses `engine/build/cache`. The Flatpak command
+stores downloaded dependencies in `engine/build/cache/flatpak` and stages its
+large disposable build under `engine/build/work/flatpak`. This avoids
+SteamOS's comparatively small `/tmp` filesystem and lets later builds reuse
+downloaded runtimes. Set `MAKO_BUILD_CACHE_ROOT` or `MAKO_BUILD_WORK_ROOT` to
+move all build storage together; the component-specific
+`MAKO_FLATPAK_CACHE_ROOT` and `MAKO_FLATPAK_TMP_ROOT` overrides remain
+available.
 
 The cache has no automatic expiry and survives reboots. Inspect its current
 size with the safe, dry-run command:
@@ -141,6 +144,18 @@ already-deployed Flatpak bundles, or your normal user Flatpak installation.
 The next `dev:flatpaks` or `dev:e2e` run will need to download the SDK/runtime
 dependencies again. For safety, the prune command targets only the default
 repo-local locations; manage custom cache locations yourself.
+
+To inspect all repository-local caches—including the isolated native Qt SDK
+and compiler cache—use:
+
+```bash
+pnpm run dev:prune-build-cache
+```
+
+Add `-- --confirm` only when you intentionally want to remove the complete
+`engine/build/cache` and `engine/build/work` trees. Normal Linux builds do not
+write cache data into `/root` or `/usr`; paths under `/usr` in Docker or
+Flatpak build output belong to disposable sandboxes.
 
 Every direct development deployment refreshes a blue status box at the top of
 the plugin. It records the local deployment timestamp, the monorepo commit,

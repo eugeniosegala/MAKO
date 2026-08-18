@@ -9,7 +9,7 @@ from typing import Dict, Any, List
 
 from .base_service import BaseService
 from .constants import (
-    ENV_MAKO_DLL_PATH, ENV_XDG_DATA_HOME, ENV_HOME,
+    ENV_MAKO_DLL_PATH, ENV_XDG_DATA_HOME,
     STEAM_COMMON_PATH, LOSSLESS_DLL_NAME
 )
 from .types import DllDetectionResponse
@@ -112,18 +112,16 @@ class DllDetectionService(BaseService):
         Returns:
             DllDetectionResponse if found, None otherwise
         """
-        home_dir = os.getenv(ENV_HOME)
-        if home_dir and home_dir.strip():
-            dll_path = Path(home_dir.strip()) / ".local" / "share" / "Steam" / STEAM_COMMON_PATH / LOSSLESS_DLL_NAME
-            if dll_path.exists():
-                self.log.info(f"Found DLL via {ENV_HOME}/.local/share: {dll_path}")
-                return {
-                    "detected": True,
-                    "path": str(dll_path),
-                    "source": f"{ENV_HOME}/.local/share Steam directory",
-                    "message": None,
-                    "error": None
-                }
+        dll_path = self.user_home / ".local" / "share" / "Steam" / STEAM_COMMON_PATH / LOSSLESS_DLL_NAME
+        if dll_path.exists():
+            self.log.info(f"Found DLL in the Decky user's Steam directory: {dll_path}")
+            return {
+                "detected": True,
+                "path": str(dll_path),
+                "source": "Decky user Steam directory",
+                "message": None,
+                "error": None
+            }
         return None
 
     def _check_steam_library_folders(self) -> DllDetectionResponse | None:
@@ -165,9 +163,13 @@ class DllDetectionService(BaseService):
         if data_dir and data_dir.strip():
             steam_paths.append(Path(data_dir.strip()) / "Steam")
 
-        home_dir = os.getenv(ENV_HOME)
-        if home_dir and home_dir.strip():
-            steam_paths.append(Path(home_dir.strip()) / ".local" / "share" / "Steam")
+        steam_paths.extend([
+            self.user_home / ".local" / "share" / "Steam",
+            self.user_home / ".steam" / "root",
+            self.user_home / ".steam" / "steam",
+            self.user_home / ".var" / "app" / "com.valvesoftware.Steam"
+                / ".local" / "share" / "Steam",
+        ])
 
         for steam_path in steam_paths:
             if steam_path.exists():

@@ -65,6 +65,7 @@ export interface ConfigSchemaResult {
 
 export interface LaunchOptionResult {
   launch_option: string;
+  wrapper_path: string;
   instructions: string;
   explanation: string;
 }

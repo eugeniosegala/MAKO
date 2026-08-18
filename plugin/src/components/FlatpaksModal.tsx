@@ -20,6 +20,7 @@ import {
   installFlatpakExtension,
   uninstallFlatpakExtension,
   getFlatpakApps,
+  getLaunchOption,
   setFlatpakAppOverride,
   removeFlatpakAppOverride,
   FlatpakExtensionStatus,
@@ -39,17 +40,22 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
   const [loading, setLoading] = useState(true);
   const [operationInProgress, setOperationInProgress] = useState<string | null>(null);
   const [appErrors, setAppErrors] = useState<Record<string, string>>({});
+  const [wrapperPath, setWrapperPath] = useState("~/.local/bin/mako-run");
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [statusResult, appsResult] = await Promise.all([
+      const [statusResult, appsResult, launchOptionResult] = await Promise.all([
         checkFlatpakExtensionStatus(),
-        getFlatpakApps()
+        getFlatpakApps(),
+        getLaunchOption().catch(() => null)
       ]);
 
       setExtensionStatus(statusResult);
       setFlatpakApps(appsResult);
+      if (launchOptionResult?.wrapper_path) {
+        setWrapperPath(launchOptionResult.wrapper_path);
+      }
     } catch (error) {
       console.error('Error loading Flatpak data:', error);
     } finally {
@@ -168,18 +174,13 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
   const instructionSteps = [
     {
       id: 'try-first',
-      title: t('FLATPAK_STEP_TRY_FIRST', 'Try first:'),
-      command: '~/.local/bin/mako-run'
-    },
-    {
-      id: 'try-full-path',
-      title: t('FLATPAK_STEP_TRY_FULL_PATH', "If that doesn't work, try full path:"),
-      command: '/home/(username)/.local/bin/mako-run'
+      title: t('FLATPAK_STEP_WRAPPER_PATH', 'Wrapper path for this device:'),
+      command: wrapperPath
     },
     {
       id: 'final-result',
       title: t('FLATPAK_STEP_FINAL', 'Final result should look like:'),
-      command: '~/.local/bin/mako-run "usr/bin/flatpak"'
+      command: `${wrapperPath} "usr/bin/flatpak"`
     }
   ];
 
@@ -196,7 +197,8 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
     background: 'rgba(0, 0, 0, 0.45)',
     padding: '8px',
     borderRadius: '4px',
-    marginTop: '6px'
+    marginTop: '6px',
+    overflowWrap: 'anywhere'
   };
 
   return (

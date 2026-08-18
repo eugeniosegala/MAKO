@@ -8,6 +8,7 @@ Vulkan layer for frame generation and scaling on SteamOS.
 import os
 import subprocess
 import hashlib
+import shlex
 from typing import Dict, Any
 from pathlib import Path
 
@@ -274,8 +275,10 @@ class Plugin:
         Returns:
             Dict containing the launch option string and instructions
         """
+        wrapper_path = self.installation_service.get_launch_script_path()
         return {
-            "launch_option": "~/.local/bin/mako-run %command%",
+            "launch_option": f"{shlex.quote(wrapper_path)} %command%",
+            "wrapper_path": wrapper_path,
             "instructions": "Add this to your game's launch options in Steam Properties",
             "explanation": "The launcher is created during installation, enables MAKO Renderer's Vulkan layer for this game, and selects its private configuration"
         }

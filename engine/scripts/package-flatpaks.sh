@@ -4,6 +4,14 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 monorepo_root="$(cd "$repo_root/.." && pwd)"
+build_cache_root="${MAKO_BUILD_CACHE_ROOT:-$repo_root/build/cache}"
+build_work_root="${MAKO_BUILD_WORK_ROOT:-$repo_root/build/work}"
+if [[ "$build_cache_root" != /* ]]; then
+    build_cache_root="$repo_root/$build_cache_root"
+fi
+if [[ "$build_work_root" != /* ]]; then
+    build_work_root="$repo_root/$build_work_root"
+fi
 version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
 default_output="$repo_root/out/mako-render-$version-flatpaks.tar.xz"
 output_path="${1:-$default_output}"
@@ -38,6 +46,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
         -v "mako-flatpak-cache:/cache" \
         -e MAKO_DISABLE_BWRAP_SECCOMP=1 \
         -e MAKO_FLATPAK_CACHE_ROOT=/cache \
+        -e MAKO_FLATPAK_WORK_ROOT=/cache \
         -v "$monorepo_root:/workspace" \
         -w /workspace/engine \
         ubuntu:24.04 \
@@ -83,13 +92,24 @@ if [[ "${MAKO_DISABLE_BWRAP_SECCOMP:-0}" == "1" ]]; then
     export FLATPAK_BWRAP="$repo_root/scripts/bwrap-no-seccomp.sh"
 fi
 
-build_root="$(mktemp -d "${TMPDIR:-/tmp}/mako-flatpak-package.XXXXXX")"
+work_root="${MAKO_FLATPAK_WORK_ROOT:-${MAKO_FLATPAK_TMP_ROOT:-$build_work_root/flatpak}}"
+if [[ "$work_root" != /* ]]; then
+    work_root="$repo_root/$work_root"
+fi
+mkdir -p "$work_root"
+build_root="$(mktemp -d "$work_root/mako-flatpak-package.XXXXXX")"
 cleanup() {
     rm -rf "$build_root"
 }
 trap cleanup EXIT
 
-cache_root="${MAKO_FLATPAK_CACHE_ROOT:-$build_root}"
+# Keep downloaded SDKs outside the disposable staging tree.  This directory is
+# ignored by Git and makes repeated native Linux release builds incremental;
+# Docker builds continue to use the explicitly configured /cache volume.
+cache_root="${MAKO_FLATPAK_CACHE_ROOT:-$build_cache_root/flatpak}"
+if [[ "$cache_root" != /* ]]; then
+    cache_root="$repo_root/$cache_root"
+fi
 export HOME="$cache_root/home"
 export XDG_CACHE_HOME="$cache_root/cache"
 export XDG_CONFIG_HOME="$cache_root/config"

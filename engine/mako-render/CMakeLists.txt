@@ -46,6 +46,13 @@ if(MAKO_BUILD_VK_LAYER)
 endif()
 
 if(BUILD_TESTING)
+    add_executable(mako-device-selection-tests
+        "tests/device_selection_tests.cpp")
+    target_include_directories(mako-device-selection-tests
+        PRIVATE "src")
+    add_test(NAME device-selection
+        COMMAND mako-device-selection-tests)
+
     add_executable(mako-profile-update-tests
         "tests/profile_update_tests.cpp")
     target_include_directories(mako-profile-update-tests

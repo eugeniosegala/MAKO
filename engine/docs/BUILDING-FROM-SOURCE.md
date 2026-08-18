@@ -62,14 +62,15 @@ produce one layer for the compiler architecture selected for that build.
 On a Pacman-based SteamOS host where Qt appears installed but its headers or
 CMake files are missing, the packager automatically downloads the exact
 `qt6-base`, `qt6-declarative`, and `libglvnd` packages selected by Pacman into
-`engine/build/native-sdk/`. It extracts and reuses that isolated SDK on later
+`engine/build/cache/native-sdk/`. It extracts and reuses that isolated SDK on later
 release builds, without Docker, Podman, root access, or changes to the SteamOS
 installation. The first fallback build needs network access; later builds reuse
 the cached files.
 
 This fallback applies only to `scripts/package-local.sh`. Manual CMake builds
 still use the system development packages. Set `MAKO_NATIVE_SDK_DIR` to place
-the reusable package cache somewhere other than `engine/build/native-sdk/`.
+that SDK somewhere else, or set `MAKO_BUILD_CACHE_ROOT` to relocate all MAKO
+build caches together.
 
 ### Fast SteamOS development build
 
@@ -90,32 +91,43 @@ runs. To retain a second incremental tree for genuine 32-bit games, run:
 The 32-bit tree defaults to `build/steamos-dev-32`. Both commands intentionally
 skip the CLI, Qt UI, Flatpak extensions, tests, archives, and Decky ZIP.
 Subsequent builds compile only changed source and its dependants. When
-available, `ccache` is enabled automatically; install it with the rest of the
-Arch build prerequisites to retain compiler results across larger rebuilds.
+available, `ccache` is enabled automatically and stored under
+`build/cache/ccache`; install it with the rest of the Arch build prerequisites
+to retain compiler results across larger rebuilds.
 
 ### SteamOS Flatpak development cache
 
-The plugin's `dev:flatpaks` and `dev:e2e` commands retain their isolated Flatpak
-SDK/runtime downloads under `build/steamos-flatpak-cache` in the engine tree and
-use `build/steamos-flatpak-tmp` for temporary staging. The cache persists until
-you remove it, so later Flatpak development builds avoid downloading the same
-runtime dependencies. To inspect it safely, run:
+MAKO keeps all reusable build data under `build/cache` by default. The plugin's
+`dev:flatpaks` and `dev:e2e` commands retain their isolated Flatpak SDK/runtime
+downloads under `build/cache/flatpak` and use `build/work/flatpak` for
+self-cleaning staging. Nothing in these locations is installed into `/root` or
+the host system. To inspect all repository-local build storage safely, run:
+
+```bash
+./scripts/prune-build-cache.sh
+```
+
+That command is a dry run. Add `--confirm` only when you want to remove all
+reusable Qt, Flatpak, and compiler caches plus disposable work trees. Native
+incremental builds, release artifacts, installed MAKO data, and profiles remain
+untouched.
+
+To inspect or remove only the Flatpak portion, run:
 
 ```bash
 ./scripts/prune-steamos-flatpak-cache.sh
 ```
 
-That command is a dry run. To delete only those two development-cache
-directories, with native builds and installed MAKO artifacts preserved, add
-the explicit confirmation flag:
+To delete only the Flatpak cache and work directory, add the explicit
+confirmation flag:
 
 ```bash
 ./scripts/prune-steamos-flatpak-cache.sh --confirm
 ```
 
-For safety, this pruner targets only the default repo-local locations. If you
-set a custom Flatpak cache or temporary-directory environment variable, manage
-that custom location yourself.
+For safety, both pruners target only the default repo-local locations. If you
+set `MAKO_BUILD_CACHE_ROOT`, `MAKO_BUILD_WORK_ROOT`, or a component-specific
+override, manage that custom location yourself.
 
 Use `MAKO_BUILD_JOBS=4` to cap parallelism on a memory-constrained Deck, or
 `MAKO_BUILD_DIR=/path/to/build` to keep the build tree elsewhere. This is a

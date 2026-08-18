@@ -74,13 +74,17 @@ The Steam launch wrapper cannot enter a Flatpak sandbox directly, so configure H
 
 1. Select **Flatpak Setup** in Mako.
 2. Under **Flatpak Applications**, prepare **Heroic**. If the matching runtime extension is missing, Mako tells you which runtime to install, commonly **25.08**. Preparing Heroic grants access to the wrapper, configuration, and `Lossless.dll`; it does not enable frame generation for every Heroic game.
-3. In every Heroic game you want to enable, open **Settings > Advanced** and set the first **Wrapper** field to:
+3. In every Heroic game you want to enable, open **Settings > Advanced** and
+   set the first **Wrapper** field to the SteamOS wrapper path:
 
    ```text
    /home/deck/.local/bin/mako-run
    ```
 
-   Leave **Arguments** empty. Do not use `%command%` in Heroic.
+   Mako also shows the exact **Wrapper path for this device** under **Flatpak
+   Setup**. Use that displayed path when it differs, such as on Bazzite or with
+   a custom username. Leave **Arguments** empty and do not use `%command%` in
+   Heroic.
 4. Start that game normally from Heroic or its Steam shortcut.
 
 The wrapper applies only to the selected Heroic games and enables the private MAKO Renderer Flatpak layer for that game.
@@ -103,6 +107,9 @@ For any EmuDeck emulator installed as a Flatpak:
      ```text
      /home/deck/.local/bin/mako-run
      ```
+
+     This is the standard SteamOS path. If Mako shows a different **Wrapper
+     path for this device** under **Flatpak Setup**, use the displayed path.
 
    - **Start In**
 

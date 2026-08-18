@@ -19,6 +19,7 @@
     "dev:host": "./scripts/deploy-dev.sh --host",
     "dev:flatpaks": "./scripts/deploy-dev.sh --flatpaks",
     "dev:e2e": "./scripts/deploy-dev.sh --e2e",
+    "dev:prune-build-cache": "../engine/scripts/prune-build-cache.sh",
     "dev:prune-flatpak-cache": "../engine/scripts/prune-steamos-flatpak-cache.sh",
     "package:publish": "./scripts/publish-package.sh",
     "test": "python3 -m unittest discover -s tests -p 'test_*.py'"

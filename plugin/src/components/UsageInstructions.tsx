@@ -1,8 +1,20 @@
+import { useEffect, useState } from "react";
 import { PanelSectionRow } from "@decky/ui";
+import { getLaunchOption } from "../api/makoApi";
 import t from "../i18n/i18n";
 import { MakoSectionHeader } from "./MakoUi";
 
 export function UsageInstructions() {
+  const [launchOption, setLaunchOption] = useState("~/.local/bin/mako-run %command%");
+
+  useEffect(() => {
+    getLaunchOption()
+      .then((result) => setLaunchOption(
+        result.launch_option || "~/.local/bin/mako-run %command%"
+      ))
+      .catch(() => undefined);
+  }, []);
+
   return (
     <>
       <MakoSectionHeader>
@@ -37,7 +49,7 @@ export function UsageInstructions() {
         textAlign: "center"
           }}
         >
-          <strong>~/.local/bin/mako-run %command%</strong>
+          <strong>{launchOption}</strong>
         </div>
       </PanelSectionRow>
 

@@ -3,6 +3,14 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 monorepo_root="$(cd "$repo_root/.." && pwd)"
+build_cache_root="${MAKO_BUILD_CACHE_ROOT:-$repo_root/build/cache}"
+build_work_root="${MAKO_BUILD_WORK_ROOT:-$repo_root/build/work}"
+if [[ "$build_cache_root" != /* ]]; then
+    build_cache_root="$repo_root/$build_cache_root"
+fi
+if [[ "$build_work_root" != /* ]]; then
+    build_work_root="$repo_root/$build_work_root"
+fi
 version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
 default_output="$repo_root/out/mako-render-$version-linux.tar.xz"
 output_path=""
@@ -150,7 +158,7 @@ bootstrap_native_qt_sdk() {
         fi
     done
 
-    local sdk_cache_dir="${MAKO_NATIVE_SDK_DIR:-$repo_root/build/native-sdk}"
+    local sdk_cache_dir="${MAKO_NATIVE_SDK_DIR:-$build_cache_root/native-sdk}"
     if [[ "$sdk_cache_dir" != /* ]]; then
         sdk_cache_dir="$repo_root/$sdk_cache_dir"
     fi
@@ -219,7 +227,8 @@ bootstrap_native_qt_sdk() {
 
 bootstrap_native_qt_sdk
 
-build_root="$(mktemp -d "${TMPDIR:-/tmp}/mako-package.XXXXXX")"
+mkdir -p "$build_work_root"
+build_root="$(mktemp -d "$build_work_root/mako-package.XXXXXX")"
 cleanup() {
     rm -rf "$build_root"
 }
@@ -242,7 +251,8 @@ cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
     -DMAKO_LAYER_LIBRARY_PATH="../../../lib/libmako-render.so"
 
 cmake --build "$build64_dir" --target \
-    mako-config-tests mako-profile-update-tests \
+    mako-config-tests mako-device-selection-tests \
+    mako-profile-update-tests \
     mako-runtime-transition-tests \
     mako-presentation-policy-tests \
     mako-adaptive-tests mako-adaptive-matrix \

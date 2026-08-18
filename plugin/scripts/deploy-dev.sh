@@ -259,8 +259,10 @@ if [[ "$deploy_flatpaks" == true ]]; then
   fi
   engine_version="$(tr -d '[:space:]' < "$engine_repo/VERSION")"
   flatpak_archive="$engine_repo/out/mako-render-$engine_version-steamos-dev-flatpaks.tar.xz"
-  flatpak_cache_root="${MAKO_FLATPAK_CACHE_ROOT:-$engine_repo/build/steamos-flatpak-cache}"
-  flatpak_tmp_root="${MAKO_FLATPAK_TMP_ROOT:-$engine_repo/build/steamos-flatpak-tmp}"
+  build_cache_root="${MAKO_BUILD_CACHE_ROOT:-$engine_repo/build/cache}"
+  build_work_root="${MAKO_BUILD_WORK_ROOT:-$engine_repo/build/work}"
+  flatpak_cache_root="${MAKO_FLATPAK_CACHE_ROOT:-$build_cache_root/flatpak}"
+  flatpak_tmp_root="${MAKO_FLATPAK_TMP_ROOT:-$build_work_root/flatpak}"
   if [[ "$flatpak_cache_root" != /* ]]; then
     flatpak_cache_root="$engine_repo/$flatpak_cache_root"
   fi
@@ -269,7 +271,8 @@ if [[ "$deploy_flatpaks" == true ]]; then
   fi
   mkdir -p "$flatpak_tmp_root"
   echo "Building all MAKO Flatpak runtime bundles..."
-  TMPDIR="$flatpak_tmp_root" MAKO_FLATPAK_CACHE_ROOT="$flatpak_cache_root" \
+  TMPDIR="$flatpak_tmp_root" MAKO_FLATPAK_WORK_ROOT="$flatpak_tmp_root" \
+    MAKO_FLATPAK_CACHE_ROOT="$flatpak_cache_root" \
     "$engine_repo/scripts/package-flatpaks.sh" "$flatpak_archive"
   flatpak_unpack_dir="$(mktemp -d "${TMPDIR:-/tmp}/mako-flatpaks.XXXXXX")"
   tar -xJf "$flatpak_archive" -C "$flatpak_unpack_dir"

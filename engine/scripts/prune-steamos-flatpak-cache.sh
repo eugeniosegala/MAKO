@@ -3,8 +3,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cache_dir="$repo_root/build/steamos-flatpak-cache"
-tmp_dir="$repo_root/build/steamos-flatpak-tmp"
+cache_dir="$repo_root/build/cache/flatpak"
+tmp_dir="$repo_root/build/work/flatpak"
 confirm=false
 
 usage() {

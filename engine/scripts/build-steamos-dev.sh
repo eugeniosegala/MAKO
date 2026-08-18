@@ -3,6 +3,10 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+build_cache_root="${MAKO_BUILD_CACHE_ROOT:-$repo_root/build/cache}"
+if [[ "$build_cache_root" != /* ]]; then
+    build_cache_root="$repo_root/$build_cache_root"
+fi
 build_dir="${MAKO_BUILD_DIR:-$repo_root/build/steamos-dev}"
 build_32_dir="${MAKO_BUILD_32_DIR:-}"
 compiler="${CXX:-clang++}"
@@ -120,8 +124,10 @@ fi
 
 compiler_launcher=""
 if command -v ccache >/dev/null 2>&1; then
+    export CCACHE_DIR="${CCACHE_DIR:-$build_cache_root/ccache}"
+    mkdir -p "$CCACHE_DIR"
     compiler_launcher="ccache"
-    echo "Using ccache for compiler results."
+    echo "Using repo-local ccache: $CCACHE_DIR"
 else
     echo "ccache is not installed; continuing with Ninja's incremental build cache."
 fi
