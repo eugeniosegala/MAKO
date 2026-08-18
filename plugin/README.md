@@ -24,7 +24,7 @@ and download the Linux archive under **Assets**.
 ## What it manages
 
 - Installs the private MAKO Renderer Vulkan layer for the current user.
-- Generates the `~/.local/bin/mako-run` per-game launcher.
+- Generates the `/home/deck/.local/bin/mako-run` per-game launcher.
 - Stores renderer settings in `~/.config/mako-render/conf.toml` and versioned game/process identity separately for automatic per-game selection.
 - Supports fixed and adaptive frame generation with live per-game controls.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
@@ -52,9 +52,9 @@ The resulting Decky ZIP is written under `plugin/out/`. Nothing is published by 
 After installing the ZIP through Decky developer settings, open Mako and install MAKO Renderer. For a native Steam or Proton game, use:
 
 ```text
-~/.local/bin/mako-run %command%
+/home/deck/.local/bin/mako-run %command%
 ```
 
 MAKO's wrapper activates `VK_LAYER_MAKO_render` only for the selected game process.
 
-See [Configuration](docs/CONFIGURATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), and [Packaging](docs/PACKAGING.md) for detailed workflows.
+See [Configuration](docs/CONFIGURATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Collect MAKO Diagnostics](docs/COLLECT_DIAGNOSTICS.md), and [Packaging](docs/PACKAGING.md) for detailed workflows.

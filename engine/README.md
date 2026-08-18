@@ -26,7 +26,7 @@ Steam Deck users who want the managed workflow should install the
 For SteamOS, the companion **MAKO Decky** plugin is the recommended installation path. It installs the renderer in a private location, creates the `mako-run` launcher, and prepares supported Flatpak applications. Install the Decky ZIP, open **Mako**, and select **Install MAKO Renderer**. For a native Steam or Proton game, set its Steam launch option to:
 
 ```text
-~/.local/bin/mako-run %command%
+/home/deck/.local/bin/mako-run %command%
 ```
 
 See the [main MAKO installation guide](../README.md#install-and-use) for the complete Decky, Heroic, and EmuDeck setup.

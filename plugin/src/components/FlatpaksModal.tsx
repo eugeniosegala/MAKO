@@ -22,7 +22,8 @@ import {
   removeFlatpakAppOverride,
   FlatpakExtensionStatus,
   FlatpakApp,
-  FlatpakAppInfo
+  FlatpakAppInfo,
+  DEFAULT_MAKO_WRAPPER_PATH
 } from '../api/makoApi';
 import t from '../i18n/i18n';
 import { showErrorToast, showSuccessToast } from '../utils/toastUtils';
@@ -44,7 +45,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
   const [loading, setLoading] = useState(true);
   const [operationInProgress, setOperationInProgress] = useState<string | null>(null);
   const [appErrors, setAppErrors] = useState<Record<string, string>>({});
-  const [wrapperPath, setWrapperPath] = useState("~/.local/bin/mako-run");
+  const [wrapperPath, setWrapperPath] = useState(DEFAULT_MAKO_WRAPPER_PATH);
 
   const loadData = async () => {
     setLoading(true);

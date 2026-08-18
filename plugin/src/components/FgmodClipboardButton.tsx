@@ -1,7 +1,11 @@
 import { useState, useEffect } from "react";
 import { PanelSectionRow, ButtonItem } from "@decky/ui";
 import { FaClipboard, FaCheck } from "react-icons/fa";
-import { checkFgmodDirectory, getLaunchOption } from "../api/makoApi";
+import {
+  checkFgmodDirectory,
+  DEFAULT_STEAM_LAUNCH_OPTION,
+  getLaunchOption
+} from "../api/makoApi";
 import { showClipboardErrorToast } from "../utils/toastUtils";
 import { copyWithVerification } from "../utils/clipboardUtils";
 import t from '../i18n/i18n';
@@ -46,7 +50,7 @@ export function FgmodClipboardButton() {
     setIsLoading(true);
     try {
       const launchOption = await getLaunchOption();
-      const text = `~/fgmod/fgmod ${launchOption.launch_option || "~/.local/bin/mako-run %command%"}`;
+      const text = `~/fgmod/fgmod ${launchOption.launch_option || DEFAULT_STEAM_LAUNCH_OPTION}`;
       const { success, verified } = await copyWithVerification(text);
 
       if (success) {

@@ -60,7 +60,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 7. For a native Steam or Proton game, add this under **Steam Properties > Launch Options**:
 
    ```text
-   ~/.local/bin/mako-run %command%
+   /home/deck/.local/bin/mako-run %command%
    ```
 
 8. Start the game normally.
@@ -122,16 +122,19 @@ For any EmuDeck emulator installed as a Flatpak:
 
 If EmuDeck installed an emulator as a native application or AppImage instead,
 it is not a Flatpak workflow: use the normal Steam launch option
-`~/.local/bin/mako-run %command%` for that shortcut.
+`/home/deck/.local/bin/mako-run %command%` for that shortcut.
 
 > [!IMPORTANT]
 > After updating MAKO, return to **Flatpak Setup** and select **Update** for every prepared emulator's matching runtime extension.
+
+For a step-by-step guide that creates a shareable report on the Desktop, see
+[Collect MAKO Diagnostics](plugin/docs/COLLECT_DIAGNOSTICS.md).
 
 ### Updating MAKO Decky
 
 The clean update path avoids Decky retaining an older backend or bundled payload:
 
-1. Quit games using `~/.local/bin/mako-run`.
+1. Quit games using `/home/deck/.local/bin/mako-run`.
 2. Uninstall Mako from Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart your Steam Deck or Steam Machine.
 4. Open Mako and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
@@ -170,6 +173,7 @@ The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications 
 
 - [Configuration guide](plugin/docs/CONFIGURATION.md): Fixed and Adaptive modes, quality and performance settings, profiles, and compatibility options.
 - [Troubleshooting](plugin/docs/TROUBLESHOOTING.md): Gamescope recovery, HDR compatibility, and diagnostic logs.
+- [Collect MAKO Diagnostics](plugin/docs/COLLECT_DIAGNOSTICS.md): user-facing steps for native Steam, Heroic, and EmuDeck reports.
 - [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
 - [Release process](HOW_TO_RELEASE.md): publish Renderer and Decky end to end with one versioned command.
 - [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.

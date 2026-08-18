@@ -1,16 +1,16 @@
 import { useEffect, useState } from "react";
 import { PanelSectionRow } from "@decky/ui";
-import { getLaunchOption } from "../api/makoApi";
+import { DEFAULT_STEAM_LAUNCH_OPTION, getLaunchOption } from "../api/makoApi";
 import t from "../i18n/i18n";
 import { MakoSectionHeader } from "./MakoUi";
 
 export function UsageInstructions() {
-  const [launchOption, setLaunchOption] = useState("~/.local/bin/mako-run %command%");
+  const [launchOption, setLaunchOption] = useState(DEFAULT_STEAM_LAUNCH_OPTION);
 
   useEffect(() => {
     getLaunchOption()
       .then((result) => setLaunchOption(
-        result.launch_option || "~/.local/bin/mako-run %command%"
+        result.launch_option || DEFAULT_STEAM_LAUNCH_OPTION
       ))
       .catch(() => undefined);
   }, []);

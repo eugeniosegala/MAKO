@@ -18,7 +18,7 @@ to test whether the layer is the cause of a startup or presentation problem.
 1. For a native Steam or Proton game, confirm its launch option is exactly:
 
    ```text
-   ~/.local/bin/mako-run %command%
+   /home/deck/.local/bin/mako-run %command%
    ```
 
 2. Open Mako and select **Install MAKO Renderer**. Installing
@@ -55,7 +55,7 @@ direct `dev:*` deployments enable them automatically. To collect a focused
 Steam report, temporarily replace the game's normal launch option with:
 
 ```text
-MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 ~/.local/bin/mako-run %command%
+MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 /home/deck/.local/bin/mako-run %command%
 ```
 
 For Heroic, keep the normal Wrapper and Arguments fields. Add these two
@@ -66,10 +66,23 @@ MAKO_PRESENT_DIAGNOSTICS=1
 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25
 ```
 
+For an EmuDeck Flatpak shortcut, first save its current **Target** and **Launch
+Options**. Temporarily set **Target** to `/usr/bin/env`, then prepend this to
+the existing **Launch Options** without changing the existing emulator ID, ROM
+path, or flags:
+
+```text
+MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 /home/deck/.local/bin/mako-run
+```
+
+Use Mako's displayed **Wrapper path for this device** when it differs. Do not
+add `%command%`. After reproducing the issue, restore the shortcut's original
+**Target** and **Launch Options** exactly.
+
 Reproduce the issue, quit the game, then run this in Desktop Mode:
 
 ```bash
-~/.local/bin/mako-diagnostics all
+/home/deck/.local/bin/mako-diagnostics all
 ```
 
 Useful focused reports are `mako-diagnostics adaptive`, `recovery`,
@@ -78,11 +91,15 @@ output is too short, or `--log PATH` for a saved diagnostic log. Remove the
 temporary variables afterwards because they can generate substantial log
 traffic.
 
+For complete user-facing instructions, including how to preserve EmuDeck
+arguments, create `MAKO-diagnostics.txt` on the Desktop, restore normal launch
+settings, and describe the issue, see [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md).
+
 ## Update and Flatpak checks
 
 Use the clean update path for every newer local ZIP:
 
-1. Quit games using `mako-run`.
+1. Quit games using `/home/deck/.local/bin/mako-run`.
 2. Uninstall **Mako** from Decky and install the newer ZIP through
    **Developer > Install Plugin from Zip**.
 3. Restart the Steam Deck or Steam Machine.
@@ -95,6 +112,7 @@ Renderer and refreshing any shared Flatpak extensions.
 
 ## Report an issue
 
-Include the MAKO ZIP/commit, SteamOS or Linux version, GPU and driver, game and
-Proton version, selected profile, exact launch method, and the relevant
-diagnostic report. Remove personal paths before sharing configuration or logs.
+Follow [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md) to reproduce the
+problem, create the focused Desktop report, restore normal launch settings,
+and submit the file privately. The linked form asks for the report context, so
+do not paste the diagnostic text into a public GitHub issue.

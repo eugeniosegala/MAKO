@@ -1,6 +1,9 @@
 import { callable } from "@decky/api";
 import { ConfigurationData } from "../config/configSchema";
 
+export const DEFAULT_MAKO_WRAPPER_PATH = "/home/deck/.local/bin/mako-run";
+export const DEFAULT_STEAM_LAUNCH_OPTION = `${DEFAULT_MAKO_WRAPPER_PATH} %command%`;
+
 // Type definitions for API responses
 export interface InstallationResult {
   success: boolean;

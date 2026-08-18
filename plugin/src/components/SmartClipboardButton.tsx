@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { PanelSectionRow, ButtonItem } from "@decky/ui";
 import { FaClipboard, FaCheck } from "react-icons/fa";
-import { getLaunchOption } from "../api/makoApi";
+import { DEFAULT_STEAM_LAUNCH_OPTION, getLaunchOption } from "../api/makoApi";
 import { showClipboardErrorToast } from "../utils/toastUtils";
 import { copyWithVerification } from "../utils/clipboardUtils";
 import t from '../i18n/i18n';
@@ -23,9 +23,9 @@ export function SmartClipboardButton() {
   const getLaunchOptionText = async (): Promise<string> => {
     try {
       const result = await getLaunchOption();
-      return result.launch_option || "~/.local/bin/mako-run %command%";
+      return result.launch_option || DEFAULT_STEAM_LAUNCH_OPTION;
     } catch (error) {
-      return "~/.local/bin/mako-run %command%";
+      return DEFAULT_STEAM_LAUNCH_OPTION;
     }
   };
 

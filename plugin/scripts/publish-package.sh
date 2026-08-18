@@ -277,14 +277,14 @@ printf '%s\n' \
   "1. Download \`$(basename "$output_path")\` below." \
   "2. On SteamOS, open Decky Loader's settings and enable **Developer Mode**." \
   '3. Choose **Developer** > **Install Plugin from Zip**, then select the downloaded ZIP.' \
-  '4. In Mako, select **Install MAKO Renderer**. For native Steam/Proton games, add `~/.local/bin/mako-run %command%` to the game’s Steam launch options.' \
+  '4. In Mako, select **Install MAKO Renderer**. For native Steam/Proton games, add `/home/deck/.local/bin/mako-run %command%` to the game’s Steam launch options.' \
   '' \
   '> [!IMPORTANT]' \
   '> If Decky does not show or reload the plugin after installing a ZIP, uninstall **Mako** from Decky, install the ZIP again, then restart your Steam Deck or Steam Machine. Open Mako afterwards and select **Install MAKO Renderer** again.' \
   '' \
   '## Updating an existing MAKO Decky installation' \
   '' \
-  '1. Quit any game currently using `~/.local/bin/mako-run`.' \
+  '1. Quit any game currently using `/home/deck/.local/bin/mako-run`.' \
   "2. Uninstall **Mako** from Decky, then download the newer ZIP from [MAKO Decky v$package_version](https://github.com/$github_repository/releases/tag/$plugin_release_tag)." \
   '3. In Game Mode, open Decky Loader’s settings, choose **Developer** > **Install Plugin from Zip**, then select the newer ZIP.' \
   '4. Restart your Steam Deck or Steam Machine.' \
