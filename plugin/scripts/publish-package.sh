@@ -6,19 +6,37 @@ script_dir="$project_dir/scripts"
 repository_root="$(cd "$project_dir/.." && pwd)"
 output_path=""
 output_path_set=false
+requested_version=""
 
 usage() {
   cat <<'EOF'
-Usage: scripts/publish-package.sh [output-path]
+Usage: scripts/publish-package.sh [--version X.Y.Z] [output-path]
 
 Builds and verifies the Decky plugin ZIP, then creates or verifies the matching
 plugin-v tag, pushes it, uploads the ZIP, and creates or updates the GitHub
-release as the repository's Latest release.
+release as the repository's Latest release. When --version is supplied, the
+script updates and commits plugin/package.json first. Its Renderer pin must
+already match that version.
 EOF
 }
 
 while (($#)); do
   case "$1" in
+    --version)
+      if (($# < 2)); then
+        echo "--version requires a value." >&2
+        usage >&2
+        exit 2
+      fi
+      requested_version="$2"
+      shift 2
+      continue
+      ;;
+    --version=*)
+      requested_version="${1#*=}"
+      shift
+      continue
+      ;;
     --help|-h)
       usage
       exit 0
@@ -61,6 +79,11 @@ if (($#)); then
   exit 2
 fi
 
+if [[ -n "$requested_version" && ! "$requested_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Release version must use X.Y.Z format: $requested_version" >&2
+  exit 2
+fi
+
 for command in git gh node; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Publishing requires command: $command" >&2
@@ -73,9 +96,52 @@ if ! gh auth status >/dev/null 2>&1; then
   exit 1
 fi
 
+current_branch="$(git -C "$project_dir" branch --show-current)"
+if [[ -z "$current_branch" ]]; then
+  echo "Publishing requires a checked-out branch, not a detached HEAD." >&2
+  exit 1
+fi
+if [[ "$current_branch" != "main" ]]; then
+  echo "Publish from main; current branch is $current_branch." >&2
+  exit 1
+fi
+
+if ! git -C "$project_dir" remote get-url origin >/dev/null 2>&1; then
+  echo "Publishing requires the origin remote." >&2
+  exit 1
+fi
+
 if [[ -n "$(git -C "$project_dir" status --porcelain --untracked-files=normal)" ]]; then
   echo "Refusing to publish from a dirty worktree. Commit the release changes first." >&2
   exit 1
+fi
+
+git -C "$project_dir" fetch origin --tags --quiet
+
+if [[ -n "$requested_version" ]]; then
+  read -r current_package_version pinned_engine_version < <(
+    node -e '
+      const manifest = require(process.argv[1]);
+      process.stdout.write(`${manifest.version ?? ""}\t${manifest.remote_binary?.[0]?.version ?? ""}\n`);
+    ' "$project_dir/package.json"
+  )
+  if [[ "$pinned_engine_version" != "$requested_version" ]]; then
+    echo "MAKO Decky v$requested_version requires a MAKO Renderer v$requested_version pin." >&2
+    echo "Publish Renderer first: ./engine/scripts/publish-package.sh --version $requested_version" >&2
+    exit 1
+  fi
+  if [[ "$current_package_version" != "$requested_version" ]]; then
+    node -e '
+      const fs = require("node:fs");
+      const path = process.argv[1];
+      const version = process.argv[2];
+      const manifest = JSON.parse(fs.readFileSync(path, "utf8"));
+      manifest.version = version;
+      fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+    ' "$project_dir/package.json" "$requested_version"
+    git -C "$repository_root" add plugin/package.json
+    git -C "$repository_root" commit -m "Release MAKO Decky v$requested_version"
+  fi
 fi
 
 read -r archive_name engine_version package_version github_repository has_flatpak_bundle archive_url engine_release_tag flatpak_archive_name flatpak_archive_url < <(
@@ -101,7 +167,6 @@ read -r archive_name engine_version package_version github_repository has_flatpa
 
 plugin_release_tag="plugin-v$package_version"
 notes_package_tag_pattern="plugin-v*"
-git -C "$project_dir" fetch origin --tags --quiet
 
 latest_previous_package_tag=""
 while IFS= read -r candidate_tag; do
@@ -166,16 +231,6 @@ if [[ -f "$local_engine_archive" ]]; then
   fi
 fi
 "$script_dir/package-local.sh" "${package_args[@]}" "$output_path"
-
-current_branch="$(git -C "$project_dir" branch --show-current)"
-if [[ -z "$current_branch" ]]; then
-  echo "Publishing requires a checked-out branch, not a detached HEAD." >&2
-  exit 1
-fi
-if [[ "$current_branch" != "main" ]]; then
-  echo "Publish from main; current branch is $current_branch." >&2
-  exit 1
-fi
 
 current_commit="$(git -C "$project_dir" rev-parse HEAD)"
 if git -C "$project_dir" rev-parse -q --verify "refs/tags/$plugin_release_tag" >/dev/null; then

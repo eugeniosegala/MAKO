@@ -2,42 +2,63 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repository_root="$(cd "$repo_root/.." && pwd)"
 cd "$repo_root"
 
-version="$(tr -d '[:space:]' < VERSION)"
-tag="render-v$version"
-archive="out/mako-render-v$version-linux.tar.xz"
-flatpak_archive="out/mako-render-v$version-flatpaks.tar.xz"
-release_branch="$(git branch --show-current)"
-source_commit="$(git rev-parse HEAD)"
 release_remote="${MAKO_RELEASE_REMOTE:-origin}"
 notes_tag_pattern="render-v*"
+requested_version=""
 
-if ! git remote get-url "$release_remote" >/dev/null 2>&1; then
-    echo "Release remote '$release_remote' is not configured." >&2
-    exit 1
+usage() {
+    cat <<'EOF'
+Usage: scripts/publish-package.sh [--version X.Y.Z]
+
+Builds, verifies, and publishes MAKO Renderer. When --version is supplied, the
+script updates and commits engine/VERSION first. After publishing, it commits
+the generated Decky binary pins and Renderer release links automatically.
+EOF
+}
+
+while (($#)); do
+    case "$1" in
+        --version)
+            if (($# < 2)); then
+                echo "--version requires a value." >&2
+                usage >&2
+                exit 2
+            fi
+            requested_version="$2"
+            shift 2
+            ;;
+        --version=*)
+            requested_version="${1#*=}"
+            shift
+            ;;
+        --help|-h)
+            usage
+            exit 0
+            ;;
+        *)
+            echo "Unknown argument: $1" >&2
+            usage >&2
+            exit 2
+            ;;
+    esac
+done
+
+if [[ -n "$requested_version" && ! "$requested_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Release version must use X.Y.Z format: $requested_version" >&2
+    exit 2
 fi
 
-git fetch "$release_remote" --tags --quiet
-
-latest_previous_tag=""
-while IFS= read -r candidate_tag; do
-    if [[ "$candidate_tag" != "$tag" ]]; then
-        latest_previous_tag="$candidate_tag"
-        break
+for command in gh git node; do
+    if ! command -v "$command" >/dev/null 2>&1; then
+        echo "Required command not found: $command" >&2
+        exit 1
     fi
-done < <(git tag --merged HEAD --list "$notes_tag_pattern" --sort=-version:refname)
-if [[ -n "$latest_previous_tag" ]]; then
-    release_notes_heading="What's new since \`$latest_previous_tag\`"
-    release_changes="$(git log --no-merges --format='- %s (%h)' "$latest_previous_tag"..HEAD -- engine README.md)"
-else
-    release_notes_heading="What's new in MAKO Renderer \`$version\`"
-    release_changes="$(git log --no-merges --format='- %s (%h)' HEAD -- engine README.md)"
-fi
-if [[ -z "$release_changes" ]]; then
-    release_changes='- No component-scoped changes were recorded after the previous tag.'
-fi
+done
 
+release_branch="$(git branch --show-current)"
 if [[ "$release_branch" != "main" ]]; then
     echo "Publish from main; current branch is $release_branch." >&2
     exit 1
@@ -48,22 +69,10 @@ if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
     exit 1
 fi
 
-tag_exists=false
-if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
-    tag_commit="$(git rev-list -n 1 "$tag")"
-    if [[ "$tag_commit" != "$source_commit" ]]; then
-        echo "Tag $tag does not point at HEAD. Publish from its intended commit or bump VERSION." >&2
-        exit 1
-    fi
-    tag_exists=true
+if ! git remote get-url "$release_remote" >/dev/null 2>&1; then
+    echo "Release remote '$release_remote' is not configured." >&2
+    exit 1
 fi
-
-for command in gh git node; do
-    if ! command -v "$command" >/dev/null 2>&1; then
-        echo "Required command not found: $command" >&2
-        exit 1
-    fi
-done
 
 release_repository="$(git remote get-url "$release_remote")"
 release_repository="${release_repository#git@github.com:}"
@@ -86,6 +95,56 @@ fi
 if ! gh auth status >/dev/null 2>&1; then
     echo "GitHub CLI is not authenticated. Run: gh auth login -h github.com" >&2
     exit 1
+fi
+
+git fetch "$release_remote" --tags --quiet
+
+if [[ -n "$requested_version" ]]; then
+    current_version="$(tr -d '[:space:]' < VERSION)"
+    if [[ "$current_version" != "$requested_version" ]]; then
+        printf '%s\n' "$requested_version" > VERSION
+        git add VERSION
+        git commit -m "Release MAKO Renderer v$requested_version"
+    fi
+fi
+
+version="$(tr -d '[:space:]' < VERSION)"
+if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "engine/VERSION must use X.Y.Z format: $version" >&2
+    exit 1
+fi
+
+tag="render-v$version"
+archive="out/mako-render-v$version-linux.tar.xz"
+flatpak_archive="out/mako-render-v$version-flatpaks.tar.xz"
+source_commit="$(git rev-parse HEAD)"
+
+latest_previous_tag=""
+while IFS= read -r candidate_tag; do
+    if [[ "$candidate_tag" != "$tag" ]]; then
+        latest_previous_tag="$candidate_tag"
+        break
+    fi
+done < <(git tag --merged HEAD --list "$notes_tag_pattern" --sort=-version:refname)
+if [[ -n "$latest_previous_tag" ]]; then
+    release_notes_heading="What's new since \`$latest_previous_tag\`"
+    release_changes="$(git log --no-merges --format='- %s (%h)' "$latest_previous_tag"..HEAD -- engine README.md)"
+else
+    release_notes_heading="What's new in MAKO Renderer \`$version\`"
+    release_changes="$(git log --no-merges --format='- %s (%h)' HEAD -- engine README.md)"
+fi
+if [[ -z "$release_changes" ]]; then
+    release_changes='- No component-scoped changes were recorded after the previous tag.'
+fi
+
+tag_exists=false
+if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
+    tag_commit="$(git rev-list -n 1 "$tag")"
+    if [[ "$tag_commit" != "$source_commit" ]]; then
+        echo "Tag $tag does not point at HEAD. Publish from its intended commit or bump VERSION." >&2
+        exit 1
+    fi
+    tag_exists=true
 fi
 
 scripts/package-local.sh "$archive"
@@ -190,15 +249,14 @@ node "$repo_root/../plugin/scripts/pin-renderer-release.mjs" \
     "$flatpak_archive" \
     "$flatpak_checksum"
 
-repository_root="$repo_root/.."
 node "$repository_root/scripts/update-release-links.mjs" \
     renderer "$version" "$release_repository"
-release_link_readmes=(README.md plugin/README.md engine/README.md)
-if ! git -C "$repository_root" diff --quiet -- "${release_link_readmes[@]}"; then
-    git -C "$repository_root" add "${release_link_readmes[@]}"
-    git -C "$repository_root" commit -m "docs: link MAKO Renderer v$version"
+release_metadata_paths=(plugin/package.json README.md plugin/README.md engine/README.md)
+if ! git -C "$repository_root" diff --quiet -- "${release_metadata_paths[@]}"; then
+    git -C "$repository_root" add "${release_metadata_paths[@]}"
+    git -C "$repository_root" commit -m "Pin MAKO Renderer v$version"
     git -C "$repository_root" push "$release_remote" "$release_branch"
 fi
 
 echo "Published: https://github.com/$release_repository/releases/tag/$tag"
-echo "Updated plugin/package.json with the published renderer assets. Review and commit that pin before publishing MAKO Decky."
+echo "Committed the matching Decky binary pins and Renderer release links."

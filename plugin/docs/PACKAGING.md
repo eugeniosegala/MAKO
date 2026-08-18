@@ -173,52 +173,19 @@ compiler prerequisites in the [source-build guide](../../engine/docs/BUILDING-FR
 
 ## Publish a GitHub release
 
-Publish from a clean `main` worktree and authenticate once with
-`gh auth login -h github.com`. Both publishers intentionally refuse another
-branch or uncommitted changes.
-
-Both publishers fetch the remote component tags and generate a release-note
-commit list from the latest earlier tag. Review that list before publishing; it
-contains every non-merge commit that touched the component or shared README in
-the selected range.
-
-1. Update the Renderer version and commit the intended Renderer release on
-   `main`.
-2. From `engine/`, run:
-
-   ```bash
-   ./scripts/publish-package.sh
-   ```
-
-   This creates the normal `render-v<version>` release, uploads the native and
-   Flatpak archives, updates the MAKO Renderer link in the root Downloads
-   table in a documentation-only commit, and updates `plugin/package.json` with
-   verified checksums.
-3. Review and commit that generated Renderer pin, then update and commit the
-   Decky version.
-4. From `plugin/`, run:
+Use the root [How to release MAKO](../../HOW_TO_RELEASE.md) guide. From a clean
+`main` worktree, one command versions, builds, verifies, pins, publishes, and
+links both packages:
 
 ```bash
-pnpm run package:publish
+./scripts/publish-release.sh 1.2.0
 ```
 
-The script verifies and builds `MAKO-Decky-v<package-version>.zip`, creates or
-verifies the matching `plugin-v<package-version>` tag, pushes the branch and
-tag, generates release notes, and creates or updates the GitHub release. A
-MAKO Decky release is explicitly marked as the repository's **Latest** release.
-After a successful release, it verifies that MAKO Decky documentation points
-to the repository's designated Latest release. The Renderer publisher updates
-every versioned MAKO Renderer release-page link across the root, Decky, and
-Renderer READMEs. Either publisher commits and pushes documentation changes
-when needed. Neither moves an existing published tag to newer code.
-
-Both components are published as normal GitHub releases. The Renderer publisher
-uses `--latest=false` so the Decky release can remain the repository's Latest
-release.
-
-The Decky publisher requires `plugin/package.json` to pin the matching
-checksum-verified Renderer assets. It refuses a local-only payload or an
-unpublished/mismatched Renderer tag.
+The workflow publishes Renderer first, including the host and Flatpak assets,
+then commits its exact URLs and checksums before publishing the matching Decky
+ZIP as GitHub's **Latest** release. It is resumable and refuses a dirty
+worktree, the wrong branch, local-only payloads, mismatched pins, or reused tags
+that point at different code.
 
 Release entry points:
 

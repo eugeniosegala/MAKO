@@ -171,6 +171,7 @@ The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications 
 - [Configuration guide](plugin/docs/CONFIGURATION.md): Fixed and Adaptive modes, quality and performance settings, profiles, and compatibility options.
 - [Troubleshooting](plugin/docs/TROUBLESHOOTING.md): Gamescope recovery, HDR compatibility, and diagnostic logs.
 - [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
+- [Release process](HOW_TO_RELEASE.md): publish Renderer and Decky end to end with one versioned command.
 - [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.
 
 ## Featured in
