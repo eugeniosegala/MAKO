@@ -1,4 +1,4 @@
-# MAKO - Frame Generation
+# MAKO - Frame Generation on Steam OS/Linux
 
 <p align="center">
   <img src="plugin/assets/mako-logo.webp" width="256" alt="MAKO logo" />
