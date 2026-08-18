@@ -3,7 +3,10 @@
 set -euo pipefail
 
 default_plugin_log="${HOME}/.config/mako-render/present-diagnostics.log"
-default_steam_log="${HOME}/.steam/steam/logs/console-linux.txt"
+default_steam_logs=(
+  "${HOME}/.steam/steam/logs/console-linux.txt"
+  "${HOME}/.var/app/com.valvesoftware.Steam/.steam/steam/logs/console-linux.txt"
+)
 log_path="${MAKO_PRESENT_DIAGNOSTICS_LOG:-}"
 line_count=800
 presets=()
@@ -13,8 +16,8 @@ usage() {
 Usage: mako-diagnostics [options] [PRESET ...]
 
 Filters the current MAKO Renderer diagnostics log. Multiple presets may be combined.
-The plugin-private log is preferred; Steam's console log is used when the
-private log does not exist.
+The MAKO Decky private log is preferred. Otherwise, the newest native or
+Flatpak Steam console log is used.
 
 Presets:
   hdr          HDR/scRGB selection, transport packing, passthrough, and initialization
@@ -97,7 +100,15 @@ if [[ -z "$log_path" ]]; then
   if [[ -f "$default_plugin_log" ]]; then
     log_path="$default_plugin_log"
   else
-    log_path="$default_steam_log"
+    for candidate in "${default_steam_logs[@]}"; do
+      if [[ -f "$candidate" &&
+            ( -z "$log_path" || "$candidate" -nt "$log_path" ) ]]; then
+        log_path="$candidate"
+      fi
+    done
+    if [[ -z "$log_path" ]]; then
+      log_path="${default_steam_logs[0]}"
+    fi
   fi
 fi
 

@@ -10,7 +10,8 @@ import unittest
 
 
 PROJECT_DIR = Path(__file__).resolve().parent.parent
-HELPER = PROJECT_DIR / "scripts" / "mako-diagnostics"
+REPOSITORY_ROOT = PROJECT_DIR.parent
+HELPER = REPOSITORY_ROOT / "scripts" / "mako-diagnostics"
 
 
 class _Logger:
@@ -142,6 +143,26 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("VK_TIMEOUT", result.stdout)
         self.assertIn("initialization failed", result.stdout)
         self.assertIn(str(path), result.stderr)
+
+    def test_newest_native_or_flatpak_steam_log_is_selected(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            home = Path(temporary_directory)
+            native_log = home / ".steam/steam/logs/console-linux.txt"
+            flatpak_log = (
+                home
+                / ".var/app/com.valvesoftware.Steam/.steam/steam/logs/console-linux.txt"
+            )
+            native_log.parent.mkdir(parents=True)
+            flatpak_log.parent.mkdir(parents=True)
+            native_log.write_text(FIXTURE, encoding="utf-8")
+            flatpak_log.write_text(FIXTURE, encoding="utf-8")
+            os.utime(native_log, (1, 1))
+            os.utime(flatpak_log, (2, 2))
+            environment = {**os.environ, "HOME": str(home)}
+            environment.pop("MAKO_PRESENT_DIAGNOSTICS_LOG", None)
+            result = self._run("errors", environment=environment)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn(str(flatpak_log), result.stderr)
 
     def test_invalid_preset_and_line_count_fail_clearly(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

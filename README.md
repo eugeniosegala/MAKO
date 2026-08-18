@@ -128,7 +128,7 @@ it is not a Flatpak workflow: use the normal Steam launch option
 > After updating MAKO, return to **Flatpak Setup** and select **Update** for every prepared emulator's matching runtime extension.
 
 For a step-by-step guide that creates a shareable report on the Desktop, see
-[Collect MAKO Diagnostics](plugin/docs/COLLECT_DIAGNOSTICS.md).
+[Collect MAKO Decky Diagnostics](plugin/docs/COLLECT_DIAGNOSTICS.md).
 
 ### Updating MAKO Decky
 
@@ -173,7 +173,7 @@ The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications 
 
 - [Configuration guide](plugin/docs/CONFIGURATION.md): Fixed and Adaptive modes, quality and performance settings, profiles, and compatibility options.
 - [Troubleshooting](plugin/docs/TROUBLESHOOTING.md): Gamescope recovery, HDR compatibility, and diagnostic logs.
-- [Collect MAKO Diagnostics](plugin/docs/COLLECT_DIAGNOSTICS.md): user-facing steps for native Steam, Heroic, and EmuDeck reports.
+- [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md): choose the MAKO Decky or standalone Renderer collection workflow and submit one shared report.
 - [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
 - [Release process](HOW_TO_RELEASE.md): publish Renderer and Decky end to end with one versioned command.
 - [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.

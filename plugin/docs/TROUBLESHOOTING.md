@@ -93,7 +93,8 @@ traffic.
 
 For complete user-facing instructions, including how to preserve EmuDeck
 arguments, create `MAKO-diagnostics.txt` on the Desktop, restore normal launch
-settings, and describe the issue, see [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md).
+settings, and submit the report, see
+[Collect MAKO Decky Diagnostics](COLLECT_DIAGNOSTICS.md).
 
 ## Update and Flatpak checks
 
@@ -112,7 +113,7 @@ Renderer and refreshing any shared Flatpak extensions.
 
 ## Report an issue
 
-Follow [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md) to reproduce the
+Follow [Collect MAKO Decky Diagnostics](COLLECT_DIAGNOSTICS.md) to reproduce the
 problem, create the focused Desktop report, restore normal launch settings,
 and submit the file privately. The linked form asks for the report context, so
 do not paste the diagnostic text into a public GitHub issue.

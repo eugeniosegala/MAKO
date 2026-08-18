@@ -57,4 +57,4 @@ After installing the ZIP through Decky developer settings, open Mako and install
 
 MAKO's wrapper activates `VK_LAYER_MAKO_render` only for the selected game process.
 
-See [Configuration](docs/CONFIGURATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Collect MAKO Diagnostics](docs/COLLECT_DIAGNOSTICS.md), and [Packaging](docs/PACKAGING.md) for detailed workflows.
+See [Configuration](docs/CONFIGURATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Collect MAKO Decky Diagnostics](docs/COLLECT_DIAGNOSTICS.md), and [Packaging](docs/PACKAGING.md) for detailed workflows.

@@ -43,7 +43,7 @@ tar -tJf mako-render-v<version>-linux.tar.xz > mako-render-v<version>-files.txt
 tar -xJf mako-render-v<version>-linux.tar.xz -C ~/.local
 ```
 
-The archive installs `mako-ui`, `mako-cli`, XDG desktop files, Vulkan manifests, and matching 64-bit and 32-bit layers. The Vulkan loader selects the correct layer for each game; the UI and CLI remain 64-bit applications. If `~/.local/bin` is not on your `PATH`, run tools with their full paths, such as `~/.local/bin/mako-ui`.
+The archive installs `mako-ui`, `mako-cli`, `mako-diagnostics`, XDG desktop files, Vulkan manifests, and matching 64-bit and 32-bit layers. The Vulkan loader selects the correct layer for each game; the UI, CLI, and diagnostics helper remain 64-bit applications or scripts. If `~/.local/bin` is not on your `PATH`, run tools with their full paths, such as `~/.local/bin/mako-ui`.
 
 #### Start the configuration UI
 
@@ -189,6 +189,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 - Library: `libmako-render.so`
 - Configuration UI: `mako-ui`
 - CLI: `mako-cli`
+- Diagnostics helper: `mako-diagnostics`
 - Configuration: `~/.config/mako-render/conf.toml`
 - Activation: `ENABLE_MAKO=1`
 - Deactivation: `DISABLE_MAKO=1`
@@ -218,3 +219,4 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 - [Flatpak guide](docs/FLATPAK-GUIDE.md): runtime extensions and direct Flatpak application overrides.
 - [Building from Source](docs/BUILDING-FROM-SOURCE.md): prerequisites, SteamOS builds, and packaging.
 - [Troubleshooting](docs/TROUBLESHOOTING.md): activation, configuration, and presentation diagnostics.
+- [Collect standalone MAKO Renderer diagnostics](docs/COLLECT_DIAGNOSTICS.md): create a focused Desktop report and submit it through the shared form.

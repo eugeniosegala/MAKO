@@ -287,6 +287,7 @@ fi
 
 required_paths=(
     "bin/mako-cli" \
+    "bin/mako-diagnostics" \
     "bin/mako-ui" \
     "lib/libmako-render.so" \
     "share/doc/mako-render/LICENSE.md" \

@@ -67,20 +67,28 @@ For a Steam game, replace `your-game-command` with `%command%`. Steam captures
 the renderer's output in `~/.steam/steam/logs/console-linux.txt`; a direct
 desktop launch writes it to the terminal or launcher log.
 
+After reproducing the issue and fully quitting the game, create the focused
+report with:
+
+```bash
+mako-diagnostics --lines 2000 all
+```
+
+For the complete end-to-end workflow—including Steam, direct commands,
+Heroic or Flatpak setups, creating `MAKO-diagnostics.txt` on the Desktop,
+restoring normal settings, and using the shared submission form—see
+[Collect Standalone MAKO Renderer Diagnostics](COLLECT_DIAGNOSTICS.md).
+
 `MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` is a recovery diagnostic. Leave
 it unset for normal play. If you are reproducing a presentation stall, set a
 small value such as `25` and include the resulting log with the report.
 
 ## Report an issue
 
-Include the following:
-
-- MAKO commit/version and installation method;
-- operating system, GPU, driver, compositor, and Proton version where relevant;
-- game, API path, resolution, and game settings;
-- the active MAKO profile with any private paths removed; and
-- the relevant MAKO/Vulkan-loader log lines.
-
-For Adaptive behaviour regressions, include the scenario and timing details.
-Maintainers can use the [Adaptive validation guide](ADAPTIVE-VALIDATION.md) for
+Follow [Collect Standalone MAKO Renderer Diagnostics](COLLECT_DIAGNOSTICS.md)
+to reproduce the problem, create the focused Desktop report, restore normal
+launch settings, and submit the file privately. The shared form asks for the
+report context, so do not paste the diagnostic text into a public GitHub
+issue. Maintainers can use the
+[Adaptive validation guide](ADAPTIVE-VALIDATION.md) when a follow-up requires
 the full deterministic and runtime test matrix.

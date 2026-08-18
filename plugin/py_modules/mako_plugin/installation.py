@@ -416,7 +416,7 @@ class InstallationService(BaseService):
         """Resolve the release-ZIP helper, with a source-tree development fallback."""
         candidates = (
             plugin_dir / BIN_DIR / DIAGNOSTICS_HELPER_FILENAME,
-            plugin_dir / "scripts" / DIAGNOSTICS_HELPER_FILENAME,
+            plugin_dir.parent / "scripts" / DIAGNOSTICS_HELPER_FILENAME,
         )
         for candidate in candidates:
             if candidate.is_file():

@@ -1,10 +1,16 @@
-# Collect MAKO Diagnostics
+# Collect MAKO Decky Diagnostics
 
-Thank you for reporting a MAKO problem. A normal description or screenshot can
-show what went wrong, but it usually cannot show why. This guide creates one
-focused text report from the most recent test run so the maintainer can check
-MAKO Renderer, Vulkan-loader, and Gamescope activity without requesting the
-entire Steam log.
+Thank you for reporting a MAKO Decky problem. A normal description or
+screenshot can show what went wrong, but it usually cannot show why. This
+guide creates one focused text report from the most recent test run so the
+maintainer can check MAKO Decky, MAKO Renderer, Vulkan-loader, and Gamescope
+activity without requesting the entire Steam log.
+
+This guide is for installations managed by the **Mako** Decky Loader plugin.
+If you installed the Renderer archive directly or built it from source and
+activate games with `ENABLE_MAKO=1`, use the
+[standalone MAKO Renderer guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md)
+instead.
 
 You will temporarily enable diagnostics for the affected game, reproduce the
 problem once, create `MAKO-diagnostics.txt` on the Desktop, restore the game's
@@ -143,10 +149,11 @@ default for development testing.
 
 ## 5. Submit the report
 
-Open the [MAKO diagnostic report form][diagnostic-form], answer its short
-questions, and attach `/home/deck/Desktop/MAKO-diagnostics.txt`. It is fine to
-select or write **Unknown** when you do not know an answer. Submit the form once;
-the maintainer can request a more specific follow-up if one is needed.
+Open the [MAKO diagnostic report form][diagnostic-form], choose **MAKO Decky
+(Decky Loader plugin)**, answer the remaining short questions, and attach
+`/home/deck/Desktop/MAKO-diagnostics.txt`. It is fine to select or write
+**Unknown** when you do not know an answer. Submit the form once; the
+maintainer can request a more specific follow-up if one is needed.
 
 Keep screenshots, videos, and discussion in the original GitHub issue, but use
 the form for the diagnostic text file so it is not posted publicly.
