@@ -206,10 +206,11 @@ The script verifies and builds `MAKO-Decky-v<package-version>.zip`, creates or
 verifies the matching `plugin-v<package-version>` tag, pushes the branch and
 tag, generates release notes, and creates or updates the GitHub release. A
 MAKO Decky release is explicitly marked as the repository's **Latest** release.
-After a successful release, it updates every versioned MAKO Decky ZIP link in
-the root README—including the Downloads table and installation steps—commits
-that documentation-only change, and pushes it. It never moves an existing
-published tag to newer code.
+After a successful release, it verifies that MAKO Decky documentation points
+to the repository's designated Latest release. The Renderer publisher updates
+every versioned MAKO Renderer release-page link across the root, Decky, and
+Renderer READMEs. Either publisher commits and pushes documentation changes
+when needed. Neither moves an existing published tag to newer code.
 
 Both components are published as normal GitHub releases. The Renderer publisher
 uses `--latest=false` so the Decky release can remain the repository's Latest

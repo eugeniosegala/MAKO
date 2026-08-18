@@ -21,14 +21,27 @@ if (!/^[A-Za-z0-9._-]+$/.test(version)) {
 const componentDetails = {
   decky: {
     name: "MAKO Decky",
-    tag: `plugin-v${version}`,
-    text: "Download latest MAKO Decky ZIP",
-    asset: `MAKO-Decky-v${version}.zip`,
+    releaseTarget: "Latest",
+    releaseUrl: `https://github.com/${repository}/releases/latest`,
+    tableText: "Latest MAKO Decky release (ZIP under Assets)",
+    linkText: "latest MAKO Decky release",
+    expectedLinks: {
+      "README.md": 1,
+      "plugin/README.md": 1,
+      "engine/README.md": 1,
+    },
   },
   renderer: {
     name: "MAKO Renderer",
-    tag: `render-v${version}`,
-    text: "Download MAKO Renderer",
+    releaseTarget: `render-v${version}`,
+    releaseUrl: `https://github.com/${repository}/releases/tag/render-v${version}`,
+    tableText: "Latest MAKO Renderer release (Linux archive under Assets)",
+    linkText: "latest MAKO Renderer release",
+    expectedLinks: {
+      "README.md": 1,
+      "plugin/README.md": 1,
+      "engine/README.md": 2,
+    },
   },
 }[component];
 
@@ -36,40 +49,62 @@ if (!componentDetails) {
   throw new Error(`Unknown component '${component}'. ${usage}`);
 }
 
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
-const readmePath = join(dirname(scriptDirectory), "README.md");
-const original = readFileSync(readmePath, "utf8");
+const repositoryRoot = dirname(scriptDirectory);
+const readmePath = join(repositoryRoot, "README.md");
 const escapedName = componentDetails.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const rowPattern = new RegExp(
   `^(\\| \\*\\*${escapedName}\\*\\* \\| [^|]+ \\| )\\[[^\\]]+\\]\\([^)]+\\)( \\|)$`,
   "m",
 );
-const releaseUrl = componentDetails.asset
-  ? `https://github.com/${repository}/releases/download/${componentDetails.tag}/${componentDetails.asset}`
-  : `https://github.com/${repository}/releases/tag/${componentDetails.tag}`;
-if (!rowPattern.test(original)) {
-  throw new Error(`Could not find the ${componentDetails.name} Downloads row in ${readmePath}`);
-}
-
-let updated = original.replace(
-  rowPattern,
-  `$1[${componentDetails.text}](${releaseUrl})$2`,
+const linkPattern = new RegExp(
+  `(\\[${escapeRegExp(componentDetails.linkText)}\\]\\()[^)]+(\\))`,
+  "g",
 );
+const changedPaths = [];
 
-if (component === "decky") {
-  const installationLinkPattern = /^(3\. \*\*\[Download the latest MAKO Decky ZIP\]\()[^)]+(\)\*\*\.)$/m;
-  if (!installationLinkPattern.test(original)) {
-    throw new Error(`Could not find the MAKO Decky installation link in ${readmePath}`);
+for (const [relativePath, expectedLinkCount] of Object.entries(componentDetails.expectedLinks)) {
+  const path = join(repositoryRoot, relativePath);
+  const original = readFileSync(path, "utf8");
+  let updated = original;
+
+  if (path === readmePath) {
+    if (!rowPattern.test(original)) {
+      throw new Error(`Could not find the ${componentDetails.name} Downloads row in ${path}`);
+    }
+    updated = updated.replace(
+      rowPattern,
+      `$1[${componentDetails.tableText}](${componentDetails.releaseUrl})$2`,
+    );
+  }
+
+  const matchingLinks = [...updated.matchAll(linkPattern)];
+  if (matchingLinks.length !== expectedLinkCount) {
+    throw new Error(
+      `Expected ${expectedLinkCount} '${componentDetails.linkText}' link(s) in ${path}, ` +
+      `found ${matchingLinks.length}`,
+    );
   }
   updated = updated.replace(
-    installationLinkPattern,
-    (_match, prefix, suffix) => `${prefix}${releaseUrl}${suffix}`,
+    linkPattern,
+    (_match, prefix, suffix) => `${prefix}${componentDetails.releaseUrl}${suffix}`,
   );
+
+  if (updated !== original) {
+    writeFileSync(path, updated, "utf8");
+    changedPaths.push(relativePath);
+  }
 }
 
-if (updated === original) {
-  console.log(`README already links every ${componentDetails.name} download to ${componentDetails.tag}.`);
+if (changedPaths.length === 0) {
+  console.log(
+    `Documentation already links every ${componentDetails.name} reference to ` +
+    `${componentDetails.releaseTarget}.`,
+  );
 } else {
-  writeFileSync(readmePath, updated, "utf8");
-  console.log(`Updated every README link for ${componentDetails.name} to ${componentDetails.tag}.`);
+  console.log(
+    `Updated ${componentDetails.name} release-page links to ${componentDetails.releaseTarget}: ` +
+    changedPaths.join(", "),
+  );
 }

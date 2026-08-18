@@ -13,12 +13,13 @@ MAKO is an independent community project bringing Lossless Scaling frame generat
 
 ## Download
 
-Download the ZIP from the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
+Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download the ZIP under **Assets**.
 Previous Decky releases are available on the
 [MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
 
-For direct Vulkan-layer installation without Decky, use the separate
-[MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
+For direct Vulkan-layer installation without Decky, open the
+[latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.0.0)
+and download the Linux archive under **Assets**.
 
 ## What it manages
 

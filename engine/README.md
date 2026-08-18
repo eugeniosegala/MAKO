@@ -14,7 +14,8 @@ The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and r
 ## Downloads
 
 Standalone Linux and Flatpak archives are published on the
-[MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
+[latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.0.0).
+Download the required archive under **Assets**.
 Steam Deck users who want the managed workflow should install the
 [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
@@ -33,7 +34,7 @@ See the [main MAKO installation guide](../README.md#install-and-use) for the com
 ### Direct Linux installation
 
 1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` but does not bundle, copy, or modify it.
-2. Open the [MAKO releases page](https://github.com/eugeniosegala/MAKO/releases), select the newest **MAKO Renderer** release, and download its versioned Linux archive: `mako-render-v<version>-linux.tar.xz`.
+2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.0.0) and download its versioned Linux archive under **Assets**: `mako-render-v<version>-linux.tar.xz`.
 3. Optionally save the archive's file list so you know exactly what was installed, then extract it into your user-local prefix:
 
 ```bash

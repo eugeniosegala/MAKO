@@ -193,8 +193,9 @@ node "$repo_root/../plugin/scripts/pin-renderer-release.mjs" \
 repository_root="$repo_root/.."
 node "$repository_root/scripts/update-release-links.mjs" \
     renderer "$version" "$release_repository"
-if ! git -C "$repository_root" diff --quiet -- README.md; then
-    git -C "$repository_root" add README.md
+release_link_readmes=(README.md plugin/README.md engine/README.md)
+if ! git -C "$repository_root" diff --quiet -- "${release_link_readmes[@]}"; then
+    git -C "$repository_root" add "${release_link_readmes[@]}"
     git -C "$repository_root" commit -m "docs: link MAKO Renderer v$version"
     git -C "$repository_root" push "$release_remote" "$release_branch"
 fi

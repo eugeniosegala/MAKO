@@ -280,8 +280,9 @@ fi
 
 node "$repository_root/scripts/update-release-links.mjs" \
   decky "$package_version" "$github_repository"
-if ! git -C "$repository_root" diff --quiet -- README.md; then
-  git -C "$repository_root" add README.md
+release_link_readmes=(README.md plugin/README.md engine/README.md)
+if ! git -C "$repository_root" diff --quiet -- "${release_link_readmes[@]}"; then
+  git -C "$repository_root" add "${release_link_readmes[@]}"
   git -C "$repository_root" commit -m "docs: link MAKO Decky v$package_version"
   git -C "$repository_root" push origin "$current_branch"
 fi
