@@ -1,6 +1,6 @@
 {
   "name": "mako-plugin",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "MAKO Decky controls for Steam Deck and compatible Linux systems",
   "type": "module",
   "scripts": {
@@ -65,18 +65,18 @@
   "remote_binary_bundling": true,
   "remote_binary": [
     {
-      "name": "mako-render-v1.0.0-linux.tar.xz",
-      "version": "1.0.0",
-      "lineage_version": "1.0.0",
+      "name": "mako-render-v1.1.0-linux.tar.xz",
+      "version": "1.1.0",
+      "lineage_version": "1.1.0",
       "source_repository": "https://github.com/eugeniosegala/MAKO",
-      "release_tag": "render-v1.0.0",
-      "source_commit": "f2133c4a3bc883a56f42936187d9b53f207658b5",
-      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.0.0/mako-render-v1.0.0-linux.tar.xz",
-      "sha256hash": "ed2e723d2ae254594e474d1ddf8ad3eb52635165e53b3f8c1b9e28c972a40565",
+      "release_tag": "render-v1.1.0",
+      "source_commit": "a3732a09fb1af751f78a6e7e2a53392bc2062f86",
+      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.1.0/mako-render-v1.1.0-linux.tar.xz",
+      "sha256hash": "6f9471d5331d819e4b93b81504305e2c1b877f57c9033174e496bf16476b833c",
       "flatpak_bundle": {
-        "name": "mako-render-v1.0.0-flatpaks.tar.xz",
-        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.0.0/mako-render-v1.0.0-flatpaks.tar.xz",
-        "sha256hash": "c7b831ea62ed9eff6e74be2e0ce28bc3bb7697485b0bd71e676b7acc955f277a"
+        "name": "mako-render-v1.1.0-flatpaks.tar.xz",
+        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.1.0/mako-render-v1.1.0-flatpaks.tar.xz",
+        "sha256hash": "628b894e20f7af71bfcd60711372dc82a16082a16593ac1d716bccb9e2bbd373"
       }
     }
   ]
