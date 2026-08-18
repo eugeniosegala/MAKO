@@ -1,14 +1,14 @@
 # Collect MAKO Decky Diagnostics
 
-Thank you for reporting a MAKO Decky problem. A normal description or
-screenshot can show what went wrong, but it usually cannot show why. This
-guide creates one focused text report from the most recent test run so the
-maintainer can check MAKO Decky, MAKO Renderer, Vulkan-loader, and Gamescope
-activity without requesting the entire Steam log.
+This guide is for troubleshooting **MAKO Decky**: the **Mako** plugin installed
+through Decky Loader. It covers the plugin-managed `mako-run` wrapper, its
+private MAKO Renderer installation, and the Flatpak extensions prepared from
+the plugin's **Flatpak Setup** screen.
 
-This guide is for installations managed by the **Mako** Decky Loader plugin.
-If you installed the Renderer archive directly or built it from source and
-activate games with `ENABLE_MAKO=1`, use the
+Use this guide when **Mako** appears in Decky Loader and you normally launch
+games through `/home/deck/.local/bin/mako-run`. If you installed the Renderer
+archive directly or built it from source and activate games with
+`ENABLE_MAKO=1`, use the
 [standalone MAKO Renderer guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md)
 instead.
 

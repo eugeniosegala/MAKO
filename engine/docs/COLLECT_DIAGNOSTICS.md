@@ -1,14 +1,13 @@
 # Collect Standalone MAKO Renderer Diagnostics
 
-Thank you for reporting a standalone MAKO Renderer problem. A normal
-description or screenshot can show what went wrong, but it usually cannot show
-why. This guide creates one focused text report from the most recent test run
-so the maintainer can check MAKO Renderer, Vulkan-loader, and compositor
-activity without requesting the entire Steam log.
+This guide is for troubleshooting the standalone **MAKO Renderer**: a Renderer
+archive extracted directly into a Linux prefix or a Renderer built and
+installed from source. These installations use `mako-ui`, `mako-cli`, and
+`ENABLE_MAKO=1` without the Decky plugin managing the game launch.
 
-This guide is for Renderer archives and direct source installations that
-activate games with `ENABLE_MAKO=1`. If **Mako** is installed through Decky
-Loader and you normally use `/home/deck/.local/bin/mako-run`, use the
+Use this guide when you installed `mako-render-v<version>-linux.tar.xz` or ran
+`cmake --install`. If **Mako** is installed through Decky Loader and you
+normally use `/home/deck/.local/bin/mako-run`, use the
 [MAKO Decky guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md)
 instead.
 

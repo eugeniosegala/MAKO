@@ -1,14 +1,21 @@
 # Collect MAKO Diagnostics
 
-MAKO has two installation workflows. Choose the guide that matches how MAKO
-was installed on the affected device. Both guides create the same
-`MAKO-diagnostics.txt` file and submit it through the same
-[MAKO diagnostic report form][diagnostic-form].
+Hey! Thank you for reaching out and reporting this.
+
+To help me understand what happened, please follow one of the two diagnostic
+guides below. You only need the guide that matches how MAKO was installed on
+your device. It will show you how to enable focused logging, reproduce the
+problem once, create `MAKO-diagnostics.txt`, restore your normal launch
+settings, and send the report to me.
+
+The shared [MAKO diagnostic report form][diagnostic-form] will guide you
+through describing the problem and uploading the file, so you do not need to
+write a separate diagnostic report in the GitHub issue.
 
 ## MAKO Decky
 
-Use the [MAKO Decky diagnostics guide](plugin/docs/COLLECT_DIAGNOSTICS.md) when
-you installed **Mako** through Decky Loader, use
+Use the [MAKO Decky diagnostics guide][decky-guide] when you installed
+**Mako** through Decky Loader, use
 `/home/deck/.local/bin/mako-run`, or manage the Renderer and Flatpak extensions
 from the Decky plugin.
 
@@ -17,8 +24,8 @@ shortcuts without changing their normal arguments.
 
 ## Standalone MAKO Renderer
 
-Use the [standalone MAKO Renderer diagnostics guide](engine/docs/COLLECT_DIAGNOSTICS.md)
-when you installed the Renderer archive directly, built it from source, open
+Use the [standalone MAKO Renderer diagnostics guide][renderer-guide] when you
+installed the Renderer archive directly, built it from source, open
 `mako-ui` yourself, or activate games with `ENABLE_MAKO=1` without the Decky
 plugin.
 
@@ -37,4 +44,6 @@ Do not paste the diagnostic text into a public GitHub issue. Follow the
 selected guide, review the generated file for personal paths, and upload it
 through the shared form.
 
+[decky-guide]: https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md
+[renderer-guide]: https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md
 [diagnostic-form]: https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform
