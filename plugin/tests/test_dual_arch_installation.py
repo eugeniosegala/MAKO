@@ -22,6 +22,7 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     MAKO_LAYER_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
     MAKO_LAYER_BUILD_MARKER,
+    MAKO_PROFILE_FALLBACK_MARKER,
     MAKO_LAYER_NAME,
     JSON32_FILENAME,
     JSON_FILENAME,
@@ -64,12 +65,17 @@ class DualArchInstallationTests(unittest.TestCase):
     def _archive(self, include_32bit: bool = True) -> Path:
         archive_path = self.root / "engine.tar.xz"
         members = {
-            f"lib/{LIB_FILENAME}": b"ELF64" + MAKO_LAYER_BUILD_MARKER,
+            f"lib/{LIB_FILENAME}": (
+                b"ELF64" + MAKO_LAYER_BUILD_MARKER + MAKO_PROFILE_FALLBACK_MARKER
+            ),
             f"share/vulkan/implicit_layer.d/{JSON_FILENAME}": self._manifest("64"),
         }
         if include_32bit:
             members.update({
-                f"lib32/{LIB_FILENAME}": b"ELF32" + MAKO_LAYER_BUILD_MARKER,
+                f"lib32/{LIB_FILENAME}": (
+                    b"ELF32" + MAKO_LAYER_BUILD_MARKER
+                    + MAKO_PROFILE_FALLBACK_MARKER
+                ),
                 f"share/vulkan/implicit_layer.d/{JSON32_FILENAME}": self._manifest("32"),
             })
 
@@ -149,6 +155,26 @@ class DualArchInstallationTests(unittest.TestCase):
                 output.addfile(copied, io.BytesIO(content))
 
         with self.assertRaisesRegex(OSError, "build marker is missing"):
+            self.service._extract_and_install_files(replacement)
+
+        self.assertFalse(self.service.lib_file.exists())
+        self.assertFalse(self.service.lib32_file.exists())
+
+    def test_rejects_payload_without_profile_fallback_protocol(self):
+        archive_path = self._archive()
+        replacement = self.root / "old-wrapper-protocol.tar.xz"
+        with tarfile.open(archive_path, "r:xz") as source, tarfile.open(
+            replacement, "w:xz"
+        ) as output:
+            for member in source.getmembers():
+                content = source.extractfile(member).read()
+                if member.name.endswith(LIB_FILENAME):
+                    content = content.replace(MAKO_PROFILE_FALLBACK_MARKER, b"")
+                copied = tarfile.TarInfo(member.name)
+                copied.size = len(content)
+                output.addfile(copied, io.BytesIO(content))
+
+        with self.assertRaisesRegex(OSError, "profile-fallback wrapper protocol"):
             self.service._extract_and_install_files(replacement)
 
         self.assertFalse(self.service.lib_file.exists())

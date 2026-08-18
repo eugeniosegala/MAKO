@@ -17,7 +17,7 @@ from .constants import (
     LIB_FILENAME, JSON_FILENAME, JSON32_FILENAME, CLI_FILENAME, CLI_DIR, BIN_DIR,
     DIAGNOSTICS_HELPER_FILENAME, MAKO_LAYER_NAME,
     MAKO_LAYER_ENABLE_ENV, MAKO_LAYER_DISABLE_ENV,
-    MAKO_LAYER_BUILD_MARKER,
+    MAKO_LAYER_BUILD_MARKER, MAKO_PROFILE_FALLBACK_MARKER,
 )
 from .config_schema import ConfigurationManager
 from .types import InstallationResponse, UninstallationResponse, InstallationCheckResponse
@@ -252,11 +252,17 @@ class InstallationService(BaseService):
 
     @staticmethod
     def _validate_layer_binary_identity(*layer_binaries: Path) -> None:
-        """Reject payloads that cannot prove they are the isolated build."""
+        """Reject payloads incompatible with this plugin's generated wrapper."""
         for layer_binary in layer_binaries:
-            if MAKO_LAYER_BUILD_MARKER not in layer_binary.read_bytes():
+            content = layer_binary.read_bytes()
+            if MAKO_LAYER_BUILD_MARKER not in content:
                 raise OSError(
                     f"MAKO layer build marker is missing from {layer_binary}"
+                )
+            if MAKO_PROFILE_FALLBACK_MARKER not in content:
+                raise OSError(
+                    "MAKO layer does not support the profile-fallback wrapper "
+                    f"protocol: {layer_binary}"
                 )
 
     def _copy_and_fix_json_file(

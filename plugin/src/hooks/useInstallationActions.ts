@@ -24,7 +24,7 @@ export function useInstallationActions() {
       const result = await installMako();
       if (result.success) {
         setIsInstalled(true);
-        setInstallationStatus(t("STATUS_ENGINE_INSTALLED", "MAKO Renderer installed"));
+        setInstallationStatus(result.message || t("STATUS_ENGINE_INSTALLED", "MAKO Renderer installed"));
         showInstallSuccessToast();
 
         // Reload MAKO Renderer config after installation

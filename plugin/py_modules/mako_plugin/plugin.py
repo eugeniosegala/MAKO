@@ -38,12 +38,36 @@ class Plugin:
         self.flatpak_service = FlatpakService()
 
     async def install_mako(self) -> Dict[str, Any]:
-        """Install MAKO Renderer by extracting the zip file to ~/.local
+        """Install MAKO Renderer and refresh existing Flatpak runtime copies.
 
         Returns:
             InstallationResponse dict with success status and message/error
         """
-        return self.installation_service.install()
+        result = self.installation_service.install()
+        if not result.get("success"):
+            return result
+
+        refresh = self.flatpak_service.refresh_installed_extensions()
+        updated_versions = refresh.get("updated_versions", [])
+        result["flatpak_extensions_updated"] = updated_versions
+        if refresh.get("success"):
+            if updated_versions:
+                result["message"] = (
+                    "MAKO Renderer installed; refreshed Flatpak runtimes "
+                    + ", ".join(updated_versions)
+                )
+        else:
+            refresh_error = refresh.get("error") or "unknown Flatpak error"
+            self.installation_service.log.warning(
+                "MAKO Renderer installed, but Flatpak runtimes were not fully refreshed: %s",
+                refresh_error,
+            )
+            result["flatpak_refresh_error"] = refresh_error
+            result["message"] = (
+                "MAKO Renderer installed. Flatpak runtime refresh needs attention "
+                "in Flatpak Setup."
+            )
+        return result
 
     async def check_mako_installed(self) -> Dict[str, Any]:
         """Check if MAKO Renderer is already installed

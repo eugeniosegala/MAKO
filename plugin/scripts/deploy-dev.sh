@@ -89,6 +89,7 @@ while (($#)); do
       ;;
     --reload)
       reload_plugin=true
+      action_selected=true
       ;;
     --plugin-dir)
       if (($# < 2)); then

@@ -402,6 +402,10 @@ for layer_binary_path in "${layer_binary_paths[@]}"; do
     echo "Engine archive has no matching MAKO Renderer build marker in $layer_binary_path" >&2
     exit 1
   fi
+  if ! strings "$verification_binary" | grep -F "MAKO_PROFILE_FALLBACK" >/dev/null; then
+    echo "Engine archive lacks the profile-fallback wrapper protocol in $layer_binary_path" >&2
+    exit 1
+  fi
 done
 
 if [[ -n "$flatpak_archive_name" ]]; then

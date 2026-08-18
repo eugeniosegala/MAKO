@@ -369,6 +369,61 @@ class FlatpakService(BaseService):
             self.log.error(error_msg)
             return self._error_response(BaseResponse, error_msg)
 
+    def refresh_installed_extensions(self) -> Dict[str, Any]:
+        """Replace installed MAKO runtime branches with this plugin's payloads.
+
+        Flatpak runtime branches keep a stable extension ID across renderer
+        releases. Installing a newer Decky ZIP therefore does not update them
+        automatically unless they are explicitly reinstalled. Refresh only
+        branches already present on the machine; first-time setup remains an
+        explicit choice in Flatpak Setup.
+        """
+        if not self.check_flatpak_available():
+            return {
+                "success": False,
+                "updated_versions": [],
+                "error": "Flatpak is not available on this system",
+            }
+
+        installed_versions = [
+            version
+            for version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS
+            if self._is_extension_installed(version)
+        ]
+        if not installed_versions:
+            return {
+                "success": True,
+                "updated_versions": [],
+                "message": "No installed MAKO Flatpak runtimes needed refreshing",
+            }
+
+        updated_versions = []
+        failures = []
+        for version in installed_versions:
+            result = self.install_extension(version)
+            if result.get("success"):
+                updated_versions.append(version)
+            else:
+                failures.append(
+                    f"{version}: {result.get('error') or 'unknown error'}"
+                )
+
+        if failures:
+            return {
+                "success": False,
+                "updated_versions": updated_versions,
+                "error": "; ".join(failures),
+            }
+
+        return {
+            "success": True,
+            "updated_versions": updated_versions,
+            "message": (
+                "Refreshed MAKO Flatpak runtime extensions: "
+                + ", ".join(updated_versions)
+            ),
+        }
+
     def uninstall_extension(self, version: str) -> BaseResponse:
         """Uninstall a specific version of the MAKO Renderer Flatpak extension"""
         try:

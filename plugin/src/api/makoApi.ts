@@ -7,6 +7,8 @@ export interface InstallationResult {
   error?: string;
   message?: string;
   removed_files?: string[];
+  flatpak_extensions_updated?: string[];
+  flatpak_refresh_error?: string;
 }
 
 export interface InstallationStatus {

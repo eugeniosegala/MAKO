@@ -164,6 +164,10 @@ for runtime_version in 23.08 24.08 25.08; do
             echo "Flatpak packaging failed: layer build identity is missing for $runtime_version" >&2
             exit 1
         fi
+        if ! strings "$layer_binary" | grep -F "MAKO_PROFILE_FALLBACK" >/dev/null; then
+            echo "Flatpak packaging failed: profile-fallback wrapper protocol is missing for $runtime_version" >&2
+            exit 1
+        fi
     done
 
     manifest64="$build_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
@@ -236,6 +240,10 @@ for runtime_version in 23.08 24.08 25.08; do
         if ! strings "$layer_binary" |
                 grep -F "mako: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
             echo "Flatpak packaging failed: deployed layer build identity is missing for $runtime_version" >&2
+            exit 1
+        fi
+        if ! strings "$layer_binary" | grep -F "MAKO_PROFILE_FALLBACK" >/dev/null; then
+            echo "Flatpak packaging failed: deployed profile-fallback wrapper protocol is missing for $runtime_version" >&2
             exit 1
         fi
     done

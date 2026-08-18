@@ -277,3 +277,37 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
 
         self.assertFalse(response["success"])
         self.assertIn("ENABLE_MAKO", response["error"])
+
+    def test_refresh_reinstalls_only_existing_runtime_branches(self):
+        self.service.check_flatpak_available = lambda: True
+        self.service._is_extension_installed = lambda version: version in {
+            "24.08", "25.08"
+        }
+        refreshed = []
+
+        def install(version):
+            refreshed.append(version)
+            return {"success": True, "message": "updated"}
+
+        self.service.install_extension = install
+
+        response = self.service.refresh_installed_extensions()
+
+        self.assertTrue(response["success"])
+        self.assertEqual(refreshed, ["24.08", "25.08"])
+        self.assertEqual(response["updated_versions"], ["24.08", "25.08"])
+
+    def test_refresh_reports_a_partial_runtime_failure(self):
+        self.service.check_flatpak_available = lambda: True
+        self.service._is_extension_installed = lambda _version: True
+        self.service.install_extension = lambda version: (
+            {"success": False, "error": "broken bundle"}
+            if version == "24.08"
+            else {"success": True, "message": "updated"}
+        )
+
+        response = self.service.refresh_installed_extensions()
+
+        self.assertFalse(response["success"])
+        self.assertEqual(response["updated_versions"], ["23.08", "25.08"])
+        self.assertIn("24.08: broken bundle", response["error"])

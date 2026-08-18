@@ -37,6 +37,11 @@ MAKO_LAYER_BUILD_MARKER = (
     b"mako: render layer active; identity="
     b"VK_LAYER_MAKO_render; build="
 )
+# Decky's generated wrapper relies on the renderer understanding this
+# low-priority profile selector. Keep it as a payload compatibility marker so
+# an older same-name renderer cannot be installed alongside a newer wrapper
+# and silently remain inactive in Heroic or an emulator Flatpak.
+MAKO_PROFILE_FALLBACK_MARKER = b"MAKO_PROFILE_FALLBACK"
 JSON_FILENAME = "VkLayer_MAKO_render.json"
 JSON32_FILENAME = "VkLayer_MAKO_render.x86.json"
 CLI_FILENAME = "mako-cli"
