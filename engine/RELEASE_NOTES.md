@@ -1,7 +1,9 @@
 ## What's new in MAKO Renderer v1.1.0
 
-- **Live configuration updates:** Supported Fixed and Adaptive settings can be reloaded while a game is running, with native presentation retained while the updated state settles.
-- **Reliable process-profile fallback:** Games launched through Steam, Heroic, or EmuDeck can use the intended process profile without leaking MAKO activation or configuration into unrelated processes.
-- **Host and Flatpak coverage:** The release contains genuine 64-bit and 32-bit host layers plus matching Freedesktop 23.08, 24.08, and 25.08 Flatpak extensions.
-- **Safer frame delivery:** Recovery and transition handling keep real frames presenting when generated-frame resources are unavailable or temporarily busy.
-- **Portable builds:** SteamOS-first packaging now reuses an isolated Qt toolchain and shared repository-local caches without requiring a container for normal releases.
+MAKO Renderer turns the frame-generation core into a more responsive, resilient Linux layer—one that adapts to the game instead of expecting every frame, menu, overlay, and GPU workload to behave perfectly.
+
+- **Adaptive Frame Generation that follows real gameplay:** Target 30–240 FPS with a selectable 2x–4x ceiling, optional automatic base-FPS cap, and Smooth Cadence. The scheduler ramps, sheds generated frames under load, and handles fast menus, overlays, short hitches, and longer interruptions without treating them all as steady gameplay.
+- **Live reconfiguration with safe boundaries:** Frame Generation on/off, Fixed or Adaptive mode, multipliers within reserved capacity, target FPS, ceiling, and cadence can update while the game is running. Changes that alter the model or resource shape remain restart-time operations instead of risking an unstable swapchain.
+- **Native-first recovery instead of a frozen game:** When generated images, private GPU work, or backend resources are temporarily unavailable, MAKO keeps real frames presenting, preserves temporal-history liveness, and warms generation before resuming. Recovery stays inside the current context rather than forcing game-owned swapchain recreation.
+- **Private process isolation from launcher to layer:** The uniquely named, opt-in Vulkan layer uses explicit wrapper markers and process-profile fallback so Steam, Heroic, EmuDeck, and portable home layouts can reach the intended profile without enabling MAKO in unrelated games, applications, or Decky plugins.
+- **Complete SteamOS and Flatpak architecture coverage:** The host archive ships genuine ELF64 and ELF32 Vulkan layers, and every Freedesktop 23.08, 24.08, and 25.08 extension includes both architectures. GPU selection is validated for multi-GPU systems, and release packaging verifies every layout and checksum before publication.

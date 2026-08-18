@@ -1,8 +1,9 @@
 ## What's new in MAKO Decky v1.1.0
 
-- **Dedicated game and process profiles:** Create persistent profiles from the detected running game, then let MAKO select the matching profile automatically on future launches.
-- **Live profile controls:** Supported frame-generation settings are written as you change them and can be applied to the active game without recreating its saved profile.
-- **Audio compatibility option:** Per-profile ALSA mode can help games affected by audio stuttering, loud sounds, or compatibility problems in particular rendering modes.
-- **Heroic and EmuDeck integration:** Flatpak setup, generated wrapper commands, and profile fallback handling cover selected non-Steam games while keeping MAKO isolated from unrelated applications and plugins.
-- **Clearer interface and safer defaults:** Profile selection, process discovery, advanced details, button styling, spacing, and default-profile fallback have been made more consistent.
-- **MAKO Renderer 1.1.0:** The ZIP bundles checksum-verified native and Flatpak Renderer packages for installation through the plugin.
+This release brings the full MAKO experience together: easier per-game setup, richer live control, broader launcher support, and a private Renderer that stays out of everything else.
+
+- **Profiles that follow the game:** Open a game once and save its detected process as a dedicated profile. MAKO remembers the Steam app and process identities, selects the right profile on future launches, and safely returns to Default when no saved game matches.
+- **Tune Frame Generation while you play:** Frame Generation, Fixed and Adaptive modes, multipliers, target FPS, Adaptive FPS Cap, maximum multiplier, and Smooth Cadence are saved as you change them. Supported changes reach the running game immediately, while settings that genuinely need new GPU resources still ask for a restart.
+- **Heroic, EmuDeck, and Bazzite-aware launch paths:** MAKO prepares only the Flatpak applications you choose, shows the correct wrapper path for the device, preserves EmuDeck-generated launch options, and fixes per-game process discovery across native Steam, Heroic, and emulator launches.
+- **Compatibility controls without global side effects:** Zink, Steam Deck Mode, Disable HDR, one-launch bypass, and the new ALSA audio option live inside each game profile. They affect only games started through `mako-run`, helping with issues such as audio stutter or loud sounds without changing Steam or Proton globally.
+- **A complete, verified Renderer update:** One in-plugin action installs the private 64-bit and 32-bit native layers, while Flatpak Setup manages matching 23.08, 24.08, and 25.08 extensions. Every bundled archive is checksum-pinned to the exact MAKO Renderer release.
