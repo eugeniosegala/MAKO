@@ -61,7 +61,7 @@ export function StatusDisplay({
       <div
         style={{
           marginTop: topMargin,
-          marginBottom: "8px",
+          marginBottom: "0",
           width: "100%",
           boxSizing: "border-box",
           overflow: "hidden",

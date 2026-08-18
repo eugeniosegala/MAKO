@@ -1,6 +1,7 @@
 import { ButtonItem, PanelSectionRow } from "@decky/ui";
 import { FaDownload, FaTrash } from "react-icons/fa";
 import t from "../i18n/i18n";
+import { MakoCompactSpinner } from "./MakoUi";
 
 interface InstallationButtonProps {
   isInstalled: boolean;
@@ -23,6 +24,7 @@ export function InstallationButton({
     if (isInstalling) {
       return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <MakoCompactSpinner />
           <div>{t("INSTALL_INSTALLING", "Installing MAKO Renderer...")}</div>
         </div>
       );
@@ -31,6 +33,7 @@ export function InstallationButton({
     if (isUninstalling) {
       return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <MakoCompactSpinner />
           <div>{t("INSTALL_UNINSTALLING", "Removing MAKO Renderer...")}</div>
         </div>
       );

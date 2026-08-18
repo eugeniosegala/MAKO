@@ -15,10 +15,13 @@ export function useInstallationActions() {
   const handleInstall = async (
     setIsInstalled: (value: boolean) => void,
     setInstallationStatus: (value: string) => void,
-    reloadConfig?: () => Promise<void>
+    reloadConfig?: () => Promise<void>,
+    operation: "install" | "update" = "install"
   ) => {
     setIsInstalling(true);
-    setInstallationStatus(t("STATUS_ENGINE_INSTALLING", "Installing MAKO Renderer..."));
+    setInstallationStatus(operation === "update"
+      ? t("STATUS_ENGINE_UPDATING", "Updating MAKO Renderer...")
+      : t("STATUS_ENGINE_INSTALLING", "Installing MAKO Renderer..."));
 
     try {
       const result = await installMako();

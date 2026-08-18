@@ -4,12 +4,9 @@ import {
   DialogBody,
   DialogHeader,
   DialogControlsSection,
-  DialogControlsSectionHeader,
   ButtonItem,
   PanelSectionRow,
-  Field,
   Toggle,
-  Spinner,
   Focusable,
   showModal,
   ConfirmModal
@@ -29,37 +26,17 @@ import {
 } from '../api/makoApi';
 import t from '../i18n/i18n';
 import { showErrorToast, showSuccessToast } from '../utils/toastUtils';
+import {
+  MakoCompactSpinner,
+  makoPanelDivider,
+  makoPanelItemStyle,
+  makoPanelSectionHeaderStyle,
+  makoPanelStyle
+} from './MakoUi';
 
 interface FlatpaksModalProps {
   closeModal?: () => void;
 }
-
-const CompactSpinner: FC<{ size?: number }> = ({ size = 18 }) => (
-  <span
-    style={{
-      width: `${size}px`,
-      height: `${size}px`,
-      display: 'inline-flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      flex: `0 0 ${size}px`,
-      overflow: 'hidden'
-    }}
-  >
-    <Spinner
-      width={size}
-      height={size}
-      style={{
-        width: `${size}px`,
-        height: `${size}px`,
-        maxWidth: `${size}px`,
-        maxHeight: `${size}px`,
-        display: 'block',
-        flex: `0 0 ${size}px`
-      }}
-    />
-  </span>
-);
 
 export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
   const [extensionStatus, setExtensionStatus] = useState<FlatpakExtensionStatus | null>(null);
@@ -191,7 +168,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
         <DialogHeader>{t('FLATPAK_MODAL_TITLE', 'Flatpak Extensions')}</DialogHeader>
         <DialogBody>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
-            <CompactSpinner size={28} />
+            <MakoCompactSpinner size={28} />
           </div>
         </DialogBody>
       </ModalRoot>
@@ -233,76 +210,98 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
       <DialogHeader>{t('FLATPAK_MODAL_TITLE', 'Flatpak Extensions')}</DialogHeader>
       <DialogBody>
         <Focusable flow-children="vertical">
-          {/* Extension Status Section */}
-          <DialogControlsSection>
-            <DialogControlsSectionHeader>{t('FLATPAK_RUNTIME_INSTALLER', 'Runtime Extension Installer')}</DialogControlsSectionHeader>
+          <div
+            style={{
+              ...makoPanelStyle,
+              margin: '8px 0 18px',
+            }}
+          >
+            <div style={makoPanelSectionHeaderStyle}>
+              {t('FLATPAK_RUNTIME_INSTALLER', 'Runtime Extension Installer')}
+            </div>
 
             {extensionStatus && extensionStatus.success ? (
-              <>
-                {[
-                  { version: '23.08', label: t('FLATPAK_RUNTIME_23', 'Runtime 23.08'), installed: extensionStatus.installed_23_08 },
-                  { version: '24.08', label: t('FLATPAK_RUNTIME_24', 'Runtime 24.08'), installed: extensionStatus.installed_24_08 },
-                  { version: '25.08', label: t('FLATPAK_RUNTIME_25', 'Runtime 25.08'), installed: extensionStatus.installed_25_08 }
-                ].map((runtime) => {
-                  const isBusy = operationInProgress === `install-${runtime.version}` || operationInProgress === `uninstall-${runtime.version}`;
+              [
+                { version: '23.08', label: t('FLATPAK_RUNTIME_23', 'Runtime 23.08'), installed: extensionStatus.installed_23_08 },
+                { version: '24.08', label: t('FLATPAK_RUNTIME_24', 'Runtime 24.08'), installed: extensionStatus.installed_24_08 },
+                { version: '25.08', label: t('FLATPAK_RUNTIME_25', 'Runtime 25.08'), installed: extensionStatus.installed_25_08 }
+              ].map((runtime) => {
+                const installBusy = operationInProgress === `install-${runtime.version}`;
+                const uninstallBusy = operationInProgress === `uninstall-${runtime.version}`;
+                const isBusy = installBusy || uninstallBusy;
 
-                  return (
-                    <div key={runtime.version}>
-                      <PanelSectionRow>
-                        <Field
-                          label={runtime.label}
-                          description={runtime.installed ? t('FLATPAK_INSTALLED', 'Installed') : t('FLATPAK_NOT_INSTALLED', 'Not installed')}
-                          icon={runtime.installed ? <FaCheck style={{ color: 'green' }} /> : <FaTimes style={{ color: 'red' }} />}
-                        />
-                      </PanelSectionRow>
-                      <PanelSectionRow>
-                        <div className={`Mako_BrandButton${runtime.installed ? ' Mako_BrandButton--danger' : ''}`}>
+                return (
+                  <div key={runtime.version} style={makoPanelItemStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      {runtime.installed
+                        ? <FaCheck style={{ color: '#65b9c9', flex: '0 0 16px' }} />
+                        : <FaTimes style={{ color: '#c89558', flex: '0 0 16px' }} />}
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ color: '#edf8fb', fontWeight: 600 }}>{runtime.label}</div>
+                        <div style={{ marginTop: '2px', color: '#b9cbd0', fontSize: '12px' }}>
+                          {runtime.installed ? t('FLATPAK_INSTALLED', 'Installed') : t('FLATPAK_NOT_INSTALLED', 'Not installed')}
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+                      {runtime.installed && (
+                        <div className="Mako_BrandButton" style={{ flex: 1, minWidth: 0 }}>
                           <ButtonItem
                             layout="below"
-                            onClick={() => handleRuntimePrimaryAction(runtime.version, runtime.installed)}
+                            onClick={() => handleExtensionOperation('install', runtime.version)}
                             disabled={isBusy}
                           >
-                            {isBusy ? <CompactSpinner /> : runtime.installed ? <><FaTrash /> {t('FLATPAK_UNINSTALL_BTN', 'Uninstall')}</> : <><FaDownload /> {t('FLATPAK_INSTALL_BTN', 'Install')}</>}
+                            {installBusy
+                              ? <><MakoCompactSpinner /> {t('FLATPAK_UPDATING_BTN', 'Updating...')}</>
+                              : <><FaDownload /> {t('FLATPAK_UPDATE_BTN', 'Update')}</>}
                           </ButtonItem>
                         </div>
-                      </PanelSectionRow>
-                      {runtime.installed && (
-                        <PanelSectionRow>
-                          <div className="Mako_BrandButton">
-                            <ButtonItem
-                              layout="below"
-                              onClick={() => handleExtensionOperation('install', runtime.version)}
-                              disabled={isBusy}
-                            >
-                              {operationInProgress === `install-${runtime.version}` ? <CompactSpinner /> : <><FaDownload /> {t('FLATPAK_UPDATE_BTN', 'Update')}</>}
-                            </ButtonItem>
-                          </div>
-                        </PanelSectionRow>
                       )}
+                      <div
+                        className={`Mako_BrandButton${runtime.installed ? ' Mako_BrandButton--danger' : ''}`}
+                        style={{ flex: 1, minWidth: 0 }}
+                      >
+                        <ButtonItem
+                          layout="below"
+                          onClick={() => handleRuntimePrimaryAction(runtime.version, runtime.installed)}
+                          disabled={isBusy}
+                        >
+                          {uninstallBusy
+                            ? <><MakoCompactSpinner /> {t('FLATPAK_UNINSTALLING_BTN', 'Uninstalling...')}</>
+                            : installBusy && !runtime.installed
+                              ? <><MakoCompactSpinner /> {t('FLATPAK_INSTALLING_BTN', 'Installing...')}</>
+                              : runtime.installed
+                                ? <><FaTrash /> {t('FLATPAK_UNINSTALL_BTN', 'Uninstall')}</>
+                                : <><FaDownload /> {t('FLATPAK_INSTALL_BTN', 'Install')}</>}
+                        </ButtonItem>
+                      </div>
                     </div>
-                  );
-                })}
-              </>
+                  </div>
+                );
+              })
             ) : (
-              <PanelSectionRow>
-                <Field
-                  label={t('FLATPAK_ERROR', 'Error')}
-                  description={extensionStatus?.error || t('FLATPAK_ERROR_STATUS', 'Failed to check extension status')}
-                  icon={<FaTimes style={{color: 'red'}} />}
-                />
-              </PanelSectionRow>
+              <div style={makoPanelItemStyle}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <FaTimes style={{ color: '#c89558', flex: '0 0 16px', marginTop: '2px' }} />
+                  <div>
+                    <div style={{ color: '#edf8fb', fontWeight: 600 }}>{t('FLATPAK_ERROR', 'Error')}</div>
+                    <div style={{ marginTop: '3px', color: '#b9cbd0', fontSize: '12px', overflowWrap: 'anywhere' }}>
+                      {extensionStatus?.error || t('FLATPAK_ERROR_STATUS', 'Failed to check extension status')}
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
-          </DialogControlsSection>
 
-          {/* Flatpak Apps Section */}
-          <DialogControlsSection>
-            <DialogControlsSectionHeader>{t('FLATPAK_APPS_TITLE', 'Flatpak Applications')}</DialogControlsSectionHeader>
-            <PanelSectionRow>
-              <Field
-                label={t('FLATPAK_PREPARE_APPLICATION', 'Prepare an application')}
-                description={t('FLATPAK_PREPARE_APPLICATION_DESC', "Install its matching runtime extension, then prepare only that app here. For Heroic, use the full Wrapper command path shown below in each game you want to enable. Preparing Heroic does not enable frame generation globally.")}
-              />
-            </PanelSectionRow>
+            <div style={{ ...makoPanelSectionHeaderStyle, borderTop: makoPanelDivider }}>
+              {t('FLATPAK_APPS_TITLE', 'Flatpak Applications')}
+            </div>
+            <div style={{ ...makoPanelItemStyle, color: '#b9cbd0', fontSize: '12px', lineHeight: 1.4 }}>
+              <div style={{ color: '#edf8fb', fontSize: '13px', fontWeight: 600, marginBottom: '4px' }}>
+                {t('FLATPAK_PREPARE_APPLICATION', 'Prepare an application')}
+              </div>
+              {t('FLATPAK_PREPARE_APPLICATION_DESC', "Install its matching runtime extension, then prepare only that app here. For Heroic, use the full Wrapper command path shown below in each game you want to enable. Preparing Heroic does not enable frame generation globally.")}
+            </div>
 
             {flatpakApps && flatpakApps.success ? (
               flatpakApps.apps.length > 0 ? (
@@ -311,90 +310,73 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                     && app.has_wrapper_override
                     && app.has_required_env_override !== false;
                   const partialOverrides = app.has_filesystem_override || app.has_wrapper_override || app.has_env_override;
+                  const appBusy = operationInProgress === `app-${app.app_id}`;
 
-                  let statusColor = 'red';
+                  let statusColor = '#c89558';
                   let statusText = t('FLATPAK_STATUS_NO_OVERRIDES', 'No overrides');
 
                   if (hasOverrides) {
-                    statusColor = 'green';
+                    statusColor = '#65b9c9';
                     statusText = t('FLATPAK_STATUS_CONFIGURED', 'Prepared');
                   } else if (partialOverrides) {
-                    statusColor = 'orange';
+                    statusColor = '#d58a39';
                     statusText = t('FLATPAK_STATUS_PARTIAL', 'Partial');
                   }
 
                   const appError = appErrors[app.app_id];
+                  const description = app.app_id === 'com.heroicgameslauncher.hgl'
+                    ? t(
+                      'FLATPAK_HEROIC_APP_DESC',
+                      '{app_id} - {status}. Per game: Settings > Advanced > enter this in Heroic\'s first Wrapper field: {wrapper_path}; leave Arguments empty.',
+                      { app_id: app.app_id, status: statusText, wrapper_path: app.wrapper_path }
+                    )
+                    : `${app.app_id} - ${statusText}`;
 
                   return (
-                    <PanelSectionRow key={app.app_id}>
-                      <Field
-                        label={app.app_name || app.app_id}
-                        description={app.app_id === 'com.heroicgameslauncher.hgl'
-                          ? t(
-                            'FLATPAK_HEROIC_APP_DESC',
-                            '{app_id} - {status}. Per game: Settings > Advanced > enter this in Heroic\'s first Wrapper field: {wrapper_path}; leave Arguments empty.',
-                            { app_id: app.app_id, status: statusText, wrapper_path: app.wrapper_path }
-                          )
-                          : `${app.app_id} - ${statusText}`}
-                        icon={<FaCog style={{color: appError ? '#f44336' : statusColor}} />}
-                      >
-                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '8px', maxWidth: '100%' }}>
-                          {appError && (
-                            <div
-                              style={{
-                                color: '#ff9b9b',
-                                fontSize: '0.82em',
-                                lineHeight: '1.35',
-                                maxWidth: '260px',
-                                overflowWrap: 'anywhere',
-                                textAlign: 'left'
-                              }}
-                            >
-                              {appError}
-                            </div>
-                          )}
-                          <Toggle
-                            value={hasOverrides}
-                            onChange={() => handleAppOverrideToggle(app)}
-                            disabled={operationInProgress === `app-${app.app_id}`}
-                          />
+                    <div key={app.app_id} style={{ ...makoPanelItemStyle, display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <FaCog style={{ color: appError ? '#d96d79' : statusColor, flex: '0 0 16px' }} />
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ color: '#edf8fb', fontWeight: 600, overflowWrap: 'anywhere' }}>
+                          {app.app_name || app.app_id}
                         </div>
-                      </Field>
-                    </PanelSectionRow>
+                        <div style={{ marginTop: '3px', color: '#b9cbd0', fontSize: '12px', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+                          {description}
+                        </div>
+                        {appError && (
+                          <div style={{ marginTop: '5px', color: '#ff9b9b', fontSize: '12px', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+                            {appError}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ flex: '0 0 auto' }}>
+                        {appBusy
+                          ? <MakoCompactSpinner />
+                          : <Toggle value={hasOverrides} onChange={() => handleAppOverrideToggle(app)} />}
+                      </div>
+                    </div>
                   );
                 })
               ) : (
-                <PanelSectionRow>
-                  <Field
-                  label={t('FLATPAK_NO_APPS', 'No Flatpak Apps Found')}
-                  description={t('FLATPAK_NO_APPS_DESC', 'No Flatpak applications are currently installed')}
-                  />
-                </PanelSectionRow>
+                <div style={makoPanelItemStyle}>
+                  <div style={{ color: '#edf8fb', fontWeight: 600 }}>{t('FLATPAK_NO_APPS', 'No Flatpak Apps Found')}</div>
+                  <div style={{ marginTop: '3px', color: '#b9cbd0', fontSize: '12px' }}>
+                    {t('FLATPAK_NO_APPS_DESC', 'No Flatpak applications are currently installed')}
+                  </div>
+                </div>
               )
             ) : (
-              <PanelSectionRow>
-                <Field
-                  label={t('FLATPAK_ERROR', 'Error')}
-                  description={flatpakApps?.error || t('FLATPAK_ERROR_APPS', 'Failed to load Flatpak applications')}
-                  icon={<FaTimes style={{color: 'red'}} />}
-                />
-              </PanelSectionRow>
+              <div style={makoPanelItemStyle}>
+                <div style={{ color: '#edf8fb', fontWeight: 600 }}>{t('FLATPAK_ERROR', 'Error')}</div>
+                <div style={{ marginTop: '3px', color: '#b9cbd0', fontSize: '12px', overflowWrap: 'anywhere' }}>
+                  {flatpakApps?.error || t('FLATPAK_ERROR_APPS', 'Failed to load Flatpak applications')}
+                </div>
+              </div>
             )}
-          </DialogControlsSection>
 
-          {/* Steam Configuration Instructions */}
-          <DialogControlsSection>
-            <DialogControlsSectionHeader>{t('FLATPAK_STEAM_CONFIG_TITLE', 'Optional Steam Flatpak shortcuts')}</DialogControlsSectionHeader>
-            <div
-              style={{
-                padding: '12px',
-                background: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: '8px',
-                margin: '8px 0',
-                display: 'flex',
-                flexDirection: 'column'
-              }}
-            >
+            <div style={{ ...makoPanelSectionHeaderStyle, borderTop: makoPanelDivider }}>
+              {t('FLATPAK_STEAM_CONFIG_TITLE', 'Optional Steam Flatpak shortcuts')}
+            </div>
+            <div style={{ ...makoPanelItemStyle, display: 'flex', flexDirection: 'column' }}>
               <div style={{ fontWeight: 'bold', marginBottom: '8px', color: '#fff' }}>
                 {t('FLATPAK_STEAM_CONFIG_HEADER', 'Configure Steam Flatpak Shortcuts')}
               </div>
@@ -418,7 +400,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               ))}
 
             </div>
-          </DialogControlsSection>
+          </div>
 
           {/* Close Button */}
           <DialogControlsSection>

@@ -162,7 +162,12 @@ export function FpsMultiplierControl({
         </>
       )}
 
-      <MakoSectionHeader>
+      <MakoSectionHeader
+        description={t(
+          "MULTIPLIER_DESC",
+          "Sets the output multiplier in Fixed mode (2x–4x). Adaptive manages the multiplier automatically."
+        )}
+      >
         {t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
       </MakoSectionHeader>
 

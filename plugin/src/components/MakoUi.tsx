@@ -1,20 +1,45 @@
-import { PanelSectionRow } from "@decky/ui";
+import { PanelSectionRow, Spinner } from "@decky/ui";
 import type { CSSProperties, ReactNode } from "react";
 
 interface MakoSectionHeaderProps {
   children: ReactNode;
+  description?: ReactNode;
 }
 
-export function MakoSectionHeader({ children }: MakoSectionHeaderProps) {
+export const makoPanelDivider = "1px solid rgba(77, 170, 190, 0.2)";
+
+export const makoPanelStyle: CSSProperties = {
+  overflow: "hidden",
+  border: "1px solid rgba(77, 170, 190, 0.28)",
+  borderRadius: "8px",
+  background: "linear-gradient(135deg, rgba(7, 31, 49, 0.68), rgba(8, 55, 68, 0.38))",
+  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 2px 6px rgba(0, 0, 0, 0.18)"
+};
+
+export const makoPanelSectionHeaderStyle: CSSProperties = {
+  padding: "12px 14px 9px",
+  color: "#edf8fb",
+  fontSize: "14px",
+  fontWeight: 600,
+  lineHeight: 1.25,
+  letterSpacing: "0.15px"
+};
+
+export const makoPanelItemStyle: CSSProperties = {
+  padding: "12px 14px",
+  borderTop: makoPanelDivider
+};
+
+export function MakoSectionHeader({ children, description }: MakoSectionHeaderProps) {
   return (
     <PanelSectionRow>
       <div
         style={{
           width: "100%",
           boxSizing: "border-box",
-          marginTop: "18px",
-          marginBottom: "4px",
-          paddingBottom: "6px",
+          marginTop: "24px",
+          marginBottom: "6px",
+          paddingBottom: "8px",
           borderBottom: "1px solid rgba(77, 170, 190, 0.28)",
           color: "#edf8fb",
           fontSize: "14px",
@@ -23,9 +48,53 @@ export function MakoSectionHeader({ children }: MakoSectionHeaderProps) {
           letterSpacing: "0.15px"
         }}
       >
-        {children}
+        <div>{children}</div>
+        {description && (
+          <div
+            style={{
+              marginTop: "4px",
+              color: "#aebfc5",
+              fontSize: "11px",
+              fontWeight: "400",
+              lineHeight: "1.35",
+              letterSpacing: "normal"
+            }}
+          >
+            {description}
+          </div>
+        )}
       </div>
     </PanelSectionRow>
+  );
+}
+
+export function MakoCompactSpinner({ size = 18 }: { size?: number }) {
+  return (
+    <span
+      aria-hidden="true"
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flex: `0 0 ${size}px`,
+        overflow: "hidden"
+      }}
+    >
+      <Spinner
+        width={size}
+        height={size}
+        style={{
+          width: `${size}px`,
+          height: `${size}px`,
+          maxWidth: `${size}px`,
+          maxHeight: `${size}px`,
+          display: "block",
+          flex: `0 0 ${size}px`
+        }}
+      />
+    </span>
   );
 }
 
