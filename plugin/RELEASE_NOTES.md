@@ -1,4 +1,4 @@
-## What's new in MAKO Decky v1.1.0
+## What's new in MAKO Decky v1.1.1
 
 This release brings the full MAKO experience together: easier per-game setup, richer live control, broader launcher support, and a private Renderer that stays out of everything else.
 

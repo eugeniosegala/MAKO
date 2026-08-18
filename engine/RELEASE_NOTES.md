@@ -1,4 +1,4 @@
-## What's new in MAKO Renderer v1.1.0
+## What's new in MAKO Renderer v1.1.1
 
 MAKO Renderer turns the frame-generation core into a more responsive, resilient Linux layer—one that adapts to the game instead of expecting every frame, menu, overlay, and GPU workload to behave perfectly.
 
