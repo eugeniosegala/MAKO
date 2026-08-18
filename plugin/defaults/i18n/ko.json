@@ -131,6 +131,8 @@
   "CONFIG_GPU_DESC": "선택적 GPU 이름, vendor:device ID 또는 PCI 버스 ID.",
   "CONFIG_ACTIVE_IN": "일치하는 프로세스",
   "CONFIG_ACTIVE_IN_DESC": "실행 파일 또는 프로세스 이름을 쉼표로 구분합니다. 실행 중 게임 캡처가 자동으로 채웁니다. 런처나 에뮬레이터에 추가 프로세스 별칭이 필요한 경우에만 편집하세요.",
+  "CONFIG_MANUAL_OVERRIDES_TITLE": "수동 재정의",
+  "CONFIG_MANUAL_OVERRIDES_DESC": "선택 사항입니다. MAKO가 자동으로 감지하므로 사용자 지정 설정, 런처 또는 에뮬레이터에 필요한 경우에만 변경하세요.",
   "INSTALL_REMOVE_RENDERER": "MAKO Renderer 제거",
   "INSTALL_RENDERER": "MAKO Renderer 설치",
   "FLATPAK_EXTENSION_UPDATED": "Flatpak 확장을 업데이트했습니다",

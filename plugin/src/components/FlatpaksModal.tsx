@@ -227,23 +227,27 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                         />
                       </PanelSectionRow>
                       <PanelSectionRow>
-                        <ButtonItem
-                          layout="below"
-                          onClick={() => handleRuntimePrimaryAction(runtime.version, runtime.installed)}
-                          disabled={isBusy}
-                        >
-                          {isBusy ? <Spinner /> : runtime.installed ? <><FaTrash /> {t('FLATPAK_UNINSTALL_BTN', 'Uninstall')}</> : <><FaDownload /> {t('FLATPAK_INSTALL_BTN', 'Install')}</>}
-                        </ButtonItem>
+                        <div className={`Mako_BrandButton${runtime.installed ? ' Mako_BrandButton--danger' : ''}`}>
+                          <ButtonItem
+                            layout="below"
+                            onClick={() => handleRuntimePrimaryAction(runtime.version, runtime.installed)}
+                            disabled={isBusy}
+                          >
+                            {isBusy ? <Spinner /> : runtime.installed ? <><FaTrash /> {t('FLATPAK_UNINSTALL_BTN', 'Uninstall')}</> : <><FaDownload /> {t('FLATPAK_INSTALL_BTN', 'Install')}</>}
+                          </ButtonItem>
+                        </div>
                       </PanelSectionRow>
                       {runtime.installed && (
                         <PanelSectionRow>
-                          <ButtonItem
-                            layout="below"
-                            onClick={() => handleExtensionOperation('install', runtime.version)}
-                            disabled={isBusy}
-                          >
-                            {operationInProgress === `install-${runtime.version}` ? <Spinner /> : <><FaDownload /> {t('FLATPAK_UPDATE_BTN', 'Update')}</>}
-                          </ButtonItem>
+                          <div className="Mako_BrandButton">
+                            <ButtonItem
+                              layout="below"
+                              onClick={() => handleExtensionOperation('install', runtime.version)}
+                              disabled={isBusy}
+                            >
+                              {operationInProgress === `install-${runtime.version}` ? <Spinner /> : <><FaDownload /> {t('FLATPAK_UPDATE_BTN', 'Update')}</>}
+                            </ButtonItem>
+                          </div>
                         </PanelSectionRow>
                       )}
                     </div>
@@ -390,12 +394,14 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
           {/* Close Button */}
           <DialogControlsSection>
             <PanelSectionRow>
-              <ButtonItem
-                layout="below"
-                onClick={closeModal}
-              >
-                {t('FLATPAK_CLOSE', 'Close')}
-              </ButtonItem>
+              <div className="Mako_BrandButton">
+                <ButtonItem
+                  layout="below"
+                  onClick={closeModal}
+                >
+                  {t('FLATPAK_CLOSE', 'Close')}
+                </ButtonItem>
+              </div>
             </PanelSectionRow>
           </DialogControlsSection>
         </Focusable>

@@ -131,6 +131,43 @@ export function Content() {
 
   return (
     <div onFocusCapture={keepFocusedControlVisible}>
+      <style>{`
+        .Mako_BrandButton button {
+          color: #f5fdff !important;
+          background: linear-gradient(135deg, #06365f 0%, #087cac 52%, #11c6dc 100%) !important;
+          border: 1px solid rgba(91, 231, 255, 0.9) !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 3px 10px rgba(0, 157, 204, 0.3) !important;
+          text-shadow: 0 1px 2px rgba(0, 20, 38, 0.75);
+          transition: background 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+        }
+
+        .Mako_BrandButton button:hover:not(:disabled) {
+          background: linear-gradient(135deg, #084a7d 0%, #0999c9 52%, #24e2ed 100%) !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 15px rgba(32, 218, 239, 0.5) !important;
+        }
+
+        .Mako_BrandButton button:focus,
+        .Mako_BrandButton button:focus-visible {
+          outline: 2px solid #ff9f1c !important;
+          outline-offset: 2px !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 0 3px rgba(255, 159, 28, 0.3), 0 0 16px rgba(24, 211, 232, 0.5) !important;
+        }
+
+        .Mako_BrandButton button:disabled {
+          filter: saturate(0.45) brightness(0.72);
+        }
+
+        .Mako_BrandButton--danger button {
+          background: linear-gradient(135deg, #6d1737 0%, #b72a62 55%, #ef4f88 100%) !important;
+          border-color: rgba(255, 149, 190, 0.9) !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 3px 10px rgba(197, 38, 100, 0.28) !important;
+        }
+
+        .Mako_BrandButton--danger button:hover:not(:disabled) {
+          background: linear-gradient(135deg, #851a42 0%, #d23470 55%, #ff69a1 100%) !important;
+          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 0 15px rgba(240, 79, 136, 0.45) !important;
+        }
+      `}</style>
       <PanelSection>
       {localDevelopmentBuildInfo && (
         <PanelSectionRow>
@@ -282,13 +319,15 @@ export function Content() {
               {t('CONTENT_ENGINE_INSTALLED', 'Installed:')} {installedEngineVersion || t('CONTENT_ENGINE_NOT_RECORDED', 'not recorded')}. {t('CONTENT_ENGINE_EXPECTS', 'This plugin expects:')} {expectedEngineVersion || t('CONTENT_ENGINE_BUNDLED_VERSION', 'the bundled version')}.
               {!installedEngineVersion && ` ${t('CONTENT_ENGINE_PREDATES_TRACKING', 'The installed payload predates version tracking.')}`} {t('CONTENT_ENGINE_UPDATE_DESC', "Reinstall the private engine to apply this plugin release's pinned payload. If you use Heroic, refresh its matching runtime extension in Flatpak Extensions afterwards.")}
             </div>
-            <ButtonItem
-              layout="below"
-              onClick={onInstall}
-              disabled={isInstalling || isUninstalling}
-            >
-              {t('CONTENT_REINSTALL_RENDERER', 'Reinstall MAKO Renderer')}
-            </ButtonItem>
+            <div className="Mako_BrandButton">
+              <ButtonItem
+                layout="below"
+                onClick={onInstall}
+                disabled={isInstalling || isUninstalling}
+              >
+                {t('CONTENT_REINSTALL_RENDERER', 'Reinstall MAKO Renderer')}
+              </ButtonItem>
+            </div>
           </div>
         </PanelSectionRow>
       )}
@@ -355,8 +394,15 @@ export function Content() {
 
       <UsageInstructions />
 
+      {isInstalled && (
+        <>
+          <SmartClipboardButton />
+          <FgmodClipboardButton />
+        </>
+      )}
+
       <PanelSectionRow>
-        <div style={{ marginTop: "24px" }}>
+        <div className="Mako_BrandButton" style={{ marginTop: "24px" }}>
           <ButtonItem
             layout="below"
             bottomSeparator="none"
@@ -368,7 +414,7 @@ export function Content() {
       </PanelSectionRow>
 
       <PanelSectionRow>
-        <div>
+        <div className="Mako_BrandButton">
           <ButtonItem
             layout="below"
             bottomSeparator="none"
@@ -378,13 +424,6 @@ export function Content() {
           </ButtonItem>
         </div>
       </PanelSectionRow>
-
-      {isInstalled && (
-        <>
-          <SmartClipboardButton />
-          <FgmodClipboardButton />
-        </>
-      )}
 
       {isInstalled && (
         <>

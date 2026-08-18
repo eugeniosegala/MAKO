@@ -7,7 +7,7 @@
 > [!IMPORTANT]
 > **[Decky LSFG-VK](https://github.com/xXJSONDeruloXx/decky-lsfg-vk) and [LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) are now MAKO.** This repository is their new home and continuation. Future development, releases, documentation, and issue tracking happen here.
 
-> **Independent project and Lossless Scaling requirement:** MAKO is an independent Steam Deck and Steam Machine project comprising MAKO Decky and MAKO Renderer. It brings Lossless Scaling frame generation to SteamOS today, with scaling support planned as the project expands. MAKO requires the `Lossless.dll` supplied by a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation but does not bundle, copy, or modify that proprietary library. Test it per game; MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
+> **Independent project:** MAKO is independently developed and maintained. It builds on work by **[PancakeTAS and the lsfg-vk contributors](https://github.com/PancakeTAS/lsfg-vk)** and **[xXJSONDeruloXx, the original Decky LSFG-VK developer](https://github.com/xXJSONDeruloXx/decky-lsfg-vk)**, whom MAKO gratefully thanks. It requires `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation but does not bundle or modify it. MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
 
 ## Downloads
 
@@ -184,3 +184,7 @@ The original copyright and license notices are preserved in [LICENSE.md](LICENSE
 ## License
 
 MAKO is distributed under [GPL-3.0-or-later](LICENSE.md). The root license also preserves the BSD-3-Clause and MIT notices required by incorporated upstream code.
+
+## AI-assisted development
+
+MAKO uses coding agents as part of an evidence-driven engineering workflow while keeping architecture, review, validation, and release decisions under human ownership. See [AI use in MAKO](AI_USE.md) for the full approach.

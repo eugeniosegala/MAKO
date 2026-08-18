@@ -131,6 +131,8 @@
   "CONFIG_GPU_DESC": "Optional GPU name, vendor:device ID, or PCI bus ID.",
   "CONFIG_ACTIVE_IN": "Matched Processes",
   "CONFIG_ACTIVE_IN_DESC": "Executable or process names separated by commas. Running-game capture fills these automatically; edit them only when a launcher or emulator needs an additional process alias.",
+  "CONFIG_MANUAL_OVERRIDES_TITLE": "Manual Overrides",
+  "CONFIG_MANUAL_OVERRIDES_DESC": "Optional. MAKO detects these automatically; change them only for custom setups, launchers, or emulators.",
   "INSTALL_REMOVE_RENDERER": "Remove MAKO Renderer",
   "INSTALL_RENDERER": "Install MAKO Renderer",
   "FLATPAK_EXTENSION_UPDATED": "Flatpak extension updated",

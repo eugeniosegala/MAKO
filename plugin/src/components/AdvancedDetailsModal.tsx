@@ -194,12 +194,14 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
           {/* Close Button */}
           <DialogControlsSection>
             <PanelSectionRow>
-              <ButtonItem
-                layout="below"
-                onClick={closeModal}
-              >
-                {t('ADVANCED_DETAILS_CLOSE', 'Close')}
-              </ButtonItem>
+              <div className="Mako_BrandButton">
+                <ButtonItem
+                  layout="below"
+                  onClick={closeModal}
+                >
+                  {t('ADVANCED_DETAILS_CLOSE', 'Close')}
+                </ButtonItem>
+              </div>
             </PanelSectionRow>
           </DialogControlsSection>
           </Focusable>

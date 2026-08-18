@@ -131,6 +131,8 @@
   "CONFIG_GPU_DESC": "任意の GPU 名、vendor:device ID、または PCI バス ID。",
   "CONFIG_ACTIVE_IN": "一致するプロセス",
   "CONFIG_ACTIVE_IN_DESC": "実行ファイルまたはプロセス名をカンマで区切ります。実行中ゲームの取得で自動入力されます。ランチャーやエミュレーターに追加のプロセス別名が必要な場合のみ編集してください。",
+  "CONFIG_MANUAL_OVERRIDES_TITLE": "手動オーバーライド",
+  "CONFIG_MANUAL_OVERRIDES_DESC": "任意。MAKO が自動検出するため、カスタム設定、ランチャー、エミュレーターで必要な場合のみ変更してください。",
   "INSTALL_REMOVE_RENDERER": "MAKO Renderer を削除",
   "INSTALL_RENDERER": "MAKO Renderer をインストール",
   "FLATPAK_EXTENSION_UPDATED": "Flatpak 拡張を更新しました",

@@ -439,6 +439,11 @@ class Plugin:
         except (OSError, ValueError) as error:
             decky.logger.warning("Could not initialize profile metadata: %s", error)
         try:
+            if self.configuration_service.sanitize_captured_processes_if_needed():
+                decky.logger.info("Removed shared helper processes from saved profiles")
+        except (OSError, ValueError) as error:
+            decky.logger.warning("Could not clean saved profile processes: %s", error)
+        try:
             if self.configuration_service.migrate_wrapper_profile_settings_if_needed():
                 decky.logger.info("Migrated wrapper-only settings into the active profile")
         except OSError as error:

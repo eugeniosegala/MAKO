@@ -284,9 +284,11 @@ export function ProfileManagement({ currentProfile, onProfileChange, mainRunning
 
       {mainRunningApp && !runningProfile && (
         <PanelSectionRow>
-          <ButtonItem layout="below" onClick={() => void saveRunningGame()} disabled={isLoading}>
-            {t("PROFILE_SAVE_RUNNING", "Save profile for {game}", { game: mainRunningApp.display_name })}
-          </ButtonItem>
+          <div className="Mako_BrandButton">
+            <ButtonItem layout="below" onClick={() => void saveRunningGame()} disabled={isLoading}>
+              {t("PROFILE_SAVE_RUNNING", "Save profile for {game}", { game: mainRunningApp.display_name })}
+            </ButtonItem>
+          </div>
         </PanelSectionRow>
       )}
 

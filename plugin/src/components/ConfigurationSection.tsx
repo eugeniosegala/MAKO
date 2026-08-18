@@ -15,6 +15,7 @@ interface ConfigurationSectionProps {
 
 const WORKAROUNDS_COLLAPSED_KEY = "mako-workarounds-collapsed";
 const CONFIG_COLLAPSED_KEY = "mako-config-collapsed";
+const MANUAL_OVERRIDES_COLLAPSED_KEY = "mako-manual-overrides-collapsed";
 
 export function ConfigurationSection({
   config,
@@ -39,6 +40,15 @@ export function ConfigurationSection({
     }
   });
 
+  const [manualOverridesCollapsed, setManualOverridesCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem(MANUAL_OVERRIDES_COLLAPSED_KEY);
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
   // Persist workarounds collapse state to localStorage
   useEffect(() => {
     try {
@@ -56,16 +66,26 @@ export function ConfigurationSection({
     }
   }, [workaroundsCollapsed]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(MANUAL_OVERRIDES_COLLAPSED_KEY, JSON.stringify(manualOverridesCollapsed));
+    } catch (error) {
+      console.warn("Failed to save manual overrides collapse state:", error);
+    }
+  }, [manualOverridesCollapsed]);
+
   return (
     <>
       <style>
         {`
         .MAKO_ConfigCollapseButton_Container > div > div > div > button,
         .MAKO_ConfigCollapseButton_Container > div > div > div > div > button,
-        .MAKO_WorkaroundsCollapseButton_Container > div > div > div > button {
+        .MAKO_WorkaroundsCollapseButton_Container > div > div > div > button,
+        .MAKO_ManualOverridesCollapseButton_Container > div > div > div > button {
           height: 10px !important;
         }
-        .MAKO_WorkaroundsCollapseButton_Container > div > div > div > div > button {
+        .MAKO_WorkaroundsCollapseButton_Container > div > div > div > div > button,
+        .MAKO_ManualOverridesCollapseButton_Container > div > div > div > div > button {
           height: 10px !important;
         }
         `}
@@ -154,32 +174,6 @@ export function ConfigurationSection({
             />
           </PanelSectionRow>
 
-          <PanelSectionRow>
-            <TextField
-              label={t("CONFIG_DLL_PATH", "Lossless.dll Path")}
-              description={t("CONFIG_DLL_PATH_DESC", "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.")}
-              value={config.dll}
-              onChange={(event) => onConfigChange(DLL, event.currentTarget.value)}
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <TextField
-              label={t("CONFIG_GPU", "GPU")}
-              description={t("CONFIG_GPU_DESC", "Optional GPU name, vendor:device ID, or PCI bus ID.")}
-              value={config.gpu}
-              onChange={(event) => onConfigChange(GPU, event.currentTarget.value)}
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <TextField
-              label={t("CONFIG_ACTIVE_IN", "Matched Processes")}
-              description={t("CONFIG_ACTIVE_IN_DESC", "Executable or process names separated by commas. Running-game capture fills these automatically; edit them only when a launcher or emulator needs an additional process alias.")}
-              value={config.active_in}
-              onChange={(event) => onConfigChange(ACTIVE_IN, event.currentTarget.value)}
-            />
-          </PanelSectionRow>
         </>
       )}
 
@@ -257,6 +251,84 @@ export function ConfigurationSection({
               description={t("CONFIG_FORCE_ALSA_AUDIO_DESC", "For this profile only. May improve audio compatibility in some native and Proton games. Disable to remove MAKO's override and restore normal Steam/Proton audio defaults.")}
               checked={config.force_alsa_audio}
               onChange={(value) => onConfigChange(FORCE_ALSA_AUDIO, value)}
+            />
+          </PanelSectionRow>
+        </>
+      )}
+
+      {/* Manual Overrides Section */}
+      <PanelSectionRow>
+        <div
+          style={{
+            fontSize: "14px",
+            fontWeight: "bold",
+            marginTop: "18px",
+            marginBottom: "4px",
+            color: "white"
+          }}
+        >
+          {t("CONFIG_MANUAL_OVERRIDES_TITLE", "Manual Overrides")}
+        </div>
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <div style={{ fontSize: "11px", lineHeight: "1.35", color: "#b8c5d6", marginBottom: "4px" }}>
+          {t(
+            "CONFIG_MANUAL_OVERRIDES_DESC",
+            "Optional. MAKO detects these automatically; change them only for custom setups, launchers, or emulators."
+          )}
+        </div>
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <div
+          className="MAKO_ManualOverridesCollapseButton_Container"
+          style={{ marginTop: "2px", marginBottom: "4px" }}
+        >
+          <ButtonItem
+            layout="below"
+            bottomSeparator={manualOverridesCollapsed ? "standard" : "none"}
+            onClick={() => setManualOverridesCollapsed(!manualOverridesCollapsed)}
+          >
+            {manualOverridesCollapsed ? (
+              <RiArrowDownSFill
+                style={{ transform: "translate(0, -13px)", fontSize: "1.5em" }}
+              />
+            ) : (
+              <RiArrowUpSFill
+                style={{ transform: "translate(0, -12px)", fontSize: "1.5em" }}
+              />
+            )}
+          </ButtonItem>
+        </div>
+      </PanelSectionRow>
+
+      {!manualOverridesCollapsed && (
+        <>
+          <PanelSectionRow>
+            <TextField
+              label={t("CONFIG_DLL_PATH", "Lossless.dll Path")}
+              description={t("CONFIG_DLL_PATH_DESC", "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.")}
+              value={config.dll}
+              onChange={(event) => onConfigChange(DLL, event.currentTarget.value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <TextField
+              label={t("CONFIG_GPU", "GPU")}
+              description={t("CONFIG_GPU_DESC", "Optional GPU name, vendor:device ID, or PCI bus ID.")}
+              value={config.gpu}
+              onChange={(event) => onConfigChange(GPU, event.currentTarget.value)}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <TextField
+              label={t("CONFIG_ACTIVE_IN", "Matched Processes")}
+              description={t("CONFIG_ACTIVE_IN_DESC", "Executable or process names separated by commas. Running-game capture fills these automatically; edit them only when a launcher or emulator needs an additional process alias.")}
+              value={config.active_in}
+              onChange={(event) => onConfigChange(ACTIVE_IN, event.currentTarget.value)}
             />
           </PanelSectionRow>
         </>

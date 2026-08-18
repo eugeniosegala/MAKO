@@ -24,6 +24,9 @@ class PluginLifecycleTests(unittest.TestCase):
             migrate_profile_metadata_if_needed=lambda: calls.append(
                 "profile-metadata"
             ) or False,
+            sanitize_captured_processes_if_needed=lambda: calls.append(
+                "captured-processes"
+            ) or False,
             migrate_wrapper_profile_settings_if_needed=lambda: calls.append(
                 "wrapper-settings"
             ) or False,
@@ -47,6 +50,7 @@ class PluginLifecycleTests(unittest.TestCase):
 
         self.assertEqual(calls, [
             "profile-metadata",
+            "captured-processes",
             "wrapper-settings",
             "base-fps-cap",
             "vkbasalt",

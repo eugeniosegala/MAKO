@@ -138,6 +138,88 @@ class GameProfileTests(unittest.TestCase):
         self.assertFalse(result["changed"])
         self.assertEqual(self.service.get_profiles()["profiles"], ["mako"])
 
+    def test_unsaved_game_cannot_match_different_saved_game_helpers(self):
+        quake = dict(ConfigurationManager.get_defaults())
+        quake["active_in"] = "Quake4.exe, steam.exe, python3.9"
+        profile_data = ProfileData(
+            current_profile="Quake-4",
+            profiles={"mako": ConfigurationManager.get_defaults(), "Quake-4": quake},
+            global_config=self.profile_data["global_config"],
+        )
+        self.service._save_profile_data(profile_data)
+        self.service._write_profile_metadata({
+            "mako": {
+                "display_name": "Default",
+                "kind": "default",
+                "steam_app_id": None,
+                "captured_processes": [],
+            },
+            "Quake-4": {
+                "display_name": "Quake 4",
+                "kind": "game",
+                "steam_app_id": "12345",
+                "captured_processes": ["Quake4.exe", "steam.exe", "python3.9"],
+            },
+        })
+
+        previous = configuration_module.detect_processes_for_steam_app
+        configuration_module.detect_processes_for_steam_app = (
+            lambda _app_id: ["ResidentEvil4.exe", "steam.exe", "python3.9"]
+        )
+        try:
+            result = self.service.sync_current_profile("67890")
+        finally:
+            configuration_module.detect_processes_for_steam_app = previous
+
+        self.assertTrue(result["success"])
+        self.assertEqual(result["profile_name"], "mako")
+        self.assertTrue(result["changed"])
+
+    def test_migration_removes_only_automatically_captured_helpers(self):
+        quake = dict(ConfigurationManager.get_defaults())
+        quake["active_in"] = (
+            "Quake4.exe, steam.exe, python3.9, UserAlias.exe"
+        )
+        profile_data = ProfileData(
+            current_profile="mako",
+            profiles={"mako": ConfigurationManager.get_defaults(), "Quake-4": quake},
+            global_config=self.profile_data["global_config"],
+        )
+        self.service._save_profile_data(profile_data)
+        self.service._write_profile_metadata({
+            "mako": {
+                "display_name": "Default",
+                "kind": "default",
+                "steam_app_id": None,
+                "captured_processes": [],
+            },
+            "Quake-4": {
+                "display_name": "Quake 4",
+                "kind": "game",
+                "steam_app_id": "12345",
+                "captured_processes": ["Quake4.exe", "steam.exe", "python3.9"],
+            },
+        })
+
+        self.assertTrue(self.service.sanitize_captured_processes_if_needed())
+        self.assertFalse(self.service.sanitize_captured_processes_if_needed())
+
+        profiles = self.service.get_profiles()
+        quake_detail = next(
+            detail for detail in profiles["profile_details"]
+            if detail["profile_name"] == "Quake-4"
+        )
+        self.assertEqual(
+            quake_detail["processes"], ["Quake4.exe", "UserAlias.exe"]
+        )
+        metadata = json.loads(
+            self.service.profile_metadata_path.read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            metadata["profiles"]["Quake-4"]["captured_processes"],
+            ["Quake4.exe"],
+        )
+
     def test_profile_sync_can_reselect_existing_process_only_profile(self):
         created = self.service.create_profile("Manual Game")
         profile_name = created["profile_name"]

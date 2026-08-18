@@ -28,7 +28,10 @@ from .constants import (
     FLATPAK_IMPLICIT_LAYER_DIR,
     PRESENT_ACQUIRE_TIMEOUT_MS,
 )
-from .process_detection import detect_processes_for_steam_app
+from .process_detection import (
+    detect_processes_for_steam_app,
+    is_matchable_process_name,
+)
 from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 
 
@@ -245,6 +248,50 @@ class ConfigurationService(BaseService):
             if current_payload == expected_payload:
                 return False
         self._write_profile_metadata(metadata)
+        return True
+
+    def sanitize_captured_processes_if_needed(self) -> bool:
+        """Remove shared launcher/helper names captured by older builds."""
+        profile_data = self._get_profile_data()
+        self.migrate_profile_metadata_if_needed()
+        metadata = self._read_profile_metadata(profile_data)
+        changed = False
+
+        for profile_name, entry in metadata.items():
+            captured = entry.get("captured_processes", [])
+            safe_captured = [
+                process_name
+                for process_name in captured
+                if is_matchable_process_name(process_name)
+            ]
+            if safe_captured == captured:
+                continue
+
+            unsafe_names = {
+                process_name.casefold()
+                for process_name in captured
+                if not is_matchable_process_name(process_name)
+            }
+            config = profile_data["profiles"][profile_name]
+            config["active_in"] = ", ".join(
+                process_name
+                for process_name in self._processes_for_config(config)
+                if process_name.casefold() not in unsafe_names
+            )
+            entry["captured_processes"] = safe_captured
+            changed = True
+
+        if not changed:
+            return False
+
+        self._save_profile_data(profile_data)
+        self._write_profile_metadata(metadata)
+        script_result = self.update_mako_script_from_profile_data(profile_data)
+        if not script_result["success"]:
+            raise OSError(
+                script_result.get("error")
+                or "could not update launch wrapper"
+            )
         return True
 
     def _profile_details(
@@ -1047,7 +1094,11 @@ class ConfigurationService(BaseService):
                 profile=None,
             )
 
-        processes = detect_processes_for_steam_app(normalized_app_id)
+        processes = [
+            process_name
+            for process_name in detect_processes_for_steam_app(normalized_app_id)
+            if is_matchable_process_name(process_name)
+        ]
         if not processes:
             return self._error_response(
                 ProfileResponse,
@@ -1241,6 +1292,7 @@ class ConfigurationService(BaseService):
                         profile_name
                         for profile_name, config in profile_data["profiles"].items()
                         if profile_name != DEFAULT_PROFILE_NAME
+                        and not metadata.get(profile_name, {}).get("steam_app_id")
                         and detected_names & {
                             process_name.casefold()
                             for process_name in self._processes_for_config(config)

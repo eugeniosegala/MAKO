@@ -55,7 +55,10 @@ export function InstallationButton({
 
   return (
     <PanelSectionRow>
-      <div style={{ marginTop: topMargin }}>
+      <div
+        className={`Mako_BrandButton${isInstalled ? " Mako_BrandButton--danger" : ""}`}
+        style={{ marginTop: topMargin }}
+      >
         <ButtonItem
           layout="below"
           onClick={isInstalled ? onUninstall : onInstall}
