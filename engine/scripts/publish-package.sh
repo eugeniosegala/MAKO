@@ -161,6 +161,9 @@ $manual_release_notes
 
 Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart after major display, DLL, GPU, Flow Scale, Performance Mode, or model changes.
 
+- **Adaptive target behaviour:** Adaptive varies the generated-frame count toward an average target. It cannot reduce a native frame rate already above that target, and the result still depends on the selected multiplier plus available GPU and compositor capacity.
+- **Quality and latency tuning:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness, so compare the available choices per game.
+
 > [!IMPORTANT]
 > MAKO Renderer requires \`Lossless.dll\` from a licensed Lossless Scaling installation. Neither release archive bundles, copies, or modifies that proprietary library.
 
@@ -196,13 +199,9 @@ flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.fla
 
 Keep the previous archives until the new version has been tested with your games.
 
-## Known limitations
+## Known limitation
 
 - **HDR frame generation is not currently supported:** HDR pipeline groundwork remains in the Renderer, but MAKO does not present it as an enabled release path yet.
-- **Adaptive targets are not hard frame limiters:** Adaptive varies generated-frame count toward an average target. It cannot reduce a native framerate already above the target, exceed the configured multiplier or available GPU/compositor capacity, or guarantee an unreachable output rate.
-- **Image quality and latency remain game-dependent:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence can improve motion consistency while reducing responsiveness.
-- **Some changes still require a restart:** GPU, Flow Scale, Performance Mode, DLL, model, FP16 policy, and settings that require additional reserved resources should be tested after restarting the game.
-- **Flatpak runtimes must match:** Install the MAKO extension matching the application’s Freedesktop runtime. A host installation alone is not visible inside a Flatpak sandbox.
 
 ## Before you play
 
