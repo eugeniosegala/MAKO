@@ -14,7 +14,7 @@
 | Component | Recommended for | Releases |
 |-----------|-----------------|----------|
 | **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users | [Latest MAKO Decky release (ZIP under Assets)](https://github.com/eugeniosegala/MAKO/releases/latest) |
-| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Latest MAKO Renderer release (Linux archive under Assets)](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.0.0) |
+| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Latest MAKO Renderer release (Linux archive under Assets)](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.1.0) |
 
 > [!NOTE]
 > Check the Downloads table regularly for updates. MAKO Decky and MAKO Renderer are published independently.
@@ -149,7 +149,7 @@ Profiles and Steam launch options are retained. The private native engine and la
 Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
 
 1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam.
-2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.0.0) and download the Linux archive under **Assets**, named `mako-render-v<version>-linux.tar.xz`.
+2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.1.0) and download the Linux archive under **Assets**, named `mako-render-v<version>-linux.tar.xz`.
 3. Extract it into your user-local prefix:
 
 ```bash
