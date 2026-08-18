@@ -65,18 +65,18 @@
   "remote_binary_bundling": true,
   "remote_binary": [
     {
-      "name": "mako-render-v1.1.1-linux.tar.xz",
-      "version": "1.1.1",
-      "lineage_version": "1.1.1",
+      "name": "mako-render-v1.1.2-linux.tar.xz",
+      "version": "1.1.2",
+      "lineage_version": "1.1.2",
       "source_repository": "https://github.com/eugeniosegala/MAKO",
-      "release_tag": "render-v1.1.1",
-      "source_commit": "c74f7c2db5d947e24fe3cafe6e0dec0b9a0eebc5",
-      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.1.1/mako-render-v1.1.1-linux.tar.xz",
-      "sha256hash": "06154aba41386b61724b1d24c3b05da2a143e17add0a71cc41fad706976e6235",
+      "release_tag": "render-v1.1.2",
+      "source_commit": "2dde01d58cac49472cd6f5b58287d4413416d753",
+      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.1.2/mako-render-v1.1.2-linux.tar.xz",
+      "sha256hash": "93adbe718d75bf84af10937372fe09b6ce574730bd9374ae95f2296082e45f43",
       "flatpak_bundle": {
-        "name": "mako-render-v1.1.1-flatpaks.tar.xz",
-        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.1.1/mako-render-v1.1.1-flatpaks.tar.xz",
-        "sha256hash": "edf1d594ed2534ef8de9f85464ad2e29d646ffdd097dffac37868bc536b74349"
+        "name": "mako-render-v1.1.2-flatpaks.tar.xz",
+        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v1.1.2/mako-render-v1.1.2-flatpaks.tar.xz",
+        "sha256hash": "c22cf973844298e0709fe85668432fbc32bedbd83f34e04880fcaf31630d646a"
       }
     }
   ]
