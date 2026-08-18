@@ -18,7 +18,7 @@ Previous Decky releases are available on the
 [MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
 
 For direct Vulkan-layer installation without Decky, open the
-[latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.1.0)
+[latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v1.1.1)
 and download the Linux archive under **Assets**.
 
 ## What it manages
