@@ -6,7 +6,6 @@ repository_root="$(cd "$repo_root/.." && pwd)"
 cd "$repo_root"
 
 release_remote="${MAKO_RELEASE_REMOTE:-origin}"
-notes_tag_pattern="render-v*"
 requested_version=""
 
 usage() {
@@ -16,6 +15,7 @@ Usage: scripts/publish-package.sh [--version X.Y.Z]
 Builds, verifies, and publishes MAKO Renderer. When --version is supplied, the
 script updates and commits engine/VERSION first. After publishing, it commits
 the generated Decky binary pins and Renderer release links automatically.
+engine/RELEASE_NOTES.md must contain the matching manually curated heading.
 EOF
 }
 
@@ -69,6 +69,12 @@ if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
     exit 1
 fi
 
+notes_version="${requested_version:-$(tr -d '[:space:]' < VERSION)}"
+manual_release_notes="$(
+    node "$repository_root/scripts/read-release-notes.mjs" \
+        "$repo_root/RELEASE_NOTES.md" "MAKO Renderer" "$notes_version"
+)"
+
 if ! git remote get-url "$release_remote" >/dev/null 2>&1; then
     echo "Release remote '$release_remote' is not configured." >&2
     exit 1
@@ -119,24 +125,6 @@ archive="out/mako-render-v$version-linux.tar.xz"
 flatpak_archive="out/mako-render-v$version-flatpaks.tar.xz"
 source_commit="$(git rev-parse HEAD)"
 
-latest_previous_tag=""
-while IFS= read -r candidate_tag; do
-    if [[ "$candidate_tag" != "$tag" ]]; then
-        latest_previous_tag="$candidate_tag"
-        break
-    fi
-done < <(git tag --merged HEAD --list "$notes_tag_pattern" --sort=-version:refname)
-if [[ -n "$latest_previous_tag" ]]; then
-    release_notes_heading="What's new since \`$latest_previous_tag\`"
-    release_changes="$(git log --no-merges --format='- %s (%h)' "$latest_previous_tag"..HEAD -- engine README.md)"
-else
-    release_notes_heading="What's new in MAKO Renderer \`$version\`"
-    release_changes="$(git log --no-merges --format='- %s (%h)' HEAD -- engine README.md)"
-fi
-if [[ -z "$release_changes" ]]; then
-    release_changes='- No component-scoped changes were recorded after the previous tag.'
-fi
-
 tag_exists=false
 if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
     tag_commit="$(git rev-list -n 1 "$tag")"
@@ -164,30 +152,21 @@ cat > "$notes_file" <<EOF
 
 MAKO Renderer v$version is a stable release. Test it game by game and retain a known-good rollback path.
 
-## $release_notes_heading
+$manual_release_notes
 
-$release_changes
+## 🎮 In-game considerations
 
-The list above is generated from every non-merge commit that changed MAKO
-Renderer or the shared README after the previous Renderer tag.
+> [!TIP]
+> **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.
 
-### Before you install
+Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart after major display, DLL, GPU, Flow Scale, Performance Mode, or model changes.
 
-- Lossless Scaling and \`Lossless.dll\` must already be installed through Steam;
-  neither archive includes or modifies them.
-- Higher interpolation ratios can increase artifacts and input latency. Test each
-  game before relying on a new setting or release.
-- The host archive contains 64-bit and 32-bit Vulkan layers. The separate
-  Flatpak archive contains extensions for the supported runtimes.
+> [!IMPORTANT]
+> MAKO Renderer requires \`Lossless.dll\` from a licensed Lossless Scaling installation. Neither release archive bundles, copies, or modifies that proprietary library.
 
-### Included files
+## Installation
 
-- 64-bit Vulkan implicit layer and manifest under \`lib/\` and \`share/vulkan/implicit_layer.d/\`
-- 32-bit Vulkan implicit layer and manifest under \`lib32/\` and \`share/vulkan/implicit_layer.d/\`
-- 64-bit CLI and Qt configuration UI
-- XDG desktop files
-
-### Install
+### Host installation
 
 Download \`$(basename "$archive")\` and extract it to your local prefix:
 
@@ -196,7 +175,7 @@ mkdir -p ~/.local
 tar -xJf $(basename "$archive") -C ~/.local
 \`\`\`
 
-The host archive includes 64-bit and 32-bit Vulkan layers; the CLI and Qt UI are 64-bit. Flatpak extensions are provided separately below.
+The host archive includes 64-bit and 32-bit Vulkan layers; the CLI and Qt UI are 64-bit. Configure the licensed DLL path with \`mako-ui\` or \`~/.config/mako-render/conf.toml\`, then use \`ENABLE_MAKO=1 %command%\` for a direct Steam launch.
 
 ### Flatpak extensions
 
@@ -208,10 +187,41 @@ flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.fla
 
 - SHA-256: \`$flatpak_checksum\`
 
-### Build details
+## Updating an existing installation
+
+1. Quit every game or application currently using MAKO Renderer.
+2. Download the newer host archive and extract it into the same local prefix. Existing files are replaced; your configuration remains under \`~/.config/mako-render/\`.
+3. If you use Flatpak applications, download the matching Flatpak archive and reinstall the extension for each runtime you use.
+4. Restart the game. Revalidate the configuration with \`~/.local/bin/mako-cli validate\` if you changed the DLL path or profiles.
+
+Keep the previous archives until the new version has been tested with your games.
+
+## Known limitations
+
+- **HDR frame generation is not currently supported:** HDR pipeline groundwork remains in the Renderer, but MAKO does not present it as an enabled release path yet.
+- **Adaptive targets are not hard frame limiters:** Adaptive varies generated-frame count toward an average target. It cannot reduce a native framerate already above the target, exceed the configured multiplier or available GPU/compositor capacity, or guarantee an unreachable output rate.
+- **Image quality and latency remain game-dependent:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence can improve motion consistency while reducing responsiveness.
+- **Some changes still require a restart:** GPU, Flow Scale, Performance Mode, DLL, model, FP16 policy, and settings that require additional reserved resources should be tested after restarting the game.
+- **Flatpak runtimes must match:** Install the MAKO extension matching the application’s Freedesktop runtime. A host installation alone is not visible inside a Flatpak sandbox.
+
+## Before you play
+
+- Test MAKO per game and start with frame generation disabled, then Fixed 2x, before adding Adaptive or higher multipliers.
+- Confirm the detected \`Lossless.dll\` path. Leaving it blank permits normal discovery in common Steam locations.
+- Do not combine MAKO with another Lossless Scaling Vulkan wrapper for the same game.
+
+## Included files
+
+- 64-bit Vulkan implicit layer and manifest under \`lib/\` and \`share/vulkan/implicit_layer.d/\`
+- 32-bit Vulkan implicit layer and manifest under \`lib32/\` and \`share/vulkan/implicit_layer.d/\`
+- 64-bit CLI and Qt configuration UI
+- XDG desktop files
+
+## Build details
 
 - Source commit: \`$source_commit\`
-- SHA-256: \`$checksum\`
+- Host archive SHA-256: \`$checksum\`
+- Flatpak archive SHA-256: \`$flatpak_checksum\`
 EOF
 
 if [[ "$tag_exists" == false ]]; then

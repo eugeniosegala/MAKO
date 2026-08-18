@@ -12,7 +12,17 @@ ship.
 
 ## Publish both packages
 
-From the repository root, replace `1.2.0` with the new version:
+First, manually write the user-facing “What’s new” copy in both files:
+
+- [MAKO Renderer release notes](engine/RELEASE_NOTES.md)
+- [MAKO Decky release notes](plugin/RELEASE_NOTES.md)
+
+Change the version in each file’s first heading and edit the Markdown beneath
+it in the tone you want for that release. Commit both files with the changes
+being released. The publisher rejects a missing, empty, or stale heading before
+it changes a version or starts a build.
+
+Then, from the repository root, replace `1.2.0` with the new version:
 
 ```bash
 ./scripts/publish-release.sh 1.2.0
@@ -20,19 +30,22 @@ From the repository root, replace `1.2.0` with the new version:
 
 That one command:
 
-1. Updates and commits `engine/VERSION`.
-2. Tests and builds the 64-bit and 32-bit host Renderer archive plus the 23.08,
+1. Validates both manually curated “What’s new” files for `1.2.0`.
+2. Updates and commits `engine/VERSION`.
+3. Tests and builds the 64-bit and 32-bit host Renderer archive plus the 23.08,
    24.08, and 25.08 Flatpak bundles.
-3. Publishes `render-v1.2.0`, calculates its checksums, and commits the exact
+4. Publishes `render-v1.2.0`, calculates its checksums, and commits the exact
    archive URLs, checksums, tag, and source commit to `plugin/package.json`.
-4. Updates and commits the Decky version, tests and verifies its bundled
+5. Updates and commits the Decky version, tests and verifies its bundled
    Renderer payload, and builds the Decky ZIP.
-5. Publishes `plugin-v1.2.0` as GitHub's **Latest** release.
-6. Updates all versioned README release links, pushes `main`, and verifies that
+6. Publishes `plugin-v1.2.0` as GitHub's **Latest** release.
+7. Updates all versioned README release links, pushes `main`, and verifies that
    the remote release-asset checksums, pins, tags, and worktree agree.
 
 No version, checksum, binary URL, Flatpak pin, or README release link needs to
-be edited manually.
+be edited manually. The two “What’s new” files are intentionally the only
+manual release content; the stable installation, update, in-game, limitations,
+and payload sections are assembled by the component publishers.
 
 ## Resume or publish one component
 

@@ -10,7 +10,8 @@ Usage: ./scripts/publish-release.sh X.Y.Z
 
 Publishes the matching MAKO Renderer and MAKO Decky releases. The workflow is
 resumable: a component whose tag, GitHub release, assets, version, and Renderer
-pins are already complete is verified and skipped.
+pins are already complete is verified and skipped. Both component
+RELEASE_NOTES.md files must be prepared and committed for X.Y.Z first.
 EOF
 }
 
@@ -36,6 +37,11 @@ for command in gh git node; do
     exit 1
   fi
 done
+
+node scripts/read-release-notes.mjs \
+  engine/RELEASE_NOTES.md "MAKO Renderer" "$version" >/dev/null
+node scripts/read-release-notes.mjs \
+  plugin/RELEASE_NOTES.md "MAKO Decky" "$version" >/dev/null
 
 if command -v sha256sum >/dev/null 2>&1; then
   checksum_command=(sha256sum)

@@ -16,7 +16,8 @@ Builds and verifies the Decky plugin ZIP, then creates or verifies the matching
 plugin-v tag, pushes it, uploads the ZIP, and creates or updates the GitHub
 release as the repository's Latest release. When --version is supplied, the
 script updates and commits plugin/package.json first. Its Renderer pin must
-already match that version.
+already match that version, and plugin/RELEASE_NOTES.md must contain the
+matching manually curated heading.
 EOF
 }
 
@@ -116,6 +117,12 @@ if [[ -n "$(git -C "$project_dir" status --porcelain --untracked-files=normal)" 
   exit 1
 fi
 
+notes_version="${requested_version:-$(node -p 'require(process.argv[1]).version' "$project_dir/package.json")}"
+manual_release_notes="$(
+  node "$repository_root/scripts/read-release-notes.mjs" \
+    "$project_dir/RELEASE_NOTES.md" "MAKO Decky" "$notes_version"
+)"
+
 git -C "$project_dir" fetch origin --tags --quiet
 
 if [[ -n "$requested_version" ]]; then
@@ -166,25 +173,6 @@ read -r archive_name engine_version package_version github_repository has_flatpa
 )
 
 plugin_release_tag="plugin-v$package_version"
-notes_package_tag_pattern="plugin-v*"
-
-latest_previous_package_tag=""
-while IFS= read -r candidate_tag; do
-  if [[ "$candidate_tag" != "$plugin_release_tag" ]]; then
-    latest_previous_package_tag="$candidate_tag"
-    break
-  fi
-done < <(git -C "$project_dir" tag --merged HEAD --list "$notes_package_tag_pattern" --sort=-version:refname)
-if [[ -n "$latest_previous_package_tag" ]]; then
-  release_notes_heading="What’s new since \`$latest_previous_package_tag\`"
-  release_changes="$(git -C "$repository_root" log --no-merges --format='- %s (%h)' "$latest_previous_package_tag"..HEAD -- plugin README.md)"
-else
-  release_notes_heading="What’s new in MAKO Decky \`$package_version\`"
-  release_changes="$(git -C "$repository_root" log --no-merges --format='- %s (%h)' HEAD -- plugin README.md)"
-fi
-if [[ -z "$release_changes" ]]; then
-  release_changes='- No Decky- or shared-documentation changes were recorded after the previous tag.'
-fi
 if [[ "$archive_url" == local-only://* || "$engine_release_tag" == local-only-* ]]; then
   echo "Refusing to publish a package pinned to a local-only engine payload." >&2
   exit 1
@@ -253,22 +241,18 @@ notes_file="$notes_dir/release-notes.md"
 printf '%s\n' \
   "> Looking for the standalone Vulkan layer? See [MAKO Renderer v$engine_version](https://github.com/$github_repository/releases/tag/$engine_release_tag)." \
   '' \
-  "## $release_notes_heading" \
+  "$manual_release_notes" \
   '' \
-  "$release_changes" \
+  '## 🎮 In-game considerations' \
   '' \
-  'The list above is generated from every non-merge commit that changed MAKO Decky or the shared README after the previous Decky tag.' \
+  '> [!TIP]' \
+  '> **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.' \
   '' \
-  '## Before you play' \
+  'Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. For most games, fullscreen is the best starting point for performance and frame pacing. Keep the configuration that feels best for that game.' \
   '' \
-  '- Test each game before relying on it.' \
-  '- Confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery.' \
-  '- Try the game’s V-Sync both on and off; its FPS cap, VRR, and compositor can affect frame pacing.' \
+  'See the [Configuration guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/CONFIGURATION.md) and [Troubleshooting guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/TROUBLESHOOTING.md) for complete behaviour and per-game controls.' \
   '' \
-  "## Bundled MAKO Renderer \`$engine_version\`" \
-  '' \
-  "- Includes checksum-verified \`$archive_name\`." \
-  '- Installing the ZIP does not replace the private Renderer by itself. Open Mako and select **Install MAKO Renderer** afterwards.' \
+  '> ⚠️ **Required Renderer update:** Installing the ZIP updates the Decky plugin files, but does **not** by itself replace the private MAKO Renderer layer. Open Mako and select **Install MAKO Renderer** after installing the ZIP.' \
   '' \
   '> [!IMPORTANT]' \
   '> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in the plugin.' \
@@ -285,10 +269,10 @@ fi
 printf '%s\n' \
   '## Installation' \
   '' \
-  'New to Decky or installing this plugin for the first time? See the [MAKO Decky README](https://github.com/eugeniosegala/MAKO/tree/main/plugin) for setup and prerequisites.' \
+  'New to Decky or installing MAKO for the first time? See the [full install and use guide](https://github.com/eugeniosegala/MAKO#install-and-use) for Decky Loader setup and prerequisites.' \
   '' \
   "1. Download \`$(basename "$output_path")\` below." \
-  "2. On the Steam OS, open Decky Loader's settings and enable **Developer Mode**." \
+  "2. On SteamOS, open Decky Loader's settings and enable **Developer Mode**." \
   '3. Choose **Developer** > **Install Plugin from Zip**, then select the downloaded ZIP.' \
   '4. In Mako, select **Install MAKO Renderer**. For native Steam/Proton games, add `~/.local/bin/mako-run %command%` to the game’s Steam launch options.' \
   '' \
@@ -311,6 +295,17 @@ printf '%s\n' \
   '- **HDR is unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
   '- **Adaptive targets are not hard frame limiters:** Adaptive varies generated-frame count toward an average target. It cannot reduce a native framerate already above the target, exceed the configured multiplier/GPU/compositor capacity, or guarantee an unreachable output rate.' \
   '- **Image-quality and latency trade-offs remain game-dependent:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness.' \
+  '' \
+  '## Before you play' \
+  '' \
+  '- Test MAKO per game and start with Frame Generation disabled, then Fixed 2x, before adding Adaptive or higher multipliers.' \
+  '- Confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery.' \
+  '- Do not combine `mako-run` with another Lossless Scaling Vulkan wrapper for the same game.' \
+  '' \
+  "## Bundled MAKO Renderer \`$engine_version\`" \
+  '' \
+  "- Includes checksum-verified \`$archive_name\`." \
+  '- Installing the ZIP does not replace the private Renderer by itself; complete the required in-plugin installation step above.' \
   '' \
   >> "$notes_file"
 

@@ -181,6 +181,12 @@ links both packages:
 ./scripts/publish-release.sh 1.2.0
 ```
 
+Before running it, update and commit both
+[`engine/RELEASE_NOTES.md`](../../engine/RELEASE_NOTES.md) and
+[`plugin/RELEASE_NOTES.md`](../RELEASE_NOTES.md). Their versioned “What’s new”
+headings and bodies are copied verbatim into the respective GitHub release
+notes; commit messages are never used as public change lists.
+
 The workflow publishes Renderer first, including the host and Flatpak assets,
 then commits its exact URLs and checksums before publishing the matching Decky
 ZIP as GitHub's **Latest** release. It is resumable and refuses a dirty
