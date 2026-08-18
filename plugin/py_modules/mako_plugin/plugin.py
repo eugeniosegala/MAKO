@@ -134,6 +134,10 @@ class Plugin:
         """
         return self.configuration_service.get_config()
 
+    async def get_profile_config(self, profile_name: str) -> Dict[str, Any]:
+        """Read a saved profile without making it the runtime profile."""
+        return self.configuration_service.get_profile_config(profile_name)
+
     async def get_config_schema(self) -> Dict[str, Any]:
         """Get configuration schema information for frontend
 

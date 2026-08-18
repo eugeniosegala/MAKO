@@ -7,6 +7,7 @@ import {
   BASE_FPS_CAP, DISABLE_STEAMDECK_MODE, ENABLE_ZINK, FORCE_ALSA_AUDIO
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
+import { MakoSectionHeader } from "./MakoUi";
 
 interface ConfigurationSectionProps {
   config: ConfigurationData;
@@ -91,20 +92,9 @@ export function ConfigurationSection({
         `}
       </style>
 
-      {/* Config Section */}
-      <PanelSectionRow>
-        <div
-          style={{
-            fontSize: "14px",
-            fontWeight: "bold",
-            marginTop: "18px",
-            marginBottom: "4px",
-            color: "white"
-          }}
-        >
-          {t("CONFIG_SECTION_TITLE", "Advanced Renderer Settings")}
-        </div>
-      </PanelSectionRow>
+      <MakoSectionHeader>
+        {t("CONFIG_SECTION_TITLE", "Advanced Renderer Settings")}
+      </MakoSectionHeader>
 
       <PanelSectionRow>
         <div
@@ -113,7 +103,7 @@ export function ConfigurationSection({
         >
           <ButtonItem
             layout="below"
-            bottomSeparator={configCollapsed ? "standard" : "none"}
+            bottomSeparator="none"
             onClick={() => setConfigCollapsed(!configCollapsed)}
           >
             {configCollapsed ? (
@@ -177,20 +167,9 @@ export function ConfigurationSection({
         </>
       )}
 
-      {/* Compatibility Settings Section */}
-      <PanelSectionRow>
-        <div
-          style={{
-            fontSize: "14px",
-            fontWeight: "bold",
-            marginTop: "18px",
-            marginBottom: "4px",
-            color: "white"
-          }}
-        >
-          {t("CONFIG_WORKAROUNDS_TITLE", "Compatibility Settings")}
-        </div>
-      </PanelSectionRow>
+      <MakoSectionHeader>
+        {t("CONFIG_WORKAROUNDS_TITLE", "Compatibility Settings")}
+      </MakoSectionHeader>
 
       <PanelSectionRow>
         <div
@@ -199,7 +178,7 @@ export function ConfigurationSection({
         >
           <ButtonItem
             layout="below"
-            bottomSeparator={workaroundsCollapsed ? "standard" : "none"}
+            bottomSeparator="none"
             onClick={() => setWorkaroundsCollapsed(!workaroundsCollapsed)}
           >
             {workaroundsCollapsed ? (
@@ -248,7 +227,7 @@ export function ConfigurationSection({
           <PanelSectionRow>
             <ToggleField
               label={t("CONFIG_FORCE_ALSA_AUDIO", "Force ALSA Audio (Restart)")}
-              description={t("CONFIG_FORCE_ALSA_AUDIO_DESC", "For this profile only. May improve audio compatibility in some native and Proton games. Disable to remove MAKO's override and restore normal Steam/Proton audio defaults.")}
+              description={t("CONFIG_FORCE_ALSA_AUDIO_DESC", "May improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds. Disable to restore normal audio defaults.")}
               checked={config.force_alsa_audio}
               onChange={(value) => onConfigChange(FORCE_ALSA_AUDIO, value)}
             />
@@ -256,20 +235,9 @@ export function ConfigurationSection({
         </>
       )}
 
-      {/* Manual Overrides Section */}
-      <PanelSectionRow>
-        <div
-          style={{
-            fontSize: "14px",
-            fontWeight: "bold",
-            marginTop: "18px",
-            marginBottom: "4px",
-            color: "white"
-          }}
-        >
-          {t("CONFIG_MANUAL_OVERRIDES_TITLE", "Manual Overrides")}
-        </div>
-      </PanelSectionRow>
+      <MakoSectionHeader>
+        {t("CONFIG_MANUAL_OVERRIDES_TITLE", "Manual Overrides")}
+      </MakoSectionHeader>
 
       <PanelSectionRow>
         <div style={{ fontSize: "11px", lineHeight: "1.35", color: "#b8c5d6", marginBottom: "4px" }}>
@@ -287,7 +255,7 @@ export function ConfigurationSection({
         >
           <ButtonItem
             layout="below"
-            bottomSeparator={manualOverridesCollapsed ? "standard" : "none"}
+            bottomSeparator="none"
             onClick={() => setManualOverridesCollapsed(!manualOverridesCollapsed)}
           >
             {manualOverridesCollapsed ? (

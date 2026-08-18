@@ -157,7 +157,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "force_alsa_audio",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "force ALSA for this game after restart; disable to restore Steam and Proton audio defaults"
+    description: "may improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds; restart required"
   },
 };
 

@@ -25,9 +25,12 @@ export function useProfileManagement() {
       const result: ProfilesResult = await getProfiles();
       if (result.success && result.profiles) {
         setProfiles(result.profiles);
-        if (result.current_profile) {
-          setCurrentProfileState(result.current_profile);
-        }
+        const resolvedProfile = result.current_profile && result.profiles.includes(result.current_profile)
+          ? result.current_profile
+          : result.profiles.includes("mako")
+            ? "mako"
+            : result.profiles[0];
+        if (resolvedProfile) setCurrentProfileState(resolvedProfile);
         return result;
       } else {
         console.error("Failed to load profiles:", result.error);

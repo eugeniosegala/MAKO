@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "mako-common/configuration/config.hpp"
+#include "mako-common/configuration/detection.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -92,6 +93,39 @@ int main() {
         "The accepted configuration must expose its base FPS cap");
     expect(config.get().profiles().front().adaptive_auto_base_fps_cap,
         "The accepted configuration must expose Adaptive auto-cap");
+
+    ls::ConfigFile detectionConfig;
+    detectionConfig.profiles() = {
+        ls::GameConf{.name = "mako"},
+        ls::GameConf{.name = "captured", .active_in = {"CoolGame.exe"}},
+    };
+    ls::Identification identification{
+        .fallback = "mako",
+        .executable = "/games/CoolGame.exe",
+        .process_name = "CoolGame.exe",
+    };
+    auto detectedProfile = ls::findProfile(detectionConfig, identification);
+    expect(detectedProfile.has_value() &&
+            detectedProfile->first == ls::IdentType::EXECUTABLE &&
+            detectedProfile->second.name == "captured",
+        "A captured process profile must supersede the launch-time fallback");
+
+    identification.executable = "/games/UnknownGame";
+    identification.process_name = "UnknownGame";
+    detectedProfile = ls::findProfile(detectionConfig, identification);
+    expect(detectedProfile.has_value() &&
+            detectedProfile->first == ls::IdentType::FALLBACK &&
+            detectedProfile->second.name == "mako",
+        "An unknown game must retain the default renderer context");
+
+    identification.override = "mako";
+    identification.executable = "/games/CoolGame.exe";
+    identification.process_name = "CoolGame.exe";
+    detectedProfile = ls::findProfile(detectionConfig, identification);
+    expect(detectedProfile.has_value() &&
+            detectedProfile->first == ls::IdentType::OVERRIDE &&
+            detectedProfile->second.name == "mako",
+        "An explicit caller profile must remain a hard override");
 
     std::filesystem::remove_all(directory);
     std::cout << "configuration watcher tests passed\n";

@@ -94,7 +94,10 @@ class WrapperEnvironmentTests(unittest.TestCase):
         )
 
     def _evaluate_profile_selection(self, lines, extra_environment=None):
-        script = "\n".join(lines + ['printf "PROFILE=%s\\n" "${MAKO_PROFILE:-}"'])
+        script = "\n".join(lines + [
+            'printf "PROFILE=%s\\n" "${MAKO_PROFILE:-}"',
+            'printf "FALLBACK=%s\\n" "${MAKO_PROFILE_FALLBACK:-}"',
+        ])
         result = subprocess.run(
             ["bash", "-c", script],
             check=True,
@@ -117,6 +120,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         )
 
         self.assertEqual(values["PROFILE"], "dolphin-starfox")
+        self.assertEqual(values["FALLBACK"], "")
 
     def test_selected_profile_is_the_fallback_without_a_caller_override(self):
         lines = self.service._profile_selection_lines(
@@ -127,7 +131,20 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
         values = self._evaluate_profile_selection(lines)
 
-        self.assertEqual(values["PROFILE"], "decky-mako")
+        self.assertEqual(values["PROFILE"], "")
+        self.assertEqual(values["FALLBACK"], "decky-mako")
+
+    def test_automatic_matching_retains_a_low_priority_default_fallback(self):
+        lines = self.service._profile_selection_lines(
+            "mako",
+            {"active_in": "CoolGame.exe"},
+            automatic_matching_enabled=True,
+        )
+
+        values = self._evaluate_profile_selection(lines)
+
+        self.assertEqual(values["PROFILE"], "")
+        self.assertEqual(values["FALLBACK"], "mako")
 
     def test_existing_additional_paths_are_untouched_on_host(self):
         values = self._evaluate({

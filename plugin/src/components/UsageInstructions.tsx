@@ -1,22 +1,13 @@
 import { PanelSectionRow } from "@decky/ui";
 import t from "../i18n/i18n";
+import { MakoSectionHeader } from "./MakoUi";
 
 export function UsageInstructions() {
   return (
     <>
-      <PanelSectionRow>
-        <div
-          style={{
-            fontSize: "14px",
-            fontWeight: "bold",
-            marginTop: "24px",
-            marginBottom: "8px",
-            color: "white"
-          }}
-        >
-          {t("USAGE_TITLE", "Usage Instructions")}
-        </div>
-      </PanelSectionRow>
+      <MakoSectionHeader>
+        {t("USAGE_TITLE", "Usage Instructions")}
+      </MakoSectionHeader>
 
       <PanelSectionRow>
         <div

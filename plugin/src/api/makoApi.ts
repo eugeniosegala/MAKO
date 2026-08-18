@@ -140,8 +140,10 @@ export interface ProfilesResult {
 export interface ProfileResult {
   success: boolean;
   profile_name?: string;
+  current_profile?: string;
   profile?: ProfileDetails;
   changed?: boolean;
+  game_running?: boolean;
   message?: string;
   error?: string;
 }
@@ -153,6 +155,7 @@ export const checkMakoInstalled = callable<[], InstallationStatus>("check_mako_i
 export const checkLosslessScalingDll = callable<[], DllDetectionResult>("check_lossless_scaling_dll");
 export const getDllStats = callable<[], DllStatsResult>("get_dll_stats");
 export const getMakoConfig = callable<[], ConfigResult>("get_mako_config");
+export const getProfileConfig = callable<[string], ConfigResult>("get_profile_config");
 export const getConfigSchema = callable<[], ConfigSchemaResult>("get_config_schema");
 export const getLaunchOption = callable<[], LaunchOptionResult>("get_launch_option");
 export const getConfigFileContent = callable<[], FileContentResult>("get_config_file_content");

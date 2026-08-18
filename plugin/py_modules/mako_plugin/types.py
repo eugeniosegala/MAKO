@@ -84,7 +84,9 @@ class ProfilesResponse(BaseResponse):
 class ProfileResponse(BaseResponse):
     """Response for single profile operations"""
     profile_name: Optional[str]
+    current_profile: Optional[str]
     profile: Optional[Dict[str, Any]]
     changed: Optional[bool]
+    game_running: Optional[bool]
     message: Optional[str]
     error: Optional[str]

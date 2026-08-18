@@ -1,4 +1,4 @@
-import { useEffect, useState, type FocusEvent } from "react";
+import { useEffect, useRef, useState, type FocusEvent } from "react";
 import { AppOverview, ButtonItem, DialogButton, PanelSection, PanelSectionRow, Router, showModal } from "@decky/ui";
 import { useInstallationStatus, useDllDetection, useMakoConfig } from "../hooks/useMakoHooks";
 import { useProfileManagement } from "../hooks/useProfileManagement";
@@ -15,10 +15,14 @@ import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
 import { ConfigurationData } from "../config/configSchema";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
+import { MakoButtonTheme, MakoSectionHeader } from "./MakoUi";
 import t from "../i18n/i18n";
 
 export function Content() {
   const [mainRunningApp, setMainRunningApp] = useState<AppOverview | undefined>(undefined);
+  const [editingProfile, setEditingProfile] = useState("mako");
+  const editingProfileRef = useRef("mako");
+  const gameWasRunningRef = useRef(false);
   const [showDevelopmentDetails, setShowDevelopmentDetails] = useState(false);
   const {
     isInstalled,
@@ -35,14 +39,11 @@ export function Content() {
 
   const {
     config,
-    loadMakoConfig,
-    updateField
+    loadMakoConfig
   } = useMakoConfig();
 
   const {
-    currentProfile,
     updateProfileConfig,
-    loadProfiles,
     syncCurrentProfile
   } = useProfileManagement();
 
@@ -50,7 +51,7 @@ export function Content() {
 
   useEffect(() => {
     if (isInstalled) {
-      loadMakoConfig();
+      void loadMakoConfig(editingProfileRef.current);
     }
   }, [isInstalled, loadMakoConfig]);
 
@@ -60,7 +61,6 @@ export function Content() {
 
     const checkRunningApp = async () => {
       const runningApp = Router.MainRunningApp;
-      setMainRunningApp(runningApp);
       if (syncInFlight) return;
 
       syncInFlight = true;
@@ -68,8 +68,33 @@ export function Content() {
         const result = await syncCurrentProfile(
           runningApp ? String(runningApp.appid) : undefined
         );
-        if (!cancelled && result.success && result.changed) {
-          await loadMakoConfig();
+        if (!cancelled && result.success) {
+          const gameIsRunning = Boolean(result.game_running && runningApp);
+          const nextEditingProfile = gameIsRunning
+            ? result.profile_name || "mako"
+            : gameWasRunningRef.current
+              ? "mako"
+              : undefined;
+          const editingProfileChanged = Boolean(
+            nextEditingProfile
+            && nextEditingProfile !== editingProfileRef.current
+          );
+
+          // On exit, reset the editor before unlocking profile controls. On
+          // launch, lock controls before following the detected game profile.
+          if (!gameIsRunning && editingProfileChanged && nextEditingProfile) {
+            editingProfileRef.current = nextEditingProfile;
+            setEditingProfile(nextEditingProfile);
+          }
+          setMainRunningApp(gameIsRunning ? runningApp : undefined);
+          gameWasRunningRef.current = gameIsRunning;
+          if (gameIsRunning && editingProfileChanged && nextEditingProfile) {
+            editingProfileRef.current = nextEditingProfile;
+            setEditingProfile(nextEditingProfile);
+          }
+          if (editingProfileChanged && nextEditingProfile) {
+            await loadMakoConfig(nextEditingProfile);
+          }
         }
       } finally {
         syncInFlight = false;
@@ -85,14 +110,11 @@ export function Content() {
   }, [loadMakoConfig, syncCurrentProfile]);
 
   const handleConfigChange = async (fieldName: keyof ConfigurationData, value: boolean | number | string) => {
-    if (currentProfile) {
-      const newConfig = { ...config, [fieldName]: value };
-      const result = await updateProfileConfig(currentProfile, newConfig);
-      if (result.success) {
-        await loadMakoConfig();
-      }
-    } else {
-      await updateField(fieldName, value);
+    const targetProfile = editingProfileRef.current;
+    const newConfig = { ...config, [fieldName]: value };
+    const result = await updateProfileConfig(targetProfile, newConfig);
+    if (result.success && editingProfileRef.current === targetProfile) {
+      await loadMakoConfig(targetProfile);
     }
   };
 
@@ -131,43 +153,7 @@ export function Content() {
 
   return (
     <div onFocusCapture={keepFocusedControlVisible}>
-      <style>{`
-        .Mako_BrandButton button {
-          color: #f5fdff !important;
-          background: linear-gradient(135deg, #06365f 0%, #087cac 52%, #11c6dc 100%) !important;
-          border: 1px solid rgba(91, 231, 255, 0.9) !important;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2), 0 3px 10px rgba(0, 157, 204, 0.3) !important;
-          text-shadow: 0 1px 2px rgba(0, 20, 38, 0.75);
-          transition: background 120ms ease, box-shadow 120ms ease, filter 120ms ease;
-        }
-
-        .Mako_BrandButton button:hover:not(:disabled) {
-          background: linear-gradient(135deg, #084a7d 0%, #0999c9 52%, #24e2ed 100%) !important;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 15px rgba(32, 218, 239, 0.5) !important;
-        }
-
-        .Mako_BrandButton button:focus,
-        .Mako_BrandButton button:focus-visible {
-          outline: 2px solid #ff9f1c !important;
-          outline-offset: 2px !important;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 0 0 3px rgba(255, 159, 28, 0.3), 0 0 16px rgba(24, 211, 232, 0.5) !important;
-        }
-
-        .Mako_BrandButton button:disabled {
-          filter: saturate(0.45) brightness(0.72);
-        }
-
-        .Mako_BrandButton--danger button {
-          background: linear-gradient(135deg, #6d1737 0%, #b72a62 55%, #ef4f88 100%) !important;
-          border-color: rgba(255, 149, 190, 0.9) !important;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 3px 10px rgba(197, 38, 100, 0.28) !important;
-        }
-
-        .Mako_BrandButton--danger button:hover:not(:disabled) {
-          background: linear-gradient(135deg, #851a42 0%, #d23470 55%, #ff69a1 100%) !important;
-          box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.24), 0 0 15px rgba(240, 79, 136, 0.45) !important;
-        }
-      `}</style>
+      <MakoButtonTheme />
       <PanelSection>
       {localDevelopmentBuildInfo && (
         <PanelSectionRow>
@@ -353,30 +339,21 @@ export function Content() {
 
       {isInstalled && (
         <ProfileManagement
-          currentProfile={currentProfile}
+          editingProfile={editingProfile}
           mainRunningApp={mainRunningApp}
-          onProfileChange={async () => {
-            await loadProfiles();
-            await loadMakoConfig();
+          onProfileChange={async (profileName) => {
+            editingProfileRef.current = profileName;
+            setEditingProfile(profileName);
+            await loadMakoConfig(profileName);
           }}
         />
       )}
 
       {isInstalled && (
         <>
-          <PanelSectionRow>
-            <div
-              style={{
-                fontSize: "14px",
-                fontWeight: "bold",
-                marginTop: "18px",
-                marginBottom: "6px",
-                color: "white"
-              }}
-            >
-              {t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")}
-            </div>
-          </PanelSectionRow>
+          <MakoSectionHeader>
+            {t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")}
+          </MakoSectionHeader>
 
           <FpsMultiplierControl
             config={config}

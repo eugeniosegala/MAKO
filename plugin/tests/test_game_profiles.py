@@ -95,6 +95,33 @@ class GameProfileTests(unittest.TestCase):
         self.assertEqual(detail["steam_app_id"], "12345")
         self.assertEqual(detail["processes"], ["UserAlias.exe", "CoolGame2.exe"])
 
+    def test_named_profile_can_be_loaded_without_activating_it(self):
+        created = self.service.create_profile("Offline Editor")
+        self.assertTrue(created["success"])
+        profile_name = created["profile_name"]
+        profile = self.service._get_profile_data()["profiles"][profile_name]
+        profile["multiplier"] = 4
+        self.assertTrue(
+            self.service.update_profile_config(profile_name, profile)["success"]
+        )
+        self.assertTrue(self.service.mako_script_path.exists())
+
+        loaded = self.service.get_profile_config(profile_name)
+
+        self.assertTrue(loaded["success"])
+        self.assertEqual(loaded["config"]["multiplier"], 4)
+        self.assertEqual(
+            self.service._get_profile_data()["current_profile"], "mako"
+        )
+
+    def test_unknown_named_profile_does_not_change_runtime_selection(self):
+        loaded = self.service.get_profile_config("missing-profile")
+
+        self.assertFalse(loaded["success"])
+        self.assertEqual(
+            self.service._get_profile_data()["current_profile"], "mako"
+        )
+
     def test_profile_sync_reselects_saved_game_then_restores_default(self):
         previous = configuration_module.detect_processes_for_steam_app
         detected_processes = ["CoolGame.exe"]
@@ -114,11 +141,15 @@ class GameProfileTests(unittest.TestCase):
         self.assertTrue(created["success"])
         self.assertEqual(stopped["profile_name"], "mako")
         self.assertTrue(stopped["changed"])
+        self.assertFalse(stopped["game_running"])
         self.assertEqual(resumed["profile_name"], created["profile_name"])
         self.assertTrue(resumed["changed"])
+        self.assertTrue(resumed["game_running"])
         self.assertFalse(unchanged["changed"])
+        self.assertTrue(unchanged["game_running"])
         self.assertEqual(exited["profile_name"], "mako")
         self.assertTrue(exited["changed"])
+        self.assertFalse(exited["game_running"])
         self.assertEqual(
             self.service._get_profile_data()["current_profile"], "mako"
         )
@@ -247,7 +278,7 @@ class GameProfileTests(unittest.TestCase):
                 str(self.service.mako_script_path),
                 "/bin/bash",
                 "-c",
-                'printf "PROFILE=%s\\nSDL=%s\\nDLLS=%s\\n" "${MAKO_PROFILE:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}"',
+                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}"',
             ],
             check=True,
             capture_output=True,
@@ -304,12 +335,14 @@ class GameProfileTests(unittest.TestCase):
         })
 
         self.assertEqual(matched["PROFILE"], "cool-game")
+        self.assertEqual(matched["FALLBACK"], "")
         self.assertEqual(matched["SDL"], "alsa")
         self.assertEqual(
             matched["DLLS"],
             "d3d11=n;winepulse.drv=d;winealsa.drv=b",
         )
         self.assertEqual(unrelated["PROFILE"], "")
+        self.assertEqual(unrelated["FALLBACK"], "mako")
         self.assertEqual(unrelated["SDL"], "pipewire")
         self.assertEqual(unrelated["DLLS"], "dxgi=n")
         self.assertEqual(
@@ -399,8 +432,14 @@ class GameProfileTests(unittest.TestCase):
         profile = self.service.create_profile("Manual Game")
         self.assertTrue(profile["success"])
         name = profile["profile_name"]
+        self.assertTrue(self.service.set_current_profile(name)["success"])
         deleted = self.service.delete_profile(name)
         self.assertTrue(deleted["success"])
+        self.assertEqual(deleted["current_profile"], "mako")
+
+        profiles = self.service.get_profiles()
+        self.assertEqual(profiles["current_profile"], "mako")
+        self.assertNotIn(name, profiles["profiles"])
 
         metadata = json.loads(self.service.profile_metadata_path.read_text(encoding="utf-8"))
         settings = json.loads(

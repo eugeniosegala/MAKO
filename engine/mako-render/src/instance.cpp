@@ -229,6 +229,9 @@ Root::Root() {
         case ls::IdentType::PROCESS_NAME:
             std::cerr << "(identified via process name)\n";
             break;
+        case ls::IdentType::FALLBACK:
+            std::cerr << "(identified via fallback)\n";
+            break;
     }
 }
 
@@ -294,11 +297,44 @@ ConfigurationUpdateResult Root::update() {
         previousGlobal.dll != currentGlobal.dll ||
         previousGlobal.allow_fp16 != currentGlobal.allow_fp16;
 
+    const auto previousProfileName = this->active_profile
+        ? std::optional<std::string>{this->active_profile->name}
+        : std::nullopt;
     const auto& profile = findProfile(this->config.get(), ls::identify());
     if (profile.has_value())
         this->active_profile = profile->second;
     else
         this->active_profile = std::nullopt;
+
+    const auto currentProfileName = this->active_profile
+        ? std::optional<std::string>{this->active_profile->name}
+        : std::nullopt;
+    if (previousProfileName != currentProfileName) {
+        std::cerr << "mako: live profile selection changed: previous='"
+                  << previousProfileName.value_or("(none)")
+                  << "' current='"
+                  << currentProfileName.value_or("(none)") << "'";
+        if (profile.has_value()) {
+            switch (profile->first) {
+                case ls::IdentType::OVERRIDE:
+                    std::cerr << " source=override";
+                    break;
+                case ls::IdentType::EXECUTABLE:
+                    std::cerr << " source=executable";
+                    break;
+                case ls::IdentType::WINE_EXECUTABLE:
+                    std::cerr << " source=wine-executable";
+                    break;
+                case ls::IdentType::PROCESS_NAME:
+                    std::cerr << " source=process-name";
+                    break;
+                case ls::IdentType::FALLBACK:
+                    std::cerr << " source=fallback";
+                    break;
+            }
+        }
+        std::cerr << '\n';
+    }
 
     if (this->active_profile) {
         for (auto& [swapchain, context] : this->swapchains) {

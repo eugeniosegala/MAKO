@@ -38,13 +38,14 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 32"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 33"
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
         "export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS=",
         "export MAKO_PRESENT_DIAGNOSTICS=",
         f"export {MAKO_LAYER_ENABLE_ENV}=1",
+        "export MAKO_PROFILE_FALLBACK=",
         "mako_diagnostics_default=",
     )
     _OBSOLETE_WRAPPER_EXPORTS = (
@@ -450,26 +451,27 @@ class ConfigurationService(BaseService):
             config: ConfigurationData,
             automatic_matching_enabled: bool = None,
     ) -> list[str]:
-        """Choose between Decky's selected profile and automatic matching.
+        """Keep the renderer active while allowing automatic live matching.
 
         A caller-provided ``MAKO_PROFILE`` deliberately overrides both Decky's
-        selected profile and mako's ``active_in`` matching. This lets a Steam
-        shortcut select an engine profile per game. Without a caller override,
-        keep Decky's selected-profile behaviour for profiles without activation
-        rules, but let mako perform its native automatic selection when rules
-        are present.
+        selected profile and mako's ``active_in`` matching. Without an explicit
+        override, expose Decky's selected profile only as a fallback. The
+        renderer checks executable/process matches first, so a profile captured
+        while the game is running can replace this fallback without restarting.
         """
         if automatic_matching_enabled is None:
             automatic_matching_enabled = cls._has_active_in(config)
 
-        if automatic_matching_enabled:
-            return [
-                "# An active_in profile is configured; MAKO Renderer will select a matching profile automatically.",
-            ]
+        matching_comment = (
+            "# MAKO Renderer prefers active_in matches and uses this profile only as a fallback."
+            if automatic_matching_enabled
+            else "# Keep the default renderer context active so a newly captured profile can take over live."
+        )
         return [
-            "# A Steam shortcut may set MAKO_PROFILE to select a per-game profile.",
+            matching_comment,
+            "# A caller-provided MAKO_PROFILE remains an explicit hard override.",
             'if [ -z "${MAKO_PROFILE:-}" ]; then',
-            f"    export MAKO_PROFILE={shlex.quote(profile_name)}",
+            f"    export MAKO_PROFILE_FALLBACK={shlex.quote(profile_name)}",
             "fi",
         ]
 
@@ -501,6 +503,32 @@ class ConfigurationService(BaseService):
             return self._success_response(ConfigurationResponse,
                                         f"Using default configuration due to parse error: {str(e)}",
                                         config=config)
+
+    def get_profile_config(self, profile_name: str) -> ConfigurationResponse:
+        """Read one saved profile without changing the runtime selection."""
+        try:
+            self.migrate_wrapper_profile_settings_if_needed()
+            profile_data = self._get_profile_data()
+            if profile_name not in profile_data["profiles"]:
+                return self._error_response(
+                    ConfigurationResponse,
+                    f"Profile '{profile_name}' does not exist",
+                    config=None,
+                )
+
+            config = self._config_for_profile(profile_data, profile_name)
+            return self._success_response(
+                ConfigurationResponse,
+                f"Profile '{profile_name}' retrieved successfully",
+                config=config,
+            )
+        except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
+            self.log.error("Error reading profile '%s': %s", profile_name, error)
+            return self._error_response(
+                ConfigurationResponse,
+                str(error),
+                config=None,
+            )
 
     def update_config_from_dict(self, config: ConfigurationData) -> ConfigurationResponse:
         """Update TOML configuration from configuration dictionary (eliminates parameter duplication)
@@ -613,7 +641,14 @@ class ConfigurationService(BaseService):
             The complete script content as a string
         """
         current_profile = profile_data["current_profile"]
-        merged_config = self._config_for_profile(profile_data, current_profile)
+        fallback_profile = (
+            DEFAULT_PROFILE_NAME
+            if DEFAULT_PROFILE_NAME in profile_data["profiles"]
+            else current_profile
+        )
+        fallback_config = self._config_for_profile(
+            profile_data, fallback_profile
+        )
         automatic_matching_enabled = any(
             self._has_active_in(profile_config)
             for profile_config in profile_data["profiles"].values()
@@ -628,13 +663,11 @@ class ConfigurationService(BaseService):
 
         lines.extend(self._wrapper_profile_configuration_lines(profile_data))
         lines.extend(self._generate_layer_environment_lines())
-        # Never export MAKO_PROFILE once any profile uses Active In: the
-        # environment override takes precedence over upstream's executable
-        # detection and would otherwise make profiles depend on the UI's last
-        # selected entry.
+        # A low-priority default keeps the layer active for an unsaved game.
+        # Once capture adds Active In, the running process match supersedes it.
         lines.extend(self._profile_selection_lines(
-            current_profile,
-            merged_config,
+            fallback_profile,
+            fallback_config,
             automatic_matching_enabled,
         ))
         lines.extend(self._generate_game_launch_lines())
@@ -813,7 +846,9 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Format 32 selects per-game compatibility settings from persistent Steam
+        Format 33 keeps an unsaved game's renderer context active with a
+        low-priority default profile so a newly captured process can take over
+        live. Format 32 selects per-game compatibility settings from persistent Steam
         app identity before launch. Format 31 removes duplicate generated
         compatibility exports. Format 30
         applies a build-flavour-aware presentation-diagnostics
@@ -849,7 +884,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO launch wrapper to format 32")
+            self.log.info("Upgraded installed MAKO launch wrapper to format 33")
             return True
         except OSError:
             raise
@@ -1015,7 +1050,8 @@ class ConfigurationService(BaseService):
 
             return self._success_response(ProfileResponse,
                                         f"Profile '{profile_name}' deleted successfully",
-                                        profile_name=profile_name)
+                                        profile_name=profile_name,
+                                        current_profile=new_profile_data["current_profile"])
 
         except ValueError as e:
             error_msg = f"Invalid profile operation: {str(e)}"
@@ -1333,6 +1369,7 @@ class ConfigurationService(BaseService):
                 profile_name=target_profile,
                 profile=detail,
                 changed=changed,
+                game_running=bool(detected_processes),
             )
         except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
             self.log.error("Error synchronising current profile: %s", error)
@@ -1342,6 +1379,7 @@ class ConfigurationService(BaseService):
                 profile_name=None,
                 profile=None,
                 changed=False,
+                game_running=None,
             )
 
     def update_profile_config(self, profile_name: str, config: ConfigurationData) -> ConfigurationResponse:
@@ -1375,10 +1413,11 @@ class ConfigurationService(BaseService):
             self._save_profile_data(profile_data)
             self._write_wrapper_profile_settings(profile_settings)
 
-            if profile_name == profile_data["current_profile"]:
-                script_result = self.update_mako_script_from_profile_data(profile_data)
-                if not script_result["success"]:
-                    self.log.warning(f"Failed to update launch script: {script_result['error']}")
+            # The wrapper embeds compatibility settings for every saved
+            # profile, not only the currently active renderer profile.
+            script_result = self.update_mako_script_from_profile_data(profile_data)
+            if not script_result["success"]:
+                self.log.warning(f"Failed to update launch script: {script_result['error']}")
 
             field_values = ", ".join(f"{k}={repr(v)}" for k, v in config.items())
             self.log.info(f"Updated profile '{profile_name}' configuration: {field_values}")

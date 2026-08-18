@@ -60,6 +60,13 @@ selected profile. Launcher compatibility settings—including **Disable MAKO
 Renderer on Next Launch**, **Disable HDR**, Steam Deck Mode, Zink, and ALSA—are
 also stored per profile. The DLL path and FP16 permission remain global.
 
+The Decky dropdown is an editor selection, not a runtime override. Outside a
+game, choose any saved profile and it remains available for editing without
+affecting another game's launch. When a live game is detected, MAKO follows its
+matching profile, or Default if no match exists. On game exit, the runtime and
+editor return to Default once; after the controls unlock, an offline selection
+stays in place until another game starts or the plugin is reopened.
+
 ## Quality and matching
 
 - **Flow Scale:** 0.25–1.0. Lower values reduce GPU cost; higher values favour
@@ -85,8 +92,9 @@ layer for the game process; the CLI and configuration UI are 64-bit only.
 - **Zink:** Vulkan-based OpenGL path for OpenGL games.
 - **Force ALSA Audio (Restart):** Forces the native SDL ALSA driver, disables
   Wine/Proton's Pulse driver, and enables its built-in ALSA driver for the
-  selected profile. This may improve audio compatibility for some games. Leave
-  it disabled by default. Turning it off
+  selected profile. This may improve compatibility with modes such as Zink and
+  reduce audio stuttering or sudden loud sounds. Leave it disabled by default.
+  Turning it off
   removes MAKO's audio override entirely and restores normal Steam/Proton
   behaviour; restart the game after changing it.
 

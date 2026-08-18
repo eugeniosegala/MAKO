@@ -5,6 +5,9 @@ more SteamOS users discover and evaluate the project.
 
 ## Videos
 
+- [Steam Deck Adaptive Frame Generation/LSFG-VK Experimental: What You Need To Know](https://www.youtube.com/watch?v=0g41gaz3asE)
+  by [Deck Wizard](https://www.youtube.com/@DeckWizard): an overview of Adaptive Frame Generation on Steam Deck and
+  the key setup and usage considerations.
 - [Lossless Scaling V.2 Plugin Is Here For The Steam Deck & It's Awesome!](https://www.youtube.com/watch?v=74YnVgd5Jzw)
   by [Gaming On Steam](https://www.youtube.com/@gaming_onsteam): an overview of the v2 plugin on Steam Deck.
 - [Adaptive Frame Gen Is HERE For The Steam Deck And It's AMAZING! (Easy Guide)](https://www.youtube.com/watch?v=d47zViCRxE8)

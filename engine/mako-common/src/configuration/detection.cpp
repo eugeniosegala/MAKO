@@ -50,6 +50,13 @@ Identification ls::identify() {
     if (override && *override != '\0')
         id.override = std::string(override);
 
+    // Decky's generated wrapper uses this only to keep an unknown game active
+    // on the default profile. Unlike MAKO_PROFILE, process matching outranks it
+    // so saving a game profile can take effect in the running process.
+    const char* fallback = std::getenv("MAKO_PROFILE_FALLBACK");
+    if (fallback && *fallback != '\0')
+        id.fallback = std::string(fallback);
+
     // fetch process exe path
     std::array<char, 4096> buf{};
     const ssize_t len = readlink("/proc/self/exe", buf.data(), buf.size() - 1);
@@ -130,6 +137,15 @@ std::optional<std::pair<IdentType, GameConf>> ls::findProfile(
         const auto proc_profile = matchById(profiles, id.process_name);
         if (proc_profile.has_value())
             return std::make_pair(IdentType::PROCESS_NAME, proc_profile.value());
+    }
+
+    // A fallback keeps the layer initialized before an unsaved game has an
+    // active_in identity. A later configuration reload can then match the
+    // captured executable/process and update the existing context in place.
+    if (id.fallback.has_value()) {
+        const auto profile = matchByName(profiles, id.fallback.value());
+        if (profile.has_value())
+            return std::make_pair(IdentType::FALLBACK, profile.value());
     }
 
     return std::nullopt;

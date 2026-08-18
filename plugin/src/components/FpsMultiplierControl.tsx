@@ -12,6 +12,7 @@ import {
   TARGET_FPS
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
+import { MakoSectionHeader, makoDialogButtonStyle } from "./MakoUi";
 
 const TARGET_FPS_SAVE_DELAY_MS = 250;
 
@@ -79,13 +80,7 @@ export function FpsMultiplierControl({
     minWidth: "48px",
     fontSize: "22px",
     fontWeight: "bold",
-    color: "#fff7ed",
-    background: "linear-gradient(135deg, #a94900 0%, #e87516 55%, #ffae52 100%)",
-    border: "1px solid rgba(255, 206, 143, 0.9)",
-    borderRadius: "4px",
-    outline: isFocused ? "3px solid #ffffff" : "none",
-    outlineOffset: "3px",
-    boxShadow: isFocused ? "0 0 0 5px rgba(255, 170, 74, 0.45), 0 0 16px rgba(255, 170, 74, 0.95)" : "none",
+    ...makoDialogButtonStyle(isFocused),
     transform: isFocused ? "scale(1.04)" : "none",
     scrollMarginTop: "28px",
     scrollMarginBottom: "28px"
@@ -167,19 +162,9 @@ export function FpsMultiplierControl({
         </>
       )}
 
-      <PanelSectionRow>
-        <div
-          style={{
-            fontSize: "16px",
-            fontWeight: "bold",
-            marginTop: config.adaptive ? "24px" : "8px",
-            marginBottom: "8px",
-            color: "white"
-          }}
-        >
-          {t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
-        </div>
-      </PanelSectionRow>
+      <MakoSectionHeader>
+        {t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
+      </MakoSectionHeader>
 
       <PanelSectionRow>
         <Focusable

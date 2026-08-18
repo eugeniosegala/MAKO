@@ -1,0 +1,95 @@
+import { PanelSectionRow } from "@decky/ui";
+import type { CSSProperties, ReactNode } from "react";
+
+interface MakoSectionHeaderProps {
+  children: ReactNode;
+}
+
+export function MakoSectionHeader({ children }: MakoSectionHeaderProps) {
+  return (
+    <PanelSectionRow>
+      <div
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          marginTop: "18px",
+          marginBottom: "4px",
+          paddingBottom: "6px",
+          borderBottom: "1px solid rgba(77, 170, 190, 0.28)",
+          color: "#edf8fb",
+          fontSize: "14px",
+          fontWeight: "600",
+          lineHeight: "1.25",
+          letterSpacing: "0.15px"
+        }}
+      >
+        {children}
+      </div>
+    </PanelSectionRow>
+  );
+}
+
+export function makoDialogButtonStyle(
+  isFocused: boolean,
+  variant: "normal" | "danger" = "normal"
+): CSSProperties {
+  const danger = variant === "danger";
+  return {
+    color: danger ? "#fff0f5" : "#eefbfe",
+    background: danger
+      ? "linear-gradient(135deg, #3b1725 0%, #64253a 58%, #7d3048 100%)"
+      : "linear-gradient(135deg, #071f31 0%, #0a4358 58%, #0b5967 100%)",
+    border: danger
+      ? "1px solid rgba(183, 82, 118, 0.62)"
+      : "1px solid rgba(65, 158, 178, 0.62)",
+    borderRadius: "4px",
+    outline: isFocused ? "2px solid #d58a39" : "none",
+    outlineOffset: "2px",
+    boxShadow: isFocused
+      ? "0 0 0 3px rgba(213, 138, 57, 0.2), 0 0 10px rgba(43, 142, 163, 0.28)"
+      : "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 5px rgba(0, 0, 0, 0.22)",
+    transition: "background 120ms ease, box-shadow 120ms ease"
+  };
+}
+
+export function MakoButtonTheme() {
+  return (
+    <style>{`
+      .Mako_BrandButton button {
+        color: #eefbfe !important;
+        background: linear-gradient(135deg, #071f31 0%, #0a4358 58%, #0b5967 100%) !important;
+        border: 1px solid rgba(65, 158, 178, 0.62) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 5px rgba(0, 0, 0, 0.22) !important;
+        text-shadow: 0 1px 2px rgba(0, 13, 23, 0.72);
+        transition: background 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+      }
+
+      .Mako_BrandButton button:hover:not(:disabled) {
+        background: linear-gradient(135deg, #092a40 0%, #0b5067 58%, #0d6875 100%) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 9px rgba(39, 150, 171, 0.26) !important;
+      }
+
+      .Mako_BrandButton button:focus,
+      .Mako_BrandButton button:focus-visible {
+        outline: 2px solid #d58a39 !important;
+        outline-offset: 2px !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 3px rgba(213, 138, 57, 0.2), 0 0 10px rgba(43, 142, 163, 0.28) !important;
+      }
+
+      .Mako_BrandButton button:disabled {
+        filter: saturate(0.4) brightness(0.68);
+      }
+
+      .Mako_BrandButton--danger button {
+        background: linear-gradient(135deg, #3b1725 0%, #64253a 58%, #7d3048 100%) !important;
+        border-color: rgba(183, 82, 118, 0.62) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 2px 5px rgba(0, 0, 0, 0.24) !important;
+      }
+
+      .Mako_BrandButton--danger button:hover:not(:disabled) {
+        background: linear-gradient(135deg, #481b2c 0%, #732a43 58%, #913852 100%) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 9px rgba(170, 57, 98, 0.24) !important;
+      }
+    `}</style>
+  );
+}

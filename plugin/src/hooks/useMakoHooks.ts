@@ -1,8 +1,9 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import {
   checkMakoInstalled,
   checkLosslessScalingDll,
   getMakoConfig,
+  getProfileConfig,
   updateMakoConfigFromObject,
   type ConfigUpdateResult
 } from "../api/makoApi";
@@ -85,10 +86,15 @@ export function useDllDetection() {
 
 export function useMakoConfig() {
   const [config, setConfig] = useState<ConfigurationData>(() => getDefaults());
+  const loadRequestId = useRef(0);
 
-  const loadMakoConfig = useCallback(async () => {
+  const loadMakoConfig = useCallback(async (profileName?: string) => {
+    const requestId = ++loadRequestId.current;
     try {
-      const result = await getMakoConfig();
+      const result = profileName
+        ? await getProfileConfig(profileName)
+        : await getMakoConfig();
+      if (requestId !== loadRequestId.current) return;
       if (result.success && result.config) {
         // Older installed configurations (or a backend that has not yet been
         // reloaded) may not contain fields introduced by a newer frontend.
@@ -100,6 +106,7 @@ export function useMakoConfig() {
         setConfig(getDefaults());
       }
     } catch (error) {
+      if (requestId !== loadRequestId.current) return;
       console.error("Error loading MAKO Renderer config:", error);
       setConfig(getDefaults());
     }

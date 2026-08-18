@@ -55,7 +55,7 @@ export function SmartClipboardButton() {
 
   return (
     <PanelSectionRow>
-      <div className="Mako_BrandButton">
+      <div className="Mako_BrandButton" style={{ marginTop: "16px" }}>
         <ButtonItem
           layout="below"
           bottomSeparator="none"

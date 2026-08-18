@@ -15,6 +15,8 @@ namespace ls {
     struct Identification {
         /// optional override name
         std::optional<std::string> override;
+        /// optional low-priority profile used only when process matching fails
+        std::optional<std::string> fallback;
         /// path to exe file
         std::string executable;
         /// path to exe file when running under wine
@@ -25,10 +27,11 @@ namespace ls {
 
     /// enum describing which identification method was used
     enum class IdentType : uint8_t {
-        OVERRIDE, // identified by override
+        OVERRIDE, // identified by explicit override
         EXECUTABLE, // identified by executable path
         WINE_EXECUTABLE, // identified by wine executable path
-        PROCESS_NAME // identified by process name
+        PROCESS_NAME, // identified by process name
+        FALLBACK // no process match; use the wrapper's safe default
     };
 
     /// identify the current process
