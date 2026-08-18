@@ -1,7 +1,8 @@
 # Featured In
 
-Community creators have covered, tested, and explained the Decky LSFG-VK Experimental plugin. Thank you for helping
-more SteamOS users discover and evaluate the project.
+Community creators have covered, tested, and explained both the earlier Decky LSFG-VK Experimental project—now
+continued as MAKO Decky—and current MAKO releases. Thank you for helping more SteamOS users discover and evaluate
+the project.
 
 ## Videos
 
