@@ -32,7 +32,9 @@ namespace mako::ui {
         Q_PROPERTY(int active_in_index READ getActiveInIndex WRITE activeInSelected NOTIFY refreshUI)
         Q_PROPERTY(size_t multiplier READ getMultiplier WRITE multiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool frame_generation_enabled READ getFrameGenerationEnabled WRITE frameGenerationEnabledUpdated NOTIFY refreshUI)
+        Q_PROPERTY(uint base_fps_cap READ getBaseFPSCap WRITE baseFPSCapUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive READ getAdaptive WRITE adaptiveUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool adaptive_auto_base_fps_cap READ getAdaptiveAutoBaseFPSCap WRITE adaptiveAutoBaseFPSCapUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint target_fps READ getTargetFPS WRITE targetFPSUpdated NOTIFY refreshUI)
         Q_PROPERTY(size_t adaptive_max_multiplier READ getAdaptiveMaxMultiplier WRITE adaptiveMaxMultiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive_stable_cadence READ getAdaptiveStableCadence WRITE adaptiveStableCadenceUpdated NOTIFY refreshUI)
@@ -84,9 +86,17 @@ namespace mako::ui {
             VALIDATE_AND_GET_PROFILE(true)
             return conf.frame_generation_enabled;
         }
+        [[nodiscard]] uint getBaseFPSCap() const {
+            VALIDATE_AND_GET_PROFILE(0)
+            return conf.base_fps_cap;
+        }
         [[nodiscard]] bool getAdaptive() const {
             VALIDATE_AND_GET_PROFILE(false)
             return conf.adaptive;
+        }
+        [[nodiscard]] bool getAdaptiveAutoBaseFPSCap() const {
+            VALIDATE_AND_GET_PROFILE(false)
+            return conf.adaptive_auto_base_fps_cap;
         }
         [[nodiscard]] uint getTargetFPS() const {
             VALIDATE_AND_GET_PROFILE(120)
@@ -169,9 +179,19 @@ namespace mako::ui {
             conf.frame_generation_enabled = frame_generation_enabled;
             MARK_DIRTY()
         }
+        void baseFPSCapUpdated(uint base_fps_cap) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.base_fps_cap = std::min(base_fps_cap, 1000U);
+            MARK_DIRTY()
+        }
         void adaptiveUpdated(bool adaptive) {
             VALIDATE_AND_GET_PROFILE()
             conf.adaptive = adaptive;
+            MARK_DIRTY()
+        }
+        void adaptiveAutoBaseFPSCapUpdated(bool adaptive_auto_base_fps_cap) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.adaptive_auto_base_fps_cap = adaptive_auto_base_fps_cap;
             MARK_DIRTY()
         }
         void targetFPSUpdated(uint target_fps) {

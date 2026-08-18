@@ -1,4 +1,5 @@
 import { PanelSectionRow } from "@decky/ui";
+import { FiAlertCircle, FiCheckCircle } from "react-icons/fi";
 
 interface StatusDisplayProps {
   dllDetected: boolean;
@@ -6,6 +7,46 @@ interface StatusDisplayProps {
   isInstalled: boolean;
   installationStatus: string;
   topMargin?: string;
+}
+
+interface StatusRowProps {
+  ready: boolean;
+  text: string;
+  separated?: boolean;
+}
+
+function StatusRow({ ready, text, separated = false }: StatusRowProps) {
+  const accent = ready ? "#65b9c9" : "#c89558";
+  const Icon = ready ? FiCheckCircle : FiAlertCircle;
+
+  return (
+    <div
+      style={{
+        minHeight: "38px",
+        padding: "7px 10px",
+        boxSizing: "border-box",
+        display: "flex",
+        alignItems: "center",
+        gap: "9px",
+        borderTop: separated ? "1px solid rgba(77, 170, 190, 0.16)" : "none",
+        color: "#e6f2f5",
+        fontSize: "13px",
+        fontWeight: "500",
+        lineHeight: "1.3"
+      }}
+    >
+      <Icon
+        aria-hidden="true"
+        style={{
+          width: "16px",
+          height: "16px",
+          flex: "0 0 16px",
+          color: accent
+        }}
+      />
+      <span>{text}</span>
+    </div>
+  );
 }
 
 export function StatusDisplay({
@@ -21,38 +62,17 @@ export function StatusDisplay({
         style={{
           marginTop: topMargin,
           marginBottom: "8px",
-          fontSize: "14px"
+          width: "100%",
+          boxSizing: "border-box",
+          overflow: "hidden",
+          background: "linear-gradient(135deg, rgba(7, 31, 49, 0.72), rgba(8, 55, 68, 0.46))",
+          border: "1px solid rgba(77, 170, 190, 0.28)",
+          borderRadius: "6px",
+          boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 2px 5px rgba(0, 0, 0, 0.16)"
         }}
       >
-        <div
-          style={{
-            color: dllDetected ? "#4CAF50" : "#F44336",
-            fontWeight: "600",
-            marginBottom: "6px",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px"
-          }}
-        >
-          <span style={{ fontSize: "16px" }}>
-            {dllDetected ? "✅" : "❌"}
-          </span>
-          {dllDetectionStatus}
-        </div>
-        <div
-          style={{
-            color: isInstalled ? "#4CAF50" : "#FF9800",
-            fontWeight: "600",
-            display: "flex",
-            alignItems: "center",
-            gap: "6px"
-          }}
-        >
-          <span style={{ fontSize: "16px" }}>
-            {isInstalled ? "✅" : "❌"}
-          </span>
-          {installationStatus}
-        </div>
+        <StatusRow ready={dllDetected} text={dllDetectionStatus} />
+        <StatusRow ready={isInstalled} text={installationStatus} separated />
       </div>
     </PanelSectionRow>
   );

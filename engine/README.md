@@ -45,6 +45,19 @@ tar -xJf mako-render-v<version>-linux.tar.xz -C ~/.local
 
 The archive installs `mako-ui`, `mako-cli`, XDG desktop files, Vulkan manifests, and matching 64-bit and 32-bit layers. The Vulkan loader selects the correct layer for each game; the UI and CLI remain 64-bit applications. If `~/.local/bin` is not on your `PATH`, run tools with their full paths, such as `~/.local/bin/mako-ui`.
 
+#### Start the configuration UI
+
+After extracting the host archive, open the MAKO Renderer configuration UI using either method:
+
+- **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode. Open the application launcher, search for **MAKO Renderer Configuration**, and select it.
+- **Terminal:** Open Konsole or another terminal and run:
+
+  ```bash
+  ~/.local/bin/mako-ui
+  ```
+
+Do not run the UI with `sudo`. It reads and writes your per-user configuration under `~/.config/mako-render/`. If the command reports a missing Qt component, install the graphical-interface requirements below and try again.
+
 MAKO normally finds `Lossless.dll` in common Steam locations. Choose it explicitly in the UI or configuration file if your Steam library is elsewhere.
 
 #### Qt requirements for the graphical interface
@@ -96,7 +109,11 @@ For a Flatpak game or emulator, install the matching MAKO Vulkan runtime extensi
 
 ### Graphical configuration
 
-Open **MAKO Renderer Configuration** from the application launcher or run `~/.local/bin/mako-ui`.
+On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from the application launcher. On any supported Linux desktop, you can instead start it from a terminal:
+
+```bash
+~/.local/bin/mako-ui
+```
 
 1. Choose the licensed Lossless Scaling DLL if MAKO did not find it automatically, then create a profile for the game.
 2. Set **Active In** to the game's Linux binary, Windows executable, or process name. Start with fixed **2x** frame generation and adjust one setting at a time.

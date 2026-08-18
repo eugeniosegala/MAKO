@@ -1,10 +1,8 @@
-## What's new in MAKO Decky v1.1.1
+## What's new in MAKO Decky v1.1.2
 
-This release brings the full MAKO experience together: easier per-game setup, richer live control, broader launcher support, and a private Renderer that stays out of everything else.
+This patch release gives MAKO's setup surfaces a calmer, more consistent finish while keeping the same isolated per-game workflow.
 
-- **Profiles that follow the game:** Open a game once and save its detected process as a dedicated profile. MAKO remembers the Steam app and process identities, selects the right profile on future launches, and safely returns to Default when no saved game matches.
-- **Tune Frame Generation while you play:** Frame Generation, Fixed and Adaptive modes, multipliers, target FPS, Adaptive FPS Cap, maximum multiplier, and Smooth Cadence are saved as you change them. Supported changes reach the running game immediately, while settings that genuinely need new GPU resources still ask for a restart.
-- **Heroic, EmuDeck, and Bazzite-aware launch paths:** MAKO prepares only the Flatpak applications you choose, shows the correct wrapper path for the device, preserves EmuDeck-generated launch options, and fixes per-game process discovery across native Steam, Heroic, and emulator launches.
-- **Compatibility controls without global side effects:** Zink, Steam Deck Mode, Disable HDR, one-launch bypass, and the new ALSA audio option live inside each game profile. They affect only games started through `mako-run`, helping with issues such as audio stutter or loud sounds without changing Steam or Proton globally.
-- **A gameplay-first MAKO interface:** Profiles and the detected running game now lead the configuration flow, related settings use consistent sections and controls, and technical fields stay grouped under Advanced Details. Clearer status cards, calmer button styling, and device-specific launch commands make setup easier without hiding the important information.
-- **A complete, verified Renderer update:** One in-plugin action installs the private 64-bit and 32-bit native layers, while Flatpak Setup manages matching 23.08, 24.08, and 25.08 extensions. Every bundled archive is checksum-pinned to the exact MAKO Renderer release.
+- **Cleaner installation status at a glance:** Lossless Scaling and MAKO Renderer readiness now appear in one restrained MAKO-styled panel, using compact outlined status icons instead of bright emoji markers.
+- **Professional Flatpak progress feedback:** Install, update, and uninstall operations now use bounded loading indicators that remain compact inside their buttons instead of expanding across the dialog.
+- **More consistent visual language:** Status colours, borders, spacing, and feedback now follow the same dark teal and muted amber palette used throughout the rest of the plugin.
+- **The improved Renderer stays aligned:** The release workflow pairs Decky v1.1.2 with the matching Renderer build and checksum-pins its native and Flatpak payloads, including the expanded standalone configuration UI.

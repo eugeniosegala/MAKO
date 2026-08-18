@@ -178,7 +178,14 @@ mkdir -p ~/.local
 tar -xJf $(basename "$archive") -C ~/.local
 \`\`\`
 
-The host archive includes 64-bit and 32-bit Vulkan layers; the CLI and Qt UI are 64-bit. Configure the licensed DLL path with \`mako-ui\` or \`~/.config/mako-render/conf.toml\`, then use \`ENABLE_MAKO=1 %command%\` for a direct Steam launch.
+The host archive includes 64-bit and 32-bit Vulkan layers; the CLI and Qt UI are 64-bit.
+
+Start the configuration UI after extraction:
+
+- **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode and open **MAKO Renderer Configuration**.
+- **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
+
+Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`ENABLE_MAKO=1 %command%\` for a direct Steam launch.
 
 ### Flatpak extensions
 

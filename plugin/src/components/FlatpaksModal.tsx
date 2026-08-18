@@ -34,6 +34,33 @@ interface FlatpaksModalProps {
   closeModal?: () => void;
 }
 
+const CompactSpinner: FC<{ size?: number }> = ({ size = 18 }) => (
+  <span
+    style={{
+      width: `${size}px`,
+      height: `${size}px`,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      flex: `0 0 ${size}px`,
+      overflow: 'hidden'
+    }}
+  >
+    <Spinner
+      width={size}
+      height={size}
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        maxWidth: `${size}px`,
+        maxHeight: `${size}px`,
+        display: 'block',
+        flex: `0 0 ${size}px`
+      }}
+    />
+  </span>
+);
+
 export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
   const [extensionStatus, setExtensionStatus] = useState<FlatpakExtensionStatus | null>(null);
   const [flatpakApps, setFlatpakApps] = useState<FlatpakAppInfo | null>(null);
@@ -164,7 +191,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
         <DialogHeader>{t('FLATPAK_MODAL_TITLE', 'Flatpak Extensions')}</DialogHeader>
         <DialogBody>
           <div style={{ display: 'flex', justifyContent: 'center', padding: '20px' }}>
-            <Spinner />
+            <CompactSpinner size={28} />
           </div>
         </DialogBody>
       </ModalRoot>
@@ -235,7 +262,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                             onClick={() => handleRuntimePrimaryAction(runtime.version, runtime.installed)}
                             disabled={isBusy}
                           >
-                            {isBusy ? <Spinner /> : runtime.installed ? <><FaTrash /> {t('FLATPAK_UNINSTALL_BTN', 'Uninstall')}</> : <><FaDownload /> {t('FLATPAK_INSTALL_BTN', 'Install')}</>}
+                            {isBusy ? <CompactSpinner /> : runtime.installed ? <><FaTrash /> {t('FLATPAK_UNINSTALL_BTN', 'Uninstall')}</> : <><FaDownload /> {t('FLATPAK_INSTALL_BTN', 'Install')}</>}
                           </ButtonItem>
                         </div>
                       </PanelSectionRow>
@@ -247,7 +274,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                               onClick={() => handleExtensionOperation('install', runtime.version)}
                               disabled={isBusy}
                             >
-                              {operationInProgress === `install-${runtime.version}` ? <Spinner /> : <><FaDownload /> {t('FLATPAK_UPDATE_BTN', 'Update')}</>}
+                              {operationInProgress === `install-${runtime.version}` ? <CompactSpinner /> : <><FaDownload /> {t('FLATPAK_UPDATE_BTN', 'Update')}</>}
                             </ButtonItem>
                           </div>
                         </PanelSectionRow>
