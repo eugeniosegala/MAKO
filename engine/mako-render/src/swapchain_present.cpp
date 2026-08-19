@@ -219,7 +219,7 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
 
     if (presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: "
+        std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=retire-acquired-images"
                   << " context=" << this->diagnosticsState.contextId
                   << " images=" << acquiredImageIndices.size()
@@ -251,7 +251,7 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
             const double observedOutputFps =
                 static_cast<double>(this->diagnosticsState.fixedRealFrames +
                     this->diagnosticsState.fixedGeneratedFrames) / windowSeconds;
-            std::cerr << "mako: present diagnostics: operation=fixed-plan"
+            std::cerr << "MAKO Renderer: present diagnostics: operation=fixed-plan"
                       << " context=" << this->diagnosticsState.contextId
                       << " base_fps=" << realFps
                       << " multiplier=" << this->profile.multiplier
@@ -340,7 +340,7 @@ bool Swapchain::recoverBackendIfReady() {
     try {
         backendReady = this->instance.get().contextReady(this->ctx.get());
     } catch (const std::exception& error) {
-        std::cerr << "mako: backend recovery poll failed; native "
+        std::cerr << "MAKO Renderer: backend recovery poll failed; native "
                      "presentation retained: " << error.what() << '\n';
     }
     if (!backendReady)
@@ -370,7 +370,7 @@ bool Swapchain::recoverBackendIfReady() {
             AdaptiveScheduler::historyWarmupFrameCount();
     }
 
-    std::cerr << "mako: backend work recovered; warming temporal "
+    std::cerr << "MAKO Renderer: backend work recovered; warming temporal "
                  "history before resuming frame generation\n";
     return true;
 }
@@ -430,7 +430,7 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
         try {
             pipelineReady = this->instance.get().contextReady(this->ctx.get());
         } catch (const std::exception& error) {
-            std::cerr << "mako: backend readiness poll failed; native "
+            std::cerr << "MAKO Renderer: backend readiness poll failed; native "
                          "presentation retained: " << error.what() << '\n';
             this->recoveryState.backendPending = true;
             pipelineReady = false;
@@ -448,7 +448,7 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
         if (busy.requestHistoryWarmup)
             this->ensureHistoryWarmup();
         if (presentDiagnosticsEnabled() && busy.diagnostic) {
-            std::cerr << "mako: present diagnostics: "
+            std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=pipeline-busy-bypass"
                       << " context=" << this->diagnosticsState.contextId
                       << " consecutive_frames=" << busy.consecutiveFrames
@@ -470,7 +470,7 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
     const auto recovery = this->recoveryState.pipelineBusyRecovery.reportReady(presentNow);
     if (recovery.resumed && recovery.diagnostic &&
             presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: "
+        std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=pipeline-busy-recovered"
                   << " context=" << this->diagnosticsState.contextId
                   << " bypassed_frames=" << recovery.bypassedFrames
@@ -546,7 +546,7 @@ void Swapchain::preacquireGeneratedImages(
     if (plan.admittedGeneratedFrameCount == plan.generatedFrameCount) {
         const auto recovery = this->recoveryState.generatedImageAdmission.reportAvailable();
         if (recovery.resumed && presentDiagnosticsEnabled()) {
-            std::cerr << "mako: present diagnostics: "
+            std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=generated-admission-recovered"
                       << " context=" << this->diagnosticsState.contextId
                       << " missed_attempts=" << recovery.missedAttempts
@@ -562,7 +562,7 @@ void Swapchain::preacquireGeneratedImages(
             plan.generatedFrameCount - plan.admittedGeneratedFrameCount;
     }
     if (logPressure && presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: "
+        std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=generated-admission-pressure"
                   << " context=" << this->diagnosticsState.contextId
                   << " planned=" << plan.generatedFrameCount
@@ -644,7 +644,7 @@ VkResult Swapchain::presentHistoryOnly(
         // The fallback copy is already queued and signals fallbackSemaphore.
         // Present the real image through it and quarantine generation instead
         // of returning an error to the application.
-        std::cerr << "mako: temporarily bypassing frame generation after "
+        std::cerr << "MAKO Renderer: temporarily bypassing frame generation after "
                      "history scheduling failure; native presentation retained: "
                   << error.what() << '\n';
         this->recoveryState.backendPending = true;
@@ -799,7 +799,7 @@ VkResult Swapchain::presentGeneratedFrames(
                 invocation.started, result
             );
             if (presentDiagnosticsEnabled()) {
-                std::cerr << "mako: present diagnostics: "
+                std::cerr << "MAKO Renderer: present diagnostics: "
                              "operation=generated-delivery-miss"
                           << " context=" << this->diagnosticsState.contextId
                           << " planned=" << plan.generatedFrameCount
@@ -1025,7 +1025,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         try {
             this->instance.get().scheduleFrames(this->ctx.get(), timestamps);
         } catch (const std::exception& error) {
-            std::cerr << "mako: temporarily bypassing frame generation after "
+            std::cerr << "MAKO Renderer: temporarily bypassing frame generation after "
                          "backend scheduling failure; native presentation retained: "
                       << error.what() << '\n';
             this->recoveryState.backendPending = true;

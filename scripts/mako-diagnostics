@@ -128,51 +128,53 @@ add_pattern() {
 
 # Every report should identify the exact engine that produced it. This makes a
 # missing render layer visible even when the user selects only a focused
-# preset such as HDR or performance.
-add_pattern 'mako: render layer active; identity=VK_LAYER_MAKO_render; build='
+# preset such as HDR or performance. Retain the former prefix in the filter so
+# reports collected immediately after an upgrade can still include old logs.
+renderer_prefix='(MAKO Renderer:|mako:)'
+add_pattern "$renderer_prefix render layer active; identity=VK_LAYER_MAKO_render; build="
 
 for preset in "${presets[@]}"; do
   case "$preset" in
     hdr)
-      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|MAKO frame-generation initialization failed)'
-      add_pattern 'mako: Gamescope application HDR feedback'
-      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)'
+      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
+      add_pattern "$renderer_prefix Gamescope application HDR feedback"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)"
       ;;
     config)
-      add_pattern 'mako: (updated mako configuration in place|configuration changes requiring GPU resource reconstruction|global backend construction changed)'
-      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)'
+      add_pattern "$renderer_prefix (updated configuration in place|updated mako configuration in place|configuration changes requiring GPU resource reconstruction|global backend construction changed)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)"
       ;;
     adaptive)
-      add_pattern 'mako: present diagnostics: operation=adaptive-'
-      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)'
+      add_pattern "$renderer_prefix present diagnostics: operation=adaptive-"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)"
       ;;
     recovery)
-      add_pattern 'mako: present diagnostics: operation=(skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-applied)'
+      add_pattern "$renderer_prefix present diagnostics: operation=(skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-applied)"
       ;;
     performance)
-      add_pattern 'mako: present diagnostics: operation=(fixed-plan|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|gamescope-refresh-rate-applied|present-|schedule-|submit-|acquire-|wait-|copy-|render-)'
+      add_pattern "$renderer_prefix present diagnostics: operation=(fixed-plan|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|gamescope-refresh-rate-applied|present-|schedule-|submit-|acquire-|wait-|copy-|render-)"
       ;;
     lifecycle)
-      add_pattern 'mako: present diagnostics: operation=swapchain-context-(create|destroy)'
-      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)'
-      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|MAKO frame-generation initialization failed)'
+      add_pattern "$renderer_prefix present diagnostics: operation=swapchain-context-(create|destroy)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)"
+      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       ;;
     startup)
       add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
-      add_pattern 'mako: present diagnostics: operation=swapchain-context-create'
-      add_pattern 'mako: Gamescope application HDR feedback'
-      add_pattern 'mako: present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)'
-      add_pattern 'mako: (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|MAKO frame-generation initialization failed)'
+      add_pattern "$renderer_prefix present diagnostics: operation=swapchain-context-create"
+      add_pattern "$renderer_prefix Gamescope application HDR feedback"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)"
+      add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       ;;
     layers)
       add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
       ;;
     errors)
-      add_pattern 'mako:.*(failed|failure|error|timeout|fallback|passthrough|disabled|VK_ERROR|VK_TIMEOUT|VK_NOT_READY|device lost)'
+      add_pattern "$renderer_prefix.*(failed|failure|error|timeout|fallback|passthrough|disabled|VK_ERROR|VK_TIMEOUT|VK_NOT_READY|device lost)"
       add_pattern '(Vulkan Loader|Gamescope WSI).*(ERROR|Error|error|WARNING|Warning|warning)'
       ;;
     all|everything)
-      add_pattern '(mako:|VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
+      add_pattern '(MAKO Renderer:|mako:|VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
       ;;
     *)
       echo "Unknown preset: $preset" >&2

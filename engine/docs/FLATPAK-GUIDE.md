@@ -28,7 +28,7 @@ The script builds and verifies both 64-bit and 32-bit MAKO Renderer libraries fo
 
 ## Manual application override
 
-The MAKO Decky plugin normally manages Flatpak access per selected application. For direct development, replace `APP_ID` below and grant the application access to MAKO Renderer's configuration and the user's Steam library:
+MAKO Decky normally manages Flatpak access per selected application. For direct development, replace `APP_ID` below and grant the application access to MAKO Renderer's configuration and the user's Steam library:
 
 ```bash
 appid=APP_ID

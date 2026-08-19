@@ -7,10 +7,8 @@ export default definePlugin(() => {
   console.log("MAKO Decky initializing");
 
   return {
-    // Use the short brand label in Decky's plugin list and the descriptive
-    // product title inside the plugin UI.
-    name: "MAKO",
-    titleView: <div className={staticClasses.Title}>MAKO - Frame Generation</div>,
+    name: "MAKO Decky",
+    titleView: <div className={staticClasses.Title}>MAKO Decky</div>,
     alwaysRender: true,
     content: <Content />,
     icon: <GiSharkFin />,

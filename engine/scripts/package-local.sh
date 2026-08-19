@@ -380,7 +380,7 @@ if [[ "$build_32_bit" == true ]]; then
 fi
 for layer_binary in "${layer_binaries[@]}"; do
     if ! strings "$layer_binary" |
-            grep -F "mako: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
+            grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
         echo "Packaging failed: layer build identity diagnostic is missing from $layer_binary" >&2
         exit 1
     fi

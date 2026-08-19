@@ -463,7 +463,7 @@ class Plugin:
         This method is called by Decky Loader when the plugin is loaded.
         Any initialization code should go here.
         """
-        decky.logger.info("mako plugin loaded")
+        decky.logger.info("MAKO Decky loaded")
         try:
             if self.configuration_service.migrate_profile_metadata_if_needed():
                 decky.logger.info("Initialized game/process profile metadata")
@@ -509,7 +509,7 @@ class Plugin:
         This method is called by Decky Loader when the plugin is being unloaded.
         Any cleanup code should go here.
         """
-        decky.logger.info("mako plugin unloaded")
+        decky.logger.info("MAKO Decky unloaded")
 
     async def _uninstall(self):
         """
@@ -518,7 +518,7 @@ class Plugin:
         This method is called by Decky Loader when the plugin is being uninstalled.
         Performs cleanup of this plugin's private files.
         """
-        decky.logger.info("mako plugin being uninstalled")
+        decky.logger.info("MAKO Decky is being uninstalled")
 
         # Clean up MAKO Renderer files when the plugin is uninstalled
         self.installation_service.cleanup_on_uninstall()
@@ -527,7 +527,7 @@ class Plugin:
         # Never remove them automatically: another plugin may still depend on one.
         decky.logger.info("Leaving shared Flatpak runtime extensions installed")
 
-        decky.logger.info("mako plugin uninstall cleanup completed")
+        decky.logger.info("MAKO Decky uninstall cleanup completed")
 
     async def _migration(self):
         """
@@ -536,7 +536,7 @@ class Plugin:
         This method is called by Decky Loader for plugin migrations.
         Currently migrates logs, settings, and runtime data from old locations.
         """
-        decky.logger.info("Running mako plugin migrations")
+        decky.logger.info("Running MAKO Decky migrations")
 
         decky.migrate_logs(os.path.join(decky.DECKY_USER_HOME,
                                        ".config", "decky-lossless-scaling-vk", "lossless-scaling-vk.log"))
@@ -549,4 +549,4 @@ class Plugin:
             os.path.join(decky.DECKY_HOME, "lossless-scaling-vk"),
             os.path.join(decky.DECKY_USER_HOME, ".local", "share", "decky-lossless-scaling-vk"))
 
-        decky.logger.info("mako plugin migrations completed")
+        decky.logger.info("MAKO Decky migrations completed")

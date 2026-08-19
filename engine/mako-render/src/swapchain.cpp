@@ -224,7 +224,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
     );
 
     if (presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: operation=runtime-state-applied"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-state-applied"
                   << " context=" << this->diagnosticsState.contextId
                   << " state_revision=" << runtimeStateRevision
                   << " adaptive=" << this->profile.adaptive
@@ -243,7 +243,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                   << '\n';
     }
 
-    std::cerr << "mako: swapchain colour pipeline: format="
+    std::cerr << "MAKO Renderer: swapchain colour pipeline: format="
               << static_cast<int>(this->info.format)
               << "; color-space=" << static_cast<int>(this->info.colorSpace)
               << "; mode=" << this->colorPipeline.name
@@ -259,7 +259,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
               << (this->colorPipeline.generationSupported ? "supported" : "passthrough")
               << '\n';
     if (this->gamescopeManaged && this->privateOrderedTransport) {
-        std::cerr << "mako: Gamescope SDR presentation transport: "
+        std::cerr << "MAKO Renderer: Gamescope SDR presentation transport: "
                      "mode=fifo-ordered; source=fork-develop; "
                      "dynamic-mode-switch=filtered\n";
     }
@@ -276,7 +276,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
             static_cast<uint64_t>(extent.width) * extent.height *
             transportImageCount *
             transportBytesPerPixel(this->colorPipeline.encoding);
-        std::cerr << "mako: HDR10 transport: mode="
+        std::cerr << "MAKO Renderer: HDR10 transport: mode="
                   << (this->colorPipeline.packedHdr10Transport
                         ? "packed-10-bit" : "rgba16f")
                   << "; nominal_bytes=" << selectedTransportBytes
@@ -289,7 +289,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
     }
 
     if (!this->colorPipeline.generationSupported) {
-        std::cerr << "mako: frame generation disabled for this swapchain: "
+        std::cerr << "MAKO Renderer: frame generation disabled for this swapchain: "
                   << this->colorPipeline.reason << '\n';
         return;
     }
@@ -366,7 +366,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         );
 
         if (!this->profile.frame_generation_enabled)
-            std::cerr << "mako: frame generation is off; retained private "
+            std::cerr << "MAKO Renderer: frame generation is off; retained private "
                          "resources permit a live enable\n";
 
         const size_t frames = std::max(
@@ -380,26 +380,26 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         }
 
         if (presentDiagnosticsEnabled()) {
-            std::cerr << "mako: present diagnostics enabled; context="
+            std::cerr << "MAKO Renderer: present diagnostics enabled; context="
                       << this->diagnosticsState.contextId
                       << "; slow operation threshold is "
                       << presentDiagnosticsThresholdMs() << " ms\n";
         }
         if (this->gamescopeManaged && !this->privateOrderedTransport) {
-            std::cerr << "mako: Gamescope HDR generated-image admission is "
+            std::cerr << "MAKO Renderer: Gamescope HDR generated-image admission is "
                          "nonblocking; native presentation is never held for "
                          "a synthetic destination\n";
         } else if (this->gamescopeManaged) {
-            std::cerr << "mako: Gamescope SDR uses the fork's ordered "
+            std::cerr << "MAKO Renderer: Gamescope SDR uses the fork's ordered "
                          "presentation path\n";
         } else if (const auto timeout = generatedImageAcquireTimeoutNs()) {
-            std::cerr << "mako: generated-image acquire timeout enabled at "
+            std::cerr << "MAKO Renderer: generated-image acquire timeout enabled at "
                       << static_cast<double>(*timeout) / 1'000'000.0
                       << " ms for the legacy non-Gamescope path; stalled "
                          "generated frames will be skipped\n";
         }
         if (this->profile.adaptive) {
-            std::cerr << "mako: adaptive frame generation enabled; target="
+            std::cerr << "MAKO Renderer: adaptive frame generation enabled; target="
                       << this->profile.target_fps
                       << " fps, maximum multiplier="
                       << this->profile.adaptive_max_multiplier
@@ -426,8 +426,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         this->colorPipeline.generationSupported = false;
         this->colorPipeline.name = "initialization-fallback";
         this->colorPipeline.reason =
-            "MAKO frame-generation initialization failed; native presentation retained";
-        std::cerr << "mako: " << this->colorPipeline.reason
+            "frame-generation initialization failed; native presentation retained";
+        std::cerr << "MAKO Renderer: " << this->colorPipeline.reason
                   << ": " << e.what() << '\n';
     }
 }
@@ -571,7 +571,7 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
             AdaptiveScheduler::historyWarmupFrameCount();
     }
 
-    std::cerr << "mako: swapchain colour pipeline transitioned in place: mode="
+    std::cerr << "MAKO Renderer: swapchain colour pipeline transitioned in place: mode="
               << this->colorPipeline.name
               << "; transport="
               << (this->colorPipeline.packedHdr10Transport
@@ -594,7 +594,7 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
             static_cast<uint64_t>(extent.width) * extent.height *
             transportImageCount *
             transportBytesPerPixel(this->colorPipeline.encoding);
-        std::cerr << "mako: HDR10 transport: mode="
+        std::cerr << "MAKO Renderer: HDR10 transport: mode="
                   << (this->colorPipeline.packedHdr10Transport
                         ? "packed-10-bit" : "rgba16f")
                   << "; nominal_bytes=" << selectedTransportBytes
@@ -625,7 +625,7 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
                     !this->renderFence->wait(vk, 0))
                 return false;
         } catch (const std::exception& error) {
-            std::cerr << "mako: private colour transition readiness poll "
+            std::cerr << "MAKO Renderer: private colour transition readiness poll "
                          "failed; real-frame passthrough retained: "
                       << error.what() << '\n';
             this->colorTransitionState.retryAt = now + std::chrono::seconds(1);
@@ -640,7 +640,7 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
     try {
         this->rebuildPrivateResources(vk, std::move(desiredPipeline));
     } catch (const std::exception& error) {
-        std::cerr << "mako: private colour transition failed; real-frame "
+        std::cerr << "MAKO Renderer: private colour transition failed; real-frame "
                      "passthrough retained and retry scheduled: "
                   << error.what() << '\n';
         this->colorTransitionState.retryAt = now + std::chrono::seconds(5);
@@ -648,7 +648,7 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
     }
 
     if (presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: "
+        std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=runtime-transition-applied"
                   << " context=" << this->diagnosticsState.contextId
                   << " state_revision=" << this->colorTransitionState.pendingHdrStateRevision
@@ -683,7 +683,7 @@ ProfileUpdateAction Swapchain::updateProfile(
                 !nextProfile.frame_generation_enabled)
             this->disableFrameGeneration();
         if (presentDiagnosticsEnabled()) {
-            std::cerr << "mako: present diagnostics: "
+            std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=runtime-transition-pending"
                       << " context=" << this->diagnosticsState.contextId
                       << " state_revision=" << runtimeStateRevision
@@ -758,7 +758,7 @@ ProfileUpdateAction Swapchain::updateProfile(
     }
 
     if (presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: operation=runtime-state-applied"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-state-applied"
                   << " context=" << this->diagnosticsState.contextId
                   << " state_revision=" << runtimeStateRevision
                   << " transition=live"
@@ -798,7 +798,7 @@ bool Swapchain::updateGamescopeHdrState(
     this->colorTransitionState.retryAt.reset();
 
     if (presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: "
+        std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=runtime-transition-pending"
                   << " context=" << this->diagnosticsState.contextId
                   << " state_revision=" << runtimeStateRevision
@@ -817,7 +817,7 @@ void Swapchain::updateGamescopeRefreshRate(
     this->gamescopeRefreshHz = refreshHz;
     this->fixedRefreshBudget.reset();
     if (presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: "
+        std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=gamescope-refresh-rate-applied"
                   << " context=" << this->diagnosticsState.contextId
                   << " refresh_hz=" << refreshHz.value_or(0) << '\n';

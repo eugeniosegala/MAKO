@@ -1,8 +1,8 @@
 # Collect Standalone MAKO Renderer Diagnostics
 
-This guide is for troubleshooting the standalone **MAKO Renderer**: a Renderer archive extracted directly into a Linux prefix or a Renderer built and installed from source. These installations use `mako-ui`, `mako-cli`, and launch-scoped environment variables without the Decky plugin managing the game launch.
+This guide is for troubleshooting the standalone **MAKO Renderer**: a MAKO Renderer archive extracted directly into a Linux prefix or MAKO Renderer built and installed from source. These installations use `mako-ui`, `mako-cli`, and launch-scoped environment variables without MAKO Decky managing the game launch.
 
-Use this guide when you installed `MAKO-Renderer-v<version>-linux.tar.xz`, the legacy `mako-render-v2.0.0-linux.tar.xz`, or ran `cmake --install`. If **MAKO** is installed through Decky Loader and you normally use `/home/deck/.local/bin/mako-run`, use the [MAKO Decky guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md) instead.
+Use this guide when you installed `MAKO-Renderer-v<version>-linux.tar.xz`, the legacy `mako-render-v2.0.0-linux.tar.xz`, or ran `cmake --install`. If **MAKO Decky** is installed through Decky Loader and you normally use `/home/deck/.local/bin/mako-run`, use the [MAKO Decky guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md) instead.
 
 You will temporarily enable diagnostics for the affected game, reproduce the problem once, create `MAKO-diagnostics.txt` on the Desktop, restore the normal launch settings, and upload the report through the [MAKO diagnostic report form][diagnostic-form]. The form contains the short questions needed to understand the report.
 
@@ -112,7 +112,7 @@ Keep screenshots, videos, and discussion in the original GitHub issue, but use t
 - **`mako-diagnostics: command not found`:** your installed Renderer predates the shared helper. For a native Steam log, create the same focused report with:
 
     ```bash
-    grep -aE '(mako:|VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)' "$HOME/.steam/steam/logs/console-linux.txt" | tail -n 2000 > "$HOME/Desktop/MAKO-diagnostics.txt"
+    grep -aE '(MAKO Renderer:|mako:|VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)' "$HOME/.steam/steam/logs/console-linux.txt" | tail -n 2000 > "$HOME/Desktop/MAKO-diagnostics.txt"
     ```
 
     For Flatpak Steam, replace the source path with `$HOME/.var/app/com.valvesoftware.Steam/.steam/steam/logs/console-linux.txt`. For a direct terminal launch, use `$HOME/Desktop/MAKO-renderer-session.log`.

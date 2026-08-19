@@ -33,7 +33,7 @@ using namespace mako::layer;
 
 namespace {
     constexpr char makoBuildIdentity[] =
-        "mako: render layer active; identity="
+        "MAKO Renderer: render layer active; identity="
         "VK_LAYER_MAKO_render; build="
         MAKO_BUILD_VERSION;
 
@@ -233,7 +233,7 @@ Root::Root() {
     this->hdrFeedback.seed(this->gamescopeHdrActive);
     this->lastHdrFeedbackPoll = std::chrono::steady_clock::now();
     if (this->gamescopeHdrActive) {
-        std::cerr << "mako: Gamescope application HDR feedback initialized: active="
+        std::cerr << "MAKO Renderer: Gamescope application HDR feedback initialized: active="
                   << *this->gamescopeHdrActive
                   << "; display=" << initialHdrFeedback.display
                   << "; refresh_hz="
@@ -243,7 +243,7 @@ Root::Root() {
                         ? "unavailable" : initialHdrFeedback.activationSource)
                   << '\n';
     } else {
-        std::cerr << "mako: Gamescope application HDR feedback provisional; "
+        std::cerr << "MAKO Renderer: Gamescope application HDR feedback provisional; "
                      "normalized 10-bit swapchains use real-frame passthrough until confirmed; "
                   << "reason=" << initialHdrFeedback.status
                   << " display="
@@ -277,7 +277,7 @@ Root::Root() {
 
     this->active_profile = profile->second;
 
-    std::cerr << "mako: using profile with name '" << this->active_profile->name << "' ";
+    std::cerr << "MAKO Renderer: using profile with name '" << this->active_profile->name << "' ";
     switch (profile->first) {
         case ls::IdentType::OVERRIDE:
             std::cerr << "(identified via override)\n";
@@ -321,7 +321,7 @@ ConfigurationUpdateResult Root::update() {
         if (diagnosticKey != this->lastHdrFeedbackDiagnosticKey) {
             this->lastHdrFeedbackDiagnosticKey = diagnosticKey;
             logHdrFeedbackDiagnostic(
-                "mako: Gamescope application HDR feedback status: ",
+                "MAKO Renderer: Gamescope application HDR feedback status: ",
                 hdrFeedbackSample
             );
         }
@@ -339,7 +339,7 @@ ConfigurationUpdateResult Root::update() {
                     *changed, this->runtimeStateRevision))
                 result.hdrContextsDeferred++;
         }
-        std::cerr << "mako: Gamescope application HDR feedback stabilized: active="
+        std::cerr << "MAKO Renderer: Gamescope application HDR feedback stabilized: active="
                   << *changed
                   << "; activation_source="
                   << (this->lastHdrActivationSource.empty()
@@ -381,7 +381,7 @@ ConfigurationUpdateResult Root::update() {
         ? std::optional<std::string>{this->active_profile->name}
         : std::nullopt;
     if (previousProfileName != currentProfileName) {
-        std::cerr << "mako: live profile selection changed: previous='"
+        std::cerr << "MAKO Renderer: live profile selection changed: previous='"
                   << previousProfileName.value_or("(none)")
                   << "' current='"
                   << currentProfileName.value_or("(none)") << "'";
@@ -566,10 +566,10 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
 
             const auto applicationDevice = identifyApplicationDevice(vk);
             if (profile.gpu) {
-                std::cerr << "mako: backend GPU selection: configured="
+                std::cerr << "MAKO Renderer: backend GPU selection: configured="
                           << *profile.gpu << '\n';
             } else {
-                std::cerr << "mako: backend GPU selection: following game device="
+                std::cerr << "MAKO Renderer: backend GPU selection: following game device="
                           << applicationDevice.name << " ("
                           << applicationDevice.vendorId << ":"
                           << applicationDevice.deviceId << ")\n";
@@ -613,7 +613,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
         : 0;
 
     if (presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: operation=swapchain-context-create"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-create"
                   << " context=" << diagnosticsContextId
                   << " swapchain=" << swapchain
                   << " active_contexts=" << this->swapchains.size()
@@ -630,7 +630,7 @@ void Root::removeSwapchainContext(VkSwapchainKHR swapchain) {
         : 0;
     const size_t removed = this->swapchains.erase(swapchain);
     if (presentDiagnosticsEnabled()) {
-        std::cerr << "mako: present diagnostics: operation=swapchain-context-destroy"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-destroy"
                   << " context=" << diagnosticsContextId
                   << " swapchain=" << swapchain
                   << " active_contexts=" << this->swapchains.size()

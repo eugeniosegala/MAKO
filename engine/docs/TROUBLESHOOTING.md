@@ -19,7 +19,7 @@
 
 4. For a 32-bit game, install both `lib32/libmako-render.so` and `VkLayer_MAKO_render.x86.json`. The manifest must report `"library_arch": "32"`.
 
-Use `VK_LOADER_DEBUG=layer` with the normal launch command when you need to see Vulkan-loader decisions. Look for `VK_LAYER_MAKO_render` and the `mako: render layer active` message.
+Use `VK_LOADER_DEBUG=layer` with the normal launch command when you need to see Vulkan-loader decisions. Look for `VK_LAYER_MAKO_render` and the `MAKO Renderer: render layer active` message.
 
 ## The layer loads but frame generation does not start
 

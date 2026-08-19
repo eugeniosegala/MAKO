@@ -52,21 +52,21 @@ namespace {
             layerInfo = reinterpret_cast<VkLayerInstanceCreateInfo*>(const_cast<void*>(layerInfo->pNext));
         }
         if (!layerInfo) {
-            std::cerr << "mako: no layer info found in pNext chain, "
+            std::cerr << "MAKO Renderer: no layer info found in pNext chain, "
                 "the previous layer does not follow spec\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
         auto* linkInfo = layerInfo->u.pLayerInfo;
         if (!linkInfo) {
-            std::cerr << "mako: link info is null, "
+            std::cerr << "MAKO Renderer: link info is null, "
                 "the previous layer does not follow spec\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
         layer_info->GetInstanceProcAddr = linkInfo->pfnNextGetInstanceProcAddr;
         if (!layer_info->GetInstanceProcAddr) {
-            std::cerr << "mako: next layer's vkGetInstanceProcAddr is null, "
+            std::cerr << "MAKO Renderer: next layer's vkGetInstanceProcAddr is null, "
                 "the previous layer does not follow spec\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
@@ -77,7 +77,7 @@ namespace {
         auto* vkCreateInstance = reinterpret_cast<PFN_vkCreateInstance>(
             layer_info->GetInstanceProcAddr(VK_NULL_HANDLE, "vkCreateInstance"));
         if (!vkCreateInstance) {
-            std::cerr << "mako: failed to get next layer's vkCreateInstance, "
+            std::cerr << "MAKO Renderer: failed to get next layer's vkCreateInstance, "
                 "the previous layer does not follow spec\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
@@ -103,7 +103,7 @@ namespace {
             return VK_SUCCESS;
         } catch (const ls::vulkan_error& e) {
             if (e.error() == VK_ERROR_EXTENSION_NOT_PRESENT)
-                std::cerr << "mako: required Vulkan instance extensions are not present. "
+                std::cerr << "MAKO Renderer: required Vulkan instance extensions are not present. "
                     "Your GPU driver is not supported.\n";
             return e.error();
         }
@@ -122,21 +122,21 @@ namespace {
             layerInfo = reinterpret_cast<VkLayerDeviceCreateInfo*>(const_cast<void*>(layerInfo->pNext));
         }
         if (!layerInfo) {
-            std::cerr << "mako: no layer info found in pNext chain, "
+            std::cerr << "MAKO Renderer: no layer info found in pNext chain, "
                 "the previous layer does not follow spec\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
         auto* linkInfo = layerInfo->u.pLayerInfo;
         if (!linkInfo) {
-            std::cerr << "mako: link info is null, "
+            std::cerr << "MAKO Renderer: link info is null, "
                 "the previous layer does not follow spec\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
         instance_info->funcs.GetDeviceProcAddr = linkInfo->pfnNextGetDeviceProcAddr;
         if (!linkInfo->pfnNextGetDeviceProcAddr) {
-            std::cerr << "mako: next layer's vkGetDeviceProcAddr is null, "
+            std::cerr << "MAKO Renderer: next layer's vkGetDeviceProcAddr is null, "
                 "the previous layer does not follow spec\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
@@ -150,13 +150,13 @@ namespace {
             layerInfo = reinterpret_cast<VkLayerDeviceCreateInfo*>(const_cast<void*>(layerInfo->pNext));
         }
         if (!layerInfo) {
-            std::cerr << "mako: no layer loader data found in pNext chain.\n";
+            std::cerr << "MAKO Renderer: no layer loader data found in pNext chain.\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
         auto* setLoaderData = layerInfo->u.pfnSetDeviceLoaderData;
         if (!setLoaderData) {
-            std::cerr << "mako: instance loader data function is null.\n";
+            std::cerr << "MAKO Renderer: instance loader data function is null.\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
@@ -172,7 +172,7 @@ namespace {
             );
         } catch (const ls::vulkan_error& e) {
             if (e.error() == VK_ERROR_EXTENSION_NOT_PRESENT)
-                std::cerr << "mako: required Vulkan device extensions are not present. "
+                std::cerr << "MAKO Renderer: required Vulkan device extensions are not present. "
                     "Your GPU driver is not supported.\n";
             return e.error();
         }
@@ -189,7 +189,7 @@ namespace {
                 )
             );
         } catch (const std::exception& e) {
-            std::cerr << "mako: something went wrong during mako initialization:\n";
+            std::cerr << "MAKO Renderer: initialization failed:\n";
             std::cerr << "- " << e.what() << '\n';
         }
 
@@ -207,7 +207,7 @@ namespace {
         auto vkDestroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(
             instance_info->funcs.GetDeviceProcAddr(device, "vkDestroyDevice"));
         if (!vkDestroyDevice) {
-            std::cerr << "mako: failed to get next layer's vkDestroyDevice, "
+            std::cerr << "MAKO Renderer: failed to get next layer's vkDestroyDevice, "
                 "the previous layer does not follow spec\n";
             return;
         }
@@ -228,7 +228,7 @@ namespace {
         auto vkDestroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(
             layer_info->GetInstanceProcAddr(instance, "vkDestroyInstance"));
         if (!vkDestroyInstance) {
-            std::cerr << "mako: failed to get next layer's vkDestroyInstance, "
+            std::cerr << "MAKO Renderer: failed to get next layer's vkDestroyInstance, "
                 "the previous layer does not follow spec\n";
 
             if (lastInstance) {
@@ -309,7 +309,7 @@ namespace {
             try {
                 layer_info->root.removeSwapchainContext(createdSwapchain);
             } catch (const std::exception& e) {
-                std::cerr << "mako: failed to retire a partially-created "
+                std::cerr << "MAKO Renderer: failed to retire a partially-created "
                              "swapchain context: " << e.what() << '\n';
             }
             it->second.df().DestroySwapchainKHR(
@@ -376,7 +376,7 @@ namespace {
                 .privateOrderedTransport = privateOrderedTransport,
             }).first->second;
 
-            // create mako swapchain
+            // Create the MAKO Renderer swapchain context.
             layer_info->root.createSwapchainContext(it->second, *swapchain, info);
 
             instance_info->swapchains.emplace(*swapchain,
@@ -386,12 +386,12 @@ namespace {
             return res;
         } catch (const ls::vulkan_error& e) {
             rollbackCreatedSwapchain();
-            std::cerr << "mako: something went wrong during mako swapchain creation:\n";
+            std::cerr << "MAKO Renderer: swapchain creation failed:\n";
             std::cerr << "- " << e.what() << '\n';
             return e.error();
         } catch (const std::exception& e) {
             rollbackCreatedSwapchain();
-            std::cerr << "mako: something went wrong during mako swapchain creation:\n";
+            std::cerr << "MAKO Renderer: swapchain creation failed:\n";
             std::cerr << "- " << e.what() << '\n';
             return VK_ERROR_INITIALIZATION_FAILED;
         }
@@ -413,15 +413,15 @@ namespace {
         }
 
         if (configurationUpdate.reloaded) {
-            std::cerr << "mako: updated mako configuration in place; contexts="
+            std::cerr << "MAKO Renderer: updated configuration in place; contexts="
                       << configurationUpdate.liveContextsUpdated << '\n';
             if (configurationUpdate.deferredContexts > 0)
-                std::cerr << "mako: configuration changes requiring GPU resource "
+                std::cerr << "MAKO Renderer: configuration changes requiring GPU resource "
                              "reconstruction remain pending until a natural game-owned "
                              "swapchain recreation; no recreation was forced; contexts="
                           << configurationUpdate.deferredContexts << '\n';
             if (configurationUpdate.globalChangeDeferred)
-                std::cerr << "mako: global backend construction changed; "
+                std::cerr << "MAKO Renderer: global backend construction changed; "
                              "the new DLL or FP16 setting applies on process restart\n";
         }
 
@@ -449,13 +449,13 @@ namespace {
                 );
             } catch (const ls::vulkan_error& e) {
                 if (e.error() != VK_ERROR_OUT_OF_DATE_KHR) {
-                    std::cerr << "mako: something went wrong during mako swapchain presentation:\n";
+                    std::cerr << "MAKO Renderer: swapchain presentation failed:\n";
                     std::cerr << "- " << e.what() << '\n';
                 } // silently swallow out-of-date errors
 
                 result = e.error();
             } catch (const std::exception& e) {
-                std::cerr << "mako: something went wrong during mako swapchain presentation:\n";
+                std::cerr << "MAKO Renderer: swapchain presentation failed:\n";
                 std::cerr << "- " << e.what() << '\n';
                 result = VK_ERROR_UNKNOWN;
             }
@@ -539,7 +539,7 @@ VkResult vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVers
             return VK_ERROR_INITIALIZATION_FAILED;
         }
     } catch (const std::exception& e) {
-        std::cerr << "mako: something went wrong during mako layer initialization:\n";
+        std::cerr << "MAKO Renderer: layer initialization failed:\n";
         std::cerr << "- " << e.what() << '\n';
 
         return VK_ERROR_INITIALIZATION_FAILED;

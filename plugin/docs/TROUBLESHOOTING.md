@@ -8,7 +8,7 @@ HDR frame generation is unavailable in this release. **Disable HDR (Restart)** i
 
 Use **Disable MAKO Renderer on Next Launch** and restart the game if you need to test whether the layer is the cause of a startup or presentation problem.
 
-## A game will not start or MAKO appears inactive
+## A game will not start or MAKO Renderer appears inactive
 
 1. For a native Steam or Proton game, confirm its launch option is exactly:
 
@@ -16,7 +16,7 @@ Use **Disable MAKO Renderer on Next Launch** and restart the game if you need to
     /home/deck/.local/bin/mako-run %command%
     ```
 
-2. Open MAKO and select **Install MAKO Renderer**. Installing a Decky ZIP alone does not replace the private Renderer payload.
+2. Open MAKO Decky and select **Install MAKO Renderer**. Installing a MAKO Decky ZIP alone does not replace the private MAKO Renderer payload.
 3. Check the selected profile's `Lossless.dll` path, GPU choice, and **Active In** rule. Start with Fixed 2x before testing Adaptive settings.
 4. Test the game's V-Sync both on and off. Its own FPS limiter, VRR, or compositor configuration can affect frame pacing.
 
@@ -68,7 +68,7 @@ Use the clean update path for every newer local ZIP:
 1. Quit games using `/home/deck/.local/bin/mako-run`.
 2. Uninstall **MAKO** from Decky and install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart the Steam Deck or Steam Machine.
-4. Open MAKO and select **Install MAKO Renderer**.
+4. Open MAKO Decky and select **Install MAKO Renderer**.
 5. In **Flatpak Setup**, select **Update** for every prepared application's matching runtime extension, such as Heroic or Dolphin.
 
 This preserves profiles and launch options while replacing the private native Renderer and refreshing any shared Flatpak extensions.

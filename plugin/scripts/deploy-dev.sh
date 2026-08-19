@@ -160,7 +160,8 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as source:
     print(json.load(source).get("name", ""))
 ' "$plugin_dir/plugin.json")"
-if [[ "$plugin_name" != "MAKO" && "$plugin_name" != "Mako" &&
+if [[ "$plugin_name" != "MAKO Decky" &&
+      "$plugin_name" != "MAKO" && "$plugin_name" != "Mako" &&
       "$plugin_name" != "MAKO - Frame Generation" ]]; then
   echo "Refusing to modify a different Decky plugin: $plugin_dir" >&2
   exit 1

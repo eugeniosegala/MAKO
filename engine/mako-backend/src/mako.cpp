@@ -778,7 +778,7 @@ bool Instance::contextReady(const Context& context) const {
 void Context::prepareWork() {
     if (this->workScheduled && !this->cmdbufFence.wait(
             this->ctx.vk, previousWorkFenceTimeoutNs)) {
-        std::cerr << "mako: backend work fence timed out after 250 ms; "
+        std::cerr << "MAKO Renderer: backend work fence timed out after 250 ms; "
                      "aborting frame scheduling\n";
         throw backend::error("Timeout waiting for previous frame to complete");
     }
@@ -897,7 +897,7 @@ void Instance::collectRetiredContexts() {
             try {
                 return context->waitForIdle(0);
             } catch (const std::exception& e) {
-                std::cerr << "mako: unable to poll a retired backend context: "
+                std::cerr << "MAKO Renderer: unable to poll a retired backend context: "
                           << e.what() << '\n';
                 return false;
             }
@@ -920,14 +920,14 @@ void Instance::closeContext(const Context& context) {
             return;
         }
     } catch (const std::exception& e) {
-        std::cerr << "mako: unable to wait for backend context retirement: "
+        std::cerr << "MAKO Renderer: unable to wait for backend context retirement: "
                   << e.what() << '\n';
     }
 
     // Never issue a device-wide indefinite wait while the game is replacing a
     // swapchain. Keep the exceptional in-flight context alive and reclaim it
     // on a later open/close once its own completion fence signals.
-    std::cerr << "mako: backend context did not retire within 250 ms; "
+    std::cerr << "MAKO Renderer: backend context did not retire within 250 ms; "
                  "deferring resource destruction\n";
     this->m_retiredContexts.push_back(std::move(*it));
     this->m_contexts.erase(it);
@@ -947,7 +947,7 @@ InstanceImpl::~InstanceImpl() {
     try {
         new vk::Vulkan(std::move(this->vk));
     } catch (...) {
-        std::cerr << "mako: failed to leak Vulkan instance\n";
+        std::cerr << "MAKO Renderer: failed to leak Vulkan instance\n";
     }
 
 }

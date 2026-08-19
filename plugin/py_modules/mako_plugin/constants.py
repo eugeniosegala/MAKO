@@ -43,7 +43,7 @@ COMPETING_LSFG_DISABLE_ENVS = (
     "DISABLE_LSFGVK",  # LSFG-VK 2.x
 )
 MAKO_LAYER_BUILD_MARKER = (
-    b"mako: render layer active; identity="
+    b"MAKO Renderer: render layer active; identity="
     b"VK_LAYER_MAKO_render; build="
 )
 # Decky's generated wrapper relies on the renderer understanding this

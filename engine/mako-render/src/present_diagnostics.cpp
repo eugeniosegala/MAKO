@@ -28,7 +28,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=adaptive-stabilization"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-stabilization"
                   << " context=" << activeContextId
                   << " reason=" << reason
                   << " duration_ms="
@@ -43,7 +43,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=adaptive-ramp"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-ramp"
                   << " context=" << activeContextId
                   << " previous_generated_limit=" << previousLimit
                   << " generated_limit=" << newLimit
@@ -57,7 +57,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << (accepted ? "adaptive-ramp-accepted" : "adaptive-load-shed")
                   << " context=" << activeContextId
                   << " previous_generated_limit=" << previousLimit
@@ -75,7 +75,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=adaptive-bridge"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-bridge"
                   << " context=" << activeContextId
                   << " previous_generated_limit=" << previousLimit
                   << " tested_generated_limit=" << testedLimit
@@ -93,7 +93,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << (accepted
                       ? "adaptive-bridge-accepted"
                       : "adaptive-bridge-rejected")
@@ -111,7 +111,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=adaptive-probe-aborted"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-probe-aborted"
                   << " context=" << activeContextId
                   << " reason=" << reason
                   << " tested_generated_limit=" << testedLimit << '\n';
@@ -125,7 +125,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=" << operation
+        std::cerr << "MAKO Renderer: present diagnostics: operation=" << operation
                   << " context=" << activeContextId
                   << " reason=" << reason
                   << " consecutive_failures=" << failures;
@@ -157,7 +157,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-fast-cadence-burst"
                   << " context=" << activeContextId
                   << " baseline_base_fps=" << baselineBaseFps
@@ -177,7 +177,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-fast-cadence-burst-complete"
                   << " context=" << activeContextId
                   << " total_ignored_frames=" << totalIgnoredFrames
@@ -194,7 +194,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=adaptive-ramp-backoff"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-ramp-backoff"
                   << " context=" << activeContextId
                   << " tested_generated_limit=" << testedLimit
                   << " consecutive_failures=" << failures
@@ -211,7 +211,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=adaptive-ramp-early-retry"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-ramp-early-retry"
                   << " context=" << activeContextId
                   << " tested_generated_limit=" << testedLimit
                   << " failed_base_fps=" << failedBaseFps
@@ -224,7 +224,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-recovery-resume-scheduled"
                   << " context=" << activeContextId
                   << " generated_limit=" << generationLimit
@@ -241,7 +241,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=" << operation
+        std::cerr << "MAKO Renderer: present diagnostics: operation=" << operation
                   << " context=" << activeContextId
                   << " generated_limit=" << generatedLimit
                   << " baseline_base_fps=" << baselineBaseFps
@@ -259,7 +259,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=adaptive-rescue-start"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-rescue-start"
                   << " context=" << activeContextId
                   << " generated_limit=" << generatedLimit
                   << " baseline_base_fps=" << baselineBaseFps
@@ -280,7 +280,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation=adaptive-rescue-complete"
+        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-rescue-complete"
                   << " context=" << activeContextId
                   << " previous_generated_limit=" << previousLimit
                   << " resumed_generated_limit=" << resumedLimit
@@ -303,7 +303,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-discontinuity-recovery-start"
                   << " context=" << activeContextId
                   << " generated_limit=" << generationLimit
@@ -322,7 +322,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-discontinuity-recovery-complete"
                   << " context=" << activeContextId
                   << " generated_limit=" << generationLimit
@@ -337,7 +337,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-gameplay-hitch-recovery"
                   << " context=" << activeContextId
                   << " generated_limit=" << generationLimit
@@ -375,7 +375,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-cadence-refresh"
                   << " context=" << activeContextId
                   << " reason=" << reason
@@ -390,7 +390,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-load-shed"
                   << " context=" << activeContextId
                   << " previous_generated_limit=" << previousLimit
@@ -411,7 +411,7 @@ namespace {
             if (!present_diagnostics::enabled())
                 return;
 
-            std::cerr << "mako: present diagnostics: operation=adaptive-plan"
+            std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-plan"
                       << " context=" << activeContextId
                       << " base_fps=" << plan.baseFps
                       << " target_fps=" << plan.targetFps
@@ -683,7 +683,7 @@ void logSlowOperation(const std::string_view operation,
         return;
 
     std::ostringstream message;
-    message << "mako: present diagnostics: operation=" << operation
+    message << "MAKO Renderer: present diagnostics: operation=" << operation
             << " context=" << activeContextId
             << " duration_ms=" << durationMs
             << " frame=" << frameIndex
@@ -705,7 +705,7 @@ void logPresentFallback(const size_t frameIndex,
     if (!enabled())
         return;
 
-    std::cerr << "mako: present diagnostics: operation=skip-generated-frames"
+    std::cerr << "MAKO Renderer: present diagnostics: operation=skip-generated-frames"
               << " context=" << activeContextId
               << " frame=" << frameIndex
               << " sequence=" << sequenceIndex
@@ -724,7 +724,7 @@ void logHistoryWarmup(const size_t frameIndex,
     if (!enabled())
         return;
 
-    std::cerr << "mako: present diagnostics: operation=history-warmup"
+    std::cerr << "MAKO Renderer: present diagnostics: operation=history-warmup"
               << " context=" << activeContextId
               << " frame=" << frameIndex
               << " sequence=" << sequenceIndex

@@ -318,9 +318,9 @@ done
 
 if [[ "$output_path_set" == false ]]; then
   if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
-    output_path="$project_dir/out/MAKO-local.$local_plugin_label.zip"
+    output_path="$project_dir/out/MAKO-Decky-local.$local_plugin_label.zip"
   else
-    output_path="$project_dir/out/MAKO.zip"
+    output_path="$project_dir/out/MAKO-Decky.zip"
   fi
 fi
 
@@ -400,7 +400,7 @@ for layer_binary_path in "${layer_binary_paths[@]}"; do
   verification_binary="$staging_dir/$(basename "$(dirname "$layer_binary_path")")-libmako-render.so"
   tar -xJOf "$package_dir/bin/$archive_name" "$layer_binary_path" > "$verification_binary"
   if ! strings "$verification_binary" |
-      grep -F "mako: render layer active; identity=VK_LAYER_MAKO_render; build=$archive_version" >/dev/null; then
+      grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$archive_version" >/dev/null; then
     echo "Engine archive has no matching MAKO Renderer build marker in $layer_binary_path" >&2
     exit 1
   fi

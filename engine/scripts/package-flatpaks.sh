@@ -160,7 +160,7 @@ for runtime_version in 23.08 24.08 25.08; do
             "$build_dir/files/lib64/libmako-render.so" \
             "$build_dir/files/lib/i386-linux-gnu/libmako-render.so"; do
         if ! strings "$layer_binary" |
-                grep -F "mako: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
+                grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
             echo "Flatpak packaging failed: layer build identity is missing for $runtime_version" >&2
             exit 1
         fi
@@ -238,7 +238,7 @@ for runtime_version in 23.08 24.08 25.08; do
             "$deployed_dir/files/lib64/libmako-render.so" \
             "$deployed_dir/files/lib/i386-linux-gnu/libmako-render.so"; do
         if ! strings "$layer_binary" |
-                grep -F "mako: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
+                grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
             echo "Flatpak packaging failed: deployed layer build identity is missing for $runtime_version" >&2
             exit 1
         fi

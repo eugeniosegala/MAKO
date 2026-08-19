@@ -3,7 +3,7 @@
 import { readFileSync } from "node:fs";
 
 const DEFAULT_DECKY_URL = "http://127.0.0.1:1337";
-const DEFAULT_PLUGIN_NAME = "MAKO - Frame Generation";
+const DEFAULT_PLUGIN_NAME = "MAKO Decky";
 const REQUEST_TIMEOUT_MS = 15_000;
 
 function installedPluginName() {
@@ -89,7 +89,7 @@ async function reloadPlugin() {
     });
   });
 
-  console.log(`Reloaded Decky plugin: ${pluginName}`);
+  console.log(`Reloaded MAKO Decky: ${pluginName}`);
 }
 
 try {

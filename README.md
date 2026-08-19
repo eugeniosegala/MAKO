@@ -58,7 +58,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam.** MAKO needs the licensed installation's `Lossless.dll`.
 3. Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download the MAKO Decky ZIP under **Assets**.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
-5. Open **MAKO** and select **Install MAKO Renderer**. This required step installs the renderer bundled in the ZIP into MAKO's private location.
+5. Open **MAKO Decky** and select **Install MAKO Renderer**. This required step installs the renderer bundled in the ZIP into MAKO Decky's private location.
 6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal starting point; Adaptive Frame Generation is optional.
 7. For a native Steam or Proton game, add this under **Steam Properties > Launch Options**:
 
@@ -70,7 +70,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> If Decky does not show or reload **MAKO** after installing a ZIP, uninstall MAKO from Decky, install the ZIP again, and restart your Steam Deck or Steam Machine. Open MAKO afterwards and repeat step 5.
+> If Decky does not show or reload **MAKO Decky** after installing a ZIP, uninstall MAKO Decky, install the ZIP again, and restart your Steam Deck or Steam Machine. Open MAKO Decky afterwards and repeat step 5.
 
 ### Heroic and other Flatpak applications
 
@@ -133,12 +133,12 @@ The clean update path avoids Decky retaining an older backend or bundled payload
 1. Quit games using `/home/deck/.local/bin/mako-run`.
 2. Uninstall MAKO from Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart your Steam Deck or Steam Machine.
-4. Open MAKO and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
+4. Open MAKO Decky and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
 5. If you use Heroic or EmuDeck Flatpak emulators, open **Flatpak Setup** and select **Update** for each prepared application's matching runtime extension shown by MAKO.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **MAKO** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in the plugin.
+> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **MAKO Decky**, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in MAKO Decky.
 
 Profiles and Steam launch options are retained. The private native engine and launcher are recreated in step 4; shared Flatpak extensions are retained and then refreshed in step 5.
 

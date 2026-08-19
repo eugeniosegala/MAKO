@@ -27,20 +27,20 @@ FIXTURE = """\
 [Vulkan Loader] Loading VK_LAYER_MAKO_frame_generation
 [Vulkan Loader] Loading VK_LAYER_MAKO_render
 [Gamescope WSI] HDR output available
-mako: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0
-mako: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
-mako: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
-mako: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
-mako: present diagnostics: operation=swapchain-context-create context=1
-mako: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources action=wait-for-natural-swapchain-recreation
-mako: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 hdr=1
-mako: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
-mako: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
-mako: present diagnostics: operation=acquire-generated-image context=1 duration_ms=50 result=VK_TIMEOUT
-mako: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
-mako: present diagnostics: operation=pipeline-busy-bypass context=1 consecutive_frames=1 total_bypassed_frames=16 duration_ms=0 planned=1 history_action=preserved action=native-present
-mako: present diagnostics: operation=pipeline-busy-recovered context=1 bypassed_frames=1 total_recoveries=16 duration_ms=8 history_warmup_requested=0
-mako: MAKO frame-generation initialization failed; native presentation retained: test failure
+MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0
+MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
+MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
+MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
+MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1
+MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources action=wait-for-natural-swapchain-recreation
+MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 hdr=1
+MAKO Renderer: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
+MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
+MAKO Renderer: present diagnostics: operation=acquire-generated-image context=1 duration_ms=50 result=VK_TIMEOUT
+MAKO Renderer: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
+MAKO Renderer: present diagnostics: operation=pipeline-busy-bypass context=1 consecutive_frames=1 total_bypassed_frames=16 duration_ms=0 planned=1 history_action=preserved action=native-present
+MAKO Renderer: present diagnostics: operation=pipeline-busy-recovered context=1 bypassed_frames=1 total_recoveries=16 duration_ms=8 history_warmup_requested=0
+MAKO Renderer: frame-generation initialization failed; native presentation retained: test failure
 unrelated application output
 """
 

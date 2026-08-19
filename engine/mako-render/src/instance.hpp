@@ -32,7 +32,7 @@ namespace mako::layer {
         bool refreshRateChanged{false};
     };
 
-    /// root context of the mako layer
+    /// Root context of the MAKO Renderer layer.
     class Root {
     public:
         /// create the mako root context

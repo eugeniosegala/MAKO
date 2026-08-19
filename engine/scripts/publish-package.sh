@@ -146,7 +146,7 @@ cleanup() {
 trap cleanup EXIT
 
 cat > "$notes_file" <<EOF
-> Looking for the Decky plugin? Download the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
+> Looking for MAKO Decky? Download the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
 ## MAKO Renderer Linux build
 
