@@ -40,4 +40,4 @@ flatpak override --user --env=DISABLE_LSFG=1 "$appid"
 flatpak override --user --env=DISABLE_LSFGVK=1 "$appid"
 ```
 
-The extension remains inactive unless `ENABLE_MAKO=1` is set for the application. The two targeted disable overrides prevent separately installed LSFG-VK releases from loading into that application alongside MAKO; other Vulkan layers remain available normally.
+These are one-time application overrides, not launch options that must be repeated for every game. The host `mako-launch` helper cannot cross the Flatpak sandbox boundary, so the sandbox needs the equivalent loader environment when MAKO Decky is not managing it. The extension remains inactive unless `ENABLE_MAKO=1` is set for the application. The two targeted disable overrides prevent separately installed LSFG-VK releases from loading alongside MAKO; other Vulkan layers remain available normally.

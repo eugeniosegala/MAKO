@@ -1,6 +1,16 @@
 # How to release MAKO
 
-MAKO Renderer and MAKO Decky use the same `X.Y.Z` release number. Run the release from a clean `main` checkout after committing the changes you want to ship.
+MAKO Renderer and MAKO Decky normally ship as a matched pair with the same `X.Y.Z` release number. Run the release from a clean `main` checkout after committing the changes you want to ship.
+
+## Recommended release order
+
+For a normal paired release, always use this order:
+
+1. Publish **MAKO Renderer** first so its immutable archives, Flatpak bundles, source commit, and checksums exist.
+2. Pin that exact Renderer release in `plugin/package.json` using the release tooling.
+3. Build and publish **MAKO Decky** from the checksum-verified pin.
+
+Treat **Renderer → pin → Decky** as the strongly recommended release strategy. A deliberate component-only release can be appropriate, so the pairing itself is not an absolute policy requirement. However, never publish MAKO Decky against an unverified, local-only, or stale Renderer payload; the Decky publisher enforces that safety boundary. The top-level publisher follows the recommended paired order automatically and should be preferred for routine releases.
 
 ## One-time setup
 
@@ -17,6 +27,8 @@ First, manually write the user-facing “What’s new” copy in both files:
 
 - [MAKO Renderer release notes](engine/RELEASE_NOTES.md)
 - [MAKO Decky release notes](plugin/RELEASE_NOTES.md)
+
+Give each normal paired release one shared codename without changing its semantic version, tags, or archive names. Store its shared banner in the root `assets/` directory as the lowercase, hyphenated codename alone—for example, `assets/leviathan-rising.png`—and reference the same codename and image from both component release-note files. MAKO Decky reads its version from `plugin/package.json` and its codename from the Decky release notes at build time for the subtle current-release identity at the top of the plugin; the frontend build rejects missing or mismatched release metadata.
 
 Change the version in each file’s first heading and edit the Markdown beneath it in the tone you want for that release. Commit both files with the changes being released. The publisher rejects a missing, empty, or stale heading before it changes a version or starts a build.
 
@@ -51,7 +63,7 @@ The component publishers are also available when deliberately resuming one stage
 ./plugin/scripts/publish-package.sh --version 1.2.0
 ```
 
-Publish MAKO Renderer first. The plugin publisher refuses to continue until its checksum-verified renderer pin matches the requested version.
+When resuming a paired release manually, preserve the same **Renderer → pin → Decky** order. The Renderer publisher writes the pin after its assets exist, and the plugin publisher refuses to continue until that checksum-verified Renderer pin matches the requested version.
 
 Do not move an existing release tag or replace an asset by hand. If released content must change, publish a new version.
 

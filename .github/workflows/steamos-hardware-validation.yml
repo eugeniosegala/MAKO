@@ -49,6 +49,10 @@ jobs:
               exit 1
             }
           done
+          command -v podman >/dev/null || command -v docker >/dev/null || {
+            echo "Portable Qt 6.2 packaging requires Podman or Docker." >&2
+            exit 1
+          }
 
       - name: Install locked Decky dependencies
         working-directory: plugin
@@ -65,13 +69,20 @@ jobs:
             vulkaninfo --summary
           } > engine/out/hardware-validation.txt 2>&1
 
+      - name: Run native AMD image-quality validation
+        working-directory: engine
+        run: >-
+          MAKO_BUILD_DIR=build/cache/hardware-validation
+          ./scripts/build-steamos-dev.sh
+
       - name: Build and verify Renderer, Flatpaks, and the complete Decky ZIP
         id: package
         working-directory: plugin
         run: |
           version="$(tr -d '[:space:]' < ../engine/VERSION)"
           decky_archive="$PWD/out/MAKO-Decky-hardware-validated-v${version}.zip"
-          ./scripts/package-local.sh \
+          MAKO_PORTABLE_PACKAGE=1 MAKO_GPU_QUALITY_TEST=OFF \
+            ./scripts/package-local.sh \
             --local-engine-repo ../engine \
             "$decky_archive"
           echo "decky_archive=$decky_archive" >> "$GITHUB_OUTPUT"
@@ -105,7 +116,7 @@ jobs:
           path: |
             engine/out/*.tar.xz
             engine/out/hardware-validation.txt
-            engine/build/cache/quality-regression
+            engine/build/cache/hardware-validation/quality-regression
             plugin/out/*.zip
           if-no-files-found: warn
           retention-days: 30

@@ -42,7 +42,7 @@ tar -xJf MAKO-Renderer-v<version>-linux.tar.xz -C ~/.local
 
 For v2.0.0, substitute its legacy filename from step 2 in both commands.
 
-The archive installs `mako-ui`, `mako-cli`, `mako-diagnostics`, XDG desktop files, Vulkan manifests, and matching 64-bit and 32-bit layers. The Vulkan loader selects the correct layer for each game; the UI, CLI, and diagnostics helper remain 64-bit applications or scripts. If `~/.local/bin` is not on your `PATH`, run tools with their full paths, such as `~/.local/bin/mako-ui`.
+The archive installs `mako-ui`, `mako-cli`, `mako-launch`, `mako-diagnostics`, XDG desktop files, Vulkan manifests, and matching 64-bit and 32-bit layers. The Vulkan loader selects the correct layer for each game; the UI, CLI, launcher, and diagnostics helper remain 64-bit applications or scripts. If `~/.local/bin` is not on your `PATH`, run tools with their full paths, such as `~/.local/bin/mako-ui`.
 
 #### Start the configuration UI
 
@@ -119,16 +119,24 @@ On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from
 3. Launch only the selected game through MAKO. For a Steam game, use this launch option:
 
     ```text
-    DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%
+    ~/.local/bin/mako-launch %command%
     ```
 
-    For a direct desktop command, prefix the game's command in the same way:
+    For a direct desktop command, pass the executable and its arguments to the same launcher:
 
     ```bash
-    DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 your-game-command
+    ~/.local/bin/mako-launch your-game-command
     ```
 
-4. Start the game normally. MAKO's implicit Vulkan layer remains off for every other process. The two targeted disable variables keep installed LSFG-VK 1.x and 2.x layers out of the same game process; they are harmless when those layers are not installed.
+4. Start the game normally. `mako-launch` enables MAKO only for that process and prevents installed LSFG-VK 1.x or 2.x frame-generation layers from intercepting the same game. Ordinary Vulkan layers, overlays, capture tools, and utilities remain available.
+
+Set an advanced launch variable before the helper and it is passed to the game unchanged. For example, this selects a named profile without changing the saved default:
+
+```text
+MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
+```
+
+The configuration UI writes MAKO's normal configuration and does not launch games, so open `mako-ui` directly. Likewise, run `mako-cli` directly for validation, benchmarks, and quality tests; use `mako-launch` only for a Vulkan application that should load the frame-generation layer.
 
 ### Manual configuration
 
@@ -161,7 +169,7 @@ Use an explicit file when needed:
 For a layer-activation check on a Vulkan-capable system with `vulkaninfo` installed:
 
 ```bash
-DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 vulkaninfo | grep -i VK_LAYER_MAKO_render
+~/.local/bin/mako-launch vulkaninfo | grep -i VK_LAYER_MAKO_render
 ```
 
 ### Benchmarking
@@ -189,9 +197,10 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 - Library: `libmako-render.so`
 - Configuration UI: `mako-ui`
 - CLI: `mako-cli`
+- Standalone game launcher: `mako-launch`
 - Diagnostics helper: `mako-diagnostics`
 - Configuration: `~/.config/mako-render/conf.toml`
-- Activation: `ENABLE_MAKO=1`
+- Activation: `~/.local/bin/mako-launch <command>`
 - Deactivation: `DISABLE_MAKO=1`
 
 ## Build packages

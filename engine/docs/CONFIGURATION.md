@@ -44,15 +44,27 @@ Frame Generation, Fixed/Adaptive mode, multiplier within existing capacity, Adap
 
 Test V-Sync both on and off for each game. It can steady the real-frame cadence, but can also add latency or conflict with an FPS cap, VRR, or the compositor.
 
-## Environment variables
+## Launch variables
 
-`ENABLE_MAKO=1` activates MAKO's implicit Vulkan layer only for the launched process. `DISABLE_MAKO=1` disables it. Set `DISABLE_LSFG=1` and `DISABLE_LSFGVK=1` on the same launch so installed LSFG-VK 1.x and 2.x layers cannot intercept the game alongside MAKO. The variables are harmless when those layers are not installed. `MAKO_CONFIG` chooses a TOML file and `MAKO_PROFILE` chooses a named profile, overriding automatic executable and process matching for that launch:
+Use `mako-launch` as the standalone activation interface. It enables MAKO for the child process, applies the known frame-generation-layer conflict guards before Vulkan starts, and forwards the command and arguments without evaluating or rewriting them:
 
-```bash
-DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 MAKO_PROFILE="My game" %command%
+```text
+~/.local/bin/mako-launch %command%
 ```
 
-The value must exactly match a configured profile `name`. Quote profile names that contain spaces; shell backticks are not profile delimiters and must not be used.
+Place any launch-specific environment variables before the helper. `MAKO_CONFIG` chooses a TOML file and `MAKO_PROFILE` chooses a named profile, overriding automatic executable and process matching for that launch:
+
+```text
+MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
+```
+
+The profile value must exactly match a configured profile `name`. Quote names that contain spaces; shell backticks are not profile delimiters and must not be used. `DISABLE_MAKO=1` remains a one-launch troubleshooting gate and is honoured even when `mako-launch` is present.
+
+If no profile matches the launched process, the Vulkan layer remains dormant and preserves the application's native presentation path. This makes launcher and helper processes safe while ensuring frame generation starts only for an explicitly matched profile.
+
+`MAKO_ALLOW_COMPETING_LAYERS=1` is an advanced, unsupported comparison escape hatch. It tells the launcher not to suppress LSFG-VK 1.x or 2.x for that process. Never use it for ordinary gameplay: concurrent frame-generation layers may both intercept the same swapchain and cause startup, synchronization, presentation, or image-quality failures.
+
+The UI and CLI do not need the launcher. Run `mako-ui` directly to edit the same configuration and run `mako-cli` directly to validate it, benchmark the backend, or execute quality tests. Only Vulkan games and applications that should load MAKO run through `mako-launch`.
 
 For a configuration that comes entirely from environment variables, set `MAKO_ENV=1` and use any of the following:
 

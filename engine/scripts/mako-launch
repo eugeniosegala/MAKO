@@ -1,0 +1,68 @@
+#!/usr/bin/env bash
+# Launch one command with the standalone MAKO Renderer Vulkan layer enabled.
+set -euo pipefail
+
+usage() {
+    cat <<'EOF'
+Usage: mako-launch [--] COMMAND [ARG ...]
+
+Activates MAKO Renderer for one command and prevents the known LSFG-VK 1.x
+and 2.x frame-generation layers from joining the same Vulkan process.
+
+Set environment variables before mako-launch to pass them to the game:
+  MAKO_PROFILE=my-profile mako-launch COMMAND [ARG ...]
+
+Advanced troubleshooting only:
+  MAKO_ALLOW_COMPETING_LAYERS=1 mako-launch COMMAND [ARG ...]
+
+Allowing multiple frame-generation layers in one process is unsupported and
+may cause startup, synchronization, presentation, or image-quality failures.
+EOF
+}
+
+if (($# == 0)); then
+    echo "mako-launch requires a command to run." >&2
+    usage >&2
+    exit 2
+fi
+
+case "$1" in
+    -h|--help)
+        usage
+        exit 0
+        ;;
+    --)
+        shift
+        if (($# == 0)); then
+            echo "mako-launch requires a command after --." >&2
+            usage >&2
+            exit 2
+        fi
+        ;;
+esac
+
+allow_competing_layers="${MAKO_ALLOW_COMPETING_LAYERS:-0}"
+case "$allow_competing_layers" in
+    0)
+        # These are the disable_environment gates declared by the two public
+        # LSFG-VK manifest generations. The Vulkan loader must see them before
+        # it discovers and assembles the process's layer chain.
+        export DISABLE_LSFG=1
+        export DISABLE_LSFGVK=1
+        ;;
+    1)
+        # Explicitly remove inherited guards for an advanced comparison run.
+        # This is intentionally opt-in and unsupported for ordinary gameplay.
+        unset DISABLE_LSFG DISABLE_LSFGVK
+        ;;
+    *)
+        echo "MAKO_ALLOW_COMPETING_LAYERS must be 0 or 1." >&2
+        exit 2
+        ;;
+esac
+
+# Do not expose the launcher's private policy switch to the renderer or game.
+unset MAKO_ALLOW_COMPETING_LAYERS
+export ENABLE_MAKO=1
+
+exec "$@"

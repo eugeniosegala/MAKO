@@ -41,6 +41,18 @@ if(NOT MAKO_GPU_QUALITY_TEST STREQUAL "AUTO" AND
 endif()
 # === READ HERE FOR BUILD OPTIONS ===
 
+if(MAKO_BUILD_VK_LAYER)
+    install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-launch"
+        DESTINATION "${CMAKE_INSTALL_BINDIR}")
+endif()
+
+if(BUILD_TESTING AND UNIX)
+    add_test(NAME standalone-launcher
+        COMMAND bash
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-mako-launch.sh"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-launch")
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 

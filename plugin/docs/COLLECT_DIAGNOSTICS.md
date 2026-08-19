@@ -2,7 +2,7 @@
 
 This guide is for troubleshooting **MAKO Decky**, installed through Decky Loader. It covers the `mako-run` wrapper, private MAKO Renderer installation, and Flatpak extensions prepared from the **Flatpak Setup** screen.
 
-Use this guide when **MAKO Decky** appears in Decky Loader and you normally launch games through `/home/deck/.local/bin/mako-run`. If you installed MAKO Renderer directly or built it from source and activate games with `ENABLE_MAKO=1`, use the [standalone guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md) instead.
+Use this guide when **MAKO Decky** appears in Decky Loader and you normally launch games through `/home/deck/.local/bin/mako-run`. If you installed MAKO Renderer directly or built it from source and activate games with `mako-launch`, use the [standalone guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md) instead.
 
 You will temporarily enable diagnostics for the affected game, reproduce the problem once, create `MAKO-diagnostics.txt` on the Desktop, restore the game's normal launch settings, and upload the report through the [MAKO diagnostic report form][diagnostic-form]. The form contains the short questions needed to understand the report, so you do not need to copy a separate template into the GitHub issue.
 

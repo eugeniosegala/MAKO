@@ -165,8 +165,8 @@ fi
 
 worktree_fingerprint() {
   local repo="$1"
-  local worktree_root
-  worktree_root="$(git -C "$repo" rev-parse --show-toplevel)"
+  local component_root
+  component_root="$(cd "$repo" && pwd)"
   {
     # Keep engine and Decky identities component-scoped. A README or frontend
     # edit must not invalidate an already verified engine archive.
@@ -179,7 +179,7 @@ worktree_fingerprint() {
         out/*) continue ;;
       esac
       printf 'untracked:%s\0' "$untracked_path"
-      "${checksum_command[@]}" "$worktree_root/$untracked_path"
+      "${checksum_command[@]}" "$component_root/$untracked_path"
     done < <(git -C "$repo" ls-files --others --exclude-standard -z -- .)
   } | "${checksum_command[@]}" | awk '{print substr($1, 1, 8)}'
 }

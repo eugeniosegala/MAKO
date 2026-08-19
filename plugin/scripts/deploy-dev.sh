@@ -323,8 +323,11 @@ if [[ "$deploy_frontend" == true ]]; then
     python3 "$project_dir/scripts/generate_ts_schema.py"
   fi
   echo "Building Decky frontend..."
-  MAKO_DEV_BUILD_INFO_PATH="$dev_build_info_path" \
-    node "$project_dir/scripts/build-frontend.mjs"
+  (
+    cd "$project_dir"
+    MAKO_DEV_BUILD_INFO_PATH="$dev_build_info_path" \
+      node "$project_dir/scripts/build-frontend.mjs"
+  )
   copy_file "$project_dir/dist/index.js" "$plugin_dir/dist/index.js"
   if cmp -s "$project_dir/plugin.json" "$plugin_dir/plugin.json"; then
     :

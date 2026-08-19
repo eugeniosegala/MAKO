@@ -15,7 +15,8 @@ import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
 import { ConfigurationData } from "../config/configSchema";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
-import { MakoButtonTheme, MakoCompactSpinner, MakoSectionHeader } from "./MakoUi";
+import { currentRelease } from "virtual:mako-release-info";
+import { MakoButtonTheme, MakoCompactSpinner, MakoReleaseIdentity, MakoSectionHeader } from "./MakoUi";
 import t from "../i18n/i18n";
 
 export function Content() {
@@ -160,6 +161,10 @@ export function Content() {
     <div onFocusCapture={keepFocusedControlVisible}>
       <MakoButtonTheme />
       <PanelSection>
+      <MakoReleaseIdentity
+        version={currentRelease.version}
+        codename={currentRelease.codename}
+      />
       {localDevelopmentBuildInfo && (
         <PanelSectionRow>
           <div

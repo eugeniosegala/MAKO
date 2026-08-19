@@ -10,6 +10,8 @@ The `Tests` GitHub Actions workflow runs on every pull request and push to `main
 - **MAKO Renderer:** the complete non-hardware CTest suite with both GCC and Clang on Linux;
 - **Renderer sanitizers:** the portable scheduling, presentation-policy, profile, transition, and colour-math boundaries under AddressSanitizer and UndefinedBehaviorSanitizer.
 
+The Renderer suite also exercises the standalone `mako-launch` contract: loader activation and conflict guards, advanced environment forwarding, argument quoting, input validation, and child exit-status propagation. The packaged hardware smoke test proves instance/device insertion with `vulkaninfo` and, when a graphical compositor and `vkcube` are available, covers finite swapchain creation and presentation too.
+
 The frontend suite intentionally tests operations where a UI/backend disagreement can damage or misrepresent user state: Renderer installation, configuration persistence, out-of-order profile loads, profile switching, default-profile protection, and Decky RPC method names. It does not use snapshots or test static labels and layout.
 
 Run the same gates locally with:

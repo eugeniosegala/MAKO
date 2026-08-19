@@ -25,7 +25,7 @@ If `mako-cli` is not on `PATH`, use `$HOME/.local/bin/mako-cli`. Fully close the
 Temporarily replace the game's normal **Steam Properties > Launch Options** with:
 
 ```text
-MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%
+MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 ~/.local/bin/mako-launch %command%
 ```
 
 ### Direct terminal command
@@ -35,17 +35,15 @@ Start the application from a terminal with the diagnostics variables and save it
 ```bash
 MAKO_PRESENT_DIAGNOSTICS=1 \
 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 \
-DISABLE_LSFG=1 \
-DISABLE_LSFGVK=1 \
-ENABLE_MAKO=1 \
-your-game-command 2>&1 | tee "$HOME/Desktop/MAKO-renderer-session.log"
+~/.local/bin/mako-launch your-game-command \
+2>&1 | tee "$HOME/Desktop/MAKO-renderer-session.log"
 ```
 
 Replace `your-game-command` with the normal executable and arguments.
 
 ### Existing Heroic or Flatpak setup
 
-Keep the launch method, wrapper, and Flatpak overrides unchanged. Ensure `DISABLE_LSFG=1` and `DISABLE_LSFGVK=1` accompany the existing `ENABLE_MAKO=1` activation, then add these two diagnostic variables for the affected game only:
+Keep the launch method, wrapper, and existing Flatpak overrides unchanged. Add these two diagnostic variables for the affected game only:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1
@@ -95,7 +93,7 @@ Open the **Desktop** folder and confirm that `MAKO-diagnostics.txt` exists. Focu
 
 After creating the report:
 
-- **Native Steam or Proton:** restore the normal standalone launch option, usually `DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%`.
+- **Native Steam or Proton:** restore the normal standalone launch option, `~/.local/bin/mako-launch %command%`.
 - **Direct command:** close the terminal session. Start the game with its normal command next time.
 - **Heroic or Flatpak:** remove `MAKO_PRESENT_DIAGNOSTICS` and `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS`. Keep the normal Renderer activation, wrapper, arguments, and Flatpak overrides.
 

@@ -26,6 +26,8 @@ from .constants import (
     COMPETING_LSFG_DISABLE_ENVS,
     FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR,
     FLATPAK_IMPLICIT_LAYER_DIR,
+    FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS,
+    FLATPAK_VULKAN_LOADER_PATHS,
     MAKO_LAYER_ENABLE_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
 )
@@ -39,7 +41,7 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 34"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 35"
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
@@ -821,15 +823,35 @@ class ConfigurationService(BaseService):
             "else",
             '    mako_implicit_layer_path=""',
             "fi",
+            'mako_loader_supports_additive_layer_path=0',
+            *(f"if [ -n \"$mako_implicit_layer_path\" ] && "
+              f"[ -z \"${{VK_IMPLICIT_LAYER_PATH:-}}\" ] && "
+              f"[ -r {shlex.quote(loader_path)} ] && "
+              f"grep -aq 'VK_ADD_IMPLICIT_LAYER_PATH' {shlex.quote(loader_path)}; then "
+              "mako_loader_supports_additive_layer_path=1; fi"
+              for loader_path in FLATPAK_VULKAN_LOADER_PATHS),
             'if [ -z "$mako_implicit_layer_path" ]; then',
             "    : # Host manifest is registered before Pressure Vessel starts.",
             'elif [ -n "${VK_IMPLICIT_LAYER_PATH:-}" ]; then',
             "    # A caller override suppresses additive paths, so extend that override in place.",
             '    export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path:$VK_IMPLICIT_LAYER_PATH"',
-            'elif [ -n "${VK_ADD_IMPLICIT_LAYER_PATH:-}" ]; then',
-            '    export VK_ADD_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path:$VK_ADD_IMPLICIT_LAYER_PATH"',
+            'elif [ "$mako_loader_supports_additive_layer_path" = "1" ]; then',
+            '    if [ -n "${VK_ADD_IMPLICIT_LAYER_PATH:-}" ]; then',
+            '        export VK_ADD_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path:$VK_ADD_IMPLICIT_LAYER_PATH"',
+            "    else",
+            '        export VK_ADD_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"',
+            "    fi",
             "else",
-            '    export VK_ADD_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"',
+            "    # Flatpak 23.08/24.08 loaders do not support the additive variable.",
+            '    mako_legacy_layer_path="$mako_implicit_layer_path"',
+            '    if [ -n "${VK_ADD_IMPLICIT_LAYER_PATH:-}" ]; then',
+            '        mako_legacy_layer_path="$mako_legacy_layer_path:$VK_ADD_IMPLICIT_LAYER_PATH"',
+            "    fi",
+            *(f"    if [ -d {shlex.quote(layer_path)} ]; then "
+              f"mako_legacy_layer_path=\"$mako_legacy_layer_path:{layer_path}\"; fi"
+              for layer_path in FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS),
+            '    export VK_IMPLICIT_LAYER_PATH="$mako_legacy_layer_path"',
+            "    unset VK_ADD_IMPLICIT_LAYER_PATH",
             "fi",
             f"export MAKO_CONFIG={shlex.quote(str(self.config_file_path))}",
             "# Heroic can discard a game's stderr. Capture opt-in engine diagnostics here instead.",
@@ -845,8 +867,10 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Format 34 preserves normal implicit Vulkan layers and disables only
-        competing LSFG implementations. Format 33 keeps an unsaved game's
+        Format 35 keeps 23.08/24.08 Flatpak loaders working while using
+        additive discovery where the loader supports it. Format 34 preserves
+        normal implicit Vulkan layers and disables only competing LSFG
+        implementations. Format 33 keeps an unsaved game's
         renderer context active with a low-priority default profile so a newly
         captured process can take over live. Format 32 selects per-game
         compatibility settings from persistent Steam app identity before
@@ -884,7 +908,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO launch wrapper to format 34")
+            self.log.info("Upgraded installed MAKO launch wrapper to format 35")
             return True
         except OSError:
             raise

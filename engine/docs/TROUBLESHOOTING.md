@@ -3,16 +3,16 @@
 ## MAKO does not load
 
 1. Confirm that the game uses Vulkan. MAKO does not attach to an OpenGL-only process.
-2. Launch the game with MAKO enabled and competing LSFG-VK layers disabled. For Steam, use:
+2. Launch the game through MAKO's standalone helper. For Steam, use:
 
     ```text
-    DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%
+    ~/.local/bin/mako-launch %command%
     ```
 
 3. Check that the Vulkan loader can see the layer:
 
     ```bash
-    DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 vulkaninfo | grep -i VK_LAYER_MAKO_render
+    ~/.local/bin/mako-launch vulkaninfo | grep -i VK_LAYER_MAKO_render
     ```
 
     Install your distribution's Vulkan-tools package if `vulkaninfo` is unavailable. No output usually means the layer manifest was not installed in a Vulkan search path, the process is Flatpak-sandboxed, or the layer is disabled by its launch environment.
@@ -43,10 +43,7 @@ Presentation diagnostics are off by default. Add the following before the normal
 ```bash
 MAKO_PRESENT_DIAGNOSTICS=1 \
 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 \
-DISABLE_LSFG=1 \
-DISABLE_LSFGVK=1 \
-ENABLE_MAKO=1 \
-your-game-command
+~/.local/bin/mako-launch your-game-command
 ```
 
 For a Steam game, replace `your-game-command` with `%command%`. Steam captures the renderer's output in `~/.steam/steam/logs/console-linux.txt`; a direct desktop launch writes it to the terminal or launcher log.

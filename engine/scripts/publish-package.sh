@@ -185,7 +185,7 @@ Start the configuration UI after extraction:
 - **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode and open **MAKO Renderer Configuration**.
 - **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
 
-Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%\` for a direct Steam launch.
+Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO for that game and prevents known LSFG-VK frame-generation layers from loading into the same process.
 
 ### Flatpak extensions
 
@@ -221,6 +221,7 @@ Keep the previous archives until the new version has been tested with your games
 - 64-bit Vulkan implicit layer and manifest under \`lib/\` and \`share/vulkan/implicit_layer.d/\`
 - 32-bit Vulkan implicit layer and manifest under \`lib32/\` and \`share/vulkan/implicit_layer.d/\`
 - 64-bit CLI and Qt configuration UI
+- Standalone \`mako-launch\` game launcher
 - XDG desktop files
 
 ## Build details

@@ -65,6 +65,30 @@ class ProductBrandingTests(unittest.TestCase):
         self.assertIn("MAKO-Decky.zip", packager)
         self.assertIn("MAKO-Decky-local.", packager)
 
+    def test_release_codename_is_shared_by_package_and_component_notes(self):
+        manifest = json.loads(
+            (PLUGIN_DIR / "package.json").read_text(encoding="utf-8")
+        )
+        decky_notes = (
+            PLUGIN_DIR / "RELEASE_NOTES.md"
+        ).read_text(encoding="utf-8")
+        match = re.search(r"^### Codename:\s*(.+?)\s*$", decky_notes, re.MULTILINE)
+        self.assertIsNotNone(match)
+        codename = match.group(1)
+        self.assertTrue(codename)
+        self.assertTrue(
+            decky_notes.startswith(
+                f"## What's new in MAKO Decky v{manifest['version']}\n"
+            )
+        )
+        expected_heading = f"### Codename: {codename}"
+        self.assertIn(
+            expected_heading,
+            (
+                REPOSITORY_ROOT / "engine/RELEASE_NOTES.md"
+            ).read_text(encoding="utf-8"),
+        )
+
     def test_renderer_logs_use_the_mako_renderer_prefix(self):
         source_files = [
             *(

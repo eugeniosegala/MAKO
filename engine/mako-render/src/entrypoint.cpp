@@ -13,6 +13,7 @@
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -36,9 +37,13 @@ namespace {
         vk::VulkanInstanceFuncs funcs;
 
         std::unordered_map<VkDevice, vk::Vulkan> devices;
+        std::unordered_set<VkDevice> nativeDevices;
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
+        std::unordered_set<VkSwapchainKHR> nativeSwapchains;
     }* instance_info; // NOLINT (global variable)
+
+    bool initializeLayerInfo();
 
     // create instance
     VkResult myvkCreateInstance(
@@ -82,13 +87,37 @@ namespace {
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
+        bool lowerInstanceCreated = false;
+        const auto rollbackCreatedInstance = [&]() noexcept {
+            if (!lowerInstanceCreated || !instance || *instance == VK_NULL_HANDLE)
+                return;
+
+            auto* vkDestroyInstance = reinterpret_cast<PFN_vkDestroyInstance>(
+                layer_info->GetInstanceProcAddr(*instance, "vkDestroyInstance"));
+            if (vkDestroyInstance) {
+                vkDestroyInstance(*instance, alloc);
+                *instance = VK_NULL_HANDLE;
+            } else {
+                std::cerr << "MAKO Renderer: failed to roll back a lower Vulkan instance "
+                             "after layer initialization failed\n";
+            }
+            lowerInstanceCreated = false;
+        };
+        const auto releaseIdleLayerState = []() noexcept {
+            if (instance_info)
+                return;
+            delete layer_info; // NOLINT (memory management)
+            layer_info = nullptr;
+        };
+
         try {
             VkInstanceCreateInfo newInfo = *info;
             layer_info->root.modifyInstanceCreateInfo(newInfo,
-                [=, newInfo = &newInfo]() {
+                [&, newInfo = &newInfo]() {
                     auto res = vkCreateInstance(newInfo, alloc, instance);
                     if (res != VK_SUCCESS)
                         throw ls::vulkan_error(res, "vkCreateInstance() failed");
+                    lowerInstanceCreated = true;
                 }
             );
 
@@ -99,13 +128,22 @@ namespace {
                 };
 
             instance_info->handles.push_back(*instance);
+            lowerInstanceCreated = false;
 
             return VK_SUCCESS;
         } catch (const ls::vulkan_error& e) {
+            rollbackCreatedInstance();
+            releaseIdleLayerState();
             if (e.error() == VK_ERROR_EXTENSION_NOT_PRESENT)
                 std::cerr << "MAKO Renderer: required Vulkan instance extensions are not present. "
                     "Your GPU driver is not supported.\n";
             return e.error();
+        } catch (const std::exception& e) {
+            rollbackCreatedInstance();
+            releaseIdleLayerState();
+            std::cerr << "MAKO Renderer: instance initialization failed:\n";
+            std::cerr << "- " << e.what() << '\n';
+            return VK_ERROR_INITIALIZATION_FAILED;
         }
     }
 
@@ -115,6 +153,12 @@ namespace {
             const VkDeviceCreateInfo* info,
             const VkAllocationCallbacks* alloc,
             VkDevice* device) {
+        if (!layer_info || !instance_info) {
+            std::cerr << "MAKO Renderer: device creation requested before "
+                         "instance initialization\n";
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
         // apply layer chaining
         auto* layerInfo = reinterpret_cast<VkLayerDeviceCreateInfo*>(const_cast<void*>(info->pNext));
         while (layerInfo && (layerInfo->sType != VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO
@@ -160,21 +204,57 @@ namespace {
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
+        bool lowerDeviceCreated = false;
+        const auto rollbackCreatedDevice = [&]() noexcept {
+            if (!lowerDeviceCreated || !device || *device == VK_NULL_HANDLE)
+                return;
+
+            auto* vkDestroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(
+                instance_info->funcs.GetDeviceProcAddr(
+                    *device, "vkDestroyDevice"
+                )
+            );
+            if (vkDestroyDevice) {
+                vkDestroyDevice(*device, alloc);
+                *device = VK_NULL_HANDLE;
+            } else {
+                std::cerr << "MAKO Renderer: failed to roll back a lower Vulkan device "
+                             "after layer initialization failed\n";
+            }
+            lowerDeviceCreated = false;
+        };
+
         // create device
         try {
             VkDeviceCreateInfo newInfo = *info;
             layer_info->root.modifyDeviceCreateInfo(newInfo,
-                [=, newInfo = &newInfo]() {
+                [&, newInfo = &newInfo]() {
                     auto res = instance_info->funcs.CreateDevice(physdev, newInfo, alloc, device);
                     if (res != VK_SUCCESS)
                         throw ls::vulkan_error(res, "vkCreateDevice() failed");
+                    lowerDeviceCreated = true;
                 }
             );
         } catch (const ls::vulkan_error& e) {
+            rollbackCreatedDevice();
             if (e.error() == VK_ERROR_EXTENSION_NOT_PRESENT)
                 std::cerr << "MAKO Renderer: required Vulkan device extensions are not present. "
                     "Your GPU driver is not supported.\n";
             return e.error();
+        } catch (const std::exception& e) {
+            rollbackCreatedDevice();
+            std::cerr << "MAKO Renderer: device creation failed:\n";
+            std::cerr << "- " << e.what() << '\n';
+            return VK_ERROR_INITIALIZATION_FAILED;
+        }
+
+        // No game profile matched when this device was created. Keep only the
+        // layer lifecycle hooks needed to chain and clean up correctly; all
+        // presentation entrypoints are forwarded directly by the GPA paths.
+        if (!layer_info->root.active()) {
+            instance_info->nativeDevices.insert(*device);
+            lowerDeviceCreated = false;
+            return VK_SUCCESS;
         }
 
         // create layer instance
@@ -189,19 +269,30 @@ namespace {
                 )
             );
         } catch (const std::exception& e) {
-            std::cerr << "MAKO Renderer: initialization failed:\n";
+            // The lower layer already returned a valid VkDevice. Do not leave
+            // it exposed to MAKO's swapchain hooks without a matching Vulkan
+            // wrapper: retain the device as a completely native pass-through.
+            instance_info->nativeDevices.insert(*device);
+            std::cerr << "MAKO Renderer: device initialization failed; "
+                         "native Vulkan device retained:\n";
             std::cerr << "- " << e.what() << '\n';
         }
+
+        lowerDeviceCreated = false;
 
         return VK_SUCCESS;
     }
 
     // destroy device
     void myvkDestroyDevice(VkDevice device, const VkAllocationCallbacks* alloc) {
+        if (!instance_info)
+            return;
+
         // destroy layer instance
         auto it = instance_info->devices.find(device);
         if (it != instance_info->devices.end())
             instance_info->devices.erase(it);
+        instance_info->nativeDevices.erase(device);
 
         // destroy device
         auto vkDestroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(
@@ -260,14 +351,29 @@ namespace {
     // get optional function pointer override
     PFN_vkVoidFunction getProcAddr(const std::string& name) {
         auto it = layer_info->map.find(name);
-        if (it != layer_info->map.end())
+        if (it == layer_info->map.end()) return nullptr;
+
+        if (layer_info->root.active()) return it->second;
+
+        // A dormant layer still owns its instance/device lifecycle wrappers,
+        // which establish the next-layer pointers and release process state.
+        // Swapchain and present entrypoints must bypass MAKO completely because
+        // an unmatched application did not enable MAKO's required extensions.
+        if (name == "vkCreateInstance" || name == "vkDestroyInstance"
+                || name == "vkCreateDevice" || name == "vkDestroyDevice")
             return it->second;
+
         return nullptr;
     }
 
     // get instance-level function pointers
     PFN_vkVoidFunction myvkGetInstanceProcAddr(VkInstance instance, const char* name) {
         if (!name) return nullptr;
+        // A loader may cache the negotiated GPA function across multiple
+        // VkInstance lifetimes without negotiating again. The final instance
+        // teardown destroys Root so its monitor thread is joined before a
+        // possible dlclose; recreate that process state on the next GPA query.
+        if (!layer_info && !initializeLayerInfo()) return nullptr;
 
         auto func = getProcAddr(name);
         if (func) return func;
@@ -279,11 +385,23 @@ namespace {
     // get device-level function pointers
     PFN_vkVoidFunction myvkGetDeviceProcAddr(VkDevice device, const char* name) {
         if (!name) return nullptr;
+        if (!layer_info || !instance_info) return nullptr;
+
+        if (!instance_info->funcs.GetDeviceProcAddr) return nullptr;
+
+        // A lower VkDevice can outlive a failed optional MAKO wrapper
+        // initialization. Forward every command for that device directly,
+        // retaining only our destruction hook so the pass-through registry is
+        // cleaned before the driver destroys the handle.
+        if (instance_info->nativeDevices.contains(device)) {
+            if (std::string(name) == "vkDestroyDevice")
+                return reinterpret_cast<PFN_vkVoidFunction>(myvkDestroyDevice);
+            return instance_info->funcs.GetDeviceProcAddr(device, name);
+        }
 
         auto func = getProcAddr(name);
         if (func) return func;
 
-        if (!instance_info->funcs.GetDeviceProcAddr) return nullptr;
         return instance_info->funcs.GetDeviceProcAddr(device, name);
     }
 }
@@ -306,6 +424,7 @@ namespace {
 
             instance_info->swapchains.erase(createdSwapchain);
             instance_info->swapchainInfos.erase(createdSwapchain);
+            instance_info->nativeSwapchains.erase(createdSwapchain);
             try {
                 layer_info->root.removeSwapchainContext(createdSwapchain);
             } catch (const std::exception& e) {
@@ -329,6 +448,7 @@ namespace {
                 const auto& mapping = instance_info->swapchains.find(info->oldSwapchain);
                 if (mapping != instance_info->swapchains.end())
                     instance_info->swapchains.erase(mapping);
+                instance_info->nativeSwapchains.erase(info->oldSwapchain);
 
                 layer_info->root.removeSwapchainContext(info->oldSwapchain);
             }
@@ -376,8 +496,40 @@ namespace {
                 .privateOrderedTransport = privateOrderedTransport,
             }).first->second;
 
-            // Create the MAKO Renderer swapchain context.
-            layer_info->root.createSwapchainContext(it->second, *swapchain, info);
+            // An enabled implicit layer can run in a process that does not
+            // match a configured game profile (launchers and helper processes
+            // are common examples). Keep that process on its original Vulkan
+            // presentation path without attempting to construct MAKO's
+            // optional backend.
+            if (!layer_info->root.active()) {
+                instance_info->swapchains.emplace(
+                    *swapchain, ls::R<vk::Vulkan>(it->second)
+                );
+                instance_info->nativeSwapchains.insert(*swapchain);
+                lowerSwapchainCreated = false;
+                return res;
+            }
+
+            // Creating interpolation resources is optional. If the game's
+            // lower swapchain is valid but MAKO's private backend cannot start
+            // (for example an unavailable DLL or unsupported private-device
+            // capability), retain the real-frame presentation path instead of
+            // turning an engine failure into a game startup failure.
+            try {
+                layer_info->root.createSwapchainContext(
+                    it->second, *swapchain, info
+                );
+            } catch (const std::exception& e) {
+                instance_info->swapchains.emplace(
+                    *swapchain, ls::R<vk::Vulkan>(it->second)
+                );
+                instance_info->nativeSwapchains.insert(*swapchain);
+                lowerSwapchainCreated = false;
+                std::cerr << "MAKO Renderer: frame-generation context initialization "
+                             "failed; native presentation retained:\n"
+                          << "- " << e.what() << '\n';
+                return res;
+            }
 
             instance_info->swapchains.emplace(*swapchain,
                 ls::R<vk::Vulkan>(it->second));
@@ -403,6 +555,21 @@ namespace {
 #pragma clang diagnostic ignored "-Wunsafe-buffer-usage"
         VkResult result = VK_SUCCESS;
         bool swapchainOutOfDate = false;
+
+        // A context that failed after the lower swapchain was created remains
+        // a normal application swapchain. Bypass MAKO for the whole batch so
+        // the driver's wait-semaphore and per-swapchain result semantics stay
+        // exactly as the application supplied them.
+        for (size_t i = 0; i < info->swapchainCount; ++i) {
+            const auto swapchain = info->pSwapchains[i];
+            if (!instance_info->nativeSwapchains.contains(swapchain))
+                continue;
+
+            const auto mapping = instance_info->swapchains.find(swapchain);
+            if (mapping == instance_info->swapchains.end())
+                return VK_ERROR_INITIALIZATION_FAILED;
+            return mapping->second.get().df().QueuePresentKHR(queue, info);
+        }
 
         // ensure layer config is up to date
         ConfigurationUpdateResult configurationUpdate;
@@ -489,6 +656,7 @@ namespace {
         const auto& mapping = instance_info->swapchains.find(swapchain);
         if (mapping != instance_info->swapchains.end())
             instance_info->swapchains.erase(mapping);
+        instance_info->nativeSwapchains.erase(swapchain);
 
         layer_info->root.removeSwapchainContext(swapchain);
 
@@ -497,9 +665,54 @@ namespace {
     }
 }
 
+namespace {
+    bool initializeLayerInfo() {
+        if (layer_info) return true;
+
+        try {
+            layer_info = new LayerInfo { // NOLINT (memory management)
+                .map = {
+#define VKPTR(name) reinterpret_cast<PFN_vkVoidFunction>(name)
+                    { "vkCreateInstance", VKPTR(myvkCreateInstance) },
+                    { "vkCreateDevice", VKPTR(myvkCreateDevice) },
+                    { "vkDestroyDevice", VKPTR(myvkDestroyDevice) },
+                    { "vkDestroyInstance", VKPTR(myvkDestroyInstance) },
+                    { "vkCreateSwapchainKHR", VKPTR(myvkCreateSwapchainKHR) },
+                    { "vkQueuePresentKHR", VKPTR(myvkQueuePresentKHR) },
+                    { "vkDestroySwapchainKHR", VKPTR(myvkDestroySwapchainKHR) }
+#undef VKPTR
+                },
+                .root = Root()
+            };
+
+        } catch (const std::exception& e) {
+            std::cerr << "MAKO Renderer: layer initialization failed:\n";
+            std::cerr << "- " << e.what() << '\n';
+            return false;
+        }
+
+        return true;
+    }
+}
+
+// Interface-version negotiation is the modern layer ABI. Keep the traditional
+// proc-address exports as a compatibility path for older loaders.
+__attribute__((visibility("default")))
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetInstanceProcAddr(
+        VkInstance instance, const char* name) {
+    return myvkGetInstanceProcAddr(instance, name);
+}
+
+__attribute__((visibility("default")))
+VKAPI_ATTR PFN_vkVoidFunction VKAPI_CALL vkGetDeviceProcAddr(
+        VkDevice device, const char* name) {
+    return myvkGetDeviceProcAddr(device, name);
+}
+
 /// Vulkan layer entrypoint
 __attribute__((visibility("default")))
-VkResult vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVersionStruct) {
+VKAPI_ATTR VkResult VKAPI_CALL vkNegotiateLoaderLayerInterfaceVersion(
+        VkNegotiateLayerInterface* pVersionStruct) {
     // ensure loader compatibility
     if (!pVersionStruct
         || pVersionStruct->sType != LAYER_NEGOTIATE_INTERFACE_STRUCT
@@ -516,34 +729,8 @@ VkResult vkNegotiateLoaderLayerInterfaceVersion(VkNegotiateLayerInterface* pVers
     }
 
     // load the layer configuration
-    try {
-        layer_info = new LayerInfo { // NOLINT (memory management)
-            .map = {
-#define VKPTR(name) reinterpret_cast<PFN_vkVoidFunction>(name)
-                { "vkCreateInstance", VKPTR(myvkCreateInstance) },
-                { "vkCreateDevice", VKPTR(myvkCreateDevice) },
-                { "vkDestroyDevice", VKPTR(myvkDestroyDevice) },
-                { "vkDestroyInstance", VKPTR(myvkDestroyInstance) },
-                { "vkCreateSwapchainKHR", VKPTR(myvkCreateSwapchainKHR) },
-                { "vkQueuePresentKHR", VKPTR(myvkQueuePresentKHR) },
-                { "vkDestroySwapchainKHR", VKPTR(myvkDestroySwapchainKHR) }
-#undef VKPTR
-            },
-            .root = Root()
-        };
-
-        if (!layer_info->root.active()) { // skip inactive
-            delete layer_info; // NOLINT (memory management)
-            layer_info = nullptr;
-
-            return VK_ERROR_INITIALIZATION_FAILED;
-        }
-    } catch (const std::exception& e) {
-        std::cerr << "MAKO Renderer: layer initialization failed:\n";
-        std::cerr << "- " << e.what() << '\n';
-
+    if (!initializeLayerInfo())
         return VK_ERROR_INITIALIZATION_FAILED;
-    }
 
     // emplace function pointers/version
     pVersionStruct->loaderLayerInterfaceVersion = 2;

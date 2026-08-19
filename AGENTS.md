@@ -30,7 +30,7 @@ branding errors:
   `~/homebrew/plugins/Mako` and `~/homebrew/logs/Mako`;
 - the Decky manifest/listing name `MAKO - Frame Generation` and its existing
   publish description;
-- commands and files such as `mako-run`, `mako-ui`, `mako-cli`,
+- commands and files such as `mako-run`, `mako-launch`, `mako-ui`, `mako-cli`,
   `mako-diagnostics`, `libmako-render.so`, and `mako-render/conf.toml`;
 - source directories, C++ namespaces, Python modules, application IDs, and
   lowercase package-manager names;

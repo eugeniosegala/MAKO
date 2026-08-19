@@ -52,7 +52,7 @@ sudo pacman -S --needed \
     qt6-base qt6-declarative
 ```
 
-The release packager builds the normal 64-bit application, CLI, UI, and layer, then builds a second layer with `-m32`. It installs the two layer libraries in `lib` and `lib32` with architecture-tagged Vulkan manifests. Direct CMake builds produce one layer for the compiler architecture selected for that build.
+The release packager builds the normal 64-bit application, CLI, UI, launcher, and layer, then builds a second layer with `-m32`. It installs the two layer libraries in `lib` and `lib32` with architecture-tagged Vulkan manifests. Direct CMake builds produce one layer for the compiler architecture selected for that build.
 
 ### Reusable SteamOS release-build SDK
 
@@ -166,4 +166,4 @@ sudo cmake --install build
 
 Keep track of the installed files, in order to uninstall them later if needed.
 
-The installed manifest is launch-scoped. Start a direct game with `DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1` so another installed LSFG-VK frame-generation layer cannot attach to the same process.
+The installed manifest is launch-scoped. Start a native game with `mako-launch <command>`. The helper activates MAKO for that process and prevents another installed LSFG-VK frame-generation layer from attaching to the same swapchain. It is installed alongside `mako-cli` whenever the Vulkan layer is installed.

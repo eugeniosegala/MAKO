@@ -6,6 +6,11 @@ interface MakoSectionHeaderProps {
   description?: ReactNode;
 }
 
+interface MakoReleaseIdentityProps {
+  version: string;
+  codename: string;
+}
+
 export const makoPanelDivider = "1px solid rgba(77, 170, 190, 0.2)";
 
 export const makoPanelStyle: CSSProperties = {
@@ -29,6 +34,42 @@ export const makoPanelItemStyle: CSSProperties = {
   padding: "12px 14px",
   borderTop: makoPanelDivider
 };
+
+export function MakoReleaseIdentity({ version, codename }: MakoReleaseIdentityProps) {
+  const codenameSlug = codename
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
+
+  return (
+    <PanelSectionRow>
+      <div
+        aria-label={`Current release: MAKO Decky v${version}, ${codename}`}
+        style={{
+          width: "100%",
+          boxSizing: "border-box",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          margin: "-2px 0 6px",
+          padding: "2px 4px 9px",
+          borderBottom: "1px solid rgba(77, 170, 190, 0.14)",
+          color: "#a8bdc2",
+          fontSize: "10px",
+          fontWeight: 600,
+          lineHeight: 1.2,
+          letterSpacing: "0.55px",
+          whiteSpace: "nowrap"
+        }}
+      >
+        <span>v{version}</span>
+        <span aria-hidden="true" style={{ padding: "0 6px", color: "#557f88" }}>-</span>
+        <span style={{ color: "#c6a16c" }}>{codenameSlug}</span>
+      </div>
+    </PanelSectionRow>
+  );
+}
 
 export function MakoSectionHeader({ children, description }: MakoSectionHeaderProps) {
   return (

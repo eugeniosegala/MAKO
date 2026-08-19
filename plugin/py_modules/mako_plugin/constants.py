@@ -70,6 +70,32 @@ FLATPAK_IMPLICIT_LAYER_DIR = f"{FLATPAK_EXTENSION_PREFIX}/share/vulkan/implicit_
 FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR = (
     "/usr/lib/extensions/vulkan/gamescope/share/vulkan/implicit_layer.d"
 )
+# Vulkan Loader releases in the 23.08 and 24.08 Flatpak runtimes predate
+# VK_ADD_IMPLICIT_LAYER_PATH. When MAKO must fall back to the overriding
+# variable, retain the ordinary application/runtime layer locations instead
+# of isolating the game to the MAKO manifest alone.
+FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS = (
+    "/app/share/vulkan/implicit_layer.d",
+    "/app/etc/vulkan/implicit_layer.d",
+    "/usr/share/vulkan/implicit_layer.d",
+    "/usr/local/share/vulkan/implicit_layer.d",
+    "/etc/vulkan/implicit_layer.d",
+    "/usr/local/etc/vulkan/implicit_layer.d",
+)
+FLATPAK_LEGACY_IMPLICIT_LAYER_PATH = ":".join((
+    FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR,
+    FLATPAK_IMPLICIT_LAYER_DIR,
+    *FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS,
+))
+# The generated Heroic/UMU wrapper runs inside the selected compatibility
+# environment, where the runtime branch is not reliably exposed (KDE and GNOME
+# have their own branch names). Probe the loader capability directly instead.
+FLATPAK_VULKAN_LOADER_PATHS = (
+    "/usr/lib/x86_64-linux-gnu/libvulkan.so.1",
+    "/usr/lib/i386-linux-gnu/libvulkan.so.1",
+    "/usr/lib/libvulkan.so.1",
+    "/usr/lib32/libvulkan.so.1",
+)
 FLATPAK_23_08_FILENAME = f"{FLATPAK_EXTENSION_NAME}-23.08.flatpak"
 FLATPAK_24_08_FILENAME = f"{FLATPAK_EXTENSION_NAME}-24.08.flatpak"
 FLATPAK_25_08_FILENAME = f"{FLATPAK_EXTENSION_NAME}-25.08.flatpak"

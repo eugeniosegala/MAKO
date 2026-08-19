@@ -124,7 +124,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
         '
 fi
 
-for command in cmake ninja clang++ strings tar sha256sum; do
+for command in cmake ninja clang++ nm strings tar sha256sum; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         exit 1
@@ -307,6 +307,7 @@ fi
 required_paths=(
     "bin/mako-cli" \
     "bin/mako-diagnostics" \
+    "bin/mako-launch" \
     "bin/mako-ui" \
     "lib/libmako-render.so" \
     "share/doc/mako-render/LICENSE.md" \
@@ -324,6 +325,13 @@ for required_path in "${required_paths[@]}"; do
         exit 1
     fi
 done
+
+if [[ ! -x "$install_dir/bin/mako-launch" ]]; then
+    echo "Packaging failed: bin/mako-launch is not executable" >&2
+    exit 1
+fi
+bash -n "$install_dir/bin/mako-launch"
+bash "$repo_root/scripts/test-mako-launch.sh" "$install_dir/bin/mako-launch"
 
 verify_elf_class() {
     local path="$1"
@@ -385,6 +393,16 @@ if [[ "$build_32_bit" == true ]]; then
     layer_binaries+=("$install_dir/lib32/libmako-render.so")
 fi
 for layer_binary in "${layer_binaries[@]}"; do
+    exported_symbols="$(nm -D --defined-only "$layer_binary" | awk '{print $3}')"
+    for required_entrypoint in \
+            vkNegotiateLoaderLayerInterfaceVersion \
+            vkGetInstanceProcAddr \
+            vkGetDeviceProcAddr; do
+        if ! grep -Fxq "$required_entrypoint" <<< "$exported_symbols"; then
+            echo "Packaging failed: Vulkan entrypoint $required_entrypoint is not exported by $layer_binary" >&2
+            exit 1
+        fi
+    done
     if ! strings "$layer_binary" |
             grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
         echo "Packaging failed: layer build identity diagnostic is missing from $layer_binary" >&2

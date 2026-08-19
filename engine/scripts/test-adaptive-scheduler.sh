@@ -46,6 +46,6 @@ cmake --build "$build_root" --target \
     mako-adaptive-matrix \
     mako-hdr-color-math-tests
 ctest --test-dir "$build_root" --output-on-failure \
-    -R '^(device-selection|profile-update|runtime-transition|presentation-policy|adaptive-scheduler|adaptive-scheduler-matrix|hdr-color-math)$'
+    -R '^(standalone-launcher|device-selection|profile-update|runtime-transition|presentation-policy|adaptive-scheduler|adaptive-scheduler-matrix|hdr-color-math)$'
 
 echo "MAKO Renderer portable policy tests passed."

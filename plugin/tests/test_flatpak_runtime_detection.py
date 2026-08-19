@@ -15,6 +15,10 @@ class _Logger:
 sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 
 from py_modules.mako_plugin.flatpak_service import FlatpakService  # noqa: E402
+from py_modules.mako_plugin.constants import (  # noqa: E402
+    FLATPAK_IMPLICIT_LAYER_DIR,
+    FLATPAK_LEGACY_IMPLICIT_LAYER_PATH,
+)
 
 
 def _result(stdout="", stderr="", returncode=0):
@@ -157,6 +161,47 @@ versions=26.08;25.08;24.08
                     calls,
                 )
 
+    def test_legacy_runtime_uses_compatible_explicit_layer_path(self):
+        app_id = "org.DolphinEmu.dolphin-emu"
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temporary_path = Path(temp_dir)
+            wrapper = temporary_path / "mako-run"
+            wrapper.touch()
+            self.service.config_dir = temporary_path / "config"
+            self.service.mako_launch_script_path = wrapper
+            self.service.check_flatpak_available = lambda: True
+            self.service._get_app_runtime_version = lambda _app_id: "24.08"
+            self.service._is_extension_installed = lambda _version: True
+            calls = []
+
+            def run(args, **_kwargs):
+                calls.append(args)
+                return _result()
+
+            self.service._run_flatpak_command = run
+
+            response = self.service.set_app_override(app_id)
+
+            self.assertTrue(response["success"])
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
+                    f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_LEGACY_IMPLICIT_LAYER_PATH}",
+                    app_id,
+                ],
+                calls,
+            )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
+                    "--unset-env=VK_ADD_IMPLICIT_LAYER_PATH",
+                    app_id,
+                ],
+                calls,
+            )
+
     def test_heroic_preparation_keeps_environment_per_game(self):
         app_id = "com.heroicgameslauncher.hgl"
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -241,6 +286,18 @@ VK_ADD_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/im
 
         self.assertTrue(status["legacy_env"])
         self.assertFalse(status["required_env"])
+
+        compatible_legacy_path = complete_override.replace(
+            f"VK_ADD_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
+            f"VK_IMPLICIT_LAYER_PATH={FLATPAK_LEGACY_IMPLICIT_LAYER_PATH}",
+        )
+        self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
+            compatible_legacy_path
+        )
+
+        status = self.service._check_app_override_status(app_id)
+
+        self.assertTrue(status["required_env"])
 
         overriding_path = complete_override.replace(
             "[Environment]\n",

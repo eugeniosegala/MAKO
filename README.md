@@ -169,10 +169,10 @@ For v2.0.0, substitute its legacy filename from step 2 in the extraction command
 5. Add a game profile, then activate MAKO only for that game. In Steam launch options, use:
 
 ```text
-ENABLE_MAKO=1 %command%
+~/.local/bin/mako-launch %command%
 ```
 
-The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications need the separate runtime extension. See the dedicated [MAKO Renderer installation and usage guide](engine/README.md) for Qt requirements, manual configuration, validation, benchmarking, Flatpak setup, source builds, and troubleshooting.
+`mako-launch` activates MAKO for that game and prevents known LSFG-VK frame-generation layers from loading into the same process. The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications need the separate runtime extension. See the dedicated [MAKO Renderer installation and usage guide](engine/README.md) for Qt requirements, manual configuration, validation, benchmarking, Flatpak setup, source builds, and troubleshooting.
 
 ## Documentation
 

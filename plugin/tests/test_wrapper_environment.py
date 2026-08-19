@@ -181,17 +181,52 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["ADD"], "/caller/additional")
 
     def test_flatpak_adds_wrapper_scoped_extension_without_hiding_other_layers(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            tempfile.NamedTemporaryFile() as modern_loader,
+        ):
+            modern_loader.write(b"VK_ADD_IMPLICIT_LAYER_PATH")
+            modern_loader.flush()
             previous = configuration_module.FLATPAK_IMPLICIT_LAYER_DIR
+            previous_loaders = configuration_module.FLATPAK_VULKAN_LOADER_PATHS
             configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = temp_dir
+            configuration_module.FLATPAK_VULKAN_LOADER_PATHS = (modern_loader.name,)
             try:
                 values = self._evaluate(config=ConfigurationManager.get_defaults())
             finally:
                 configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = previous
+                configuration_module.FLATPAK_VULKAN_LOADER_PATHS = previous_loaders
 
         self.assertEqual(values["ADD"], temp_dir)
         self.assertEqual(values["IMPLICIT"], "")
         self.assertEqual(values["ENABLE"], "1")
+
+    def test_legacy_flatpak_loader_keeps_standard_implicit_layers(self):
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            tempfile.TemporaryDirectory() as standard_dir,
+            tempfile.NamedTemporaryFile() as legacy_loader,
+        ):
+            previous = configuration_module.FLATPAK_IMPLICIT_LAYER_DIR
+            previous_standard = configuration_module.FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS
+            previous_loaders = configuration_module.FLATPAK_VULKAN_LOADER_PATHS
+            configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = temp_dir
+            configuration_module.FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS = (standard_dir,)
+            configuration_module.FLATPAK_VULKAN_LOADER_PATHS = (legacy_loader.name,)
+            try:
+                values = self._evaluate({
+                    "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
+                })
+            finally:
+                configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = previous
+                configuration_module.FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS = previous_standard
+                configuration_module.FLATPAK_VULKAN_LOADER_PATHS = previous_loaders
+
+        self.assertEqual(values["ADD"], "")
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"{temp_dir}:/caller/additional:{standard_dir}",
+        )
 
     def test_flatpak_sdr_boundary_extends_existing_umu_manifest_path(self):
         with (
