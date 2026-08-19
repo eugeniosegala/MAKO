@@ -23,6 +23,7 @@ MAKO Decky 2.0 brings the new Renderer directly into Game Mode across Steam Deck
 - **Coexists with the rest of your stack:** Normal Vulkan layer discovery remains available for overlays and utilities. MAKO only excludes known competing LSFG-VK frame-generation layers, and never applies global Steam or Proton changes.
 - **Per-game compatibility controls:** Zink, ALSA, Steam Deck Mode, GPU and DLL overrides, HDR safety, the one-launch bypass, and renderer profile selection stay isolated to the chosen profile.
 - **Upgrade-safe identity:** Existing installs keep the stable `Mako` Decky directory and **MAKO - Frame Generation** listing identity. Wrapper migrations refresh compatibility logic in place without renaming user-facing release tags or versioned assets.
+- **Safer translated-host installation:** Renderer staging stays inside MAKO's user-owned data directory and uses deterministic file permissions, avoiding Armada/FEX's problematic translated `/tmp` boundary. The published package declares its x86_64 host requirement and refuses to install an incompatible layer on native AArch64 while preserving Armada's required game launcher for future validated native builds.
 
 ### Pinned, tested, and ready to steer
 

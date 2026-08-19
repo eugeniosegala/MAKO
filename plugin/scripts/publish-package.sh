@@ -164,6 +164,13 @@ read -r archive_name engine_version package_version github_repository has_flatpa
       process.exitCode = 1;
       throw new Error("package.json must define version, GitHub repository, and one versioned remote_binary entry");
     }
+    if (!Array.isArray(binary.host_architectures) ||
+        binary.host_architectures.length === 0 ||
+        binary.host_architectures.some((architecture) =>
+          !["x86_64", "aarch64"].includes(architecture))) {
+      process.exitCode = 1;
+      throw new Error("remote_binary must declare supported native host architectures");
+    }
     if (flatpak && (!flatpak.name || !flatpak.url || !flatpak.sha256hash)) {
       process.exitCode = 1;
       throw new Error("flatpak_bundle must define name, url, and sha256hash when present");

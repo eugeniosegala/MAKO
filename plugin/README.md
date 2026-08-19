@@ -18,6 +18,8 @@ Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/relea
 
 For direct Vulkan-layer installation without Decky, open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download the Linux archive under **Assets**.
 
+Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bit and 32-bit x86 game-process layers. MAKO Decky detects native AArch64/Armada hosts and will not install an incompatible x86 Vulkan layer.
+
 ## What it manages
 
 - Installs the private MAKO Renderer Vulkan layer for the current user.

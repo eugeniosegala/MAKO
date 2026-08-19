@@ -78,6 +78,7 @@ binary.release_tag = releaseTag;
 binary.source_commit = sourceCommit;
 binary.url = `${releaseBase}/${archiveName}`;
 binary.sha256hash = archiveChecksum.toLowerCase();
+binary.host_architectures = ["x86_64"];
 binary.flatpak_bundle = {
   name: flatpakArchiveName,
   url: `${releaseBase}/${flatpakArchiveName}`,

@@ -85,6 +85,9 @@
       "source_commit": "00a830e4ab6acc167a591cd7508df1af8f7037c9",
       "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0/mako-render-v2.0.0-linux.tar.xz",
       "sha256hash": "31b4652cd589921fdc67f42f76ed98fee0e0e7a94b275d7fa7e5cb13b02f22d7",
+      "host_architectures": [
+        "x86_64"
+      ],
       "flatpak_bundle": {
         "name": "mako-render-v2.0.0-flatpaks.tar.xz",
         "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0/mako-render-v2.0.0-flatpaks.tar.xz",

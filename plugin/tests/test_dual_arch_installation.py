@@ -9,6 +9,7 @@ import tarfile
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 
 class _Logger:
@@ -29,6 +30,7 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     LIB_FILENAME,
 )
 from py_modules.mako_plugin.installation import InstallationService  # noqa: E402
+from py_modules.mako_plugin import installation as installation_module  # noqa: E402
 
 
 class DualArchInstallationTests(unittest.TestCase):
@@ -38,6 +40,8 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service = InstallationService(logger=_Logger())
         self.service.lib_file = self.root / "lib" / LIB_FILENAME
         self.service.lib32_file = self.root / "lib32" / LIB_FILENAME
+        self.service.local_lib_dir = self.service.lib_file.parent
+        self.service.local_lib32_dir = self.service.lib32_file.parent
         manifest_dir = self.root / "share/vulkan/implicit_layer.d"
         self.service.local_share_dir = manifest_dir
         self.service.json_file = manifest_dir / JSON_FILENAME
@@ -187,6 +191,42 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service._validate_archive_checksum(archive_path, expected)
         with self.assertRaisesRegex(OSError, "checksum mismatch"):
             self.service._validate_archive_checksum(archive_path, "0" * 64)
+
+    def test_armada_host_is_detected_when_decky_runs_through_fex(self):
+        armada_marker = self.root / "usr/libexec/armada/device-env"
+        armada_marker.parent.mkdir(parents=True)
+        armada_marker.write_text("", encoding="utf-8")
+
+        with (
+            patch.object(installation_module, "ARMADA_DEVICE_ENV", armada_marker),
+            patch.object(installation_module.platform, "machine", return_value="x86_64"),
+        ):
+            self.assertEqual(
+                self.service._detect_native_host_architecture(),
+                "aarch64",
+            )
+
+    def test_armada_host_rejects_x86_only_renderer_before_installation(self):
+        with patch.object(
+            self.service,
+            "_detect_native_host_architecture",
+            return_value="aarch64",
+        ):
+            with self.assertRaisesRegex(
+                OSError,
+                "does not include a native Armada/AArch64 Renderer",
+            ):
+                self.service._validate_host_architecture({
+                    "host_architectures": ["x86_64"],
+                })
+
+    def test_installed_files_use_deterministic_permissions(self):
+        self.service._extract_and_install_files(self._archive())
+
+        self.assertEqual(self.service.lib_file.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.service.lib32_file.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.service.json_file.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.service.json32_file.stat().st_mode & 0o777, 0o644)
 
 
 if __name__ == "__main__":

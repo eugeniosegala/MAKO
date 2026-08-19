@@ -192,6 +192,13 @@ read -r archive_name archive_version archive_url archive_checksum flatpak_archiv
       process.exitCode = 1;
       throw new Error("package.json must define one versioned, verified remote_binary entry");
     }
+    if (!Array.isArray(binary.host_architectures) ||
+        binary.host_architectures.length === 0 ||
+        binary.host_architectures.some((architecture) =>
+          !["x86_64", "aarch64"].includes(architecture))) {
+      process.exitCode = 1;
+      throw new Error("remote_binary must declare supported native host architectures");
+    }
     const flatpak = binary.flatpak_bundle;
     if (flatpak && (!flatpak.name || !flatpak.url || !flatpak.sha256hash)) {
       process.exitCode = 1;
@@ -472,6 +479,7 @@ if [[ "$local_engine_mode" == true ]]; then
     binary.url = `local-worktree://${archiveName}`;
     binary.sha256hash = archiveChecksum;
     binary.architectures = build64Only === "true" ? ["64"] : ["64", "32"];
+    binary.host_architectures = ["x86_64"];
     if (binary.flatpak_bundle && flatpakName) {
       binary.flatpak_bundle.name = flatpakName;
       binary.flatpak_bundle.url = `local-worktree://${flatpakName}`;

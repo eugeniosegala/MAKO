@@ -8,6 +8,7 @@ import sys
 import tempfile
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 
 class _Logger:
@@ -424,6 +425,51 @@ class WrapperEnvironmentTests(unittest.TestCase):
             service._diagnostics_default_marker(),
             "# development presentation diagnostics default: enabled",
         )
+
+    def test_armada_launcher_wraps_once_and_only_on_armada(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            device_env = temp_path / "device-env"
+            game_launch = temp_path / "armada-game-launch"
+            game_launch.write_text(
+                "#!/bin/bash\nprintf 'armada\\n'\nexec \"$@\"\n",
+                encoding="utf-8",
+            )
+            game_launch.chmod(0o755)
+
+            with (
+                patch.object(configuration_module, "ARMADA_DEVICE_ENV", device_env),
+                patch.object(configuration_module, "ARMADA_GAME_LAUNCH", game_launch),
+            ):
+                lines = self.service._generate_game_launch_lines()
+
+            direct = subprocess.run(
+                ["bash", "-c", "\n".join(lines), "mako-test", "/bin/printf", "game\\n"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(direct.stdout, "game\n")
+
+            device_env.write_text("", encoding="utf-8")
+            wrapped = subprocess.run(
+                ["bash", "-c", "\n".join(lines), "mako-test", "/bin/printf", "game\\n"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(wrapped.stdout, "armada\ngame\n")
+
+            already_wrapped = subprocess.run(
+                [
+                    "bash", "-c", "\n".join(lines), "mako-test",
+                    str(game_launch), "/bin/printf", "game\\n",
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(already_wrapped.stdout, "armada\ngame\n")
 
     def test_diagnostics_default_marker_change_regenerates_wrapper(self):
         with tempfile.TemporaryDirectory() as temp_dir:

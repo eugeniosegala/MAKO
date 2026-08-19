@@ -26,7 +26,7 @@ MAKO Renderer 2.0 rises as the adaptive, opt-in Vulkan engine behind MAKO's Stea
 
 ### Forged for the full fleet
 
-- **Real 64-bit and 32-bit delivery:** Host packages contain both native architectures, alongside dual-architecture Flatpak extensions for Freedesktop 23.08, 24.08, and 25.08.
+- **Real 64-bit and 32-bit x86 delivery:** Host packages contain layers for both x86 process architectures, alongside dual-architecture Flatpak extensions for Freedesktop 23.08, 24.08, and 25.08. Native AArch64/Armada packages are not part of this release.
 - **Broader Qt compatibility:** The optional UI now accepts Qt 6.2 or newer, including Ubuntu 24.04's system Qt 6.4. Release packaging rejects newer accidental ABI requirements and offers a reproducible Qt 6.2 build through Docker or Podman when the build host only has a newer Qt.
 - **Visual regression evidence on AMD:** A deterministic odd-sized scene checks frame boundaries, motion and disocclusion, severe focus errors, and thin detail in both FP32 and FP16. The generated comparison images and metrics are retained with the build, and `robustImageAccess2` status is reported explicitly.
 - **Stronger release gates:** GCC and Clang suites, AddressSanitizer and UndefinedBehaviorSanitizer coverage, adaptive-scheduler and runtime-transition tests, Vulkan-loader smoke tests, package-layout and checksum verification, and native SteamOS AMD validation now guard the release path.

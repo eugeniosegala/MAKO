@@ -9,6 +9,7 @@ import tempfile
 import json
 import os
 import hashlib
+import platform
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -18,6 +19,7 @@ from .constants import (
     DIAGNOSTICS_HELPER_FILENAME, MAKO_LAYER_NAME,
     MAKO_LAYER_ENABLE_ENV, MAKO_LAYER_DISABLE_ENV,
     MAKO_LAYER_BUILD_MARKER, MAKO_PROFILE_FALLBACK_MARKER,
+    ARMADA_DEVICE_ENV,
 )
 from .config_schema import ConfigurationManager
 from .types import InstallationResponse, UninstallationResponse, InstallationCheckResponse
@@ -45,6 +47,7 @@ class InstallationService(BaseService):
         try:
             plugin_dir = Path(__file__).parent.parent.parent
             archive_metadata = self._bundled_archive_metadata(plugin_dir)
+            self._validate_host_architecture(archive_metadata)
             archive_path = plugin_dir / BIN_DIR / archive_metadata["name"]
 
             if not archive_path.exists():
@@ -100,6 +103,7 @@ class InstallationService(BaseService):
             version = binary.get("version")
             checksum = binary.get("sha256hash")
             architectures = binary.get("architectures", ["64", "32"])
+            host_architectures = binary.get("host_architectures", ["x86_64"])
             if not isinstance(archive_name, str) or Path(archive_name).name != archive_name:
                 raise ValueError("remote_binary name must be a filename")
             if not isinstance(version, str) or not version:
@@ -117,11 +121,23 @@ class InstallationService(BaseService):
                 or "64" not in architectures
             ):
                 raise ValueError("remote_binary architectures must contain 64 and optional 32")
+            if (
+                not isinstance(host_architectures, list)
+                or not host_architectures
+                or any(
+                    architecture not in ("x86_64", "aarch64")
+                    for architecture in host_architectures
+                )
+            ):
+                raise ValueError(
+                    "remote_binary host_architectures must contain supported native host names"
+                )
             return {
                 "name": archive_name,
                 "version": version,
                 "sha256hash": checksum,
                 "architectures": architectures,
+                "host_architectures": host_architectures,
             }
         except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
             raise OSError(f"Could not read bundled MAKO Renderer metadata from {manifest_path}: {exc}") from exc
@@ -133,8 +149,70 @@ class InstallationService(BaseService):
             "version": archive_metadata["version"],
             "sha256hash": archive_metadata["sha256hash"],
             "architectures": archive_metadata.get("architectures", ["64", "32"]),
+            "host_architectures": archive_metadata.get(
+                "host_architectures", ["x86_64"]
+            ),
         }
         self._write_file(self.engine_state_file, json.dumps(state, indent=2) + "\n", 0o644)
+
+    @staticmethod
+    def _normalized_host_architecture(machine: str) -> str:
+        """Return the canonical native host name used by package metadata."""
+        normalized = machine.strip().lower()
+        if normalized in ("amd64", "x86_64"):
+            return "x86_64"
+        if normalized in ("arm64", "aarch64"):
+            return "aarch64"
+        return normalized or "unknown"
+
+    def _detect_native_host_architecture(self) -> str:
+        """Detect the host ISA even when Decky's Python runs through FEX."""
+        process_architecture = self._normalized_host_architecture(platform.machine())
+
+        # Armada exposes this native helper inside Decky's FEX environment,
+        # where platform.machine() otherwise reports the emulated x86_64 ISA.
+        if ARMADA_DEVICE_ENV.is_file():
+            self.log.info("Detected native AArch64 Armada host through device-env")
+            return "aarch64"
+
+        # PID 1 is a native host process on Armada. Read only the ELF identity:
+        # e_machine 62 is x86_64 and 183 is AArch64.
+        try:
+            with Path("/proc/1/exe").open("rb") as host_executable:
+                elf_header = host_executable.read(20)
+            if elf_header[:4] == b"\x7fELF" and elf_header[5] in (1, 2):
+                byte_order = "little" if elf_header[5] == 1 else "big"
+                native_architecture = {
+                    62: "x86_64",
+                    183: "aarch64",
+                }.get(int.from_bytes(elf_header[18:20], byte_order))
+                if native_architecture:
+                    if native_architecture != process_architecture:
+                        self.log.info(
+                            "Detected native %s host through PID 1 (plugin process: %s)",
+                            native_architecture,
+                            process_architecture,
+                        )
+                    return native_architecture
+        except OSError as error:
+            self.log.debug("Could not inspect native host architecture: %s", error)
+
+        return process_architecture
+
+    def _validate_host_architecture(self, archive_metadata: Dict[str, Any]) -> None:
+        """Reject a Renderer archive built for a different native host ISA."""
+        detected = self._detect_native_host_architecture()
+        supported = archive_metadata.get("host_architectures", ["x86_64"])
+        if detected in supported:
+            return
+
+        supported_text = ", ".join(supported)
+        raise OSError(
+            "This MAKO Renderer package supports native host architecture "
+            f"{supported_text}, but this device is {detected}. "
+            "The current release does not include a native Armada/AArch64 "
+            "Renderer, so no incompatible Vulkan layer was installed."
+        )
 
     @staticmethod
     def _validate_archive_checksum(archive_path: Path, expected_checksum: str) -> None:
@@ -181,8 +259,14 @@ class InstallationService(BaseService):
             f"share/vulkan/implicit_layer.d/{JSON32_FILENAME}": self.json32_file,
         }
         destinations = {**required_destinations, **optional_32bit_destinations}
+        # Keep staging in MAKO's user-owned data directory. Armada currently
+        # runs Decky through FEX, whose translated /tmp mount has produced
+        # permission errors while handling native Vulkan-layer files.
+        staging_parent = self.local_lib_dir.parent
+        staging_parent.mkdir(parents=True, exist_ok=True)
         with tarfile.open(archive_path, "r:xz") as archive:
-            with tempfile.TemporaryDirectory() as temp_dir:
+            with tempfile.TemporaryDirectory(
+                    prefix=".mako-install-", dir=staging_parent) as temp_dir:
                 temp_path = Path(temp_dir)
                 staged_files = {}
                 for member in archive.getmembers():
@@ -239,9 +323,10 @@ class InstallationService(BaseService):
                             temp_file, destination, "../../lib32/libmako-render.so", "32"
                         )
                     else:
-                        shutil.copy2(temp_file, destination)
-                        if filename == CLI_FILENAME:
-                            destination.chmod(0o755)
+                        # Copy bytes and set a deterministic mode explicitly.
+                        # Avoid metadata-preserving copies across FEX filesystems.
+                        shutil.copyfile(temp_file, destination)
+                        destination.chmod(0o755 if filename == CLI_FILENAME else 0o644)
                     self.log.info("Installed %s to %s", filename, destination)
 
                 if not has_32bit_library:

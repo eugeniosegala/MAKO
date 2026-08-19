@@ -54,6 +54,8 @@ Native-only, 64-bit-only archives are labelled accordingly and must not be publi
 
 The engine's native and Flatpak packaging scripts run first, including their tests and dual-architecture layout checks. Decky then embeds those artifacts and writes their source commit, dirty-worktree marker, and calculated checksums into the generated ZIP's copy of `package.json`. The tracked Decky `package.json` remains unchanged, so this development path cannot alter the release pin. The ZIP is named with the local engine commit and `.dirty` when applicable. It does not tag, push, or publish the monorepo.
 
+Renderer metadata keeps native host ISA (`host_architectures`, currently `x86_64`) separate from Vulkan process bitness (`architectures`, normally `64` and `32`). Packaging and publishing reject missing or unknown host declarations, and MAKO Decky checks the native host before extracting the bundled Renderer.
+
 ## Fast direct SteamOS iteration
 
 When the MAKO monorepo is on the SteamOS machine, do not create a ZIP for every edit. Install the plugin and use its **Install MAKO Renderer** action once first, then run these commands from `plugin/`:

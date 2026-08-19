@@ -16,6 +16,8 @@ The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and r
 
 Standalone Linux and Flatpak archives are published on the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0). Download the required archive under **Assets**. Steam Deck users who want the managed workflow should install the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
+Published archives currently target x86_64 Linux hosts and contain Vulkan layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages require a separately built and validated Renderer and are not part of this release.
+
 ## Installation
 
 ### Steam Deck or Steam Machine: use MAKO Decky
