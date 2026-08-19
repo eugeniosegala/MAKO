@@ -93,7 +93,7 @@ export function ConfigurationSection({
       </style>
 
       <MakoSectionHeader>
-        {t("CONFIG_SECTION_TITLE", "Advanced Renderer Settings")}
+        {t("CONFIG_SECTION_TITLE", "Advanced MAKO Renderer Settings")}
       </MakoSectionHeader>
 
       <PanelSectionRow>

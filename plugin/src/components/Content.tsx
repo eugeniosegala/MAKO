@@ -197,9 +197,9 @@ export function Content() {
                     textOverflow: "ellipsis"
                   }}
                 >
-                  Decky <code>{localDevelopmentBuildInfo.plugin.commit}</code>
+                  MAKO Decky <code>{localDevelopmentBuildInfo.plugin.commit}</code>
                   {localDevelopmentBuildInfo.plugin.dirty ? "*" : ""}
-                  {" · MAKO "}
+                  {" · MAKO Renderer "}
                   {localDevelopmentBuildInfo.engine
                     ? <code>{localDevelopmentBuildInfo.engine.commit}</code>
                     : "unchanged"}
@@ -237,13 +237,13 @@ export function Content() {
                   {new Date(localDevelopmentBuildInfo.generatedAt).toLocaleString()}
                 </div>
                 <div>
-                  <div style={{ color: "#83bff0", fontWeight: "600" }}>Decky</div>
+                  <div style={{ color: "#83bff0", fontWeight: "600" }}>MAKO Decky</div>
                   <div>Commit: <code>{localDevelopmentBuildInfo.plugin.commit}</code>{localDevelopmentBuildInfo.plugin.dirty ? " + local edits" : ""}</div>
                   <div>Frontend: {localDevelopmentBuildInfo.plugin.frontendDeployed ? "deployed" : "unchanged"}</div>
                   <div>Backend: {localDevelopmentBuildInfo.plugin.backendDeployed ? "deployed" : "unchanged"}</div>
                 </div>
                 <div>
-                  <div style={{ color: "#83bff0", fontWeight: "600" }}>MAKO</div>
+                  <div style={{ color: "#83bff0", fontWeight: "600" }}>MAKO Renderer</div>
                   {localDevelopmentBuildInfo.engine ? (
                     <>
                       <div>Commit: <code>{localDevelopmentBuildInfo.engine.commit}</code>{localDevelopmentBuildInfo.engine.dirty ? " + local edits" : ""}</div>

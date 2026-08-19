@@ -9,7 +9,7 @@ pnpm install --frozen-lockfile
 pnpm run package:local
 ```
 
-This creates a versioned local ZIP under `out/`, named `MAKO-Decky-local.<engine-and-source-identity>.zip`. The packager regenerates configuration bindings, builds the frontend and sibling MAKO Renderer engine, verifies its payload, and creates a MAKO Decky ZIP. It does not tag, push, or publish anything.
+This creates a versioned local ZIP under `out/`, named `MAKO-Decky-local.<engine-and-source-identity>.zip`. The packager regenerates configuration bindings, builds the frontend and sibling MAKO Renderer source, verifies its payload, and creates a MAKO Decky ZIP. It does not tag, push, or publish anything.
 
 The ZIP keeps the established `Mako/` directory and installs to `~/homebrew/plugins/Mako` so a package replaces earlier versions instead of creating a second case-sensitive directory. This is an internal compatibility slug; the ZIP filename and the name displayed inside Decky use **MAKO Decky**.
 
@@ -19,7 +19,7 @@ Pass a path to choose the output location:
 pnpm run package:local -- /path/to/MAKO-Decky.zip
 ```
 
-To reuse local copies of the _already pinned_ Renderer and Flatpak archives, provide both archives directly. Their filenames and checksums must match the pin in `package.json`:
+To reuse local copies of the _already pinned_ renderer and Flatpak archives, provide both archives directly. Their filenames and checksums must match the pin in `package.json`:
 
 ```bash
 scripts/package-local.sh \
@@ -112,7 +112,7 @@ Use the root [How to release MAKO](../../HOW_TO_RELEASE.md) guide. From a clean 
 
 Before running it, update and commit both [`engine/RELEASE_NOTES.md`](../../engine/RELEASE_NOTES.md) and [`plugin/RELEASE_NOTES.md`](../RELEASE_NOTES.md). Their versioned “What’s new” headings and bodies are copied verbatim into the respective GitHub release notes; commit messages are never used as public change lists.
 
-The workflow publishes Renderer first, including the host and Flatpak assets, then commits its exact URLs and checksums before publishing the matching Decky ZIP as GitHub's **Latest** release. It is resumable and refuses a dirty worktree, the wrong branch, local-only payloads, mismatched pins, or reused tags that point at different code.
+The workflow publishes MAKO Renderer first, including the host and Flatpak assets, then commits its exact URLs and checksums before publishing the matching MAKO Decky ZIP as GitHub's **Latest** release. It is resumable and refuses a dirty worktree, the wrong branch, local-only payloads, mismatched pins, or reused tags that point at different code.
 
 Release entry points:
 

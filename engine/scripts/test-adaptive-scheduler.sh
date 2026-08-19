@@ -32,4 +32,4 @@ cmake -S "$repo_root" -B "$build_root" -G "$generator" \
 cmake --build "$build_root"
 ctest --test-dir "$build_root" --output-on-failure
 
-echo "Renderer tests passed; eligible AMD hardware also passed the GPU quality regression."
+echo "MAKO Renderer tests passed; eligible AMD hardware also passed the GPU quality regression."

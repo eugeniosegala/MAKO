@@ -21,6 +21,17 @@ class ProductBrandingTests(unittest.TestCase):
         self.assertIn('name: "MAKO Decky"', frontend)
         self.assertIn(">MAKO Decky</div>", frontend)
 
+        content = (
+            PLUGIN_DIR / "src/components/Content.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("MAKO Decky <code>", content)
+        self.assertIn('{" · MAKO Renderer "}', content)
+
+        configuration = (
+            PLUGIN_DIR / "src/components/ConfigurationSection.tsx"
+        ).read_text(encoding="utf-8")
+        self.assertIn("Advanced MAKO Renderer Settings", configuration)
+
         lifecycle = (
             PLUGIN_DIR / "py_modules/mako_plugin/plugin.py"
         ).read_text(encoding="utf-8")
@@ -31,6 +42,12 @@ class ProductBrandingTests(unittest.TestCase):
             PLUGIN_DIR / "scripts/reload-decky-plugin.mjs"
         ).read_text(encoding="utf-8")
         self.assertIn('DEFAULT_PLUGIN_NAME = "MAKO Decky"', reloader)
+
+        failure_guide = (
+            PLUGIN_DIR / "docs/DECKY_INSTALLATION_FAILURES.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("=== MAKO Decky plugin log ===", failure_guide)
+        self.assertNotIn("=== Mako plugin log ===", failure_guide)
 
     def test_default_decky_archive_uses_the_product_name(self):
         packager = (

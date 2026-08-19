@@ -431,7 +431,7 @@
     "CONTENT_FPS_MULTIPLIER": "Frame Generation Mode",
     "CONTENT_ADVANCED_DETAILS": "Advanced Details",
     "CONTENT_FLATPAK_SETUP": "Flatpak Setup",
-    "CONFIG_SECTION_TITLE": "Advanced Renderer Settings",
+    "CONFIG_SECTION_TITLE": "Advanced MAKO Renderer Settings",
     "CONFIG_WORKAROUNDS_TITLE": "Compatibility Settings",
     "CONFIG_FLOW_SCALE": "Flow Scale",
     "CONFIG_FLOW_SCALE_DESC": "Lowers internal motion estimation resolution, improving performance slightly.",

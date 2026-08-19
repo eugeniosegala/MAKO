@@ -14,8 +14,8 @@
 
 | Component | Recommended for | Releases |
 | --- | --- | --- |
-| **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users | [Latest MAKO Decky release (ZIP under Assets)](https://github.com/eugeniosegala/MAKO/releases/latest) |
-| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Latest MAKO Renderer release (Linux archive under Assets)](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) |
+| **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users | [Latest release (ZIP under Assets)](https://github.com/eugeniosegala/MAKO/releases/latest) |
+| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Latest release (Linux archive under Assets)](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) |
 
 <!-- prettier-ignore -->
 > [!NOTE]
@@ -56,9 +56,9 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 1. **Install Decky Loader** if needed. Switch to Desktop Mode and follow the [official Decky Loader installation guide](https://github.com/SteamDeckHomebrew/decky-loader#-installation), then return to Game Mode.
 2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam.** MAKO needs the licensed installation's `Lossless.dll`.
-3. Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download the MAKO Decky ZIP under **Assets**.
+3. Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download its ZIP under **Assets**.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
-5. Open **MAKO Decky** and select **Install MAKO Renderer**. This required step installs the renderer bundled in the ZIP into MAKO Decky's private location.
+5. Open **MAKO Decky** and select **Install MAKO Renderer**. This required step installs the bundled renderer into the plugin's private location.
 6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal starting point; Adaptive Frame Generation is optional.
 7. For a native Steam or Proton game, add this under **Steam Properties > Launch Options**:
 
@@ -70,13 +70,13 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> If Decky does not show or reload **MAKO Decky** after installing a ZIP, uninstall MAKO Decky, install the ZIP again, and restart your Steam Deck or Steam Machine. Open MAKO Decky afterwards and repeat step 5.
+> If Decky does not show or reload **MAKO Decky** after installing a ZIP, uninstall it, install the ZIP again, and restart your Steam Deck or Steam Machine. Then open the plugin and repeat step 5.
 
 ### Heroic and other Flatpak applications
 
 The Steam launch wrapper cannot enter a Flatpak sandbox directly, so configure Heroic through **Flatpak Setup**:
 
-1. Select **Flatpak Setup** in MAKO.
+1. Select **Flatpak Setup** in MAKO Decky.
 2. Under **Flatpak Applications**, prepare **Heroic**. If the matching runtime extension is missing, MAKO tells you which runtime to install, commonly **25.08**. Preparing Heroic grants access to the wrapper, configuration, and `Lossless.dll`; it does not enable frame generation for every Heroic game.
 3. In every Heroic game you want to enable, open **Settings > Advanced** and set the first **Wrapper** field to the SteamOS wrapper path:
 
@@ -98,7 +98,7 @@ The wrapper applies only to the selected Heroic games and enables the private MA
 
 For any EmuDeck emulator installed as a Flatpak:
 
-1. In MAKO, select **Flatpak Setup** and prepare the emulator you use. Install its matching runtime extension when prompted.
+1. In MAKO Decky, select **Flatpak Setup** and prepare the emulator you use. Install its matching runtime extension when prompted.
 2. Select **Vulkan** as that emulator's graphics backend when it offers one.
 3. In Desktop Mode, open the Steam shortcut for each EmuDeck game you want to configure, then set these fields under **Properties > Shortcut**:
 
@@ -131,14 +131,14 @@ For a step-by-step guide that creates a shareable report on the Desktop, see [Co
 The clean update path avoids Decky retaining an older backend or bundled payload:
 
 1. Quit games using `/home/deck/.local/bin/mako-run`.
-2. Uninstall MAKO from Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
+2. Uninstall MAKO Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart your Steam Deck or Steam Machine.
 4. Open MAKO Decky and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
 5. If you use Heroic or EmuDeck Flatpak emulators, open **Flatpak Setup** and select **Update** for each prepared application's matching runtime extension shown by MAKO.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **MAKO Decky**, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in MAKO Decky.
+> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **MAKO Decky**, install the newer ZIP, restart your Steam Deck or Steam Machine, then open it and select **Install MAKO Renderer**.
 
 Profiles and Steam launch options are retained. The private native engine and launcher are recreated in step 4; shared Flatpak extensions are retained and then refreshed in step 5.
 
@@ -170,9 +170,9 @@ The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications 
 
 - [Configuration guide](plugin/docs/CONFIGURATION.md): Fixed and Adaptive modes, quality and performance settings, profiles, and compatibility options.
 - [Troubleshooting](plugin/docs/TROUBLESHOOTING.md): Gamescope recovery, HDR compatibility, and diagnostic logs.
-- [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md): choose the MAKO Decky or standalone Renderer collection workflow and submit one shared report.
+- [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md): choose the MAKO Decky or standalone renderer collection workflow and submit one shared report.
 - [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
-- [Release process](HOW_TO_RELEASE.md): publish Renderer and Decky end to end with one versioned command.
+- [Release process](HOW_TO_RELEASE.md): publish both components end to end with one versioned command.
 - [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.
 
 ## Featured in

@@ -137,7 +137,7 @@ if [[ -z "$dll_path" ]]; then
     done
 fi
 if [[ -z "$dll_path" ]]; then
-    skip_test "Lossless.dll was not found; configure it in MAKO or set MAKO_QUALITY_DLL"
+    skip_test "Lossless.dll was not found; configure it in MAKO Renderer or set MAKO_QUALITY_DLL"
 fi
 
 mkdir -p "$output_directory/fp32" "$output_directory/fp16"

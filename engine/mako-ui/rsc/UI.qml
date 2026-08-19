@@ -387,7 +387,7 @@ ApplicationWindow {
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
-                        text: "Automatic game discovery, launch compatibility, Flatpak setup, and Renderer installation are managed in MAKO Decky."
+                        text: "Automatic game discovery, launch compatibility, Flatpak setup, and MAKO Renderer installation are managed in MAKO Decky."
                         color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
                     }
                 }

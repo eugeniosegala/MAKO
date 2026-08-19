@@ -14,7 +14,7 @@ Usage: scripts/publish-package.sh [--version X.Y.Z]
 
 Builds, verifies, and publishes MAKO Renderer. When --version is supplied, the
 script updates and commits engine/VERSION first. After publishing, it commits
-the generated Decky binary pins and Renderer release links automatically.
+the generated MAKO Decky binary pins and MAKO Renderer release links automatically.
 engine/RELEASE_NOTES.md must contain the matching manually curated heading.
 EOF
 }
@@ -146,7 +146,7 @@ cleanup() {
 trap cleanup EXIT
 
 cat > "$notes_file" <<EOF
-> Looking for MAKO Decky? Download the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
+> Looking for Decky integration? Download the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
 ## MAKO Renderer Linux build
 
@@ -208,7 +208,7 @@ Keep the previous archives until the new version has been tested with your games
 
 ## Known limitation
 
-- **HDR frame generation is not currently supported:** HDR pipeline groundwork remains in the Renderer, but MAKO does not present it as an enabled release path yet.
+- **HDR frame generation is not currently supported:** HDR pipeline groundwork remains in the renderer, but MAKO does not present it as an enabled release path yet.
 
 ## Before you play
 
@@ -275,4 +275,4 @@ if ! git -C "$repository_root" diff --quiet -- "${release_metadata_paths[@]}"; t
 fi
 
 echo "Published: https://github.com/$release_repository/releases/tag/$tag"
-echo "Committed the matching Decky binary pins and Renderer release links."
+echo "Committed the matching MAKO Decky binary pins and MAKO Renderer release links."

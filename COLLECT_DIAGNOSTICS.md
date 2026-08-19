@@ -6,21 +6,21 @@ The shared [MAKO diagnostic report form](https://docs.google.com/forms/d/e/1FAIp
 
 ## MAKO Decky
 
-If Decky Loader cannot install **MAKO Decky**, or MAKO Decky never appears or opens after installation, use the [MAKO Decky installation and loading failure guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/DECKY_INSTALLATION_FAILURES.md). That guide does not require MAKO Decky or MAKO Renderer to be running.
+If Decky Loader cannot install **MAKO Decky**, or it never appears or opens after installation, use the [installation and loading failure guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/DECKY_INSTALLATION_FAILURES.md). That guide does not require either MAKO component to be running.
 
-If **MAKO Decky** is installed and opens in Decky Loader, use the [MAKO Decky diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md). Use it when you launch games through `/home/deck/.local/bin/mako-run` or manage MAKO Renderer and its Flatpak extensions from MAKO Decky.
+If **MAKO Decky** is installed and opens in Decky Loader, use its [diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md). It covers games launched through `/home/deck/.local/bin/mako-run`, the managed renderer, and Flatpak extensions.
 
 The Decky diagnostics guide covers native Steam and Proton games, Heroic, and EmuDeck shortcuts without changing their normal arguments.
 
 ## Standalone MAKO Renderer
 
-Use the [standalone MAKO Renderer diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md) when you installed the MAKO Renderer archive directly, built it from source, open `mako-ui` yourself, or activate games with `ENABLE_MAKO=1` without MAKO Decky.
+Use the [standalone diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md) when you installed **MAKO Renderer** directly, built it from source, open `mako-ui` yourself, or activate games with `ENABLE_MAKO=1` without MAKO Decky.
 
-The Renderer guide covers native Steam and Proton games, direct terminal launches, and existing Heroic or Flatpak configurations.
+The standalone guide covers native Steam and Proton games, direct terminal launches, and existing Heroic or Flatpak configurations.
 
 ## If you are not sure
 
-- If **MAKO Decky** appears in Decky Loader, use the **MAKO Decky** guide.
+- If **MAKO Decky** appears in Decky Loader, use its guide.
 - If you extracted `MAKO-Renderer-v<version>-linux.tar.xz`, the legacy `mako-render-v2.0.0-linux.tar.xz`, or ran `cmake --install`, use the **standalone MAKO Renderer** guide.
 - If neither description is clear, select **Not sure** in the shared form and explain how you normally start the game.
 

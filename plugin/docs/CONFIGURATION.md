@@ -19,7 +19,7 @@ Adaptive target, ceiling, and cadence changes normally apply while a game is run
 
 ## Game / Process Profiles
 
-For a Steam game or shortcut, start the game and choose **Save profile for &lt;game&gt;** in MAKO Decky after gameplay has loaded. MAKO records only processes carrying that running Steam app ID, saves their executable names under **Matched Processes**, and keeps the profile for later launches. Choosing the same action again updates the existing profile instead of creating a duplicate.
+For a Steam game or shortcut, start the game and choose **Save profile for &lt;game&gt;** in MAKO Decky after gameplay has loaded. The plugin records only processes carrying that running Steam app ID, saves their executable names under **Matched Processes**, and keeps the profile for later launches. Choosing the same action again updates the existing profile instead of creating a duplicate.
 
 The saved Steam app ID selects launcher compatibility settings before the game starts. The captured process names select the same renderer profile once its Vulkan process loads. Unrecognised Steam games use the Default profile, so a setting saved for one game does not leak into another game or plugin.
 
