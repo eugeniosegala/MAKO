@@ -33,6 +33,13 @@ int main() {
     expect(!hdrExposureDisabledFromEnvironment(nullptr, nullptr),
         "an absent DXVK capability signal must not invent an HDR decision");
 
+    expect(gamescopeFeedbackPollInterval(false, false) == 1s,
+        "ordinary desktop feedback polling should remain idle");
+    expect(gamescopeFeedbackPollInterval(true, false) == 250ms,
+        "the Gamescope environment hint should retain responsive polling");
+    expect(gamescopeFeedbackPollInterval(false, true) == 250ms,
+        "detected Gamescope feedback should retain responsive polling");
+
     // A live SDR<->HDR resource transition requires 750 ms of continuous
     // feedback. Flapping or resolver outages must not rebuild the pipeline or
     // inherit time accumulated by an earlier candidate.

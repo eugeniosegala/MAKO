@@ -182,9 +182,12 @@ namespace mako::backend {
     };
 
     ///
-    /// Make all mako instances leaking.
-    /// This is to workaround a bug in the Vulkan loader, which
-    /// makes it impossible to destroy Vulkan instances and devices.
+    /// Retain private Vulkan objects for the remaining process lifetime.
+    /// This works around Vulkan loader configurations where destroying a
+    /// nested instance and device during layer unload is unsafe.
+    /// The retained device submits no new work, but its driver resources remain
+    /// allocated until the host process exits. Do not enable this before a
+    /// backend context has successfully been attached to an application layer.
     ///
     void makeLeaking();
 

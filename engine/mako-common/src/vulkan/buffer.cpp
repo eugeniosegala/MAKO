@@ -62,16 +62,18 @@ namespace {
         if (res != VK_SUCCESS)
             throw ls::vulkan_error(res, "vkAllocateMemory() failed");
 
+        auto memory = ls::owned_ptr<VkDeviceMemory>(
+            new VkDeviceMemory(handle),
+            [dev = vk.dev(), defunc = vk.df().FreeMemory](VkDeviceMemory& value) {
+                defunc(dev, value, VK_NULL_HANDLE);
+            }
+        );
+
         res = vk.df().BindBufferMemory(vk.dev(), buffer, handle, 0);
         if (res != VK_SUCCESS)
             throw ls::vulkan_error(res, "vkBindBufferMemory() failed");
 
-        return ls::owned_ptr<VkDeviceMemory>(
-            new VkDeviceMemory(handle),
-            [dev = vk.dev(), defunc = vk.df().FreeMemory](VkDeviceMemory& memory) {
-                defunc(dev, memory, VK_NULL_HANDLE);
-            }
-        );
+        return memory;
     }
     /// copy data to a buffer
     void copyDataToBuffer(const vk::Vulkan& vk,

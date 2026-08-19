@@ -298,6 +298,27 @@ namespace {
         if (it == instance_info->devices.end())
             return VK_ERROR_INITIALIZATION_FAILED;
 
+        VkSwapchainKHR createdSwapchain{VK_NULL_HANDLE};
+        bool lowerSwapchainCreated{false};
+        const auto rollbackCreatedSwapchain = [&]() noexcept {
+            if (!lowerSwapchainCreated || createdSwapchain == VK_NULL_HANDLE)
+                return;
+
+            instance_info->swapchains.erase(createdSwapchain);
+            instance_info->swapchainInfos.erase(createdSwapchain);
+            try {
+                layer_info->root.removeSwapchainContext(createdSwapchain);
+            } catch (const std::exception& e) {
+                std::cerr << "mako: failed to retire a partially-created "
+                             "swapchain context: " << e.what() << '\n';
+            }
+            it->second.df().DestroySwapchainKHR(
+                device, createdSwapchain, alloc
+            );
+            *swapchain = VK_NULL_HANDLE;
+            lowerSwapchainCreated = false;
+        };
+
         try {
             // retire old swapchain
             if (info->oldSwapchain) {
@@ -318,11 +339,13 @@ namespace {
             VkSwapchainCreateInfoKHR newInfo = *info;
             const bool privateOrderedTransport =
                 layer_info->root.modifySwapchainCreateInfo(it->second, newInfo,
-                [=, newInfo = &newInfo]() {
+                [&, newInfo = &newInfo]() {
                     auto res = it->second.df().CreateSwapchainKHR(
                         device, newInfo, alloc, swapchain);
                     if (res != VK_SUCCESS)
                         throw ls::vulkan_error(res, "vkCreateSwapchainKHR() failed");
+                    createdSwapchain = *swapchain;
+                    lowerSwapchainCreated = true;
                 }
             );
 
@@ -330,8 +353,13 @@ namespace {
             uint32_t imageCount{};
             auto res = it->second.df().GetSwapchainImagesKHR(device, *swapchain,
                 &imageCount, VK_NULL_HANDLE);
-            if (res != VK_SUCCESS || imageCount == 0)
+            if (res != VK_SUCCESS)
                 throw ls::vulkan_error(res, "vkGetSwapchainImagesKHR() failed");
+            if (imageCount == 0)
+                throw ls::vulkan_error(
+                    VK_ERROR_INITIALIZATION_FAILED,
+                    "vkGetSwapchainImagesKHR() returned no images"
+                );
 
             std::vector<VkImage> swapchainImages(imageCount);
             res = it->second.df().GetSwapchainImagesKHR(device, *swapchain,
@@ -354,12 +382,15 @@ namespace {
             instance_info->swapchains.emplace(*swapchain,
                 ls::R<vk::Vulkan>(it->second));
 
+            lowerSwapchainCreated = false;
             return res;
         } catch (const ls::vulkan_error& e) {
+            rollbackCreatedSwapchain();
             std::cerr << "mako: something went wrong during mako swapchain creation:\n";
             std::cerr << "- " << e.what() << '\n';
             return e.error();
         } catch (const std::exception& e) {
+            rollbackCreatedSwapchain();
             std::cerr << "mako: something went wrong during mako swapchain creation:\n";
             std::cerr << "- " << e.what() << '\n';
             return VK_ERROR_INITIALIZATION_FAILED;
@@ -403,18 +434,18 @@ namespace {
                 return VK_ERROR_INITIALIZATION_FAILED;
 
             try {
-                std::vector<VkSemaphore> waitSemaphores;
-                waitSemaphores.reserve(info->waitSemaphoreCount);
-
-                for (size_t j = 0; j < info->waitSemaphoreCount; j++)
-                    waitSemaphores.push_back(info->pWaitSemaphores[j]);
+                const auto waitSemaphores = info->waitSemaphoreCount > 0
+                    ? std::span<const VkSemaphore>(
+                        info->pWaitSemaphores, info->waitSemaphoreCount
+                    )
+                    : std::span<const VkSemaphore>{};
 
                 auto& context = layer_info->root.getSwapchainContext(swapchain);
                 result = context.present(it->second,
                     queue, swapchain,
                     const_cast<void*>(info->pNext),
                     info->pImageIndices[i],
-                    { waitSemaphores.begin(), waitSemaphores.end() }
+                    waitSemaphores
                 );
             } catch (const ls::vulkan_error& e) {
                 if (e.error() != VK_ERROR_OUT_OF_DATE_KHR) {

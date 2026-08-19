@@ -271,7 +271,10 @@ cmake --build "$build64_dir" --target \
     mako-hdr-color-math-tests mako-cli
 ctest --test-dir "$build64_dir" --output-on-failure
 cmake --build "$build64_dir"
-cmake --install "$build64_dir"
+# Release archives do not need local symbol tables. CMake's install-time strip
+# preserves the dynamic entrypoints required by the Vulkan loader while
+# keeping both the installed payload and compressed archive smaller.
+cmake --install "$build64_dir" --strip
 
 if [[ "$build_32_bit" == true ]]; then
     # A Vulkan layer is loaded into the application's process. Release archives
@@ -293,7 +296,7 @@ if [[ "$build_32_bit" == true ]]; then
         -DMAKO_LAYER_LIBRARY_PATH="../../../lib32/libmako-render.so"
 
     cmake --build "$build32_dir" --target mako-render
-    cmake --install "$build32_dir"
+    cmake --install "$build32_dir" --strip
 fi
 
 required_paths=(

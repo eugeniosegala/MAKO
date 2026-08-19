@@ -8,6 +8,7 @@
 #include <optional>
 
 #include <vulkan/vulkan_core.h>
+#include <unistd.h>
 
 using namespace vk;
 
@@ -25,8 +26,18 @@ namespace {
             .pNext = fd.has_value() ? &exportInfo : nullptr
         };
         auto res = vk.df().CreateSemaphore(vk.dev(), &semaphoreInfo, VK_NULL_HANDLE, &handle);
-        if (res != VK_SUCCESS)
+        if (res != VK_SUCCESS) {
+            if (fd)
+                static_cast<void>(::close(*fd));
             throw ls::vulkan_error(res, "vkCreateSemaphore() failed");
+        }
+
+        auto semaphore = ls::owned_ptr<VkSemaphore>(
+            new VkSemaphore(handle),
+            [dev = vk.dev(), defunc = vk.df().DestroySemaphore](VkSemaphore& value) {
+                defunc(dev, value, VK_NULL_HANDLE);
+            }
+        );
 
         if (fd.has_value()) {
             // import semaphore from fd
@@ -37,16 +48,13 @@ namespace {
                 .fd = *fd // closes the fd
             };
             res = vk.df().ImportSemaphoreFdKHR(vk.dev(), &importInfo);
-            if (res != VK_SUCCESS)
+            if (res != VK_SUCCESS) {
+                static_cast<void>(::close(*fd));
                 throw ls::vulkan_error(res, "vkImportSemaphoreFdKHR() failed");
+            }
         }
 
-        return ls::owned_ptr<VkSemaphore>(
-            new VkSemaphore(handle),
-            [dev = vk.dev(), defunc = vk.df().DestroySemaphore](VkSemaphore& semaphore) {
-                defunc(dev, semaphore, VK_NULL_HANDLE);
-            }
-        );
+        return semaphore;
     }
 }
 

@@ -103,6 +103,7 @@ namespace mako::layer {
         std::optional<uint32_t> lastGamescopeRefreshHz;
         std::string lastHdrFeedbackDiagnosticKey;
         std::optional<std::chrono::steady_clock::time_point> lastHdrFeedbackPoll;
+        std::optional<std::chrono::steady_clock::time_point> lastConfigurationPoll;
         uint64_t runtimeStateRevision{1};
     };
 

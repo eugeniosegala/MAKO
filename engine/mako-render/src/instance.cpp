@@ -348,6 +348,15 @@ ConfigurationUpdateResult Root::update() {
                   << result.hdrContextsDeferred << '\n';
     }
 
+    // Configuration hot reload does not need a filesystem metadata query for
+    // every presented frame. Keep the UI responsive while bounding the check
+    // to four times per second, matching the feedback sampling cadence.
+    constexpr auto configurationPollInterval = std::chrono::milliseconds(250);
+    if (this->lastConfigurationPoll &&
+            now - *this->lastConfigurationPoll < configurationPollInterval)
+        return result;
+    this->lastConfigurationPoll = now;
+
     const auto previousGlobal = this->config.get().global();
     if (!this->config.update())
         return result;

@@ -1099,7 +1099,11 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                 }
             );
 
-            backend::makeLeaking(); // don't worry about it :3
+            // The backend's private VkDevice must outlive this layer on loader
+            // combinations where destroying it during layer unload is unsafe.
+            // This is process-lifetime retention, not active GPU work; see the
+            // backend API contract before changing the teardown policy.
+            backend::makeLeaking();
         } catch (const std::exception& e) {
             throw ls::error("failed to create swapchain context", e);
         }
@@ -1268,6 +1272,8 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
             backend->closeContext(context);
         }
     );
+    // Match initial context construction: the private backend device follows
+    // the documented process-lifetime loader workaround.
     backend::makeLeaking();
 
     // Everything above is constructed before the active resources are
@@ -1587,7 +1593,7 @@ void Swapchain::disableFrameGeneration() {
 VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
         const VkQueue queue, const VkSwapchainKHR swapchain,
         const void* nextChain, const uint32_t originalImageIndex,
-        const std::vector<VkSemaphore>& applicationWaitSemaphores,
+        const std::span<const VkSemaphore> applicationWaitSemaphores,
         const std::span<const uint32_t> acquiredImageIndices,
         const VkImage originalImage) {
     if (acquiredImageIndices.empty())
@@ -1671,7 +1677,7 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             );
         }
         commandBuffer.submit(
-            vk, waits, VK_NULL_HANDLE, 0,
+            vk, std::move(waits), VK_NULL_HANDLE, 0,
             {pcs.first.handle(), pcs.second.handle()},
             VK_NULL_HANDLE, 0,
             last ? this->renderFence->handle() : VK_NULL_HANDLE
@@ -1737,7 +1743,7 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
 VkResult Swapchain::present(const vk::Vulkan& vk,
         VkQueue queue, VkSwapchainKHR swapchain,
         void* next_chain, uint32_t imageIdx,
-        const std::vector<VkSemaphore>& semaphores) {
+        const std::span<const VkSemaphore> semaphores) {
     const DiagnosticsContextScope diagnosticsContext(
         this->diagnosticsContextId
     );
@@ -2195,8 +2201,11 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
 
     cmdbuf.end(vk);
     const auto sourceSubmitStarted = startPresentDiagnostic();
+    std::vector<VkSemaphore> sourceWaitSemaphores(
+        semaphores.begin(), semaphores.end()
+    );
     cmdbuf.submit(vk,
-        semaphores, VK_NULL_HANDLE, 0,
+        std::move(sourceWaitSemaphores), VK_NULL_HANDLE, 0,
         {}, this->syncSemaphore->handle(), this->idx++
     );
     logSlowPresentOperation("submit-source-copy", this->fidx, this->idx, sourceSubmitStarted);
@@ -2424,8 +2433,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         cmdbuf.end(vk);
         const auto generatedSubmitStarted = startPresentDiagnostic();
         cmdbuf.submit(vk,
-            waitSemaphores, this->syncSemaphore->handle(), this->idx,
-            signalSemaphores, VK_NULL_HANDLE, 0,
+            std::move(waitSemaphores), this->syncSemaphore->handle(), this->idx,
+            std::move(signalSemaphores), VK_NULL_HANDLE, 0,
             i == scheduledGeneratedFrameCount - 1
                 ? this->renderFence->handle() : VK_NULL_HANDLE
         );

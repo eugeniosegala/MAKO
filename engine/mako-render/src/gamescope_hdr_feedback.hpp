@@ -3,6 +3,7 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <cstdint>
 #include <optional>
@@ -43,6 +44,19 @@ namespace mako::layer {
         std::string resolverStatus;
         std::string resolverCandidates;
     };
+
+    /// Keep compositor feedback responsive when Gamescope is present, but do
+    /// not wake an ordinary desktop Vulkan process four times per second just
+    /// because it has an X11 display. The idle probe preserves late discovery
+    /// without making non-Gamescope monitoring a hot background loop.
+    [[nodiscard]] inline std::chrono::milliseconds
+    gamescopeFeedbackPollInterval(
+            const bool environmentHint,
+            const bool gamescopeDetected) {
+        return environmentHint || gamescopeDetected
+            ? std::chrono::milliseconds{250}
+            : std::chrono::milliseconds{1'000};
+    }
 
     struct GamescopeHdrActivationEvidence {
         std::optional<bool> appWantsHdr;

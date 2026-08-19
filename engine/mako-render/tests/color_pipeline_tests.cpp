@@ -115,6 +115,24 @@ int main() {
     expect(!gamescopeSdr8.hdr,
         "Gamescope HDR feedback must preserve 8-bit SDR semantics");
 
+    // Classification is deliberately stateless. An SDR -> HDR -> SDR
+    // feedback transition for the same normalized 10-bit format must restore
+    // the high-precision SDR pipeline rather than retaining PQ semantics from
+    // the preceding frame-generation context.
+    const auto recoveredSdr10 = layer::classifySwapchainColor(
+        VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+        VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        false
+    );
+    expect(recoveredSdr10.generationSupported,
+        "SDR recovery after Gamescope HDR should remain supported");
+    expect(recoveredSdr10.encoding == backend::FrameEncoding::SdrHighPrecision,
+        "SDR recovery retained HDR10/PQ transport semantics");
+    expect(!recoveredSdr10.hdr &&
+            !recoveredSdr10.gamescopeColorSpaceRecovered &&
+            !recoveredSdr10.packedHdr10Transport,
+        "HDR state leaked into the recovered SDR pipeline");
+
     for (const auto format : {
             VK_FORMAT_A2B10G10R10_UNORM_PACK32,
             VK_FORMAT_A2R10G10B10_UNORM_PACK32}) {

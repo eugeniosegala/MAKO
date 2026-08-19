@@ -3,6 +3,7 @@
 #include "gamescope_hdr_feedback.hpp"
 
 #include <chrono>
+#include <condition_variable>
 #include <filesystem>
 #include <cstdlib>
 #include <cstring>
@@ -53,6 +54,8 @@ struct GamescopeHdrFeedbackReader::Impl {
     std::mutex sampleMutex;
     GamescopeHdrFeedbackSample latestSample;
     std::jthread monitor;
+    std::mutex monitorWaitMutex;
+    std::condition_variable monitorWake;
 
 #if defined(__linux__)
     void* library{nullptr};
@@ -516,6 +519,13 @@ struct GamescopeHdrFeedbackReader::Impl {
         this->latestSample = sample;
     }
 
+    std::chrono::milliseconds pollInterval() {
+        std::scoped_lock lock(this->sampleMutex);
+        return gamescopeFeedbackPollInterval(
+            runningUnderGamescope(), this->latestSample.gamescopeDetected
+        );
+    }
+
     void start() {
         // One synchronous startup read lets the first swapchain use the right
         // colour pipeline. All later X11 round trips stay off the presentation
@@ -526,9 +536,13 @@ struct GamescopeHdrFeedbackReader::Impl {
 
         this->monitor = std::jthread([this](const std::stop_token stop) {
             while (!stop.stop_requested()) {
-                std::this_thread::sleep_for(std::chrono::milliseconds(250));
-                if (stop.stop_requested())
+                const auto interval = this->pollInterval();
+                std::unique_lock waitLock(this->monitorWaitMutex);
+                if (this->monitorWake.wait_for(
+                        waitLock, interval,
+                        [&stop] { return stop.stop_requested(); }))
                     break;
+                waitLock.unlock();
                 this->refresh();
             }
         });
@@ -537,6 +551,7 @@ struct GamescopeHdrFeedbackReader::Impl {
     ~Impl() {
         if (this->monitor.joinable()) {
             this->monitor.request_stop();
+            this->monitorWake.notify_all();
             this->monitor.join();
         }
 #if defined(__linux__)

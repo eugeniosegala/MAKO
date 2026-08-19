@@ -9,6 +9,7 @@
 #include <optional>
 
 #include <vulkan/vulkan_core.h>
+#include <unistd.h>
 
 using namespace vk;
 
@@ -16,8 +17,9 @@ namespace {
     /// create a image
     ls::owned_ptr<VkImage> createImage(const vk::Vulkan& vk,
             VkExtent2D extent, VkFormat format, VkImageUsageFlags usage,
-            bool external) {
+            std::optional<int> importFd, bool exportable) {
         VkImage handle{};
+        const bool external = importFd.has_value() || exportable;
 
         const VkExternalMemoryImageCreateInfo externalInfo{
             .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -40,8 +42,11 @@ namespace {
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE
         };
         auto res = vk.df().CreateImage(vk.dev(), &imageInfo, VK_NULL_HANDLE, &handle);
-        if (res != VK_SUCCESS)
+        if (res != VK_SUCCESS) {
+            if (importFd)
+                static_cast<void>(::close(*importFd));
             throw ls::vulkan_error(res, "vkCreateImage() failed");
+        }
 
         return ls::owned_ptr<VkImage>(
             new VkImage(handle),
@@ -62,8 +67,11 @@ namespace {
             reqs.memoryTypeBits,
             false
         );
-        if (!mti.has_value())
+        if (!mti.has_value()) {
+            if (importFd)
+                static_cast<void>(::close(*importFd));
             throw ls::vulkan_error("no suitable memory type found for image");
+        }
 
         const VkMemoryDedicatedAllocateInfoKHR dedicatedInfo{
             .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
@@ -92,11 +100,21 @@ namespace {
             .memoryTypeIndex = *mti
         };
         auto res = vk.df().AllocateMemory(vk.dev(), &memoryInfo, VK_NULL_HANDLE, &handle);
-        if (res != VK_SUCCESS)
+        if (res != VK_SUCCESS) {
+            if (importFd)
+                static_cast<void>(::close(*importFd));
             throw ls::vulkan_error(res, "vkAllocateMemory() failed");
+        }
         if (handle == VK_NULL_HANDLE)
             throw ls::vulkan_error(VK_ERROR_OUT_OF_DEVICE_MEMORY,
                 "vkAllocateMemory() succeeded but returned a null handle");
+
+        auto memory = ls::owned_ptr<VkDeviceMemory>(
+            new VkDeviceMemory(handle),
+            [dev = vk.dev(), defunc = vk.df().FreeMemory](VkDeviceMemory& value) {
+                defunc(dev, value, VK_NULL_HANDLE);
+            }
+        );
 
         res = vk.df().BindImageMemory(vk.dev(), image, handle, 0);
         if (res != VK_SUCCESS)
@@ -115,12 +133,7 @@ namespace {
             **exportFd = fd;
         }
 
-        return ls::owned_ptr<VkDeviceMemory>(
-            new VkDeviceMemory(handle),
-            [dev = vk.dev(), defunc = vk.df().FreeMemory](VkDeviceMemory& memory) {
-                defunc(dev, memory, VK_NULL_HANDLE);
-            }
-        );
+        return memory;
     }
     /// create an image view
     ls::owned_ptr<VkImageView> createImageView(const vk::Vulkan& vk,
@@ -161,7 +174,7 @@ Image::Image(const vk::Vulkan& vk,
             std::optional<int*> exportFd) :
         image(createImage(vk,
             extent, format, usage,
-            importFd.has_value() || exportFd.has_value()
+            importFd, exportFd.has_value()
         )),
         memory(allocateMemory(vk,
             *this->image,

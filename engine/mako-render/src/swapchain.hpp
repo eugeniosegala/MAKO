@@ -76,7 +76,7 @@ namespace mako::layer {
         VkResult present(const vk::Vulkan& vk,
             VkQueue queue, VkSwapchainKHR swapchain,
             void* next_chain, uint32_t imageIdx,
-            const std::vector<VkSemaphore>& semaphores);
+            std::span<const VkSemaphore> semaphores);
         /// stable identifier used to correlate this context's diagnostics
         [[nodiscard]] uint64_t diagnosticsId() const {
             return this->diagnosticsContextId;
@@ -157,7 +157,7 @@ namespace mako::layer {
         VkResult retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             VkQueue queue, VkSwapchainKHR swapchain, const void* nextChain,
             uint32_t originalImageIndex,
-            const std::vector<VkSemaphore>& applicationWaitSemaphores,
+            std::span<const VkSemaphore> applicationWaitSemaphores,
             std::span<const uint32_t> acquiredImageIndices,
             VkImage originalImage);
     };
