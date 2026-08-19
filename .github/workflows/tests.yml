@@ -121,8 +121,14 @@ jobs:
       - name: Check out source
         uses: actions/checkout@v6
 
-      - name: Install portable test dependencies
-        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++
+      - name: Confirm hosted sanitizer toolchain
+        run: |
+          for command in cmake ctest gcc g++; do
+            command -v "$command" >/dev/null || {
+              echo "Required hosted-runner command is missing: $command" >&2
+              exit 1
+            }
+          done
 
       - name: Run sanitized portable policy tests
         working-directory: engine
