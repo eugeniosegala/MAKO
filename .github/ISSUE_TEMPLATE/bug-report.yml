@@ -6,52 +6,12 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thanks for taking the time to help improve MAKO. Please search existing issues before opening a new one.
-
-  - type: checkboxes
-    id: searched-issues
-    attributes:
-      label: Is there an existing issue for this?
-      options:
-        - label: I have searched the existing issues.
-          required: true
+        Thanks for taking the time to help improve MAKO. Tell us what happened, and MAKO Wiz will guide you through any diagnostics we need.
 
   - type: textarea
     id: what-happened
     attributes:
       label: What happened?
-      description: Describe the problem and what you expected to happen instead.
-    validations:
-      required: true
-
-  - type: textarea
-    id: steps-to-reproduce
-    attributes:
-      label: Steps to reproduce
-      placeholder: |
-        1. ...
-        2. ...
-        3. ...
-    validations:
-      required: true
-
-  - type: textarea
-    id: logs
-    attributes:
-      label: Relevant logs or screenshots
-      description: Paste any relevant output, or drag in screenshots.
-      render: shell
-    validations:
-      required: false
-
-  - type: textarea
-    id: environment
-    attributes:
-      label: Environment
-      description: Include your operating system, MAKO version, and any relevant hardware or software details.
-      placeholder: |
-        - OS:
-        - MAKO version:
-        - Other relevant details:
+      description: Briefly describe the problem, including what you expected to happen instead.
     validations:
       required: true
