@@ -54,6 +54,18 @@ the project.
   Ally Z2A.
 - [Adaptive Frame Gen With Lossless Scaling Massive Performance Legion Go S](https://www.youtube.com/watch?v=9YeqsS2JNws)
   by [JahsonENT](https://www.youtube.com/@JahsonENT): Adaptive Frame Generation performance coverage on Legion Go S.
+- [Mako Frame Generation Is HERE For The Steam Deck! This One Is A GAME CHANGER! (Easy Guide)](https://www.youtube.com/watch?v=AX5wFv4s9fM)
+  by [Gaming On Steam](https://www.youtube.com/@gaming_onsteam): an easy guide to MAKO Frame Generation on Steam
+  Deck.
+- [Гайд: Як встановити FSR 4.1.1 + MAKO Frame Generation на Steam Deck OLED | SteamOS](https://www.youtube.com/watch?v=8pJx60dSHK8)
+  by [👾BiGDeck👾_UA](https://www.youtube.com/@BiGDeck_UA): Ukrainian-language guide to installing FSR 4.1.1 and
+  MAKO Frame Generation on Steam Deck OLED.
+- [LSFG-VK Experimental стал MAKO-Frame Generation+пошашовая установка.](https://www.youtube.com/watch?v=US4XQY_KZLw)
+  by [Андрей-Канал Солянка](https://www.youtube.com/@Andrey_6777): Russian-language coverage of the transition from
+  LSFG-VK Experimental to MAKO, with a step-by-step installation guide.
+- [Crimson Desert ACTUALIZADO + MAKO Frame Gen en Steam Deck 🦈](https://www.youtube.com/watch?v=YCcGTfDcTX0)
+  by [Hooandee](https://www.youtube.com/@Hooandee): Spanish-language coverage of MAKO Frame Generation in Crimson
+  Desert on Steam Deck.
 
 ## Coverage includes
 
