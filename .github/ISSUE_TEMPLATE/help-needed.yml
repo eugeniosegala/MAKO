@@ -1,0 +1,40 @@
+name: Help needed
+description: Ask for help getting unstuck with MAKO.
+title: "[Help]: "
+labels: ["help wanted"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Tell us where you are stuck, what you expected, and what you have already tried.
+
+  - type: textarea
+    id: goal
+    attributes:
+      label: What are you trying to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: blocked
+    attributes:
+      label: Where are you blocked?
+      description: Include the exact error or unexpected result, if there is one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+    validations:
+      required: false
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment and logs
+      description: Include your operating system, MAKO version, and relevant output.
+      render: shell
+    validations:
+      required: false

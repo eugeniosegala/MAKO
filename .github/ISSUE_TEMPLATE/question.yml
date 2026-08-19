@@ -1,0 +1,32 @@
+name: Question
+description: Ask for clarification or advice about using MAKO.
+title: "[Question]: "
+labels: [question]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ask anything about MAKO. Please include enough context for someone else to help.
+
+  - type: textarea
+    id: question
+    attributes:
+      label: What would you like to know?
+    validations:
+      required: true
+
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: Include commands, configuration, links, or other relevant context.
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add logs, screenshots, or details that may help answer the question.
+    validations:
+      required: false
