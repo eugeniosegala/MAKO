@@ -9,7 +9,7 @@ MAKO Renderer and MAKO Decky use the same `X.Y.Z` release number. Run the releas
 - Confirm `git status` is clean and the `origin` remote points to this repository.
 - Configure the dedicated `steamos` + `amd-gpu` self-hosted runner described in [Testing](TESTING.md).
 
-The renderer packager rejects a `mako-ui` binary that requires a Qt ABI newer than 6.4. A Linux host with Qt 6.2–6.4 needs no container. Non-Linux packaging requires Docker as before. When a rolling Linux distribution only provides a newer Qt, Docker is an optional compatibility fallback: prefix the release command with `MAKO_PORTABLE_PACKAGE=1` to build the UI against Ubuntu 22.04's Qt 6.2 baseline.
+The renderer packager rejects a `mako-ui` binary that requires a Qt ABI newer than 6.4. A Linux host with Qt 6.2–6.4 needs no container. Non-Linux packaging requires Docker or Podman. When a rolling Linux distribution only provides a newer Qt, either runtime is an optional compatibility fallback: prefix the release command with `MAKO_PORTABLE_PACKAGE=1` to build the UI against Ubuntu 22.04's Qt 6.2 baseline.
 
 ## Publish both packages
 

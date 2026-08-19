@@ -45,7 +45,7 @@
 
 ## What MAKO is
 
-MAKO is a next-generation, Vulkan-powered graphics project for Linux gaming, built to bring Lossless Scaling frame generation and scaling to Steam Deck and desktop Linux. Frame generation is available today, with scaling support planned as the project expands.
+MAKO is a next-generation, Vulkan-powered graphics project for Linux gaming, built to bring Lossless Scaling frame generation and scaling (**scaling coming soon**) to Steam Deck, Steam Machine, SteamOS, and Linux more broadly. Frame generation is available today, with scaling as the next planned capability.
 
 The project consists of two closely integrated components:
 

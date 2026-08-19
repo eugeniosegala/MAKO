@@ -357,7 +357,7 @@ namespace {
         if (!enabled())
             return;
 
-        std::cerr << "mako-render: present diagnostics: operation="
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
                   << "adaptive-sdr-gameplay-hitch-bridged"
                   << " context=" << activeContextId
                   << " generated_limit=" << generationLimit

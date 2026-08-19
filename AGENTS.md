@@ -1,0 +1,176 @@
+# MAKO repository guide for coding agents
+
+This file is a navigation and operating guide. It points to the repository's
+authoritative build, test, diagnostic, packaging, and release sources instead
+of duplicating them. When a workflow changes, update the owning script or guide
+first and keep this index aligned with it.
+
+## Product names and compatibility identifiers
+
+Use these names in user-facing prose, UI text, workflow labels, package output,
+and new logs:
+
+- **MAKO** for the overall project;
+- **MAKO Renderer** for the Vulkan layer, backend, CLI, and optional Qt UI; and
+- **MAKO Decky** for the Decky Loader plugin.
+
+The established Decky manifest/listing name is the deliberate exception:
+`plugin/plugin.json` remains **MAKO - Frame Generation**, and its publish
+description is stable listing metadata. The component is still called **MAKO
+Decky** in project documentation, its frontend, and lifecycle logs.
+
+Renderer log records use the stable `MAKO Renderer:` prefix. MAKO Decky
+lifecycle logs name `MAKO Decky`. Do not introduce `mako:`, `mako-render:`,
+`Mako Renderer:`, or `Mako Decky:` as new public prefixes.
+
+The following are stable technical or compatibility identifiers and are not
+branding errors:
+
+- the Decky package/install slug `Mako/`, including
+  `~/homebrew/plugins/Mako` and `~/homebrew/logs/Mako`;
+- the Decky manifest/listing name `MAKO - Frame Generation` and its existing
+  publish description;
+- commands and files such as `mako-run`, `mako-ui`, `mako-cli`,
+  `mako-diagnostics`, `libmako-render.so`, and `mako-render/conf.toml`;
+- source directories, C++ namespaces, Python modules, application IDs, and
+  lowercase package-manager names;
+- `VK_LAYER_MAKO_render`, `ENABLE_MAKO`, `DISABLE_MAKO`, and the other existing
+  environment-variable interfaces;
+- release tags such as `render-vX.Y.Z` and `plugin-vX.Y.Z`; and
+- already-published legacy archive names. Current archive names are generated
+  by the packaging scripts and must not be renamed independently.
+
+The diagnostics helper deliberately recognizes historical lowercase renderer
+prefixes so reports from older installations remain readable. Preserve that
+input compatibility while requiring current source to emit the branded prefix.
+Do not rename any stable identifier without an explicit migration and backward-
+compatibility plan.
+
+## Project map
+
+| Area | Responsibility | Primary locations |
+| --- | --- | --- |
+| Repository root | Product overview, cross-component orchestration, shared diagnostics, and releases | `README.md`, `justfile`, `TESTING.md`, `HOW_TO_RELEASE.md`, `scripts/` |
+| MAKO Renderer layer | Vulkan interception, swapchain handling, presentation, recovery, Gamescope integration | `engine/mako-render/` |
+| Renderer backend | Lossless Scaling resource extraction and private compute pipeline | `engine/mako-backend/` |
+| Renderer common code | Configuration, Vulkan wrappers, device features, and image-quality utilities | `engine/mako-common/` |
+| Renderer tools | Validation, benchmarking, debugging, and GPU quality regression | `engine/mako-cli/` |
+| Renderer UI | Optional Qt Quick configuration application | `engine/mako-ui/` |
+| Renderer distribution | Host manifests, Flatpak definitions, packaging, and build scripts | `engine/dist/`, `engine/scripts/` |
+| MAKO Decky frontend | Decky React/TypeScript interface and RPC consumers | `plugin/src/` |
+| MAKO Decky backend | Installation, profiles, wrappers, Flatpak preparation, and lifecycle RPCs | `plugin/py_modules/mako_plugin/` |
+| Decky packaging | Frontend generation, local ZIPs, direct development deployment, reload, and publishing | `plugin/scripts/` |
+| Automation | Portable CI and dedicated SteamOS/AMD hardware validation | `.github/workflows/` |
+
+Start architecture work with the root `README.md`, then use
+`engine/README.md` or `plugin/README.md` for the selected component. Renderer
+configuration behavior is owned by `engine/docs/CONFIGURATION.md`; Decky's
+profile and compatibility UX is documented in `plugin/docs/CONFIGURATION.md`.
+
+## Authoritative workflow index
+
+| Task | Read first | Executable entry points |
+| --- | --- | --- |
+| Understand validation coverage | `TESTING.md` | `justfile`, `.github/workflows/tests.yml` |
+| Build Renderer from source | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/CMakeLists.txt`, `engine/scripts/build-steamos-dev.sh` |
+| Run portable Renderer tests | `TESTING.md` | `engine/scripts/test-adaptive-scheduler.sh` |
+| Build host Renderer archives | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/scripts/package-local.sh` |
+| Build Flatpak runtime extensions | `engine/docs/FLATPAK-GUIDE.md` | `engine/scripts/package-flatpaks.sh` |
+| Test AMD image quality | `engine/docs/IMAGE-QUALITY-REGRESSION.md` | `engine/scripts/run-gpu-quality-regression.sh`, `engine/mako-cli/src/tools/quality.cpp` |
+| Validate real SteamOS hardware | `TESTING.md` | `.github/workflows/steamos-hardware-validation.yml` |
+| Exercise the game/runtime matrix | `engine/docs/ADAPTIVE-VALIDATION.md` | Manual DXVK, VKD3D-Proton, native Vulkan, Gamescope, and supported desktop scenarios |
+| Build or package MAKO Decky | `plugin/docs/PACKAGING.md` | `plugin/package.json`, `plugin/scripts/package-local.sh` |
+| Deploy/reload a local Decky install | `plugin/docs/PACKAGING.md` | `plugin/scripts/deploy-dev.sh`, `plugin/scripts/reload-decky-plugin.mjs` |
+| Collect diagnostics | `COLLECT_DIAGNOSTICS.md` | `scripts/mako-diagnostics` |
+| Publish both components | `HOW_TO_RELEASE.md` | `scripts/publish-release.sh` |
+| Resume one component publish | `HOW_TO_RELEASE.md` | `engine/scripts/publish-package.sh`, `plugin/scripts/publish-package.sh` |
+
+`just --list` exposes the common non-publishing entry points. Component scripts
+remain the source of truth for their arguments, prerequisites, cache behavior,
+and output paths.
+
+## Test selection and evidence
+
+Run validation in proportion to the affected boundary:
+
+- Renderer C++ changes need the portable/full CTest coverage described in
+  `TESTING.md`. Presentation, synchronization, device-feature, image-format,
+  shader-selection, or frame-quality changes also need real Vulkan evidence.
+- Scheduling and presentation-policy changes should run the sanitizer path and
+  the manual matrix in `engine/docs/ADAPTIVE-VALIDATION.md` where applicable.
+- AMD behavior must be checked in both FP32 and FP16 modes. The deterministic
+  scene, scoring, and artifacts live in `engine/mako-common/src/quality/`,
+  `engine/mako-common/tests/`, and the output directory selected by the GPU
+  regression script.
+- MAKO Decky backend changes need the Python suite under `plugin/tests/`.
+  Frontend changes need typechecking, focused Vitest coverage, and a production
+  bundle. Use the exact gates listed in `TESTING.md`.
+- Packaging, installation, wrapper, architecture, or release-pin changes need
+  the corresponding local package verification; unit tests alone do not prove
+  archive layout or Vulkan-loader activation.
+
+A skipped GPU test is not evidence of GPU correctness. The automated AMD scene
+is also not a substitute for the game/runtime compatibility matrix. State which
+hardware, driver, architecture, Flatpak runtime, and matrix rows were not tested.
+
+## Diagnostics map
+
+- `COLLECT_DIAGNOSTICS.md` routes users to Decky or standalone collection.
+- `plugin/docs/COLLECT_DIAGNOSTICS.md` owns the managed Decky workflow.
+- `engine/docs/COLLECT_DIAGNOSTICS.md` owns standalone Renderer collection.
+- `scripts/mako-diagnostics` filters current and legacy Renderer logs into a
+  focused report; its deterministic coverage is in
+  `plugin/tests/test_diagnostics_helper.py`.
+- `engine/mako-render/src/present_diagnostics.cpp` and `.hpp` own structured
+  presentation records. Related state is emitted from `instance.cpp`,
+  `swapchain.cpp`, and `swapchain_present.cpp`.
+- `plugin/py_modules/mako_plugin/configuration.py` controls wrapper-side log
+  capture, while `installation.py` installs and migrates the helper.
+
+Keep diagnostic operation names and fields machine-filterable. If a current log
+format changes, update the collector, its tests, and both user guides together.
+
+## Generated files, artifacts, and protected inputs
+
+- Treat `engine/build/`, `engine/out/`, `plugin/dist/`, `plugin/out/`,
+  `plugin/coverage/`, and `plugin/node_modules/` as generated. Do not hand-edit
+  or commit their contents.
+- `plugin/shared_config.py` owns the shared Decky configuration schema.
+  `plugin/src/config/generatedConfigSchema.ts` and
+  `plugin/py_modules/mako_plugin/config_schema_generated.py` are generated by
+  `plugin/scripts/generate_ts_schema.py`; do not edit them independently.
+- Published Renderer URLs, checksums, and pins in `plugin/package.json` are
+  maintained by the release/pinning scripts. Local-engine packaging writes
+  local identity into the ZIP without changing the tracked release pin.
+- `Lossless.dll` is a user-supplied licensed input. Never add it to the
+  repository, package it, upload it, or treat its presence as portable CI data.
+- Preserve unrelated worktree changes. Inspect `git status` before editing and
+  do not clean generated or local files unless the task explicitly requests it.
+
+## Qt compatibility contract
+
+Qt is used only by the optional `mako-ui`; the Vulkan layer, backend, and CLI do
+not depend on it. `engine/mako-ui/CMakeLists.txt` deliberately declares Qt 6.2
+as the source-build minimum. That is a minimum, not a pinned version, so Ubuntu
+24.04's Qt 6.4 satisfies it.
+
+Published host archives must remain runnable with Ubuntu 24.04's Qt 6.4. The
+ABI checks in `engine/scripts/package-local.sh` reject Qt 6.5-or-newer symbols
+and the Qt 6.8 `libQt6QmlMeta` dependency. On hosts with newer Qt, use
+`MAKO_PORTABLE_PACKAGE=1`; the portable Ubuntu 22.04 builder links against Qt
+6.2 and produces an archive that also runs with newer compatible Qt 6 releases.
+Do not raise the CMake minimum or relax the package ABI guard without updating
+the build documentation and testing the oldest supported runtime.
+
+## Packaging, deployment, and release boundaries
+
+Local packaging does not publish. Direct development deployment does mutate an
+installed Decky test environment, and engine replacement requires games using
+the layer to be closed. Run deployment/reload actions only when the task calls
+for changing that installed environment.
+
+Publishing is a separate, explicitly authorized workflow. Follow
+`HOW_TO_RELEASE.md` from a clean `main` checkout, update the two component
+release-note files as the only manual release copy, require the SteamOS hardware
+gate, and let the scripts manage versions, pins, checksums, tags, assets, and
+README release links. Never move a published tag or replace a published asset.

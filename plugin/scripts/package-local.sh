@@ -165,8 +165,12 @@ fi
 
 worktree_fingerprint() {
   local repo="$1"
+  local worktree_root
+  worktree_root="$(git -C "$repo" rev-parse --show-toplevel)"
   {
-    git -C "$repo" diff --binary HEAD || true
+    # Keep engine and Decky identities component-scoped. A README or frontend
+    # edit must not invalidate an already verified engine archive.
+    git -C "$repo" diff --binary HEAD -- . || true
     while IFS= read -r -d '' untracked_path; do
       # Generated packages must not become part of the source identity.  Apart
       # from making the label depend on old artifacts, including out/ makes
@@ -175,8 +179,8 @@ worktree_fingerprint() {
         out/*) continue ;;
       esac
       printf 'untracked:%s\0' "$untracked_path"
-      "${checksum_command[@]}" "$repo/$untracked_path"
-    done < <(git -C "$repo" ls-files --others --exclude-standard -z)
+      "${checksum_command[@]}" "$worktree_root/$untracked_path"
+    done < <(git -C "$repo" ls-files --others --exclude-standard -z -- .)
   } | "${checksum_command[@]}" | awk '{print substr($1, 1, 8)}'
 }
 

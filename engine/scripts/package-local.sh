@@ -63,8 +63,13 @@ fi
 portable_container="${MAKO_PORTABLE_PACKAGE:-0}"
 containerized_build="${MAKO_PACKAGE_CONTAINERIZED:-0}"
 if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_container" == "1" ) ]]; then
-    if ! command -v docker >/dev/null 2>&1; then
-        echo "Portable packaging needs Docker. Install Docker Desktop/Engine and try again." >&2
+    container_runtime=""
+    if command -v docker >/dev/null 2>&1; then
+        container_runtime="docker"
+    elif command -v podman >/dev/null 2>&1; then
+        container_runtime="podman"
+    else
+        echo "Portable packaging needs Docker or Podman. Install one and try again." >&2
         exit 1
     fi
 
@@ -78,12 +83,12 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
             ;;
     esac
 
-    echo "Using local linux/amd64 Docker packaging environment..."
+    echo "Using local linux/amd64 $container_runtime packaging environment..."
     docker_64_only=0
     if [[ "$build_32_bit" == false ]]; then
         docker_64_only=1
     fi
-    exec docker run --rm --platform linux/amd64 \
+    exec "$container_runtime" run --rm --platform linux/amd64 \
         -e MAKO_PACKAGE_64_ONLY="$docker_64_only" \
         -e MAKO_PACKAGE_CONTAINERIZED=1 \
         -v "$monorepo_root:/workspace" \
@@ -337,9 +342,10 @@ if [[ "$build_32_bit" == true ]]; then
 fi
 
 # Qt promises backwards binary compatibility, not forwards compatibility.
-# Keep release archives usable on the Qt 6.2 baseline used by Ubuntu 22.04
-# (and therefore on Ubuntu 24.04's Qt 6.4) even when packaging is initiated
-# from a rolling distribution with a newer Qt installation.
+# Keep release archives usable on the Qt 6.4 baseline provided by Ubuntu
+# 24.04 even when packaging is initiated on a rolling distribution. Portable
+# packaging intentionally builds against Qt 6.2 and therefore produces an
+# archive with a broader runtime range.
 ui_strings="$build_root/mako-ui.strings"
 strings "$install_dir/bin/mako-ui" > "$ui_strings"
 if grep -Eq 'Qt_6\.([5-9]|[1-9][0-9])' "$ui_strings"; then

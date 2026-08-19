@@ -60,7 +60,7 @@ The release packager builds the normal 64-bit application, CLI, UI, and layer, t
 
 This fallback applies only to `scripts/package-local.sh`. Manual CMake builds still use the system development packages. Set `MAKO_NATIVE_SDK_DIR` to place that SDK somewhere else, or set `MAKO_BUILD_CACHE_ROOT` to relocate all MAKO build caches together.
 
-Native Linux packaging does not require a container. The packager verifies that the resulting `mako-ui` does not require a Qt ABI newer than 6.4, which keeps published host archives compatible with Ubuntu 24.04. If the host distribution only provides a newer Qt, rerun with `MAKO_PORTABLE_PACKAGE=1`; that optional mode uses Docker and builds the UI against Ubuntu 22.04's Qt 6.2 baseline. Non-Linux packaging continues to require Docker.
+Native Linux packaging does not require a container. The packager verifies that the resulting `mako-ui` does not require a Qt ABI newer than 6.4, which keeps published host archives compatible with Ubuntu 24.04. If the host distribution only provides a newer Qt, rerun with `MAKO_PORTABLE_PACKAGE=1`; that optional mode uses Docker or Podman and builds the UI against Ubuntu 22.04's Qt 6.2 baseline. Non-Linux packaging continues to require one of those container runtimes.
 
 ### Fast SteamOS development build
 

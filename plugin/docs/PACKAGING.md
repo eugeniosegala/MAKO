@@ -11,7 +11,7 @@ pnpm run package:local
 
 This creates a versioned local ZIP under `out/`, named `MAKO-Decky-local.<engine-and-source-identity>.zip`. The packager regenerates configuration bindings, builds the frontend and sibling MAKO Renderer source, verifies its payload, and creates a MAKO Decky ZIP. It does not tag, push, or publish anything.
 
-The ZIP keeps the established `Mako/` directory and installs to `~/homebrew/plugins/Mako` so a package replaces earlier versions instead of creating a second case-sensitive directory. This is an internal compatibility slug; the ZIP filename and the name displayed inside Decky use **MAKO Decky**.
+The ZIP keeps the established `Mako/` directory and installs to `~/homebrew/plugins/Mako` so a package replaces earlier versions instead of creating a second case-sensitive directory. This is an internal compatibility slug. The Decky manifest/listing name remains **MAKO - Frame Generation**, while project documentation, the frontend, and lifecycle logs identify the component as **MAKO Decky**.
 
 Pass a path to choose the output location:
 

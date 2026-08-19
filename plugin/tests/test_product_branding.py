@@ -11,11 +11,18 @@ REPOSITORY_ROOT = PLUGIN_DIR.parent
 
 
 class ProductBrandingTests(unittest.TestCase):
-    def test_decky_identity_is_mako_decky_everywhere_it_is_displayed(self):
+    def test_decky_manifest_preserves_established_listing_identity(self):
         manifest = json.loads(
             (PLUGIN_DIR / "plugin.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["name"], "MAKO Decky")
+        self.assertEqual(manifest["name"], "MAKO - Frame Generation")
+        self.assertEqual(
+            manifest["publish"]["description"],
+            "MAKO brings Vulkan-powered Lossless Scaling frame generation to "
+            "Steam Deck, Steam Machine, and SteamOS gaming.",
+        )
+
+    def test_decky_component_identity_is_mako_decky(self):
 
         frontend = (PLUGIN_DIR / "src/index.tsx").read_text(encoding="utf-8")
         self.assertIn('name: "MAKO Decky"', frontend)
@@ -41,7 +48,9 @@ class ProductBrandingTests(unittest.TestCase):
         reloader = (
             PLUGIN_DIR / "scripts/reload-decky-plugin.mjs"
         ).read_text(encoding="utf-8")
-        self.assertIn('DEFAULT_PLUGIN_NAME = "MAKO Decky"', reloader)
+        self.assertIn(
+            'DEFAULT_PLUGIN_NAME = "MAKO - Frame Generation"', reloader
+        )
 
         failure_guide = (
             PLUGIN_DIR / "docs/DECKY_INSTALLATION_FAILURES.md"
@@ -68,7 +77,10 @@ class ProductBrandingTests(unittest.TestCase):
         sources = "\n".join(
             path.read_text(encoding="utf-8") for path in source_files
         )
-        self.assertIsNone(re.search(r'["\']mako:\s', sources))
+        self.assertIsNone(
+            re.search(r'["\'][Mm]ako(?:-render| Renderer)?:\s', sources)
+        )
+        self.assertIsNone(re.search(r'["\']MAKO:\s', sources))
         self.assertIn(
             '"MAKO Renderer: render layer active; identity="', sources
         )
