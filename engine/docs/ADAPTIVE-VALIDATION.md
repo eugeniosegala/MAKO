@@ -4,13 +4,19 @@ Adaptive Frame Generation has two complementary validation layers. The determini
 
 ## Deterministic policy tests
 
-Run the portable scheduler suite from the repository root:
+Run the portable Renderer policy suite from the `engine/` directory:
 
 ```bash
 scripts/test-adaptive-scheduler.sh
 ```
 
 The test build disables the Vulkan layer, UI, and CLI. It therefore does not need a Vulkan SDK, GPU, `Lossless.dll`, Gamescope, or a Linux host. Every clock value is supplied by the test, so a cadence trace produces the same decisions on every run.
+
+Run the same policy boundaries under AddressSanitizer and UndefinedBehaviorSanitizer with:
+
+```bash
+MAKO_ENABLE_SANITIZERS=ON scripts/test-adaptive-scheduler.sh
+```
 
 The suite currently locks down:
 

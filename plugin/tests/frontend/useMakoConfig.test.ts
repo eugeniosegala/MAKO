@@ -1,0 +1,88 @@
+import { act, cleanup, renderHook, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { getDefaults, type ConfigurationData } from "../../src/config/configSchema";
+
+const mocks = vi.hoisted(() => ({
+  checkMakoInstalled: vi.fn(),
+  checkLosslessScalingDll: vi.fn(),
+  getMakoConfig: vi.fn(),
+  getProfileConfig: vi.fn(),
+  updateMakoConfigFromObject: vi.fn(),
+  showErrorToast: vi.fn()
+}));
+
+vi.mock("../../src/api/makoApi", () => ({
+  checkMakoInstalled: mocks.checkMakoInstalled,
+  checkLosslessScalingDll: mocks.checkLosslessScalingDll,
+  getMakoConfig: mocks.getMakoConfig,
+  getProfileConfig: mocks.getProfileConfig,
+  updateMakoConfigFromObject: mocks.updateMakoConfigFromObject
+}));
+vi.mock("../../src/utils/toastUtils", () => ({
+  showErrorToast: mocks.showErrorToast,
+  ToastMessages: {
+    CONFIG_UPDATE_ERROR: { title: "Update Failed", body: "Failed to update configuration" }
+  }
+}));
+vi.mock("../../src/i18n/i18n", () => ({
+  default: (_key: string, fallback: string) => fallback
+}));
+
+import { useMakoConfig } from "../../src/hooks/useMakoHooks";
+
+describe("MAKO configuration persistence", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.getMakoConfig.mockResolvedValue({ success: true, config: getDefaults() });
+  });
+  afterEach(cleanup);
+
+  test("keeps a newer profile load when an older request completes late", async () => {
+    let finishInitialLoad!: (value: { success: boolean; config: ConfigurationData }) => void;
+    mocks.getMakoConfig.mockReturnValue(new Promise((resolve) => {
+      finishInitialLoad = resolve;
+    }));
+    mocks.getProfileConfig.mockResolvedValue({
+      success: true,
+      config: { ...getDefaults(), multiplier: 4, target_fps: 120 }
+    });
+    const { result } = renderHook(() => useMakoConfig());
+
+    await act(() => result.current.loadMakoConfig("game-profile"));
+    expect(result.current.config.multiplier).toBe(4);
+
+    await act(async () => {
+      finishInitialLoad({
+        success: true,
+        config: { ...getDefaults(), multiplier: 2, target_fps: 60 }
+      });
+      await Promise.resolve();
+    });
+
+    expect(result.current.config.multiplier).toBe(4);
+    expect(result.current.config.target_fps).toBe(120);
+  });
+
+  test("fills missing defaults before writing and commits state only after success", async () => {
+    mocks.updateMakoConfigFromObject.mockResolvedValue({ success: true });
+    const { result } = renderHook(() => useMakoConfig());
+    await waitFor(() => expect(mocks.getMakoConfig).toHaveBeenCalledOnce());
+    const partial = { multiplier: 3, adaptive: true } as ConfigurationData;
+
+    await act(() => result.current.updateConfig(partial));
+
+    expect(mocks.updateMakoConfigFromObject).toHaveBeenCalledWith({
+      ...getDefaults(),
+      multiplier: 3,
+      adaptive: true
+    });
+    expect(result.current.config.multiplier).toBe(3);
+    expect(result.current.config.disable_hdr_exposure).toBe(true);
+
+    mocks.updateMakoConfigFromObject.mockResolvedValue({ success: false, error: "write failed" });
+    await act(() => result.current.updateConfig({ ...result.current.config, multiplier: 4 }));
+
+    expect(result.current.config.multiplier).toBe(3);
+    expect(mocks.showErrorToast).toHaveBeenCalledWith("Update Failed", "write failed");
+  });
+});

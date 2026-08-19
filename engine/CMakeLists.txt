@@ -24,6 +24,7 @@ option(MAKO_BUILD_UI           "Build the user interface"         OFF)
 option(MAKO_BUILD_CLI          "Build the command line interface"  ON)
 option(MAKO_INSTALL_DEVELOP    "Install development libraries and headers"      OFF)
 option(MAKO_INSTALL_XDG_FILES  "Install the application icon and desktop files" OFF)
+option(MAKO_ENABLE_SANITIZERS  "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 set(MAKO_LAYER_LIBRARY_PATH libmako-render.so CACHE STRING "Change where Vulkan searches for the layer library")
 set(MAKO_LAYER_MANIFEST_SUFFIX "" CACHE STRING "Suffix for the installed Vulkan layer manifest filename")
 option(MAKO_TESTING_RENDERDOC  "Enable RenderDoc integration for testing purposes" OFF)
@@ -45,6 +46,21 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_SKIP_RPATH ON)
+
+if(MAKO_ENABLE_SANITIZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR
+            "MAKO_ENABLE_SANITIZERS requires GCC, Clang, or AppleClang")
+    endif()
+    add_compile_options(
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
+        -fno-sanitize-recover=all)
+    set(CMAKE_EXE_LINKER_FLAGS
+        "${CMAKE_EXE_LINKER_FLAGS} -fsanitize=address,undefined")
+    set(CMAKE_SHARED_LINKER_FLAGS
+        "${CMAKE_SHARED_LINKER_FLAGS} -fsanitize=address,undefined")
+endif()
 
 if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     set(CMAKE_EXPORT_COMPILE_COMMANDS ON)

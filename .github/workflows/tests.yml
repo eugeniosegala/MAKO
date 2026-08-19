@@ -1,0 +1,129 @@
+name: Tests
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  decky:
+    name: MAKO Decky
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.17.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: plugin/pnpm-lock.yaml
+
+      - name: Set up Decky Python runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install locked frontend dependencies
+        working-directory: plugin
+        run: pnpm install --frozen-lockfile
+
+      - name: Test backend behavior
+        working-directory: plugin
+        run: pnpm run test:backend
+
+      - name: Type-check frontend tests
+        working-directory: plugin
+        run: pnpm run test:frontend:typecheck
+
+      - name: Test frontend behavior with coverage
+        working-directory: plugin
+        run: pnpm run test:frontend:coverage
+
+      - name: Build production frontend
+        working-directory: plugin
+        run: pnpm run build
+
+      - name: Retain frontend coverage
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: decky-frontend-coverage
+          path: plugin/coverage/frontend
+          if-no-files-found: ignore
+          retention-days: 14
+
+  renderer:
+    name: MAKO Renderer (${{ matrix.toolchain }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - toolchain: gcc
+            cc: gcc
+            cxx: g++
+          - toolchain: clang
+            cc: clang
+            cxx: clang++
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install Renderer build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++ clang libvulkan-dev libx11-dev
+
+      - name: Configure Renderer tests
+        run: >-
+          cmake -S engine -B engine/build/ci-${{ matrix.toolchain }} -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DMAKO_BUILD_VK_LAYER=ON
+          -DMAKO_BUILD_UI=OFF
+          -DMAKO_BUILD_CLI=ON
+          -DMAKO_GPU_QUALITY_TEST=OFF
+
+      - name: Build Renderer and test executables
+        run: cmake --build engine/build/ci-${{ matrix.toolchain }}
+
+      - name: Run Renderer tests
+        run: ctest --test-dir engine/build/ci-${{ matrix.toolchain }} --output-on-failure
+
+  renderer-sanitizers:
+    name: MAKO Renderer (ASan + UBSan)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CC: gcc
+      CXX: g++
+      MAKO_ENABLE_SANITIZERS: ON
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install portable test dependencies
+        run: sudo apt-get update && sudo apt-get install -y cmake ninja-build g++
+
+      - name: Run sanitized portable policy tests
+        working-directory: engine
+        run: ./scripts/test-adaptive-scheduler.sh

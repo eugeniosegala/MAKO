@@ -3,6 +3,7 @@
   "version": "2.0.0",
   "description": "MAKO Decky controls for Steam Deck and compatible Linux systems",
   "type": "module",
+  "packageManager": "pnpm@11.17.0",
   "scripts": {
     "build": "node scripts/build-frontend.mjs",
     "watch": "rollup -c -w",
@@ -22,7 +23,11 @@
     "dev:prune-build-cache": "../engine/scripts/prune-build-cache.sh",
     "dev:prune-flatpak-cache": "../engine/scripts/prune-steamos-flatpak-cache.sh",
     "package:publish": "./scripts/publish-package.sh",
-    "test": "python3 -m unittest discover -s tests -p 'test_*.py'"
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "python3 -m unittest discover -s tests -p 'test_*.py'",
+    "test:frontend": "vitest run",
+    "test:frontend:coverage": "vitest run --coverage",
+    "test:frontend:typecheck": "tsc --noEmit -p tsconfig.test.json"
   },
   "repository": {
     "type": "git",
@@ -47,11 +52,18 @@
   "devDependencies": {
     "@decky/rollup": "^1.0.1",
     "@decky/ui": "^4.7.2",
+    "@testing-library/react": "^16.3.2",
+    "@types/node": "24.13.3",
     "@types/react": "18.3.3",
     "@types/react-dom": "18.3.0",
     "@types/webpack": "^5.28.5",
+    "@vitest/coverage-v8": "^4.1.11",
+    "jsdom": "^30.0.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
     "rollup": "^4.22.5",
-    "typescript": "^5.6.2"
+    "typescript": "^5.6.2",
+    "vitest": "^4.1.11"
   },
   "dependencies": {
     "@decky/api": "^1.1.2",

@@ -1,0 +1,111 @@
+name: SteamOS hardware validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      deploy_to_decky:
+        description: Deploy to an existing MAKO Decky installation and reload it after package validation
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: steamos-hardware-validation
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: AMD SteamOS release candidate
+    runs-on: [self-hosted, linux, x64, steamos, amd-gpu]
+    timeout-minutes: 120
+    env:
+      MAKO_GPU_QUALITY_TEST: REQUIRED
+      MAKO_STEAM_MACHINE: 1
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 11.17.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Confirm dedicated hardware prerequisites
+        run: |
+          test "$(uname -s)" = Linux
+          grep -qi '^ID=steamos' /etc/os-release
+          grep -qi '0x1002' /sys/class/drm/renderD*/device/vendor
+          for command in cmake ninja clang++ vulkaninfo flatpak flatpak-builder; do
+            command -v "$command" >/dev/null || {
+              echo "Required hardware-runner command is missing: $command" >&2
+              exit 1
+            }
+          done
+
+      - name: Install locked Decky dependencies
+        working-directory: plugin
+        run: pnpm install --frozen-lockfile
+
+      - name: Record hardware and driver evidence
+        run: |
+          mkdir -p engine/out
+          {
+            echo "commit=${GITHUB_SHA}"
+            echo "generated_at=$(date --utc --iso-8601=seconds)"
+            uname -a
+            cat /etc/os-release
+            vulkaninfo --summary
+          } > engine/out/hardware-validation.txt 2>&1
+
+      - name: Build and verify Renderer, Flatpaks, and the complete Decky ZIP
+        id: package
+        working-directory: plugin
+        run: |
+          version="$(tr -d '[:space:]' < ../engine/VERSION)"
+          decky_archive="$PWD/out/MAKO-Decky-hardware-validated-v${version}.zip"
+          ./scripts/package-local.sh \
+            --local-engine-repo ../engine \
+            "$decky_archive"
+          echo "decky_archive=$decky_archive" >> "$GITHUB_OUTPUT"
+
+      - name: Activate Decky's packaged Vulkan layer on the AMD GPU
+        working-directory: engine
+        run: |
+          smoke_root="$(mktemp -d "${TMPDIR:-/tmp}/mako-decky-payload.XXXXXX")"
+          trap 'rm -rf -- "$smoke_root"' EXIT
+          unzip -q "${{ steps.package.outputs.decky_archive }}" \
+            'Mako/bin/*-linux.tar.xz' -d "$smoke_root"
+          mapfile -t renderer_archives < <(
+            find "$smoke_root" -type f -name '*-linux.tar.xz' -print
+          )
+          if (( ${#renderer_archives[@]} != 1 )); then
+            echo "Expected exactly one native Renderer archive in the Decky ZIP." >&2
+            exit 1
+          fi
+          ./scripts/smoke-test-vulkan-layer.sh "${renderer_archives[0]}"
+
+      - name: Deploy to the dedicated Decky test installation
+        if: inputs.deploy_to_decky
+        working-directory: plugin
+        run: ./scripts/deploy-dev.sh --e2e --reload
+
+      - name: Retain packages, GPU comparisons, and validation logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: steamos-hardware-validation-${{ github.sha }}
+          path: |
+            engine/out/*.tar.xz
+            engine/out/hardware-validation.txt
+            engine/build/cache/quality-regression
+            plugin/out/*.zip
+          if-no-files-found: warn
+          retention-days: 30

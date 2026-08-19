@@ -4,6 +4,13 @@
   <img src="plugin/assets/mako-logo.webp" width="256" alt="MAKO logo" />
 </p>
 
+<p align="center">
+  <a href="https://github.com/eugeniosegala/MAKO/actions/workflows/tests.yml"><img src="https://img.shields.io/github/actions/workflow/status/eugeniosegala/MAKO/tests.yml?branch=main&amp;style=flat-square&amp;label=tests" alt="Tests status" /></a>
+  <a href="https://github.com/eugeniosegala/MAKO/releases/latest"><img src="https://img.shields.io/github/v/release/eugeniosegala/MAKO?display_name=tag&amp;sort=semver&amp;style=flat-square&amp;label=release" alt="Latest release" /></a>
+  <a href="LICENSE.md"><img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue?style=flat-square" alt="GPL-3.0-or-later license" /></a>
+  <img src="https://img.shields.io/badge/platform-SteamOS%20%7C%20Linux-6b8e23?style=flat-square" alt="SteamOS and Linux" />
+</p>
+
 <!-- prettier-ignore -->
 > [!IMPORTANT]
 > **[Decky LSFG-VK Experimental](https://github.com/eugeniosegala/decky-lsfg-vk-experimental) and [LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) are now MAKO.** This repository is their new home and continuation. Future development, releases, documentation, and issue tracking happen here.
@@ -173,6 +180,7 @@ The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications 
 - [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md): choose the MAKO Decky or standalone renderer collection workflow and submit one shared report.
 - [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
 - [Release process](HOW_TO_RELEASE.md): publish both components end to end with one versioned command.
+- [Testing](TESTING.md): pull-request gates, sanitizer coverage, SteamOS hardware validation, and the runtime compatibility boundary.
 - [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.
 
 ## Featured in

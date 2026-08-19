@@ -23,6 +23,14 @@ build-engine:
 test-engine: build-engine
     ctest --test-dir engine/build --output-on-failure
 
+# Run the portable Renderer policy tests without a Vulkan SDK or GPU.
+test-engine-portable:
+    cd engine && ./scripts/test-adaptive-scheduler.sh
+
+# Run the portable Renderer policy tests under ASan and UBSan.
+test-engine-sanitized:
+    cd engine && MAKO_ENABLE_SANITIZERS=ON ./scripts/test-adaptive-scheduler.sh
+
 # Build the Decky frontend.
 build-plugin:
     pnpm --dir plugin run build
