@@ -29,6 +29,7 @@ trap cleanup EXIT
 prefix="$smoke_root/prefix"
 home_dir="$smoke_root/home"
 log_file="$smoke_root/vulkaninfo.log"
+inactive_log_file="$smoke_root/vulkaninfo-inactive.log"
 swapchain_log="$smoke_root/vkcube.log"
 mkdir -p "$prefix" "$home_dir"
 tar -xJf "$archive" -C "$prefix"
@@ -42,6 +43,33 @@ for required_file in "$manifest" "$library" "$launcher"; do
         exit 1
     fi
 done
+
+# The manifest is installed in a global discovery directory, but MAKO must be
+# absent from the process unless the caller explicitly opts in. Exercise the
+# loader's real enable_environment gate before testing the active path; a
+# regression here could affect Gamescope, Steam, and every unrelated Vulkan
+# application merely because the package is installed.
+if ! env -u ENABLE_MAKO -u DISABLE_MAKO \
+        HOME="$home_dir" \
+        XDG_CONFIG_HOME="$home_dir/.config" \
+        XDG_DATA_HOME="$prefix/share" \
+        VK_LOADER_DEBUG=layer \
+        vulkaninfo --summary >"$inactive_log_file" 2>&1; then
+    cat "$inactive_log_file" >&2
+    echo "vulkaninfo failed while testing MAKO Renderer's inactive manifest gate." >&2
+    exit 1
+fi
+if ! grep -Fq 'VkLayer_MAKO_render.json' "$inactive_log_file"; then
+    cat "$inactive_log_file" >&2
+    echo "The Vulkan loader did not discover MAKO Renderer's inactive manifest." >&2
+    exit 1
+fi
+if grep -Eq 'Insert(ed)? (instance|device) layer "VK_LAYER_MAKO_render"|MAKO Renderer: render layer active' \
+        "$inactive_log_file"; then
+    cat "$inactive_log_file" >&2
+    echo "MAKO Renderer activated without ENABLE_MAKO=1." >&2
+    exit 1
+fi
 
 if ! env -u DISABLE_MAKO \
         HOME="$home_dir" \

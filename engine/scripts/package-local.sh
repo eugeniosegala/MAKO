@@ -124,7 +124,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
         '
 fi
 
-for command in cmake ninja clang++ nm strings tar sha256sum; do
+for command in cmake ninja clang++ nm readelf strings tar sha256sum; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         exit 1
@@ -393,6 +393,13 @@ if [[ "$build_32_bit" == true ]]; then
     layer_binaries+=("$install_dir/lib32/libmako-render.so")
 fi
 for layer_binary in "${layer_binaries[@]}"; do
+    dynamic_dependencies="$(readelf -d "$layer_binary")"
+    if ! grep -Fq 'Shared library: [libstdc++.so.6]' <<< "$dynamic_dependencies"; then
+        echo "Packaging failed: $layer_binary must use SteamOS's dynamic C++ runtime" >&2
+        echo "Static libstdc++ inside a Vulkan layer is not supported." >&2
+        exit 1
+    fi
+
     exported_symbols="$(nm -D --defined-only "$layer_binary" | awk '{print $3}')"
     for required_entrypoint in \
             vkNegotiateLoaderLayerInterfaceVersion \
