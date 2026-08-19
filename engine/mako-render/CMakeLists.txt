@@ -2,7 +2,9 @@ set(LAYER_SOURCES
     "src/entrypoint.cpp"
     "src/gamescope_hdr_feedback.cpp"
     "src/instance.cpp"
-    "src/swapchain.cpp")
+    "src/present_diagnostics.cpp"
+    "src/swapchain.cpp"
+    "src/swapchain_present.cpp")
 
 add_library(mako-adaptive STATIC
     "src/adaptive_scheduler.cpp")

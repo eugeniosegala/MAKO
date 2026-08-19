@@ -16,6 +16,7 @@
 #include "profile_update.hpp"
 #include "presentation_policy.hpp"
 
+#include <array>
 #include <chrono>
 #include <cstdint>
 #include <optional>
@@ -79,7 +80,7 @@ namespace mako::layer {
             std::span<const VkSemaphore> semaphores);
         /// stable identifier used to correlate this context's diagnostics
         [[nodiscard]] uint64_t diagnosticsId() const {
-            return this->diagnosticsContextId;
+            return this->diagnosticsState.contextId;
         }
 
         /// Apply configuration that is safe for an already-created context.
@@ -101,6 +102,58 @@ namespace mako::layer {
         /// Stop generation in place when the active profile disappears.
         void disableFrameGeneration();
     private:
+        struct PresentInvocation {
+            const vk::Vulkan& vk;
+            VkQueue queue;
+            VkSwapchainKHR swapchain;
+            const void* nextChain;
+            uint32_t imageIndex;
+            std::span<const VkSemaphore> waitSemaphores;
+            std::chrono::steady_clock::time_point started;
+        };
+
+        struct PresentationFramePlan {
+            size_t generatedFrameCount{0};
+            size_t admittedGeneratedFrameCount{0};
+            size_t scheduledGeneratedFrameCount{0};
+            bool historyWarmupActive{false};
+            std::optional<uint64_t> configuredAcquireTimeout;
+            std::array<uint32_t, 3> preacquiredGeneratedImages{};
+        };
+
+        struct FrameState {
+            size_t sequenceIndex{1};
+            size_t realFrameIndex{0};
+            size_t backendFrameIndex{0};
+            bool renderFenceInFlight{false};
+            std::optional<std::chrono::steady_clock::time_point>
+                lastPresentStarted;
+            std::optional<std::chrono::steady_clock::duration>
+                recentRealInterval;
+        };
+
+        struct RecoveryState {
+            GeneratedImageAdmission generatedImageAdmission;
+            PipelineBusyRecovery pipelineBusyRecovery;
+            bool backendPending{false};
+            size_t historyWarmupRemaining{0};
+        };
+
+        struct DiagnosticsState {
+            std::optional<std::chrono::steady_clock::time_point>
+                fixedWindowStarted;
+            size_t fixedRealFrames{0};
+            size_t fixedGeneratedFrames{0};
+            size_t fixedSkippedFrames{0};
+            uint64_t contextId{0};
+        };
+
+        struct ColorTransitionState {
+            std::optional<bool> pendingGamescopeHdrActive;
+            uint64_t pendingHdrStateRevision{0};
+            std::optional<std::chrono::steady_clock::time_point> retryAt;
+        };
+
         std::vector<vk::Image> sourceImages;
         std::vector<vk::Image> destinationImages;
         ls::lazy<vk::TimelineSemaphore> syncSemaphore;
@@ -116,44 +169,59 @@ namespace mako::layer {
 
         ls::R<backend::Instance> instance;
         ls::owned_ptr<ls::R<backend::Context>> ctx;
-        size_t idx{1};
-        size_t fidx{0}; // real frame index
-        size_t backendFrameIndex{0};
-        bool renderFenceInFlight{false};
-        GeneratedImageAdmission generatedImageAdmission;
-        PipelineBusyRecovery pipelineBusyRecovery;
-        bool backendRecoveryPending{false};
+        FrameState frameState;
+        RecoveryState recoveryState;
+        DiagnosticsState diagnosticsState;
+        ColorTransitionState colorTransitionState;
         std::optional<AdaptiveScheduler> adaptiveScheduler;
         std::vector<float> fixedFrameTimestamps;
-        std::optional<std::chrono::steady_clock::time_point>
-            fixedDiagnosticWindowStarted;
-        size_t fixedDiagnosticRealFrames{0};
-        size_t fixedDiagnosticGeneratedFrames{0};
-        size_t fixedDiagnosticSkippedFrames{0};
-        size_t configurationHistoryWarmupRemaining{0};
-        uint64_t diagnosticsContextId{0};
 
         bool gamescopeManaged{false};
         // Immutable for this context; copied from SwapchainInfo rather than
         // inferred again from the current SDR/HDR colour pipeline.
         bool privateOrderedTransport{false};
         std::optional<uint32_t> gamescopeRefreshHz;
-        std::optional<bool> pendingGamescopeHdrActive;
-        uint64_t pendingHdrStateRevision{0};
-        std::optional<std::chrono::steady_clock::time_point>
-            colorTransitionRetryAt;
         FixedRefreshBudget fixedRefreshBudget;
         RealFramePacer realFramePacer;
-        std::optional<std::chrono::steady_clock::time_point> lastPresentStarted;
-        std::optional<std::chrono::steady_clock::duration> recentRealInterval;
 
         SwapchainColorPipeline colorPipeline;
         ls::GameConf profile;
         SwapchainInfo info;
 
         [[nodiscard]] bool applyPendingColorPipeline(const vk::Vulkan& vk);
+        [[nodiscard]] static std::optional<uint64_t>
+            generatedImageAcquireTimeoutNs();
         void rebuildPrivateResources(const vk::Vulkan& vk,
             SwapchainColorPipeline pipeline);
+        void recordPresentCadence(
+            std::chrono::steady_clock::time_point presentNow);
+        [[nodiscard]] VkResult presentNativeFrame(
+            const PresentInvocation& invocation);
+        [[nodiscard]] VkResult presentOriginalImage(
+            const PresentInvocation& invocation, VkSemaphore waitSemaphore,
+            const void* nextChain);
+        [[nodiscard]] bool recoverBackendIfReady();
+        void ensureHistoryWarmup();
+        [[nodiscard]] PresentationFramePlan prepareFramePlan(
+            std::chrono::steady_clock::time_point presentNow,
+            bool gamescopeHdrTransport);
+        [[nodiscard]] bool generationPipelineReady(
+            const vk::Vulkan& vk, bool gamescopeHdrTransport,
+            size_t generatedFrameCount,
+            std::chrono::steady_clock::time_point presentNow);
+        void prepareRenderFence(const vk::Vulkan& vk);
+        void preacquireGeneratedImages(
+            const PresentInvocation& invocation,
+            PresentationFramePlan& plan);
+        void submitSourceCopy(const PresentInvocation& invocation,
+            VkImage swapchainImage, const vk::Image& sourceImage);
+        [[nodiscard]] VkResult presentHistoryOnly(
+            const PresentInvocation& invocation,
+            const PresentationFramePlan& plan);
+        [[nodiscard]] VkResult presentGeneratedFrames(
+            const PresentInvocation& invocation,
+            const PresentationFramePlan& plan,
+            bool gamescopeHdrTransport);
         VkResult retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             VkQueue queue, VkSwapchainKHR swapchain, const void* nextChain,
             uint32_t originalImageIndex,
