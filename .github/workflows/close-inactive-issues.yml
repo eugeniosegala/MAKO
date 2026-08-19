@@ -1,0 +1,71 @@
+name: Close inactive issues
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  issues: write
+
+concurrency:
+  group: close-inactive-issues
+  cancel-in-progress: false
+
+jobs:
+  close-inactive-issues:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Close issues inactive for more than seven days
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const inactiveForMs = 7 * 24 * 60 * 60 * 1000;
+            const inactiveBefore = Date.now() - inactiveForMs;
+            const issues = await github.paginate(github.rest.issues.listForRepo, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              sort: 'updated',
+              direction: 'asc',
+              per_page: 100,
+            });
+
+            let closed = 0;
+
+            for (const issue of issues) {
+              if (issue.pull_request || new Date(issue.updated_at).getTime() >= inactiveBefore) {
+                continue;
+              }
+
+              const { data: currentIssue } = await github.rest.issues.get({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issue.number,
+              });
+
+              if (
+                currentIssue.state !== 'open' ||
+                currentIssue.pull_request ||
+                new Date(currentIssue.updated_at).getTime() >= inactiveBefore
+              ) {
+                continue;
+              }
+
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: currentIssue.number,
+                body: 'This issue was automatically closed because it has had no activity for more than seven days. Reply with new information if it should be reopened.',
+              });
+
+              await github.rest.issues.update({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: currentIssue.number,
+                state: 'closed',
+              });
+
+              closed += 1;
+            }
+
+            core.info(`Closed ${closed} inactive issue(s).`);
