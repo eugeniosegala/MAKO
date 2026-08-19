@@ -11,9 +11,14 @@ const steamLanguageMap: Record<string, string> =
 const languageMetadata = languages.language_metadata as unknown as Record<string, LanguageEntry>;
 const translationSets = languages as unknown as Record<string, Record<string, string>>;
 
-const normalizeLanguage = (language: string): string => {
-  const normalized = language.trim().toLowerCase();
-  return steamLanguageMap[normalized] ?? normalized;
+export const normalizeLanguage = (language?: string): string => {
+  const normalized = (language || "en").trim().toLowerCase().replace(/_/g, "-");
+  const mapped = steamLanguageMap[normalized] ?? normalized;
+
+  // Steam has used both language names (such as `schinese`) and standard
+  // locale identifiers (such as `zh-CN`) here. Translation files are keyed by
+  // their base language so either representation resolves consistently.
+  return mapped.split("-", 1)[0] || "en";
 };
 
 function getLangs(): Record<string, LanguageEntry> {
@@ -33,14 +38,8 @@ function getLangs(): Record<string, LanguageEntry> {
 
 export const LANGS = getLangs();
 
-let cachedLang: string | undefined;
-
 export const getCurrentLanguage = (): string => {
-  if (cachedLang) return cachedLang;
-
-  const lang = normalizeLanguage(window.LocalizationManager.m_rgLocalesToUse[0]);
-  cachedLang = lang;
-  return lang;
+  return normalizeLanguage(window.LocalizationManager?.m_rgLocalesToUse?.[0]);
 };
 
 export const getLanguageName = (lang?: string): string => {

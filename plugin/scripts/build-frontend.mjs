@@ -53,6 +53,20 @@ try {
     throw new Error("defaults/i18n/template.json must contain a translation object");
   }
 
+  const languageMetadata = translations.language_metadata;
+  if (!languageMetadata || typeof languageMetadata !== "object" || Array.isArray(languageMetadata)) {
+    throw new Error("defaults/i18n/language_metadata.json must contain a language object");
+  }
+
+  const advertisedWithoutStrings = Object.keys(languageMetadata).filter(
+    (language) => language !== "en" && !(language in translations)
+  );
+  if (advertisedWithoutStrings.length) {
+    throw new Error(
+      `Advertised languages without translations: ${advertisedWithoutStrings.join(", ")}`
+    );
+  }
+
   const metadataFiles = new Set(["language_metadata", "steam_language_map", "template"]);
   for (const [language, strings] of Object.entries(translations)) {
     if (metadataFiles.has(language)) continue;
