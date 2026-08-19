@@ -14,8 +14,8 @@
 
 | Component | Recommended for | Releases |
 | --- | --- | --- |
-| **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users | [Latest release (ZIP under Assets)](https://github.com/eugeniosegala/MAKO/releases/latest) |
-| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Latest release (Linux archive under Assets)](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) |
+| **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users | [Latest MAKO Decky release (ZIP under Assets)](https://github.com/eugeniosegala/MAKO/releases/latest) |
+| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Latest MAKO Renderer release (Linux archive under Assets)](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) |
 
 <!-- prettier-ignore -->
 > [!NOTE]
