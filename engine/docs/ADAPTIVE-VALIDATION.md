@@ -1,9 +1,6 @@
 # Adaptive validation
 
-Adaptive Frame Generation has two complementary validation layers. The
-deterministic layer verifies scheduling policy without a Vulkan device. The
-runtime layer verifies the driver, compositor, game, and GPU interactions that
-cannot be modeled faithfully in a unit test.
+Adaptive Frame Generation has two complementary validation layers. The deterministic layer verifies scheduling policy without a Vulkan device. The runtime layer verifies the driver, compositor, game, and GPU interactions that cannot be modeled faithfully in a unit test.
 
 ## Deterministic policy tests
 
@@ -13,10 +10,7 @@ Run the portable scheduler suite from the repository root:
 scripts/test-adaptive-scheduler.sh
 ```
 
-The test build disables the Vulkan layer, UI, and CLI. It therefore does not
-need a Vulkan SDK, GPU, `Lossless.dll`, Gamescope, or a Linux host. Every clock
-value is supplied by the test, so a cadence trace produces the same decisions
-on every run.
+The test build disables the Vulkan layer, UI, and CLI. It therefore does not need a Vulkan SDK, GPU, `Lossless.dll`, Gamescope, or a Linux host. Every clock value is supplied by the test, so a cadence trace produces the same decisions on every run.
 
 The suite currently locks down:
 
@@ -31,9 +25,7 @@ The suite currently locks down:
 - Smooth Cadence validation near an integer output ratio;
 - timestamp ordering, capacity bounds, and deterministic trace replay.
 
-`adaptive-scheduler-matrix` also runs 120 combinations of base cadence, target,
-multiplier ceiling, and Smooth Cadence. It checks output bounds and can emit
-CSV when built in a persistent directory and run directly:
+`adaptive-scheduler-matrix` also runs 120 combinations of base cadence, target, multiplier ceiling, and Smooth Cadence. It checks output bounds and can emit CSV when built in a persistent directory and run directly:
 
 ```bash
 cmake -S . -B build/adaptive-policy \
@@ -45,13 +37,9 @@ cmake --build build/adaptive-policy --target mako-adaptive-matrix
 build/adaptive-policy/mako-render/mako-adaptive-matrix > adaptive-policy-matrix.csv
 ```
 
-The CSV includes average generated frames, generated-frame share, and frame-count
-changes. Generated share is useful as an artifact-exposure proxy—2x, 3x, and 4x
-can display up to 50%, 67%, and 75% generated frames respectively—but it is not
-a measurement of ghosting or model quality.
+The CSV includes average generated frames, generated-frame share, and frame-count changes. Generated share is useful as an artifact-exposure proxy: 2x, 3x, and 4x can display up to 50%, 67%, and 75% generated frames respectively, but it is not a measurement of ghosting or model quality.
 
-The normal Linux packaging script builds and runs both tests before producing
-an archive. A policy regression therefore blocks local release packaging.
+The normal Linux packaging script builds and runs both tests before producing an archive. A policy regression therefore blocks local release packaging.
 
 For a local CPU-cost comparison, run:
 
@@ -59,44 +47,29 @@ For a local CPU-cost comparison, run:
 scripts/benchmark-adaptive-scheduler.sh
 ```
 
-This reports scheduler nanoseconds per decision for real-only, strict 2x,
-strict 4x, and Smooth Cadence cases. It is intentionally not a pass/fail test:
-CPU frequency, compiler version, and host load affect absolute timings. Compare
-results only on the same machine and toolchain. The hot-path frame plan stores
-its maximum three timestamps inline, so planning performs no per-frame heap
-allocation.
+This reports scheduler nanoseconds per decision for real-only, strict 2x, strict 4x, and Smooth Cadence cases. It is intentionally not a pass/fail test: CPU frequency, compiler version, and host load affect absolute timings. Compare results only on the same machine and toolchain. The hot-path frame plan stores its maximum three timestamps inline, so planning performs no per-frame heap allocation.
 
 ## Runtime compatibility matrix
 
-Deterministic tests cannot validate Vulkan synchronization, generated-image
-availability, compositor pacing, model quality, or game behavior during a
-swapchain rebuild. Record those results separately and retain the diagnostic
-trace for every failure.
+Deterministic tests cannot validate Vulkan synchronization, generated-image availability, compositor pacing, model quality, or game behavior during a swapchain rebuild. Record those results separately and retain the diagnostic trace for every failure.
 
-For a ghosting-sensitive comparison, capture the same repeatable scene with
-Fixed 2x, Adaptive capped at 2x, and Adaptive at the intended higher ceiling.
-Compare moving edges after startup, overlay recovery, and a short hitch. A
-higher target is not a quality win if it increases generated share, cadence
-switches, or interpolation distance enough to worsen visible trails. The
-three-frame history warm-up and history-only fallback should remain enabled;
-they are correctness work, not optional performance overhead.
+For a ghosting-sensitive comparison, capture the same repeatable scene with Fixed 2x, Adaptive capped at 2x, and Adaptive at the intended higher ceiling. Compare moving edges after startup, overlay recovery, and a short hitch. A higher target is not a quality win if it increases generated share, cadence switches, or interpolation distance enough to worsen visible trails. The three-frame history warm-up and history-only fallback should remain enabled; they are correctness work, not optional performance overhead.
 
 Use this minimum matrix for a release candidate:
 
 | Platform | API path | Required scenarios |
-|---|---|---|
+| --- | --- | --- |
 | Steam Deck / AMD RDNA2 / Gamescope | DXVK (DX11) | Fixed baseline, Adaptive steady target, Steam overlay, live Off → On |
 | Steam Deck / AMD RDNA2 / Gamescope | VKD3D-Proton (DX12) | Menu transition, fast-present burst, 100–250 ms hitch, longer interruption |
 | Desktop AMD or Intel / Wayland compositor | Native Vulkan or DXVK | Fractional target, Smooth Cadence, unreachable target, resize/recreation |
 | Desktop NVIDIA / current proprietary driver | Native Vulkan or DXVK | Fixed regression baseline, Adaptive ramp/load shedding, resize/recreation |
 
-If hardware for a row is unavailable, mark it **not tested** rather than
-inferring compatibility from another driver.
+If hardware for a row is unavailable, mark it **not tested** rather than inferring compatibility from another driver.
 
 For each run, capture:
 
 | Field | Value |
-|---|---|
+| --- | --- |
 | Release commit | Git commit and build version |
 | Device | CPU, GPU, handheld/desktop |
 | Software | Kernel, Mesa/NVIDIA driver, compositor, Proton version |
@@ -120,9 +93,6 @@ A candidate is ready for broader testing when:
 4. generation never exceeds its configured ceiling;
 5. Off → On starts from fresh temporal and recovery state;
 6. every runtime failure has a context-correlated diagnostic trace;
-7. unsupported matrix rows and known game-specific failures are documented in
-   the release notes.
+7. unsupported matrix rows and known game-specific failures are documented in the release notes.
 
-These gates deliberately separate **policy correctness** from **runtime
-compatibility**. Passing the deterministic suite is necessary, but it is not a
-claim that every Vulkan driver or game has been validated.
+These gates deliberately separate **policy correctness** from **runtime compatibility**. Passing the deterministic suite is necessary, but it is not a claim that every Vulkan driver or game has been validated.

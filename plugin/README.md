@@ -4,8 +4,7 @@
   <img src="assets/mako-logo.webp" width="256" alt="MAKO Decky logo" />
 </p>
 
-> [!NOTE]
-> **[Decky LSFG-VK Experimental](https://github.com/eugeniosegala/decky-lsfg-vk-experimental) is now MAKO Decky.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
+> [!NOTE] **[Decky LSFG-VK Experimental](https://github.com/eugeniosegala/decky-lsfg-vk-experimental) is now MAKO Decky.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
 MAKO Decky is the Decky Loader component of MAKO. It provides per-game controls, installation, updates, Flatpak preparation, and game launch integration for MAKO Renderer on Steam Deck and compatible Linux systems.
 
@@ -13,13 +12,9 @@ MAKO is an independent community project bringing Lossless Scaling frame generat
 
 ## Download
 
-Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download the ZIP under **Assets**.
-Previous Decky releases are available on the
-[MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
+Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download the ZIP under **Assets**. Previous Decky releases are available on the [MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
 
-For direct Vulkan-layer installation without Decky, open the
-[latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0)
-and download the Linux archive under **Assets**.
+For direct Vulkan-layer installation without Decky, open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download the Linux archive under **Assets**.
 
 ## What it manages
 

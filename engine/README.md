@@ -4,20 +4,15 @@
   <img src="assets/mako-render-logo.webp" width="256" alt="MAKO Renderer logo" />
 </p>
 
-> [!NOTE]
-> **[LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
+> [!NOTE] **[LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
-MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Lossless Scaling frame generation—and, as the project expands, scaling—to Steam Deck and desktop Linux.
+MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Lossless Scaling frame generation to Steam Deck and desktop Linux, with scaling planned as the project expands.
 
 The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. It requires a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer does not bundle or replace that proprietary library.
 
 ## Downloads
 
-Standalone Linux and Flatpak archives are published on the
-[latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0).
-Download the required archive under **Assets**.
-Steam Deck users who want the managed workflow should install the
-[latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
+Standalone Linux and Flatpak archives are published on the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0). Download the required archive under **Assets**. Steam Deck users who want the managed workflow should install the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
 ## Installation
 
@@ -52,9 +47,9 @@ After extracting the host archive, open the MAKO Renderer configuration UI using
 - **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode. Open the application launcher, search for **MAKO Renderer Configuration**, and select it.
 - **Terminal:** Open Konsole or another terminal and run:
 
-  ```bash
-  ~/.local/bin/mako-ui
-  ```
+    ```bash
+    ~/.local/bin/mako-ui
+    ```
 
 Do not run the UI with `sudo`. It reads and writes your per-user configuration under `~/.config/mako-render/`. If the command reports a missing Qt component, install the graphical-interface requirements below and try again.
 
@@ -119,15 +114,15 @@ On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from
 2. Set **Active In** to the game's Linux binary, Windows executable, or process name. Start with fixed **2x** frame generation and adjust one setting at a time.
 3. Launch only the selected game through MAKO. For a Steam game, use this launch option:
 
-   ```text
-   ENABLE_MAKO=1 %command%
-   ```
+    ```text
+    ENABLE_MAKO=1 %command%
+    ```
 
-   For a direct desktop command, prefix the game's command in the same way:
+    For a direct desktop command, prefix the game's command in the same way:
 
-   ```bash
-   ENABLE_MAKO=1 your-game-command
-   ```
+    ```bash
+    ENABLE_MAKO=1 your-game-command
+    ```
 
 4. Start the game normally. MAKO's implicit Vulkan layer remains off for every other process. Do not combine MAKO with another Lossless Scaling Vulkan wrapper for the same game.
 
@@ -177,8 +172,7 @@ The default duration is 10 seconds. Run `~/.local/bin/mako-cli` without a subcom
 
 ## In-game considerations
 
-> [!TIP]
-> Try the game's V-Sync setting both on and off. It can make frame delivery feel steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep whichever setting feels smoother and more responsive for that game.
+> [!TIP] Try the game's V-Sync setting both on and off. It can make frame delivery feel steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep whichever setting feels smoother and more responsive for that game.
 
 Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart the game after major display, DLL, GPU, Flow Scale, Performance Mode, or model changes.
 
