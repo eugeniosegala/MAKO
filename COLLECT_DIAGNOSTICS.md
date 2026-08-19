@@ -1,7 +1,5 @@
 # Collect MAKO Diagnostics
 
-Hey! Thank you for reaching out and reporting this.
-
 To help me understand what happened, please follow one of the two diagnostic guides below. You only need the guide that matches how MAKO was installed on your device. It will show you how to enable focused logging, reproduce the problem once, create `MAKO-diagnostics.txt`, restore your normal launch settings, and send the report to me.
 
 The shared [MAKO diagnostic report form](https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform) will guide you through describing the problem and uploading the file, so you do not need to write a separate diagnostic report in the GitHub issue.
