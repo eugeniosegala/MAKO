@@ -166,4 +166,4 @@ sudo cmake --install build
 
 Keep track of the installed files, in order to uninstall them later if needed.
 
-The installed manifest is wrapper-scoped. Start a direct game with `ENABLE_MAKO=1`.
+The installed manifest is launch-scoped. Start a direct game with `DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1` so another installed LSFG-VK frame-generation layer cannot attach to the same process.

@@ -33,6 +33,15 @@ LIB_FILENAME = "libmako-render.so"
 MAKO_LAYER_NAME = "VK_LAYER_MAKO_render"
 MAKO_LAYER_ENABLE_ENV = "ENABLE_MAKO"
 MAKO_LAYER_DISABLE_ENV = "DISABLE_MAKO"
+# MAKO and the public LSFG-VK releases are separate frame-generation layers.
+# Loading either public identity alongside MAKO would make both layers
+# intercept the same swapchain and presentation calls. Disable only those
+# known competitors in the per-game launcher instead of hiding every other
+# implicit Vulkan layer from the game.
+COMPETING_LSFG_DISABLE_ENVS = (
+    "DISABLE_LSFG",  # LSFG-VK 1.x
+    "DISABLE_LSFGVK",  # LSFG-VK 2.x
+)
 MAKO_LAYER_BUILD_MARKER = (
     b"mako: render layer active; identity="
     b"VK_LAYER_MAKO_render; build="
@@ -54,10 +63,10 @@ FLATPAK_EXTENSION_NAME = "org.freedesktop.Platform.VulkanLayer.makorender"
 FLATPAK_EXTENSION_PREFIX = "/usr/lib/extensions/vulkan/makorender"
 FLATPAK_IMPLICIT_LAYER_DIR = f"{FLATPAK_EXTENSION_PREFIX}/share/vulkan/implicit_layer.d"
 # Heroic's Flatpak ships Gamescope as a separate Vulkan runtime extension.
-# When the per-game UMU wrapper must use VK_IMPLICIT_LAYER_PATH to carry this
-# MAKO Renderer layer into Pressure Vessel, keep Gamescope's manifest in that
-# explicit search set as well. Removing it changes ordinary SDR presentation,
-# frame limiting, and window integration before MAKO creates a swapchain.
+# Add it alongside MAKO when the per-game wrapper exposes mounted extensions
+# to the child compatibility environment. This preserves Gamescope's ordinary
+# SDR presentation, frame limiting, and window integration without replacing
+# the loader's standard implicit-layer search paths.
 FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR = (
     "/usr/lib/extensions/vulkan/gamescope/share/vulkan/implicit_layer.d"
 )

@@ -36,6 +36,8 @@ flatpak override --user --filesystem="$HOME/.config/mako-render:rw" "$appid"
 flatpak override --user --filesystem="$HOME/.local/share/Steam/steamapps/common:ro" "$appid"
 flatpak override --user --env=MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" "$appid"
 flatpak override --user --env=ENABLE_MAKO=1 "$appid"
+flatpak override --user --env=DISABLE_LSFG=1 "$appid"
+flatpak override --user --env=DISABLE_LSFGVK=1 "$appid"
 ```
 
-The extension remains inactive unless `ENABLE_MAKO=1` is set for the application.
+The extension remains inactive unless `ENABLE_MAKO=1` is set for the application. The two targeted disable overrides prevent separately installed LSFG-VK releases from loading into that application alongside MAKO; other Vulkan layers remain available normally.

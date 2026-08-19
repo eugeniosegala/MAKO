@@ -126,7 +126,7 @@ versions=26.08;25.08;24.08
                 [
                     "override",
                     "--user",
-                    "--unset-env=VK_ADD_IMPLICIT_LAYER_PATH",
+                    "--unset-env=VK_IMPLICIT_LAYER_PATH",
                     app_id,
                 ],
                 calls,
@@ -144,13 +144,18 @@ versions=26.08;25.08;24.08
                 [
                     "override",
                     "--user",
-                    "--env=VK_IMPLICIT_LAYER_PATH="
+                    "--env=VK_ADD_IMPLICIT_LAYER_PATH="
                     "/usr/lib/extensions/vulkan/makorender/share/"
                     "vulkan/implicit_layer.d",
                     app_id,
                 ],
                 calls,
             )
+            for variable in ("DISABLE_LSFG", "DISABLE_LSFGVK"):
+                self.assertIn(
+                    ["override", "--user", f"--env={variable}=1", app_id],
+                    calls,
+                )
 
     def test_heroic_preparation_keeps_environment_per_game(self):
         app_id = "com.heroicgameslauncher.hgl"
@@ -190,6 +195,8 @@ versions=26.08;25.08;24.08
             for variable in (
                 "MAKO_CONFIG",
                 "ENABLE_MAKO",
+                "DISABLE_LSFG",
+                "DISABLE_LSFGVK",
                 "VK_IMPLICIT_LAYER_PATH",
                 "VK_ADD_IMPLICIT_LAYER_PATH",
             ):
@@ -209,7 +216,9 @@ filesystems=/config;/dll;/wrapper;
 [Environment]
 MAKO_CONFIG=/config/conf.toml
 ENABLE_MAKO=1
-VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implicit_layer.d
+DISABLE_LSFG=1
+DISABLE_LSFGVK=1
+VK_ADD_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implicit_layer.d
 """
         self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
             complete_override
@@ -226,6 +235,19 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
         )
         self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
             incomplete_override
+        )
+
+        status = self.service._check_app_override_status(app_id)
+
+        self.assertTrue(status["legacy_env"])
+        self.assertFalse(status["required_env"])
+
+        overriding_path = complete_override.replace(
+            "[Environment]\n",
+            "[Environment]\nVK_IMPLICIT_LAYER_PATH=/legacy/isolated/path\n",
+        )
+        self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
+            overriding_path
         )
 
         status = self.service._check_app_override_status(app_id)
@@ -254,6 +276,8 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
             for variable in (
                 "MAKO_CONFIG",
                 "ENABLE_MAKO",
+                "DISABLE_LSFG",
+                "DISABLE_LSFGVK",
                 "VK_IMPLICIT_LAYER_PATH",
                 "VK_ADD_IMPLICIT_LAYER_PATH",
             ):

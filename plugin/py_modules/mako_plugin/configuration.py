@@ -23,9 +23,10 @@ from .config_schema_generated import (
 from .constants import (
     ARMADA_DEVICE_ENV,
     ARMADA_GAME_LAUNCH,
-    MAKO_LAYER_ENABLE_ENV,
+    COMPETING_LSFG_DISABLE_ENVS,
     FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR,
     FLATPAK_IMPLICIT_LAYER_DIR,
+    MAKO_LAYER_ENABLE_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
 )
 from .process_detection import (
@@ -38,13 +39,14 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 33"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 34"
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
         "export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS=",
         "export MAKO_PRESENT_DIAGNOSTICS=",
         f"export {MAKO_LAYER_ENABLE_ENV}=1",
+        *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
         "export MAKO_PROFILE_FALLBACK=",
         "mako_diagnostics_default=",
     )
@@ -789,16 +791,16 @@ class ConfigurationService(BaseService):
         ]
 
     def _generate_layer_environment_lines(self) -> list[str]:
-        """Activate only the registered MAKO Renderer layer for this game.
+        """Activate MAKO for this game without replacing Vulkan discovery.
 
         The same wrapper is used in Steam launch options and as Heroic's
         per-game wrapper command. Host launches use the uniquely named, gated
         manifest installed in Vulkan's normal per-user directory so Pressure
         Vessel can register it before this wrapper starts. Heroic's UMU launch
-        path rebuilds the child's Vulkan manifest search from an explicit
-        override; use the mounted Flatpak extension as that override so the
-        MAKO Renderer layer survives into the game process. The HDR exposure
-        boundary is enforced separately.
+        path needs the mounted Flatpak extensions added to the child's search
+        path. Preserve every standard and caller-provided layer while disabling
+        only the two public LSFG identities that must not share a swapchain
+        with MAKO. The HDR exposure boundary is enforced separately.
         """
         diagnostics_log_path = self.config_dir / "present-diagnostics.log"
         diagnostics_default = "1" if self.development_build else "0"
@@ -809,23 +811,20 @@ class ConfigurationService(BaseService):
             # always wins, including 0 to turn diagnostics off for profiling.
             f'export MAKO_PRESENT_DIAGNOSTICS="${{MAKO_PRESENT_DIAGNOSTICS:-{diagnostics_default}}}"',
             f"export {MAKO_LAYER_ENABLE_ENV}=1",
+            *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
             f"if [ -d {shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)} ]; then",
             f"    mako_implicit_layer_path={shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)}",
             f"    if [ -d {shlex.quote(FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR)} ]; then",
             "        # Gamescope must stay above MAKO Renderer in Heroic's Vulkan chain.",
             f"        mako_implicit_layer_path={shlex.quote(FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR)}:\"$mako_implicit_layer_path\"",
             "    fi",
-            'elif [ "${MAKO_DISABLE_HDR_EXPOSURE:-0}" != "0" ]; then',
-            f"    mako_implicit_layer_path={shlex.quote(str(self.local_share_dir))}",
             "else",
             '    mako_implicit_layer_path=""',
             "fi",
-            'if [ "${MAKO_DISABLE_HDR_EXPOSURE:-0}" != "0" ]; then',
-            '    export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"',
-            '    unset VK_ADD_IMPLICIT_LAYER_PATH',
-            'elif [ -z "$mako_implicit_layer_path" ]; then',
+            'if [ -z "$mako_implicit_layer_path" ]; then',
             "    : # Host manifest is registered before Pressure Vessel starts.",
             'elif [ -n "${VK_IMPLICIT_LAYER_PATH:-}" ]; then',
+            "    # A caller override suppresses additive paths, so extend that override in place.",
             '    export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path:$VK_IMPLICIT_LAYER_PATH"',
             'elif [ -n "${VK_ADD_IMPLICIT_LAYER_PATH:-}" ]; then',
             '    export VK_ADD_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path:$VK_ADD_IMPLICIT_LAYER_PATH"',
@@ -846,14 +845,15 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Format 33 keeps an unsaved game's renderer context active with a
-        low-priority default profile so a newly captured process can take over
-        live. Format 32 selects per-game compatibility settings from persistent Steam
-        app identity before launch. Format 31 removes duplicate generated
-        compatibility exports. Format 30
-        applies a build-flavour-aware presentation-diagnostics
-        default. Local development packages enable it while published packages
-        remain quiet, and either build still honours an explicit caller value.
+        Format 34 preserves normal implicit Vulkan layers and disables only
+        competing LSFG implementations. Format 33 keeps an unsaved game's
+        renderer context active with a low-priority default profile so a newly
+        captured process can take over live. Format 32 selects per-game
+        compatibility settings from persistent Steam app identity before
+        launch. Format 31 removes duplicate generated compatibility exports.
+        Format 30 applies a build-flavour-aware presentation-diagnostics default.
+        Local development packages enable it while published packages remain
+        quiet, and either build still honours an explicit caller value.
         Format 29 preserves a caller-provided profile for per-shortcut selection.
         Format 28 moved Base FPS Cap from the DXVK-only wrapper export into the
         engine. Regenerate any older or incomplete wrapper while retaining user
@@ -884,7 +884,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO launch wrapper to format 33")
+            self.log.info("Upgraded installed MAKO launch wrapper to format 34")
             return True
         except OSError:
             raise

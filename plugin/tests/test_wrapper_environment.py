@@ -47,6 +47,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "ADD=%s\\n" "${VK_ADD_IMPLICIT_LAYER_PATH:-}"',
             'printf "IMPLICIT=%s\\n" "${VK_IMPLICIT_LAYER_PATH:-}"',
             'printf "ENABLE=%s\\n" "${ENABLE_MAKO:-}"',
+            'printf "DISABLE_LSFG=%s\\n" "${DISABLE_LSFG:-}"',
+            'printf "DISABLE_LSFGVK=%s\\n" "${DISABLE_LSFGVK:-}"',
             'printf "DISABLE_MAKO=%s\\n" "${DISABLE_MAKO:-}"',
             'printf "DISABLE_GAMESCOPE=%s\\n" "${DISABLE_GAMESCOPE_WSI:-}"',
             'printf "ENABLE_GAMESCOPE=%s\\n" "${ENABLE_GAMESCOPE_WSI:-}"',
@@ -68,10 +70,12 @@ class WrapperEnvironmentTests(unittest.TestCase):
         return dict(line.split("=", 1) for line in result.stdout.splitlines())
 
     def test_host_uses_registered_gated_manifest_without_overriding_discovery(self):
-        values = self._evaluate()
+        values = self._evaluate(config=ConfigurationManager.get_defaults())
         self.assertEqual(values["ADD"], "")
         self.assertEqual(values["IMPLICIT"], "")
         self.assertEqual(values["ENABLE"], "1")
+        self.assertEqual(values["DISABLE_LSFG"], "1")
+        self.assertEqual(values["DISABLE_LSFGVK"], "1")
         self.assertEqual(values["INSTANCE"], "")
 
     def test_existing_instance_layer_order_is_preserved(self):
@@ -147,37 +151,41 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["FALLBACK"], "mako")
 
     def test_existing_additional_paths_are_untouched_on_host(self):
-        values = self._evaluate({
-            "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/one:/caller/two",
-        })
+        values = self._evaluate(
+            {"VK_ADD_IMPLICIT_LAYER_PATH": "/caller/one:/caller/two"},
+            ConfigurationManager.get_defaults(),
+        )
         self.assertEqual(
             values["ADD"],
             "/caller/one:/caller/two",
         )
 
     def test_caller_override_path_is_untouched_on_host(self):
-        values = self._evaluate({
-            "VK_IMPLICIT_LAYER_PATH": "/caller/override",
-            "VK_ADD_IMPLICIT_LAYER_PATH": "/ignored/by/loader",
-        })
+        values = self._evaluate(
+            {
+                "VK_IMPLICIT_LAYER_PATH": "/caller/override",
+                "VK_ADD_IMPLICIT_LAYER_PATH": "/ignored/by/loader",
+            },
+            ConfigurationManager.get_defaults(),
+        )
         self.assertEqual(values["IMPLICIT"], "/caller/override")
         self.assertEqual(values["ADD"], "/ignored/by/loader")
 
-    def test_hdr_recovery_uses_legacy_isolation(self):
+    def test_sdr_boundary_does_not_replace_layer_discovery(self):
         values = self._evaluate({
             "MAKO_DISABLE_HDR_EXPOSURE": "1",
             "VK_IMPLICIT_LAYER_PATH": "/caller/override",
             "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
         })
-        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
-        self.assertEqual(values["ADD"], "")
+        self.assertEqual(values["IMPLICIT"], "/caller/override")
+        self.assertEqual(values["ADD"], "/caller/additional")
 
     def test_flatpak_adds_wrapper_scoped_extension_without_hiding_other_layers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             previous = configuration_module.FLATPAK_IMPLICIT_LAYER_DIR
             configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = temp_dir
             try:
-                values = self._evaluate()
+                values = self._evaluate(config=ConfigurationManager.get_defaults())
             finally:
                 configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = previous
 
@@ -185,8 +193,11 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["IMPLICIT"], "")
         self.assertEqual(values["ENABLE"], "1")
 
-    def test_flatpak_sdr_boundary_uses_explicit_umu_manifest_path(self):
-        with tempfile.TemporaryDirectory() as temp_dir, tempfile.TemporaryDirectory() as gamescope_dir:
+    def test_flatpak_sdr_boundary_extends_existing_umu_manifest_path(self):
+        with (
+            tempfile.TemporaryDirectory() as temp_dir,
+            tempfile.TemporaryDirectory() as gamescope_dir,
+        ):
             previous = configuration_module.FLATPAK_IMPLICIT_LAYER_DIR
             previous_gamescope = configuration_module.FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR
             configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = temp_dir
@@ -202,8 +213,11 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = previous
                 configuration_module.FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR = previous_gamescope
 
-        self.assertEqual(values["IMPLICIT"], f"{gamescope_dir}:{temp_dir}")
-        self.assertEqual(values["ADD"], "")
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"{gamescope_dir}:{temp_dir}:/caller/override",
+        )
+        self.assertEqual(values["ADD"], "/caller/additional")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
 
     def test_hdr_recovery_profile_generates_wrapper_export(self):

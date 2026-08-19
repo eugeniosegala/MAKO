@@ -185,7 +185,7 @@ Start the configuration UI after extraction:
 - **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode and open **MAKO Renderer Configuration**.
 - **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
 
-Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`ENABLE_MAKO=1 %command%\` for a direct Steam launch.
+Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%\` for a direct Steam launch.
 
 ### Flatpak extensions
 

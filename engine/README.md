@@ -119,16 +119,16 @@ On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from
 3. Launch only the selected game through MAKO. For a Steam game, use this launch option:
 
     ```text
-    ENABLE_MAKO=1 %command%
+    DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%
     ```
 
     For a direct desktop command, prefix the game's command in the same way:
 
     ```bash
-    ENABLE_MAKO=1 your-game-command
+    DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 your-game-command
     ```
 
-4. Start the game normally. MAKO's implicit Vulkan layer remains off for every other process. Do not combine MAKO with another Lossless Scaling Vulkan wrapper for the same game.
+4. Start the game normally. MAKO's implicit Vulkan layer remains off for every other process. The two targeted disable variables keep installed LSFG-VK 1.x and 2.x layers out of the same game process; they are harmless when those layers are not installed.
 
 ### Manual configuration
 
@@ -161,7 +161,7 @@ Use an explicit file when needed:
 For a layer-activation check on a Vulkan-capable system with `vulkaninfo` installed:
 
 ```bash
-ENABLE_MAKO=1 vulkaninfo | grep -i VK_LAYER_MAKO_render
+DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 vulkaninfo | grep -i VK_LAYER_MAKO_render
 ```
 
 ### Benchmarking

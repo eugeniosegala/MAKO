@@ -12,6 +12,7 @@ from .base_service import BaseService
 from .config_schema import ConfigurationManager
 from .constants import (
     BIN_DIR,
+    COMPETING_LSFG_DISABLE_ENVS,
     FLATPAK_23_08_FILENAME,
     FLATPAK_24_08_FILENAME,
     FLATPAK_25_08_FILENAME,
@@ -36,6 +37,7 @@ _PER_GAME_WRAPPER_FLATPAK_APPS = {"com.heroicgameslauncher.hgl"}
 _LAYER_ENVIRONMENT_VARIABLES = (
     "MAKO_CONFIG",
     MAKO_LAYER_ENABLE_ENV,
+    *COMPETING_LSFG_DISABLE_ENVS,
     "VK_IMPLICIT_LAYER_PATH",
     "VK_ADD_IMPLICIT_LAYER_PATH",
 )
@@ -566,8 +568,13 @@ class FlatpakService(BaseService):
                     environment_values.get("MAKO_CONFIG") ==
                     f"{config_path}/conf.toml"
                     and environment_values.get(MAKO_LAYER_ENABLE_ENV) == "1"
-                    and environment_values.get("VK_IMPLICIT_LAYER_PATH") ==
+                    and all(
+                        environment_values.get(variable) == "1"
+                        for variable in COMPETING_LSFG_DISABLE_ENVS
+                    )
+                    and environment_values.get("VK_ADD_IMPLICIT_LAYER_PATH") ==
                     FLATPAK_IMPLICIT_LAYER_DIR
+                    and "VK_IMPLICIT_LAYER_PATH" not in environment_values
                 )
             )
 
@@ -696,17 +703,23 @@ class FlatpakService(BaseService):
             else:
                 # Flatpak applies persisted unset-environment entries after a
                 # host-side Steam wrapper exports variables. Direct Flatpak
-                # applications therefore need the config and isolated manifest
+                # applications therefore need the config and additive manifest
                 # path in their app override; otherwise the wrapper launches
                 # successfully but the Vulkan layer never attaches. Keep the
+                # standard implicit-layer discovery intact so Gamescope,
+                # MangoHud, vkBasalt, and device-selection layers remain visible.
                 # MAKO must remain enabled for direct Flatpak applications,
                 # including helper Vulkan processes launched after the host-side
                 # wrapper environment is filtered.
                 environment_overrides = [
                     f"--env=MAKO_CONFIG={config_path}/conf.toml",
                     f"--env={MAKO_LAYER_ENABLE_ENV}=1",
-                    f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
-                    "--unset-env=VK_ADD_IMPLICIT_LAYER_PATH",
+                    *(
+                        f"--env={variable}=1"
+                        for variable in COMPETING_LSFG_DISABLE_ENVS
+                    ),
+                    f"--env=VK_ADD_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
+                    "--unset-env=VK_IMPLICIT_LAYER_PATH",
                 ]
 
             for override in environment_overrides:

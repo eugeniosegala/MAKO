@@ -1,6 +1,6 @@
 # Collect Standalone MAKO Renderer Diagnostics
 
-This guide is for troubleshooting the standalone **MAKO Renderer**: a Renderer archive extracted directly into a Linux prefix or a Renderer built and installed from source. These installations use `mako-ui`, `mako-cli`, and `ENABLE_MAKO=1` without the Decky plugin managing the game launch.
+This guide is for troubleshooting the standalone **MAKO Renderer**: a Renderer archive extracted directly into a Linux prefix or a Renderer built and installed from source. These installations use `mako-ui`, `mako-cli`, and launch-scoped environment variables without the Decky plugin managing the game launch.
 
 Use this guide when you installed `MAKO-Renderer-v<version>-linux.tar.xz`, the legacy `mako-render-v2.0.0-linux.tar.xz`, or ran `cmake --install`. If **MAKO** is installed through Decky Loader and you normally use `/home/deck/.local/bin/mako-run`, use the [MAKO Decky guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md) instead.
 
@@ -25,7 +25,7 @@ If `mako-cli` is not on `PATH`, use `$HOME/.local/bin/mako-cli`. Fully close the
 Temporarily replace the game's normal **Steam Properties > Launch Options** with:
 
 ```text
-MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 ENABLE_MAKO=1 %command%
+MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%
 ```
 
 ### Direct terminal command
@@ -35,6 +35,8 @@ Start the application from a terminal with the diagnostics variables and save it
 ```bash
 MAKO_PRESENT_DIAGNOSTICS=1 \
 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 \
+DISABLE_LSFG=1 \
+DISABLE_LSFGVK=1 \
 ENABLE_MAKO=1 \
 your-game-command 2>&1 | tee "$HOME/Desktop/MAKO-renderer-session.log"
 ```
@@ -43,7 +45,7 @@ Replace `your-game-command` with the normal executable and arguments.
 
 ### Existing Heroic or Flatpak setup
 
-Keep the launch method, wrapper, Flatpak overrides, and existing `ENABLE_MAKO=1` activation unchanged. Add these two environment variables for the affected game only:
+Keep the launch method, wrapper, and Flatpak overrides unchanged. Ensure `DISABLE_LSFG=1` and `DISABLE_LSFGVK=1` accompany the existing `ENABLE_MAKO=1` activation, then add these two diagnostic variables for the affected game only:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1
@@ -93,7 +95,7 @@ Open the **Desktop** folder and confirm that `MAKO-diagnostics.txt` exists. Focu
 
 After creating the report:
 
-- **Native Steam or Proton:** restore the normal standalone launch option, usually `ENABLE_MAKO=1 %command%`.
+- **Native Steam or Proton:** restore the normal standalone launch option, usually `DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_MAKO=1 %command%`.
 - **Direct command:** close the terminal session. Start the game with its normal command next time.
 - **Heroic or Flatpak:** remove `MAKO_PRESENT_DIAGNOSTICS` and `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS`. Keep the normal Renderer activation, wrapper, arguments, and Flatpak overrides.
 
