@@ -29,9 +29,12 @@ jobs:
               throw new Error(`${path} is not a file.`);
             }
 
+            const mascotUrl = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/${context.payload.repository.default_branch}/plugin/assets/mako-wiz.webp`;
+            const mascot = `<img src="${mascotUrl}" alt="MAKO Wiz, a cyberpunk shark wearing a wizard hat" width="160" />`;
             const guide = Buffer.from(file.content, 'base64').toString('utf8').trim();
             const body = [
               '<!-- mako-wiz-diagnostics -->',
+              mascot,
               '👋 **MAKO Wiz** here. Thanks for opening an issue!',
               'Please use the diagnostics guide below to collect the information needed to investigate this problem:',
               guide,
