@@ -59,7 +59,7 @@ MAKO normally finds `Lossless.dll` in common Steam locations. Choose it explicit
 
 #### Qt requirements for the graphical interface
 
-The Vulkan layer and `mako-cli` do not require Qt. The `mako-ui` graphical interface requires Qt 6, Qt Quick, and Qt Quick Controls. If those runtime components are not already installed, run only the command for your distribution:
+The Vulkan layer and `mako-cli` do not use Qt. Only the optional `mako-ui` graphical interface needs Qt, Qt Quick, and Qt Quick Controls. If those runtime components are not already installed, run only the command for your distribution:
 
 ```bash
 # Debian or Ubuntu
@@ -194,7 +194,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 ## Build packages
 
-MAKO Renderer uses CMake and requires Vulkan development headers. The optional desktop interface also requires Qt 6.
+MAKO Renderer uses CMake and requires Vulkan development headers. The optional desktop interface also requires Qt 6.2 or newer.
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release

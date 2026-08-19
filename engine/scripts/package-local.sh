@@ -60,9 +60,11 @@ if [[ -z "$version" ]]; then
     exit 1
 fi
 
-if [[ "$(uname -s)" != "Linux" ]]; then
+portable_container="${MAKO_PORTABLE_PACKAGE:-0}"
+containerized_build="${MAKO_PACKAGE_CONTAINERIZED:-0}"
+if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_container" == "1" ) ]]; then
     if ! command -v docker >/dev/null 2>&1; then
-        echo "Packaging needs Linux. Install Docker Desktop or run this script on Linux." >&2
+        echo "Portable packaging needs Docker. Install Docker Desktop/Engine and try again." >&2
         exit 1
     fi
 
@@ -71,7 +73,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
             output_relative="${output_path#"$repo_root"/}"
             ;;
         *)
-            echo "On non-Linux hosts, the output path must be inside this repository." >&2
+            echo "For a containerized build, the output path must be inside this repository." >&2
             exit 1
             ;;
     esac
@@ -83,6 +85,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
     fi
     exec docker run --rm --platform linux/amd64 \
         -e MAKO_PACKAGE_64_ONLY="$docker_64_only" \
+        -e MAKO_PACKAGE_CONTAINERIZED=1 \
         -v "$monorepo_root:/workspace" \
         -w /workspace/engine \
         ubuntu:22.04 \
@@ -125,10 +128,15 @@ done
 
 has_usable_qt_prefix() {
     local prefix="$1"
-    [[ -f "$prefix/lib/cmake/Qt6/Qt6Config.cmake" &&
-       -f "$prefix/include/qt6/QtCore/QtCore" &&
-       -f "$prefix/include/GL/gl.h" &&
-       -e "$prefix/lib/libOpenGL.so" ]]
+    local qt_config
+    local qt_header
+    local gl_header
+    local opengl_library
+    qt_config="$(find "$prefix/lib" -path '*/cmake/Qt6/Qt6Config.cmake' -print -quit 2>/dev/null)"
+    qt_header="$(find "$prefix/include" -path '*/qt6/QtCore/QtCore' -print -quit 2>/dev/null)"
+    gl_header="$(find "$prefix/include" -path '*/GL/gl.h' -print -quit 2>/dev/null)"
+    opengl_library="$(find "$prefix/lib" -name 'libOpenGL.so' -print -quit 2>/dev/null)"
+    [[ -n "$qt_config" && -n "$qt_header" && -n "$gl_header" && -n "$opengl_library" ]]
 }
 
 bootstrap_native_qt_sdk() {
@@ -320,6 +328,23 @@ verify_elf_class() {
 verify_elf_class "$install_dir/lib/libmako-render.so" 2
 if [[ "$build_32_bit" == true ]]; then
     verify_elf_class "$install_dir/lib32/libmako-render.so" 1
+fi
+
+# Qt promises backwards binary compatibility, not forwards compatibility.
+# Keep release archives usable on the Qt 6.2 baseline used by Ubuntu 22.04
+# (and therefore on Ubuntu 24.04's Qt 6.4) even when packaging is initiated
+# from a rolling distribution with a newer Qt installation.
+ui_strings="$build_root/mako-ui.strings"
+strings "$install_dir/bin/mako-ui" > "$ui_strings"
+if grep -Eq 'Qt_6\.([5-9]|[1-9][0-9])' "$ui_strings"; then
+    echo "Packaging failed: mako-ui requires a Qt ABI newer than 6.4." >&2
+    echo "Re-run with MAKO_PORTABLE_PACKAGE=1 to use the reproducible Qt 6.2 container." >&2
+    exit 1
+fi
+if grep -Fq 'libQt6QmlMeta.so.6' "$ui_strings"; then
+    echo "Packaging failed: mako-ui unexpectedly depends on Qt 6.8's QmlMeta library." >&2
+    echo "Re-run with MAKO_PORTABLE_PACKAGE=1 to use the reproducible Qt 6.2 container." >&2
+    exit 1
 fi
 
 manifest64="$install_dir/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"

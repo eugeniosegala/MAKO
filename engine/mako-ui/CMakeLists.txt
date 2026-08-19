@@ -1,4 +1,4 @@
-find_package(Qt6 REQUIRED COMPONENTS Quick)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Quick)
 
 set(UI_SOURCES
     "src/backend.cpp"

@@ -27,7 +27,7 @@ You will need the following dependencies:
 - Vulkan SDK
 - X11 headers (`libx11` and `xorgproto` on Arch/SteamOS)
 - A multilib C++ toolchain when building the 32-bit Vulkan layer
-- Qt6 and Qt6Quick (only needed when building mako-ui)
+- Qt 6.2 or newer and Qt6Quick (only needed when building `mako-ui`)
 
 The list of required packages may vary depending on your operating system. Below are the installation commands for some common Linux distributions.
 
@@ -59,6 +59,8 @@ The release packager builds the normal 64-bit application, CLI, UI, and layer, t
 `scripts/package-local.sh` normally uses the host Qt development installation. On a Pacman-based SteamOS host where Qt appears installed but its headers or CMake files are missing, the packager automatically downloads the exact `qt6-base`, `qt6-declarative`, and `libglvnd` packages selected by Pacman into `engine/build/cache/native-sdk/`. It extracts and reuses that isolated SDK on later release builds, without Docker, Podman, root access, or changes to the SteamOS installation. The first fallback build needs network access; later builds reuse the cached files.
 
 This fallback applies only to `scripts/package-local.sh`. Manual CMake builds still use the system development packages. Set `MAKO_NATIVE_SDK_DIR` to place that SDK somewhere else, or set `MAKO_BUILD_CACHE_ROOT` to relocate all MAKO build caches together.
+
+Native Linux packaging does not require a container. The packager verifies that the resulting `mako-ui` does not require a Qt ABI newer than 6.4, which keeps published host archives compatible with Ubuntu 24.04. If the host distribution only provides a newer Qt, rerun with `MAKO_PORTABLE_PACKAGE=1`; that optional mode uses Docker and builds the UI against Ubuntu 22.04's Qt 6.2 baseline. Non-Linux packaging continues to require Docker.
 
 ### Fast SteamOS development build
 
