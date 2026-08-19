@@ -4,7 +4,9 @@
   <img src="assets/mako-render-logo.webp" width="256" alt="MAKO Renderer logo" />
 </p>
 
-> [!NOTE] **[LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
+<!-- prettier-ignore -->
+> [!NOTE]
+> **[LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
 MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Lossless Scaling frame generation to Steam Deck and desktop Linux, with scaling planned as the project expands.
 
@@ -172,7 +174,9 @@ The default duration is 10 seconds. Run `~/.local/bin/mako-cli` without a subcom
 
 ## In-game considerations
 
-> [!TIP] Try the game's V-Sync setting both on and off. It can make frame delivery feel steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep whichever setting feels smoother and more responsive for that game.
+<!-- prettier-ignore -->
+> [!TIP]
+> Try the game's V-Sync setting both on and off. It can make frame delivery feel steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep whichever setting feels smoother and more responsive for that game.
 
 Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart the game after major display, DLL, GPU, Flow Scale, Performance Mode, or model changes.
 

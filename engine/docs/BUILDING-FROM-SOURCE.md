@@ -2,7 +2,9 @@
 
 This guide provides step-by-step instructions on how to build the MAKO Renderer project from source code.
 
-> [!IMPORTANT] If you are planning on compiling MAKO Renderer on SteamOS, you need to temporarily disable read-only protection and restore the base C/C++ headers first:
+<!-- prettier-ignore -->
+> [!IMPORTANT]
+> If you are planning on compiling MAKO Renderer on SteamOS, you need to temporarily disable read-only protection and restore the base C/C++ headers first:
 >
 > ```bash
 > sudo steamos-readonly disable
