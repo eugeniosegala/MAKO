@@ -1,4 +1,4 @@
-name: Close inactive issues
+name: MAKO Cleaner
 
 on:
   schedule:
@@ -8,11 +8,11 @@ permissions:
   issues: write
 
 concurrency:
-  group: close-inactive-issues
+  group: mako-cleaner
   cancel-in-progress: false
 
 jobs:
-  close-inactive-issues:
+  mako-cleaner:
     runs-on: ubuntu-latest
     steps:
       - name: Close issues inactive for more than seven days
@@ -21,6 +21,8 @@ jobs:
           script: |
             const inactiveForMs = 7 * 24 * 60 * 60 * 1000;
             const inactiveBefore = Date.now() - inactiveForMs;
+            const mascotUrl = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/${context.payload.repository.default_branch}/plugin/assets/mako-cleaner.webp`;
+            const mascot = `<p align="center"><img src="${mascotUrl}" alt="MAKO Cleaner, a cyberpunk shark wearing a green police-style cap" width="160" /></p>`;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -55,7 +57,13 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: currentIssue.number,
-                body: 'This issue was automatically closed because it has had no activity for more than seven days. Reply with new information if it should be reopened.',
+                body: [
+                  '<!-- mako-cleaner-inactive-issue -->',
+                  mascot,
+                  '🧹 **MAKO Cleaner** here.',
+                  'This issue was automatically closed because it has had no activity for more than seven days. Reply with new information if it should be reopened.',
+                  '_This is an automated reply from MAKO Cleaner._',
+                ].join('\n\n'),
               });
 
               await github.rest.issues.update({
