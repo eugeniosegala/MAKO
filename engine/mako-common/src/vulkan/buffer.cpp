@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -102,4 +103,22 @@ void Buffer::write(const vk::Vulkan& vk, const void* data, size_t length) {
     if (length > this->size)
         throw ls::vulkan_error("buffer write exceeds allocation size");
     copyDataToBuffer(vk, *this->memory, data, length);
+}
+
+std::vector<uint8_t> Buffer::read(const vk::Vulkan& vk) const {
+    std::vector<uint8_t> result(this->size);
+    void* mapped{};
+    const auto res = vk.df().MapMemory(
+        vk.dev(), *this->memory, 0, this->size, 0, &mapped
+    );
+    if (res != VK_SUCCESS)
+        throw ls::vulkan_error(res, "vkMapMemory() failed");
+
+    std::copy_n(
+        reinterpret_cast<const uint8_t*>(mapped),
+        this->size,
+        result.data()
+    );
+    vk.df().UnmapMemory(vk.dev(), *this->memory);
+    return result;
 }

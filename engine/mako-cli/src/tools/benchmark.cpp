@@ -22,7 +22,6 @@
 #include <vector>
 
 #include <time.h>
-#include <bits/time.h>
 #include <vulkan/vulkan_core.h>
 
 using namespace mako::cli;

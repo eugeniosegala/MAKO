@@ -6,6 +6,8 @@
 #include "vulkan.hpp"
 
 #include <cstddef>
+#include <cstdint>
+#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -38,6 +40,11 @@ namespace vk {
         /// @param length number of bytes to upload
         /// @throws ls::vulkan_error on failure
         void write(const vk::Vulkan& vk, const void* data, size_t length);
+
+        /// copy the contents of a host-visible buffer into CPU memory
+        /// @param vk the Vulkan instance
+        /// @return a byte-for-byte copy of the buffer
+        [[nodiscard]] std::vector<uint8_t> read(const vk::Vulkan& vk) const;
 
         /// replace the contents of a host-visible buffer
         template<typename T>

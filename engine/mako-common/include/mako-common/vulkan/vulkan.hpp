@@ -77,6 +77,7 @@ namespace vk {
         PFN_vkCmdBindDescriptorSets CmdBindDescriptorSets;
         PFN_vkCmdDispatch CmdDispatch;
         PFN_vkCmdCopyBufferToImage CmdCopyBufferToImage;
+        PFN_vkCmdCopyImageToBuffer CmdCopyImageToBuffer;
         PFN_vkQueueSubmit QueueSubmit;
         PFN_vkAllocateDescriptorSets AllocateDescriptorSets;
         PFN_vkFreeDescriptorSets FreeDescriptorSets;
@@ -235,6 +236,12 @@ namespace vk {
         /// @return true if fp16 is supported
         [[nodiscard]] bool supportsFP16() const { return this->fp16; }
 
+        /// check if robust out-of-bounds image access is enabled
+        /// @return true if VK_EXT_robustness2 robustImageAccess2 is enabled
+        [[nodiscard]] bool supportsRobustImageAccess2() const {
+            return this->robustImageAccess2;
+        }
+
         /// get instance-level function pointers
         /// @return the instance function pointers
         [[nodiscard]] const auto& fi() const { return this->instance_funcs; }
@@ -251,6 +258,7 @@ namespace vk {
         VkPhysicalDevice phys_dev;
         uint32_t queueFamilyIdx;
         bool fp16;
+        bool robustImageAccess2;
 
         ls::owned_ptr<VkDevice> device;
         std::optional<PFN_vkSetDeviceLoaderData> setLoaderData;

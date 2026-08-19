@@ -27,6 +27,17 @@ option(MAKO_INSTALL_XDG_FILES  "Install the application icon and desktop files" 
 set(MAKO_LAYER_LIBRARY_PATH libmako-render.so CACHE STRING "Change where Vulkan searches for the layer library")
 set(MAKO_LAYER_MANIFEST_SUFFIX "" CACHE STRING "Suffix for the installed Vulkan layer manifest filename")
 option(MAKO_TESTING_RENDERDOC  "Enable RenderDoc integration for testing purposes" OFF)
+set(MAKO_GPU_QUALITY_TEST AUTO CACHE STRING
+    "Run the AMD hardware image-quality regression during CTest: AUTO (required on Steam Machine), REQUIRED, or OFF")
+set_property(CACHE MAKO_GPU_QUALITY_TEST PROPERTY STRINGS AUTO REQUIRED OFF)
+set(MAKO_GPU_QUALITY_OUTPUT "${CMAKE_BINARY_DIR}/quality-regression" CACHE PATH
+    "Directory for AMD hardware image-quality comparison artifacts")
+string(TOUPPER "${MAKO_GPU_QUALITY_TEST}" MAKO_GPU_QUALITY_TEST)
+if(NOT MAKO_GPU_QUALITY_TEST STREQUAL "AUTO" AND
+        NOT MAKO_GPU_QUALITY_TEST STREQUAL "REQUIRED" AND
+        NOT MAKO_GPU_QUALITY_TEST STREQUAL "OFF")
+    message(FATAL_ERROR "MAKO_GPU_QUALITY_TEST must be AUTO, REQUIRED, or OFF")
+endif()
 # === READ HERE FOR BUILD OPTIONS ===
 
 set(CMAKE_CXX_STANDARD 20)
@@ -68,7 +79,7 @@ if(MAKO_BUILD_VK_LAYER OR MAKO_BUILD_UI OR MAKO_BUILD_CLI OR
         MAKO_INSTALL_DEVELOP OR BUILD_TESTING)
     add_subdirectory(mako-common)
 endif()
-if(MAKO_BUILD_VK_LAYER OR MAKO_INSTALL_DEVELOP)
+if(MAKO_BUILD_VK_LAYER OR MAKO_BUILD_CLI OR MAKO_INSTALL_DEVELOP)
     add_subdirectory(mako-backend)
 endif()
 if(MAKO_BUILD_VK_LAYER OR BUILD_TESTING)

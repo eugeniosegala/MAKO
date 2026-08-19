@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "mako-common/vulkan/vulkan.hpp"
+#include "mako-common/vulkan/device_features.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/pointers.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bitset>
 #include <cstddef>
@@ -13,6 +15,7 @@
 #include <ios>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <dlfcn.h>
@@ -159,6 +162,51 @@ namespace {
         return vulkan12.shaderFloat16 == VK_TRUE;
     }
 
+    bool supportsDeviceExtension(const VulkanInstanceFuncs& fi,
+            const VkPhysicalDevice physdev, const std::string_view name) {
+        uint32_t extensionCount{};
+        auto res = fi.EnumerateDeviceExtensionProperties(
+            physdev, nullptr, &extensionCount, nullptr
+        );
+        if (res != VK_SUCCESS)
+            throw ls::vulkan_error(res, "vkEnumerateDeviceExtensionProperties() failed");
+
+        std::vector<VkExtensionProperties> extensions(extensionCount);
+        res = fi.EnumerateDeviceExtensionProperties(
+            physdev, nullptr, &extensionCount, extensions.data()
+        );
+        if (res != VK_SUCCESS)
+            throw ls::vulkan_error(res, "vkEnumerateDeviceExtensionProperties() failed");
+
+        return std::any_of(extensions.begin(), extensions.end(),
+                [name](const auto& extension) {
+            return name == extension.extensionName;
+        });
+    }
+
+    OptionalDeviceFeatures checkOptionalDeviceFeatures(
+            const VulkanInstanceFuncs& fi, const VkPhysicalDevice physdev) {
+        constexpr std::string_view robustness2Extension =
+            VK_EXT_ROBUSTNESS_2_EXTENSION_NAME;
+        const bool hasRobustness2 = supportsDeviceExtension(
+            fi, physdev, robustness2Extension
+        );
+        if (!hasRobustness2)
+            return {};
+
+        VkPhysicalDeviceRobustness2FeaturesEXT robustness2{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+        };
+        VkPhysicalDeviceFeatures2 features{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .pNext = &robustness2,
+        };
+        fi.GetPhysicalDeviceFeatures2(physdev, &features);
+        return selectOptionalDeviceFeatures(
+            hasRobustness2, robustness2.robustImageAccess2 == VK_TRUE
+        );
+    }
+
     template<typename T>
     T dpa(const VulkanInstanceFuncs& funcs, VkDevice device, const char* name) {
         T func = reinterpret_cast<T>(
@@ -170,12 +218,20 @@ namespace {
 
     /// create a logical device
     ls::owned_ptr<VkDevice> createLogicalDevice(const VulkanInstanceFuncs& fi,
-            VkPhysicalDevice physdev, uint32_t cfi, bool fp16) {
+            VkPhysicalDevice physdev, uint32_t cfi, bool fp16,
+            const OptionalDeviceFeatures optionalFeatures) {
         VkDevice handle{};
 
         const float queuePriority{1.0F}; // highest priority
+        VkPhysicalDeviceRobustness2FeaturesEXT requestedRobustness2{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ROBUSTNESS_2_FEATURES_EXT,
+            .robustBufferAccess2 = VK_FALSE,
+            .robustImageAccess2 = optionalFeatures.robustImageAccess2,
+            .nullDescriptor = VK_FALSE,
+        };
         const VkPhysicalDeviceVulkan12Features requestedFeaturesVulkan12{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES,
+            .pNext = optionalFeatures.robustImageAccess2 ? &requestedRobustness2 : nullptr,
             .shaderFloat16 = fp16,
             .timelineSemaphore = VK_TRUE
         };
@@ -190,11 +246,13 @@ namespace {
             .queueCount = 1,
             .pQueuePriorities = &queuePriority
         };
-        const std::vector<const char*> requestedExtensions{
+        std::vector<const char*> requestedExtensions{
             VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
             VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME,
             VK_KHR_TIMELINE_SEMAPHORE_EXTENSION_NAME
         };
+        if (optionalFeatures.robustImageAccess2)
+            requestedExtensions.push_back(VK_EXT_ROBUSTNESS_2_EXTENSION_NAME);
         const VkDeviceCreateInfo deviceInfo{
             .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
             .pNext = &requestedFeaturesVulkan12,
@@ -364,6 +422,7 @@ VulkanDeviceFuncs vk::initVulkanDeviceFuncs(const VulkanInstanceFuncs& f, VkDevi
         .CmdBindDescriptorSets = dpa<PFN_vkCmdBindDescriptorSets>(f, d, "vkCmdBindDescriptorSets"),
         .CmdDispatch = dpa<PFN_vkCmdDispatch>(f, d, "vkCmdDispatch"),
         .CmdCopyBufferToImage = dpa<PFN_vkCmdCopyBufferToImage>(f, d, "vkCmdCopyBufferToImage"),
+        .CmdCopyImageToBuffer = dpa<PFN_vkCmdCopyImageToBuffer>(f, d, "vkCmdCopyImageToBuffer"),
         .QueueSubmit = dpa<PFN_vkQueueSubmit>(f, d, "vkQueueSubmit"),
         .AllocateDescriptorSets = dpa<PFN_vkAllocateDescriptorSets>(f, d,
             "vkAllocateDescriptorSets"),
@@ -435,10 +494,16 @@ Vulkan::Vulkan(const std::string& appName, version appVersion,
     queueFamilyIdx(findQFI(this->instance_funcs, this->phys_dev,
         isGraphical ? VK_QUEUE_GRAPHICS_BIT : VK_QUEUE_COMPUTE_BIT)),
     fp16(checkFP16(this->instance_funcs, this->phys_dev)),
+    robustImageAccess2(checkOptionalDeviceFeatures(
+        this->instance_funcs, this->phys_dev
+    ).robustImageAccess2),
     device(createLogicalDevice(this->instance_funcs,
         this->phys_dev,
         this->queueFamilyIdx,
-        this->fp16
+        this->fp16,
+        OptionalDeviceFeatures{
+            .robustImageAccess2 = this->robustImageAccess2,
+        }
     )),
     setLoaderData(setLoaderData),
     device_funcs(initVulkanDeviceFuncs(
@@ -471,6 +536,7 @@ Vulkan::Vulkan(VkInstance instance, VkDevice device,
     queueFamilyIdx(findQFI(this->instance_funcs, this->phys_dev,
         isGraphical ? VK_QUEUE_GRAPHICS_BIT : VK_QUEUE_COMPUTE_BIT)),
     fp16(false),
+    robustImageAccess2(false),
     device(new VkDevice(device)),
     setLoaderData(setLoaderData),
     device_funcs(deviceFuncs),

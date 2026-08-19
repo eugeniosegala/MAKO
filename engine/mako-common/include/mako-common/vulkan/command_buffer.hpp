@@ -70,6 +70,13 @@ namespace vk {
         void copyBufferToImage(const vk::Vulkan& vk,
             const vk::Buffer& buffer, const vk::Image& image) const;
 
+        /// copy an image into a host-visible transfer buffer
+        /// @param vk the vulkan instance
+        /// @param image the source image
+        /// @param buffer the destination buffer
+        void copyImageToBuffer(const vk::Vulkan& vk,
+            const vk::Image& image, const vk::Buffer& buffer) const;
+
         /// end recording commands
         /// @param vk the vulkan instance
         /// @throws ls::vulkan_error on failure

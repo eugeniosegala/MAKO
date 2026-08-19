@@ -70,13 +70,13 @@ For native Steam-game iteration, use the persistent incremental build instead of
 ./scripts/build-steamos-dev.sh
 ```
 
-It builds only the 64-bit Vulkan layer and keeps `build/steamos-dev` between runs. To retain a second incremental tree for genuine 32-bit games, run:
+It builds the 64-bit Vulkan layer and CLI, keeps `build/steamos-dev` between runs, and automatically runs the AMD image-quality regression in both FP32 and FP16 modes. On a detected SteamOS or Steam Machine host this check is mandatory, so a missing AMD Vulkan GPU, `Lossless.dll`, or failed comparison stops the build. To retain a second incremental tree for genuine 32-bit games, run:
 
 ```bash
 ./scripts/build-steamos-dev.sh --with-32-bit
 ```
 
-The 32-bit tree defaults to `build/steamos-dev-32`. Both commands intentionally skip the CLI, Qt UI, Flatpak extensions, tests, archives, and Decky ZIP. Subsequent builds compile only changed source and its dependants. When available, `ccache` is enabled automatically and stored under `build/cache/ccache`; install it with the rest of the Arch build prerequisites to retain compiler results across larger rebuilds.
+The 32-bit tree defaults to `build/steamos-dev-32`. Both commands intentionally skip the Qt UI, Flatpak extensions, general test suite, archives, and Decky ZIP. Use `--skip-quality-regression` only when an intentionally short iteration should omit the hardware check. Set `MAKO_QUALITY_DLL` for a nonstandard Lossless Scaling installation or `MAKO_QUALITY_GPU` to select an exact AMD device name. Set `MAKO_STEAM_MACHINE=1` in the development environment only when real Steam Machine hardware is running a distribution that cannot be recognized automatically. Subsequent builds compile only changed source and its dependants. When available, `ccache` is enabled automatically and stored under `build/cache/ccache`; install it with the rest of the Arch build prerequisites to retain compiler results across larger rebuilds.
 
 ### SteamOS Flatpak development cache
 

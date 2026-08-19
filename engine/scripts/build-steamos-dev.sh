@@ -13,16 +13,19 @@ compiler="${CXX:-clang++}"
 jobs="${MAKO_BUILD_JOBS:-}"
 build_64_bit=true
 build_32_bit=false
+quality_regression=true
+gpu_quality_mode="${MAKO_GPU_QUALITY_TEST:-AUTO}"
 
 usage() {
     cat <<'EOF'
 Usage: scripts/build-steamos-dev.sh [options]
 
 Incrementally builds host Vulkan layers needed for native Steam-game testing.
-The default builds only the 64-bit layer. The build directories are retained
-between runs; this does not build the CLI, Qt UI, Flatpak extensions, tests,
-archives, or a Decky ZIP. Set CXX to choose a compiler. ccache is used
-automatically when present.
+The default builds the 64-bit layer and CLI, then automatically runs the AMD
+GPU image-quality regression. The test is mandatory on a detected SteamOS or
+Steam Machine host. The build directories are retained between runs; this does not
+build the Qt UI, Flatpak extensions, general test suite, archives, or a Decky
+ZIP. Set CXX to choose a compiler. ccache is used automatically when present.
 
 Options:
   --with-32-bit          Build both the 64-bit and 32-bit host layers.
@@ -30,12 +33,19 @@ Options:
   --build-dir PATH       64-bit persistent CMake build directory.
   --build-32-dir PATH    32-bit persistent CMake build directory.
   --jobs COUNT           Parallel compile jobs.
+  --skip-quality-regression
+                        Skip the automatic AMD GPU image-quality regression.
 
 Environment:
   MAKO_BUILD_DIR     Persistent CMake build directory (default: build/steamos-dev)
   MAKO_BUILD_32_DIR  Persistent 32-bit build directory (default: build/steamos-dev-32)
   MAKO_BUILD_JOBS    Parallel compile jobs (default: available CPUs)
   CXX                C++ compiler (default: clang++)
+  MAKO_QUALITY_DLL   Lossless.dll path when it is outside standard Steam paths
+  MAKO_QUALITY_GPU   Exact AMD Vulkan device name on a multi-GPU system
+  MAKO_GPU_QUALITY_TEST
+                     AUTO (default; mandatory on Steam Machine), REQUIRED, or OFF
+  MAKO_STEAM_MACHINE  Set to 1 for mandatory AUTO policy on an unrecognized host OS
 EOF
 }
 
@@ -74,6 +84,9 @@ while (($#)); do
         --32-bit-only)
             build_64_bit=false
             build_32_bit=true
+            ;;
+        --skip-quality-regression)
+            quality_regression=false
             ;;
         -h|--help)
             usage
@@ -136,6 +149,13 @@ build_layer() {
     local architecture="$1"
     local target_build_dir="$2"
     shift 2
+    local build_cli=OFF
+    local build_targets=(mako-render)
+
+    if [[ "$architecture" == "64-bit" && "$quality_regression" == true ]]; then
+        build_cli=ON
+        build_targets+=(mako-cli)
+    fi
 
     # Reconfiguring a persistent Ninja tree is cheap and picks up CMake/source
     # changes without throwing away already compiled objects.
@@ -147,11 +167,11 @@ build_layer() {
         -DBUILD_TESTING=OFF \
         -DMAKO_BUILD_VK_LAYER=ON \
         -DMAKO_BUILD_UI=OFF \
-        -DMAKO_BUILD_CLI=OFF \
+        -DMAKO_BUILD_CLI="$build_cli" \
         -DMAKO_INSTALL_XDG_FILES=OFF \
         "$@"
 
-    cmake --build "$target_build_dir" --parallel "$jobs" --target mako-render
+    cmake --build "$target_build_dir" --parallel "$jobs" --target "${build_targets[@]}"
 
     local layer_path="$target_build_dir/mako-render/libmako-render.so"
     if [[ ! -f "$layer_path" ]]; then
@@ -159,6 +179,13 @@ build_layer() {
         exit 1
     fi
     echo "Incremental $architecture layer build ready: $layer_path"
+
+    if [[ "$architecture" == "64-bit" && "$quality_regression" == true ]]; then
+        bash "$repo_root/scripts/run-gpu-quality-regression.sh" \
+            "$target_build_dir/mako-cli/mako-cli" \
+            "$target_build_dir/quality-regression" \
+            "$gpu_quality_mode" 0
+    fi
 }
 
 if [[ "$build_64_bit" == true ]]; then

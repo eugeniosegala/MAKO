@@ -255,17 +255,20 @@ cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
     -DMAKO_BUILD_VK_LAYER=ON \
     -DMAKO_BUILD_UI=ON \
     -DMAKO_BUILD_CLI=ON \
+    -DMAKO_GPU_QUALITY_TEST="${MAKO_GPU_QUALITY_TEST:-AUTO}" \
+    -DMAKO_GPU_QUALITY_OUTPUT="$build_cache_root/quality-regression" \
     -DMAKO_INSTALL_XDG_FILES=ON \
     -DMAKO_LAYER_LIBRARY_PATH="../../../lib/libmako-render.so"
 
 cmake --build "$build64_dir" --target \
-    mako-config-tests mako-device-selection-tests \
+    mako-config-tests mako-device-feature-tests mako-image-quality-tests \
+    mako-device-selection-tests \
     mako-profile-update-tests \
     mako-runtime-transition-tests \
     mako-presentation-policy-tests \
     mako-adaptive-tests mako-adaptive-matrix \
     mako-pnext-chain-tests mako-color-tests \
-    mako-hdr-color-math-tests
+    mako-hdr-color-math-tests mako-cli
 ctest --test-dir "$build64_dir" --output-on-failure
 cmake --build "$build64_dir"
 cmake --install "$build64_dir"

@@ -306,6 +306,9 @@ InstanceImpl::InstanceImpl(vk::PhysicalDeviceSelector selectPhysicalDevice,
 #ifdef MAKO_TESTING_RENDERDOC
     this->renderdoc = loadRenderDocIntegration();
 #endif
+    std::clog << "MAKO: robustImageAccess2 "
+        << (vk.supportsRobustImageAccess2() ? "enabled" : "unavailable")
+        << '\n';
     vk.persistPipelineCache(); // will silently fail
 }
 

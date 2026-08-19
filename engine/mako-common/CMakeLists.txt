@@ -3,6 +3,7 @@ set(COMMON_SOURCES
     "src/configuration/detection.cpp"
     "src/helpers/errors.cpp"
     "src/helpers/paths.cpp"
+    "src/quality/image_quality.cpp"
     "src/vulkan/buffer.cpp"
     "src/vulkan/command_buffer.cpp"
     "src/vulkan/descriptor_pool.cpp"
@@ -30,6 +31,20 @@ if(BUILD_TESTING)
         PRIVATE mako-common)
     add_test(NAME watched-configuration
         COMMAND mako-config-tests)
+
+    add_executable(mako-device-feature-tests
+        "tests/device_feature_tests.cpp")
+    target_link_libraries(mako-device-feature-tests
+        PRIVATE mako-common)
+    add_test(NAME optional-device-features
+        COMMAND mako-device-feature-tests)
+
+    add_executable(mako-image-quality-tests
+        "tests/image_quality_tests.cpp")
+    target_link_libraries(mako-image-quality-tests
+        PRIVATE mako-common)
+    add_test(NAME amd-image-quality-scene
+        COMMAND mako-image-quality-tests)
 endif()
 
 if(MAKO_INSTALL_DEVELOP)

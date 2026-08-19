@@ -193,6 +193,49 @@ void CommandBuffer::copyBufferToImage(const vk::Vulkan& vk,
     );
 }
 
+void CommandBuffer::copyImageToBuffer(const vk::Vulkan& vk,
+        const vk::Image& image, const vk::Buffer& buffer) const {
+    const VkImageMemoryBarrier barrier{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = image.handle(),
+        .subresourceRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .levelCount = 1,
+            .layerCount = 1
+        }
+    };
+    vk.df().CmdPipelineBarrier(*this->commandBuffer,
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0,
+        0, VK_NULL_HANDLE,
+        0, VK_NULL_HANDLE,
+        1, &barrier
+    );
+
+    const VkBufferImageCopy region{
+        .bufferImageHeight = 0,
+        .imageSubresource = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+            .layerCount = 1
+        },
+        .imageExtent = {
+            .width = image.getExtent().width,
+            .height = image.getExtent().height,
+            .depth = 1
+        }
+    };
+    vk.df().CmdCopyImageToBuffer(*this->commandBuffer,
+        image.handle(), VK_IMAGE_LAYOUT_GENERAL,
+        buffer.handle(), 1, &region
+    );
+}
+
 void CommandBuffer::end(const vk::Vulkan& vk) const {
     auto res = vk.df().EndCommandBuffer(*this->commandBuffer);
     if (res != VK_SUCCESS)

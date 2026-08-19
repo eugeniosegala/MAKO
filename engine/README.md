@@ -204,6 +204,8 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+On a detected SteamOS or Steam Machine host, CTest makes the FP32 and FP16 image-quality regression mandatory by default; a missing AMD GPU or `Lossless.dll` fails the run. Macs and other unsupported hosts report it as skipped. Configure hardware CI with `-DMAKO_GPU_QUALITY_TEST=REQUIRED` to record the requirement explicitly.
+
 Local Linux archives and Flatpak runtime extensions can be built with:
 
 ```bash
@@ -219,4 +221,5 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 - [Flatpak guide](docs/FLATPAK-GUIDE.md): runtime extensions and direct Flatpak application overrides.
 - [Building from Source](docs/BUILDING-FROM-SOURCE.md): prerequisites, SteamOS builds, and packaging.
 - [Troubleshooting](docs/TROUBLESHOOTING.md): activation, configuration, and presentation diagnostics.
+- [AMD image-quality regression](docs/IMAGE-QUALITY-REGRESSION.md): deterministic Flow Scale 1.0 GPU validation and comparison artifacts.
 - [Collect standalone MAKO Renderer diagnostics](docs/COLLECT_DIAGNOSTICS.md): create a focused Desktop report and submit it through the shared form.

@@ -2,6 +2,7 @@
 
 #include "tools/benchmark.hpp"
 #include "tools/debug.hpp"
+#include "tools/quality.hpp"
 #include "tools/validate.hpp"
 
 #include <array>
@@ -12,8 +13,6 @@
 #include <string>
 
 #include <getopt.h> // NOLINT (IWYU)
-#include <bits/getopt_core.h>
-#include <bits/getopt_ext.h>
 
 using namespace mako::cli;
 
@@ -30,6 +29,8 @@ COMMANDS:
     validate    Validate a configuration file
     benchmark   Run a benchmark
     debug       Run mako on a set of images
+    quality-regression
+                Run the deterministic AMD image-quality regression
 
 SUBCOMMAND OPTIONS:
 
@@ -50,7 +51,14 @@ SUBCOMMAND OPTIONS:
         -t, --duration <SECONDS>        Benchmark duration in seconds
 
     debug
-        <folder>                        Path to the debug frames)" << '\n';
+        <folder>                        Path to the debug frames
+
+    quality-regression
+        -d, --dll <PATH>                Path to Lossless.dll
+        -a, --allow-fp16                Include FP16 acceleration in the test
+        -g, --gpu <STRING>              GPU to use
+        -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
+)" << '\n';
     }
 
     /// parse the validate command options
@@ -204,6 +212,45 @@ SUBCOMMAND OPTIONS:
 
         std::exit(debug::run(opts));
     }
+
+    /// parse the quality-regression command options
+    [[noreturn]] void on_quality_regression(int argc, char** argv) {
+        quality::Options opts{};
+        const std::array<option, 5> GETOPT {{
+            { "dll",        required_argument, nullptr, 'd' },
+            { "allow-fp16", no_argument,       nullptr, 'a' },
+            { "gpu",        required_argument, nullptr, 'g' },
+            { "output",     required_argument, nullptr, 'o' },
+            { nullptr,       no_argument,       nullptr,  0  }
+        }};
+
+        int c{0};
+        while ((c = getopt_long(argc, argv, "d:ag:o:", GETOPT.data(), nullptr)) != -1) {
+            switch (c) {
+                case 'd':
+                    opts.dll.emplace(optarg);
+                    break;
+                case 'a':
+                    opts.allow_fp16 = true;
+                    break;
+                case 'g':
+                    opts.gpu.emplace(optarg);
+                    break;
+                case 'o':
+                    opts.output.emplace(optarg);
+                    break;
+                case '?':
+                default:
+                    usage(*argv);
+                    std::exit(EXIT_FAILURE);
+            }
+        }
+        if (optind < argc) {
+            usage(*argv);
+            std::exit(EXIT_FAILURE);
+        }
+        std::exit(quality::run(opts));
+    }
 }
 
 int main(int argc, char** argv) {
@@ -219,6 +266,8 @@ int main(int argc, char** argv) {
         on_benchmark(argc - 1, argv + 1);
     else if (command == "debug")
         on_debug(argc - 1, argv + 1);
+    else if (command == "quality-regression")
+        on_quality_regression(argc - 1, argv + 1);
 
     usage(*argv);
     return EXIT_FAILURE;
