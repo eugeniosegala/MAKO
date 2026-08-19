@@ -11,6 +11,7 @@ permissions:
 jobs:
   reply-with-diagnostics-guide:
     name: Reply with diagnostics guide
+    if: contains(github.event.issue.labels.*.name, 'bug')
     runs-on: ubuntu-latest
     steps:
       - name: Post the MAKO Wiz troubleshooting guide
