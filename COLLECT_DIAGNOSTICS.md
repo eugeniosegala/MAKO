@@ -6,9 +6,11 @@ The shared [MAKO diagnostic report form](https://docs.google.com/forms/d/e/1FAIp
 
 ## MAKO Decky
 
-Use the [MAKO Decky diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md) when you installed **Mako** through Decky Loader, use `/home/deck/.local/bin/mako-run`, or manage the Renderer and Flatpak extensions from the Decky plugin.
+If Decky Loader cannot install **Mako**, or Mako never appears or opens after installation, use the [MAKO Decky installation and loading failure guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/DECKY_INSTALLATION_FAILURES.md). That guide does not require the plugin or MAKO Renderer to be running.
 
-The Decky guide covers native Steam and Proton games, Heroic, and EmuDeck shortcuts without changing their normal arguments.
+If **Mako** is installed and opens in Decky Loader, use the [MAKO Decky diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md). Use it when you launch games through `/home/deck/.local/bin/mako-run` or manage the Renderer and Flatpak extensions from the Decky plugin.
+
+The Decky diagnostics guide covers native Steam and Proton games, Heroic, and EmuDeck shortcuts without changing their normal arguments.
 
 ## Standalone MAKO Renderer
 
