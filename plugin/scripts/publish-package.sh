@@ -179,8 +179,8 @@ if [[ "$archive_url" == local-only://* || "$engine_release_tag" == local-only-* 
 fi
 
 expected_engine_release_tag="render-v$engine_version"
-expected_archive_name="mako-render-v$engine_version-linux.tar.xz"
-expected_flatpak_archive_name="mako-render-v$engine_version-flatpaks.tar.xz"
+expected_archive_name="MAKO-Renderer-v$engine_version-linux.tar.xz"
+expected_flatpak_archive_name="MAKO-Renderer-v$engine_version-flatpaks.tar.xz"
 expected_archive_url="https://github.com/$github_repository/releases/download/$expected_engine_release_tag/$expected_archive_name"
 expected_flatpak_archive_url="https://github.com/$github_repository/releases/download/$expected_engine_release_tag/$expected_flatpak_archive_name"
 if [[ "$engine_release_tag" != "$expected_engine_release_tag" ||
@@ -255,10 +255,10 @@ printf '%s\n' \
   '' \
   'See the [Configuration guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/CONFIGURATION.md) and [Troubleshooting guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/TROUBLESHOOTING.md) for complete behaviour and per-game controls.' \
   '' \
-  '> ⚠️ **Required Renderer update:** Installing the ZIP updates the Decky plugin files, but does **not** by itself replace the private MAKO Renderer layer. Open Mako and select **Install MAKO Renderer** after installing the ZIP.' \
+  '> ⚠️ **Required Renderer update:** Installing the ZIP updates the Decky plugin files, but does **not** by itself replace the private MAKO Renderer layer. Open MAKO and select **Install MAKO Renderer** after installing the ZIP.' \
   '' \
   '> [!IMPORTANT]' \
-  '> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in the plugin.' \
+  '> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **MAKO** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in the plugin.' \
   '' \
   > "$notes_file"
 
@@ -277,18 +277,18 @@ printf '%s\n' \
   "1. Download \`$(basename "$output_path")\` below." \
   "2. On SteamOS, open Decky Loader's settings and enable **Developer Mode**." \
   '3. Choose **Developer** > **Install Plugin from Zip**, then select the downloaded ZIP.' \
-  '4. In Mako, select **Install MAKO Renderer**. For native Steam/Proton games, add `/home/deck/.local/bin/mako-run %command%` to the game’s Steam launch options.' \
+  '4. In MAKO, select **Install MAKO Renderer**. For native Steam/Proton games, add `/home/deck/.local/bin/mako-run %command%` to the game’s Steam launch options.' \
   '' \
   '> [!IMPORTANT]' \
-  '> If Decky does not show or reload the plugin after installing a ZIP, uninstall **Mako** from Decky, install the ZIP again, then restart your Steam Deck or Steam Machine. Open Mako afterwards and select **Install MAKO Renderer** again.' \
+  '> If Decky does not show or reload the plugin after installing a ZIP, uninstall **MAKO** from Decky, install the ZIP again, then restart your Steam Deck or Steam Machine. Open MAKO afterwards and select **Install MAKO Renderer** again.' \
   '' \
   '## Updating an existing MAKO Decky installation' \
   '' \
   '1. Quit any game currently using `/home/deck/.local/bin/mako-run`.' \
-  "2. Uninstall **Mako** from Decky, then download the newer ZIP from [MAKO Decky v$package_version](https://github.com/$github_repository/releases/tag/$plugin_release_tag)." \
+  "2. Uninstall **MAKO** from Decky, then download the newer ZIP from [MAKO Decky v$package_version](https://github.com/$github_repository/releases/tag/$plugin_release_tag)." \
   '3. In Game Mode, open Decky Loader’s settings, choose **Developer** > **Install Plugin from Zip**, then select the newer ZIP.' \
   '4. Restart your Steam Deck or Steam Machine.' \
-  '5. ⚠️ **Required:** Open Mako and select **Install MAKO Renderer** to install the version bundled in the new ZIP.' \
+  '5. ⚠️ **Required:** Open MAKO and select **Install MAKO Renderer** to install the version bundled in the new ZIP.' \
   '6. In **Flatpak Setup**, select **Update** for every prepared application’s matching runtime extension. This replaces its Flatpak layer with the engine bundled in the new ZIP while preserving its preparation and per-game Wrapper commands.' \
   '' \
   'Existing profiles and Steam launch options are retained. The private native renderer and launcher are re-created in step 5; shared Flatpak extensions are retained, then refreshed in step 6.' \

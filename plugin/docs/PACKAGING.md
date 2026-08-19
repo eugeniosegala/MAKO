@@ -9,23 +9,23 @@ pnpm install --frozen-lockfile
 pnpm run package:local
 ```
 
-This creates a versioned local ZIP under `out/`, named `Mako-local.<engine-and-source-identity>.zip`. The packager regenerates configuration bindings, builds the frontend and sibling MAKO Renderer engine, verifies its payload, and creates a Decky ZIP. It does not tag, push, or publish anything.
+This creates a versioned local ZIP under `out/`, named `MAKO-local.<engine-and-source-identity>.zip`. The packager regenerates configuration bindings, builds the frontend and sibling MAKO Renderer engine, verifies its payload, and creates a Decky ZIP. It does not tag, push, or publish anything.
 
-The ZIP's `Mako/` directory and the installed `~/homebrew/plugins/Mako` directory match the **Mako** name displayed inside Decky. The component is officially named **MAKO Decky** within the wider MAKO project.
+The ZIP keeps the established `Mako/` directory and installs to `~/homebrew/plugins/Mako` so a package replaces earlier versions instead of creating a second case-sensitive directory. This is an internal compatibility slug; the ZIP filename and the name displayed inside Decky use **MAKO**. The component is officially named **MAKO Decky** within the wider MAKO project.
 
 Pass a path to choose the output location:
 
 ```bash
-pnpm run package:local -- /path/to/Mako.zip
+pnpm run package:local -- /path/to/MAKO.zip
 ```
 
 To reuse local copies of the _already pinned_ Renderer and Flatpak archives, provide both archives directly. Their filenames and checksums must match the pin in `package.json`:
 
 ```bash
 scripts/package-local.sh \
-  --engine-archive /path/to/mako-render-<version>-linux.tar.xz \
-  --flatpak-archive /path/to/mako-render-<version>-flatpaks.tar.xz \
-  /path/to/Mako-local-test.zip
+  --engine-archive /path/to/MAKO-Renderer-v<version>-linux.tar.xz \
+  --flatpak-archive /path/to/MAKO-Renderer-v<version>-flatpaks.tar.xz \
+  /path/to/MAKO-local-test.zip
 ```
 
 For an engine candidate that differs from the pin, use `pnpm run package:local-engine` or `scripts/package-local.sh --local-engine-repo /path/to/MAKO/engine`. That workflow creates and records a local payload identity in the ZIP instead of pretending it is a released archive.

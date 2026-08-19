@@ -121,8 +121,8 @@ if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
 fi
 
 tag="render-v$version"
-archive="out/mako-render-v$version-linux.tar.xz"
-flatpak_archive="out/mako-render-v$version-flatpaks.tar.xz"
+archive="out/MAKO-Renderer-v$version-linux.tar.xz"
+flatpak_archive="out/MAKO-Renderer-v$version-flatpaks.tar.xz"
 source_commit="$(git rev-parse HEAD)"
 
 tag_exists=false

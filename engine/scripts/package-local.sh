@@ -12,7 +12,7 @@ if [[ "$build_work_root" != /* ]]; then
     build_work_root="$repo_root/$build_work_root"
 fi
 version="$(tr -d '[:space:]' < "$repo_root/VERSION")"
-default_output="$repo_root/out/mako-render-$version-linux.tar.xz"
+default_output="$repo_root/out/MAKO-Renderer-v$version-linux.tar.xz"
 output_path=""
 build_32_bit=true
 

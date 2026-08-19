@@ -2,7 +2,7 @@
 
 This guide is for troubleshooting the standalone **MAKO Renderer**: a Renderer archive extracted directly into a Linux prefix or a Renderer built and installed from source. These installations use `mako-ui`, `mako-cli`, and `ENABLE_MAKO=1` without the Decky plugin managing the game launch.
 
-Use this guide when you installed `mako-render-v<version>-linux.tar.xz` or ran `cmake --install`. If **Mako** is installed through Decky Loader and you normally use `/home/deck/.local/bin/mako-run`, use the [MAKO Decky guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md) instead.
+Use this guide when you installed `MAKO-Renderer-v<version>-linux.tar.xz`, the legacy `mako-render-v2.0.0-linux.tar.xz`, or ran `cmake --install`. If **MAKO** is installed through Decky Loader and you normally use `/home/deck/.local/bin/mako-run`, use the [MAKO Decky guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md) instead.
 
 You will temporarily enable diagnostics for the affected game, reproduce the problem once, create `MAKO-diagnostics.txt` on the Desktop, restore the normal launch settings, and upload the report through the [MAKO diagnostic report form][diagnostic-form]. The form contains the short questions needed to understand the report.
 

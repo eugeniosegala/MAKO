@@ -58,7 +58,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam.** MAKO needs the licensed installation's `Lossless.dll`.
 3. Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download the MAKO Decky ZIP under **Assets**.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
-5. Open **Mako** and select **Install MAKO Renderer**. This required step installs the renderer bundled in the ZIP into MAKO's private location.
+5. Open **MAKO** and select **Install MAKO Renderer**. This required step installs the renderer bundled in the ZIP into MAKO's private location.
 6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal starting point; Adaptive Frame Generation is optional.
 7. For a native Steam or Proton game, add this under **Steam Properties > Launch Options**:
 
@@ -70,21 +70,21 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> If Decky does not show or reload **Mako** after installing a ZIP, uninstall Mako from Decky, install the ZIP again, and restart your Steam Deck or Steam Machine. Open Mako afterwards and repeat step 5.
+> If Decky does not show or reload **MAKO** after installing a ZIP, uninstall MAKO from Decky, install the ZIP again, and restart your Steam Deck or Steam Machine. Open MAKO afterwards and repeat step 5.
 
 ### Heroic and other Flatpak applications
 
 The Steam launch wrapper cannot enter a Flatpak sandbox directly, so configure Heroic through **Flatpak Setup**:
 
-1. Select **Flatpak Setup** in Mako.
-2. Under **Flatpak Applications**, prepare **Heroic**. If the matching runtime extension is missing, Mako tells you which runtime to install, commonly **25.08**. Preparing Heroic grants access to the wrapper, configuration, and `Lossless.dll`; it does not enable frame generation for every Heroic game.
+1. Select **Flatpak Setup** in MAKO.
+2. Under **Flatpak Applications**, prepare **Heroic**. If the matching runtime extension is missing, MAKO tells you which runtime to install, commonly **25.08**. Preparing Heroic grants access to the wrapper, configuration, and `Lossless.dll`; it does not enable frame generation for every Heroic game.
 3. In every Heroic game you want to enable, open **Settings > Advanced** and set the first **Wrapper** field to the SteamOS wrapper path:
 
     ```text
     /home/deck/.local/bin/mako-run
     ```
 
-    Mako also shows the exact **Wrapper path for this device** under **Flatpak Setup**. Use that displayed path when it differs, such as on Bazzite or with a custom username. Leave **Arguments** empty and do not use `%command%` in Heroic.
+    MAKO also shows the exact **Wrapper path for this device** under **Flatpak Setup**. Use that displayed path when it differs, such as on Bazzite or with a custom username. Leave **Arguments** empty and do not use `%command%` in Heroic.
 
 4. Start that game normally from Heroic or its Steam shortcut.
 
@@ -98,7 +98,7 @@ The wrapper applies only to the selected Heroic games and enables the private MA
 
 For any EmuDeck emulator installed as a Flatpak:
 
-1. In Mako, select **Flatpak Setup** and prepare the emulator you use. Install its matching runtime extension when prompted.
+1. In MAKO, select **Flatpak Setup** and prepare the emulator you use. Install its matching runtime extension when prompted.
 2. Select **Vulkan** as that emulator's graphics backend when it offers one.
 3. In Desktop Mode, open the Steam shortcut for each EmuDeck game you want to configure, then set these fields under **Properties > Shortcut**:
 
@@ -108,7 +108,7 @@ For any EmuDeck emulator installed as a Flatpak:
         /home/deck/.local/bin/mako-run
         ```
 
-        This is the standard SteamOS path. If Mako shows a different **Wrapper path for this device** under **Flatpak Setup**, use the displayed path.
+        This is the standard SteamOS path. If MAKO shows a different **Wrapper path for this device** under **Flatpak Setup**, use the displayed path.
 
     - **Start In**
 
@@ -131,14 +131,14 @@ For a step-by-step guide that creates a shareable report on the Desktop, see [Co
 The clean update path avoids Decky retaining an older backend or bundled payload:
 
 1. Quit games using `/home/deck/.local/bin/mako-run`.
-2. Uninstall Mako from Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
+2. Uninstall MAKO from Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart your Steam Deck or Steam Machine.
-4. Open Mako and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
-5. If you use Heroic or EmuDeck Flatpak emulators, open **Flatpak Setup** and select **Update** for each prepared application's matching runtime extension shown by Mako.
+4. Open MAKO and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
+5. If you use Heroic or EmuDeck Flatpak emulators, open **Flatpak Setup** and select **Update** for each prepared application's matching runtime extension shown by MAKO.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **Mako** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in the plugin.
+> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **MAKO** from Decky, install the newer ZIP, restart your Steam Deck or Steam Machine, then select **Install MAKO Renderer** in the plugin.
 
 Profiles and Steam launch options are retained. The private native engine and launcher are recreated in step 4; shared Flatpak extensions are retained and then refreshed in step 5.
 
@@ -147,13 +147,15 @@ Profiles and Steam launch options are retained. The private native engine and la
 Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
 
 1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam.
-2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download the Linux archive under **Assets**, named `mako-render-v<version>-linux.tar.xz`.
+2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download the Linux archive under **Assets**. New releases use `MAKO-Renderer-v<version>-linux.tar.xz`; the existing v2.0.0 release retains its published legacy name, `mako-render-v2.0.0-linux.tar.xz`.
 3. Extract it into your user-local prefix:
 
 ```bash
 mkdir -p ~/.local
-tar -xJf mako-render-v<version>-linux.tar.xz -C ~/.local
+tar -xJf MAKO-Renderer-v<version>-linux.tar.xz -C ~/.local
 ```
+
+For v2.0.0, substitute its legacy filename from step 2 in the extraction command.
 
 4. Open **MAKO Renderer Configuration** from the application launcher or run `~/.local/bin/mako-ui`.
 5. Add a game profile, then activate MAKO only for that game. In Steam launch options, use:

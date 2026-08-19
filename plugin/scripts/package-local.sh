@@ -205,7 +205,9 @@ read -r archive_name archive_version archive_url archive_checksum flatpak_archiv
   ' "$project_dir/package.json"
 )
 
-if [[ -z "$local_engine_repo" && "$archive_name" != mako-render-v*-linux.tar.xz ]]; then
+if [[ -z "$local_engine_repo" &&
+      "$archive_name" != MAKO-Renderer-v*-linux.tar.xz &&
+      "$archive_name" != mako-render-v*-linux.tar.xz ]]; then
   echo "The tracked renderer pin predates the MAKO Renderer release track and cannot package the renamed Vulkan layer." >&2
   echo "Use --local-engine-repo for bootstrap builds, or publish render-v$archive_version and commit the generated plugin/package.json pin first." >&2
   exit 1
@@ -263,7 +265,7 @@ if [[ -n "$local_engine_repo" ]]; then
   if [[ "$build_64_only" == true ]]; then
     engine_archive_suffix="linux.x86_64"
   fi
-  engine_archive_path="$local_engine_repo/out/mako-render-$archive_version-local.$local_engine_label-$engine_archive_suffix.tar.xz"
+  engine_archive_path="$local_engine_repo/out/MAKO-Renderer-v$archive_version-local.$local_engine_label-$engine_archive_suffix.tar.xz"
   archive_name="$(basename "$engine_archive_path")"
 
   if [[ -s "$engine_archive_path" ]]; then
@@ -283,7 +285,7 @@ if [[ -n "$local_engine_repo" ]]; then
     flatpak_archive_name=""
     flatpak_archive_checksum=""
   else
-    flatpak_archive_path="$local_engine_repo/out/mako-render-$archive_version-local.$local_engine_label-flatpaks.tar.xz"
+    flatpak_archive_path="$local_engine_repo/out/MAKO-Renderer-v$archive_version-local.$local_engine_label-flatpaks.tar.xz"
     flatpak_archive_name="$(basename "$flatpak_archive_path")"
     if [[ -s "$flatpak_archive_path" ]]; then
       echo "Reusing matching local Flatpak archive $flatpak_archive_name..."
@@ -316,9 +318,9 @@ done
 
 if [[ "$output_path_set" == false ]]; then
   if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
-    output_path="$project_dir/out/Mako-local.$local_plugin_label.zip"
+    output_path="$project_dir/out/MAKO-local.$local_plugin_label.zip"
   else
-    output_path="$project_dir/out/Mako.zip"
+    output_path="$project_dir/out/MAKO.zip"
   fi
 fi
 

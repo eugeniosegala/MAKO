@@ -160,7 +160,8 @@ import sys
 with open(sys.argv[1], encoding="utf-8") as source:
     print(json.load(source).get("name", ""))
 ' "$plugin_dir/plugin.json")"
-if [[ "$plugin_name" != "Mako" && "$plugin_name" != "MAKO - Frame Generation" ]]; then
+if [[ "$plugin_name" != "MAKO" && "$plugin_name" != "Mako" &&
+      "$plugin_name" != "MAKO - Frame Generation" ]]; then
   echo "Refusing to modify a different Decky plugin: $plugin_dir" >&2
   exit 1
 fi
@@ -259,7 +260,7 @@ if [[ "$deploy_flatpaks" == true ]]; then
     exit 1
   fi
   engine_version="$(tr -d '[:space:]' < "$engine_repo/VERSION")"
-  flatpak_archive="$engine_repo/out/mako-render-$engine_version-steamos-dev-flatpaks.tar.xz"
+  flatpak_archive="$engine_repo/out/MAKO-Renderer-v$engine_version-steamos-dev-flatpaks.tar.xz"
   build_cache_root="${MAKO_BUILD_CACHE_ROOT:-$engine_repo/build/cache}"
   build_work_root="${MAKO_BUILD_WORK_ROOT:-$engine_repo/build/work}"
   flatpak_cache_root="${MAKO_FLATPAK_CACHE_ROOT:-$build_cache_root/flatpak}"

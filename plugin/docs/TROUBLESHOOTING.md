@@ -16,7 +16,7 @@ Use **Disable MAKO Renderer on Next Launch** and restart the game if you need to
     /home/deck/.local/bin/mako-run %command%
     ```
 
-2. Open Mako and select **Install MAKO Renderer**. Installing a Decky ZIP alone does not replace the private Renderer payload.
+2. Open MAKO and select **Install MAKO Renderer**. Installing a Decky ZIP alone does not replace the private Renderer payload.
 3. Check the selected profile's `Lossless.dll` path, GPU choice, and **Active In** rule. Start with Fixed 2x before testing Adaptive settings.
 4. Test the game's V-Sync both on and off. Its own FPS limiter, VRR, or compositor configuration can affect frame pacing.
 
@@ -49,7 +49,7 @@ For an EmuDeck Flatpak shortcut, first save its current **Target** and **Launch 
 MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 /home/deck/.local/bin/mako-run
 ```
 
-Use Mako's displayed **Wrapper path for this device** when it differs. Do not add `%command%`. After reproducing the issue, restore the shortcut's original **Target** and **Launch Options** exactly.
+Use MAKO's displayed **Wrapper path for this device** when it differs. Do not add `%command%`. After reproducing the issue, restore the shortcut's original **Target** and **Launch Options** exactly.
 
 Reproduce the issue, quit the game, then run this in Desktop Mode:
 
@@ -66,9 +66,9 @@ For complete user-facing instructions, including how to preserve EmuDeck argumen
 Use the clean update path for every newer local ZIP:
 
 1. Quit games using `/home/deck/.local/bin/mako-run`.
-2. Uninstall **Mako** from Decky and install the newer ZIP through **Developer > Install Plugin from Zip**.
+2. Uninstall **MAKO** from Decky and install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart the Steam Deck or Steam Machine.
-4. Open Mako and select **Install MAKO Renderer**.
+4. Open MAKO and select **Install MAKO Renderer**.
 5. In **Flatpak Setup**, select **Update** for every prepared application's matching runtime extension, such as Heroic or Dolphin.
 
 This preserves profiles and launch options while replacing the private native Renderer and refreshing any shared Flatpak extensions.

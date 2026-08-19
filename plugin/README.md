@@ -46,7 +46,7 @@ The resulting Decky ZIP is written under `plugin/out/`. Nothing is published by 
 
 ## Using a local build
 
-After installing the ZIP through Decky developer settings, open Mako and install MAKO Renderer. For a native Steam or Proton game, use:
+After installing the ZIP through Decky developer settings, open MAKO and install MAKO Renderer. For a native Steam or Proton game, use:
 
 ```text
 /home/deck/.local/bin/mako-run %command%

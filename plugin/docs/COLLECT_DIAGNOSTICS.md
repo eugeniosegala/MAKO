@@ -1,8 +1,8 @@
 # Collect MAKO Decky Diagnostics
 
-This guide is for troubleshooting **MAKO Decky**: the **Mako** plugin installed through Decky Loader. It covers the plugin-managed `mako-run` wrapper, its private MAKO Renderer installation, and the Flatpak extensions prepared from the plugin's **Flatpak Setup** screen.
+This guide is for troubleshooting **MAKO Decky**: the **MAKO** plugin installed through Decky Loader. It covers the plugin-managed `mako-run` wrapper, its private MAKO Renderer installation, and the Flatpak extensions prepared from the plugin's **Flatpak Setup** screen.
 
-Use this guide when **Mako** appears in Decky Loader and you normally launch games through `/home/deck/.local/bin/mako-run`. If you installed the Renderer archive directly or built it from source and activate games with `ENABLE_MAKO=1`, use the [standalone MAKO Renderer guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md) instead.
+Use this guide when **MAKO** appears in Decky Loader and you normally launch games through `/home/deck/.local/bin/mako-run`. If you installed the Renderer archive directly or built it from source and activate games with `ENABLE_MAKO=1`, use the [standalone MAKO Renderer guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md) instead.
 
 You will temporarily enable diagnostics for the affected game, reproduce the problem once, create `MAKO-diagnostics.txt` on the Desktop, restore the game's normal launch settings, and upload the report through the [MAKO diagnostic report form][diagnostic-form]. The form contains the short questions needed to understand the report, so you do not need to copy a separate template into the GitHub issue.
 
@@ -10,11 +10,11 @@ Please do not attach `MAKO-diagnostics.txt` directly to a public GitHub issue. R
 
 The process does not copy `Lossless.dll`, install system packages, factory reset the device, or change SteamOS system files.
 
-These commands use the standard SteamOS home directory, `/home/deck`. If Mako shows a different **Wrapper path for this device**, use that home directory in the wrapper, diagnostics-helper, and Desktop paths below.
+These commands use the standard SteamOS home directory, `/home/deck`. If MAKO shows a different **Wrapper path for this device**, use that home directory in the wrapper, diagnostics-helper, and Desktop paths below.
 
 ## 1. Prepare the game
 
-Open Mako and confirm that **MAKO Renderer is installed**. Fully close the game before changing its launch settings, then follow exactly one setup below.
+Open MAKO and confirm that **MAKO Renderer is installed**. Fully close the game before changing its launch settings, then follow exactly one setup below.
 
 ### Native Steam or Proton game
 
@@ -111,7 +111,7 @@ Keep screenshots, videos, and discussion in the original GitHub issue, but use t
 
 ## If the report command fails
 
-- **`mako-diagnostics: No such file or directory`:** open Mako and select **Install MAKO Renderer**, then try again.
+- **`mako-diagnostics: No such file or directory`:** open MAKO and select **Install MAKO Renderer**, then try again.
 - **`Diagnostics log not found`:** diagnostics did not reach the tested game. Recheck the setup for its launch type, reproduce the issue again, fully quit the game, and immediately rerun the report command.
 - **The report contains no `render layer active` line:** send the report anyway. That absence is useful evidence that the Vulkan layer did not load.
 - **An EmuDeck shortcut no longer starts:** restore its saved Target and Launch Options, confirm it starts normally, then repeat the temporary diagnostic setup without removing or reordering any original EmuDeck arguments.

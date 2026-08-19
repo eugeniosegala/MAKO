@@ -52,8 +52,8 @@ if (!/^[^/]+\/[^/]+$/.test(repository)) {
 
 const archiveName = basename(archivePath);
 const flatpakArchiveName = basename(flatpakArchivePath);
-const expectedArchiveName = `mako-render-v${version}-linux.tar.xz`;
-const expectedFlatpakArchiveName = `mako-render-v${version}-flatpaks.tar.xz`;
+const expectedArchiveName = `MAKO-Renderer-v${version}-linux.tar.xz`;
+const expectedFlatpakArchiveName = `MAKO-Renderer-v${version}-flatpaks.tar.xz`;
 if (archiveName !== expectedArchiveName) {
   throw new Error(`Expected ${expectedArchiveName}, received ${archiveName}`);
 }

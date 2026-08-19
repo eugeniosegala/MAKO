@@ -90,8 +90,8 @@ fi
 
 renderer_tag="render-v$version"
 decky_tag="plugin-v$version"
-renderer_archive="mako-render-v$version-linux.tar.xz"
-flatpak_archive="mako-render-v$version-flatpaks.tar.xz"
+renderer_archive="MAKO-Renderer-v$version-linux.tar.xz"
+flatpak_archive="MAKO-Renderer-v$version-flatpaks.tar.xz"
 decky_archive="MAKO-Decky-v$version.zip"
 
 release_has_asset() {
@@ -146,8 +146,8 @@ renderer_pin_matches() {
     const repository = process.argv[4];
     const binary = manifest.remote_binary?.[0];
     const tag = `render-v${version}`;
-    const nativeName = `mako-render-v${version}-linux.tar.xz`;
-    const flatpakName = `mako-render-v${version}-flatpaks.tar.xz`;
+    const nativeName = `MAKO-Renderer-v${version}-linux.tar.xz`;
+    const flatpakName = `MAKO-Renderer-v${version}-flatpaks.tar.xz`;
     const base = `https://github.com/${repository}/releases/download/${tag}`;
     const sha256 = /^[0-9a-f]{64}$/;
     const valid = binary?.version === version &&

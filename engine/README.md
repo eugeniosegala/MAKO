@@ -20,7 +20,7 @@ Standalone Linux and Flatpak archives are published on the [latest MAKO Renderer
 
 ### Steam Deck or Steam Machine: use MAKO Decky
 
-For SteamOS, the companion **MAKO Decky** plugin is the recommended installation path. It installs the renderer in a private location, creates the `mako-run` launcher, and prepares supported Flatpak applications. Install the Decky ZIP, open **Mako**, and select **Install MAKO Renderer**. For a native Steam or Proton game, set its Steam launch option to:
+For SteamOS, the companion **MAKO Decky** plugin is the recommended installation path. It installs the renderer in a private location, creates the `mako-run` launcher, and prepares supported Flatpak applications. Install the Decky ZIP, open **MAKO**, and select **Install MAKO Renderer**. For a native Steam or Proton game, set its Steam launch option to:
 
 ```text
 /home/deck/.local/bin/mako-run %command%
@@ -31,14 +31,16 @@ See the [main MAKO installation guide](../README.md#install-and-use) for the com
 ### Direct Linux installation
 
 1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` but does not bundle, copy, or modify it.
-2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download its versioned Linux archive under **Assets**: `mako-render-v<version>-linux.tar.xz`.
+2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download its versioned Linux archive under **Assets**. New releases use `MAKO-Renderer-v<version>-linux.tar.xz`; the existing v2.0.0 release retains its published legacy name, `mako-render-v2.0.0-linux.tar.xz`.
 3. Optionally save the archive's file list so you know exactly what was installed, then extract it into your user-local prefix:
 
 ```bash
 mkdir -p ~/.local
-tar -tJf mako-render-v<version>-linux.tar.xz > mako-render-v<version>-files.txt
-tar -xJf mako-render-v<version>-linux.tar.xz -C ~/.local
+tar -tJf MAKO-Renderer-v<version>-linux.tar.xz > MAKO-Renderer-v<version>-files.txt
+tar -xJf MAKO-Renderer-v<version>-linux.tar.xz -C ~/.local
 ```
+
+For v2.0.0, substitute its legacy filename from step 2 in both commands.
 
 The archive installs `mako-ui`, `mako-cli`, `mako-diagnostics`, XDG desktop files, Vulkan manifests, and matching 64-bit and 32-bit layers. The Vulkan loader selects the correct layer for each game; the UI, CLI, and diagnostics helper remain 64-bit applications or scripts. If `~/.local/bin` is not on your `PATH`, run tools with their full paths, such as `~/.local/bin/mako-ui`.
 
