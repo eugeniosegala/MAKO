@@ -99,6 +99,14 @@ int main() {
         ls::GameConf{.name = "mako"},
         ls::GameConf{.name = "captured", .active_in = {"CoolGame.exe"}},
     };
+
+    setenv("MAKO_PROFILE", "captured", 1);
+    const auto environmentIdentification = ls::identify();
+    expect(environmentIdentification.override.has_value() &&
+            environmentIdentification.override.value() == "captured",
+        "MAKO_PROFILE must populate the explicit profile override");
+    unsetenv("MAKO_PROFILE");
+
     ls::Identification identification{
         .fallback = "mako",
         .executable = "/games/CoolGame.exe",

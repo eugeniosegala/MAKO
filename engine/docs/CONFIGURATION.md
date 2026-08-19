@@ -46,7 +46,13 @@ Test V-Sync both on and off for each game. It can steady the real-frame cadence,
 
 ## Environment variables
 
-`ENABLE_MAKO=1` activates MAKO's implicit Vulkan layer only for the launched process. `DISABLE_MAKO=1` disables it. `MAKO_CONFIG` chooses a TOML file and `MAKO_PROFILE` chooses a named profile.
+`ENABLE_MAKO=1` activates MAKO's implicit Vulkan layer only for the launched process. `DISABLE_MAKO=1` disables it. `MAKO_CONFIG` chooses a TOML file and `MAKO_PROFILE` chooses a named profile, overriding automatic executable and process matching for that launch:
+
+```bash
+ENABLE_MAKO=1 MAKO_PROFILE="My game" %command%
+```
+
+The value must exactly match a configured profile `name`. Quote profile names that contain spaces; shell backticks are not profile delimiters and must not be used.
 
 For a configuration that comes entirely from environment variables, set `MAKO_ENV=1` and use any of the following:
 
