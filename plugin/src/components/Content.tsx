@@ -111,13 +111,17 @@ export function Content() {
     };
   }, [loadMakoConfig, syncCurrentProfile]);
 
-  const handleConfigChange = async (fieldName: keyof ConfigurationData, value: boolean | number | string) => {
+  const handleConfigChanges = async (changes: Partial<ConfigurationData>) => {
     const targetProfile = editingProfileRef.current;
-    const newConfig = { ...config, [fieldName]: value };
+    const newConfig = { ...config, ...changes };
     const result = await updateProfileConfig(targetProfile, newConfig);
     if (result.success && editingProfileRef.current === targetProfile) {
       await loadMakoConfig(targetProfile);
     }
+  };
+
+  const handleConfigChange = async (fieldName: keyof ConfigurationData, value: boolean | number | string) => {
+    await handleConfigChanges({ [fieldName]: value } as Partial<ConfigurationData>);
   };
 
   const onInstall = async () => {
@@ -377,6 +381,7 @@ export function Content() {
           <FpsMultiplierControl
             config={config}
             onConfigChange={handleConfigChange}
+            onConfigUpdate={handleConfigChanges}
           />
         </>
       )}

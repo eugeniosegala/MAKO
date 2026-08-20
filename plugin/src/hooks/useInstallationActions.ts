@@ -28,12 +28,13 @@ export function useInstallationActions() {
       if (result.success) {
         setIsInstalled(true);
         setInstallationStatus(result.message || t("STATUS_ENGINE_INSTALLED", "MAKO Renderer installed"));
-        showInstallSuccessToast();
 
         // Reload MAKO Renderer config after installation
         if (reloadConfig) {
           await reloadConfig();
         }
+
+        showInstallSuccessToast();
       } else {
         setInstallationStatus(`${t("STATUS_INSTALL_FAILED", "Installation failed:")} ${result.error}`);
         showInstallErrorToast(result.error);

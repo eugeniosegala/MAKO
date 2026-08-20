@@ -104,6 +104,7 @@ export function ConfigurationSection({
         .MAKO_ManualOverrideFields > * + * {
           margin-top: 0 !important;
         }
+        .MAKO_ManualOverrideFields > *:nth-child(2),
         .MAKO_ManualOverrideFields > *:nth-child(3) {
           margin-top: 4px !important;
         }

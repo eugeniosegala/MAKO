@@ -6,9 +6,10 @@ Test one change at a time. Games, displays, VRR, and compositors differ; try the
 
 ## Frame generation
 
-- **Frame Generation (Live On/Off):** Turns synthesis on or off without losing the selected Fixed or Adaptive settings.
+- **Frame Generation (Live On/Off):** Turns synthesis on or off without losing the selected Fixed or Adaptive settings. Keep it on whenever you want either mode to generate frames.
 - **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Start at 2x for the best balance of image quality and latency.
 - **Adaptive Frame Generation:** Varies the generated-frame count toward a target and uses fractional multipliers automatically. For example, 80 real FPS targeting 120 displayed FPS uses an average 1.5x cadence. The target is not a game FPS limiter: Adaptive cannot reduce a game already above target or exceed the selected ceiling.
+- **Fractional Adaptive (Preset):** Derived helper switch for the settings required by fractional Adaptive generation; it is not a separate saved mode. Turning it on enables Frame Generation and Adaptive and disables Steady 2x FPS Cap. Turning it off selects Steady 2x. Its state is recalculated from those settings, so changing one incompatibly turns the preset off automatically.
 - **Target FPS:** Desired Adaptive output rate, from 30 to 240 FPS in Decky. Fractional generation is the normal behavior when **Steady 2x FPS Cap** is off.
 - **Steady 2x FPS Cap:** Replaces fractional generation with a half-target real-FPS cap and a steady 2x cadence while the game can maintain that cap. This can feel smoother, but it reduces real FPS and may increase input latency. It is off by default; while enabled, it takes control from the regular **Base FPS Cap**.
 - **Maximum Adaptive Multiplier:** The 2x, 3x, or 4x Adaptive ceiling. 2x usually looks best; 4x can help reach a higher target at the cost of more generated frames.
@@ -31,11 +32,11 @@ The Decky dropdown is an editor selection, not a runtime override. Outside a gam
 
 ## External Tools
 
-**Enable MangoHud** and **Enable vkBasalt** are mutually exclusive per-profile controls. Default applies to games without a saved profile; to limit a tool to one title, start that game, choose **Save profile for &lt;game&gt;**, and enable the tool in the captured profile. Restart the game after changing either control.
+**Enable MangoHud** and **Enable vkBasalt** are mutually exclusive per-profile controls under **External Tools**. This UI is the recommended way to use either integration. Default applies to games without a saved profile; to limit a tool to one title, start that game, choose **Save profile for &lt;game&gt;**, and enable the tool in the captured profile. Restart the game after changing either control.
 
 These controls admit one named host Vulkan layer while retaining MAKO's Gamescope WSI, Mesa device-selection, Mesa anti-lag, and competing-frame-generation guards. The current lane is limited to a host-installed tool with a 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS. Flatpak games remain on MAKO's private extension path, and MangoHud plus vkBasalt cannot be selected together.
 
-The controls activate the selected layer; they do not own its appearance or effects. MangoHud continues to read `~/.config/MangoHud/MangoHud.conf`, and vkBasalt continues to use its own configuration under `~/.config/vkBasalt/`. For a one-game MangoHud override, or for loader diagnostics and manual activation, use the Renderer [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md) guide.
+The controls activate the selected layer; they do not own its appearance or effects. MangoHud continues to read `~/.config/MangoHud/MangoHud.conf`, and vkBasalt continues to use its own configuration under `~/.config/vkBasalt/`. The Renderer-owned [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md) guide shows how to add per-game MangoHud options while keeping the toggle enabled, activate either tool manually without the toggles, and test more advanced layer chains through MAKO Decky.
 
 ### Upgrade and legacy-option safety
 

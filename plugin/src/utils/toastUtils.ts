@@ -4,7 +4,10 @@
  */
 
 import { toaster } from "@decky/api";
+import { MakoInstallCountdown } from "../components/MakoInstallCountdown";
 import t from "../i18n/i18n";
+
+const INSTALL_SUCCESS_DURATION_MS = 3000;
 
 export interface ToastOptions {
   title: string;
@@ -38,7 +41,7 @@ export const ToastMessages = {
   get INSTALL_SUCCESS() {
     return {
       title: t("TOAST_INSTALL_COMPLETE", "Installation Complete"),
-      body: t("TOAST_INSTALL_COMPLETE_DESC", "MAKO Renderer installed privately")
+      body: t("TOAST_INSTALL_COMPLETE_DESC", "Restarting your device is recommended.")
     };
   },
   get INSTALL_ERROR() {
@@ -91,7 +94,15 @@ export function showErrorToastWithMessage(title: string, error: unknown): void {
  * Show installation success toast
  */
 export function showInstallSuccessToast(): void {
-  showSuccessToast(ToastMessages.INSTALL_SUCCESS.title, ToastMessages.INSTALL_SUCCESS.body);
+  toaster.toast({
+    title: ToastMessages.INSTALL_SUCCESS.title,
+    body: ToastMessages.INSTALL_SUCCESS.body,
+    icon: window.SP_REACT.createElement(MakoInstallCountdown, {
+      durationMs: INSTALL_SUCCESS_DURATION_MS
+    }),
+    duration: INSTALL_SUCCESS_DURATION_MS,
+    expiration: INSTALL_SUCCESS_DURATION_MS
+  });
 }
 
 /**

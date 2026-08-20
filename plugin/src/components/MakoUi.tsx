@@ -14,6 +14,7 @@ interface MakoReleaseIdentityProps {
 
 export const makoPanelDivider = "1px solid rgba(77, 170, 190, 0.2)";
 export const makoDangerTextColor = "#d08aa0";
+export const makoReleaseAccentColor = "#d58a39";
 
 export const makoPanelStyle: CSSProperties = {
   overflow: "hidden",
@@ -67,7 +68,7 @@ export function MakoReleaseIdentity({ version, codename }: MakoReleaseIdentityPr
       >
         <span>v{version}</span>
         <span aria-hidden="true" style={{ padding: "0 6px", color: "#557f88" }}>-</span>
-        <span style={{ color: makoDangerTextColor }}>{codenameSlug}</span>
+        <span style={{ color: makoReleaseAccentColor }}>{codenameSlug}</span>
       </div>
     </PanelSectionRow>
   );

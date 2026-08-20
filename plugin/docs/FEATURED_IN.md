@@ -28,6 +28,8 @@ Community creators have covered, tested, and explained both the earlier Decky LS
 - [MAKO Frame Generation On Steam Deck: What Is It & How Does It Work?](https://www.youtube.com/watch?v=jgEyZdf3_0E) by [Deck Wizard](https://www.youtube.com/@DeckWizard): an explanation of what MAKO Frame Generation is and how it works on Steam Deck.
 - [Clair Obscur: Expedition 33 on Steam Deck | FSR 4.1 | MAKO vs LSFG Experimental | Performance Test](https://www.youtube.com/watch?v=p-N7HdWWcOU&t=349s) by [Deck Madness](https://www.youtube.com/@deck_madness): a Steam Deck performance comparison of MAKO and the earlier LSFG-VK Experimental plugin alongside FSR 4.1.
 - [Hogwarts Legacy on Steam Deck | FSR 4 | Mako vs LSFG-VK Experimental | Full Performance Test](https://www.youtube.com/watch?v=gmVcYXePqCQ&t=111s) by [Deck Madness](https://www.youtube.com/@deck_madness): a full Steam Deck performance test comparing MAKO with the earlier LSFG-VK Experimental plugin alongside FSR 4.
+- [FSR 4.1.1 e Lossless Scaling 2.0(MAKO): La RIVOLUZIONE delle Prestazioni su Steam Deck](https://www.youtube.com/watch?v=3N-cDm9iGbA) by [GAMERZ 56K](https://www.youtube.com/@gamerz56k): Italian-language coverage of FSR 4.1.1 and MAKO frame-generation performance on Steam Deck.
+- [Bloodborne on Steam Deck — ShadPS4 v0.18.1 | MAKO FG | Full Performance Test](https://www.youtube.com/watch?v=He2Sv1g2elk) by [Deck Madness](https://www.youtube.com/@deck_madness): a full Steam Deck performance test of Bloodborne through ShadPS4 with MAKO Frame Generation.
 
 ## Coverage includes
 

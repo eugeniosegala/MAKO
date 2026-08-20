@@ -11,19 +11,25 @@ import {
   PERFORMANCE_MODE,
   TARGET_FPS
 } from "../config/generatedConfigSchema";
+import {
+  fractionalAdaptivePresetChanges,
+  isFractionalAdaptivePresetEnabled
+} from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
-import { MakoSectionHeader, makoDialogButtonStyle } from "./MakoUi";
+import { MakoSectionHeader, makoDangerTextColor, makoDialogButtonStyle } from "./MakoUi";
 
 const TARGET_FPS_SAVE_DELAY_MS = 250;
 
 interface FpsMultiplierControlProps {
   config: ConfigurationData;
   onConfigChange: (fieldName: keyof ConfigurationData, value: boolean | number | string) => Promise<void>;
+  onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
 }
 
 export function FpsMultiplierControl({
   config,
-  onConfigChange
+  onConfigChange,
+  onConfigUpdate
 }: FpsMultiplierControlProps) {
   const [focusedControl, setFocusedControl] = useState<"decrease" | "increase" | null>(null);
   const [targetFps, setTargetFps] = useState(config.target_fps);
@@ -91,7 +97,14 @@ export function FpsMultiplierControl({
       <PanelSectionRow>
         <ToggleField
           label={t("FRAME_GENERATION_ENABLED", "Frame Generation (Live On/Off)")}
-          description={t("FRAME_GENERATION_ENABLED_DESC", "Live on/off. Leave it on to use Fixed or Adaptive Frame Generation. When off, neither mode generates frames; your settings stay saved.")}
+          description={(
+            <>
+              <div>{t("FRAME_GENERATION_ENABLED_DESC", "Live on/off. Leave it on to use Fixed or Adaptive Frame Generation. When off, neither mode generates frames; your settings stay saved.")}</div>
+              <div style={{ marginTop: "6px", color: makoDangerTextColor, fontWeight: "500" }}>
+                {t("FRAME_GENERATION_ENABLED_WARNING", "Keep this on if you want frame generation.")}
+              </div>
+            </>
+          )}
           checked={config.frame_generation_enabled ?? true}
           onChange={(value) => onConfigChange(FRAME_GENERATION_ENABLED, value)}
         />
@@ -110,9 +123,18 @@ export function FpsMultiplierControl({
         <ToggleField
           label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
           description={t("ADAPTIVE_DESC", "Adaptive uses fractional multipliers by default to reach the target FPS. Enable Steady 2x FPS Cap below only if you prefer a fixed 2x cadence. Settings normally apply live; increasing the multiplier ceiling may require a restart.")}
-          bottomSeparator={config.adaptive ? "standard" : "none"}
           checked={config.adaptive}
           onChange={(value) => onConfigChange(ADAPTIVE, value)}
+        />
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ToggleField
+          label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive (Preset)")}
+          description={t("FRACTIONAL_ADAPTIVE_PRESET_DESC", "One-click setup for fractional generation. Adaptive can average between integer ratios—for example, 60 real FPS targeting 90 displayed FPS is 1.5x. On enables Frame Generation and Adaptive and turns off Steady 2x FPS Cap; off selects Steady 2x. This switch is derived from those settings, so incompatible changes turn it off automatically.")}
+          bottomSeparator={config.adaptive ? "standard" : "none"}
+          checked={isFractionalAdaptivePresetEnabled(config)}
+          onChange={(value) => onConfigUpdate(fractionalAdaptivePresetChanges(value))}
         />
       </PanelSectionRow>
 
