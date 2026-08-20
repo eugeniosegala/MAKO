@@ -104,11 +104,13 @@ Do not implement this by removing the SDR guards globally, guessing from output 
 Isolation is a strong boundary and has intentional tradeoffs:
 
 - Steam's implicit shader-cache and Vulkan overlay hooks do not join the game process. Steam and Game Mode remain usable, but a Vulkan-hook feature may be absent.
-- MangoHud, capture tools, post-processing layers, or vendor tools installed as implicit layers will not load through the managed path unless a future curated policy explicitly admits and validates them.
+- MangoHud, capture tools, post-processing layers, or vendor tools installed as implicit layers do not load through the normal managed path. The [optional Vulkan layer chaining guide](LAYER-CHAINING.md) documents a limited native Steam/Proton MangoHud exception; it is an opt-in compatibility path rather than the default presentation contract.
 - A game that relied on another implicit layer for compatibility may behave differently. Compare against a native launch before assuming MAKO's scheduler is responsible.
 - Current managed launches intentionally do not expose HDR frame generation.
 - An incorrectly packaged private manifest can make MAKO appear active at the instance level while missing device or swapchain interception. Both architecture manifests and their relative library paths must be verified.
 - Over-broad changes to the path variables can break Flatpak, 32-bit Proton, Heroic/UMU, or emulators even when a native 64-bit Steam game passes.
+
+The dedicated chaining guide owns the MangoHud command, guard meanings, observed order, verification procedure, evidence, and unsupported matrix. Do not remove those guards or generalize the exception without the corresponding package and real-hardware evidence.
 
 Signals that the boundary regressed include:
 

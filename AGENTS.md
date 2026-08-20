@@ -44,7 +44,7 @@ The diagnostics helper deliberately recognizes historical lowercase renderer pre
 | Decky packaging | Frontend generation, local ZIPs, direct development deployment, reload, and publishing | `plugin/scripts/` |
 | Automation | Portable CI and dedicated SteamOS/AMD hardware validation | `.github/workflows/` |
 
-Start architecture work with the root `README.md`, then use `engine/README.md` or `plugin/README.md` for the selected component. Renderer configuration behavior is owned by `engine/docs/CONFIGURATION.md`; Decky's profile and compatibility UX is documented in `plugin/docs/CONFIGURATION.md`. Renderer HDR architecture is owned by `engine/docs/HDR-PIPELINE.md`; implicit layer and Gamescope presentation ownership is owned by `engine/docs/WSI-ISOLATION.md`. Read both before changing either boundary.
+Start architecture work with the root `README.md`, then use `engine/README.md` or `plugin/README.md` for the selected component. Renderer configuration behavior is owned by `engine/docs/CONFIGURATION.md`; Decky's profile and compatibility UX is documented in `plugin/docs/CONFIGURATION.md`. Renderer HDR architecture is owned by `engine/docs/HDR-PIPELINE.md`; implicit layer and Gamescope presentation ownership is owned by `engine/docs/WSI-ISOLATION.md`; guarded exceptions and their evidence are owned by `engine/docs/LAYER-CHAINING.md`. Read the applicable guides before changing either boundary.
 
 ## Authoritative workflow index
 
@@ -59,6 +59,7 @@ Start architecture work with the root `README.md`, then use `engine/README.md` o
 | Test AMD image quality | `engine/docs/IMAGE-QUALITY-REGRESSION.md` | `engine/scripts/run-gpu-quality-regression.sh`, `engine/mako-cli/src/tools/quality.cpp` |
 | Change HDR colour handling | `engine/docs/HDR-PIPELINE.md` | `engine/mako-render/src/color_pipeline.cpp`, `engine/mako-backend/src/mako.cpp` |
 | Change WSI/layer isolation | `engine/docs/WSI-ISOLATION.md` | `engine/mako-render/src/presentation_policy.hpp`, `engine/scripts/mako-launch` |
+| Add or change an optional Vulkan layer chain | `engine/docs/LAYER-CHAINING.md`, `engine/docs/WSI-ISOLATION.md` | Owning launcher, manifest, package, and focused loader/runtime validation |
 | Validate real SteamOS hardware | `TESTING.md` | `.github/workflows/steamos-hardware-validation.yml` |
 | Exercise the game/runtime matrix | `engine/docs/ADAPTIVE-VALIDATION.md` | Manual DXVK, VKD3D-Proton, native Vulkan, Gamescope, and supported desktop scenarios |
 | Archive a completed comparative game trace | `TRACES.md` | `scripts/capture-trace.sh`, sibling private `MAKO-Traces` checkout |
