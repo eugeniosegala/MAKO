@@ -1,6 +1,10 @@
+import t from "../i18n/i18n";
+
 interface MakoInstallCountdownProps {
   durationMs: number;
 }
+
+export const MAKO_INSTALL_COMPLETION_DURATION_MS = 3000;
 
 export function MakoInstallCountdown({ durationMs }: MakoInstallCountdownProps) {
   return (
@@ -40,5 +44,21 @@ export function MakoInstallCountdown({ durationMs }: MakoInstallCountdownProps) 
         />
       </circle>
     </svg>
+  );
+}
+
+export function MakoInstallCompletion() {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+      <MakoInstallCountdown durationMs={MAKO_INSTALL_COMPLETION_DURATION_MS} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start", gap: "2px" }}>
+        <div style={{ fontWeight: 600 }}>
+          {t("TOAST_INSTALL_COMPLETE", "Installation Complete")}
+        </div>
+        <div style={{ fontSize: "12px", opacity: 0.82 }}>
+          {t("TOAST_INSTALL_COMPLETE_DESC", "Restarting your device is recommended.")}
+        </div>
+      </div>
+    </div>
   );
 }

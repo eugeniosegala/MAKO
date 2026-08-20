@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   AppOverview,
   ButtonItem,
@@ -83,9 +83,10 @@ interface ProfileManagementProps {
   editingProfile?: string;
   onProfileChange?: (profileName: string) => void | Promise<void>;
   mainRunningApp?: AppOverview;
+  topMargin?: CSSProperties["marginTop"];
 }
 
-export function ProfileManagement({ editingProfile, onProfileChange, mainRunningApp }: ProfileManagementProps) {
+export function ProfileManagement({ editingProfile, onProfileChange, mainRunningApp, topMargin }: ProfileManagementProps) {
   const [profiles, setProfiles] = useState<string[]>([]);
   const [profileDetails, setProfileDetails] = useState<ProfileDetails[]>([]);
   const [selectedProfile, setSelectedProfile] = useState(editingProfile || "mako");
@@ -289,7 +290,7 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
         }
       `}</style>
 
-      <MakoSectionHeader>
+      <MakoSectionHeader topMargin={topMargin}>
         {t("PROFILE_SECTION_TITLE", "Game / Process Profiles")}
       </MakoSectionHeader>
 

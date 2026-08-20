@@ -70,7 +70,7 @@ CONFIG_SCHEMA_DEF = {
     "adaptive_auto_base_fps_cap": {
         "name": "adaptive_auto_base_fps_cap",
         "fieldType": ConfigFieldType.BOOLEAN,
-        "default": False,
+        "default": True,
         "description": "automatically cap real FPS at half the target for steadier 2x frame generation",
         "location": "toml"
     },

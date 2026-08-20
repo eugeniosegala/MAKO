@@ -7,7 +7,6 @@ import traceback
 import tarfile
 import tempfile
 import json
-import os
 import hashlib
 from pathlib import Path
 from typing import Dict, Any, Optional
@@ -95,32 +94,50 @@ class InstallationService(BaseService):
         manifest_path = plugin_dir / "package.json"
         try:
             manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
-            binaries = manifest.get("remote_binary")
-            if not isinstance(binaries, list) or len(binaries) != 1:
-                raise ValueError("package.json must define exactly one remote_binary entry")
-            binary = binaries[0]
+            if "bundled_renderer" in manifest:
+                if "remote_binary" in manifest:
+                    raise ValueError(
+                        "package.json must not define both bundled_renderer and remote_binary"
+                    )
+                binary = manifest["bundled_renderer"]
+                metadata_name = "bundled_renderer"
+                if not isinstance(binary, dict):
+                    raise ValueError("bundled_renderer must be an object")
+            else:
+                binaries = manifest.get("remote_binary")
+                if not isinstance(binaries, list) or len(binaries) != 1:
+                    raise ValueError(
+                        "package.json must define bundled_renderer or exactly one "
+                        "remote_binary entry"
+                    )
+                binary = binaries[0]
+                metadata_name = "remote_binary"
             archive_name = binary.get("name")
             version = binary.get("version")
             checksum = binary.get("sha256hash")
             architectures = binary.get("architectures", ["64", "32"])
             host_architectures = binary.get("host_architectures", ["x86_64"])
             if not isinstance(archive_name, str) or Path(archive_name).name != archive_name:
-                raise ValueError("remote_binary name must be a filename")
+                raise ValueError(f"{metadata_name} name must be a filename")
             if not isinstance(version, str) or not version:
-                raise ValueError("remote_binary version must be a non-empty string")
+                raise ValueError(f"{metadata_name} version must be a non-empty string")
             if (
                 not isinstance(checksum, str)
                 or len(checksum) != 64
                 or any(character not in "0123456789abcdefABCDEF" for character in checksum)
             ):
-                raise ValueError("remote_binary sha256hash must be a SHA-256 checksum")
+                raise ValueError(
+                    f"{metadata_name} sha256hash must be a SHA-256 checksum"
+                )
             if (
                 not isinstance(architectures, list)
                 or not architectures
                 or any(architecture not in ("64", "32") for architecture in architectures)
                 or "64" not in architectures
             ):
-                raise ValueError("remote_binary architectures must contain 64 and optional 32")
+                raise ValueError(
+                    f"{metadata_name} architectures must contain 64 and optional 32"
+                )
             if (
                 not isinstance(host_architectures, list)
                 or not host_architectures
@@ -130,7 +147,8 @@ class InstallationService(BaseService):
                 )
             ):
                 raise ValueError(
-                    "remote_binary host_architectures must contain supported native host names"
+                    f"{metadata_name} host_architectures must contain supported native "
+                    "host names"
                 )
             return {
                 "name": archive_name,
@@ -303,10 +321,14 @@ class InstallationService(BaseService):
                             temp_file, destination, "../../lib32/libmako-render.so", "32"
                         )
                     else:
-                        # Copy bytes and set a deterministic mode explicitly.
-                        # Avoid metadata-preserving copies across FEX filesystems.
-                        shutil.copyfile(temp_file, destination)
-                        destination.chmod(0o755 if filename == CLI_FILENAME else 0o644)
+                        # Replace the entry only after the complete file and its
+                        # safe owner mode are ready. This avoids modifying a stale
+                        # file or following a stale symlink in place.
+                        self._copy_file_atomically(
+                            temp_file,
+                            destination,
+                            0o755 if filename == CLI_FILENAME else 0o644,
+                        )
                     self.log.info("Installed %s to %s", filename, destination)
 
                 if not has_32bit_library:
@@ -356,24 +378,11 @@ class InstallationService(BaseService):
             layer["disable_environment"] = {
                 MAKO_LAYER_DISABLE_ENV: "1",
             }
-            dst_file.parent.mkdir(parents=True, exist_ok=True)
-            file_descriptor, temporary_name = tempfile.mkstemp(
-                prefix=f".{dst_file.name}.",
-                dir=dst_file.parent,
-            )
-            temporary_path = Path(temporary_name)
-            try:
-                with os.fdopen(file_descriptor, "w", encoding="utf-8") as output:
-                    json.dump(json_data, output, indent=2)
-                    output.write("\n")
-                    output.flush()
-                    os.fsync(output.fileno())
-                temporary_path.chmod(0o644)
-                temporary_path.replace(dst_file)
-            finally:
-                temporary_path.unlink(missing_ok=True)
+            self._write_file(dst_file, json.dumps(json_data, indent=2) + "\n", 0o644)
         except (json.JSONDecodeError, OSError, TypeError, ValueError) as error:
-            raise OSError(f"Invalid Vulkan layer manifest {src_file}: {error}") from error
+            raise OSError(
+                f"Could not install Vulkan layer manifest {dst_file} from {src_file}: {error}"
+            ) from error
 
     def _register_layer_manifests(self) -> None:
         """Register gated manifests without activating the private layer globally."""
@@ -471,9 +480,7 @@ class InstallationService(BaseService):
     def _install_diagnostics_helper(self, plugin_dir: Path) -> None:
         """Install the packaged read-only diagnostic filter beside the wrapper."""
         source = self._diagnostics_helper_source(plugin_dir)
-        self.diagnostics_script_path.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(source, self.diagnostics_script_path)
-        self.diagnostics_script_path.chmod(0o755)
+        self._copy_file_atomically(source, self.diagnostics_script_path, 0o755)
         self.log.info("Installed diagnostics helper to %s", self.diagnostics_script_path)
 
     @staticmethod

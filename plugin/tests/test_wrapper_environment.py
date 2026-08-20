@@ -477,7 +477,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
     def test_adaptive_auto_cap_is_engine_owned_and_serialized(self):
         self.assertIn("adaptive_auto_base_fps_cap", ALL_FIELDS)
         config = ConfigurationManager.get_defaults()
-        self.assertFalse(config["adaptive_auto_base_fps_cap"])
+        self.assertTrue(config["adaptive_auto_base_fps_cap"])
         config["adaptive"] = True
         config["adaptive_auto_base_fps_cap"] = True
         config["target_fps"] = 165

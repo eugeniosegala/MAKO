@@ -17,6 +17,7 @@ import { ConfigurationData } from "../config/configSchema";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
 import { currentRelease } from "virtual:mako-release-info";
 import { MakoButtonTheme, MakoCompactSpinner, MakoReleaseIdentity, MakoSectionHeader } from "./MakoUi";
+import { MakoInstallCompletion } from "./MakoInstallCountdown";
 import t from "../i18n/i18n";
 
 export function Content() {
@@ -49,7 +50,13 @@ export function Content() {
     syncCurrentProfile
   } = useProfileManagement();
 
-  const { isInstalling, isUninstalling, handleInstall, handleUninstall } = useInstallationActions();
+  const {
+    isInstalling,
+    isUninstalling,
+    isInstallCompletionVisible,
+    handleInstall,
+    handleUninstall
+  } = useInstallationActions();
 
   useEffect(() => {
     if (isInstalled) {
@@ -324,16 +331,20 @@ export function Content() {
               <ButtonItem
                 layout="below"
                 onClick={onInstall}
-                disabled={isInstalling || isUninstalling}
+                disabled={isInstalling || isInstallCompletionVisible || isUninstalling}
               >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
-                  {isInstalling && <MakoCompactSpinner />}
-                  <span>
-                    {isInstalling
-                      ? t('CONTENT_UPDATING_RENDERER', 'Updating MAKO Renderer...')
-                      : t('CONTENT_UPDATE_RENDERER', 'Update MAKO Renderer')}
-                  </span>
-                </div>
+                {isInstallCompletionVisible ? (
+                  <MakoInstallCompletion />
+                ) : (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "8px" }}>
+                    {isInstalling && <MakoCompactSpinner />}
+                    <span>
+                      {isInstalling
+                        ? t('CONTENT_UPDATING_RENDERER', 'Updating MAKO Renderer...')
+                        : t('CONTENT_UPDATE_RENDERER', 'Update MAKO Renderer')}
+                    </span>
+                  </div>
+                )}
               </ButtonItem>
             </div>
           </div>
@@ -344,6 +355,7 @@ export function Content() {
           <InstallationButton
             isInstalled={isInstalled}
             isInstalling={isInstalling}
+            isInstallCompletionVisible={isInstallCompletionVisible}
             isUninstalling={isUninstalling}
             hostArchitectureSupported={hostArchitectureSupported}
             onInstall={onInstall}
@@ -364,6 +376,11 @@ export function Content() {
         <ProfileManagement
           editingProfile={editingProfile}
           mainRunningApp={mainRunningApp}
+          topMargin={
+            !localDevelopmentBuildInfo && !mainRunningApp && !engineUpdateRequired
+              ? "18px"
+              : undefined
+          }
           onProfileChange={async (profileName) => {
             editingProfileRef.current = profileName;
             setEditingProfile(profileName);
@@ -448,6 +465,7 @@ export function Content() {
           <InstallationButton
             isInstalled={isInstalled}
             isInstalling={isInstalling}
+            isInstallCompletionVisible={isInstallCompletionVisible}
             isUninstalling={isUninstalling}
             hostArchitectureSupported={hostArchitectureSupported}
             onInstall={onInstall}

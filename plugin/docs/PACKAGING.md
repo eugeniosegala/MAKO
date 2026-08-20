@@ -11,6 +11,8 @@ pnpm run package:local
 
 This creates a versioned local ZIP under `out/`, named `MAKO-Decky-local.<engine-and-source-identity>.zip`. The packager regenerates configuration bindings, builds the frontend and sibling MAKO Renderer source, verifies its payload, and creates a MAKO Decky ZIP. It does not tag, push, or publish anything.
 
+Local ZIPs are self-contained. Their generated manifest stores the embedded archive under MAKO's `bundled_renderer` metadata and omits Decky's `remote_binary` field, because Decky Loader downloads every `remote_binary` entry even when installing a local ZIP. The packager rejects a local artifact that would trigger a download, lacks its embedded archive, or has a mismatched checksum. Published packages keep the established `remote_binary` contract and are rejected unless their Renderer and optional Flatpak URLs use HTTPS.
+
 The ZIP keeps the established `Mako/` directory and installs to `~/homebrew/plugins/Mako` so a package replaces earlier versions instead of creating a second case-sensitive directory. This is an internal compatibility slug. The Decky manifest/listing name remains **MAKO - Frame Generation**, while project documentation, the frontend, and lifecycle logs identify the component as **MAKO Decky**.
 
 Pass a path to choose the output location:
@@ -52,7 +54,7 @@ pnpm run package:local-engine-fast
 
 Native-only, 64-bit-only archives are labelled accordingly and must not be published. Run the complete local-engine packaging command before any release candidate or when testing Flatpak games and launchers. Local artifacts are keyed by the engine commit and dirty-worktree fingerprint, so UI-only repackaging reuses an already verified matching engine build; changing engine source produces a new fingerprint and rebuilds it.
 
-The engine's native and Flatpak packaging scripts run first, including their tests and dual-architecture layout checks. Decky then embeds those artifacts and writes their source commit, dirty-worktree marker, and calculated checksums into the generated ZIP's copy of `package.json`. The tracked Decky `package.json` remains unchanged, so this development path cannot alter the release pin. The ZIP is named with the local engine commit and `.dirty` when applicable. It does not tag, push, or publish the monorepo.
+The engine's native and Flatpak packaging scripts run first, including their tests and dual-architecture layout checks. Decky then embeds those artifacts and writes their source commit, dirty-worktree marker, and calculated checksums into the generated ZIP's `bundled_renderer` record. The tracked Decky `package.json` remains unchanged, so this development path cannot alter the release pin. The ZIP is named with the local engine commit and `.dirty` when applicable. It does not tag, push, or publish the monorepo.
 
 Renderer metadata keeps native host ISA (`host_architectures`, currently `x86_64`) separate from Vulkan process bitness (`architectures`, normally `64` and `32`). Packaging and publishing reject missing or unknown host declarations, and MAKO Decky checks the native host before extracting the bundled Renderer. On an incompatible AArch64/Armada host, startup also replaces a legacy wrapper with an early passthrough and removes positively identified MAKO Flatpak activation left by older builds. The exact fail-closed contract and the gates for future native support are documented in [Armada and native AArch64 support](ARMADA.md).
 

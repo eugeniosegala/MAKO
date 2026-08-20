@@ -131,6 +131,11 @@ class ConfigurationManager:
     @staticmethod
     def _config_from_profile(profile: Dict[str, Any], global_config: Dict[str, Any]) -> ConfigurationData:
         config = ConfigurationManager.get_defaults()
+        # Existing profiles created before this field was persisted used
+        # Fractional Adaptive. Preserve that choice while new profiles use the
+        # current, steadier 2x default.
+        if "adaptive_auto_base_fps_cap" not in profile:
+            config["adaptive_auto_base_fps_cap"] = False
         for field in PROFILE_TOML_FIELDS | SCRIPT_ONLY_FIELDS:
             if field not in profile:
                 continue

@@ -2,10 +2,12 @@ import { ButtonItem, PanelSectionRow } from "@decky/ui";
 import { FaDownload, FaTrash } from "react-icons/fa";
 import t from "../i18n/i18n";
 import { MakoCompactSpinner } from "./MakoUi";
+import { MakoInstallCompletion } from "./MakoInstallCountdown";
 
 interface InstallationButtonProps {
   isInstalled: boolean;
   isInstalling: boolean;
+  isInstallCompletionVisible: boolean;
   isUninstalling: boolean;
   hostArchitectureSupported: boolean;
   onInstall: () => void;
@@ -16,6 +18,7 @@ interface InstallationButtonProps {
 export function InstallationButton({
   isInstalled,
   isInstalling,
+  isInstallCompletionVisible,
   isUninstalling,
   hostArchitectureSupported,
   onInstall,
@@ -23,6 +26,10 @@ export function InstallationButton({
   topMargin = "0"
 }: InstallationButtonProps) {
   const renderButtonContent = () => {
+    if (isInstallCompletionVisible) {
+      return <MakoInstallCompletion />;
+    }
+
     if (isInstalling) {
       return (
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
@@ -67,7 +74,7 @@ export function InstallationButton({
         <ButtonItem
           layout="below"
           onClick={isInstalled ? onUninstall : onInstall}
-          disabled={isInstalling || isUninstalling || !hostArchitectureSupported}
+          disabled={isInstalling || isInstallCompletionVisible || isUninstalling || !hostArchitectureSupported}
         >
           {renderButtonContent()}
         </ButtonItem>

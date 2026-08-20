@@ -4,10 +4,7 @@
  */
 
 import { toaster } from "@decky/api";
-import { MakoInstallCountdown } from "../components/MakoInstallCountdown";
 import t from "../i18n/i18n";
-
-const INSTALL_SUCCESS_DURATION_MS = 3000;
 
 export interface ToastOptions {
   title: string;
@@ -38,12 +35,6 @@ export function showErrorToast(title: string, body: string): void {
  * Standard success messages for common operations
  */
 export const ToastMessages = {
-  get INSTALL_SUCCESS() {
-    return {
-      title: t("TOAST_INSTALL_COMPLETE", "Installation Complete"),
-      body: t("TOAST_INSTALL_COMPLETE_DESC", "Restarting your device is recommended.")
-    };
-  },
   get INSTALL_ERROR() {
     return {
       title: t("TOAST_INSTALL_FAILED", "Installation Failed"),
@@ -88,21 +79,6 @@ export const ToastMessages = {
 export function showErrorToastWithMessage(title: string, error: unknown): void {
   const errorMessage = error instanceof Error ? error.message : String(error);
   showErrorToast(title, errorMessage);
-}
-
-/**
- * Show installation success toast
- */
-export function showInstallSuccessToast(): void {
-  toaster.toast({
-    title: ToastMessages.INSTALL_SUCCESS.title,
-    body: ToastMessages.INSTALL_SUCCESS.body,
-    icon: window.SP_REACT.createElement(MakoInstallCountdown, {
-      durationMs: INSTALL_SUCCESS_DURATION_MS
-    }),
-    duration: INSTALL_SUCCESS_DURATION_MS,
-    expiration: INSTALL_SUCCESS_DURATION_MS
-  });
 }
 
 /**

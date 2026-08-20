@@ -476,17 +476,17 @@ if [[ "$local_engine_mode" == true ]]; then
     binary.release_tag = `local-worktree-${localLabel}`;
     binary.source_commit = sourceCommit;
     binary.local_worktree_dirty = sourceDirty === "true";
-    binary.url = `local-worktree://${archiveName}`;
     binary.sha256hash = archiveChecksum;
     binary.architectures = build64Only === "true" ? ["64"] : ["64", "32"];
     binary.host_architectures = ["x86_64"];
-    if (binary.flatpak_bundle && flatpakName) {
-      binary.flatpak_bundle.name = flatpakName;
-      binary.flatpak_bundle.url = `local-worktree://${flatpakName}`;
-      binary.flatpak_bundle.sha256hash = flatpakChecksum;
-    } else {
-      delete binary.flatpak_bundle;
-    }
+    // Decky Loader unconditionally downloads every remote_binary entry after
+    // extracting a ZIP. Local packages already embed this verified archive,
+    // so expose it only through MAKO-owned package metadata.
+    delete binary.url;
+    delete binary.flatpak_bundle;
+    manifest.bundled_renderer = binary;
+    delete manifest.remote_binary;
+    delete manifest.remote_binary_bundling;
     manifest.version = `${manifest.version}.local.${localPluginLabel}`;
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   ' "$package_dir/package.json" "$archive_name" "$archive_version" \
@@ -499,6 +499,15 @@ elif [[ "$local_plugin_mode" == true ]]; then
     const manifestPath = process.argv[1];
     const localPluginLabel = process.argv[2];
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+    const [binary] = manifest.remote_binary ?? [];
+    if (!binary) throw new Error("package.json has no remote_binary entry");
+    // Keep wrapper-only test ZIPs self-contained for the same Decky contract
+    // as local-engine packages.
+    delete binary.url;
+    delete binary.flatpak_bundle;
+    manifest.bundled_renderer = binary;
+    delete manifest.remote_binary;
+    delete manifest.remote_binary_bundling;
     manifest.version = `${manifest.version}.local.${localPluginLabel}`;
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   ' "$package_dir/package.json" "$local_plugin_label"
@@ -509,6 +518,14 @@ if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
   cp "$project_dir/defaults/build_flavor.dev.py" \
     "$package_dir/py_modules/mako_plugin/build_flavor.py"
 fi
+
+package_contract_mode="release"
+if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
+  package_contract_mode="local"
+fi
+echo "Validating Decky package contract..."
+node "$project_dir/scripts/validate-package-contract.mjs" \
+  "$package_dir" "$package_contract_mode"
 
 # Python bytecode is host-version-specific and is regenerated on Steam OS.
 find "$package_dir/py_modules" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete

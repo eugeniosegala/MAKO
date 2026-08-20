@@ -27,8 +27,9 @@ WRAPPER_PROFILE_SETTINGS_FILENAME = "profile-wrapper-settings.json"
 # Friendly game identity and Steam app matching for Decky's versioned profile
 # model. Renderer settings remain in conf.toml, their canonical engine format.
 PROFILE_METADATA_FILENAME = "profile-metadata.json"
-# Bundled MAKO Renderer payload filenames. The archive name is read from the packaged
-# package.json remote_binary record so the release pin has one source of truth.
+# Bundled MAKO Renderer payload filenames. Published packages read the archive
+# identity from remote_binary; self-contained local packages use
+# bundled_renderer so Decky Loader does not attempt an impossible download.
 LIB_FILENAME = "libmako-render.so"
 MAKO_LAYER_NAME = "VK_LAYER_MAKO_render"
 MAKO_LAYER_ENABLE_ENV = "ENABLE_MAKO"

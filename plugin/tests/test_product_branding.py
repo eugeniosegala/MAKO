@@ -23,7 +23,6 @@ class ProductBrandingTests(unittest.TestCase):
         )
 
     def test_decky_component_identity_is_mako_decky(self):
-
         frontend = (PLUGIN_DIR / "src/index.tsx").read_text(encoding="utf-8")
         self.assertIn('name: "MAKO Decky"', frontend)
         self.assertIn(">MAKO Decky</div>", frontend)
@@ -31,7 +30,7 @@ class ProductBrandingTests(unittest.TestCase):
         content = (
             PLUGIN_DIR / "src/components/Content.tsx"
         ).read_text(encoding="utf-8")
-        self.assertIn("MAKO Decky <code>", content)
+        self.assertRegex(content, r'MAKO Decky(?:\{" "\})?\s*<code>')
         self.assertIn('{" · MAKO Renderer "}', content)
 
         configuration = (

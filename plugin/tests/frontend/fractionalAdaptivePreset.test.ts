@@ -6,6 +6,16 @@ import {
 } from "../../src/config/fractionalAdaptivePreset";
 
 describe("fractional Adaptive preset", () => {
+  test("new profiles start with Steady 2x", () => {
+    const config = getDefaults();
+
+    expect(config.adaptive_auto_base_fps_cap).toBe(true);
+    expect(isFractionalAdaptivePresetEnabled({
+      ...config,
+      adaptive: true
+    })).toBe(false);
+  });
+
   test("derives its state from the three compatible settings", () => {
     const enabledConfig = {
       ...getDefaults(),

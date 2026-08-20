@@ -79,7 +79,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   adaptive_auto_base_fps_cap: {
     name: "adaptive_auto_base_fps_cap",
     fieldType: ConfigFieldType.BOOLEAN,
-    default: false,
+    default: true,
     description: "automatically cap real FPS at half the target for steadier 2x frame generation"
   },
   target_fps: {
@@ -206,7 +206,7 @@ export function getDefaults(): ConfigurationData {
     base_fps_cap: 0,
     multiplier: 2,
     adaptive: false,
-    adaptive_auto_base_fps_cap: false,
+    adaptive_auto_base_fps_cap: true,
     target_fps: 90,
     adaptive_max_multiplier: 3,
     adaptive_stable_cadence: true,

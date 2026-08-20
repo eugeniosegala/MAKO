@@ -1,6 +1,6 @@
 # Configuration guide
 
-The default profile is a good starting point: Fixed **2x**, Flow Scale **0.90**, Performance Mode off, and FP16 allowed where it is supported. Adaptive mode defaults to fractional generation with a **90 FPS** target, 3x ceiling, Smooth Cadence on, and Steady 2x FPS Cap off.
+The default profile is a good starting point: Fixed **2x**, Flow Scale **0.90**, Performance Mode off, and FP16 allowed where it is supported. Adaptive mode defaults to Steady **2x** with a **90 FPS** target, 3x ceiling, and Smooth Cadence on. Fractional Adaptive is an opt-in preset.
 
 Test one change at a time. Games, displays, VRR, and compositors differ; try the game's V-Sync both on and off and keep the setting that feels smoother and more responsive.
 
@@ -8,10 +8,10 @@ Test one change at a time. Games, displays, VRR, and compositors differ; try the
 
 - **Frame Generation (Live On/Off):** Turns synthesis on or off without losing the selected Fixed or Adaptive settings. Keep it on whenever you want either mode to generate frames.
 - **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Start at 2x for the best balance of image quality and latency.
-- **Adaptive Frame Generation:** Varies the generated-frame count toward a target and uses fractional multipliers automatically. For example, 80 real FPS targeting 120 displayed FPS uses an average 1.5x cadence. The target is not a game FPS limiter: Adaptive cannot reduce a game already above target or exceed the selected ceiling.
-- **Fractional Adaptive (Preset):** Derived helper switch for the settings required by fractional Adaptive generation; it is not a separate saved mode. Turning it on enables Frame Generation and Adaptive and disables Steady 2x FPS Cap. Turning it off selects Steady 2x. Its state is recalculated from those settings, so changing one incompatibly turns the preset off automatically.
-- **Target FPS:** Desired Adaptive output rate, from 30 to 240 FPS in Decky. Fractional generation is the normal behavior when **Steady 2x FPS Cap** is off.
-- **Steady 2x FPS Cap:** Replaces fractional generation with a half-target real-FPS cap and a steady 2x cadence while the game can maintain that cap. This can feel smoother, but it reduces real FPS and may increase input latency. It is off by default; while enabled, it takes control from the regular **Base FPS Cap**.
+- **Adaptive Frame Generation:** Adjusts generation toward a target FPS. Adaptive cannot slow down a game that is already above the target or exceed the selected multiplier ceiling.
+- **Fractional Adaptive (Preset):** Mixes generation ratios over time, such as 60 real FPS to 90 displayed FPS. It keeps more real frames and may reduce input lag, but uneven frame spacing can feel choppy in some games. It is off by default. Turning it on enables Frame Generation and Adaptive and disables Steady 2x; incompatible setting changes turn the preset off automatically.
+- **Target FPS:** Desired displayed rate, from 30 to 240 FPS in Decky. Fractional Adaptive mixes ratios to approach it; Steady 2x caps real FPS at half the target.
+- **Steady 2x FPS Cap:** The default Adaptive mode. It caps real FPS at half the target and uses an even 2x cadence while the game can maintain the cap. This usually gives smoother pacing, but it means fewer real frames and may increase input latency. While enabled, it takes control from the regular **Base FPS Cap**.
 - **Maximum Adaptive Multiplier:** The 2x, 3x, or 4x Adaptive ceiling. 2x usually looks best; 4x can help reach a higher target at the cost of more generated frames.
 - **Smooth Cadence:** Prefers a sustainable constant interpolation cadence. It can improve displayed motion but may reduce responsiveness. It is on by default; disable it if the game feels better with stricter target scheduling.
 - **Base FPS Cap:** Caps real frames before generation. It applies live and is disabled while **Steady 2x FPS Cap** controls the cap.

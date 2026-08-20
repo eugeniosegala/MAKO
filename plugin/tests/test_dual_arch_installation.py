@@ -31,6 +31,7 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
 )
 from py_modules.mako_plugin.installation import InstallationService  # noqa: E402
 from py_modules.mako_plugin import installation as installation_module  # noqa: E402
+from py_modules.mako_plugin import base_service as base_service_module  # noqa: E402
 from py_modules.mako_plugin import host_environment as host_environment_module  # noqa: E402
 
 
@@ -195,6 +196,64 @@ class DualArchInstallationTests(unittest.TestCase):
         with self.assertRaisesRegex(OSError, "checksum mismatch"):
             self.service._validate_archive_checksum(archive_path, "0" * 64)
 
+    def test_reads_legacy_release_remote_binary_metadata_for_2_0_upgrade(self):
+        package_manifest = {
+            "version": "2.0.0",
+            "remote_binary": [{
+                "name": "MAKO-Renderer-v2.0.0-linux.tar.xz",
+                "version": "2.0.0",
+                "sha256hash": "a" * 64,
+                "host_architectures": ["x86_64"],
+            }],
+        }
+        (self.root / "package.json").write_text(
+            json.dumps(package_manifest), encoding="utf-8"
+        )
+
+        metadata = self.service._bundled_archive_metadata(self.root)
+
+        self.assertEqual(metadata["name"], "MAKO-Renderer-v2.0.0-linux.tar.xz")
+        self.assertEqual(metadata["version"], "2.0.0")
+        self.assertEqual(metadata["architectures"], ["64", "32"])
+        self.assertEqual(metadata["host_architectures"], ["x86_64"])
+
+    def test_reads_self_contained_local_renderer_metadata(self):
+        package_manifest = {
+            "version": "2.1.0.local.test",
+            "bundled_renderer": {
+                "name": "MAKO-Renderer-v2.0.0-local.test-linux.tar.xz",
+                "version": "2.0.0-local.test",
+                "sha256hash": "b" * 64,
+                "architectures": ["64"],
+                "host_architectures": ["x86_64"],
+            },
+        }
+        (self.root / "package.json").write_text(
+            json.dumps(package_manifest), encoding="utf-8"
+        )
+
+        metadata = self.service._bundled_archive_metadata(self.root)
+
+        self.assertEqual(
+            metadata["name"], "MAKO-Renderer-v2.0.0-local.test-linux.tar.xz"
+        )
+        self.assertEqual(metadata["version"], "2.0.0-local.test")
+        self.assertEqual(metadata["architectures"], ["64"])
+
+    def test_rejects_ambiguous_remote_and_bundled_renderer_metadata(self):
+        package_manifest = {
+            "bundled_renderer": {},
+            "remote_binary": [{}],
+        }
+        (self.root / "package.json").write_text(
+            json.dumps(package_manifest), encoding="utf-8"
+        )
+
+        with self.assertRaisesRegex(
+            OSError, "must not define both bundled_renderer and remote_binary"
+        ):
+            self.service._bundled_archive_metadata(self.root)
+
     def test_armada_host_is_detected_when_decky_runs_through_fex(self):
         armada_marker = self.root / "usr/libexec/armada/device-env"
         armada_marker.parent.mkdir(parents=True)
@@ -301,6 +360,70 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertEqual(self.service.lib32_file.stat().st_mode & 0o777, 0o644)
         self.assertEqual(self.service.json_file.stat().st_mode & 0o777, 0o644)
         self.assertEqual(self.service.json32_file.stat().st_mode & 0o777, 0o644)
+
+    def test_install_atomically_replaces_read_only_managed_files(self):
+        for path in (self.service.lib_file, self.service.lib32_file):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"stale")
+            path.chmod(0o444)
+
+        self.service._extract_and_install_files(self._archive())
+
+        self.assertTrue(self.service.lib_file.read_bytes().startswith(b"ELF64"))
+        self.assertTrue(self.service.lib32_file.read_bytes().startswith(b"ELF32"))
+        self.assertEqual(self.service.lib_file.stat().st_mode & 0o777, 0o644)
+        self.assertEqual(self.service.lib32_file.stat().st_mode & 0o777, 0o644)
+
+    def test_install_replaces_managed_symlink_without_following_it(self):
+        unrelated_file = self.root / "unrelated-library.so"
+        unrelated_file.write_bytes(b"leave-this-alone")
+        self.service.lib_file.parent.mkdir(parents=True, exist_ok=True)
+        self.service.lib_file.symlink_to(unrelated_file)
+
+        self.service._extract_and_install_files(self._archive())
+
+        self.assertFalse(self.service.lib_file.is_symlink())
+        self.assertTrue(self.service.lib_file.read_bytes().startswith(b"ELF64"))
+        self.assertEqual(unrelated_file.read_bytes(), b"leave-this-alone")
+
+    def test_fresh_install_does_not_require_chmod(self):
+        with patch.object(
+            base_service_module.os,
+            "fchmod",
+            side_effect=PermissionError(1, "Operation not permitted"),
+        ) as chmod:
+            self.service._extract_and_install_files(self._archive())
+            self.service._register_layer_manifests()
+
+        chmod.assert_not_called()
+        self.assertTrue(self.service.lib_file.read_bytes().startswith(b"ELF64"))
+        self.assertTrue(self.service.registered_json_file.exists())
+
+    def test_atomic_copy_failure_preserves_existing_file(self):
+        source = self.root / "replacement"
+        destination = self.root / "managed-file"
+        source.write_bytes(b"replacement")
+        destination.write_bytes(b"existing")
+
+        with patch.object(
+            base_service_module.os,
+            "fsync",
+            side_effect=OSError("simulated write failure"),
+        ):
+            with self.assertRaisesRegex(OSError, "atomically replace"):
+                self.service._copy_file_atomically(source, destination)
+
+        self.assertEqual(destination.read_bytes(), b"existing")
+        self.assertEqual(list(self.root.glob(".managed-file.*")), [])
+
+    def test_install_preserves_unmanaged_neighbouring_files(self):
+        unmanaged_file = self.service.local_lib_dir.parent / "user-note.txt"
+        unmanaged_file.parent.mkdir(parents=True, exist_ok=True)
+        unmanaged_file.write_text("keep", encoding="utf-8")
+
+        self.service._extract_and_install_files(self._archive())
+
+        self.assertEqual(unmanaged_file.read_text(encoding="utf-8"), "keep")
 
 
 if __name__ == "__main__":
