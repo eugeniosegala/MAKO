@@ -140,8 +140,8 @@ export function ConfigurationSection({
         <>
           <PanelSectionRow>
             <SliderField
-              label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round(config.flow_scale * 100)}%)`}
-              description={t("CONFIG_FLOW_SCALE_DESC", "Lowers internal motion estimation resolution, improving performance slightly.")}
+              label={`${t("CONFIG_FLOW_SCALE", "Flow Scale (Restart)")} (${Math.round(config.flow_scale * 100)}%)`}
+              description={t("CONFIG_FLOW_SCALE_DESC", "Controls internal motion-estimation resolution. Lower values reduce GPU work; higher values favour quality. Restart the game after changing it.")}
               value={config.flow_scale}
               min={0.25}
               max={1.0}
@@ -299,8 +299,8 @@ export function ConfigurationSection({
             />
 
             <TextField
-              label={t("CONFIG_GPU", "GPU")}
-              description={t("CONFIG_GPU_DESC", "Optional GPU name, vendor:device ID, or PCI bus ID.")}
+              label={t("CONFIG_GPU", "GPU (Restart)")}
+              description={t("CONFIG_GPU_DESC", "Optional GPU name, vendor:device ID, or PCI bus ID. Restart the game after changing it.")}
               value={config.gpu}
               onChange={(event) => onConfigChange(GPU, event.currentTarget.value)}
             />

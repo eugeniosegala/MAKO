@@ -99,8 +99,8 @@ export function FpsMultiplierControl({
 
       <PanelSectionRow>
         <ToggleField
-          label={t("CONFIG_PERFORMANCE_MODE", "Performance Mode")}
-          description={t("CONFIG_PERFORMANCE_MODE_DESC", "Can improve performance at the cost of ghosting. Start disabled; enable it only if your device struggles, then test it per game.")}
+          label={t("CONFIG_PERFORMANCE_MODE", "Performance Mode (Restart)")}
+          description={t("CONFIG_PERFORMANCE_MODE_DESC", "Uses a lighter model that may improve performance at the cost of more ghosting. Restart the game after changing it. Start disabled and test per game.")}
           checked={config.performance_mode}
           onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
         />
@@ -109,7 +109,7 @@ export function FpsMultiplierControl({
       <PanelSectionRow>
         <ToggleField
           label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
-          description={t("ADAPTIVE_DESC", "Adaptive settings apply live when the current swapchain has enough reserved capacity. Increasing the multiplier ceiling may require a game restart. Let timing settle before judging performance.")}
+          description={t("ADAPTIVE_DESC", "Adaptive uses fractional multipliers by default to reach the target FPS. Enable Steady 2x FPS Cap below only if you prefer a fixed 2x cadence. Settings normally apply live; increasing the multiplier ceiling may require a restart.")}
           checked={config.adaptive}
           onChange={(value) => onConfigChange(ADAPTIVE, value)}
         />
@@ -120,7 +120,7 @@ export function FpsMultiplierControl({
           <PanelSectionRow>
             <SliderField
               label={`${t("ADAPTIVE_TARGET_FPS", "Target FPS")} (${targetFps})`}
-              description={t("ADAPTIVE_TARGET_FPS_DESC", "Desired output rate. The multiplier limit may intentionally keep output below this target.")}
+              description={t("ADAPTIVE_TARGET_FPS_DESC", "Desired output rate. With Steady 2x FPS Cap off, Adaptive automatically uses fractional multipliers—for example, 80 to 120 FPS is 1.5x.")}
               value={targetFps}
               min={30}
               max={240}
@@ -130,8 +130,8 @@ export function FpsMultiplierControl({
           </PanelSectionRow>
           <PanelSectionRow>
             <ToggleField
-              label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Adaptive FPS Cap")} (${automaticBaseFpsCapLabel} FPS)`}
-              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "Locks the game's real FPS to half the target, giving frame generation a steadier cadence. Best for uneven frame rates; test per game. Turn it off to use the Base FPS Cap.")}
+              label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Steady 2x FPS Cap")} (${automaticBaseFpsCapLabel} FPS)`}
+              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "Off uses fractional multipliers. On caps real FPS to half the target and replaces fractional generation with a steady 2x cadence while the cap is maintained. This can feel smoother, but lowers real FPS and may increase input latency.")}
               checked={config.adaptive_auto_base_fps_cap ?? false}
               onChange={(value) => onConfigChange(ADAPTIVE_AUTO_BASE_FPS_CAP, value)}
             />
@@ -165,7 +165,7 @@ export function FpsMultiplierControl({
       <MakoSectionHeader
         description={t(
           "MULTIPLIER_DESC",
-          "Sets the output multiplier in Fixed mode (2x–4x). Adaptive manages the multiplier automatically."
+          "Sets Fixed mode to 2x–4x. An increase beyond the running game's reserved capacity applies after restart. Adaptive manages the multiplier automatically."
         )}
       >
         {t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}

@@ -1,6 +1,6 @@
 # Configuration guide
 
-The default profile is a good starting point: Fixed **2x**, Flow Scale **0.90**, Performance Mode off, and FP16 allowed where it is supported. Adaptive mode defaults to a **90 FPS** target, 3x ceiling, and Smooth Cadence on.
+The default profile is a good starting point: Fixed **2x**, Flow Scale **0.90**, Performance Mode off, and FP16 allowed where it is supported. Adaptive mode defaults to fractional generation with a **90 FPS** target, 3x ceiling, Smooth Cadence on, and Steady 2x FPS Cap off.
 
 Test one change at a time. Games, displays, VRR, and compositors differ; try the game's V-Sync both on and off and keep the setting that feels smoother and more responsive.
 
@@ -8,12 +8,12 @@ Test one change at a time. Games, displays, VRR, and compositors differ; try the
 
 - **Frame Generation (Live On/Off):** Turns synthesis on or off without losing the selected Fixed or Adaptive settings.
 - **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Start at 2x for the best balance of image quality and latency.
-- **Adaptive Frame Generation:** Varies the generated-frame count toward a target. It is a target, not a game FPS limiter: it cannot reduce a game already above target or exceed the selected ceiling.
-- **Target FPS:** Desired Adaptive output rate, from 30 to 240 FPS in Decky.
-- **Adaptive FPS Cap:** Automatically caps the game's real FPS at half the Adaptive target for steadier 2x frame generation. Turn it off to use the regular **Base FPS Cap** instead.
+- **Adaptive Frame Generation:** Varies the generated-frame count toward a target and uses fractional multipliers automatically. For example, 80 real FPS targeting 120 displayed FPS uses an average 1.5x cadence. The target is not a game FPS limiter: Adaptive cannot reduce a game already above target or exceed the selected ceiling.
+- **Target FPS:** Desired Adaptive output rate, from 30 to 240 FPS in Decky. Fractional generation is the normal behavior when **Steady 2x FPS Cap** is off.
+- **Steady 2x FPS Cap:** Replaces fractional generation with a half-target real-FPS cap and a steady 2x cadence while the game can maintain that cap. This can feel smoother, but it reduces real FPS and may increase input latency. It is off by default; while enabled, it takes control from the regular **Base FPS Cap**.
 - **Maximum Adaptive Multiplier:** The 2x, 3x, or 4x Adaptive ceiling. 2x usually looks best; 4x can help reach a higher target at the cost of more generated frames.
 - **Smooth Cadence:** Prefers a sustainable constant interpolation cadence. It can improve displayed motion but may reduce responsiveness. It is on by default; disable it if the game feels better with stricter target scheduling.
-- **Base FPS Cap:** Caps real frames before generation. It applies live and is disabled while **Adaptive FPS Cap** controls the cap.
+- **Base FPS Cap:** Caps real frames before generation. It applies live and is disabled while **Steady 2x FPS Cap** controls the cap.
 
 Adaptive target, ceiling, and cadence changes normally apply while a game is running. Give the game a few seconds to settle before judging the result. Changes that need a different GPU backend or larger private resources can wait for a natural swapchain recreation; restarting the game applies them directly.
 
@@ -37,11 +37,11 @@ Settings that still carry useful meaning are migrated explicitly before their ol
 
 ## Quality and matching
 
-- **Flow Scale:** 0.25–1.0. Lower values reduce GPU cost; higher values favour optical-flow quality.
-- **Performance Mode:** Uses a lighter model with lower GPU overhead and more visible artifacts.
+- **Flow Scale (Restart):** 0.25–1.0. Lower values reduce GPU cost; higher values favour optical-flow quality. Restart the game after changing it because the setting is part of backend construction.
+- **Performance Mode (Restart):** Uses a lighter model with lower GPU overhead and more visible artifacts. Restart the game after changing it because the setting is part of backend construction.
 - **Allow FP16:** Usually improves performance on AMD. Disable it if an older NVIDIA GPU performs worse.
 - **Lossless.dll Path:** Overrides automatic discovery. Leave it empty for normal Steam-library discovery.
-- **GPU:** Optional GPU name, vendor/device ID, or PCI bus ID. It must identify the GPU used by the game; dual-GPU frame generation is not supported.
+- **GPU (Restart):** Optional GPU name, vendor/device ID, or PCI bus ID. It must identify the GPU used by the game; dual-GPU frame generation is not supported. Restart the game after changing it because device selection is part of backend construction.
 
 ## Compatibility and HDR
 
