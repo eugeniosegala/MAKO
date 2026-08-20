@@ -21,6 +21,9 @@ class PluginLifecycleTests(unittest.TestCase):
         calls = []
         plugin = Plugin.__new__(Plugin)
         plugin.configuration_service = SimpleNamespace(
+            enforce_unsupported_host_passthrough_if_needed=lambda: calls.append(
+                "host-passthrough"
+            ) or False,
             migrate_profile_metadata_if_needed=lambda: calls.append(
                 "profile-metadata"
             ) or False,
@@ -41,9 +44,17 @@ class PluginLifecycleTests(unittest.TestCase):
             ) or False,
         )
         plugin.installation_service = SimpleNamespace(
+            current_package_host_compatibility=lambda: (
+                "x86_64", True, None
+            ),
             migrate_diagnostics_helper_if_needed=lambda: calls.append(
                 "diagnostics-helper"
             ) or False,
+        )
+        plugin.flatpak_service = SimpleNamespace(
+            disable_incompatible_host_overrides=lambda: calls.append(
+                "flatpak-host-boundary"
+            ) or {"success": True, "disabled_apps": []},
         )
 
         asyncio.run(plugin._main())
@@ -56,6 +67,38 @@ class PluginLifecycleTests(unittest.TestCase):
             "vkbasalt",
             "launch-script",
             "diagnostics-helper",
+        ])
+
+    def test_main_stops_before_migrations_on_unsupported_host(self):
+        calls = []
+        plugin = Plugin.__new__(Plugin)
+        plugin.configuration_service = SimpleNamespace(
+            enforce_unsupported_host_passthrough_if_needed=lambda: calls.append(
+                "host-passthrough"
+            ) or True,
+            migrate_profile_metadata_if_needed=lambda: calls.append(
+                "profile-metadata"
+            ),
+        )
+        plugin.installation_service = SimpleNamespace(
+            current_package_host_compatibility=lambda: (
+                "aarch64", False, "unsupported"
+            ),
+        )
+        plugin.flatpak_service = SimpleNamespace(
+            disable_incompatible_host_overrides=lambda: calls.append(
+                "flatpak-host-boundary"
+            ) or {
+                "success": True,
+                "disabled_apps": ["org.example.Game"],
+            },
+        )
+
+        asyncio.run(plugin._main())
+
+        self.assertEqual(calls, [
+            "host-passthrough",
+            "flatpak-host-boundary",
         ])
 
 

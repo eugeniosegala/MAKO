@@ -29,6 +29,7 @@ export function Content() {
     isInstalled,
     installationStatus,
     engineUpdateRequired,
+    hostArchitectureSupported,
     installedEngineVersion,
     expectedEngineVersion,
     setIsInstalled,
@@ -340,6 +341,7 @@ export function Content() {
             isInstalled={isInstalled}
             isInstalling={isInstalling}
             isUninstalling={isUninstalling}
+            hostArchitectureSupported={hostArchitectureSupported}
             onInstall={onInstall}
             onUninstall={onUninstall}
           />
@@ -442,6 +444,7 @@ export function Content() {
             isInstalled={isInstalled}
             isInstalling={isInstalling}
             isUninstalling={isUninstalling}
+            hostArchitectureSupported={hostArchitectureSupported}
             onInstall={onInstall}
             onUninstall={onUninstall}
             topMargin="16px"

@@ -66,6 +66,7 @@ BIN_DIR = "bin"
 
 # Flatpak uses a dedicated MAKO Renderer extension ID and mount point.
 FLATPAK_EXTENSION_NAME = "org.freedesktop.Platform.VulkanLayer.makorender"
+FLATPAK_HOST_ARCHITECTURE = "x86_64"
 FLATPAK_EXTENSION_PREFIX = "/usr/lib/extensions/vulkan/makorender"
 FLATPAK_IMPLICIT_LAYER_DIR = f"{FLATPAK_EXTENSION_PREFIX}/share/vulkan/implicit_layer.d"
 FLATPAK_23_08_FILENAME = f"{FLATPAK_EXTENSION_NAME}-23.08.flatpak"

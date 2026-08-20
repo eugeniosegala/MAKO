@@ -31,6 +31,7 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
 )
 from py_modules.mako_plugin.installation import InstallationService  # noqa: E402
 from py_modules.mako_plugin import installation as installation_module  # noqa: E402
+from py_modules.mako_plugin import host_environment as host_environment_module  # noqa: E402
 
 
 class DualArchInstallationTests(unittest.TestCase):
@@ -51,6 +52,8 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.registered_json_file = registered_dir / JSON_FILENAME
         self.service.registered_json32_file = registered_dir / JSON32_FILENAME
         self.service.cli_file = self.root / "bin/mako-cli"
+        self.service.mako_launch_script_path = self.root / "bin/mako-run"
+        self.service.engine_state_file = self.root / "installed-engine.json"
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -199,12 +202,35 @@ class DualArchInstallationTests(unittest.TestCase):
 
         with (
             patch.object(installation_module, "ARMADA_DEVICE_ENV", armada_marker),
-            patch.object(installation_module.platform, "machine", return_value="x86_64"),
+            patch.object(
+                host_environment_module.platform,
+                "machine",
+                return_value="x86_64",
+            ),
         ):
             self.assertEqual(
                 self.service._detect_native_host_architecture(),
                 "aarch64",
             )
+
+    def test_pid_one_elf_identifies_translated_aarch64_host(self):
+        native_process = self.root / "native-init"
+        elf_header = bytearray(20)
+        elf_header[:4] = b"\x7fELF"
+        elf_header[5] = 1
+        elf_header[18:20] = (183).to_bytes(2, "little")
+        native_process.write_bytes(elf_header)
+
+        environment = host_environment_module.detect_host_environment(
+            process_machine="x86_64",
+            armada_marker=self.root / "missing-device-env",
+            native_process=native_process,
+        )
+
+        self.assertEqual(environment.process_architecture, "x86_64")
+        self.assertEqual(environment.native_architecture, "aarch64")
+        self.assertTrue(environment.translated)
+        self.assertFalse(environment.armada)
 
     def test_armada_host_rejects_x86_only_renderer_before_installation(self):
         with patch.object(
@@ -214,11 +240,59 @@ class DualArchInstallationTests(unittest.TestCase):
         ):
             with self.assertRaisesRegex(
                 OSError,
-                "does not include a native Armada/AArch64 Renderer",
+                "does not include a validated native Armada/AArch64 Renderer",
             ):
                 self.service._validate_host_architecture({
                     "host_architectures": ["x86_64"],
                 })
+
+    def test_existing_x86_files_are_not_reported_installed_on_armada(self):
+        for path in (
+            self.service.lib_file,
+            self.service.lib32_file,
+            self.service.json_file,
+            self.service.json32_file,
+            self.service.registered_json_file,
+            self.service.registered_json32_file,
+            self.service.mako_launch_script_path,
+        ):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        self.service.engine_state_file.write_text(
+            json.dumps({
+                "archive": "renderer.tar.xz",
+                "version": "2.0.0",
+                "sha256hash": "a" * 64,
+            }),
+            encoding="utf-8",
+        )
+        metadata = {
+            "name": "renderer.tar.xz",
+            "version": "2.0.0",
+            "sha256hash": "a" * 64,
+            "architectures": ["64", "32"],
+            "host_architectures": ["x86_64"],
+        }
+
+        with (
+            patch.object(
+                self.service,
+                "_bundled_archive_metadata",
+                return_value=metadata,
+            ),
+            patch.object(
+                self.service,
+                "_detect_native_host_architecture",
+                return_value="aarch64",
+            ),
+        ):
+            status = self.service.check_installation()
+
+        self.assertFalse(status["installed"])
+        self.assertTrue(status["lib_exists"])
+        self.assertEqual(status["host_architecture"], "aarch64")
+        self.assertFalse(status["host_architecture_supported"])
+        self.assertIn("Games remain on their normal Armada launch path", status["error"])
 
     def test_installed_files_use_deterministic_permissions(self):
         self.service._extract_and_install_files(self._archive())

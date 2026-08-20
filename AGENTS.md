@@ -85,6 +85,7 @@ layer and Gamescope presentation ownership is owned by
 | Validate real SteamOS hardware | `TESTING.md` | `.github/workflows/steamos-hardware-validation.yml` |
 | Exercise the game/runtime matrix | `engine/docs/ADAPTIVE-VALIDATION.md` | Manual DXVK, VKD3D-Proton, native Vulkan, Gamescope, and supported desktop scenarios |
 | Build or package MAKO Decky | `plugin/docs/PACKAGING.md` | `plugin/package.json`, `plugin/scripts/package-local.sh` |
+| Review Armada/native AArch64 behavior | `plugin/docs/ARMADA.md` | `plugin/py_modules/mako_plugin/host_environment.py`, host/wrapper/Flatpak boundary tests |
 | Deploy/reload a local Decky install | `plugin/docs/PACKAGING.md` | `plugin/scripts/deploy-dev.sh`, `plugin/scripts/reload-decky-plugin.mjs` |
 | Collect diagnostics | `COLLECT_DIAGNOSTICS.md` | `scripts/mako-diagnostics` |
 | Publish both components | `HOW_TO_RELEASE.md` | `scripts/publish-release.sh` |
@@ -113,6 +114,10 @@ Run validation in proportion to the affected boundary:
 - Packaging, installation, wrapper, architecture, or release-pin changes need
   the corresponding local package verification; unit tests alone do not prove
   archive layout or Vulkan-loader activation.
+- Armada/native AArch64 remains a fail-closed compatibility boundary described
+  in `plugin/docs/ARMADA.md`. Do not add an untraceable native binary, a second
+  host detector, or a global FEX mutation. Enabling it requires native hardware
+  evidence and an explicit source-built AArch64 package declaration.
 
 A skipped GPU test is not evidence of GPU correctness. The automated AMD scene
 is also not a substitute for the game/runtime compatibility matrix. State which

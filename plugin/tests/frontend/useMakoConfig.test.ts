@@ -28,7 +28,39 @@ vi.mock("../../src/i18n/i18n", () => ({
   default: (_key: string, fallback: string) => fallback
 }));
 
-import { useMakoConfig } from "../../src/hooks/useMakoHooks";
+import { useInstallationStatus, useMakoConfig } from "../../src/hooks/useMakoHooks";
+
+describe("native host installation boundary", () => {
+  beforeEach(() => vi.clearAllMocks());
+  afterEach(cleanup);
+
+  test("disables installation only after an explicit unsupported-host result", async () => {
+    mocks.checkMakoInstalled.mockResolvedValue({
+      installed: false,
+      host_architecture: "aarch64",
+      host_architecture_supported: false,
+      engine_update_required: false,
+      error: "MAKO Renderer is disabled on this host"
+    });
+
+    const { result } = renderHook(() => useInstallationStatus());
+
+    await waitFor(() => expect(result.current.hostArchitectureSupported).toBe(false));
+    expect(result.current.installationStatus).toBe(
+      "MAKO Renderer is disabled on this host"
+    );
+  });
+
+  test("does not treat a transient backend failure as unsupported hardware", async () => {
+    mocks.checkMakoInstalled.mockRejectedValue(new Error("Decky reloading"));
+
+    const { result } = renderHook(() => useInstallationStatus());
+
+    await waitFor(() => expect(mocks.checkMakoInstalled).toHaveBeenCalledOnce());
+    expect(result.current.hostArchitectureSupported).toBe(true);
+    expect(result.current.installationStatus).toBe("MAKO Renderer not installed");
+  });
+});
 
 describe("MAKO configuration persistence", () => {
   beforeEach(() => {

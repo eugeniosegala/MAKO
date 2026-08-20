@@ -26,6 +26,8 @@ export interface InstallationStatus {
   expected_engine_version?: string;
   engine_version_known?: boolean;
   engine_update_required?: boolean;
+  host_architecture?: string;
+  host_architecture_supported?: boolean;
   error?: string;
 }
 

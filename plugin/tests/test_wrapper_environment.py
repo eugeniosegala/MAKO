@@ -412,50 +412,77 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "# development presentation diagnostics default: disabled",
         )
 
-    def test_armada_launcher_wraps_once_and_only_on_armada(self):
+    def test_unsupported_armada_host_bypasses_mako_and_wraps_once(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_path = Path(temp_dir)
             device_env = temp_path / "device-env"
             game_launch = temp_path / "armada-game-launch"
+            game = temp_path / "game"
             game_launch.write_text(
                 "#!/bin/bash\nprintf 'armada\\n'\nexec \"$@\"\n",
                 encoding="utf-8",
             )
             game_launch.chmod(0o755)
+            game.write_text(
+                "#!/bin/bash\nprintf 'game enable=%s disable=%s\\n' "
+                '"${ENABLE_MAKO:-}" "${DISABLE_MAKO:-}"\n',
+                encoding="utf-8",
+            )
+            game.chmod(0o755)
 
             with (
                 patch.object(configuration_module, "ARMADA_DEVICE_ENV", device_env),
                 patch.object(configuration_module, "ARMADA_GAME_LAUNCH", game_launch),
             ):
-                lines = self.service._generate_game_launch_lines()
+                lines = self.service._generate_host_compatibility_guard_lines()
+            lines.extend([
+                "export ENABLE_MAKO=1",
+                'exec "$@"',
+            ])
 
             direct = subprocess.run(
-                ["bash", "-c", "\n".join(lines), "mako-test", "/bin/printf", "game\\n"],
+                ["bash", "-c", "\n".join(lines), "mako-test", str(game)],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(direct.stdout, "game\n")
+            self.assertEqual(direct.stdout, "game enable=1 disable=\n")
 
             device_env.write_text("", encoding="utf-8")
             wrapped = subprocess.run(
-                ["bash", "-c", "\n".join(lines), "mako-test", "/bin/printf", "game\\n"],
+                ["bash", "-c", "\n".join(lines), "mako-test", str(game)],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(wrapped.stdout, "armada\ngame\n")
+            self.assertEqual(
+                wrapped.stdout,
+                "armada\ngame enable= disable=1\n",
+            )
 
             already_wrapped = subprocess.run(
                 [
                     "bash", "-c", "\n".join(lines), "mako-test",
-                    str(game_launch), "/bin/printf", "game\\n",
+                    str(game_launch), str(game),
                 ],
                 check=True,
                 capture_output=True,
                 text=True,
             )
-            self.assertEqual(already_wrapped.stdout, "armada\ngame\n")
+            self.assertEqual(
+                already_wrapped.stdout,
+                "armada\ngame enable= disable=1\n",
+            )
+
+    def test_generated_wrapper_places_host_guard_before_mako_exports(self):
+        script = self.service._generate_script_content(
+            ConfigurationManager.get_defaults()
+        )
+
+        self.assertLess(
+            script.index(self.service._HOST_COMPATIBILITY_MARKER),
+            script.index("export ENABLE_MAKO=1"),
+        )
 
     def test_diagnostics_default_marker_change_regenerates_wrapper(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -589,6 +616,24 @@ class WrapperEnvironmentTests(unittest.TestCase):
             self.service.mako_script_path.write_text(
                 "\n".join([
                     "# mako-wrapper-format: 40",
+                    self.service._diagnostics_default_marker(),
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_format_41_wrapper_is_regenerated_for_host_guard(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "# mako-wrapper-format: 41",
                     self.service._diagnostics_default_marker(),
                     *self.service._REQUIRED_WRAPPER_EXPORTS,
                 ]),

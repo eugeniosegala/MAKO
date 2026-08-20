@@ -15,6 +15,7 @@ export function useInstallationStatus() {
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
   const [installationStatus, setInstallationStatus] = useState<string>("");
   const [engineUpdateRequired, setEngineUpdateRequired] = useState<boolean>(false);
+  const [hostArchitectureSupported, setHostArchitectureSupported] = useState<boolean>(true);
   const [installedEngineVersion, setInstalledEngineVersion] = useState<string | undefined>();
   const [expectedEngineVersion, setExpectedEngineVersion] = useState<string | undefined>();
 
@@ -25,8 +26,11 @@ export function useInstallationStatus() {
       setEngineUpdateRequired(Boolean(status.engine_update_required));
       setInstalledEngineVersion(status.installed_engine_version);
       setExpectedEngineVersion(status.expected_engine_version);
+      setHostArchitectureSupported(status.host_architecture_supported !== false);
       if (status.installed) {
         setInstallationStatus(t("STATUS_ENGINE_INSTALLED", "MAKO Renderer installed"));
+      } else if (status.host_architecture_supported === false && status.error) {
+        setInstallationStatus(status.error);
       } else {
         setInstallationStatus(t("STATUS_ENGINE_NOT_INSTALLED", "MAKO Renderer not installed"));
       }
@@ -34,6 +38,10 @@ export function useInstallationStatus() {
     } catch (error) {
       setInstallationStatus(t("STATUS_ENGINE_NOT_INSTALLED", "MAKO Renderer not installed"));
       setEngineUpdateRequired(false);
+      // A transient RPC failure is not evidence that the native host is
+      // unsupported. Only the backend's explicit compatibility result should
+      // disable the installation action.
+      setHostArchitectureSupported(true);
       setInstalledEngineVersion(undefined);
       setExpectedEngineVersion(undefined);
       return false;
@@ -48,6 +56,7 @@ export function useInstallationStatus() {
     isInstalled,
     installationStatus,
     engineUpdateRequired,
+    hostArchitectureSupported,
     installedEngineVersion,
     expectedEngineVersion,
     setIsInstalled,

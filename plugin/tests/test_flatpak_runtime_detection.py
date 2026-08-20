@@ -30,6 +30,21 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
     def setUp(self):
         self.service = FlatpakService(logger=_Logger())
 
+    def test_unsupported_host_cannot_install_or_activate_x86_flatpak_payload(self):
+        self.service._host_architecture_supported = lambda: False
+        self.service.check_flatpak_available = lambda: self.fail(
+            "unsupported host must be rejected before invoking Flatpak"
+        )
+
+        extension = self.service.install_extension("25.08")
+        override = self.service.set_app_override("org.example.Application")
+        refresh = self.service.refresh_installed_extensions()
+
+        self.assertFalse(extension["success"])
+        self.assertFalse(override["success"])
+        self.assertFalse(refresh["success"])
+        self.assertIn("native AArch64/Armada", extension["error"])
+
     def test_direct_freedesktop_runtime_uses_its_branch(self):
         def run(args, **_kwargs):
             self.assertEqual(args, ["info", "--show-runtime", self.app_id])
@@ -367,6 +382,48 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
         status = self.service._check_app_override_status(app_id)
 
         self.assertFalse(status["required_env"])
+
+    def test_unsupported_host_cleanup_removes_only_mako_owned_overrides(self):
+        self.service._host_architecture_supported = lambda: False
+        self.service.check_flatpak_available = lambda: True
+        self.service._run_flatpak_command = lambda args, **_kwargs: (
+            _result(
+                "MAKO game\torg.example.MakoGame\n"
+                "Other game\torg.example.OtherGame\n"
+            )
+            if args == ["list", "--app"]
+            else self.fail(f"unexpected Flatpak command: {args}")
+        )
+        self.service._check_app_override_status = lambda app_id: {
+            "filesystem": False,
+            "wrapper": False,
+            "legacy_env": True,
+            "mako_env": app_id == "org.example.MakoGame",
+            "required_env": False,
+        }
+        removed = []
+        self.service.remove_app_override = lambda app_id: (
+            removed.append(app_id)
+            or {"success": True, "app_id": app_id}
+        )
+
+        response = self.service.disable_incompatible_host_overrides()
+
+        self.assertTrue(response["success"])
+        self.assertEqual(removed, ["org.example.MakoGame"])
+        self.assertEqual(response["disabled_apps"], ["org.example.MakoGame"])
+
+    def test_competitor_only_flatpak_override_is_not_mako_owned(self):
+        self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
+            "[Environment]\nDISABLE_LSFG=1\nDISABLE_LSFGVK=1\n"
+        )
+
+        status = self.service._check_app_override_status(
+            "org.example.OtherGame"
+        )
+
+        self.assertTrue(status["legacy_env"])
+        self.assertFalse(status["mako_env"])
 
     def test_removing_direct_override_clears_all_layer_environment(self):
         app_id = "org.DolphinEmu.dolphin-emu"

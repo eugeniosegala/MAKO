@@ -29,6 +29,7 @@ from .constants import (
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
     HDR_EXPOSURE_DISABLE_ENV,
+    MAKO_LAYER_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
 )
@@ -42,7 +43,10 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 41"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 42"
+    _HOST_COMPATIBILITY_MARKER = (
+        "# mako-host-compatibility: aarch64-passthrough-v1"
+    )
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
@@ -622,6 +626,33 @@ class ConfigurationService(BaseService):
             self._write_file(self.mako_script_path, "\n".join(cleaned_lines) + "\n", 0o755)
         return removed
 
+    def enforce_unsupported_host_passthrough_if_needed(self) -> bool:
+        """Replace an existing wrapper with a configuration-free safe bypass.
+
+        This is called only after the installation service proves the packaged
+        Renderer is incompatible with the native host. It runs before profile
+        migrations so a stale pre-boundary wrapper can never expose MAKO while
+        parsing or migration is failing.
+        """
+        if not self.mako_script_path.exists():
+            return False
+
+        lines = [
+            "#!/bin/bash",
+            self._WRAPPER_FORMAT_MARKER,
+            self._HOST_COMPATIBILITY_MARKER,
+            "# MAKO Renderer is unavailable for this native host in this release.",
+        ]
+        lines.extend(self._generate_unsupported_host_passthrough_lines())
+        content = "\n".join(lines) + "\n"
+        try:
+            if self.mako_script_path.read_text(encoding="utf-8") == content:
+                return False
+        except OSError:
+            pass
+        self._write_file(self.mako_script_path, content, 0o755)
+        return True
+
     def _generate_script_content(self, config: ConfigurationData) -> str:
         """Generate the content for the isolated per-game launch script
 
@@ -639,10 +670,11 @@ class ConfigurationService(BaseService):
             "# This script sets up the environment for mako to work with the plugin configuration",
         ]
 
+        lines.extend(self._generate_host_compatibility_guard_lines())
         lines.extend(self._script_configuration_lines(config))
         lines.extend(self._generate_layer_environment_lines())
         lines.extend(self._profile_selection_lines(DEFAULT_PROFILE_NAME, config))
-        lines.extend(self._generate_game_launch_lines())
+        lines.append('exec "$@"')
 
         return "\n".join(lines) + "\n"
 
@@ -676,6 +708,7 @@ class ConfigurationService(BaseService):
             f"# Current profile: {current_profile}",
         ]
 
+        lines.extend(self._generate_host_compatibility_guard_lines())
         lines.extend(self._wrapper_profile_configuration_lines(profile_data))
         lines.extend(self._generate_layer_environment_lines())
         # A low-priority default keeps the layer active for an unsaved game.
@@ -685,7 +718,7 @@ class ConfigurationService(BaseService):
             fallback_config,
             automatic_matching_enabled,
         ))
-        lines.extend(self._generate_game_launch_lines())
+        lines.append('exec "$@"')
 
         return "\n".join(lines) + "\n"
 
@@ -846,7 +879,9 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Format 41 restores v2's private SDR manifest directory on native Steam,
+        Format 42 makes unsupported native AArch64 hosts an early passthrough:
+        MAKO remains disabled while Armada's required game launcher is
+        preserved. Format 41 restores v2's private SDR manifest directory on native Steam,
         preventing Steam's Vulkan Fossilize/overlay layers from bypassing MAKO's
         device and swapchain hooks. Format 40 briefly selected the standard
         per-user directory. Format 39 restores deterministic implicit-layer
@@ -882,6 +917,7 @@ class ConfigurationService(BaseService):
             current_content = self.mako_script_path.read_text(encoding="utf-8")
             wrapper_is_current = (
                 self._WRAPPER_FORMAT_MARKER in current_content
+                and self._HOST_COMPATIBILITY_MARKER in current_content
                 and self._diagnostics_default_marker() in current_content
                 and all(
                     export in current_content
@@ -900,7 +936,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO launch wrapper to format 41")
+            self.log.info("Upgraded installed MAKO launch wrapper to format 42")
             return True
         except OSError:
             raise
@@ -908,26 +944,47 @@ class ConfigurationService(BaseService):
             raise OSError(f"Could not upgrade MAKO Renderer launch wrapper: {error}") from error
 
     @staticmethod
-    def _generate_game_launch_lines() -> list[str]:
-        """Preserve Armada's required host launcher when running under FEX.
-
-        This is intentionally host-gated, so ordinary SteamOS installs retain
-        the normal direct ``exec`` path.  The argument scan also avoids adding
-        the wrapper twice when a user already has it in Steam launch options.
-        """
+    def _generate_unsupported_host_passthrough_lines(
+            indent: str = "") -> list[str]:
+        """Disable MAKO and preserve Armada's launcher exactly once."""
         device_env = ARMADA_DEVICE_ENV.as_posix()
         game_launch = ARMADA_GAME_LAUNCH.as_posix()
         return [
-            f'armada_game_launch="{game_launch}"',
-            'for argument in "$@"; do',
-            '    if [ "$argument" = "$armada_game_launch" ]; then',
-            '        exec "$@"',
-            "    fi",
-            "done",
-            f'if [ -f "{device_env}" ] && [ -x "$armada_game_launch" ]; then',
-            '    exec "$armada_game_launch" "$@"',
+            f"{indent}unset {MAKO_LAYER_ENABLE_ENV}",
+            f"{indent}export {MAKO_LAYER_DISABLE_ENV}=1",
+            f'{indent}armada_game_launch="{game_launch}"',
+            f'{indent}if [ -f "{device_env}" ] && [ -x "$armada_game_launch" ]; then',
+            f'{indent}    for argument in "$@"; do',
+            f'{indent}        if [ "$argument" = "$armada_game_launch" ]; then',
+            f'{indent}            exec "$@"',
+            f"{indent}        fi",
+            f"{indent}    done",
+            f'{indent}    exec "$armada_game_launch" "$@"',
+            f"{indent}fi",
+            f'{indent}exec "$@"',
+        ]
+
+    @staticmethod
+    def _generate_host_compatibility_guard_lines() -> list[str]:
+        """Bypass MAKO before any exports on unsupported AArch64 hosts.
+
+        Current release packages contain only native x86_64 Renderer payloads.
+        Keep games launchable through Armada/FEX without exposing that x86
+        layer to a native AArch64 Vulkan stack. The root-owned Armada marker
+        handles translated ``uname`` results; the architecture check covers an
+        ordinary native AArch64 shell. This branch executes before MAKO, Vulkan
+        path, diagnostics, HDR, or competing-layer variables are changed.
+        """
+        device_env = ARMADA_DEVICE_ENV.as_posix()
+        return [
+            ConfigurationService._HOST_COMPATIBILITY_MARKER,
+            'mako_native_arch="$(uname -m 2>/dev/null || true)"',
+            f'if [ -f "{device_env}" ] || [ "$mako_native_arch" = "aarch64" ] || [ "$mako_native_arch" = "arm64" ]; then',
+            "    # This release has no validated native AArch64 Renderer.",
+            *ConfigurationService._generate_unsupported_host_passthrough_lines(
+                "    "
+            ),
             "fi",
-            'exec "$@"',
         ]
 
     def _get_profile_data(self) -> ProfileData:

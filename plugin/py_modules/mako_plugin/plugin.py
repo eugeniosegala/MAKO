@@ -465,6 +465,53 @@ class Plugin:
         """
         decky.logger.info("MAKO Decky loaded")
         try:
+            _host, host_supported, host_error = (
+                self.installation_service.current_package_host_compatibility()
+            )
+        except OSError as error:
+            # Invalid release metadata is itself unsafe: do not regenerate an
+            # activation wrapper until installation compatibility is known.
+            host_supported = False
+            host_error = str(error)
+
+        if not host_supported:
+            try:
+                if self.configuration_service.enforce_unsupported_host_passthrough_if_needed():
+                    decky.logger.info(
+                        "Replaced incompatible MAKO wrapper with native-host passthrough"
+                    )
+            except OSError as error:
+                decky.logger.warning(
+                    "Could not enforce the native-host passthrough wrapper: %s",
+                    error,
+                )
+            try:
+                flatpak_cleanup = (
+                    self.flatpak_service.disable_incompatible_host_overrides()
+                )
+                if flatpak_cleanup.get("success"):
+                    disabled_apps = flatpak_cleanup.get("disabled_apps", [])
+                    if disabled_apps:
+                        decky.logger.info(
+                            "Disabled incompatible MAKO Flatpak overrides for: %s",
+                            ", ".join(disabled_apps),
+                        )
+                else:
+                    decky.logger.warning(
+                        "Could not verify every persisted Flatpak override: %s",
+                        flatpak_cleanup.get("error") or "unknown error",
+                    )
+            except Exception as error:
+                # The host wrapper boundary is independent of Flatpak. Keep the
+                # plugin available so users can inspect or remove old state.
+                decky.logger.warning(
+                    "Could not verify every persisted Flatpak override: %s",
+                    error,
+                )
+            decky.logger.warning("MAKO Renderer remains disabled: %s", host_error)
+            return
+
+        try:
             if self.configuration_service.migrate_profile_metadata_if_needed():
                 decky.logger.info("Initialized game/process profile metadata")
         except (OSError, ValueError) as error:

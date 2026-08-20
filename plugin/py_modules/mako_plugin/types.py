@@ -47,6 +47,8 @@ class InstallationCheckResponse(TypedDict):
     expected_engine_version: Optional[str]
     engine_version_known: bool
     engine_update_required: bool
+    host_architecture: Optional[str]
+    host_architecture_supported: bool
     error: Optional[str]
 
 

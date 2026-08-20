@@ -7,6 +7,7 @@ interface InstallationButtonProps {
   isInstalled: boolean;
   isInstalling: boolean;
   isUninstalling: boolean;
+  hostArchitectureSupported: boolean;
   onInstall: () => void;
   onUninstall: () => void;
   topMargin?: string;
@@ -16,6 +17,7 @@ export function InstallationButton({
   isInstalled,
   isInstalling,
   isUninstalling,
+  hostArchitectureSupported,
   onInstall,
   onUninstall,
   topMargin = "0"
@@ -65,7 +67,7 @@ export function InstallationButton({
         <ButtonItem
           layout="below"
           onClick={isInstalled ? onUninstall : onInstall}
-          disabled={isInstalling || isUninstalling}
+          disabled={isInstalling || isUninstalling || !hostArchitectureSupported}
         >
           {renderButtonContent()}
         </ButtonItem>

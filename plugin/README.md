@@ -18,7 +18,7 @@ Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/relea
 
 For direct Vulkan-layer installation without Decky, open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download the Linux archive under **Assets**.
 
-Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bit and 32-bit x86 game-process layers. MAKO Decky detects native AArch64/Armada hosts and will not install an incompatible x86 Vulkan layer.
+Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bit and 32-bit x86 game-process layers. MAKO Decky detects native AArch64/Armada hosts, refuses incompatible installation, and converts older activation state to a safe game-launch passthrough. See [Armada and native AArch64 support](docs/ARMADA.md) for the exact boundary and the hardware gates required before enabling it.
 
 ## What it manages
 
@@ -56,4 +56,4 @@ After installing the ZIP through Decky developer settings, open MAKO Decky and i
 
 MAKO Decky's wrapper activates `VK_LAYER_MAKO_render` only for the selected game process.
 
-See [Configuration](docs/CONFIGURATION.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Collect MAKO Decky Diagnostics](docs/COLLECT_DIAGNOSTICS.md), and [Packaging](docs/PACKAGING.md) for detailed workflows.
+See [Configuration](docs/CONFIGURATION.md), [Armada and native AArch64 support](docs/ARMADA.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Collect MAKO Decky Diagnostics](docs/COLLECT_DIAGNOSTICS.md), and [Packaging](docs/PACKAGING.md) for detailed workflows.

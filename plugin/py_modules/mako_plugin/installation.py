@@ -9,7 +9,6 @@ import tempfile
 import json
 import os
 import hashlib
-import platform
 from pathlib import Path
 from typing import Dict, Any, Optional
 
@@ -22,6 +21,7 @@ from .constants import (
     ARMADA_DEVICE_ENV,
 )
 from .config_schema import ConfigurationManager
+from .host_environment import detect_host_environment
 from .types import InstallationResponse, UninstallationResponse, InstallationCheckResponse
 
 
@@ -155,64 +155,44 @@ class InstallationService(BaseService):
         }
         self._write_file(self.engine_state_file, json.dumps(state, indent=2) + "\n", 0o644)
 
-    @staticmethod
-    def _normalized_host_architecture(machine: str) -> str:
-        """Return the canonical native host name used by package metadata."""
-        normalized = machine.strip().lower()
-        if normalized in ("amd64", "x86_64"):
-            return "x86_64"
-        if normalized in ("arm64", "aarch64"):
-            return "aarch64"
-        return normalized or "unknown"
-
     def _detect_native_host_architecture(self) -> str:
         """Detect the host ISA even when Decky's Python runs through FEX."""
-        process_architecture = self._normalized_host_architecture(platform.machine())
+        return detect_host_environment(
+            self.log,
+            armada_marker=ARMADA_DEVICE_ENV,
+        ).native_architecture
 
-        # Armada exposes this native helper inside Decky's FEX environment,
-        # where platform.machine() otherwise reports the emulated x86_64 ISA.
-        if ARMADA_DEVICE_ENV.is_file():
-            self.log.info("Detected native AArch64 Armada host through device-env")
-            return "aarch64"
-
-        # PID 1 is a native host process on Armada. Read only the ELF identity:
-        # e_machine 62 is x86_64 and 183 is AArch64.
-        try:
-            with Path("/proc/1/exe").open("rb") as host_executable:
-                elf_header = host_executable.read(20)
-            if elf_header[:4] == b"\x7fELF" and elf_header[5] in (1, 2):
-                byte_order = "little" if elf_header[5] == 1 else "big"
-                native_architecture = {
-                    62: "x86_64",
-                    183: "aarch64",
-                }.get(int.from_bytes(elf_header[18:20], byte_order))
-                if native_architecture:
-                    if native_architecture != process_architecture:
-                        self.log.info(
-                            "Detected native %s host through PID 1 (plugin process: %s)",
-                            native_architecture,
-                            process_architecture,
-                        )
-                    return native_architecture
-        except OSError as error:
-            self.log.debug("Could not inspect native host architecture: %s", error)
-
-        return process_architecture
-
-    def _validate_host_architecture(self, archive_metadata: Dict[str, Any]) -> None:
-        """Reject a Renderer archive built for a different native host ISA."""
+    def _host_compatibility(
+            self, archive_metadata: Dict[str, Any]) -> tuple[str, bool, Optional[str]]:
+        """Return the detected host, support result, and a stable user message."""
         detected = self._detect_native_host_architecture()
         supported = archive_metadata.get("host_architectures", ["x86_64"])
         if detected in supported:
-            return
+            return detected, True, None
 
         supported_text = ", ".join(supported)
-        raise OSError(
-            "This MAKO Renderer package supports native host architecture "
-            f"{supported_text}, but this device is {detected}. "
-            "The current release does not include a native Armada/AArch64 "
-            "Renderer, so no incompatible Vulkan layer was installed."
+        return detected, False, (
+            "MAKO Renderer is disabled on this host: this package supports "
+            f"native host architecture {supported_text}, but this device is "
+            f"{detected}. The current release does not include a validated "
+            "native Armada/AArch64 Renderer. Games remain on their normal "
+            "Armada launch path."
         )
+
+    def current_package_host_compatibility(
+            self) -> tuple[str, bool, Optional[str]]:
+        """Evaluate the bundled Renderer against the native host."""
+        plugin_dir = Path(__file__).parent.parent.parent
+        return self._host_compatibility(
+            self._bundled_archive_metadata(plugin_dir)
+        )
+
+    def _validate_host_architecture(self, archive_metadata: Dict[str, Any]) -> None:
+        """Reject a Renderer archive built for a different native host ISA."""
+        _detected, supported, error = self._host_compatibility(archive_metadata)
+        if supported:
+            return
+        raise OSError(error or "MAKO Renderer package is incompatible with this host")
 
     @staticmethod
     def _validate_archive_checksum(archive_path: Path, expected_checksum: str) -> None:
@@ -551,11 +531,18 @@ class InstallationService(BaseService):
                 and script_exists
             )
             expected = self._bundled_archive_metadata(Path(__file__).parent.parent.parent)
+            host_architecture, host_supported, host_error = (
+                self._host_compatibility(expected)
+            )
             expects_32bit = "32" in expected.get("architectures", ["64", "32"])
             installed = installed and (
                 not expects_32bit
                 or (lib32_exists and json32_exists and registered_json32_exists)
             )
+            # Files left by a pre-boundary build do not make an incompatible
+            # native host supported. Keep their presence observable for manual
+            # cleanup while withholding all "installed" and update claims.
+            installed = installed and host_supported
             state = self._read_engine_state()
             version_known = state is not None
             installed_version = state["version"] if state else None
@@ -586,7 +573,9 @@ class InstallationService(BaseService):
                 "expected_engine_version": expected["version"],
                 "engine_version_known": version_known,
                 "engine_update_required": update_required,
-                "error": None
+                "host_architecture": host_architecture,
+                "host_architecture_supported": host_supported,
+                "error": host_error,
             }
 
         except Exception as e:
@@ -604,6 +593,8 @@ class InstallationService(BaseService):
                 "expected_engine_version": None,
                 "engine_version_known": False,
                 "engine_update_required": False,
+                "host_architecture": None,
+                "host_architecture_supported": False,
                 "error": str(e)
             }
 

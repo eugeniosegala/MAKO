@@ -18,12 +18,15 @@ from .constants import (
     FLATPAK_24_08_FILENAME,
     FLATPAK_25_08_FILENAME,
     FLATPAK_EXTENSION_NAME,
+    FLATPAK_EXTENSION_PREFIX,
+    FLATPAK_HOST_ARCHITECTURE,
     FLATPAK_IMPLICIT_LAYER_DIR,
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
     HDR_EXPOSURE_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
 )
+from .host_environment import detect_host_environment
 from .types import BaseResponse
 
 
@@ -88,6 +91,20 @@ class FlatpakService(BaseService):
         self.extension_id_24_08 = f"{FLATPAK_EXTENSION_NAME}/x86_64/24.08"
         self.extension_id_25_08 = f"{FLATPAK_EXTENSION_NAME}/x86_64/25.08"
         self.flatpak_command = None
+
+    def _host_architecture_supported(self) -> bool:
+        """Return whether this release's Flatpak payload matches the host ISA."""
+        return (
+            detect_host_environment(self.log).native_architecture
+            == FLATPAK_HOST_ARCHITECTURE
+        )
+
+    @staticmethod
+    def _unsupported_host_error() -> str:
+        return (
+            "MAKO Flatpak activation is disabled on native AArch64/Armada in "
+            "this release because the bundled runtime extensions are x86_64."
+        )
 
     def _get_mako_paths(self) -> tuple[str, str]:
         """Return the config directory and read-only directory containing Lossless.dll.
@@ -328,6 +345,10 @@ class FlatpakService(BaseService):
     def install_extension(self, version: str) -> BaseResponse:
         """Install or refresh a specific MAKO Renderer Flatpak runtime extension."""
         try:
+            if not self._host_architecture_supported():
+                return self._error_response(
+                    BaseResponse, self._unsupported_host_error()
+                )
             if version not in ["23.08", "24.08", "25.08"]:
                 return self._error_response(BaseResponse, "Invalid version. Must be '23.08', '24.08', or '25.08'")
 
@@ -388,6 +409,12 @@ class FlatpakService(BaseService):
         branches already present on the machine; first-time setup remains an
         explicit choice in Flatpak Setup.
         """
+        if not self._host_architecture_supported():
+            return {
+                "success": False,
+                "updated_versions": [],
+                "error": self._unsupported_host_error(),
+            }
         if not self.check_flatpak_available():
             return {
                 "success": False,
@@ -526,6 +553,7 @@ class FlatpakService(BaseService):
                     "filesystem": False,
                     "wrapper": False,
                     "legacy_env": False,
+                    "mako_env": False,
                     "required_env": False,
                 }
 
@@ -570,6 +598,15 @@ class FlatpakService(BaseService):
                 variable in environment_values
                 for variable in _LAYER_ENVIRONMENT_VARIABLES
             )
+            mako_env_override = (
+                "MAKO_CONFIG" in environment_values
+                or MAKO_LAYER_ENABLE_ENV in environment_values
+                or HDR_EXPOSURE_DISABLE_ENV in environment_values
+                or environment_values.get("VK_IMPLICIT_LAYER_PATH")
+                == FLATPAK_IMPLICIT_LAYER_DIR
+                or FLATPAK_EXTENSION_PREFIX
+                in environment_values.get("VK_ADD_IMPLICIT_LAYER_PATH", "")
+            )
             compatible_layer_path = (
                 environment_values.get("VK_IMPLICIT_LAYER_PATH") ==
                 FLATPAK_IMPLICIT_LAYER_DIR
@@ -609,6 +646,7 @@ class FlatpakService(BaseService):
                 "filesystem": filesystem_override,
                 "wrapper": has_wrapper_fs,
                 "legacy_env": legacy_env_override,
+                "mako_env": mako_env_override,
                 "required_env": required_env_override,
             }
 
@@ -618,8 +656,89 @@ class FlatpakService(BaseService):
                 "filesystem": False,
                 "wrapper": False,
                 "legacy_env": False,
+                "mako_env": False,
                 "required_env": False,
             }
+
+    def disable_incompatible_host_overrides(self) -> Dict[str, Any]:
+        """Fail closed for MAKO-owned Flatpak overrides on unsupported hosts.
+
+        Older plugin builds could prepare a direct Flatpak application before
+        the native-host architecture boundary existed. Merely rejecting new
+        activation would leave those persisted variables in place. Inspect
+        every application, but remove settings only when its override contains
+        a MAKO-specific path or variable; competitor-only LSFG settings are not
+        sufficient evidence of MAKO ownership.
+        """
+        if self._host_architecture_supported():
+            return {
+                "success": True,
+                "disabled_apps": [],
+                "message": "Native host supports the packaged Flatpak payload",
+            }
+        if not self.check_flatpak_available():
+            return {
+                "success": False,
+                "disabled_apps": [],
+                "error": "Flatpak is unavailable; persisted MAKO overrides could not be inspected",
+            }
+
+        try:
+            result = self._run_flatpak_command(
+                ["list", "--app"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+        except subprocess.CalledProcessError as error:
+            return {
+                "success": False,
+                "disabled_apps": [],
+                "error": (
+                    "Could not inspect Flatpak applications for incompatible "
+                    f"MAKO overrides: {error.stderr or error}"
+                ),
+            }
+
+        disabled_apps = []
+        failures = []
+        for line in result.stdout.splitlines():
+            parts = line.split("\t")
+            if len(parts) < 2:
+                continue
+            app_id = parts[1].strip()
+            if not app_id:
+                continue
+            status = self._check_app_override_status(app_id)
+            if not (
+                status["filesystem"]
+                or status["wrapper"]
+                or status["mako_env"]
+            ):
+                continue
+            removal = self.remove_app_override(app_id)
+            if removal.get("success"):
+                disabled_apps.append(app_id)
+            else:
+                failures.append(
+                    f"{app_id}: {removal.get('error') or 'unknown error'}"
+                )
+
+        if failures:
+            return {
+                "success": False,
+                "disabled_apps": disabled_apps,
+                "error": "; ".join(failures),
+            }
+        return {
+            "success": True,
+            "disabled_apps": disabled_apps,
+            "message": (
+                "Disabled incompatible MAKO Flatpak overrides"
+                if disabled_apps
+                else "No incompatible MAKO Flatpak overrides were present"
+            ),
+        }
 
     def _filesystem_override_present(self, filesystem_section: str, host_path: str) -> bool:
         """Match Flatpak's absolute or home-relative permission representation.
@@ -658,6 +777,13 @@ class FlatpakService(BaseService):
     def set_app_override(self, app_id: str) -> FlatpakOverrideResponse:
         """Set MAKO Renderer overrides for a Flatpak app"""
         try:
+            if not self._host_architecture_supported():
+                return self._error_response(
+                    FlatpakOverrideResponse,
+                    self._unsupported_host_error(),
+                    app_id=app_id,
+                    operation="set",
+                )
             if not self.check_flatpak_available():
                 return self._error_response(FlatpakOverrideResponse,
                                           "Flatpak is not available on this system",
