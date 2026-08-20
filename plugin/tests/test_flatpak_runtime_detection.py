@@ -17,7 +17,6 @@ sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 from py_modules.mako_plugin.flatpak_service import FlatpakService  # noqa: E402
 from py_modules.mako_plugin.constants import (  # noqa: E402
     FLATPAK_IMPLICIT_LAYER_DIR,
-    FLATPAK_LEGACY_IMPLICIT_LAYER_PATH,
 )
 
 
@@ -130,7 +129,7 @@ versions=26.08;25.08;24.08
                 [
                     "override",
                     "--user",
-                    "--unset-env=VK_IMPLICIT_LAYER_PATH",
+                    f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
                     app_id,
                 ],
                 calls,
@@ -148,9 +147,7 @@ versions=26.08;25.08;24.08
                 [
                     "override",
                     "--user",
-                    "--env=VK_ADD_IMPLICIT_LAYER_PATH="
-                    "/usr/lib/extensions/vulkan/makorender/share/"
-                    "vulkan/implicit_layer.d",
+                    "--unset-env=VK_ADD_IMPLICIT_LAYER_PATH",
                     app_id,
                 ],
                 calls,
@@ -160,8 +157,26 @@ versions=26.08;25.08;24.08
                     ["override", "--user", f"--env={variable}=1", app_id],
                     calls,
                 )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
+                    "--env=DISABLE_GAMESCOPE_WSI=1",
+                    app_id,
+                ],
+                calls,
+            )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
+                    "--unset-env=ENABLE_GAMESCOPE_WSI",
+                    app_id,
+                ],
+                calls,
+            )
 
-    def test_legacy_runtime_uses_compatible_explicit_layer_path(self):
+    def test_legacy_runtime_uses_same_deterministic_layer_path(self):
         app_id = "org.DolphinEmu.dolphin-emu"
         with tempfile.TemporaryDirectory() as temp_dir:
             temporary_path = Path(temp_dir)
@@ -187,7 +202,7 @@ versions=26.08;25.08;24.08
                 [
                     "override",
                     "--user",
-                    f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_LEGACY_IMPLICIT_LAYER_PATH}",
+                    f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
                     app_id,
                 ],
                 calls,
@@ -242,6 +257,8 @@ versions=26.08;25.08;24.08
                 "ENABLE_MAKO",
                 "DISABLE_LSFG",
                 "DISABLE_LSFGVK",
+                "DISABLE_GAMESCOPE_WSI",
+                "ENABLE_GAMESCOPE_WSI",
                 "VK_IMPLICIT_LAYER_PATH",
                 "VK_ADD_IMPLICIT_LAYER_PATH",
             ):
@@ -263,7 +280,8 @@ MAKO_CONFIG=/config/conf.toml
 ENABLE_MAKO=1
 DISABLE_LSFG=1
 DISABLE_LSFGVK=1
-VK_ADD_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implicit_layer.d
+DISABLE_GAMESCOPE_WSI=1
+VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implicit_layer.d
 """
         self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
             complete_override
@@ -287,21 +305,21 @@ VK_ADD_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/im
         self.assertTrue(status["legacy_env"])
         self.assertFalse(status["required_env"])
 
-        compatible_legacy_path = complete_override.replace(
+        legacy_additive_path = complete_override.replace(
+            f"VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
             f"VK_ADD_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
-            f"VK_IMPLICIT_LAYER_PATH={FLATPAK_LEGACY_IMPLICIT_LAYER_PATH}",
         )
         self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
-            compatible_legacy_path
+            legacy_additive_path
         )
 
         status = self.service._check_app_override_status(app_id)
 
-        self.assertTrue(status["required_env"])
+        self.assertFalse(status["required_env"])
 
         overriding_path = complete_override.replace(
-            "[Environment]\n",
-            "[Environment]\nVK_IMPLICIT_LAYER_PATH=/legacy/isolated/path\n",
+            FLATPAK_IMPLICIT_LAYER_DIR,
+            f"/legacy/isolated/path:{FLATPAK_IMPLICIT_LAYER_DIR}",
         )
         self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
             overriding_path
@@ -310,6 +328,17 @@ VK_ADD_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/im
         status = self.service._check_app_override_status(app_id)
 
         self.assertTrue(status["legacy_env"])
+        self.assertFalse(status["required_env"])
+
+        missing_gamescope_guard = complete_override.replace(
+            "DISABLE_GAMESCOPE_WSI=1\n", ""
+        )
+        self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
+            missing_gamescope_guard
+        )
+
+        status = self.service._check_app_override_status(app_id)
+
         self.assertFalse(status["required_env"])
 
     def test_removing_direct_override_clears_all_layer_environment(self):
@@ -335,6 +364,8 @@ VK_ADD_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/im
                 "ENABLE_MAKO",
                 "DISABLE_LSFG",
                 "DISABLE_LSFGVK",
+                "DISABLE_GAMESCOPE_WSI",
+                "ENABLE_GAMESCOPE_WSI",
                 "VK_IMPLICIT_LAYER_PATH",
                 "VK_ADD_IMPLICIT_LAYER_PATH",
             ):

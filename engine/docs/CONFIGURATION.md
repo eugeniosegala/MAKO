@@ -46,7 +46,7 @@ Test V-Sync both on and off for each game. It can steady the real-frame cadence,
 
 ## Launch variables
 
-Use `mako-launch` as the standalone activation interface. It enables MAKO for the child process, applies the known frame-generation-layer conflict guards before Vulkan starts, and forwards the command and arguments without evaluating or rewriting them:
+Use `mako-launch` as the standalone activation interface. It selects the installed private MAKO-only implicit-layer directory, enables MAKO for the child process, applies the known frame-generation-layer conflict guards and the Gamescope WSI presentation guard before Vulkan starts, and forwards the command and arguments without evaluating or rewriting them:
 
 ```text
 ~/.local/bin/mako-launch %command%
@@ -58,7 +58,7 @@ Place any launch-specific environment variables before the helper. `MAKO_CONFIG`
 MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
 ```
 
-The profile value must exactly match a configured profile `name`. Quote names that contain spaces; shell backticks are not profile delimiters and must not be used. `DISABLE_MAKO=1` remains a one-launch troubleshooting gate and is honoured even when `mako-launch` is present.
+The profile value must exactly match a configured profile `name`. Quote names that contain spaces; shell backticks are not profile delimiters and must not be used. `DISABLE_MAKO=1` remains a one-launch troubleshooting gate and is honoured even when `mako-launch` is present. The launcher disables Gamescope WSI only inside the child process so MAKO owns a single presentation clock; Gamescope itself remains the active compositor. Steam's Vulkan Fossilize/overlay hooks and system-wide implicit layers are deliberately excluded from MAKO-managed processes, matching v2's validated SDR behavior.
 
 If no profile matches the launched process, the Vulkan layer remains dormant and preserves the application's native presentation path. This makes launcher and helper processes safe while ensuring frame generation starts only for an explicitly matched profile.
 

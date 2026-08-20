@@ -130,7 +130,7 @@ On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from
     ~/.local/bin/mako-launch your-game-command
     ```
 
-4. Start the game normally. `mako-launch` enables MAKO only for that process and prevents installed LSFG-VK 1.x or 2.x frame-generation layers from intercepting the same game. Ordinary Vulkan layers, overlays, capture tools, and utilities remain available.
+4. Start the game normally. `mako-launch` enables MAKO only for that process and selects its installed private manifest directory, matching MAKO v2's proven SDR boundary. Steam's Vulkan Fossilize/overlay hooks, system-wide implicit presentation layers, and installed LSFG-VK 1.x or 2.x frame-generation layers cannot bypass MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. Game-local integrations such as OptiScaler are unchanged; use only one frame-generation implementation per game.
 
 Set an advanced launch variable before the helper and it is passed to the game unchanged. For example, this selects a named profile without changing the saved default:
 

@@ -166,4 +166,4 @@ sudo cmake --install build
 
 Keep track of the installed files, in order to uninstall them later if needed.
 
-The installed manifest is launch-scoped. Start a native game with `mako-launch <command>`. The helper activates MAKO for that process and prevents another installed LSFG-VK frame-generation layer from attaching to the same swapchain. It is installed alongside `mako-cli` whenever the Vulkan layer is installed.
+The installed manifests are launch-scoped. Start a native game with `mako-launch <command>`. The helper selects the install prefix's private MAKO-only implicit-layer directory, activates MAKO for that process, prevents Steam's Vulkan hooks or another installed LSFG-VK frame-generation layer from bypassing the same swapchain, and suppresses Gamescope WSI's conflicting presentation policy for that child. It is installed alongside `mako-cli` whenever the Vulkan layer is installed.

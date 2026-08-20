@@ -24,10 +24,7 @@ from .constants import (
     ARMADA_DEVICE_ENV,
     ARMADA_GAME_LAUNCH,
     COMPETING_LSFG_DISABLE_ENVS,
-    FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR,
     FLATPAK_IMPLICIT_LAYER_DIR,
-    FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS,
-    FLATPAK_VULKAN_LOADER_PATHS,
     MAKO_LAYER_ENABLE_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
 )
@@ -41,7 +38,7 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 35"
+    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 41"
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = (
@@ -49,6 +46,10 @@ class ConfigurationService(BaseService):
         "export MAKO_PRESENT_DIAGNOSTICS=",
         f"export {MAKO_LAYER_ENABLE_ENV}=1",
         *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
+        "export DISABLE_GAMESCOPE_WSI=1",
+        "unset ENABLE_GAMESCOPE_WSI",
+        "export VK_IMPLICIT_LAYER_PATH=",
+        "unset VK_ADD_IMPLICIT_LAYER_PATH",
         "export MAKO_PROFILE_FALLBACK=",
         "mako_diagnostics_default=",
     )
@@ -72,8 +73,7 @@ class ConfigurationService(BaseService):
         )
 
     def _diagnostics_default_marker(self) -> str:
-        default = "enabled" if self.development_build else "disabled"
-        return f"# development presentation diagnostics default: {default}"
+        return "# development presentation diagnostics default: disabled"
 
     @staticmethod
     def _wrapper_settings_defaults() -> Dict[str, Any]:
@@ -780,79 +780,47 @@ class ConfigurationService(BaseService):
 
         The engine contains HDR colour-pipeline groundwork, but cross-game HDR
         activation and presentation are unavailable in the current Decky
-        release. Ignore stale profile opt-ins until a later release unlocks
-        this boundary.
+        release. Keep the launcher's normal DXVK policy while MAKO enforces
+        its own SDR processing and presentation boundary.
         """
         del config
         return [
             "export MAKO_DISABLE_HDR_EXPOSURE=1",
-            # Absence is DXVK's established SDR default. Do not replace the
-            # launcher's normal Gamescope WSI contract while blocking MAKO's
-            # unfinished HDR path.
             "unset DXVK_HDR",
         ]
 
     def _generate_layer_environment_lines(self) -> list[str]:
-        """Activate MAKO for this game without replacing Vulkan discovery.
+        """Activate MAKO through its deterministic Vulkan discovery boundary.
 
         The same wrapper is used in Steam launch options and as Heroic's
-        per-game wrapper command. Host launches use the uniquely named, gated
-        manifest installed in Vulkan's normal per-user directory so Pressure
-        Vessel can register it before this wrapper starts. Heroic's UMU launch
-        path needs the mounted Flatpak extensions added to the child's search
-        path. Preserve every standard and caller-provided layer while disabling
-        only the two public LSFG identities that must not share a swapchain
-        with MAKO. The HDR exposure boundary is enforced separately.
+        per-game wrapper command. Give the Vulkan loader one deterministic
+        implicit-layer directory before it constructs the chain: the mounted
+        MAKO extension in Flatpak, or Decky's private MAKO manifest directory
+        on the host. This restores the v2 SDR boundary that is proven to
+        intercept Wine's swapchain without Gamescope WSI, Steam's Vulkan
+        Fossilize/overlay layers, or system-wide ordering changing the dispatch
+        chain. The Gamescope compositor and Steam/Game Mode UI remain outside
+        this application layer chain. The explicit LSFG and Gamescope guards
+        provide defence in depth.
         """
         diagnostics_log_path = self.config_dir / "present-diagnostics.log"
-        diagnostics_default = "1" if self.development_build else "0"
         return [
             f'export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS="${{MAKO_PRESENT_ACQUIRE_TIMEOUT_MS:-{PRESENT_ACQUIRE_TIMEOUT_MS}}}"',
-            # Local development packages collect the current test run without
-            # requiring per-game launch-option edits. An explicit caller value
-            # always wins, including 0 to turn diagnostics off for profiling.
-            f'export MAKO_PRESENT_DIAGNOSTICS="${{MAKO_PRESENT_DIAGNOSTICS:-{diagnostics_default}}}"',
+            # Presentation logging is intentionally opt-in for every build.
+            # Slow-path records are synchronous and can distort the timing
+            # problem being measured when a compositor is already congested.
+            'export MAKO_PRESENT_DIAGNOSTICS="${MAKO_PRESENT_DIAGNOSTICS:-0}"',
             f"export {MAKO_LAYER_ENABLE_ENV}=1",
             *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
+            "export DISABLE_GAMESCOPE_WSI=1",
+            "unset ENABLE_GAMESCOPE_WSI",
             f"if [ -d {shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)} ]; then",
             f"    mako_implicit_layer_path={shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)}",
-            f"    if [ -d {shlex.quote(FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR)} ]; then",
-            "        # Gamescope must stay above MAKO Renderer in Heroic's Vulkan chain.",
-            f"        mako_implicit_layer_path={shlex.quote(FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR)}:\"$mako_implicit_layer_path\"",
-            "    fi",
             "else",
-            '    mako_implicit_layer_path=""',
+            f"    mako_implicit_layer_path={shlex.quote(str(self.local_share_dir))}",
             "fi",
-            'mako_loader_supports_additive_layer_path=0',
-            *(f"if [ -n \"$mako_implicit_layer_path\" ] && "
-              f"[ -z \"${{VK_IMPLICIT_LAYER_PATH:-}}\" ] && "
-              f"[ -r {shlex.quote(loader_path)} ] && "
-              f"grep -aq 'VK_ADD_IMPLICIT_LAYER_PATH' {shlex.quote(loader_path)}; then "
-              "mako_loader_supports_additive_layer_path=1; fi"
-              for loader_path in FLATPAK_VULKAN_LOADER_PATHS),
-            'if [ -z "$mako_implicit_layer_path" ]; then',
-            "    : # Host manifest is registered before Pressure Vessel starts.",
-            'elif [ -n "${VK_IMPLICIT_LAYER_PATH:-}" ]; then',
-            "    # A caller override suppresses additive paths, so extend that override in place.",
-            '    export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path:$VK_IMPLICIT_LAYER_PATH"',
-            'elif [ "$mako_loader_supports_additive_layer_path" = "1" ]; then',
-            '    if [ -n "${VK_ADD_IMPLICIT_LAYER_PATH:-}" ]; then',
-            '        export VK_ADD_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path:$VK_ADD_IMPLICIT_LAYER_PATH"',
-            "    else",
-            '        export VK_ADD_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"',
-            "    fi",
-            "else",
-            "    # Flatpak 23.08/24.08 loaders do not support the additive variable.",
-            '    mako_legacy_layer_path="$mako_implicit_layer_path"',
-            '    if [ -n "${VK_ADD_IMPLICIT_LAYER_PATH:-}" ]; then',
-            '        mako_legacy_layer_path="$mako_legacy_layer_path:$VK_ADD_IMPLICIT_LAYER_PATH"',
-            "    fi",
-            *(f"    if [ -d {shlex.quote(layer_path)} ]; then "
-              f"mako_legacy_layer_path=\"$mako_legacy_layer_path:{layer_path}\"; fi"
-              for layer_path in FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS),
-            '    export VK_IMPLICIT_LAYER_PATH="$mako_legacy_layer_path"',
-            "    unset VK_ADD_IMPLICIT_LAYER_PATH",
-            "fi",
+            'export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"',
+            "unset VK_ADD_IMPLICIT_LAYER_PATH",
             f"export MAKO_CONFIG={shlex.quote(str(self.config_file_path))}",
             "# Heroic can discard a game's stderr. Capture opt-in engine diagnostics here instead.",
             f"mako_diagnostics_default={shlex.quote(str(diagnostics_log_path))}",
@@ -867,7 +835,20 @@ class ConfigurationService(BaseService):
     def migrate_launch_script_if_needed(self) -> bool:
         """Upgrade an installed generated wrapper without touching user data.
 
-        Format 35 keeps 23.08/24.08 Flatpak loaders working while using
+        Format 41 restores v2's private SDR manifest directory on native Steam,
+        preventing Steam's Vulkan Fossilize/overlay layers from bypassing MAKO's
+        device and swapchain hooks. Format 40 briefly selected the standard
+        per-user directory. Format 39 restores deterministic implicit-layer
+        selection so MAKO remains the swapchain interceptor when Gamescope WSI
+        is absent.
+        Format 38 introduced the direct Gamescope presentation guard. It
+        suppresses Gamescope WSI's conflicting upper FIFO policy while the
+        regular compositor remains active. Format 37 restores the launcher's
+        normal DXVK policy.
+        Format 36 makes high-volume presentation diagnostics opt-in in local
+        development builds as well as published builds while preserving
+        Gamescope WSI and the launcher's normal DXVK policy. Format 35 keeps
+        23.08/24.08 Flatpak loaders working while using
         additive discovery where the loader supports it. Format 34 preserves
         normal implicit Vulkan layers and disables only competing LSFG
         implementations. Format 33 keeps an unsaved game's
@@ -875,9 +856,9 @@ class ConfigurationService(BaseService):
         captured process can take over live. Format 32 selects per-game
         compatibility settings from persistent Steam app identity before
         launch. Format 31 removes duplicate generated compatibility exports.
-        Format 30 applies a build-flavour-aware presentation-diagnostics default.
-        Local development packages enable it while published packages remain
-        quiet, and either build still honours an explicit caller value.
+        Format 30 introduced a build-flavour-aware presentation-diagnostics
+        default. Current wrappers keep every build quiet unless the caller
+        explicitly enables diagnostics.
         Format 29 preserves a caller-provided profile for per-shortcut selection.
         Format 28 moved Base FPS Cap from the DXVK-only wrapper export into the
         engine. Regenerate any older or incomplete wrapper while retaining user
@@ -908,7 +889,7 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO launch wrapper to format 35")
+            self.log.info("Upgraded installed MAKO launch wrapper to format 41")
             return True
         except OSError:
             raise

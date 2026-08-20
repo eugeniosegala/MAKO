@@ -171,7 +171,7 @@
   "PROFILE_UPDATE_CONFIG_FAILED": "Failed to update profile config",
   "PROFILE_UPDATE_CONFIG_ERROR": "Error updating profile config",
   "USAGE_MAKO_CONFIG_NOTE": "MAKO uses its own Vulkan layer and configuration at ~/.config/mako-render/conf.toml. It is selected only for games launched through this command.",
-  "USAGE_ISOLATION_NOTE": "MAKO Renderer stays private while normal implicit Vulkan layers, including Gamescope WSI, remain discoverable. Use only one Lossless Scaling wrapper per game.",
+  "USAGE_ISOLATION_NOTE": "MAKO Renderer uses its proven private Vulkan layer boundary and disables Gamescope WSI for reliable swapchain ownership. Gamescope and Game Mode remain active; use only one frame-generation implementation per game.",
   "ADVANCED_DETAILS_FAILED_LOAD_DATA": "Failed to load data",
   "ADVANCED_DETAILS_FAILED_DLL_STATS": "Failed to get DLL stats",
   "STATUS_ENGINE_INSTALLED": "MAKO Renderer installed",

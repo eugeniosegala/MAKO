@@ -185,7 +185,7 @@ Start the configuration UI after extraction:
 - **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode and open **MAKO Renderer Configuration**.
 - **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
 
-Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO for that game and prevents known LSFG-VK frame-generation layers from loading into the same process.
+Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO through its private Vulkan layer directory, prevents Steam's Vulkan Fossilize/overlay hooks and competing presentation layers from bypassing its swapchain interception, and keeps Gamescope and the Steam/Game Mode interface active outside that application chain.
 
 ### Flatpak extensions
 

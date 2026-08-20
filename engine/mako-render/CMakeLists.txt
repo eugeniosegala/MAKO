@@ -133,8 +133,28 @@ if(MAKO_BUILD_VK_LAYER)
         "${MAKO_LAYER_MANIFEST_FILE}"
         @ONLY)
 
+    # MAKO-managed SDR launches use a private manifest directory, matching the
+    # proven v2 Decky boundary. Relative paths containing a directory need one
+    # more parent traversal; a bare loader name remains valid as-is.
+    set(MAKO_PUBLIC_LAYER_LIBRARY_PATH "${MAKO_LAYER_LIBRARY_PATH}")
+    if(MAKO_PUBLIC_LAYER_LIBRARY_PATH MATCHES "/")
+        set(MAKO_LAYER_LIBRARY_PATH "../${MAKO_PUBLIC_LAYER_LIBRARY_PATH}")
+    else()
+        set(MAKO_LAYER_LIBRARY_PATH "${MAKO_PUBLIC_LAYER_LIBRARY_PATH}")
+    endif()
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/private-manifest")
+    configure_file(
+        "VkLayer_MAKO_render.json.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/private-manifest/${MAKO_LAYER_MANIFEST_FILE}"
+        @ONLY)
+    set(MAKO_LAYER_LIBRARY_PATH "${MAKO_PUBLIC_LAYER_LIBRARY_PATH}")
+
     install(TARGETS mako-render
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${MAKO_LAYER_MANIFEST_FILE}"
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/vulkan/implicit_layer.d")
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/private-manifest/${MAKO_LAYER_MANIFEST_FILE}"
+        DESTINATION
+            "${CMAKE_INSTALL_DATAROOTDIR}/mako-render/vulkan/implicit_layer.d")
 endif()

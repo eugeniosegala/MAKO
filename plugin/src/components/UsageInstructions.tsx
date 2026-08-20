@@ -75,7 +75,7 @@ export function UsageInstructions() {
             marginTop: "4px"
           }}
         >
-          {t('USAGE_ISOLATION_NOTE', 'MAKO Renderer stays private while normal implicit Vulkan layers, including Gamescope WSI, remain discoverable. Use only one Lossless Scaling wrapper per game.')}
+          {t('USAGE_ISOLATION_NOTE', 'MAKO Renderer uses its proven private Vulkan layer boundary and disables Gamescope WSI for reliable swapchain ownership. Gamescope and Game Mode remain active; use only one frame-generation implementation per game.')}
         </div>
       </PanelSectionRow>
     </>

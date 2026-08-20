@@ -70,13 +70,16 @@ class WrapperEnvironmentTests(unittest.TestCase):
         )
         return dict(line.split("=", 1) for line in result.stdout.splitlines())
 
-    def test_host_uses_registered_gated_manifest_without_overriding_discovery(self):
+    def test_host_uses_deterministic_private_layer_boundary(self):
         values = self._evaluate(config=ConfigurationManager.get_defaults())
         self.assertEqual(values["ADD"], "")
-        self.assertEqual(values["IMPLICIT"], "")
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
         self.assertEqual(values["ENABLE"], "1")
         self.assertEqual(values["DISABLE_LSFG"], "1")
         self.assertEqual(values["DISABLE_LSFGVK"], "1")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+        self.assertEqual(values["DXVK_HDR"], "")
         self.assertEqual(values["INSTANCE"], "")
 
     def test_existing_instance_layer_order_is_preserved(self):
@@ -151,17 +154,15 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["PROFILE"], "")
         self.assertEqual(values["FALLBACK"], "mako")
 
-    def test_existing_additional_paths_are_untouched_on_host(self):
+    def test_existing_additional_paths_are_excluded_on_host(self):
         values = self._evaluate(
             {"VK_ADD_IMPLICIT_LAYER_PATH": "/caller/one:/caller/two"},
             ConfigurationManager.get_defaults(),
         )
-        self.assertEqual(
-            values["ADD"],
-            "/caller/one:/caller/two",
-        )
+        self.assertEqual(values["ADD"], "")
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
 
-    def test_caller_override_path_is_untouched_on_host(self):
+    def test_caller_override_path_is_replaced_on_host(self):
         values = self._evaluate(
             {
                 "VK_IMPLICIT_LAYER_PATH": "/caller/override",
@@ -169,92 +170,76 @@ class WrapperEnvironmentTests(unittest.TestCase):
             },
             ConfigurationManager.get_defaults(),
         )
-        self.assertEqual(values["IMPLICIT"], "/caller/override")
-        self.assertEqual(values["ADD"], "/ignored/by/loader")
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
+        self.assertEqual(values["ADD"], "")
 
-    def test_sdr_boundary_does_not_replace_layer_discovery(self):
-        values = self._evaluate({
-            "MAKO_DISABLE_HDR_EXPOSURE": "1",
-            "VK_IMPLICIT_LAYER_PATH": "/caller/override",
-            "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
-        })
-        self.assertEqual(values["IMPLICIT"], "/caller/override")
-        self.assertEqual(values["ADD"], "/caller/additional")
+    def test_sdr_boundary_uses_deterministic_layer_discovery(self):
+        values = self._evaluate(
+            {
+                "MAKO_DISABLE_HDR_EXPOSURE": "1",
+                "VK_IMPLICIT_LAYER_PATH": "/caller/override",
+                "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
+            },
+            {"disable_hdr_exposure": True},
+        )
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
+        self.assertEqual(values["ADD"], "")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+        self.assertEqual(values["DXVK_HDR"], "")
 
-    def test_flatpak_adds_wrapper_scoped_extension_without_hiding_other_layers(self):
-        with (
-            tempfile.TemporaryDirectory() as temp_dir,
-            tempfile.NamedTemporaryFile() as modern_loader,
-        ):
-            modern_loader.write(b"VK_ADD_IMPLICIT_LAYER_PATH")
-            modern_loader.flush()
+    def test_flatpak_uses_deterministic_extension_boundary(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
             previous = configuration_module.FLATPAK_IMPLICIT_LAYER_DIR
-            previous_loaders = configuration_module.FLATPAK_VULKAN_LOADER_PATHS
             configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = temp_dir
-            configuration_module.FLATPAK_VULKAN_LOADER_PATHS = (modern_loader.name,)
             try:
                 values = self._evaluate(config=ConfigurationManager.get_defaults())
             finally:
                 configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = previous
-                configuration_module.FLATPAK_VULKAN_LOADER_PATHS = previous_loaders
-
-        self.assertEqual(values["ADD"], temp_dir)
-        self.assertEqual(values["IMPLICIT"], "")
-        self.assertEqual(values["ENABLE"], "1")
-
-    def test_legacy_flatpak_loader_keeps_standard_implicit_layers(self):
-        with (
-            tempfile.TemporaryDirectory() as temp_dir,
-            tempfile.TemporaryDirectory() as standard_dir,
-            tempfile.NamedTemporaryFile() as legacy_loader,
-        ):
-            previous = configuration_module.FLATPAK_IMPLICIT_LAYER_DIR
-            previous_standard = configuration_module.FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS
-            previous_loaders = configuration_module.FLATPAK_VULKAN_LOADER_PATHS
-            configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = temp_dir
-            configuration_module.FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS = (standard_dir,)
-            configuration_module.FLATPAK_VULKAN_LOADER_PATHS = (legacy_loader.name,)
-            try:
-                values = self._evaluate({
-                    "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
-                })
-            finally:
-                configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = previous
-                configuration_module.FLATPAK_STANDARD_IMPLICIT_LAYER_DIRS = previous_standard
-                configuration_module.FLATPAK_VULKAN_LOADER_PATHS = previous_loaders
 
         self.assertEqual(values["ADD"], "")
-        self.assertEqual(
-            values["IMPLICIT"],
-            f"{temp_dir}:/caller/additional:{standard_dir}",
-        )
+        self.assertEqual(values["IMPLICIT"], temp_dir)
+        self.assertEqual(values["ENABLE"], "1")
 
-    def test_flatpak_sdr_boundary_extends_existing_umu_manifest_path(self):
-        with (
-            tempfile.TemporaryDirectory() as temp_dir,
-            tempfile.TemporaryDirectory() as gamescope_dir,
-        ):
+    def test_flatpak_discards_caller_layer_paths(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
             previous = configuration_module.FLATPAK_IMPLICIT_LAYER_DIR
-            previous_gamescope = configuration_module.FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR
             configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = temp_dir
-            configuration_module.FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR = gamescope_dir
             try:
-                values = self._evaluate({
-                    "MAKO_DISABLE_HDR_EXPOSURE": "1",
-                    "VK_IMPLICIT_LAYER_PATH": "/caller/override",
-                    "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
-                    "ENABLE_GAMESCOPE_WSI": "1",
-                })
+                values = self._evaluate(
+                    {
+                        "VK_IMPLICIT_LAYER_PATH": "/caller/override",
+                        "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
+                    }
+                )
             finally:
                 configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = previous
-                configuration_module.FLATPAK_GAMESCOPE_IMPLICIT_LAYER_DIR = previous_gamescope
 
-        self.assertEqual(
-            values["IMPLICIT"],
-            f"{gamescope_dir}:{temp_dir}:/caller/override",
-        )
-        self.assertEqual(values["ADD"], "/caller/additional")
-        self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ADD"], "")
+        self.assertEqual(values["IMPLICIT"], temp_dir)
+
+    def test_flatpak_sdr_boundary_keeps_gamescope_wsi_out_of_umu_chain(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            previous = configuration_module.FLATPAK_IMPLICIT_LAYER_DIR
+            configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = temp_dir
+            try:
+                values = self._evaluate(
+                    {
+                        "MAKO_DISABLE_HDR_EXPOSURE": "1",
+                        "VK_IMPLICIT_LAYER_PATH": "/caller/override",
+                        "VK_ADD_IMPLICIT_LAYER_PATH": "/caller/additional",
+                        "ENABLE_GAMESCOPE_WSI": "1",
+                    },
+                    {"disable_hdr_exposure": True},
+                )
+            finally:
+                configuration_module.FLATPAK_IMPLICIT_LAYER_DIR = previous
+
+        self.assertEqual(values["IMPLICIT"], temp_dir)
+        self.assertEqual(values["ADD"], "")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["DXVK_HDR"], "")
 
     def test_hdr_recovery_profile_generates_wrapper_export(self):
         lines = get_script_generation_logic()({"disable_hdr_exposure": True})
@@ -321,11 +306,11 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "VK_LAYER_existing_one:VK_LAYER_existing_two",
         )
         self.assertEqual(values["ENABLE"], "1")
-        self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
         self.assertEqual(values["HDR_EXPOSURE_DISABLED"], "1")
         self.assertEqual(values["DXVK_HDR"], "")
         self.assertEqual(values["DISABLE_MAKO"], "")
-        self.assertEqual(values["DISABLE_GAMESCOPE"], "")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
 
     def test_default_sdr_profile_never_exports_hdr_bootstrap(self):
         lines = self.service._hdr_activation_lines({
@@ -344,7 +329,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DXVK_HDR"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
         self.assertEqual(values["DISABLE_MAKO"], "")
-        self.assertEqual(values["DISABLE_GAMESCOPE"], "")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
 
     def test_full_layer_disable_keeps_hdr_exposure_blocked(self):
         lines = self.service._hdr_activation_lines({
@@ -352,6 +337,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "disable_mako": True,
         })
         self.assertIn("unset DXVK_HDR", lines)
+        self.assertNotIn("export DISABLE_GAMESCOPE_WSI=1", lines)
         self.assertNotIn("VK_INSTANCE_LAYERS", "\n".join(lines))
 
     def test_full_layer_disable_targets_mako_identity(self):
@@ -411,19 +397,19 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "# development presentation diagnostics default: disabled",
         )
 
-    def test_development_wrapper_enables_diagnostics_by_default(self):
+    def test_development_wrapper_keeps_diagnostics_opt_in(self):
         service = ConfigurationService(
             logger=_Logger(),
             development_build=True,
         )
         lines = service._generate_layer_environment_lines()
         self.assertIn(
-            'export MAKO_PRESENT_DIAGNOSTICS="${MAKO_PRESENT_DIAGNOSTICS:-1}"',
+            'export MAKO_PRESENT_DIAGNOSTICS="${MAKO_PRESENT_DIAGNOSTICS:-0}"',
             lines,
         )
         self.assertEqual(
             service._diagnostics_default_marker(),
-            "# development presentation diagnostics default: enabled",
+            "# development presentation diagnostics default: disabled",
         )
 
     def test_armada_launcher_wraps_once_and_only_on_armada(self):
@@ -495,6 +481,114 @@ class WrapperEnvironmentTests(unittest.TestCase):
             self.service.mako_script_path.write_text(
                 "\n".join([
                     "# mako-wrapper-format: 30",
+                    self.service._diagnostics_default_marker(),
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_format_35_wrapper_is_regenerated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "# mako-wrapper-format: 35",
+                    self.service._diagnostics_default_marker(),
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_format_36_wrapper_is_regenerated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "# mako-wrapper-format: 36",
+                    self.service._diagnostics_default_marker(),
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_format_37_wrapper_is_regenerated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "# mako-wrapper-format: 37",
+                    self.service._diagnostics_default_marker(),
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_format_38_wrapper_is_regenerated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "# mako-wrapper-format: 38",
+                    self.service._diagnostics_default_marker(),
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_format_39_wrapper_is_regenerated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "# mako-wrapper-format: 39",
+                    self.service._diagnostics_default_marker(),
+                    *self.service._REQUIRED_WRAPPER_EXPORTS,
+                ]),
+                encoding="utf-8",
+            )
+            self.service._get_profile_data = lambda: {}
+            self.service.update_mako_script_from_profile_data = (
+                lambda _profile_data: {"success": True}
+            )
+
+            self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+    def test_format_40_wrapper_is_regenerated(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.mako_script_path = Path(temp_dir) / "wrapper"
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "# mako-wrapper-format: 40",
                     self.service._diagnostics_default_marker(),
                     *self.service._REQUIRED_WRAPPER_EXPORTS,
                 ]),

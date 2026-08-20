@@ -171,7 +171,7 @@
   "PROFILE_UPDATE_CONFIG_FAILED": "无法更新配置文件设置",
   "PROFILE_UPDATE_CONFIG_ERROR": "更新配置文件设置时出错",
   "USAGE_MAKO_CONFIG_NOTE": "MAKO 使用自己的 Vulkan 层和 ~/.config/mako-render/conf.toml 配置。它只会为通过此命令启动的游戏启用。",
-  "USAGE_ISOLATION_NOTE": "MAKO Renderer 保持独立，同时仍可发现包括 Gamescope WSI 在内的常规隐式 Vulkan 层。每个游戏只能使用一个 Lossless Scaling 包装器。",
+  "USAGE_ISOLATION_NOTE": "MAKO Renderer 使用经过验证的专用 Vulkan 层边界，并禁用 Gamescope WSI，以可靠地取得交换链控制权。Gamescope 和游戏模式本身仍保持运行；每个游戏只能使用一种帧生成实现。",
   "ADVANCED_DETAILS_FAILED_LOAD_DATA": "无法加载数据",
   "ADVANCED_DETAILS_FAILED_DLL_STATS": "无法获取 DLL 信息",
   "STATUS_ENGINE_INSTALLED": "MAKO Renderer 已安装",

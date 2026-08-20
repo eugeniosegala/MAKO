@@ -101,7 +101,7 @@ After creating the report:
 - **Heroic:** remove `MAKO_PRESENT_DIAGNOSTICS` and `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS` from the game's environment. Keep the normal Wrapper and Arguments.
 - **EmuDeck Flatpak:** restore the exact original **Target** and **Launch Options** saved before testing.
 
-Published builds keep diagnostics off after these temporary settings are removed. Local development ZIPs and direct `dev:*` deployments enable them by default for development testing.
+All builds keep diagnostics off after these temporary settings are removed. Local development ZIPs and direct `dev:*` deployments also require explicit opt-in so synchronous log traffic cannot distort performance testing.
 
 ## 5. Submit the report
 

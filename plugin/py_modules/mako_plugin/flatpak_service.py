@@ -18,7 +18,6 @@ from .constants import (
     FLATPAK_25_08_FILENAME,
     FLATPAK_EXTENSION_NAME,
     FLATPAK_IMPLICIT_LAYER_DIR,
-    FLATPAK_LEGACY_IMPLICIT_LAYER_PATH,
     MAKO_LAYER_ENABLE_ENV,
 )
 from .types import BaseResponse
@@ -39,6 +38,8 @@ _LAYER_ENVIRONMENT_VARIABLES = (
     "MAKO_CONFIG",
     MAKO_LAYER_ENABLE_ENV,
     *COMPETING_LSFG_DISABLE_ENVS,
+    "DISABLE_GAMESCOPE_WSI",
+    "ENABLE_GAMESCOPE_WSI",
     "VK_IMPLICIT_LAYER_PATH",
     "VK_ADD_IMPLICIT_LAYER_PATH",
 )
@@ -563,20 +564,11 @@ class FlatpakService(BaseService):
                 variable in environment_values
                 for variable in _LAYER_ENVIRONMENT_VARIABLES
             )
-            overriding_layer_path = environment_values.get(
-                "VK_IMPLICIT_LAYER_PATH", ""
+            compatible_layer_path = (
+                environment_values.get("VK_IMPLICIT_LAYER_PATH") ==
+                FLATPAK_IMPLICIT_LAYER_DIR
+                and not environment_values.get("VK_ADD_IMPLICIT_LAYER_PATH")
             )
-            if overriding_layer_path:
-                # VK_IMPLICIT_LAYER_PATH suppresses the additive variable, so
-                # it is valid only when its effective path contains MAKO.
-                compatible_layer_path = FLATPAK_IMPLICIT_LAYER_DIR in (
-                    overriding_layer_path.split(":")
-                )
-            else:
-                compatible_layer_path = (
-                    environment_values.get("VK_ADD_IMPLICIT_LAYER_PATH") ==
-                    FLATPAK_IMPLICIT_LAYER_DIR
-                )
             required_env_override = (
                 app_id in _PER_GAME_WRAPPER_FLATPAK_APPS
                 or (
@@ -587,6 +579,8 @@ class FlatpakService(BaseService):
                         environment_values.get(variable) == "1"
                         for variable in COMPETING_LSFG_DISABLE_ENVS
                     )
+                    and environment_values.get("DISABLE_GAMESCOPE_WSI") == "1"
+                    and not environment_values.get("ENABLE_GAMESCOPE_WSI")
                     and compatible_layer_path
                 )
             )
@@ -718,24 +712,16 @@ class FlatpakService(BaseService):
                 # host-side Steam wrapper exports variables. Direct Flatpak
                 # applications therefore need the config and manifest path in
                 # their app override; otherwise the wrapper launches successfully
-                # but the Vulkan layer never attaches. Flatpak 25.08 supports the
-                # additive loader variable. The 23.08/24.08 loaders require the
-                # overriding variable, so include their standard layer locations
-                # in that compatibility path.
+                # but the Vulkan layer never attaches. Use one deterministic
+                # MAKO-only extension boundary on every supported runtime so a
+                # system layer cannot reorder the swapchain dispatch chain.
                 # MAKO must remain enabled for direct Flatpak applications,
                 # including helper Vulkan processes launched after the host-side
                 # wrapper environment is filtered.
-                layer_environment = (
-                    [
-                        f"--env=VK_ADD_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
-                        "--unset-env=VK_IMPLICIT_LAYER_PATH",
-                    ]
-                    if runtime_version == "25.08"
-                    else [
-                        f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_LEGACY_IMPLICIT_LAYER_PATH}",
-                        "--unset-env=VK_ADD_IMPLICIT_LAYER_PATH",
-                    ]
-                )
+                layer_environment = [
+                    f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
+                    "--unset-env=VK_ADD_IMPLICIT_LAYER_PATH",
+                ]
                 environment_overrides = [
                     f"--env=MAKO_CONFIG={config_path}/conf.toml",
                     f"--env={MAKO_LAYER_ENABLE_ENV}=1",
@@ -743,6 +729,8 @@ class FlatpakService(BaseService):
                         f"--env={variable}=1"
                         for variable in COMPETING_LSFG_DISABLE_ENVS
                     ),
+                    "--env=DISABLE_GAMESCOPE_WSI=1",
+                    "--unset-env=ENABLE_GAMESCOPE_WSI",
                     *layer_environment,
                 ]
 

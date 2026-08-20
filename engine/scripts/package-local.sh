@@ -311,11 +311,13 @@ required_paths=(
     "bin/mako-ui" \
     "lib/libmako-render.so" \
     "share/doc/mako-render/LICENSE.md" \
+    "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
     "share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
 )
 if [[ "$build_32_bit" == true ]]; then
     required_paths+=(
         "lib32/libmako-render.so"
+        "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
         "share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
     )
 fi
@@ -368,6 +370,7 @@ if grep -Fq 'libQt6QmlMeta.so.6' "$ui_strings"; then
 fi
 
 manifest64="$install_dir/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
+private_manifest64="$install_dir/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
 if ! grep -Fq '"library_arch": "64"' "$manifest64" ||
         ! grep -Fq '../../../lib/libmako-render.so' "$manifest64" ||
         ! grep -Fq '"name": "VK_LAYER_MAKO_render"' "$manifest64" ||
@@ -376,14 +379,27 @@ if ! grep -Fq '"library_arch": "64"' "$manifest64" ||
     echo "Packaging failed: 64-bit Vulkan manifest is incorrect" >&2
     exit 1
 fi
+if ! grep -Fq '"library_arch": "64"' "$private_manifest64" ||
+        ! grep -Fq '../../../../lib/libmako-render.so' "$private_manifest64" ||
+        ! grep -Fq '"name": "VK_LAYER_MAKO_render"' "$private_manifest64"; then
+    echo "Packaging failed: private 64-bit Vulkan manifest is incorrect" >&2
+    exit 1
+fi
 if [[ "$build_32_bit" == true ]]; then
     manifest32="$install_dir/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+    private_manifest32="$install_dir/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
     if ! grep -Fq '"library_arch": "32"' "$manifest32" ||
             ! grep -Fq '../../../lib32/libmako-render.so' "$manifest32" ||
             ! grep -Fq '"name": "VK_LAYER_MAKO_render"' "$manifest32" ||
             ! grep -Fq '"ENABLE_MAKO": "1"' "$manifest32" ||
             ! grep -Fq '"DISABLE_MAKO": "1"' "$manifest32"; then
         echo "Packaging failed: 32-bit Vulkan manifest is incorrect" >&2
+        exit 1
+    fi
+    if ! grep -Fq '"library_arch": "32"' "$private_manifest32" ||
+            ! grep -Fq '../../../../lib32/libmako-render.so' "$private_manifest32" ||
+            ! grep -Fq '"name": "VK_LAYER_MAKO_render"' "$private_manifest32"; then
+        echo "Packaging failed: private 32-bit Vulkan manifest is incorrect" >&2
         exit 1
     fi
 fi

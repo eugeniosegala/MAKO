@@ -174,7 +174,7 @@ For v2.0.0, substitute its legacy filename from step 2 in the extraction command
 ~/.local/bin/mako-launch %command%
 ```
 
-`mako-launch` activates MAKO for that game and prevents known LSFG-VK frame-generation layers from loading into the same process. The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications need the separate runtime extension. See the dedicated [MAKO Renderer installation and usage guide](engine/README.md) for Qt requirements, manual configuration, validation, benchmarking, Flatpak setup, source builds, and troubleshooting.
+`mako-launch` activates MAKO for that game through the same private Vulkan layer boundary proven by MAKO v2. It prevents Steam's Vulkan Fossilize/overlay hooks, competing frame-generation layers, and system-wide presentation hooks from bypassing MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. Game-local integrations such as OptiScaler are not removed, but use only one frame-generation implementation per game. The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications need the separate runtime extension. See the dedicated [MAKO Renderer installation and usage guide](engine/README.md) for Qt requirements, manual configuration, validation, benchmarking, Flatpak setup, source builds, and troubleshooting.
 
 ## Documentation
 

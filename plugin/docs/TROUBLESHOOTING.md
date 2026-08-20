@@ -4,7 +4,7 @@ These instructions apply to both published MAKO Decky ZIPs and local developer b
 
 ## HDR is unavailable by design
 
-HDR frame generation is unavailable in this release. **Disable HDR (Restart)** is checked, read-only, and enforced by the backend. The launcher uses MAKO's validated SDR path, so an HDR option being unavailable in a game is expected and does not mean the ZIP installed incorrectly.
+HDR frame generation is unavailable in this release. **Disable HDR (Restart)** is checked, read-only, and enforced by the backend. MAKO-managed launches keep the launcher's normal DXVK policy, use MAKO's deterministic manifest directory, and disable Gamescope WSI for the game process so MAKO owns the swapchain and a single presentation clock. The Gamescope compositor remains active. An HDR option being unavailable in a game is expected and does not mean the ZIP installed incorrectly.
 
 Use **Disable MAKO Renderer on Next Launch** and restart the game if you need to test whether the layer is the cause of a startup or presentation problem.
 
@@ -30,7 +30,7 @@ With no **GPU** value configured, MAKO Renderer follows the Vulkan device used b
 
 ## Collect diagnostics
 
-Published builds keep diagnostics off by default. Local development ZIPs and direct `dev:*` deployments enable them automatically. To collect a focused Steam report, temporarily replace the game's normal launch option with:
+Presentation diagnostics are off by default in published and local development builds because high-volume synchronous logging can distort frame-pacing measurements. To collect a focused Steam report, temporarily replace the game's normal launch option with:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 /home/deck/.local/bin/mako-run %command%

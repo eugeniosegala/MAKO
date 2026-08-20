@@ -171,7 +171,7 @@
   "PROFILE_UPDATE_CONFIG_FAILED": "프로필 설정 업데이트에 실패했습니다",
   "PROFILE_UPDATE_CONFIG_ERROR": "프로필 설정 업데이트 중 오류가 발생했습니다",
   "USAGE_MAKO_CONFIG_NOTE": "MAKO는 ~/.config/mako-render/conf.toml에 자체 Vulkan 레이어와 설정을 저장합니다. 이 명령으로 실행한 게임에만 적용됩니다.",
-  "USAGE_ISOLATION_NOTE": "MAKO Renderer는 비공개로 유지하면서 Gamescope WSI를 포함한 일반 암시적 Vulkan 레이어도 검색할 수 있습니다. 게임마다 Lossless Scaling 래퍼는 하나만 사용하세요.",
+  "USAGE_ISOLATION_NOTE": "MAKO Renderer는 안정적인 스왑체인 소유권을 위해 검증된 전용 Vulkan 레이어 경계를 사용하고 Gamescope WSI를 비활성화합니다. Gamescope와 Game Mode 자체는 계속 작동합니다. 게임마다 프레임 생성 구현은 하나만 사용하세요.",
   "ADVANCED_DETAILS_FAILED_LOAD_DATA": "데이터를 불러오지 못했습니다",
   "ADVANCED_DETAILS_FAILED_DLL_STATS": "DLL 정보를 가져오지 못했습니다",
   "STATUS_ENGINE_INSTALLED": "MAKO Renderer가 설치되었습니다",
