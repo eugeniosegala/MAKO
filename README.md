@@ -84,17 +84,9 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 > [!IMPORTANT]
 > If Decky does not show or reload **MAKO Decky** after installing a ZIP, uninstall it, install the ZIP again, and restart your Steam Deck or Steam Machine. Then open the plugin and repeat step 5.
 
-### MangoHud with native Steam or Proton games
+### MangoHud
 
-For a host-installed MangoHud with a 64-bit native Vulkan or Proton game launched directly by Steam, use:
-
-```text
-/home/deck/.local/bin/mako-run env MANGOHUD=1 NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
-```
-
-Keep `env` after `mako-run`. `MANGOHUD=1` enables MangoHud; the two Mesa guards prevent other current SteamOS implicit layers from joining. The verified order is `Application -> MAKO Renderer -> MangoHud -> Vulkan driver`, so MangoHud reports generated output FPS.
-
-This opt-in path is validated only for 64-bit SteamOS/RADV. It is not validated for 32-bit or Flatpak games, and other frame-generation layers must not be combined with MAKO. See [optional Vulkan layer chaining](engine/docs/LAYER-CHAINING.md) for the full contract, verification steps, and limits.
+For MangoHud support, follow the guarded setup in [optional Vulkan layer chaining](engine/docs/LAYER-CHAINING.md).
 
 ### Heroic and other Flatpak applications
 
