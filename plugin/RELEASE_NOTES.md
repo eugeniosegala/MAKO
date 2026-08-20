@@ -2,7 +2,7 @@
 
 ![Leviathan Rising — a Renaissance vision of the MAKO Leviathan](https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/leviathan-rising.png)
 
-### Codename: Leviathan Rising
+### Release codename: Leviathan Rising
 
 > **Command the Leviathan.**
 
