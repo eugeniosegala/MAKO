@@ -14,11 +14,19 @@ The wrapper selects MAKO's private `VK_IMPLICIT_LAYER_PATH`, removes additive im
 
 ## Validated MangoHud exception
 
-For a host-installed MangoHud with a 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS, use:
+For a host-installed MangoHud with a 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS, the minimal setup is:
 
 ```text
 /home/deck/.local/bin/mako-run env MANGOHUD=1 NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
 ```
+
+For a more detailed overlay with FPS, frametime, CPU and GPU load and temperatures, RAM and VRAM use, and a top-right position, use:
+
+```text
+/home/deck/.local/bin/mako-run env MANGOHUD=1 MANGOHUD_CONFIG=fps,frametime,cpu_stats,cpu_temp,gpu_stats,gpu_temp,ram,vram,position=top-right NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
+```
+
+`MANGOHUD_CONFIG` accepts comma-separated MangoHud options and takes priority over matching config-file settings. See MangoHud's [example configuration](https://github.com/flightlessmango/MangoHud/blob/master/data/MangoHud.conf) for the complete option list. Changing these display options does not change the Vulkan layer order.
 
 Use the wrapper path displayed by MAKO Decky on systems whose user home is not `/home/deck`.
 
@@ -28,7 +36,8 @@ The variables have separate responsibilities:
 
 | Variable | Purpose |
 | --- | --- |
-| `MANGOHUD=1` | Satisfies MangoHud's manifest activation condition. This is the only MangoHud-specific setting. |
+| `MANGOHUD=1` | Satisfies MangoHud's manifest activation condition. |
+| `MANGOHUD_CONFIG=...` | Optionally customizes the overlay with comma-separated MangoHud settings. It is not required for activation. |
 | `NODEVICE_SELECT=1` | Disables SteamOS's normally active `VK_LAYER_MESA_device_select` manifest after the system directory is exposed. |
 | `DISABLE_LAYER_MESA_ANTI_LAG=1` | Prevents `VK_LAYER_MESA_anti_lag` from joining if another environment enables it. |
 | `VK_IMPLICIT_LAYER_PATH=...` | Exposes MAKO's private manifests first and SteamOS's host implicit-layer manifests second. |

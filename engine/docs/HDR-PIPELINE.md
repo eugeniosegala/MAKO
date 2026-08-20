@@ -106,11 +106,71 @@ The HDR transport is selectable only when Gamescope is detected, the swapchain i
 
 Stable SDR/HDR feedback may rebuild MAKO's private images, backend context, and colour conversions in place. It does not recreate the game-owned `VkSwapchainKHR` and does not change its presentation transport. Before a private rebuild, MAKO checks backend and fence readiness. A failed rebuild retains native real-frame passthrough and schedules a bounded retry.
 
+## Future discovery: curated Gamescope WSI injection
+
+The validated [MangoHud layer chain](LAYER-CHAINING.md) established an important process-start capability: a Steam launch can carry a deliberately expanded implicit-layer set through Steam Runtime Pressure Vessel, and Vulkan loader diagnostics can prove the resulting instance and device order. That result does not prove HDR correctness, but it turns selective Gamescope WSI admission from an architectural assumption into a concrete experiment.
+
+This may be the missing HDR activation mechanism rather than a new colour-processing design. MAKO already contains HDR10/PQ and scRGB classification, high-precision transport, Gamescope application-HDR feedback, colour conversion shaders, private resource transitions, and the native-first `GamescopeHdr` presentation policy. The current managed launch prevents those pieces from meeting because it excludes Gamescope WSI before Vulkan starts.
+
+### 64-bit discovery hypothesis
+
+The SteamOS host used for the initial layer-chain evidence exposes this architecture-specific manifest:
+
+```text
+/usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.x86_64.json
+```
+
+It selects `VK_LAYER_FROG_gamescope_wsi_x86_64`, points to the host's 64-bit Gamescope WSI library, and is gated by `ENABLE_GAMESCOPE_WSI=1` and `DISABLE_GAMESCOPE_WSI=1`. These paths are host evidence, not a portable interface: an implementation must resolve and validate the installed manifest instead of assuming every distribution uses the SteamOS layout.
+
+Gamescope documents that HDR client support requires its WSI layer. The hypothesis is that an opt-in launch can expose only the architecture-correct Gamescope WSI manifest and MAKO's private manifest, allow HDR exposure at process start, and produce this exact chain:
+
+```text
+Game / Proton / DXVK or VKD3D-Proton
+                  |
+                  v
+       Gamescope WSI x86_64
+                  |
+                  v
+          MAKO Renderer
+                  |
+      generated frame(s) + original
+                  |
+                  v
+             Vulkan driver
+```
+
+Gamescope WSI must remain above MAKO. It exposes HDR formats to the application, translates Wine/Proton WSI handles, consumes the application's HDR colour space, and forwards a normalized swapchain to lower layers. MAKO then combines the normalized format with confirmed application-owned Gamescope feedback to recover HDR10/PQ or scRGB semantics. The [Gamescope source](https://github.com/ValveSoftware/gamescope/blob/master/src/main.cpp#L2538) describes WSI as required for HDR client support.
+
+This is not read-only information injection. Gamescope WSI also changes swapchain and presentation behavior, so admitting it can reintroduce the pacing conflict that collapsed a nominal 60 FPS game to roughly 13 FPS in the earlier SDR chain. The existing `GamescopeHdr` transport is designed for this risk by admitting generated images without waiting and always allowing the real frame to win, but real HDR hardware and game evidence are still required.
+
+### Ordering and packaging requirements
+
+Do not expose the complete system implicit-layer directory as the eventual HDR design. A proof must admit only MAKO and the architecture-correct Gamescope WSI layer while continuing to exclude MangoHud, Mesa device selection, Mesa anti-lag, competing frame generation, capture layers, and unrelated vendor hooks.
+
+Do not infer call order from manifest filenames. The Vulkan loader may enumerate multiple manifests in one directory in an unstable order. A durable implementation should use a controlled mechanism such as isolated one-layer directories or an ordered meta-layer, then verify the actual instance and device call stacks with `VK_LOADER_DEBUG=layer`. See the Khronos [Vulkan Loader layer interface](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/docs/LoaderLayerInterface.md) for discovery and ordering constraints.
+
+The HDR lane must be a process-start profile choice that requires a game restart. Its policy would allow Gamescope WSI and HDR exposure before `vkCreateInstance`; it must never remove the validated SDR guards globally or attempt to add WSI to a running Vulkan instance. A first proof should remain 64-bit-only. The x86 manifest, 32-bit runtime dependencies, Flatpak extensions, Heroic/UMU, and other distribution layouts require separate evidence before the lane can expand.
+
+### Staged proof plan
+
+1. **Loader-only proof:** Construct a temporary curated 64-bit discovery path containing only Gamescope WSI and MAKO. Keep frame generation disabled and verify `Application -> Gamescope WSI x86_64 -> MAKO Renderer -> Vulkan driver` at both instance and device creation.
+2. **Native HDR passthrough:** Launch one known 64-bit HDR game with MAKO loaded but generation off. Confirm that the game offers HDR, Gamescope reports application HDR intent, MAKO selects `hdr10-pq` or `scrgb-linear`, and the game's original frames remain visually correct.
+3. **Fixed 2x generation:** Enable Fixed 2x through the existing `GamescopeHdr` transport. Confirm that generated frames use the correct encoding, native frames win under private-backend pressure, and base FPS does not collapse.
+4. **Adaptive generation:** Exercise fractional and steady Adaptive cadences only after Fixed 2x is stable. Compare output cadence, generated-image misses, recovery, latency, and image quality against the native HDR baseline.
+5. **Runtime transitions:** Test focus changes, Steam overlays, menus, resolution changes, natural swapchain recreation, HDR metadata changes, hitches, and shutdown without stale feedback or repeated private-resource rebuilds.
+6. **Compatibility expansion:** Repeat the proof for native Vulkan, DXVK, VKD3D-Proton, every supported AMD hardware class, FP32 and FP16, then address 32-bit and sandboxed launchers separately.
+
+The discovery succeeds only if the exact layer order is deterministic, HDR intent belongs to the active game, explicit or recovered colour classification is correct, original-frame passthrough remains available, generated colours and highlights match the native baseline, and presentation avoids the former Gamescope/MAKO frame-rate collapse. Washed-out or crushed output, purple or green motion, stale metadata, unexpected layers, blocked native presents, or unexplained cadence loss are release-blocking failures.
+
+If this proof succeeds, MAKO Decky could eventually offer a per-game experimental HDR launch policy with explicit restart semantics and fail-closed fallback. Until then, the supported launch remains the isolated SDR path and this section records a high-value discovery direction rather than a user-facing HDR command.
+
 ## Invariants for future HDR work
 
 - Never use output HDR capability as application HDR intent.
 - Never infer PQ from a 10-bit format without a colour space or confirmed application feedback.
 - Never enable the Gamescope HDR transport when Gamescope WSI was isolated at process start.
+- Never expose the complete host implicit-layer directory as an HDR compatibility policy.
+- Never assume discovery proves the required `Gamescope WSI -> MAKO Renderer` order; retain loader evidence.
 - Never change presentation transport for a live `VkSwapchainKHR`.
 - Never force a game-owned swapchain recreation for a Decky/UI setting change.
 - Never wait for a generated image on the Gamescope HDR bridge; native frames take priority under pressure.
