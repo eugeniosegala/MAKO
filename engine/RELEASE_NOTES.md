@@ -6,16 +6,18 @@
 
 > **The deep has awakened.**
 
-MAKO Renderer 2.1 introduces Adaptive Frame Generation alongside a substantial reliability, compatibility, and packaging update. Frame generation is available now; scaling is coming soon.
+MAKO Renderer 2.1 makes frame generation easier to understand and much harder to disrupt, pairing clearer fractional Adaptive behavior with new AMD image-quality safeguards, tougher recovery, and a cleaner SteamOS presentation path. Frame generation is available now; scaling is coming soon.
 
-### What's new
-
-- **Adaptive Frame Generation:** Target 30 to 240 FPS with a 2x to 4x ceiling, or use the optional Steady 2x FPS Cap for a consistent 2x cadence. Fixed 2x to 4x generation remains available.
-- **Live configuration:** Frame Generation mode, supported multipliers, Target FPS, cadence, and FPS-cap settings can update while a game is running. Options that require new GPU resources remain restart-only.
-- **Improved standalone use:** The new `mako-launch` helper provides one-command activation, `MAKO_PROFILE` selects a saved profile, and the optional Qt interface exposes the complete Renderer configuration.
-- **More reliable presentation:** Swapchain creation, teardown, recovery, Gamescope pacing, and Vulkan layer ownership have been hardened. If MAKO cannot initialize safely, supported paths preserve the game's original presentation instead of turning frame generation into a launch failure.
-- **Safe AMD robustness:** `robustImageAccess2` is enabled only when the complete required feature is advertised by the driver. Unsupported hardware keeps the established fallback path.
-- **Broader distribution support:** Host packages now contain genuine 64-bit and 32-bit x86 layers, with matching Flatpak extensions for Freedesktop 23.08, 24.08, and 25.08. The optional UI supports Qt 6.2 and newer, including Ubuntu 24.04's Qt 6.4.
-- **Stronger validation:** New scheduler, runtime-transition, sanitizer, package, Vulkan-loader, AMD FP32/FP16 image-quality, and native SteamOS checks protect the release path.
+- **Fractional Adaptive, finally explained:** Adaptive can average between integer ratios—for example, 60 real FPS targeting 90 displayed FPS uses a 1.5x cadence. The capability was already in MAKO; 2.1 brings it to the foreground with clear examples, explicit multiplier ceilings, and a clearly named **Steady 2x FPS Cap** for players who prefer a fixed cadence.
+- **AMD image-quality improvements:** MAKO integrates the upstream robustness path aimed at reducing ghosting and edge corruption, enabling `robustImageAccess2` only when a driver fully supports it. New FP32 and FP16 GPU regression scenes hunt motion trails, disocclusion errors, boundary corruption, and lost thin detail before release.
+- **Gamescope and generated frames stop fighting:** Managed launches keep Gamescope's Vulkan WSI policy outside MAKO's generated/original sequence while Gamescope remains the compositor, protecting base FPS without losing Game Mode or Steam.
+- **Frame generation fails gracefully:** Backend or swapchain-context initialization problems now preserve the game's original frames where supported instead of turning an optional graphics feature into a launch failure.
+- **Recovery built for real gameplay:** Focus changes, overlays, hitches, swapchain recreation, teardown, and repeated game lifetimes have stronger cleanup and recovery, with prompt shutdown instead of long Vulkan waits.
+- **HDR groundwork without risking SDR:** Presentation transport is fixed at process start, keeping the experimental HDR path isolated while ordinary launches stay on the supported SDR path.
+- **One-command standalone launch:** The new `mako-launch` helper activates MAKO through its private Vulkan manifest and applies the same presentation and competing-layer protections as managed launches.
+- **MangoHud can report generated output FPS:** A documented opt-in chain places MAKO before MangoHud on validated 64-bit SteamOS/RADV setups, so the overlay sees the final generated presents rather than only source FPS.
+- **Diagnostics that tell the story:** Renderer packages now include focused collection tools for activation, presentation, recovery, and Vulkan layer ordering, while heavy frame tracing remains opt-in so normal play stays fast.
+- **A more portable configuration UI:** The Qt interface supports Qt 6.2 and newer, and package guards keep published archives compatible with Ubuntu 24.04's Qt 6.4 runtime.
+- **Tested where frame generation breaks:** New Vulkan-loader checks, sanitizers, compiler coverage, native SteamOS validation, and AMD image-quality runs exercise the paths that ordinary unit tests cannot see.
 
 **Leviathan Rising is only the beginning.**

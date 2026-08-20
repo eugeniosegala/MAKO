@@ -6,16 +6,20 @@
 
 > **Command the Leviathan.**
 
-MAKO Decky 2.1 brings the new MAKO Renderer experience into Game Mode with per-game profiles, Adaptive Frame Generation, clearer controls, and broader support for Steam Deck, Steam Machine, SteamOS, and Linux. Frame generation is available now; scaling is coming soon.
+MAKO Decky 2.1 brings the Renderer improvements into Game Mode with clearer Adaptive controls, steadier SteamOS presentation, safer compatibility handling, and a more polished everyday experience. Frame generation is available now; scaling is coming soon.
 
-### What's new
-
-- **Per-game profiles:** Save settings for a detected game or process and MAKO will select them automatically on future launches.
-- **Fixed and Adaptive Frame Generation:** Choose a fixed 2x to 4x multiplier or let Adaptive respond to the game's performance, with live Target FPS and Steady 2x FPS Cap controls.
-- **Clearer live and restart behaviour:** Settings that update during play and settings that require a game restart are now identified directly in the interface.
-- **Refined interface:** The plugin has a cleaner layout, improved spacing, a subtle release identity, and a complete Simplified Chinese translation.
-- **Broader game and launcher support:** The new packaging covers 64-bit and 32-bit games across Steam, Proton, Heroic, supported emulators, and Freedesktop Flatpak runtimes 23.08, 24.08, and 25.08.
-- **Safer compatibility:** MAKO-managed launches use an isolated Renderer path designed to avoid conflicting Vulkan presentation and frame-generation layers without changing the rest of SteamOS. Existing profiles and installations remain compatible, while unsupported native Armada installations continue to fail safely.
-- **Better diagnostics and testing:** Installation, profiles, wrappers, Flatpak setup, frontend behaviour, and native SteamOS/AMD rendering now have substantially broader automated validation.
+- **Fractional Adaptive becomes a real choice:** The controls now show that Adaptive can average between integer ratios—80 real FPS targeting 120 displayed FPS is 1.5x—and explain the tradeoff between flexible fractional generation and the newly clarified **Steady 2x FPS Cap**.
+- **AMD image-quality work included:** The bundled Renderer carries the upstream robustness improvements aimed at reducing ghosting and edge corruption, with guarded activation on supported GPUs and the established fallback everywhere else.
+- **Smoother SteamOS presentation:** MAKO's generated frames no longer compete with Gamescope's Vulkan WSI policy in the managed game chain, protecting base FPS while Gamescope, Game Mode, overlays, and Steam remain active.
+- **Games keep presenting when generation cannot:** More initialization and recovery failures fall back to the game's original frames, while hitches, focus changes, overlays, swapchain recreation, and shutdown receive stronger cleanup.
+- **Private Vulkan activation stays private:** Native, Proton, and supported Flatpak launches select the intended MAKO manifests without silently inviting competing presentation or frame-generation layers into the same chain.
+- **MangoHud can show the final result:** The new guarded setup lets MangoHud sit after MAKO and report generated output FPS on the validated 64-bit SteamOS/RADV path, with full ordering and rollback guidance in the dedicated layer-chaining guide.
+- **Controls say what actually happens:** Fractional targets, multiplier ceilings, live changes, and restart-only settings are explained directly. Flow Scale, Performance Mode, and GPU selection now carry clear restart guidance.
+- **A cleaner Game Mode interface:** Spacing, section hierarchy, manual overrides, installation messaging, compatibility controls, and the Leviathan Rising release identity make the plugin feel calmer and easier to scan.
+- **Full Simplified Chinese support:** Steam language names and locale variants now resolve consistently to the new complete translation.
+- **Armada fails safe:** Native AArch64 rendering and incompatible Flatpak overrides remain disabled until a reproducible Renderer passes the hardware matrix, preserving the normal Armada/FEX game path.
+- **Upgrades clean up after themselves:** Wrappers are regenerated from canonical profile state, and retired or unknown settings stay inert before disappearing on the next normal save.
+- **Useful diagnostics, not log noise:** Focused collection tools expose activation, presentation, recovery, and layer ordering without enabling expensive frame-by-frame tracing during normal play.
+- **A release tested like people use it:** Expanded SteamOS, AMD FP32/FP16, packaging, backend, frontend, and Vulkan-loader validation covers real hardware and runtime boundaries—not just portable unit tests.
 
 **The Leviathan is awake. Take the helm.**
