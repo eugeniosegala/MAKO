@@ -95,7 +95,16 @@ export function ConfigurationSection({
           gap: 8px;
           width: 100%;
           min-width: 0;
-          margin: 10px 0 6px;
+          margin: 10px 0 0;
+        }
+        .MAKO_ManualOverrideFields > * {
+          margin-bottom: 0 !important;
+        }
+        .MAKO_ManualOverrideFields > * + * {
+          margin-top: 0 !important;
+        }
+        .MAKO_ManualOverrideFields > *:nth-child(3) {
+          margin-top: 4px !important;
         }
         `}
       </style>

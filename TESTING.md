@@ -69,6 +69,7 @@ The capture command requires a game name, explicit archive version label, and se
   --game-id 2050650 \
   --version "2.0.0-dev-f1f6a1c" \
   --label "fixed-adaptive-fifo-pressure" \
+  --run-index 1 \
   --session-start "2026-08-20T12:30:52+01:00" \
   --session-end "2026-08-20T12:36:25+01:00" \
   --decky-log "$HOME/homebrew/logs/Mako/<decky-log>.log" \

@@ -42,13 +42,14 @@ Close the game first so buffered diagnostics are complete, then capture before s
   --game-id 2050650 \
   --version "2.0.0-dev-f1f6a1c" \
   --label "fixed-adaptive-fifo-pressure" \
+  --run-index 1 \
   --session-start "2026-08-20T12:30:52+01:00" \
   --session-end "2026-08-20T12:36:25+01:00" \
   --decky-log "$HOME/homebrew/logs/Mako/<decky-log>.log" \
   --steam-log "$HOME/.steam/steam/logs/console-linux.txt"
 ```
 
-Required inputs are the game name, explicit archive version label, and local ISO session-start timestamp. The session end defaults to capture time. Present diagnostics, Renderer configuration, and the MAKO source checkout have sensible local defaults; Decky and Steam logs are optional and are clipped to the requested time window.
+Required inputs are the game name, explicit archive version label, and local ISO session-start timestamp. The optional run index defaults to 1 and distinguishes repeated trials of the same scenario. The session end defaults to capture time. Present diagnostics, Renderer configuration, and the MAKO source checkout have sensible local defaults; Decky and Steam logs are optional and are clipped to the requested time window.
 
 Development builds must use an explicit label such as `2.0.0-dev-f1f6a1c`. Do not archive a branch build as a released version merely because the Renderer binary reports that base version.
 
@@ -62,14 +63,15 @@ The extractor:
 4. clips optional Decky and Steam logs to the session window;
 5. derives a compact event index without altering the raw presentation evidence;
 6. records the game, session, source commit, dirty state, Renderer-reported build, operating system, architecture, GPU, refresh rate, and artifact list;
-7. rejects likely remaining credentials;
-8. writes SHA-256 checksums and atomically installs the completed run directory.
+7. creates a stable UTC run ID from the session start, scenario label, and repetition index;
+8. rejects likely remaining credentials; and
+9. writes SHA-256 checksums and atomically installs the completed run directory.
 
 An existing destination is never overwritten. A failed capture removes its staging directory and does not publish a partial run.
 
 ## Stored evidence
 
-Each run is written to `traces/<game-slug>/<version-label>/<session-id>/` in the private repository. The usual files are:
+Each run is written to `traces/<version-label>/<game-slug>/<run-id>/` in the private repository. Version-first grouping makes the test coverage for one build immediately visible. A run ID such as `20260820T113052Z-fixed-adaptive-fifo-pressure-r01` combines the UTC session start, a readable scenario label, and a repetition number. The exact local start and end timestamps remain in metadata. The usual files are:
 
 - `metadata.json`: machine-readable identity and provenance;
 - `present-diagnostics.log`: raw session-scoped MAKO Renderer evidence;
@@ -97,4 +99,4 @@ Validate the private archive after every capture:
 
 If an intentional notes or factual metadata correction changes a run, refresh its checksums with the helper in the private repository and validate again. Raw diagnostic and clipped source logs are immutable evidence and should not be rewritten.
 
-When the capture contract changes, update `scripts/capture-trace.sh` and this README in MAKO together with `schema/metadata.schema.json`, `docs/TRACE-FORMAT.md`, the notes template, and the validator in MAKO-Traces. Historical raw evidence should remain intact; use a compatible reader or factual metadata migration instead of rewriting it.
+When the capture contract changes, update `scripts/capture-trace.sh` and `TRACES.md` in MAKO together with `schema/metadata.schema.json`, `docs/TRACE-FORMAT.md`, the notes template, and the validator in MAKO-Traces. Historical raw evidence should remain intact; use a compatible reader or factual metadata migration instead of rewriting it.

@@ -4,6 +4,7 @@ import type { CSSProperties, ReactNode } from "react";
 interface MakoSectionHeaderProps {
   children: ReactNode;
   description?: ReactNode;
+  topMargin?: CSSProperties["marginTop"];
 }
 
 interface MakoReleaseIdentityProps {
@@ -71,17 +72,19 @@ export function MakoReleaseIdentity({ version, codename }: MakoReleaseIdentityPr
   );
 }
 
-export function MakoSectionHeader({ children, description }: MakoSectionHeaderProps) {
+export function MakoSectionHeader({
+  children,
+  description,
+  topMargin = "32px"
+}: MakoSectionHeaderProps) {
   return (
     <PanelSectionRow>
       <div
         style={{
           width: "100%",
           boxSizing: "border-box",
-          marginTop: "24px",
+          marginTop: topMargin,
           marginBottom: "6px",
-          paddingBottom: "8px",
-          borderBottom: "1px solid rgba(77, 170, 190, 0.28)",
           color: "#edf8fb",
           fontSize: "14px",
           fontWeight: "600",
@@ -89,11 +92,18 @@ export function MakoSectionHeader({ children, description }: MakoSectionHeaderPr
           letterSpacing: "0.15px"
         }}
       >
-        <div>{children}</div>
+        <div
+          style={{
+            paddingBottom: "8px",
+            borderBottom: "1px solid rgba(77, 170, 190, 0.28)"
+          }}
+        >
+          {children}
+        </div>
         {description && (
           <div
             style={{
-              marginTop: "4px",
+              marginTop: "8px",
               color: "#aebfc5",
               fontSize: "11px",
               fontWeight: "400",

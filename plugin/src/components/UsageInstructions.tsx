@@ -17,7 +17,7 @@ export function UsageInstructions() {
 
   return (
     <>
-      <MakoSectionHeader>
+      <MakoSectionHeader topMargin="24px">
         {t("USAGE_TITLE", "Usage Instructions")}
       </MakoSectionHeader>
 

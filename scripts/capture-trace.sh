@@ -17,6 +17,7 @@ Required:
 Options:
   --game-id ID             Store/application identifier
   --label LABEL            Short scenario label; defaults to playthrough
+  --run-index NUMBER       Repetition number for this scenario; defaults to 1
   --session-end TIME       Local ISO timestamp; defaults to the capture time
   --diagnostics PATH       Present diagnostics source
   --decky-log PATH         Decky log to clip to the session window
@@ -86,6 +87,7 @@ game=''
 game_id=''
 version=''
 label='playthrough'
+run_index=1
 session_start=''
 session_end=''
 diagnostics="$HOME/.config/mako-render/present-diagnostics.log"
@@ -118,6 +120,11 @@ while [[ $# -gt 0 ]]; do
     --label)
       require_value "$@"
       label=$2
+      shift 2
+      ;;
+    --run-index)
+      require_value "$@"
+      run_index=$2
       shift 2
       ;;
     --session-start)
@@ -178,6 +185,7 @@ done
 [[ -n "$game" ]] || die '--game is required'
 [[ -n "$version" ]] || die '--version is required'
 [[ -n "$session_start" ]] || die '--session-start is required'
+[[ "$run_index" =~ ^[1-9][0-9]{0,2}$ ]] || die '--run-index must be an integer from 1 to 999'
 [[ -r "$diagnostics" ]] || die "diagnostics file is not readable: $diagnostics"
 [[ -s "$diagnostics" ]] || die "diagnostics file is empty: $diagnostics"
 [[ -r "$config" ]] || die "configuration file is not readable: $config"
@@ -210,9 +218,11 @@ label_slug=$(slugify "$label")
 [[ "$version_component" == "$version" ]] || die 'version must contain only letters, numbers, dots, underscores, and dashes'
 [[ -n "$label_slug" ]] || die 'label does not produce a safe path component'
 
-session_component=${session_start//:/-}
-session_component=$(safe_component "$session_component-$label_slug")
-destination="$trace_repo/traces/$game_slug/$version_component/$session_component"
+utc_start=$(date --date="$session_start" --utc '+%Y%m%dT%H%M%SZ') || die "invalid ISO timestamp: $session_start"
+run_index_number=$((10#$run_index))
+printf -v run_component 'r%02d' "$run_index_number"
+session_component="$utc_start-$label_slug-$run_component"
+destination="$trace_repo/traces/$version_component/$game_slug/$session_component"
 [[ ! -e "$destination" ]] || die "capture already exists: $destination"
 
 mkdir -p -- "$(dirname -- "$destination")"
@@ -241,6 +251,7 @@ else
     printf '# %s — %s\n\n' "$game" "$label"
     printf '## Test conditions\n\n'
     printf -- '- Version: `%s`\n' "$version"
+    printf -- '- Run: `%s` (index `%d`)\n' "$session_component" "$run_index_number"
     printf -- '- Session: `%s` to `%s`\n' "$session_start" "$session_end"
     if [[ -n "$game_id" ]]; then
       printf -- '- Game ID: `%s`\n' "$game_id"
@@ -285,6 +296,7 @@ jq -n \
   --arg game_id "$game_id" \
   --arg version_label "$version" \
   --arg label "$label" \
+  --arg session_id "$session_component" \
   --arg started_at "$session_start" \
   --arg ended_at "$session_end" \
   --arg captured_at "$(date --iso-8601=seconds)" \
@@ -296,14 +308,15 @@ jq -n \
   --arg os "$os_name" \
   --arg gpu "$gpu" \
   --arg refresh_hz "$refresh_hz" \
+  --argjson run_index "$run_index_number" \
   --argjson source_dirty "$source_dirty" \
   --argjson artifacts "$artifacts_json" \
   '{
-    schema_version: 1,
+    schema_version: 2,
     game: {name: $game_name, slug: $game_slug, id: $game_id},
     version_label: $version_label,
     renderer_reported_build: $renderer_build,
-    session: {label: $label, started_at: $started_at, ended_at: $ended_at, captured_at: $captured_at},
+    session: {id: $session_id, label: $label, run_index: $run_index, started_at: $started_at, ended_at: $ended_at, captured_at: $captured_at},
     source: {path: $source_path, branch: $source_branch, commit: $source_commit, dirty: $source_dirty},
     host: {architecture: $arch, os: $os, gpu: $gpu, refresh_hz: $refresh_hz},
     artifacts: $artifacts
