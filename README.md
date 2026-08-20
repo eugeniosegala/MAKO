@@ -54,6 +54,8 @@ The project consists of two closely integrated components:
 - **MAKO Decky** is the Decky Loader component, providing per-game controls, installation, updates, Flatpak preparation, and game launch integration.
 - **MAKO Renderer** is the Vulkan layer that provides the graphics pipeline for frame generation and future scaling capabilities.
 
+Choose one launch workflow for each installation: MAKO Decky uses `mako-run`, while a directly installed MAKO Renderer uses `mako-launch`. Do not stack the two launchers or combine MAKO with another frame-generation wrapper for the same game.
+
 ## 🎮 In-game considerations
 
 <!-- prettier-ignore -->
@@ -157,15 +159,13 @@ Profiles and Steam launch options are retained. The private native engine and la
 Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
 
 1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam.
-2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download the Linux archive under **Assets**. New releases use `MAKO-Renderer-v<version>-linux.tar.xz`; the existing v2.0.0 release retains its published legacy name, `mako-render-v2.0.0-linux.tar.xz`.
+2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download `MAKO-Renderer-v<version>-linux.tar.xz` under **Assets**.
 3. Extract it into your user-local prefix:
 
 ```bash
 mkdir -p ~/.local
 tar -xJf MAKO-Renderer-v<version>-linux.tar.xz -C ~/.local
 ```
-
-For v2.0.0, substitute its legacy filename from step 2 in the extraction command.
 
 4. Open **MAKO Renderer Configuration** from the application launcher or run `~/.local/bin/mako-ui`.
 5. Add a game profile, then activate MAKO only for that game. In Steam launch options, use:
@@ -174,7 +174,7 @@ For v2.0.0, substitute its legacy filename from step 2 in the extraction command
 ~/.local/bin/mako-launch %command%
 ```
 
-`mako-launch` activates MAKO for that game through the same private Vulkan layer boundary proven by MAKO v2. It prevents Steam's Vulkan Fossilize/overlay hooks, competing frame-generation layers, and system-wide presentation hooks from bypassing MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. Game-local integrations such as OptiScaler are not removed, but use only one frame-generation implementation per game. The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications need the separate runtime extension. See the dedicated [MAKO Renderer installation and usage guide](engine/README.md) for Qt requirements, manual configuration, validation, benchmarking, Flatpak setup, source builds, and troubleshooting.
+`mako-launch` activates MAKO for that game through its private Vulkan layer boundary. It prevents Steam's Vulkan Fossilize/overlay hooks, competing frame-generation layers, and system-wide presentation hooks from bypassing MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. Game-local integrations such as OptiScaler are not removed, but use only one frame-generation implementation per game. The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications need the separate runtime extension. See the dedicated [MAKO Renderer installation and usage guide](engine/README.md) for Qt requirements, manual configuration, validation, benchmarking, Flatpak setup, source builds, and troubleshooting.
 
 ## Documentation
 

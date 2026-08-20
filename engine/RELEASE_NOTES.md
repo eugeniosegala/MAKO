@@ -1,4 +1,4 @@
-## What's new in MAKO Renderer v2.0.0
+## What's new in MAKO Renderer v2.1.0
 
 ![Leviathan Rising — a Renaissance vision of the MAKO Leviathan](https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/leviathan-rising.png)
 
@@ -6,32 +6,16 @@
 
 > **The deep has awakened.**
 
-MAKO Renderer 2.0 rises as the adaptive, opt-in Vulkan engine behind MAKO's SteamOS frame-generation experience. Leviathan Rising combines new control with a major presentation and lifecycle hardening pass: broader deployment coverage, safer failure behaviour, clearer diagnostics, and an engine that responds to the game instead of blindly chasing a fixed workload. Frame generation is available now; scaling is coming soon and is not part of this release.
+MAKO Renderer 2.1 introduces Adaptive Frame Generation alongside a substantial reliability, compatibility, and packaging update. Frame generation is available now; scaling is coming soon.
 
-### Take command
+### What's new
 
-- **Adaptive Frame Generation:** Target 30 to 240 FPS with a 2x to 4x ceiling, Smooth Cadence, and the optional Adaptive FPS Cap. When a game becomes GPU- or compositor-bound, Adaptive reduces generated-frame work instead of forcing a fixed amount of interpolation. That can improve performance and frame pacing; test it per game.
-- **Live tuning with safe boundaries:** Frame Generation, Fixed or Adaptive mode, supported multiplier changes, Target FPS, cadence, and FPS caps update while the game runs. Changes that require different GPU resources remain restart-only.
-- **A complete Desktop Mode helm:** The optional `mako-ui` provides scrollable Fixed, Adaptive, cap, quality, performance, GPU, DLL, and profile controls. Launch it as **MAKO Renderer Configuration** or run `~/.local/bin/mako-ui`.
-- **One-command standalone activation:** The new `mako-launch` helper activates MAKO for one native game through the proven private Vulkan layer boundary, blocks Steam's Vulkan Fossilize/overlay hooks and competing presentation layers from bypassing its swapchain interception, selects the validated SDR lane, and keeps Gamescope and the Steam/Game Mode interface active outside that application chain. Advanced variables such as `MAKO_PROFILE` can be placed before the helper and are forwarded unchanged.
-- **Explicit profile selection:** `MAKO_PROFILE` can select a named renderer profile for launchers, scripts, and advanced setups without changing the saved default.
-
-### Built to surface safely
-
-- **A hardened presentation pipeline:** Swapchain creation now rolls back partial state, imported Vulkan resources close safely on failures, idle and teardown paths respond promptly, and Gamescope HDR feedback no longer holds up shutdown. Standard Vulkan proc-address entrypoints are exported for compatibility with negotiated and traditional loader paths, repeated instance lifetimes reinitialise layer state safely, and presentation and diagnostics were separated into focused components to make future changes easier to verify.
-- **Original-frame fallback:** If no profile matches, or MAKO cannot initialise its private frame-generation backend for a supported presentation path, the layer now preserves the application's native presentation instead of turning an optional enhancement into a launch failure.
-- **AMD robustness without an AMD-only assumption:** On compatible drivers, MAKO enables `robustImageAccess2` only when the GPU advertises the complete required feature. Unsupported GPUs and drivers retain the established rendering path; robust buffer access and null descriptors are not forced.
-- **SteamOS pacing restored:** MAKO-managed launches suppress Gamescope WSI for the game process because its upper FIFO policy and MAKO's generated/original sequence otherwise throttle each other. The Gamescope compositor itself remains active.
-- **Centralized HDR/WSI boundary:** Renderer and Decky launch paths now share one process-start contract: isolating Gamescope WSI also closes the unavailable HDR bridge, while the implemented HDR colour pipeline and its future validation lane are documented separately from supported SDR behavior.
-- **Proven swapchain ownership:** MAKO restores v2's private SDR layer directory so Steam's Vulkan Fossilize/overlay hooks and system-wide implicit layers cannot silently bypass MAKO's device and swapchain hooks. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain, and game-local integrations such as OptiScaler are not removed. Known competing frame-generation layers remain disabled; use only one frame-generation implementation per game.
-- **Consistent diagnostics:** New public engine records use the stable **MAKO Renderer** name, while diagnostic collection remains able to recognise logs from older installations.
-- **Predictable legacy-profile handling:** Unknown settings in the current config format are inert, and a canonical UI or Decky save removes them. Settings whose meaning must survive are carried forward only through explicit, tested migrations.
-
-### Forged for the full fleet
-
-- **Real 64-bit and 32-bit x86 delivery:** Host packages contain layers for both x86 process architectures, alongside dual-architecture Flatpak extensions for Freedesktop 23.08, 24.08, and 25.08. Native AArch64/Armada packages are not part of this release.
-- **Broader Qt compatibility:** The optional UI now accepts Qt 6.2 or newer, including Ubuntu 24.04's system Qt 6.4. Release packaging rejects newer accidental ABI requirements and offers a reproducible Qt 6.2 build through Docker or Podman when the build host only has a newer Qt.
-- **Visual regression evidence on AMD:** A deterministic odd-sized scene checks frame boundaries, motion and disocclusion, severe focus errors, and thin detail in both FP32 and FP16. The generated comparison images and metrics are retained with the build, and `robustImageAccess2` status is reported explicitly.
-- **Stronger release gates:** GCC and Clang suites, AddressSanitizer and UndefinedBehaviorSanitizer coverage, adaptive-scheduler and runtime-transition tests, Vulkan-loader smoke tests, package-layout and checksum verification, and native SteamOS AMD validation now guard the release path.
+- **Adaptive Frame Generation:** Target 30 to 240 FPS with a 2x to 4x ceiling, or use the optional Steady 2x FPS Cap for a consistent 2x cadence. Fixed 2x to 4x generation remains available.
+- **Live configuration:** Frame Generation mode, supported multipliers, Target FPS, cadence, and FPS-cap settings can update while a game is running. Options that require new GPU resources remain restart-only.
+- **Improved standalone use:** The new `mako-launch` helper provides one-command activation, `MAKO_PROFILE` selects a saved profile, and the optional Qt interface exposes the complete Renderer configuration.
+- **More reliable presentation:** Swapchain creation, teardown, recovery, Gamescope pacing, and Vulkan layer ownership have been hardened. If MAKO cannot initialize safely, supported paths preserve the game's original presentation instead of turning frame generation into a launch failure.
+- **Safe AMD robustness:** `robustImageAccess2` is enabled only when the complete required feature is advertised by the driver. Unsupported hardware keeps the established fallback path.
+- **Broader distribution support:** Host packages now contain genuine 64-bit and 32-bit x86 layers, with matching Flatpak extensions for Freedesktop 23.08, 24.08, and 25.08. The optional UI supports Qt 6.2 and newer, including Ubuntu 24.04's Qt 6.4.
+- **Stronger validation:** New scheduler, runtime-transition, sanitizer, package, Vulkan-loader, AMD FP32/FP16 image-quality, and native SteamOS checks protect the release path.
 
 **Leviathan Rising is only the beginning.**

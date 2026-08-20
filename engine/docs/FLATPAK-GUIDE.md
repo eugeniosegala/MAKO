@@ -6,8 +6,6 @@ MAKO Renderer ships separate Vulkan runtime extensions for Freedesktop 23.08, 24
 
 Extract a MAKO Renderer Flatpak archive and install the matching bundle:
 
-New releases use the filename below. The existing v2.0.0 release retains its published legacy name, `mako-render-v2.0.0-flatpaks.tar.xz`; substitute that name when installing v2.0.0.
-
 ```bash
 tar -xJf MAKO-Renderer-v<version>-flatpaks.tar.xz
 flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.flatpak

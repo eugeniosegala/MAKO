@@ -33,7 +33,7 @@ See the [main MAKO installation guide](../README.md#install-and-use) for the com
 ### Direct Linux installation
 
 1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` but does not bundle, copy, or modify it.
-2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download its versioned Linux archive under **Assets**. New releases use `MAKO-Renderer-v<version>-linux.tar.xz`; the existing v2.0.0 release retains its published legacy name, `mako-render-v2.0.0-linux.tar.xz`.
+2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.0.0) and download `MAKO-Renderer-v<version>-linux.tar.xz` under **Assets**.
 3. Optionally save the archive's file list so you know exactly what was installed, then extract it into your user-local prefix:
 
 ```bash
@@ -41,8 +41,6 @@ mkdir -p ~/.local
 tar -tJf MAKO-Renderer-v<version>-linux.tar.xz > MAKO-Renderer-v<version>-files.txt
 tar -xJf MAKO-Renderer-v<version>-linux.tar.xz -C ~/.local
 ```
-
-For v2.0.0, substitute its legacy filename from step 2 in both commands.
 
 The archive installs `mako-ui`, `mako-cli`, `mako-launch`, `mako-diagnostics`, XDG desktop files, Vulkan manifests, and matching 64-bit and 32-bit layers. The Vulkan loader selects the correct layer for each game; the UI, CLI, launcher, and diagnostics helper remain 64-bit applications or scripts. If `~/.local/bin` is not on your `PATH`, run tools with their full paths, such as `~/.local/bin/mako-ui`.
 
@@ -130,7 +128,7 @@ On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from
     ~/.local/bin/mako-launch your-game-command
     ```
 
-4. Start the game normally. `mako-launch` enables MAKO only for that process and selects its installed private manifest directory, matching MAKO v2's proven SDR boundary. Steam's Vulkan Fossilize/overlay hooks, system-wide implicit presentation layers, and installed LSFG-VK 1.x or 2.x frame-generation layers cannot bypass MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. The launcher keeps the unfinished HDR path disabled because the isolated Gamescope WSI layer cannot be reintroduced after Vulkan starts. Game-local integrations such as OptiScaler are unchanged; use only one frame-generation implementation per game. See [WSI isolation](docs/WSI-ISOLATION.md) and the [HDR pipeline architecture](docs/HDR-PIPELINE.md) for the complete contract.
+4. Start the game normally. `mako-launch` enables MAKO only for that process and selects its installed private manifest directory and supported SDR presentation boundary. Steam's Vulkan Fossilize/overlay hooks, system-wide implicit presentation layers, and installed LSFG-VK frame-generation layers cannot bypass MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. The launcher keeps the unfinished HDR path disabled because the isolated Gamescope WSI layer cannot be reintroduced after Vulkan starts. Game-local integrations such as OptiScaler are unchanged; use only one frame-generation implementation per game. See [WSI isolation](docs/WSI-ISOLATION.md) and the [HDR pipeline architecture](docs/HDR-PIPELINE.md) for the complete contract.
 
 Set an advanced launch variable before the helper and it is passed to the game unchanged. For example, this selects a named profile without changing the saved default:
 

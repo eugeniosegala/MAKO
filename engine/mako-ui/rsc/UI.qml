@@ -237,7 +237,7 @@ ApplicationWindow {
 
                     GroupEntry {
                         title: "Adaptive Frame Generation"
-                        description: "Vary generated frames to approach a target framerate (maximum 4x)"
+                        description: "Use fractional multipliers automatically to approach Target FPS; leave Steady 2x FPS Cap off for fractional generation"
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -249,7 +249,7 @@ ApplicationWindow {
 
                     GroupEntry {
                         title: "Target FPS"
-                        description: "Desired output; the multiplier limit may intentionally keep it below target"
+                        description: "Desired output rate; for example, 60 to 90 FPS uses an average 1.5x cadence"
                         enabled: backend.adaptive
 
                         SpinBox {
@@ -264,8 +264,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Adaptive FPS Cap (" + (backend.target_fps / 2) + " FPS)"
-                        description: "Cap real FPS to half the target for a steadier 2x baseline"
+                        title: "Steady 2x FPS Cap (" + (backend.target_fps / 2) + " FPS)"
+                        description: "Off uses fractional multipliers; on caps real FPS to half the target and replaces fractional generation with a steady 2x cadence"
                         enabled: backend.adaptive
 
                         CheckBox {
@@ -278,7 +278,7 @@ ApplicationWindow {
 
                     GroupEntry {
                         title: "Maximum Adaptive Multiplier"
-                        description: "Limit interpolation to protect image quality when the real framerate falls"
+                        description: "Interpolation ceiling, not a fixed ratio; Adaptive may use lower or fractional multipliers"
                         enabled: backend.adaptive
 
                         SpinBox {
