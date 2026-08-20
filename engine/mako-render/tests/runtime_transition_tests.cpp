@@ -2,6 +2,7 @@
 
 #include "runtime_transition.hpp"
 #include "gamescope_hdr_feedback.hpp"
+#include "presentation_policy.hpp"
 
 #include <chrono>
 #include <cstdlib>
@@ -24,14 +25,24 @@ namespace {
 int main() {
     const auto start = StableBooleanFeedback::TimePoint{};
 
-    expect(hdrExposureDisabledFromEnvironment("1", "1"),
+    expect(resolvePresentationEnvironmentPolicy("1", "1", nullptr)
+            .hdrExposureDisabled,
         "the explicit SDR boundary must override DXVK HDR exposure");
-    expect(hdrExposureDisabledFromEnvironment(nullptr, "0"),
+    expect(resolvePresentationEnvironmentPolicy(nullptr, "0", nullptr)
+            .hdrExposureDisabled,
         "DXVK_HDR=0 must select the SDR boundary");
-    expect(!hdrExposureDisabledFromEnvironment("0", "1"),
+    expect(!resolvePresentationEnvironmentPolicy("0", "1", nullptr)
+            .hdrExposureDisabled,
         "an explicit HDR test must remain possible");
-    expect(!hdrExposureDisabledFromEnvironment(nullptr, nullptr),
+    expect(!resolvePresentationEnvironmentPolicy(nullptr, nullptr, nullptr)
+            .hdrExposureDisabled,
         "an absent DXVK capability signal must not invent an HDR decision");
+    const auto isolatedWsi = resolvePresentationEnvironmentPolicy(
+        "0", "1", "1"
+    );
+    expect(isolatedWsi.gamescopeWsiDisabled &&
+            isolatedWsi.hdrExposureDisabled,
+        "WSI isolation must also close the unavailable HDR bridge");
 
     expect(gamescopeFeedbackPollInterval(false, false) == 1s,
         "ordinary desktop feedback polling should remain idle");

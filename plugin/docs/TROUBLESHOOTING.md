@@ -4,7 +4,7 @@ These instructions apply to both published MAKO Decky ZIPs and local developer b
 
 ## HDR is unavailable by design
 
-HDR frame generation is unavailable in this release. **Disable HDR (Restart)** is checked, read-only, and enforced by the backend. MAKO-managed launches keep the launcher's normal DXVK policy, use MAKO's deterministic manifest directory, and disable Gamescope WSI for the game process so MAKO owns the swapchain and a single presentation clock. The Gamescope compositor remains active. An HDR option being unavailable in a game is expected and does not mean the ZIP installed incorrectly.
+HDR frame generation is unavailable in this release. **Disable HDR (Restart)** is checked, read-only, and enforced by the backend. MAKO-managed launches disable HDR exposure, remove inherited `DXVK_HDR` activation, use MAKO's deterministic manifest directory, and disable Gamescope WSI for the game process so MAKO owns the swapchain and a single presentation clock. The Gamescope compositor remains active. An HDR option being unavailable in a game is expected and does not mean the ZIP installed incorrectly. Do not remove those guards as a general workaround; see the Renderer documentation for [WSI isolation](../../engine/docs/WSI-ISOLATION.md) and the [HDR pipeline](../../engine/docs/HDR-PIPELINE.md).
 
 Use **Disable MAKO Renderer on Next Launch** and restart the game if you need to test whether the layer is the cause of a startup or presentation problem.
 

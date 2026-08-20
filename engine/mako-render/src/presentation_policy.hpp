@@ -9,8 +9,39 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <string_view>
 
 namespace mako::layer {
+
+    [[nodiscard]] inline bool environmentFlagEnabled(const char* value) {
+        if (!value)
+            return false;
+        const std::string_view flag(value);
+        return flag == "1" || flag == "true" ||
+            flag == "yes" || flag == "on";
+    }
+
+    /// Process-start policy shared by HDR classification and presentation
+    /// transport selection. Gamescope WSI membership is fixed before Vulkan
+    /// instance creation, so an isolated WSI process cannot safely enter the
+    /// Gamescope HDR bridge later, even if compositor feedback reports HDR.
+    struct PresentationEnvironmentPolicy {
+        bool gamescopeWsiDisabled{false};
+        bool hdrExposureDisabled{false};
+    };
+
+    [[nodiscard]] inline PresentationEnvironmentPolicy
+    resolvePresentationEnvironmentPolicy(
+            const char* explicitHdrDisable, const char* dxvkHdr,
+            const char* gamescopeWsiDisable) {
+        const bool wsiDisabled = environmentFlagEnabled(gamescopeWsiDisable);
+        return {
+            .gamescopeWsiDisabled = wsiDisabled,
+            .hdrExposureDisabled = wsiDisabled ||
+                environmentFlagEnabled(explicitHdrDisable) ||
+                (dxvkHdr && !environmentFlagEnabled(dxvkHdr)),
+        };
+    }
 
     /// SteamOS/Gamescope integration boundary.
     ///
@@ -38,9 +69,12 @@ namespace mako::layer {
     /// rebuild colour resources; it must not change the transport underneath
     /// an already-created VkSwapchainKHR.
     [[nodiscard]] inline PresentationTransport selectPresentationTransport(
-            const bool gamescopeManaged,
-            const bool hdrCapableSwapchain) {
-        return gamescopeManaged && hdrCapableSwapchain
+            const bool gamescopeDetected,
+            const bool hdrCapableSwapchain,
+            const PresentationEnvironmentPolicy& environment) {
+        return gamescopeDetected && hdrCapableSwapchain &&
+                !environment.gamescopeWsiDisabled &&
+                !environment.hdrExposureDisabled
             ? PresentationTransport::GamescopeHdr
             : PresentationTransport::OrderedSdr;
     }
@@ -51,9 +85,9 @@ namespace mako::layer {
     /// a backend failure. Ordered/legacy paths retain their configured ceiling
     /// because their synchronous FIFO contract is intentionally different.
     [[nodiscard]] inline uint64_t generatedImageAcquireTimeout(
-            const bool gamescopeManaged,
+            const bool gamescopeHdrTransport,
             const std::optional<uint64_t> configuredTimeout) {
-        if (gamescopeManaged)
+        if (gamescopeHdrTransport)
             return 0;
         return configuredTimeout.value_or(std::numeric_limits<uint64_t>::max());
     }

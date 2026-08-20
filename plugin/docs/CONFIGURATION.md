@@ -29,6 +29,21 @@ Frame-generation, quality, GPU, and matched-process settings belong to the selec
 
 The Decky dropdown is an editor selection, not a runtime override. Outside a game, choose any saved profile and it remains available for editing without affecting another game's launch. When a live game is detected, MAKO follows its matching profile, or Default if no match exists. On game exit, the runtime and editor return to Default once; after the controls unlock, an offline selection stays in place until another game starts or the plugin is reopened.
 
+### Upgrade and legacy-option safety
+
+MAKO Decky treats the current shared configuration schema as an allowlist. An
+unknown or retired key in a manually copied Renderer profile is ignored, and it
+cannot become a launch-wrapper environment variable. Reading the profile alone
+does not change its file; the next Decky save or installation merge rewrites it
+in canonical form and removes unknown keys.
+
+Settings that still carry useful meaning are migrated explicitly before their
+old representation is removed. This is safer than preserving arbitrary legacy
+variables indefinitely, because a stale option cannot silently reactivate or
+acquire a different meaning later. Profiles that still use a supported format
+remain safe to open in an older release, but saving them there can discard
+settings that older MAKO does not understand.
+
 ## Quality and matching
 
 - **Flow Scale:** 0.25–1.0. Lower values reduce GPU cost; higher values favour optical-flow quality.
@@ -46,6 +61,6 @@ The package includes 64-bit and 32-bit Vulkan layers. Vulkan chooses the right l
 - **Zink:** Vulkan-based OpenGL path for OpenGL games.
 - **Force ALSA Audio (Restart):** Forces the native SDL ALSA driver, disables Wine/Proton's Pulse driver, and enables its built-in ALSA driver for the selected profile. This may improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds. Leave it disabled by default. Turning it off removes MAKO's audio override entirely and restores normal Steam/Proton behaviour; restart the game after changing it.
 
-HDR frame generation is unavailable in this release. **Disable HDR (Restart)** is intentionally checked and read-only: MAKO Decky keeps the Renderer on its validated SDR path without changing the launcher's normal DXVK policy. MAKO-managed launches use v2's proven private MAKO manifest directory and disable Gamescope WSI for the game process so the Renderer owns the swapchain and a single presentation clock. Steam's Vulkan Fossilize/overlay hooks and system-wide implicit presentation layers are excluded from that application chain; Gamescope and the Steam/Game Mode interface remain active outside it. Do not add HDR environment variables manually for ordinary launches. Use **Disable MAKO Renderer on Next Launch** if the layer itself is the suspected problem.
+HDR frame generation is unavailable in this release. **Disable HDR (Restart)** is intentionally checked and read-only: MAKO Decky selects the Renderer's validated SDR lane, disables HDR exposure, and removes inherited `DXVK_HDR` activation. MAKO-managed launches use v2's proven private MAKO manifest directory and disable Gamescope WSI for the game process so the Renderer owns the swapchain and a single presentation clock. Steam's Vulkan Fossilize/overlay hooks and system-wide implicit presentation layers are excluded from that application chain; Gamescope and the Steam/Game Mode interface remain active outside it. Do not add HDR environment variables manually for ordinary launches. Use **Disable MAKO Renderer on Next Launch** if the layer itself is the suspected problem. The underlying contracts are documented in the Renderer guides for [WSI isolation](../../engine/docs/WSI-ISOLATION.md) and the [HDR pipeline](../../engine/docs/HDR-PIPELINE.md).
 
 See [Troubleshooting](TROUBLESHOOTING.md) for diagnostics and update recovery.

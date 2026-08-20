@@ -130,7 +130,7 @@ On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from
     ~/.local/bin/mako-launch your-game-command
     ```
 
-4. Start the game normally. `mako-launch` enables MAKO only for that process and selects its installed private manifest directory, matching MAKO v2's proven SDR boundary. Steam's Vulkan Fossilize/overlay hooks, system-wide implicit presentation layers, and installed LSFG-VK 1.x or 2.x frame-generation layers cannot bypass MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. Game-local integrations such as OptiScaler are unchanged; use only one frame-generation implementation per game.
+4. Start the game normally. `mako-launch` enables MAKO only for that process and selects its installed private manifest directory, matching MAKO v2's proven SDR boundary. Steam's Vulkan Fossilize/overlay hooks, system-wide implicit presentation layers, and installed LSFG-VK 1.x or 2.x frame-generation layers cannot bypass MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. The launcher keeps the unfinished HDR path disabled because the isolated Gamescope WSI layer cannot be reintroduced after Vulkan starts. Game-local integrations such as OptiScaler are unchanged; use only one frame-generation implementation per game. See [WSI isolation](docs/WSI-ISOLATION.md) and the [HDR pipeline architecture](docs/HDR-PIPELINE.md) for the complete contract.
 
 Set an advanced launch variable before the helper and it is passed to the game unchanged. For example, this selects a named profile without changing the saved default:
 
@@ -229,6 +229,8 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 ## More documentation
 
 - [Configuration](docs/CONFIGURATION.md): profiles, frame-generation controls, Adaptive mode, and environment variables.
+- [WSI isolation](docs/WSI-ISOLATION.md): private Vulkan discovery, Gamescope presentation ownership, tradeoffs, diagnostics, and future HDR constraints.
+- [HDR pipeline architecture](docs/HDR-PIPELINE.md): evidence, colour classification, split transport/model formats, fallbacks, live transitions, and validation requirements.
 - [Flatpak guide](docs/FLATPAK-GUIDE.md): runtime extensions and direct Flatpak application overrides.
 - [Building from Source](docs/BUILDING-FROM-SOURCE.md): prerequisites, SteamOS builds, and packaging.
 - [Troubleshooting](docs/TROUBLESHOOTING.md): activation, configuration, and presentation diagnostics.

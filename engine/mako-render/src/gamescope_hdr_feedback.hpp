@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "presentation_policy.hpp"
+
 #include <algorithm>
 #include <chrono>
 #include <memory>
@@ -12,23 +14,6 @@
 #include <vector>
 
 namespace mako::layer {
-
-    [[nodiscard]] inline bool environmentFlagEnabled(const char* value) {
-        if (!value)
-            return false;
-        const std::string_view flag(value);
-        return flag == "1" || flag == "true" ||
-            flag == "yes" || flag == "on";
-    }
-
-    /// The plugin's restart-time SDR boundary is authoritative even when
-    /// Gamescope or DXVK exposes HDR capability. DXVK_HDR=0 is also
-    /// conclusively SDR, while an absent DXVK_HDR alone does not force a mode.
-    [[nodiscard]] inline bool hdrExposureDisabledFromEnvironment(
-            const char* explicitDisable, const char* dxvkHdr) {
-        return environmentFlagEnabled(explicitDisable) ||
-            (dxvkHdr && !environmentFlagEnabled(dxvkHdr));
-    }
 
     struct GamescopeHdrFeedbackSample {
         std::optional<bool> active;
@@ -138,7 +123,9 @@ namespace mako::layer {
     /// presentation path.
     class GamescopeHdrFeedbackReader {
     public:
-        GamescopeHdrFeedbackReader();
+        explicit GamescopeHdrFeedbackReader(
+            const PresentationEnvironmentPolicy& presentationEnvironment
+        );
         ~GamescopeHdrFeedbackReader();
 
         GamescopeHdrFeedbackReader(const GamescopeHdrFeedbackReader&) = delete;

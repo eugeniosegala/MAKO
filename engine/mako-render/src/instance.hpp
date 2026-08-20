@@ -92,11 +92,11 @@ namespace mako::layer {
 
         ls::lazy<backend::Instance> backend;
         std::unordered_map<VkSwapchainKHR, Swapchain> swapchains;
+        PresentationEnvironmentPolicy presentationEnvironment;
         GamescopeHdrFeedbackReader hdrFeedbackReader;
         StableBooleanFeedback hdrFeedback;
         std::optional<bool> gamescopeHdrActive;
-        bool hdrExposureDisabled{false};
-        bool gamescopeManaged{false};
+        bool gamescopeDetected{false};
         std::optional<uint32_t> gamescopeRefreshHz;
         std::optional<bool> lastHdrFeedbackSample;
         std::string lastHdrActivationSource;

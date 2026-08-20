@@ -13,11 +13,15 @@ from .config_schema import ConfigurationManager
 from .constants import (
     BIN_DIR,
     COMPETING_LSFG_DISABLE_ENVS,
+    DXVK_HDR_ENV,
     FLATPAK_23_08_FILENAME,
     FLATPAK_24_08_FILENAME,
     FLATPAK_25_08_FILENAME,
     FLATPAK_EXTENSION_NAME,
     FLATPAK_IMPLICIT_LAYER_DIR,
+    GAMESCOPE_WSI_DISABLE_ENV,
+    GAMESCOPE_WSI_ENABLE_ENV,
+    HDR_EXPOSURE_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
 )
 from .types import BaseResponse
@@ -38,8 +42,10 @@ _LAYER_ENVIRONMENT_VARIABLES = (
     "MAKO_CONFIG",
     MAKO_LAYER_ENABLE_ENV,
     *COMPETING_LSFG_DISABLE_ENVS,
-    "DISABLE_GAMESCOPE_WSI",
-    "ENABLE_GAMESCOPE_WSI",
+    GAMESCOPE_WSI_DISABLE_ENV,
+    GAMESCOPE_WSI_ENABLE_ENV,
+    HDR_EXPOSURE_DISABLE_ENV,
+    DXVK_HDR_ENV,
     "VK_IMPLICIT_LAYER_PATH",
     "VK_ADD_IMPLICIT_LAYER_PATH",
 )
@@ -579,8 +585,10 @@ class FlatpakService(BaseService):
                         environment_values.get(variable) == "1"
                         for variable in COMPETING_LSFG_DISABLE_ENVS
                     )
-                    and environment_values.get("DISABLE_GAMESCOPE_WSI") == "1"
-                    and not environment_values.get("ENABLE_GAMESCOPE_WSI")
+                    and environment_values.get(GAMESCOPE_WSI_DISABLE_ENV) == "1"
+                    and not environment_values.get(GAMESCOPE_WSI_ENABLE_ENV)
+                    and environment_values.get(HDR_EXPOSURE_DISABLE_ENV) == "1"
+                    and not environment_values.get(DXVK_HDR_ENV)
                     and compatible_layer_path
                 )
             )
@@ -729,8 +737,10 @@ class FlatpakService(BaseService):
                         f"--env={variable}=1"
                         for variable in COMPETING_LSFG_DISABLE_ENVS
                     ),
-                    "--env=DISABLE_GAMESCOPE_WSI=1",
-                    "--unset-env=ENABLE_GAMESCOPE_WSI",
+                    f"--env={GAMESCOPE_WSI_DISABLE_ENV}=1",
+                    f"--unset-env={GAMESCOPE_WSI_ENABLE_ENV}",
+                    f"--env={HDR_EXPOSURE_DISABLE_ENV}=1",
+                    f"--unset-env={DXVK_HDR_ENV}",
                     *layer_environment,
                 ]
 

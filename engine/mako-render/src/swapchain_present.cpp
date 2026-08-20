@@ -788,7 +788,7 @@ VkResult Swapchain::presentGeneratedFrames(
 
             result = this->presentOriginalImage(
                 invocation, fallbackSemaphore.handle(),
-                this->gamescopeManaged || i == 0
+                this->gamescopeDetected || i == 0
                     ? invocation.nextChain : nullptr
             );
             if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
@@ -883,7 +883,7 @@ VkResult Swapchain::presentGeneratedFrames(
 
         const VkPresentInfoKHR presentInfo{
             .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
-            .pNext = !this->gamescopeManaged && i == 0
+            .pNext = !this->gamescopeDetected && i == 0
                 ? invocation.nextChain : nullptr,
             .waitSemaphoreCount = 1,
             .pWaitSemaphores = &postCopy.first.handle(),
@@ -913,7 +913,7 @@ VkResult Swapchain::presentGeneratedFrames(
     );
     const auto result = this->presentOriginalImage(
         invocation, lastPostCopy.second.handle(),
-        this->gamescopeManaged ? invocation.nextChain : nullptr
+        this->gamescopeDetected ? invocation.nextChain : nullptr
     );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
@@ -948,7 +948,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         this->privateOrderedTransport
     );
     const bool gamescopeHdrTransport =
-        this->gamescopeManaged && !this->privateOrderedTransport;
+        this->gamescopeDetected && !this->privateOrderedTransport;
 
     const auto limiterArrival = DiagnosticsClock::now();
     const auto limiterDeadline = this->realFramePacer.schedule(

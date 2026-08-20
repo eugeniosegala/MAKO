@@ -175,6 +175,19 @@ versions=26.08;25.08;24.08
                 ],
                 calls,
             )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
+                    "--env=MAKO_DISABLE_HDR_EXPOSURE=1",
+                    app_id,
+                ],
+                calls,
+            )
+            self.assertIn(
+                ["override", "--user", "--unset-env=DXVK_HDR", app_id],
+                calls,
+            )
 
     def test_legacy_runtime_uses_same_deterministic_layer_path(self):
         app_id = "org.DolphinEmu.dolphin-emu"
@@ -259,6 +272,8 @@ versions=26.08;25.08;24.08
                 "DISABLE_LSFGVK",
                 "DISABLE_GAMESCOPE_WSI",
                 "ENABLE_GAMESCOPE_WSI",
+                "MAKO_DISABLE_HDR_EXPOSURE",
+                "DXVK_HDR",
                 "VK_IMPLICIT_LAYER_PATH",
                 "VK_ADD_IMPLICIT_LAYER_PATH",
             ):
@@ -281,6 +296,7 @@ ENABLE_MAKO=1
 DISABLE_LSFG=1
 DISABLE_LSFGVK=1
 DISABLE_GAMESCOPE_WSI=1
+MAKO_DISABLE_HDR_EXPOSURE=1
 VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implicit_layer.d
 """
         self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
@@ -311,6 +327,17 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
         )
         self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
             legacy_additive_path
+        )
+
+        status = self.service._check_app_override_status(app_id)
+
+        self.assertFalse(status["required_env"])
+
+        missing_hdr_boundary = complete_override.replace(
+            "MAKO_DISABLE_HDR_EXPOSURE=1\n", ""
+        )
+        self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
+            missing_hdr_boundary
         )
 
         status = self.service._check_app_override_status(app_id)
@@ -366,6 +393,8 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
                 "DISABLE_LSFGVK",
                 "DISABLE_GAMESCOPE_WSI",
                 "ENABLE_GAMESCOPE_WSI",
+                "MAKO_DISABLE_HDR_EXPOSURE",
+                "DXVK_HDR",
                 "VK_IMPLICIT_LAYER_PATH",
                 "VK_ADD_IMPLICIT_LAYER_PATH",
             ):

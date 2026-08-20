@@ -70,6 +70,40 @@ class GameProfileTests(unittest.TestCase):
             self.service.config_file_path.read_text(encoding="utf-8"), original
         )
 
+    def test_unknown_profile_options_are_inert_then_removed_on_canonical_save(self):
+        content = "\n".join([
+            "version = 2",
+            '# decky-current-profile = "mako"',
+            "[global]",
+            "allow_fp16 = true",
+            'removed_global_option = "inert"',
+            "[[profile]]",
+            'name = "mako"',
+            "multiplier = 3",
+            "removed_profile_option = true",
+            "",
+        ])
+
+        profile_data = ConfigurationManager.parse_toml_content_multi_profile(content)
+
+        self.assertEqual(profile_data["profiles"]["mako"]["multiplier"], 3)
+        self.assertNotIn("removed_profile_option", profile_data["profiles"]["mako"])
+        self.assertNotIn("removed_global_option", profile_data["global_config"])
+
+        rewritten = ConfigurationManager.generate_toml_content_multi_profile(
+            profile_data
+        )
+        self.assertNotIn("removed_profile_option", rewritten)
+        self.assertNotIn("removed_global_option", rewritten)
+
+    def test_rpc_validation_discards_unknown_profile_options(self):
+        validated = ConfigurationManager.validate_config({
+            **ConfigurationManager.get_defaults(),
+            "removed_profile_option": True,
+        })
+
+        self.assertNotIn("removed_profile_option", validated)
+
     def test_capture_creates_then_updates_one_profile_for_the_same_app(self):
         previous = configuration_module.detect_processes_for_steam_app
         detected_processes = ["CoolGame.exe"]

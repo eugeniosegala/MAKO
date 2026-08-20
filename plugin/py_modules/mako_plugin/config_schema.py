@@ -31,15 +31,17 @@ CONFIG_SCHEMA: Dict[str, ConfigField] = {
     )
     for name, definition in CONFIG_SCHEMA_DEF.items()
 }
-GLOBAL_SECTION_FIELDS = {"dll", "allow_fp16"}
+GLOBAL_SECTION_FIELDS = {
+    name for name, definition in CONFIG_SCHEMA_DEF.items()
+    if definition["location"] == "global"
+}
 SCRIPT_ONLY_FIELDS = {
     name for name, definition in CONFIG_SCHEMA_DEF.items()
     if definition["location"] == "script"
 }
 PROFILE_TOML_FIELDS = {
-    "active_in", "gpu", "frame_generation_enabled", "base_fps_cap", "multiplier", "adaptive", "target_fps", "adaptive_max_multiplier",
-    "adaptive_auto_base_fps_cap", "adaptive_stable_cadence",
-    "flow_scale", "performance_mode", "pacing"
+    name for name, definition in CONFIG_SCHEMA_DEF.items()
+    if definition["location"] in {"toml", "profile"}
 }
 DEFAULT_PROFILE_NAME = "mako"
 CURRENT_PROFILE_COMMENT = re.compile(r'^\s*#\s*decky-current-profile\s*=\s*"([^"]+)"\s*$')
@@ -84,6 +86,12 @@ class ConfigurationManager:
 
     @staticmethod
     def validate_config(config: Dict[str, Any]) -> ConfigurationData:
+        """Return current-schema values and deliberately discard unknown keys.
+
+        Unknown or removed profile options must never become active implicitly.
+        A setting whose meaning changes belongs in an explicit migration before
+        canonical validation, rather than being retained as untyped state.
+        """
         validated: Dict[str, Any] = {}
         for name, field in CONFIG_SCHEMA.items():
             value = config.get(name, field.default)
@@ -198,6 +206,11 @@ class ConfigurationManager:
 
     @staticmethod
     def parse_toml_content_multi_profile(content: str) -> ProfileData:
+        """Parse supported config data without rewriting the source file.
+
+        Unknown keys in a supported format version are inert. They disappear
+        only when a MAKO editor or migration later writes canonical config.
+        """
         data = tomllib.loads(content)
         if data.get("version") == 1:
             return ConfigurationManager._profile_data_from_previous_schema(data)

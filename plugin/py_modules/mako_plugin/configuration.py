@@ -24,7 +24,11 @@ from .constants import (
     ARMADA_DEVICE_ENV,
     ARMADA_GAME_LAUNCH,
     COMPETING_LSFG_DISABLE_ENVS,
+    DXVK_HDR_ENV,
     FLATPAK_IMPLICIT_LAYER_DIR,
+    GAMESCOPE_WSI_DISABLE_ENV,
+    GAMESCOPE_WSI_ENABLE_ENV,
+    HDR_EXPOSURE_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
 )
@@ -46,8 +50,8 @@ class ConfigurationService(BaseService):
         "export MAKO_PRESENT_DIAGNOSTICS=",
         f"export {MAKO_LAYER_ENABLE_ENV}=1",
         *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
-        "export DISABLE_GAMESCOPE_WSI=1",
-        "unset ENABLE_GAMESCOPE_WSI",
+        f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
+        f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
         "export VK_IMPLICIT_LAYER_PATH=",
         "unset VK_ADD_IMPLICIT_LAYER_PATH",
         "export MAKO_PROFILE_FALLBACK=",
@@ -84,7 +88,12 @@ class ConfigurationService(BaseService):
 
     @staticmethod
     def _normalize_wrapper_settings(raw_settings: Dict[str, Any]) -> Dict[str, Any]:
-        """Validate Decky-only wrapper settings without polluting engine TOML."""
+        """Allowlist current wrapper settings without polluting engine TOML.
+
+        Removed and unknown fields are intentionally discarded so profile data
+        can never create an environment export unless the current schema and
+        wrapper generator both support it.
+        """
         candidate = ConfigurationManager.get_defaults()
         candidate.update({
             field_name: raw_settings[field_name]
@@ -112,6 +121,8 @@ class ConfigurationService(BaseService):
             )
             if not isinstance(raw_data, dict):
                 raise ValueError("wrapper settings must be a JSON object")
+            if raw_data.get("version") != self._WRAPPER_PROFILE_SETTINGS_VERSION:
+                raise ValueError("unsupported wrapper settings version")
             raw_profiles = raw_data.get("profiles", {})
             if not isinstance(raw_profiles, dict):
                 raise ValueError("wrapper settings profiles must be an object")
@@ -780,13 +791,13 @@ class ConfigurationService(BaseService):
 
         The engine contains HDR colour-pipeline groundwork, but cross-game HDR
         activation and presentation are unavailable in the current Decky
-        release. Keep the launcher's normal DXVK policy while MAKO enforces
-        its own SDR processing and presentation boundary.
+        release. Remove inherited DXVK HDR exposure while MAKO enforces its
+        supported SDR processing and presentation boundary.
         """
         del config
         return [
-            "export MAKO_DISABLE_HDR_EXPOSURE=1",
-            "unset DXVK_HDR",
+            f"export {HDR_EXPOSURE_DISABLE_ENV}=1",
+            f"unset {DXVK_HDR_ENV}",
         ]
 
     def _generate_layer_environment_lines(self) -> list[str]:
@@ -800,8 +811,8 @@ class ConfigurationService(BaseService):
         intercept Wine's swapchain without Gamescope WSI, Steam's Vulkan
         Fossilize/overlay layers, or system-wide ordering changing the dispatch
         chain. The Gamescope compositor and Steam/Game Mode UI remain outside
-        this application layer chain. The explicit LSFG and Gamescope guards
-        provide defence in depth.
+        this application layer chain. The explicit LSFG, Gamescope, and HDR
+        guards provide defence in depth.
         """
         diagnostics_log_path = self.config_dir / "present-diagnostics.log"
         return [
@@ -812,8 +823,8 @@ class ConfigurationService(BaseService):
             'export MAKO_PRESENT_DIAGNOSTICS="${MAKO_PRESENT_DIAGNOSTICS:-0}"',
             f"export {MAKO_LAYER_ENABLE_ENV}=1",
             *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
-            "export DISABLE_GAMESCOPE_WSI=1",
-            "unset ENABLE_GAMESCOPE_WSI",
+            f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
+            f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
             f"if [ -d {shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)} ]; then",
             f"    mako_implicit_layer_path={shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)}",
             "else",
@@ -843,11 +854,11 @@ class ConfigurationService(BaseService):
         is absent.
         Format 38 introduced the direct Gamescope presentation guard. It
         suppresses Gamescope WSI's conflicting upper FIFO policy while the
-        regular compositor remains active. Format 37 restores the launcher's
-        normal DXVK policy.
+        regular compositor remains active. Format 37 restored the DXVK
+        environment policy then in use.
         Format 36 makes high-volume presentation diagnostics opt-in in local
-        development builds as well as published builds while preserving
-        Gamescope WSI and the launcher's normal DXVK policy. Format 35 keeps
+        development builds as well as published builds while preserving the
+        Gamescope WSI and DXVK policies then in use. Format 35 keeps
         23.08/24.08 Flatpak loaders working while using
         additive discovery where the loader supports it. Format 34 preserves
         normal implicit Vulkan layers and disables only competing LSFG

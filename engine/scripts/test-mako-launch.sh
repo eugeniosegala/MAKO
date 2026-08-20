@@ -26,6 +26,7 @@ fi
 default_output="$({
     env -u ENABLE_MAKO -u DISABLE_MAKO \
         -u ENABLE_GAMESCOPE_WSI -u DISABLE_GAMESCOPE_WSI \
+        -u MAKO_DISABLE_HDR_EXPOSURE -u DXVK_HDR \
         -u DISABLE_LSFG -u DISABLE_LSFGVK \
         -u MAKO_ALLOW_COMPETING_LAYERS \
         XDG_DATA_HOME="$test_data_home" \
@@ -39,6 +40,8 @@ default_output="$({
                 "${DISABLE_LSFGVK:-unset}" \
                 "${DISABLE_GAMESCOPE_WSI:-unset}" \
                 "${ENABLE_GAMESCOPE_WSI:-unset}" \
+                "${MAKO_DISABLE_HDR_EXPOSURE:-unset}" \
+                "${DXVK_HDR:-unset}" \
                 "${VK_IMPLICIT_LAYER_PATH:-unset}" \
                 "${VK_ADD_IMPLICIT_LAYER_PATH:-unset}" \
                 "${MAKO_PROFILE:-unset}" \
@@ -46,13 +49,14 @@ default_output="$({
         ' _ "argument with spaces" '$literal'
 } 2>&1)" || fail "default launch failed: $default_output"
 
-expected_default="$(printf '1\n1\n1\n1\nunset\n%s\nunset\nprofile with spaces\nargument with spaces\n$literal' "$expected_layer_path")"
+expected_default="$(printf '1\n1\n1\n1\nunset\n1\nunset\n%s\nunset\nprofile with spaces\nargument with spaces\n$literal' "$expected_layer_path")"
 if [[ "$default_output" != "$expected_default" ]]; then
     fail "default environment or argument forwarding changed:\n$default_output"
 fi
 
 allow_output="$({
     DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_GAMESCOPE_WSI=1 \
+        MAKO_DISABLE_HDR_EXPOSURE=0 DXVK_HDR=1 \
         XDG_DATA_HOME="$test_data_home" \
         VK_IMPLICIT_LAYER_PATH="/caller/override" \
         VK_ADD_IMPLICIT_LAYER_PATH="/caller/additional" \
@@ -64,13 +68,15 @@ allow_output="$({
                 "${DISABLE_LSFGVK:-unset}" \
                 "${DISABLE_GAMESCOPE_WSI:-unset}" \
                 "${ENABLE_GAMESCOPE_WSI:-unset}" \
+                "${MAKO_DISABLE_HDR_EXPOSURE:-unset}" \
+                "${DXVK_HDR:-unset}" \
                 "${VK_IMPLICIT_LAYER_PATH:-unset}" \
                 "${VK_ADD_IMPLICIT_LAYER_PATH:-unset}" \
                 "${MAKO_ALLOW_COMPETING_LAYERS:-unset}"
         '
 } 2>&1)" || fail "advanced opt-out launch failed: $allow_output"
 
-expected_allow="$(printf '1\nunset\nunset\n1\nunset\n%s\nunset\nunset' "$expected_layer_path")"
+expected_allow="$(printf '1\nunset\nunset\n1\nunset\n1\nunset\n%s\nunset\nunset' "$expected_layer_path")"
 if [[ "$allow_output" != "$expected_allow" ]]; then
     fail "advanced opt-out did not remove only the conflict guards:\n$allow_output"
 fi

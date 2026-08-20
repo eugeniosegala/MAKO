@@ -604,10 +604,29 @@ class WrapperEnvironmentTests(unittest.TestCase):
     def test_obsolete_wow64_profile_setting_is_discarded(self):
         settings = self.service._normalize_wrapper_settings({
             "enable_wow64": True,
+            "unknown_launcher_option": "unsafe",
             "disable_hdr_exposure": True,
         })
         self.assertNotIn("enable_wow64", settings)
+        self.assertNotIn("unknown_launcher_option", settings)
         self.assertTrue(settings["disable_hdr_exposure"])
+
+    def test_unknown_wrapper_settings_version_falls_back_safely(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            self.service.wrapper_profile_settings_path = (
+                Path(temp_dir) / "wrapper-settings.json"
+            )
+            self.service.wrapper_profile_settings_path.write_text(
+                json.dumps({
+                    "version": 99,
+                    "profiles": {
+                        "mako": {"disable_mako": True},
+                    },
+                }),
+                encoding="utf-8",
+            )
+
+            self.assertEqual(self.service._read_wrapper_profile_settings(), {})
 
     def test_current_marker_with_obsolete_wow64_export_is_regenerated(self):
         with tempfile.TemporaryDirectory() as temp_dir:

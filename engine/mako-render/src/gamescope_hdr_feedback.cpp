@@ -1,7 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "gamescope_hdr_feedback.hpp"
-
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
@@ -51,6 +50,11 @@ namespace {
 }
 
 struct GamescopeHdrFeedbackReader::Impl {
+    explicit Impl(
+            const PresentationEnvironmentPolicy& presentationEnvironment) :
+        presentationEnvironment(presentationEnvironment) {}
+
+    const PresentationEnvironmentPolicy presentationEnvironment;
     std::mutex sampleMutex;
     GamescopeHdrFeedbackSample latestSample;
     std::jthread monitor;
@@ -383,12 +387,6 @@ struct GamescopeHdrFeedbackReader::Impl {
         // signal. A false capability does conclusively mean the game is SDR,
         // but still resolve Gamescope first: its identity, refresh budget and
         // WSI ownership remain relevant to SDR presentation.
-        const char* dxvkHdr = std::getenv("DXVK_HDR");
-        const bool hdrExposureDisabled =
-            hdrExposureDisabledFromEnvironment(
-                std::getenv("MAKO_DISABLE_HDR_EXPOSURE"), dxvkHdr
-            );
-
         if (!this->initialize()) {
             sample.gamescopePid = this->observedGamescopePid;
             sample.xwaylandServerId = this->observedServerId;
@@ -433,7 +431,7 @@ struct GamescopeHdrFeedbackReader::Impl {
         sample.appHdrMetadataPresent = this->hasCardinalData(
             this->display, this->root, gamescopeHdrMetadataProperty
         );
-        if (hdrExposureDisabled) {
+        if (this->presentationEnvironment.hdrExposureDisabled) {
             const auto decision = decideGamescopeHdrActivation({
                 .outputHdrEnabled = sample.outputHdrEnabled,
                 .appHdrMetadataPresent = sample.appHdrMetadataPresent,
@@ -562,8 +560,9 @@ struct GamescopeHdrFeedbackReader::Impl {
     }
 };
 
-GamescopeHdrFeedbackReader::GamescopeHdrFeedbackReader() :
-    impl(std::make_unique<Impl>()) {
+GamescopeHdrFeedbackReader::GamescopeHdrFeedbackReader(
+        const PresentationEnvironmentPolicy& presentationEnvironment) :
+    impl(std::make_unique<Impl>(presentationEnvironment)) {
     this->impl->start();
 }
 

@@ -24,21 +24,29 @@ namespace {
 }
 
 int main() {
+    const PresentationEnvironmentPolicy normalEnvironment{};
+    const PresentationEnvironmentPolicy isolatedEnvironment{
+        .gamescopeWsiDisabled = true,
+        .hdrExposureDisabled = true,
+    };
     // Regression boundary: only an HDR-capable swapchain managed by Gamescope
     // may use the compositor bridge. In particular, merely discovering
     // Gamescope must not route an ordinary SDR game away from ordered FIFO.
-    expect(selectPresentationTransport(false, false) ==
+    expect(selectPresentationTransport(false, false, normalEnvironment) ==
             PresentationTransport::OrderedSdr,
         "ordinary SDR did not retain the ordered fork transport");
-    expect(selectPresentationTransport(false, true) ==
+    expect(selectPresentationTransport(false, true, normalEnvironment) ==
             PresentationTransport::OrderedSdr,
         "non-Gamescope HDR unexpectedly selected the Gamescope bridge");
-    expect(selectPresentationTransport(true, false) ==
+    expect(selectPresentationTransport(true, false, normalEnvironment) ==
             PresentationTransport::OrderedSdr,
         "Gamescope SDR was routed through the HDR transport");
-    expect(selectPresentationTransport(true, true) ==
+    expect(selectPresentationTransport(true, true, normalEnvironment) ==
             PresentationTransport::GamescopeHdr,
         "HDR-capable Gamescope swapchain did not select the HDR bridge");
+    expect(selectPresentationTransport(true, true, isolatedEnvironment) ==
+            PresentationTransport::OrderedSdr,
+        "WSI-isolated launch selected the unavailable Gamescope HDR bridge");
 
     // The HDR/Gamescope path must never block a real frame waiting for a
     // synthetic image. Legacy/ordered paths keep their historical contract.

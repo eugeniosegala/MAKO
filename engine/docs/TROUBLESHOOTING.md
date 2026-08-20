@@ -36,6 +36,22 @@ Use `VK_LOADER_DEBUG=layer` with the normal launch command when you need to see 
 
 For a Flatpak game or emulator, the host layer is not visible inside the sandbox. Install the matching MAKO Flatpak extension and application overrides as described in the [Flatpak guide](FLATPAK-GUIDE.md). MAKO Decky manages those steps through **Flatpak Setup**.
 
+## Gamescope WSI, overlays, and HDR
+
+The supported launcher intentionally gives MAKO a private implicit-layer chain,
+disables Gamescope WSI inside the game process, and keeps HDR exposure off.
+Gamescope the compositor and the Steam/Game Mode interface remain active. This
+prevents two presentation policies from throttling the generated/original
+sequence, but implicit Vulkan overlays, capture layers, or post-processing
+layers are not admitted automatically. See [WSI isolation](WSI-ISOLATION.md)
+for expected loader evidence, compatibility tradeoffs, and regression signals.
+
+HDR frame generation is not currently supported. Do not remove the WSI or HDR
+guards as a general workaround: layer membership is fixed before Vulkan starts,
+and the experimental HDR lane has a different presentation contract. See [HDR
+pipeline architecture](HDR-PIPELINE.md) for its implemented fallbacks and the
+validation required before exposure.
+
 ## Collect diagnostics
 
 Presentation diagnostics are off by default. Add the following before the normal launch command to log slow presentation operations:

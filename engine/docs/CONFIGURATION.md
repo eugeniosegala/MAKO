@@ -38,6 +38,26 @@ frame_generation_enabled = true
 
 MAKO Decky uses its own safer UI defaults: 90 FPS Adaptive target, 0.90 Flow Scale, and Smooth Cadence enabled when it creates a profile. Those defaults do not change the direct Renderer defaults above.
 
+## Profile compatibility
+
+`version = 2` is the current configuration format. MAKO accepts only a format
+version it understands; a future structural change must use a new version and
+an explicit migration.
+
+Within a supported version, an unrecognised global or profile key is inert: the
+Renderer does not turn it into engine state or an environment variable. Merely
+starting the Renderer does not edit the file. If MAKO Decky or `mako-ui` later
+saves that configuration, it writes the current canonical schema and removes
+unknown or retired keys. This keeps ordinary upgrades safe and prevents an old
+option from unexpectedly regaining meaning in a later release.
+
+When a setting is renamed or its value must be carried forward, add a one-time,
+tested migration before removing the old field. Do not reuse an old option name
+for different behavior. Copying a profile that still uses a supported format
+from a newer MAKO release into an older editor is therefore not lossless: the
+older runtime ignores unknown settings, and saving with that older editor
+removes them.
+
 ## Applying changes
 
 Frame Generation, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, and Smooth Cadence can usually apply while the game is running. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Performance Mode, HDR-related settings, or a setting that requires more private GPU resources.
@@ -58,7 +78,7 @@ Place any launch-specific environment variables before the helper. `MAKO_CONFIG`
 MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
 ```
 
-The profile value must exactly match a configured profile `name`. Quote names that contain spaces; shell backticks are not profile delimiters and must not be used. `DISABLE_MAKO=1` remains a one-launch troubleshooting gate and is honoured even when `mako-launch` is present. The launcher disables Gamescope WSI only inside the child process so MAKO owns a single presentation clock; Gamescope itself remains the active compositor. Steam's Vulkan Fossilize/overlay hooks and system-wide implicit layers are deliberately excluded from MAKO-managed processes, matching v2's validated SDR behavior.
+The profile value must exactly match a configured profile `name`. Quote names that contain spaces; shell backticks are not profile delimiters and must not be used. `DISABLE_MAKO=1` remains a one-launch troubleshooting gate and is honoured even when `mako-launch` is present. The launcher disables Gamescope WSI only inside the child process so MAKO owns a single presentation clock; Gamescope itself remains the active compositor. It also disables HDR exposure because an isolated WSI layer cannot be added back after Vulkan starts. Steam's Vulkan Fossilize/overlay hooks and system-wide implicit layers are deliberately excluded from MAKO-managed processes, matching v2's validated SDR behavior. The design, tradeoffs, and future process-start HDR lane are documented in [WSI isolation](WSI-ISOLATION.md) and [HDR pipeline architecture](HDR-PIPELINE.md).
 
 If no profile matches the launched process, the Vulkan layer remains dormant and preserves the application's native presentation path. This makes launcher and helper processes safe while ensuring frame generation starts only for an explicitly matched profile.
 
@@ -73,4 +93,4 @@ For a configuration that comes entirely from environment variables, set `MAKO_EN
 - `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`
 - `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`
 
-`MAKO_DISABLE_HDR_EXPOSURE=1` keeps MAKO's unfinished HDR path disabled. It is the normal boundary used by the current Decky workflow.
+`MAKO_DISABLE_HDR_EXPOSURE=1` keeps MAKO's unfinished HDR path disabled. It is part of the normal MAKO Decky and standalone `mako-launch` boundary. `DISABLE_GAMESCOPE_WSI=1` also closes that engine path defensively because the required HDR bridge is unavailable without the WSI layer. HDR and WSI settings are process-start policy and require a game restart; they are not live profile controls.

@@ -8,6 +8,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <iterator>
 #include <string>
 #include <string_view>
 #include <thread>
@@ -28,13 +29,23 @@ namespace {
         output.close();
     }
 
+    std::string readText(const std::filesystem::path& path) {
+        std::ifstream input(path);
+        return {
+            std::istreambuf_iterator<char>(input),
+            std::istreambuf_iterator<char>()
+        };
+    }
+
     constexpr std::string_view validConfiguration = R"(version = 2
 [global]
 allow_fp16 = true
+removed_global_option = "inert"
 
 [[profile]]
 name = "test"
 active_in = "game"
+removed_profile_option = true
 adaptive = true
 base_fps_cap = 60
 adaptive_auto_base_fps_cap = true
@@ -93,6 +104,15 @@ int main() {
         "The accepted configuration must expose its base FPS cap");
     expect(config.get().profiles().front().adaptive_auto_base_fps_cap,
         "The accepted configuration must expose Adaptive auto-cap");
+    expect(config.get().profiles().front().multiplier == 2,
+        "Unknown legacy options must be inert without disturbing known defaults");
+
+    const auto canonicalPath = directory / "canonical.toml";
+    config.get().write(canonicalPath);
+    const auto canonicalConfiguration = readText(canonicalPath);
+    expect(canonicalConfiguration.find("removed_global_option") == std::string::npos &&
+            canonicalConfiguration.find("removed_profile_option") == std::string::npos,
+        "A canonical Renderer write must remove unknown legacy options");
 
     ls::ConfigFile detectionConfig;
     detectionConfig.profiles() = {

@@ -33,6 +33,12 @@ LIB_FILENAME = "libmako-render.so"
 MAKO_LAYER_NAME = "VK_LAYER_MAKO_render"
 MAKO_LAYER_ENABLE_ENV = "ENABLE_MAKO"
 MAKO_LAYER_DISABLE_ENV = "DISABLE_MAKO"
+# Process-start presentation policy. Keep native wrappers and direct Flatpak
+# overrides on the same supported SDR/WSI-isolated boundary.
+GAMESCOPE_WSI_DISABLE_ENV = "DISABLE_GAMESCOPE_WSI"
+GAMESCOPE_WSI_ENABLE_ENV = "ENABLE_GAMESCOPE_WSI"
+HDR_EXPOSURE_DISABLE_ENV = "MAKO_DISABLE_HDR_EXPOSURE"
+DXVK_HDR_ENV = "DXVK_HDR"
 # MAKO and the public LSFG-VK releases are separate frame-generation layers.
 # Loading either public identity alongside MAKO would make both layers
 # intercept the same swapchain and presentation calls. Disable only those

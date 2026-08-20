@@ -205,19 +205,28 @@ namespace {
     }
 }
 
-Root::Root() {
+Root::Root() :
+    presentationEnvironment(resolvePresentationEnvironmentPolicy(
+        std::getenv("MAKO_DISABLE_HDR_EXPOSURE"),
+        std::getenv("DXVK_HDR"),
+        std::getenv("DISABLE_GAMESCOPE_WSI")
+    )),
+    hdrFeedbackReader(this->presentationEnvironment) {
     std::cerr << makoBuildIdentity << '\n';
 
-    this->hdrExposureDisabled = hdrExposureDisabledFromEnvironment(
-        std::getenv("MAKO_DISABLE_HDR_EXPOSURE"),
-        std::getenv("DXVK_HDR")
-    );
+    std::cerr << "MAKO Renderer: presentation policy: gamescope_wsi="
+              << (this->presentationEnvironment.gamescopeWsiDisabled
+                    ? "isolated" : "allowed")
+              << "; hdr_exposure="
+              << (this->presentationEnvironment.hdrExposureDisabled
+                    ? "disabled" : "allowed")
+              << '\n';
 
     const auto initialHdrFeedback =
         this->hdrFeedbackReader.diagnosticSample();
     this->lastHdrFeedbackSample = initialHdrFeedback.active;
     this->lastHdrActivationSource = initialHdrFeedback.activationSource;
-    this->gamescopeManaged = initialHdrFeedback.gamescopeDetected;
+    this->gamescopeDetected = initialHdrFeedback.gamescopeDetected;
     this->lastGamescopeRefreshHz = initialHdrFeedback.refreshHz;
     this->gamescopeRefreshHz = initialHdrFeedback.refreshHz;
     this->lastHdrFeedbackDiagnosticKey = hdrFeedbackDiagnosticKey(
@@ -307,7 +316,7 @@ ConfigurationUpdateResult Root::update() {
             this->hdrFeedbackReader.diagnosticSample();
         this->lastHdrFeedbackSample = hdrFeedbackSample.active;
         this->lastHdrActivationSource = hdrFeedbackSample.activationSource;
-        this->gamescopeManaged = hdrFeedbackSample.gamescopeDetected;
+        this->gamescopeDetected = hdrFeedbackSample.gamescopeDetected;
         if (hdrFeedbackSample.refreshHz != this->lastGamescopeRefreshHz) {
             this->lastGamescopeRefreshHz = hdrFeedbackSample.refreshHz;
             this->gamescopeRefreshHz = hdrFeedbackSample.refreshHz;
@@ -524,8 +533,8 @@ bool Root::modifySwapchainCreateInfo(const vk::Vulkan& vk,
         caps.maxImageCount,
         createInfo,
         this->gamescopeHdrActive.value_or(false),
-        this->gamescopeManaged,
-        this->hdrExposureDisabled
+        this->gamescopeDetected,
+        this->presentationEnvironment
     );
 
     // Gamescope forwards both a MAILBOX base mode and a MAILBOX-only
@@ -606,8 +615,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     const bool inserted = this->swapchains.emplace(swapchain,
         Swapchain(vk, this->backend.mut(), profile, info,
             this->gamescopeHdrActive,
-            this->gamescopeManaged,
-            this->hdrExposureDisabled,
+            this->gamescopeDetected,
+            this->presentationEnvironment.hdrExposureDisabled,
             this->gamescopeRefreshHz,
             this->runtimeStateRevision)).second;
     const auto insertedContext = this->swapchains.find(swapchain);

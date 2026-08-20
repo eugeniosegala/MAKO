@@ -50,7 +50,8 @@ namespace mako::layer {
     [[nodiscard]] bool context_ModifySwapchainCreateInfo(
         const ls::GameConf& profile, uint32_t maxImages,
         VkSwapchainCreateInfoKHR& createInfo, bool gamescopeHdrActive,
-        bool gamescopeManaged, bool hdrExposureDisabled);
+        bool gamescopeDetected,
+        const PresentationEnvironmentPolicy& presentationEnvironment);
 
     /// swapchain context for a layer instance
     class Swapchain {
@@ -63,7 +64,7 @@ namespace mako::layer {
         Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
             ls::GameConf profile, SwapchainInfo info,
             std::optional<bool> gamescopeHdrActive,
-            bool gamescopeManaged, bool hdrExposureDisabled,
+            bool gamescopeDetected, bool hdrExposureDisabled,
             std::optional<uint32_t> gamescopeRefreshHz,
             uint64_t runtimeStateRevision);
 
@@ -176,7 +177,7 @@ namespace mako::layer {
         std::optional<AdaptiveScheduler> adaptiveScheduler;
         std::vector<float> fixedFrameTimestamps;
 
-        bool gamescopeManaged{false};
+        bool gamescopeDetected{false};
         // Immutable for this context; copied from SwapchainInfo rather than
         // inferred again from the current SDR/HDR colour pipeline.
         bool privateOrderedTransport{false};

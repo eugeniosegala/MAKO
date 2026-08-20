@@ -63,7 +63,7 @@ namespace {
     SwapchainColorPipeline initialColorPipeline(
             const VkFormat format, const VkColorSpaceKHR colorSpace,
             const std::optional<bool> gamescopeHdrActive,
-            const bool gamescopeManaged,
+            const bool gamescopeDetected,
             const bool hdrExposureDisabled) {
         auto pipeline = classifySwapchainColor(
             format, colorSpace, gamescopeHdrActive.value_or(false)
@@ -75,7 +75,7 @@ namespace {
                 "HDR frame generation is disabled for this process";
             return pipeline;
         }
-        if (gamescopeManaged && !gamescopeHdrActive &&
+        if (gamescopeDetected && !gamescopeHdrActive &&
                 pipeline.encoding == backend::FrameEncoding::SdrHighPrecision) {
             pipeline.generationSupported = false;
             pipeline.name = "gamescope-hdr-pending";
@@ -148,13 +148,14 @@ std::optional<uint64_t> Swapchain::generatedImageAcquireTimeoutNs() {
 bool layer::context_ModifySwapchainCreateInfo(const ls::GameConf& profile,
         uint32_t maxImages,
         VkSwapchainCreateInfoKHR& createInfo, const bool gamescopeHdrActive,
-        const bool gamescopeManaged, const bool hdrExposureDisabled) {
+        const bool gamescopeDetected,
+        const PresentationEnvironmentPolicy& presentationEnvironment) {
     const auto colorPipeline = classifySwapchainColor(
         createInfo.imageFormat, createInfo.imageColorSpace,
         gamescopeHdrActive
     );
     if (!colorPipeline.generationSupported ||
-            (hdrExposureDisabled && colorPipeline.hdr))
+            (presentationEnvironment.hdrExposureDisabled && colorPipeline.hdr))
         return false;
 
     createInfo.imageUsage |=
@@ -170,11 +171,13 @@ bool layer::context_ModifySwapchainCreateInfo(const ls::GameConf& profile,
             if (maxImages && createInfo.minImageCount > maxImages)
                 createInfo.minImageCount = maxImages;
 
-            const bool hdrCapableSwapchain = !hdrExposureDisabled &&
+            const bool hdrCapableSwapchain =
+                !presentationEnvironment.hdrExposureDisabled &&
                 (colorPipeline.hdr ||
                     colorPipeline.encoding == backend::FrameEncoding::SdrHighPrecision);
             const auto transport = selectPresentationTransport(
-                gamescopeManaged, hdrCapableSwapchain
+                gamescopeDetected, hdrCapableSwapchain,
+                presentationEnvironment
             );
 
             // This is a create-time transport choice, not the current HDR on/off
@@ -197,16 +200,16 @@ bool layer::context_ModifySwapchainCreateInfo(const ls::GameConf& profile,
 Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
             ls::GameConf profile, SwapchainInfo info,
             const std::optional<bool> gamescopeHdrActive,
-            const bool gamescopeManaged,
+            const bool gamescopeDetected,
             const bool hdrExposureDisabled,
             const std::optional<uint32_t> gamescopeRefreshHz,
             const uint64_t runtimeStateRevision) :
         instance(backend),
-        gamescopeManaged(gamescopeManaged),
+        gamescopeDetected(gamescopeDetected),
         privateOrderedTransport(info.privateOrderedTransport),
         gamescopeRefreshHz(gamescopeRefreshHz),
         colorPipeline(initialColorPipeline(
-            info.format, info.colorSpace, gamescopeHdrActive, gamescopeManaged,
+            info.format, info.colorSpace, gamescopeHdrActive, gamescopeDetected,
             hdrExposureDisabled
         )),
         profile(std::move(profile)), info(std::move(info)) {
@@ -258,7 +261,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
               << "; frame-generation="
               << (this->colorPipeline.generationSupported ? "supported" : "passthrough")
               << '\n';
-    if (this->gamescopeManaged && this->privateOrderedTransport) {
+    if (this->gamescopeDetected && this->privateOrderedTransport) {
         std::cerr << "MAKO Renderer: Gamescope SDR presentation transport: "
                      "mode=fifo-ordered; source=fork-develop; "
                      "dynamic-mode-switch=filtered\n";
@@ -385,11 +388,11 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                       << "; slow operation threshold is "
                       << presentDiagnosticsThresholdMs() << " ms\n";
         }
-        if (this->gamescopeManaged && !this->privateOrderedTransport) {
+        if (this->gamescopeDetected && !this->privateOrderedTransport) {
             std::cerr << "MAKO Renderer: Gamescope HDR generated-image admission is "
                          "nonblocking; native presentation is never held for "
                          "a synthetic destination\n";
-        } else if (this->gamescopeManaged) {
+        } else if (this->gamescopeDetected) {
             std::cerr << "MAKO Renderer: Gamescope SDR uses the fork's ordered "
                          "presentation path\n";
         } else if (const auto timeout = generatedImageAcquireTimeoutNs()) {
