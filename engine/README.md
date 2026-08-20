@@ -228,7 +228,7 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 
 - [Configuration](docs/CONFIGURATION.md): profiles, frame-generation controls, Adaptive mode, and environment variables.
 - [WSI isolation](docs/WSI-ISOLATION.md): private Vulkan discovery, Gamescope presentation ownership, tradeoffs, diagnostics, and future HDR constraints.
-- [Optional Vulkan layer chaining](docs/LAYER-CHAINING.md): the guarded MangoHud exception, general chaining rules, verification, evidence, and limits.
+- [Optional graphics integrations](docs/LAYER-CHAINING.md): MAKO Decky's per-profile MangoHud and experimental vkBasalt controls, manual layer chaining, capture and DLL-injector test lanes, verification, evidence, and limits.
 - [HDR pipeline architecture](docs/HDR-PIPELINE.md): evidence, colour classification, split transport/model formats, fallbacks, live transitions, and validation requirements.
 - [Flatpak guide](docs/FLATPAK-GUIDE.md): runtime extensions and direct Flatpak application overrides.
 - [Building from Source](docs/BUILDING-FROM-SOURCE.md): prerequisites, SteamOS builds, and packaging.

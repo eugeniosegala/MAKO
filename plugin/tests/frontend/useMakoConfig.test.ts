@@ -110,11 +110,24 @@ describe("MAKO configuration persistence", () => {
     });
     expect(result.current.config.multiplier).toBe(3);
     expect(result.current.config.disable_hdr_exposure).toBe(true);
+    expect(result.current.config.external_vulkan_layer).toBe("");
 
     mocks.updateMakoConfigFromObject.mockResolvedValue({ success: false, error: "write failed" });
     await act(() => result.current.updateConfig({ ...result.current.config, multiplier: 4 }));
 
     expect(result.current.config.multiplier).toBe(3);
     expect(mocks.showErrorToast).toHaveBeenCalledWith("Update Failed", "write failed");
+  });
+
+  test("keeps external tools off when an older backend omits the selector", async () => {
+    mocks.getMakoConfig.mockResolvedValue({
+      success: true,
+      config: { multiplier: 3 } as ConfigurationData
+    });
+
+    const { result } = renderHook(() => useMakoConfig());
+
+    await waitFor(() => expect(result.current.config.multiplier).toBe(3));
+    expect(result.current.config.external_vulkan_layer).toBe("");
   });
 });

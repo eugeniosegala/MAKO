@@ -306,7 +306,6 @@ printf '%s\n' \
   '' \
   '## Before you play' \
   '' \
-  '- Test MAKO per game and start with Frame Generation disabled, then Fixed 2x, before adding Adaptive or higher multipliers.' \
   '- Confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery.' \
   '- Do not combine `mako-run` with another Lossless Scaling Vulkan wrapper for the same game.' \
   '' \

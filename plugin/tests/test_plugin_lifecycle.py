@@ -36,9 +36,6 @@ class PluginLifecycleTests(unittest.TestCase):
             migrate_legacy_base_fps_caps_if_needed=lambda: calls.append(
                 "base-fps-cap"
             ) or False,
-            remove_legacy_vkbasalt_exports=lambda: calls.append(
-                "vkbasalt"
-            ) or False,
             migrate_launch_script_if_needed=lambda: calls.append(
                 "launch-script"
             ) or False,
@@ -64,7 +61,6 @@ class PluginLifecycleTests(unittest.TestCase):
             "captured-processes",
             "wrapper-settings",
             "base-fps-cap",
-            "vkbasalt",
             "launch-script",
             "diagnostics-helper",
         ])

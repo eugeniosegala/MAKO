@@ -212,7 +212,6 @@ Keep the previous archives until the new version has been tested with your games
 
 ## Before you play
 
-- Test MAKO per game and start with frame generation disabled, then Fixed 2x, before adding Adaptive or higher multipliers.
 - Confirm the detected \`Lossless.dll\` path. Leaving it blank permits normal discovery in common Steam locations.
 - Do not combine MAKO with another Lossless Scaling Vulkan wrapper for the same game.
 

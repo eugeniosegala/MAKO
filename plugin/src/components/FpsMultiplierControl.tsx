@@ -110,6 +110,7 @@ export function FpsMultiplierControl({
         <ToggleField
           label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
           description={t("ADAPTIVE_DESC", "Adaptive uses fractional multipliers by default to reach the target FPS. Enable Steady 2x FPS Cap below only if you prefer a fixed 2x cadence. Settings normally apply live; increasing the multiplier ceiling may require a restart.")}
+          bottomSeparator={config.adaptive ? "standard" : "none"}
           checked={config.adaptive}
           onChange={(value) => onConfigChange(ADAPTIVE, value)}
         />
@@ -155,6 +156,7 @@ export function FpsMultiplierControl({
             <ToggleField
               label={t("ADAPTIVE_SMOOTH_CADENCE", "Smooth Cadence")}
               description={t("ADAPTIVE_SMOOTH_CADENCE_DESC", "Uses a validated constant interpolation cadence. It can make displayed motion smoother, but may lower real-frame cadence and increase input lag. Enabled by default; disable it if a game feels more responsive without it.")}
+              bottomSeparator="none"
               checked={config.adaptive_stable_cadence ?? true}
               onChange={(value) => onConfigChange(ADAPTIVE_STABLE_CADENCE, value)}
             />
@@ -163,6 +165,7 @@ export function FpsMultiplierControl({
       )}
 
       <MakoSectionHeader
+        topMargin="26px"
         description={t(
           "MULTIPLIER_DESC",
           "Sets Fixed mode to 2x–4x. An increase beyond the running game's reserved capacity applies after restart. Adaptive manages the multiplier automatically."

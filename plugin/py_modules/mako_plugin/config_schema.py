@@ -120,6 +120,12 @@ class ConfigurationManager:
             raise ValueError("flow_scale must be between 0.25 and 1.0")
         if validated["pacing"] != "none":
             raise ValueError("only pacing = 'none' is currently available")
+        external_vulkan_layer = validated["external_vulkan_layer"].strip().lower()
+        if external_vulkan_layer not in {"", "mangohud", "vkbasalt"}:
+            raise ValueError(
+                "external_vulkan_layer must be empty, 'mangohud', or 'vkbasalt'"
+            )
+        validated["external_vulkan_layer"] = external_vulkan_layer
         return cast(ConfigurationData, validated)
 
     @staticmethod

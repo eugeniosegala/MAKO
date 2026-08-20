@@ -42,12 +42,17 @@ DXVK_HDR_ENV = "DXVK_HDR"
 # MAKO and the public LSFG-VK releases are separate frame-generation layers.
 # Loading either public identity alongside MAKO would make both layers
 # intercept the same swapchain and presentation calls. Disable only those
-# known competitors in the per-game launcher instead of hiding every other
-# implicit Vulkan layer from the game.
+# known competitors in the per-game launcher as defence in depth. They remain
+# excluded when an explicitly selected external tool temporarily admits the
+# guarded system manifest directory alongside MAKO's private directory.
 COMPETING_LSFG_DISABLE_ENVS = (
     "DISABLE_LSFG",  # LSFG-VK 1.x
     "DISABLE_LSFGVK",  # LSFG-VK 2.x
 )
+HOST_SYSTEM_IMPLICIT_LAYER_DIR = Path("/usr/share/vulkan/implicit_layer.d")
+EXTERNAL_VULKAN_LAYER_ENV = "MAKO_EXTERNAL_VULKAN_LAYER"
+EXTERNAL_VULKAN_LAYER_MANGOHUD = "mangohud"
+EXTERNAL_VULKAN_LAYER_VKBASALT = "vkbasalt"
 MAKO_LAYER_BUILD_MARKER = (
     b"MAKO Renderer: render layer active; identity="
     b"VK_LAYER_MAKO_render; build="

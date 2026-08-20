@@ -42,7 +42,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
     def _evaluate(self, extra_environment=None, config=None):
         lines = []
         if config is not None:
-            lines.extend(self.service._hdr_activation_lines(config))
+            lines.extend(self.service._script_configuration_lines(config))
         lines.extend(self.service._generate_layer_environment_lines())
         script = "\n".join(lines + [
             'printf "ADD=%s\\n" "${VK_ADD_IMPLICIT_LAYER_PATH:-}"',
@@ -56,6 +56,13 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "HDR_EXPOSURE_DISABLED=%s\\n" "${MAKO_DISABLE_HDR_EXPOSURE:-}"',
             'printf "DXVK_HDR=%s\\n" "${DXVK_HDR:-}"',
             'printf "INSTANCE=%s\\n" "${VK_INSTANCE_LAYERS:-}"',
+            'printf "EXTERNAL_SELECTOR=%s\\n" "${MAKO_EXTERNAL_VULKAN_LAYER:-}"',
+            'printf "MANGOHUD=%s\\n" "${MANGOHUD:-}"',
+            'printf "MANGOHUD_CONFIG=%s\\n" "${MANGOHUD_CONFIG:-}"',
+            'printf "VKBASALT=%s\\n" "${ENABLE_VKBASALT:-}"',
+            'printf "VKBASALT_DISABLED=%s\\n" "${DISABLE_VKBASALT:-}"',
+            'printf "DEVICE_SELECT_DISABLED=%s\\n" "${NODEVICE_SELECT:-}"',
+            'printf "MESA_ANTI_LAG_DISABLED=%s\\n" "${DISABLE_LAYER_MESA_ANTI_LAG:-}"',
         ])
         environment = {
             "PATH": os.environ.get("PATH", ""),
@@ -81,6 +88,84 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
         self.assertEqual(values["DXVK_HDR"], "")
         self.assertEqual(values["INSTANCE"], "")
+        self.assertEqual(values["EXTERNAL_SELECTOR"], "")
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(values["VKBASALT"], "")
+
+    def test_mangohud_profile_admits_only_the_guarded_system_directory(self):
+        with tempfile.TemporaryDirectory() as system_dir:
+            with patch.object(
+                configuration_module,
+                "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+                Path(system_dir),
+            ):
+                config = ConfigurationManager.get_defaults()
+                config["external_vulkan_layer"] = "mangohud"
+                values = self._evaluate(
+                    {"MANGOHUD_CONFIG": "fps,frametime,position=top-right"},
+                    config,
+                )
+
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"/private/mako/implicit_layer.d:{system_dir}",
+        )
+        self.assertEqual(values["MANGOHUD"], "1")
+        self.assertEqual(
+            values["MANGOHUD_CONFIG"],
+            "fps,frametime,position=top-right",
+        )
+        self.assertEqual(values["VKBASALT"], "")
+        self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
+        self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
+        self.assertEqual(values["EXTERNAL_SELECTOR"], "")
+
+    def test_vkbasalt_profile_is_mutually_exclusive_with_mangohud(self):
+        with tempfile.TemporaryDirectory() as system_dir:
+            with patch.object(
+                configuration_module,
+                "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+                Path(system_dir),
+            ):
+                config = ConfigurationManager.get_defaults()
+                config["external_vulkan_layer"] = "vkbasalt"
+                values = self._evaluate(
+                    {
+                        "MANGOHUD": "1",
+                        "DISABLE_VKBASALT": "1",
+                    },
+                    config,
+                )
+
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"/private/mako/implicit_layer.d:{system_dir}",
+        )
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(values["VKBASALT"], "1")
+        self.assertEqual(values["VKBASALT_DISABLED"], "")
+        self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
+        self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
+
+    def test_default_profile_rejects_inherited_external_activation(self):
+        values = self._evaluate(
+            {
+                "MANGOHUD": "1",
+                "ENABLE_VKBASALT": "1",
+            },
+            ConfigurationManager.get_defaults(),
+        )
+
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(values["VKBASALT"], "")
+
+    def test_external_layer_schema_rejects_unknown_tools(self):
+        config = ConfigurationManager.get_defaults()
+        config["external_vulkan_layer"] = "renderdoc"
+
+        with self.assertRaisesRegex(ValueError, "external_vulkan_layer"):
+            ConfigurationManager.validate_config(config)
 
     def test_existing_instance_layer_order_is_preserved(self):
         values = self._evaluate({
@@ -217,6 +302,29 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
         self.assertEqual(values["ADD"], "")
         self.assertEqual(values["IMPLICIT"], temp_dir)
+
+    def test_flatpak_does_not_admit_selected_host_external_layer(self):
+        with tempfile.TemporaryDirectory() as flatpak_dir:
+            with tempfile.TemporaryDirectory() as system_dir:
+                config = ConfigurationManager.get_defaults()
+                config["external_vulkan_layer"] = "mangohud"
+                with (
+                    patch.object(
+                        configuration_module,
+                        "FLATPAK_IMPLICIT_LAYER_DIR",
+                        flatpak_dir,
+                    ),
+                    patch.object(
+                        configuration_module,
+                        "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+                        Path(system_dir),
+                    ),
+                ):
+                    values = self._evaluate(config=config)
+
+        self.assertEqual(values["IMPLICIT"], flatpak_dir)
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(values["VKBASALT"], "")
 
     def test_flatpak_sdr_boundary_keeps_gamescope_wsi_out_of_umu_chain(self):
         with tempfile.TemporaryDirectory() as temp_dir:

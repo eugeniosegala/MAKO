@@ -16,7 +16,9 @@ const firstContentLine = releaseNotes
   .split("\n")
   .find((line) => line.trim())
   ?.trim();
-const releaseCodename = releaseNotes.match(/^### Codename:\s*(.+?)\s*$/m)?.[1];
+const releaseCodename = releaseNotes.match(
+  /^### Release codename:\s*(.+?)\s*$/m
+)?.[1];
 
 if (firstContentLine !== expectedHeading) {
   throw new Error(
@@ -24,7 +26,9 @@ if (firstContentLine !== expectedHeading) {
   );
 }
 if (!releaseCodename) {
-  throw new Error("MAKO Decky release notes must define '### Codename: <name>'");
+  throw new Error(
+    "MAKO Decky release notes must define '### Release codename: <name>'"
+  );
 }
 
 const releaseInfoModule = "virtual:mako-release-info";

@@ -158,6 +158,14 @@ CONFIG_SCHEMA_DEF = {
         "location": "script"
     },
 
+    "external_vulkan_layer": {
+        "name": "external_vulkan_layer",
+        "fieldType": ConfigFieldType.STRING,
+        "default": "",
+        "description": "optional guarded host Vulkan layer: mangohud or vkbasalt",
+        "location": "script"
+    },
+
     # Unsupported controls are intentionally omitted from the current schema.
 
     "disable_steamdeck_mode": {

@@ -25,10 +25,14 @@ from .constants import (
     ARMADA_GAME_LAUNCH,
     COMPETING_LSFG_DISABLE_ENVS,
     DXVK_HDR_ENV,
+    EXTERNAL_VULKAN_LAYER_ENV,
+    EXTERNAL_VULKAN_LAYER_MANGOHUD,
+    EXTERNAL_VULKAN_LAYER_VKBASALT,
     FLATPAK_IMPLICIT_LAYER_DIR,
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
     HDR_EXPOSURE_DISABLE_ENV,
+    HOST_SYSTEM_IMPLICIT_LAYER_DIR,
     MAKO_LAYER_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
@@ -43,7 +47,7 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_VERSION = 42
+    _WRAPPER_FORMAT_VERSION = 43
     _WRAPPER_FORMAT_MARKER = (
         f"# mako-wrapper-format: {_WRAPPER_FORMAT_VERSION}"
     )
@@ -59,6 +63,7 @@ class ConfigurationService(BaseService):
         *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
         f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
         f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
+        f"export {EXTERNAL_VULKAN_LAYER_ENV}=",
         "export VK_IMPLICIT_LAYER_PATH=",
         "unset VK_ADD_IMPLICIT_LAYER_PATH",
         "export MAKO_PROFILE_FALLBACK=",
@@ -601,34 +606,6 @@ class ConfigurationService(BaseService):
             self.log.error(error_msg)
             return self._error_response(ConfigurationResponse, str(e), config=None)
 
-    def remove_legacy_vkbasalt_exports(self) -> bool:
-        """Remove obsolete plugin-managed vkBasalt exports.
-
-        Layer discovery is now preserved, so a separately configured vkBasalt
-        installation can work normally. Older plugin versions managed these
-        variables directly; remove those stale exports during migration.
-        """
-        if not self.mako_script_path.exists():
-            return False
-
-        legacy_exports = {"DISABLE_VKBASALT", "ENABLE_VKBASALT"}
-        existing_lines = self.mako_script_path.read_text(encoding="utf-8").splitlines()
-        cleaned_lines = []
-        removed = False
-
-        for line in existing_lines:
-            stripped = line.strip()
-            if stripped.startswith("export "):
-                variable = stripped[len("export "):].split("=", 1)[0].strip()
-                if variable in legacy_exports:
-                    removed = True
-                    continue
-            cleaned_lines.append(line)
-
-        if removed:
-            self._write_file(self.mako_script_path, "\n".join(cleaned_lines) + "\n", 0o755)
-        return removed
-
     def enforce_unsupported_host_passthrough_if_needed(self) -> bool:
         """Replace an existing wrapper with a configuration-free safe bypass.
 
@@ -846,11 +823,13 @@ class ConfigurationService(BaseService):
         on the host. This restores the v2 SDR boundary that is proven to
         intercept Wine's swapchain without Gamescope WSI, Steam's Vulkan
         Fossilize/overlay layers, or system-wide ordering changing the dispatch
-        chain. The Gamescope compositor and Steam/Game Mode UI remain outside
-        this application layer chain. The explicit LSFG, Gamescope, and HDR
-        guards provide defence in depth.
+        chain. A profile may admit the guarded host system directory for exactly
+        one selected external tool. The Gamescope compositor and Steam/Game
+        Mode UI remain outside this application layer chain. The explicit LSFG,
+        Gamescope, Mesa, and HDR guards provide defence in depth.
         """
         diagnostics_log_path = self.config_dir / "present-diagnostics.log"
+        system_layer_dir = shlex.quote(str(HOST_SYSTEM_IMPLICIT_LAYER_DIR))
         return [
             f'export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS="${{MAKO_PRESENT_ACQUIRE_TIMEOUT_MS:-{PRESENT_ACQUIRE_TIMEOUT_MS}}}"',
             # Presentation logging is intentionally opt-in for every build.
@@ -861,10 +840,33 @@ class ConfigurationService(BaseService):
             *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
             f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
             f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
+            f'mako_external_vulkan_layer="${{{EXTERNAL_VULKAN_LAYER_ENV}:-}}"',
+            f"unset {EXTERNAL_VULKAN_LAYER_ENV}",
+            "unset MANGOHUD",
+            "unset ENABLE_VKBASALT",
             f"if [ -d {shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)} ]; then",
             f"    mako_implicit_layer_path={shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)}",
             "else",
             f"    mako_implicit_layer_path={shlex.quote(str(self.local_share_dir))}",
+            '    case "$mako_external_vulkan_layer" in',
+            f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
+            "            export MANGOHUD=1",
+            "            export NODEVICE_SELECT=1",
+            "            export DISABLE_LAYER_MESA_ANTI_LAG=1",
+            f"            if [ -d {system_layer_dir} ]; then",
+            f'                mako_implicit_layer_path="$mako_implicit_layer_path:{HOST_SYSTEM_IMPLICIT_LAYER_DIR}"',
+            "            fi",
+            "            ;;",
+            f"        {EXTERNAL_VULKAN_LAYER_VKBASALT})",
+            "            unset DISABLE_VKBASALT",
+            "            export ENABLE_VKBASALT=1",
+            "            export NODEVICE_SELECT=1",
+            "            export DISABLE_LAYER_MESA_ANTI_LAG=1",
+            f"            if [ -d {system_layer_dir} ]; then",
+            f'                mako_implicit_layer_path="$mako_implicit_layer_path:{HOST_SYSTEM_IMPLICIT_LAYER_DIR}"',
+            "            fi",
+            "            ;;",
+            "    esac",
             "fi",
             'export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"',
             "unset VK_ADD_IMPLICIT_LAYER_PATH",

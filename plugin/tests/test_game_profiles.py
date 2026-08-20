@@ -312,7 +312,7 @@ class GameProfileTests(unittest.TestCase):
                 str(self.service.mako_script_path),
                 "/bin/bash",
                 "-c",
-                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}"',
+                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nIMPLICIT=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VK_IMPLICIT_LAYER_PATH:-}"',
             ],
             check=True,
             capture_output=True,
@@ -403,6 +403,53 @@ class GameProfileTests(unittest.TestCase):
         self.assertEqual(restored["PROFILE"], "cool-game")
         self.assertEqual(restored["SDL"], "pipewire")
         self.assertEqual(restored["DLLS"], "dxgi=n")
+
+    def test_external_tool_selection_is_applied_per_game_profile(self):
+        game = dict(ConfigurationManager.get_defaults())
+        game["active_in"] = "CoolGame.exe"
+        profile_data = ProfileData(
+            current_profile="mako",
+            profiles={"mako": ConfigurationManager.get_defaults(), "cool-game": game},
+            global_config=self.profile_data["global_config"],
+        )
+        self.service._save_profile_data(profile_data)
+        self.service._write_profile_metadata({
+            "mako": {
+                "display_name": "Default",
+                "kind": "default",
+                "steam_app_id": None,
+            },
+            "cool-game": {
+                "display_name": "Cool Game",
+                "kind": "game",
+                "steam_app_id": "12345",
+            },
+        })
+        self.service._write_wrapper_profile_settings({
+            "mako": {"external_vulkan_layer": "vkbasalt"},
+            "cool-game": {"external_vulkan_layer": "mangohud"},
+        })
+
+        with tempfile.TemporaryDirectory() as system_dir:
+            previous = configuration_module.HOST_SYSTEM_IMPLICIT_LAYER_DIR
+            configuration_module.HOST_SYSTEM_IMPLICIT_LAYER_DIR = Path(system_dir)
+            try:
+                result = self.service.update_mako_script_from_profile_data(
+                    profile_data
+                )
+                self.assertTrue(result["success"])
+                matched = self._run_wrapper("12345")
+                unrelated = self._run_wrapper("67890")
+            finally:
+                configuration_module.HOST_SYSTEM_IMPLICIT_LAYER_DIR = previous
+
+        expected_path = f"{self.service.local_share_dir}:{system_dir}"
+        self.assertEqual(matched["MANGOHUD"], "1")
+        self.assertEqual(matched["VKBASALT"], "")
+        self.assertEqual(matched["IMPLICIT"], expected_path)
+        self.assertEqual(unrelated["MANGOHUD"], "")
+        self.assertEqual(unrelated["VKBASALT"], "1")
+        self.assertEqual(unrelated["IMPLICIT"], expected_path)
 
     def test_current_wrapper_is_never_reverse_migrated_as_one_profile(self):
         self.service.migrate_profile_metadata_if_needed()

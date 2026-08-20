@@ -32,6 +32,7 @@ def get_env_var_name(field_name: str) -> str:
     env_map = {
         "disable_mako": "DISABLE_MAKO",
         "disable_hdr_exposure": "MAKO_DISABLE_HDR_EXPOSURE",
+        "external_vulkan_layer": "MAKO_EXTERNAL_VULKAN_LAYER",
         "disable_steamdeck_mode": "SteamDeck",
         "enable_zink": "ZINK_ENABLE",
         "force_alsa_audio": "SDL_AUDIODRIVER"
@@ -156,8 +157,13 @@ def generate_script_generation() -> str:
             lines.append(f'            lines.append(f"export {env_var}={{{field_name}}}")')
         elif field_type == ConfigFieldType.STRING:
             lines.append(f'        {field_name} = config.get("{field_name}", "")')
-            lines.append(f'        if {field_name}:')
-            lines.append(f'            lines.append(f"export {env_var}={{{field_name}}}")')
+            if field_name == "external_vulkan_layer":
+                # Always overwrite this internal selector so a caller cannot
+                # leak another profile's external layer into the wrapper.
+                lines.append(f'        lines.append(f"export {env_var}={{{field_name}}}")')
+            else:
+                lines.append(f'        if {field_name}:')
+                lines.append(f'            lines.append(f"export {env_var}={{{field_name}}}")')
 
     return "\n".join(lines)
 

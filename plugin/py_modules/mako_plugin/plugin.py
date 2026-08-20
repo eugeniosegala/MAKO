@@ -532,12 +532,6 @@ class Plugin:
         except OSError as error:
             decky.logger.warning("Could not migrate Base FPS Cap: %s", error)
         try:
-            if self.configuration_service.remove_legacy_vkbasalt_exports():
-                decky.logger.info("Removed obsolete vkBasalt exports from isolated launcher")
-        except OSError as error:
-            decky.logger.warning("Could not remove obsolete vkBasalt exports: %s", error)
-
-        try:
             if self.configuration_service.migrate_launch_script_if_needed():
                 decky.logger.info("Upgraded installed MAKO launch wrapper to the current format")
         except OSError as error:

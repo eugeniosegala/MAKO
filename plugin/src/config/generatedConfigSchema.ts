@@ -25,6 +25,7 @@ export const ACTIVE_IN = "active_in" as const;
 export const GPU = "gpu" as const;
 export const DISABLE_MAKO = "disable_mako" as const;
 export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
+export const EXTERNAL_VULKAN_LAYER = "external_vulkan_layer" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
 export const FORCE_ALSA_AUDIO = "force_alsa_audio" as const;
@@ -141,6 +142,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: true,
     description: "required SDR safety boundary while HDR is unavailable"
   },
+  external_vulkan_layer: {
+    name: "external_vulkan_layer",
+    fieldType: ConfigFieldType.STRING,
+    default: "",
+    description: "optional guarded host Vulkan layer: mangohud or vkbasalt"
+  },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",
     fieldType: ConfigFieldType.BOOLEAN,
@@ -180,6 +187,7 @@ export interface ConfigurationData {
   gpu: string;
   disable_mako: boolean;
   disable_hdr_exposure: boolean;
+  external_vulkan_layer: string;
   disable_steamdeck_mode: boolean;
   enable_zink: boolean;
   force_alsa_audio: boolean;
@@ -209,6 +217,7 @@ export function getDefaults(): ConfigurationData {
     gpu: "",
     disable_mako: false,
     disable_hdr_exposure: true,
+    external_vulkan_layer: "",
     disable_steamdeck_mode: false,
     enable_zink: false,
     force_alsa_audio: false,
@@ -234,6 +243,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     gpu: ConfigFieldType.STRING,
     disable_mako: ConfigFieldType.BOOLEAN,
     disable_hdr_exposure: ConfigFieldType.BOOLEAN,
+    external_vulkan_layer: ConfigFieldType.STRING,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,
     force_alsa_audio: ConfigFieldType.BOOLEAN,

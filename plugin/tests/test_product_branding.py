@@ -37,7 +37,7 @@ class ProductBrandingTests(unittest.TestCase):
         configuration = (
             PLUGIN_DIR / "src/components/ConfigurationSection.tsx"
         ).read_text(encoding="utf-8")
-        self.assertIn("Advanced MAKO Renderer Settings", configuration)
+        self.assertIn("Advanced Rendering Settings", configuration)
 
         lifecycle = (
             PLUGIN_DIR / "py_modules/mako_plugin/plugin.py"
@@ -65,29 +65,36 @@ class ProductBrandingTests(unittest.TestCase):
         self.assertIn("MAKO-Decky.zip", packager)
         self.assertIn("MAKO-Decky-local.", packager)
 
-    def test_release_codename_is_shared_by_package_and_component_notes(self):
-        manifest = json.loads(
-            (PLUGIN_DIR / "package.json").read_text(encoding="utf-8")
-        )
+    def test_release_version_and_codename_are_shared_by_component_notes(self):
         decky_notes = (
             PLUGIN_DIR / "RELEASE_NOTES.md"
         ).read_text(encoding="utf-8")
-        match = re.search(r"^### Codename:\s*(.+?)\s*$", decky_notes, re.MULTILINE)
-        self.assertIsNotNone(match)
-        codename = match.group(1)
+        engine_notes = (
+            REPOSITORY_ROOT / "engine/RELEASE_NOTES.md"
+        ).read_text(encoding="utf-8")
+        codename_match = re.search(
+            r"^### Release codename:\s*(.+?)\s*$",
+            decky_notes,
+            re.MULTILINE,
+        )
+        self.assertIsNotNone(codename_match)
+        codename = codename_match.group(1)
         self.assertTrue(codename)
-        self.assertTrue(
-            decky_notes.startswith(
-                f"## What's new in MAKO Decky v{manifest['version']}\n"
-            )
+        decky_version = re.match(
+            r"^## What's new in MAKO Decky v(.+?)$",
+            decky_notes,
+            re.MULTILINE,
         )
-        expected_heading = f"### Codename: {codename}"
-        self.assertIn(
-            expected_heading,
-            (
-                REPOSITORY_ROOT / "engine/RELEASE_NOTES.md"
-            ).read_text(encoding="utf-8"),
+        engine_version = re.match(
+            r"^## What's new in MAKO Renderer v(.+?)$",
+            engine_notes,
+            re.MULTILINE,
         )
+        self.assertIsNotNone(decky_version)
+        self.assertIsNotNone(engine_version)
+        self.assertEqual(decky_version.group(1), engine_version.group(1))
+        expected_heading = f"### Release codename: {codename}"
+        self.assertIn(expected_heading, engine_notes)
 
     def test_renderer_logs_use_the_mako_renderer_prefix(self):
         source_files = [

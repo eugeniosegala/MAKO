@@ -29,6 +29,7 @@ When adding transitional compatibility, update this ledger in the same change wi
 | Cleanup | Result | Completed |
 | --- | --- | --- |
 | Numbered generated-wrapper history in migration documentation and tests | Replaced format-by-format descriptions and tests with the actual invariant: any non-current format is regenerated from canonical state. Unique user-state migrations and contamination guards remain separately tested. | 2026-08-20 |
+| Legacy vkBasalt wrapper-export scrubber | Removed the one-off line editor. Non-current wrappers are regenerated from canonical profile state, and current vkBasalt activation is now owned by the per-profile External Tools selector. | 2026-08-20 |
 
 ## Removal checklist
 

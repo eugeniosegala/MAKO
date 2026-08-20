@@ -30,6 +30,7 @@ ACTIVE_IN = "active_in"
 GPU = "gpu"
 DISABLE_MAKO = "disable_mako"
 DISABLE_HDR_EXPOSURE = "disable_hdr_exposure"
+EXTERNAL_VULKAN_LAYER = "external_vulkan_layer"
 DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode"
 ENABLE_ZINK = "enable_zink"
 FORCE_ALSA_AUDIO = "force_alsa_audio"
@@ -54,6 +55,7 @@ class ConfigurationData(TypedDict):
     gpu: str
     disable_mako: bool
     disable_hdr_exposure: bool
+    external_vulkan_layer: str
     disable_steamdeck_mode: bool
     enable_zink: bool
     force_alsa_audio: bool
@@ -78,6 +80,8 @@ def get_script_parsing_logic():
                         script_values["disable_mako"] = value == "1"
                 if key == "MAKO_DISABLE_HDR_EXPOSURE":
                         script_values["disable_hdr_exposure"] = value == "1"
+                if key == "MAKO_EXTERNAL_VULKAN_LAYER":
+                        script_values["external_vulkan_layer"] = value
                 if key == "SteamDeck":
                         script_values["disable_steamdeck_mode"] = value == "0"
                 if key == "__GLX_VENDOR_LIBRARY_NAME" and value == "mesa":
@@ -101,6 +105,8 @@ def get_script_generation_logic():
             lines.append("export DISABLE_MAKO=1")
         if config.get("disable_hdr_exposure", False):
             lines.append("export MAKO_DISABLE_HDR_EXPOSURE=1")
+        external_vulkan_layer = config.get("external_vulkan_layer", "")
+        lines.append(f"export MAKO_EXTERNAL_VULKAN_LAYER={external_vulkan_layer}")
         if config.get("disable_steamdeck_mode", False):
             lines.append("export SteamDeck=0")
         if config.get("enable_zink", False):
@@ -123,4 +129,4 @@ def get_script_generation_logic():
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']
+ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'external_vulkan_layer', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']

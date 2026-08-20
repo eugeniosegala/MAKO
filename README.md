@@ -84,9 +84,9 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 > [!IMPORTANT]
 > If Decky does not show or reload **MAKO Decky** after installing a ZIP, uninstall it, install the ZIP again, and restart your Steam Deck or Steam Machine. Then open the plugin and repeat step 5.
 
-### MangoHud
+### Optional graphics integrations
 
-For MangoHud support, follow the guarded setup in [optional Vulkan layer chaining](engine/docs/LAYER-CHAINING.md).
+MAKO Decky can enable either MangoHud or experimental vkBasalt per profile. For customization, manual commands, and testing guidance for OBS Vulkan Capture, RenderDoc, ReShade, and OptiScaler, see [optional graphics integrations](engine/docs/LAYER-CHAINING.md).
 
 ### Heroic and other Flatpak applications
 

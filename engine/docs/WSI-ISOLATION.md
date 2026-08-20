@@ -64,7 +64,7 @@ MAKO Decky uses the equivalent per-user path below `~/.local/share/mako-render/`
 | Steam/Game Mode interface | Active | Compositor UI is not the Vulkan WSI layer |
 | Gamescope WSI Vulkan layer | Excluded | Avoids competing presentation policy |
 | Steam Fossilize/implicit overlay hooks | Excluded | Prevents dispatch-chain bypass and ordering changes |
-| System-wide implicit layers | Excluded | Makes swapchain ownership deterministic |
+| System-wide implicit layers | Excluded by default | Makes swapchain ownership deterministic; MAKO Decky may admit the guarded host directory for one selected External Tool |
 | Known LSFG-VK frame-generation layers | Disabled | Two frame generators cannot own one swapchain |
 | Explicit application layers | Not selected by this implicit-path policy | Vulkan explicit-layer behavior remains separate |
 | Game-local integrations such as OptiScaler | Files are not removed | Use only one frame-generation implementation per game |
@@ -104,13 +104,13 @@ Do not implement this by removing the SDR guards globally, guessing from output 
 Isolation is a strong boundary and has intentional tradeoffs:
 
 - Steam's implicit shader-cache and Vulkan overlay hooks do not join the game process. Steam and Game Mode remain usable, but a Vulkan-hook feature may be absent.
-- MangoHud, capture tools, post-processing layers, or vendor tools installed as implicit layers do not load through the normal managed path. The [optional Vulkan layer chaining guide](LAYER-CHAINING.md) documents a limited native Steam/Proton MangoHud exception; it is an opt-in compatibility path rather than the default presentation contract.
+- MangoHud, capture tools, post-processing layers, or vendor tools installed as implicit layers do not load through the normal managed path. The [optional graphics integrations guide](LAYER-CHAINING.md) documents MAKO Decky's mutually exclusive MangoHud and experimental vkBasalt controls plus the manual expert path; each is an opt-in compatibility lane rather than the default presentation contract.
 - A game that relied on another implicit layer for compatibility may behave differently. Compare against a native launch before assuming MAKO's scheduler is responsible.
 - Current managed launches intentionally do not expose HDR frame generation.
 - An incorrectly packaged private manifest can make MAKO appear active at the instance level while missing device or swapchain interception. Both architecture manifests and their relative library paths must be verified.
 - Over-broad changes to the path variables can break Flatpak, 32-bit Proton, Heroic/UMU, or emulators even when a native 64-bit Steam game passes.
 
-The dedicated chaining guide owns the MangoHud command, guard meanings, observed order, verification procedure, evidence, and unsupported matrix. Do not remove those guards or generalize the exception without the corresponding package and real-hardware evidence.
+The dedicated integrations guide owns the Decky controls, manual commands, customization boundary, guard meanings, observed order, verification procedure, evidence, and unsupported matrix. Do not remove those guards or generalize an exception without the corresponding package and real-hardware evidence.
 
 Signals that the boundary regressed include:
 

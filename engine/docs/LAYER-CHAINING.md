@@ -1,6 +1,6 @@
-# Optional Vulkan layer chaining
+# Optional graphics integrations
 
-This guide documents deliberate exceptions to MAKO Renderer's managed implicit-layer isolation. [WSI isolation](WSI-ISOLATION.md) remains the architectural source of truth: the supported default gives MAKO one deterministic presentation owner and exposes only MAKO's private Vulkan manifests.
+This guide documents deliberate exceptions to MAKO Renderer's managed implicit-layer isolation and the separate boundary for game-local integrations. [WSI isolation](WSI-ISOLATION.md) remains the architectural source of truth: the supported default gives MAKO one deterministic presentation owner and exposes only MAKO's private Vulkan manifests.
 
 ## Default managed launch
 
@@ -12,9 +12,21 @@ MAKO Decky normally launches a native Steam or Proton game with:
 
 The wrapper selects MAKO's private `VK_IMPLICIT_LAYER_PATH`, removes additive implicit-layer discovery, disables Gamescope WSI and competing frame-generation identities, and keeps Gamescope itself active outside the game's Vulkan chain. Keep this default unless a specific additional layer has its own compatibility evidence.
 
+## MAKO Decky External Tools
+
+MAKO Decky exposes mutually exclusive **Enable MangoHud** and **Enable vkBasalt** controls under **External Tools**. The selection is stored per profile and applied after restarting the game. Enable a tool in Default to use it for games without their own saved profile, or start a game and choose **Save profile for &lt;game&gt;** before enabling it to limit the selection to that title.
+
+The MangoHud control activates the host layer but does not replace MangoHud's display settings. MangoHud continues to read the user's existing `~/.config/MangoHud/MangoHud.conf`. For a one-game override while the profile control is enabled, keep the normal wrapper and add only the desired options:
+
+```text
+/home/deck/.local/bin/mako-run env MANGOHUD_CONFIG=fps,frametime,cpu_stats,gpu_stats,position=top-right %command%
+```
+
+The vkBasalt control similarly leaves vkBasalt's own configuration under `~/.config/vkBasalt/` untouched. Both controls currently target a host-installed layer with a 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS. They do not enable external layers inside Flatpak games. The manual commands below remain useful for expert diagnosis, loader tracing, and systems without MAKO Decky. Set both External Tools controls off before using a manual activation command so a profile cannot inject a second external layer.
+
 ## Validated MangoHud exception
 
-For a host-installed MangoHud with a 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS, the minimal setup is:
+For a host-installed MangoHud with a 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS, the minimal manual setup is:
 
 ```text
 /home/deck/.local/bin/mako-run env MANGOHUD=1 NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
@@ -55,6 +67,51 @@ MAKO is closer to the application. Each generated or original present that MAKO 
 
 Do not use `mangohud /home/deck/.local/bin/mako-run %command%`. That launcher runs before `mako-run`; MAKO then replaces implicit discovery, while MangoHud's preload shim can propagate into Steam Runtime helper processes without loading the Vulkan overlay in the game.
 
+## Candidate Vulkan-layer tests
+
+The same narrow manifest-path technique can expose another host Vulkan layer without changing MAKO Renderer. This establishes discovery, not compatibility: the candidate still needs the correct architecture, its own activation condition, a host-visible library, a usable position in the call chain, and real runtime validation. Only the MangoHud lane above is currently validated.
+
+This Deck did not have host-visible vkBasalt, OBS Vulkan Capture, or RenderDoc manifests when this guide was written. Install one candidate at a time and confirm the directory containing its JSON manifest before testing. Do not combine these candidate commands with MangoHud or another unvalidated layer.
+
+For a 64-bit host-installed [vkBasalt](https://github.com/DadSchoorse/vkBasalt) manifest in `/usr/share/vulkan/implicit_layer.d`, test:
+
+```text
+/home/deck/.local/bin/mako-run env ENABLE_VKBASALT=1 NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
+```
+
+For a 64-bit host-visible [OBS Vulkan Capture](https://github.com/nowrep/obs-vkcapture) manifest in `/usr/share/vulkan/implicit_layer.d`, with the matching OBS plugin installed, test:
+
+```text
+/home/deck/.local/bin/mako-run env OBS_VKCAPTURE=1 NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
+```
+
+[RenderDoc](https://github.com/baldurk/renderdoc/blob/v1.x/docs/behind_scenes/vulkan_support.rst) registers a Vulkan capture layer and controls capture through its own launch or injection workflow. Keep RenderDoc's activation environment, add the actual directory containing its registered manifest after MAKO's private manifest directory, and inspect the loader order; there is no validated universal Steam launch command yet.
+
+The provisional goal for vkBasalt and OBS Vulkan Capture is:
+
+```text
+Application
+    -> MAKO Renderer
+        -> candidate layer
+            -> Vulkan driver
+```
+
+That position gives the candidate an opportunity to observe every original or generated present sent by MAKO, but it does not guarantee that post-processing or capture will understand MAKO-owned images and synchronization. RenderDoc's useful capture position depends on the debugging question, so record the measured order rather than assuming one.
+
+Use these candidates for local experiments, not as a support claim:
+
+| Integration | Mechanism | Current MAKO status |
+| --- | --- | --- |
+| vkBasalt | Host implicit Vulkan post-processing layer enabled by `ENABLE_VKBASALT=1` | Candidate command documented; not installed or validated on the recorded SteamOS system. |
+| OBS Vulkan Capture | Host-visible implicit Vulkan capture layer enabled by `OBS_VKCAPTURE=1`, plus the matching OBS plugin | Candidate command documented; not installed or validated on the recorded SteamOS system. Flatpak OBS also needs the matching capture components at the sandbox boundary. |
+| RenderDoc | Developer capture layer registered and activated by RenderDoc | Candidate procedure documented; no universal Steam launch command or validated order yet. Use for diagnosis, not performance evidence. |
+
+## Game-local Proton integrations
+
+ReShade and OptiScaler are normally injected into the Windows game through a proxy DLL and Wine/Proton DLL overrides. They are not admitted through `VK_IMPLICIT_LAYER_PATH`, so MAKO's host Vulkan-layer isolation does not remove their files or activation settings.
+
+This makes coexistence possible in principle, but not automatically supported. Test each title independently with the normal `/home/deck/.local/bin/mako-run %command%` launch, preserve the integration's documented DLL override, and disable every other frame-generation implementation. [OptiScaler](https://github.com/optiscaler/OptiScaler/wiki/Manual-Installation) upscaling may remain active, but OptiScaler frame generation must be off while MAKO owns frame generation. For ReShade effects through a native Linux Vulkan layer rather than a game-local DLL, use vkBasalt's ReShade FX support and follow the candidate-layer test above.
+
 ## How general chaining works
 
 `VK_IMPLICIT_LAYER_PATH` is a Vulkan-loader interface, not a MangoHud interface. It accepts colon-separated directories on Linux and replaces normal implicit-layer discovery with manifests from those directories. An implicit layer joins only when its manifest is compatible and its enable/disable conditions permit it.
@@ -66,13 +123,24 @@ Use these compatibility rules:
 | Layer class | MAKO policy |
 | --- | --- |
 | MangoHud | Limited opt-in evidence exists for the exact 64-bit SteamOS path above. |
+| vkBasalt | Experimental candidate only. Add its manifest directory and activation variable for one local test; validate order, image quality, and pacing. |
+| OBS Vulkan Capture | Experimental candidate only. The game and OBS must see their matching capture components; validate that the recording contains generated output and remains stable. |
+| RenderDoc | Experimental diagnostic candidate only. Use RenderDoc's registration and activation workflow, expose its manifest deliberately, and measure the resulting order. |
 | Gamescope WSI | Excluded from the managed SDR game chain because its upper FIFO policy can conflict with MAKO's generated/original sequence. Gamescope the compositor remains active. |
 | Other frame generation | Never combine with MAKO. Two frame generators cannot own one swapchain. |
 | Mesa device selection or anti-lag | Excluded by the documented MangoHud guards so the exception changes only the intended overlay boundary. |
-| Capture, post-processing, vendor, or developer layers | Unsupported until their exact order and runtime matrix have real evidence. |
-| Game-local integrations such as OptiScaler | Not admitted through this manifest path. Their files remain untouched, but their frame-generation implementation must stay disabled when MAKO is active. |
+| Other capture, post-processing, vendor, or developer layers | Unsupported until their exact activation, order, and runtime matrix have real evidence. |
+| Game-local integrations such as ReShade or OptiScaler | Not admitted through this manifest path. Their files and DLL overrides remain untouched, but any other frame-generation implementation must stay disabled when MAKO is active. |
 
 Do not broaden the path to a new manifest directory or remove a guard globally. Add one named compatibility path at a time, record its intended order, and validate native Vulkan, DXVK, VKD3D-Proton, Gamescope, focus/overlay transitions, swapchain recreation, and every supported architecture or sandbox boundary it claims.
+
+For each candidate, start from the normal MAKO launch and verify the game first. Then enable only that candidate, turn on `VK_LOADER_DEBUG=layer` and MAKO presentation diagnostics for one short run, and check all of the following before considering the combination usable:
+
+- the architecture-correct MAKO and candidate identities both appear in the instance and device call stacks;
+- no Gamescope WSI, Mesa device-selection, Mesa anti-lag, competing frame-generation, or unrelated layer identity joins the game chain;
+- the candidate visibly works or captures the intended original and generated frames;
+- Fixed and Adaptive generation remain paced during normal play, hitches, focus changes, overlays, swapchain recreation, and shutdown; and
+- removing the candidate restores the normal MAKO baseline.
 
 ## Verify the active chain
 

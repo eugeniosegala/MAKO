@@ -4,10 +4,11 @@ import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
 import { ConfigurationData } from "../config/configSchema";
 import {
   ACTIVE_IN, ALLOW_FP16, DISABLE_MAKO, DLL, FLOW_SCALE, GPU,
-  BASE_FPS_CAP, DISABLE_STEAMDECK_MODE, ENABLE_ZINK, FORCE_ALSA_AUDIO
+  BASE_FPS_CAP, DISABLE_STEAMDECK_MODE, ENABLE_ZINK, EXTERNAL_VULKAN_LAYER,
+  FORCE_ALSA_AUDIO
 } from "../config/generatedConfigSchema";
 import t from "../i18n/i18n";
-import { MakoSectionHeader } from "./MakoUi";
+import { makoDangerTextColor, MakoSectionHeader } from "./MakoUi";
 
 interface ConfigurationSectionProps {
   config: ConfigurationData;
@@ -109,8 +110,8 @@ export function ConfigurationSection({
         `}
       </style>
 
-      <MakoSectionHeader>
-        {t("CONFIG_SECTION_TITLE", "Advanced MAKO Renderer Settings")}
+      <MakoSectionHeader topMargin="37px">
+        {t("CONFIG_SECTION_TITLE", "Advanced Rendering Settings")}
       </MakoSectionHeader>
 
       <PanelSectionRow>
@@ -176,6 +177,7 @@ export function ConfigurationSection({
             <ToggleField
               label={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH", "Disable MAKO Renderer on Next Launch")}
               description={t("CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC", "Troubleshooting only. Stops MAKO Renderer loading after restart. Use Frame Generation above for live on/off.")}
+              bottomSeparator="none"
               checked={config.disable_mako}
               onChange={(value) => onConfigChange(DISABLE_MAKO, value)}
             />
@@ -184,7 +186,7 @@ export function ConfigurationSection({
         </>
       )}
 
-      <MakoSectionHeader>
+      <MakoSectionHeader topMargin="26px">
         {t("CONFIG_WORKAROUNDS_TITLE", "Compatibility Settings")}
       </MakoSectionHeader>
 
@@ -245,6 +247,7 @@ export function ConfigurationSection({
             <ToggleField
               label={t("CONFIG_FORCE_ALSA_AUDIO", "Force ALSA Audio (Restart)")}
               description={t("CONFIG_FORCE_ALSA_AUDIO_DESC", "May improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds. Disable to restore normal audio defaults.")}
+              bottomSeparator="none"
               checked={config.force_alsa_audio}
               onChange={(value) => onConfigChange(FORCE_ALSA_AUDIO, value)}
             />
@@ -252,7 +255,47 @@ export function ConfigurationSection({
         </>
       )}
 
-      <MakoSectionHeader>
+      <MakoSectionHeader topMargin="26px">
+        {t("CONFIG_EXTERNAL_TOOLS_TITLE", "External Tools")}
+      </MakoSectionHeader>
+
+      <PanelSectionRow>
+        <div style={{ fontSize: "11px", lineHeight: "1.35", color: "#b8c5d6", marginBottom: "4px" }}>
+          <div>
+            {t(
+              "CONFIG_EXTERNAL_TOOLS_DESC",
+              "Optional and per profile. Enable a tool in Default for games without a saved profile, or save a game profile first to limit it to that title. Only one external Vulkan layer can be selected at a time. Restart the game after changing it."
+            )}
+          </div>
+          <div style={{ marginTop: "6px", color: makoDangerTextColor, fontWeight: "500" }}>
+            {t(
+              "CONFIG_EXTERNAL_TOOLS_WARNING",
+              "External tools may affect performance. Test each game carefully."
+            )}
+          </div>
+        </div>
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ToggleField
+          label={t("CONFIG_ENABLE_MANGOHUD", "Enable MangoHud (Restart)")}
+          description={t("CONFIG_ENABLE_MANGOHUD_DESC", "Uses the host-installed MangoHud and your existing MangoHud configuration. See the expert guide for per-game environment overrides.")}
+          checked={config.external_vulkan_layer === "mangohud"}
+          onChange={(value) => onConfigChange(EXTERNAL_VULKAN_LAYER, value ? "mangohud" : "")}
+        />
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ToggleField
+          label={t("CONFIG_ENABLE_VKBASALT", "Enable vkBasalt (Experimental, Restart)")}
+          description={t("CONFIG_ENABLE_VKBASALT_DESC", "Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.")}
+          bottomSeparator="none"
+          checked={config.external_vulkan_layer === "vkbasalt"}
+          onChange={(value) => onConfigChange(EXTERNAL_VULKAN_LAYER, value ? "vkbasalt" : "")}
+        />
+      </PanelSectionRow>
+
+      <MakoSectionHeader topMargin="26px">
         {t("CONFIG_MANUAL_OVERRIDES_TITLE", "Manual Overrides")}
       </MakoSectionHeader>
 

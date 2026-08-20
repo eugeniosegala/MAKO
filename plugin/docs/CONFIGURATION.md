@@ -25,9 +25,17 @@ The saved Steam app ID selects launcher compatibility settings before the game s
 
 For launchers and emulators, start the title from its Steam or Game Mode shortcut and use the same running-game capture action. Profile creation is not available while no game is running: MAKO relies on process discovery instead of asking you to guess an executable name. After capture, edit **Matched Processes** only if a launcher or emulator needs an additional process alias. Linux binary names and Windows `.exe` names are supported.
 
-Frame-generation, quality, GPU, and matched-process settings belong to the selected profile. Launcher compatibility settings, including **Disable MAKO Renderer on Next Launch**, **Disable HDR**, Steam Deck Mode, Zink, and ALSA, are also stored per profile. The DLL path and FP16 permission remain global.
+Frame-generation, quality, GPU, and matched-process settings belong to the selected profile. Launcher compatibility settings, including **Disable MAKO Renderer on Next Launch**, **Disable HDR**, Steam Deck Mode, Zink, ALSA, and the External Tools selection, are also stored per profile. The DLL path and FP16 permission remain global.
 
 The Decky dropdown is an editor selection, not a runtime override. Outside a game, choose any saved profile and it remains available for editing without affecting another game's launch. When a live game is detected, MAKO follows its matching profile, or Default if no match exists. On game exit, the runtime and editor return to Default once; after the controls unlock, an offline selection stays in place until another game starts or the plugin is reopened.
+
+## External Tools
+
+**Enable MangoHud** and **Enable vkBasalt** are mutually exclusive per-profile controls. Default applies to games without a saved profile; to limit a tool to one title, start that game, choose **Save profile for &lt;game&gt;**, and enable the tool in the captured profile. Restart the game after changing either control.
+
+These controls admit one named host Vulkan layer while retaining MAKO's Gamescope WSI, Mesa device-selection, Mesa anti-lag, and competing-frame-generation guards. The current lane is limited to a host-installed tool with a 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS. Flatpak games remain on MAKO's private extension path, and MangoHud plus vkBasalt cannot be selected together.
+
+The controls activate the selected layer; they do not own its appearance or effects. MangoHud continues to read `~/.config/MangoHud/MangoHud.conf`, and vkBasalt continues to use its own configuration under `~/.config/vkBasalt/`. For a one-game MangoHud override, or for loader diagnostics and manual activation, use the Renderer [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md) guide.
 
 ### Upgrade and legacy-option safety
 
