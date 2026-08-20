@@ -14,17 +14,14 @@ The Renderer suite also exercises the standalone `mako-launch` contract: determi
 
 The frontend suite intentionally tests operations where a UI/backend disagreement can damage or misrepresent user state: Renderer installation, configuration persistence, out-of-order profile loads, profile switching, default-profile protection, and Decky RPC method names. It does not use snapshots or test static labels and layout.
 
-The backend suite treats Armada as an unsupported-host safety boundary: native
-host detection must survive a translated Decky process, stale x86 files cannot
-report a successful install, old wrappers must exit before any MAKO exports,
-and persisted MAKO Flatpak activation must be removed without touching
-competitor-only settings. These deterministic checks prove fail-closed behavior
-only. Native Renderer support still requires the real-hardware evidence listed
-in [Armada and native AArch64 support](plugin/docs/ARMADA.md).
+The Decky job also runs the repository Markdown formatting check. Install the tracked local hook once with `just install-hooks`; it formats only staged Markdown through lint-staged, preserves partially staged work, and leaves JS/TS, Python, C++, generated output, and vendored code untouched.
+
+The backend suite treats Armada as an unsupported-host safety boundary: native host detection must survive a translated Decky process, stale x86 files cannot report a successful install, old wrappers must exit before any MAKO exports, and persisted MAKO Flatpak activation must be removed without touching competitor-only settings. These deterministic checks prove fail-closed behavior only. Native Renderer support still requires the real-hardware evidence listed in [Armada and native AArch64 support](plugin/docs/ARMADA.md).
 
 Run the same gates locally with:
 
 ```bash
+just check-markdown-format
 npm --prefix plugin test
 npm --prefix plugin run test:frontend:typecheck
 npm --prefix plugin run test:frontend:coverage

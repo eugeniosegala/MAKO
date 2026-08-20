@@ -8,6 +8,18 @@ default:
 install-plugin:
     pnpm --dir plugin install --frozen-lockfile
 
+# Enable the tracked Markdown pre-commit hook for this checkout.
+install-hooks:
+    ./scripts/install-git-hooks.sh
+
+# Format all Markdown without artificial prose wrapping.
+format-markdown:
+    pnpm --dir plugin run format:markdown
+
+# Check repository Markdown formatting without changing files.
+check-markdown-format:
+    pnpm --dir plugin run format:markdown:check
+
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 

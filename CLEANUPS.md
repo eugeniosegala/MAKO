@@ -1,38 +1,18 @@
 # Compatibility cleanup ledger
 
-This document owns MAKO's transitional compatibility and cleanup policy. It is
-not a general backlog. Add an entry when a change temporarily accepts, imports,
-rewrites, or rejects an older persisted representation and remove the entry
-when the compatibility code is removed.
+This document owns MAKO's transitional compatibility and cleanup policy. It is not a general backlog. Add an entry when a change temporarily accepts, imports, rewrites, or rejects an older persisted representation and remove the entry when the compatibility code is removed.
 
 ## Policy
 
 Generated files and user data have different lifecycles:
 
-- Generated launch wrappers are disposable cache. MAKO supports the current
-  wrapper in place and atomically regenerates every stale, incomplete, or
-  contaminated wrapper from canonical profile and configuration data. Do not
-  add a chain of format-specific wrapper transforms or retain tests for an
-  arbitrary number of old format numbers.
-- Persisted values that do not exist anywhere else are user data. Keep a small,
-  idempotent migration until MAKO has explicitly ended the direct-upgrade path
-  from the affected release. Regenerating a wrapper is not a substitute for
-  first rescuing those values.
-- Compatibility deny-lists and fail-closed host guards are current safety
-  invariants, not historical implementations. Keep them while a stale artifact
-  could otherwise reactivate unsupported or conflicting behavior.
+- Generated launch wrappers are disposable cache. MAKO supports the current wrapper in place and atomically regenerates every stale, incomplete, or contaminated wrapper from canonical profile and configuration data. Do not add a chain of format-specific wrapper transforms or retain tests for an arbitrary number of old format numbers.
+- Persisted values that do not exist anywhere else are user data. Keep a small, idempotent migration until MAKO has explicitly ended the direct-upgrade path from the affected release. Regenerating a wrapper is not a substitute for first rescuing those values.
+- Compatibility deny-lists and fail-closed host guards are current safety invariants, not historical implementations. Keep them while a stale artifact could otherwise reactivate unsupported or conflicting behavior.
 
-MAKO does not currently impose a maximum skipped-version upgrade gap. Therefore
-"keep the last three releases" is not a safe deletion rule for data migrations:
-users may update directly from an older published build. A data migration can
-be removed only after the project declares a minimum supported direct-upgrade
-baseline that is newer than its source release, or provides an equivalent
-state-preserving replacement.
+MAKO does not currently impose a maximum skipped-version upgrade gap. Therefore "keep the last three releases" is not a safe deletion rule for data migrations: users may update directly from an older published build. A data migration can be removed only after the project declares a minimum supported direct-upgrade baseline that is newer than its source release, or provides an equivalent state-preserving replacement.
 
-When adding transitional compatibility, update this ledger in the same change
-with its owner, reason, removal gate, and regression test. Prefer one generic
-contract test over one test per historical version when the implementation does
-not branch on version.
+When adding transitional compatibility, update this ledger in the same change with its owner, reason, removal gate, and regression test. Prefer one generic contract test over one test per historical version when the implementation does not branch on version.
 
 ## Current obligations
 
@@ -54,18 +34,11 @@ not branch on version.
 
 Before deleting a current obligation:
 
-1. Confirm whether the old representation contains unique user data or is only
-   generated output.
-2. Identify the published release that first wrote the canonical replacement
-   and compare it with the declared minimum direct-upgrade baseline.
-3. Verify that install, startup, rollback, and skipped-version upgrades cannot
-   encounter the removed path within the supported contract.
-4. Remove the compatibility code, its ledger entry, and only the tests that no
-   longer express a current invariant.
-5. Run the boundary-specific suite in `TESTING.md`; package/install changes also
-   require local archive verification.
+1. Confirm whether the old representation contains unique user data or is only generated output.
+2. Identify the published release that first wrote the canonical replacement and compare it with the declared minimum direct-upgrade baseline.
+3. Verify that install, startup, rollback, and skipped-version upgrades cannot encounter the removed path within the supported contract.
+4. Remove the compatibility code, its ledger entry, and only the tests that no longer express a current invariant.
+5. Run the boundary-specific suite in `TESTING.md`; package/install changes also require local archive verification.
 6. Mention user-visible compatibility removals in the component release notes.
 
-Diagnostic input compatibility, stable package identifiers, and published
-archive names have their own contracts in `AGENTS.md`; do not treat them as
-generated-wrapper cleanup.
+Diagnostic input compatibility, stable package identifiers, and published archive names have their own contracts in `AGENTS.md`; do not treat them as generated-wrapper cleanup.

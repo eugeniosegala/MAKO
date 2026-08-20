@@ -31,18 +31,9 @@ The Decky dropdown is an editor selection, not a runtime override. Outside a gam
 
 ### Upgrade and legacy-option safety
 
-MAKO Decky treats the current shared configuration schema as an allowlist. An
-unknown or retired key in a manually copied Renderer profile is ignored, and it
-cannot become a launch-wrapper environment variable. Reading the profile alone
-does not change its file; the next Decky save or installation merge rewrites it
-in canonical form and removes unknown keys.
+MAKO Decky treats the current shared configuration schema as an allowlist. An unknown or retired key in a manually copied Renderer profile is ignored, and it cannot become a launch-wrapper environment variable. Reading the profile alone does not change its file; the next Decky save or installation merge rewrites it in canonical form and removes unknown keys.
 
-Settings that still carry useful meaning are migrated explicitly before their
-old representation is removed. This is safer than preserving arbitrary legacy
-variables indefinitely, because a stale option cannot silently reactivate or
-acquire a different meaning later. Profiles that still use a supported format
-remain safe to open in an older release, but saving them there can discard
-settings that older MAKO does not understand.
+Settings that still carry useful meaning are migrated explicitly before their old representation is removed. This is safer than preserving arbitrary legacy variables indefinitely, because a stale option cannot silently reactivate or acquire a different meaning later. Profiles that still use a supported format remain safe to open in an older release, but saving them there can discard settings that older MAKO does not understand.
 
 ## Quality and matching
 

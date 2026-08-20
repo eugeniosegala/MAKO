@@ -43,6 +43,10 @@ jobs:
         working-directory: plugin
         run: pnpm install --frozen-lockfile
 
+      - name: Check Markdown formatting
+        working-directory: plugin
+        run: pnpm run format:markdown:check
+
       - name: Test backend behavior
         working-directory: plugin
         run: pnpm run test:backend

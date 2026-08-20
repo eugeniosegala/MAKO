@@ -40,23 +40,11 @@ MAKO Decky uses its own safer UI defaults: 90 FPS Adaptive target, 0.90 Flow Sca
 
 ## Profile compatibility
 
-`version = 2` is the current configuration format. MAKO accepts only a format
-version it understands; a future structural change must use a new version and
-an explicit migration.
+`version = 2` is the current configuration format. MAKO accepts only a format version it understands; a future structural change must use a new version and an explicit migration.
 
-Within a supported version, an unrecognised global or profile key is inert: the
-Renderer does not turn it into engine state or an environment variable. Merely
-starting the Renderer does not edit the file. If MAKO Decky or `mako-ui` later
-saves that configuration, it writes the current canonical schema and removes
-unknown or retired keys. This keeps ordinary upgrades safe and prevents an old
-option from unexpectedly regaining meaning in a later release.
+Within a supported version, an unrecognised global or profile key is inert: the Renderer does not turn it into engine state or an environment variable. Merely starting the Renderer does not edit the file. If MAKO Decky or `mako-ui` later saves that configuration, it writes the current canonical schema and removes unknown or retired keys. This keeps ordinary upgrades safe and prevents an old option from unexpectedly regaining meaning in a later release.
 
-When a setting is renamed or its value must be carried forward, add a one-time,
-tested migration before removing the old field. Do not reuse an old option name
-for different behavior. Copying a profile that still uses a supported format
-from a newer MAKO release into an older editor is therefore not lossless: the
-older runtime ignores unknown settings, and saving with that older editor
-removes them.
+When a setting is renamed or its value must be carried forward, add a one-time, tested migration before removing the old field. Do not reuse an old option name for different behavior. Copying a profile that still uses a supported format from a newer MAKO release into an older editor is therefore not lossless: the older runtime ignores unknown settings, and saving with that older editor removes them.
 
 ## Applying changes
 
