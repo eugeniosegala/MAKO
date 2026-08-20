@@ -56,3 +56,23 @@ Set the workflow's `deploy_to_decky` input only on a dedicated device with an ex
 ## Runtime compatibility matrix
 
 The hardware workflow establishes packaging, loader activation, and deterministic image-quality boundaries. Game presentation still requires the release-candidate matrix in [Adaptive validation](engine/docs/ADAPTIVE-VALIDATION.md): DXVK and VKD3D-Proton under Gamescope, overlay and focus transitions, hitches, swapchain recreation, and the supported desktop GPU paths. Record unavailable rows as **not tested** rather than treating the automated smoke test as equivalent coverage.
+
+## Versioned game traces
+
+Use `scripts/capture-trace.sh` after a completed game session to archive comparative evidence into a sibling **private** `MAKO-Traces` checkout. Read the [trace extractor guide](TRACES.md) first. Keep the private repository outside the MAKO worktree so licensed paths, large runtime logs, and subjective notes never become product artifacts; it is not required for normal MAKO builds, tests, packaging, installation, or releases.
+
+The capture command requires a game name, explicit archive version label, and session start time. Development builds must include their source identity rather than masquerading as a released version. The script stores sanitized diagnostics and configuration, optionally clips Decky and Steam logs to the session window, records the exact MAKO source revision and host identity, generates an event index and notes template, rejects likely credentials, and writes checksums without overwriting an existing capture.
+
+```bash
+./scripts/capture-trace.sh \
+  --game "Resident Evil 4" \
+  --game-id 2050650 \
+  --version "2.0.0-dev-f1f6a1c" \
+  --label "fixed-adaptive-fifo-pressure" \
+  --session-start "2026-08-20T12:30:52+01:00" \
+  --session-end "2026-08-20T12:36:25+01:00" \
+  --decky-log "$HOME/homebrew/logs/Mako/<decky-log>.log" \
+  --steam-log "$HOME/.steam/steam/logs/console-linux.txt"
+```
+
+Close the game first so buffered records are complete, then capture before launching another game because the development wrapper starts each session with a fresh presentation log. Validate the resulting archive with `../MAKO-Traces/scripts/validate.sh`. A stored trace supports repeatable comparison; a single run does not by itself prove a performance or image-quality regression.

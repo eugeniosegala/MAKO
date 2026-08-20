@@ -61,6 +61,7 @@ Start architecture work with the root `README.md`, then use `engine/README.md` o
 | Change WSI/layer isolation | `engine/docs/WSI-ISOLATION.md` | `engine/mako-render/src/presentation_policy.hpp`, `engine/scripts/mako-launch` |
 | Validate real SteamOS hardware | `TESTING.md` | `.github/workflows/steamos-hardware-validation.yml` |
 | Exercise the game/runtime matrix | `engine/docs/ADAPTIVE-VALIDATION.md` | Manual DXVK, VKD3D-Proton, native Vulkan, Gamescope, and supported desktop scenarios |
+| Archive a completed comparative game trace | `TRACES.md` | `scripts/capture-trace.sh`, sibling private `MAKO-Traces` checkout |
 | Build or package MAKO Decky | `plugin/docs/PACKAGING.md` | `plugin/package.json`, `plugin/scripts/package-local.sh` |
 | Review Armada/native AArch64 behavior | `plugin/docs/ARMADA.md` | `plugin/py_modules/mako_plugin/host_environment.py`, host/wrapper/Flatpak boundary tests |
 | Add or remove transitional compatibility | `CLEANUPS.md` | Owning migration/generator and its focused regression tests |
@@ -83,6 +84,8 @@ Run validation in proportion to the affected boundary:
 - Armada/native AArch64 remains a fail-closed compatibility boundary described in `plugin/docs/ARMADA.md`. Do not add an untraceable native binary, a second host detector, or a global FEX mutation. Enabling it requires native hardware evidence and an explicit source-built AArch64 package declaration.
 
 A skipped GPU test is not evidence of GPU correctness. The automated AMD scene is also not a substitute for the game/runtime compatibility matrix. State which hardware, driver, architecture, Flatpak runtime, and matrix rows were not tested.
+
+Completed comparative game sessions may be archived with `scripts/capture-trace.sh` into a sibling **private** `MAKO-Traces` checkout. Read `TRACES.md` before changing or running the extractor. The public MAKO repository owns extraction and sanitization behavior; the private trace repository owns stored evidence, its schema, and integrity validation. Normal MAKO builds, tests, packaging, installation, and releases must not require access to the private repository. Never copy licensed inputs or unrelated logs into a trace.
 
 ## Diagnostics map
 
