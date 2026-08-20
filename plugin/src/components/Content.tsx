@@ -169,6 +169,11 @@ export function Content() {
     });
   };
 
+  const hasDevelopmentNotice = Boolean(localDevelopmentBuildInfo);
+  const hasRunningAppNotice = Boolean(isInstalled && mainRunningApp);
+  const hasEngineUpdateNotice = Boolean(isInstalled && engineUpdateRequired);
+  const hasTopNotice = hasDevelopmentNotice || hasRunningAppNotice || hasEngineUpdateNotice;
+
   return (
     <div onFocusCapture={keepFocusedControlVisible}>
       <MakoButtonTheme />
@@ -176,6 +181,7 @@ export function Content() {
       <MakoReleaseIdentity
         version={currentRelease.version}
         codename={currentRelease.codename}
+        bottomMargin={hasTopNotice ? "8px" : "2px"}
       />
       {localDevelopmentBuildInfo && (
         <PanelSectionRow>
@@ -293,7 +299,7 @@ export function Content() {
         <PanelSectionRow>
           <div
             style={{
-              marginTop: localDevelopmentBuildInfo ? "8px" : undefined,
+              marginTop: hasDevelopmentNotice ? "8px" : undefined,
               padding: "8px 12px",
               width: "100%",
               boxSizing: "border-box",
@@ -312,7 +318,7 @@ export function Content() {
         <PanelSectionRow>
           <div
             style={{
-              marginTop: "8px",
+              marginTop: hasDevelopmentNotice || hasRunningAppNotice ? "8px" : undefined,
               padding: "12px",
               borderRadius: "8px",
               background: "rgba(255, 152, 0, 0.16)",
@@ -376,11 +382,7 @@ export function Content() {
         <ProfileManagement
           editingProfile={editingProfile}
           mainRunningApp={mainRunningApp}
-          topMargin={
-            !localDevelopmentBuildInfo && !mainRunningApp && !engineUpdateRequired
-              ? "18px"
-              : undefined
-          }
+          topMargin="18px"
           onProfileChange={async (profileName) => {
             editingProfileRef.current = profileName;
             setEditingProfile(profileName);

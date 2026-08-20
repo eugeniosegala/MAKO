@@ -10,6 +10,7 @@ interface MakoSectionHeaderProps {
 interface MakoReleaseIdentityProps {
   version: string;
   codename: string;
+  bottomMargin?: CSSProperties["marginBottom"];
 }
 
 export const makoPanelDivider = "1px solid rgba(77, 170, 190, 0.2)";
@@ -38,7 +39,7 @@ export const makoPanelItemStyle: CSSProperties = {
   borderTop: makoPanelDivider
 };
 
-export function MakoReleaseIdentity({ version, codename }: MakoReleaseIdentityProps) {
+export function MakoReleaseIdentity({ version, codename, bottomMargin = "2px" }: MakoReleaseIdentityProps) {
   const codenameSlug = codename
     .trim()
     .toLowerCase()
@@ -55,7 +56,8 @@ export function MakoReleaseIdentity({ version, codename }: MakoReleaseIdentityPr
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          margin: "-2px 0 2px",
+          margin: "-2px 0 0",
+          marginBottom: bottomMargin,
           padding: "2px 4px 4px",
           color: "#a8bdc2",
           fontSize: "10px",
