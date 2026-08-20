@@ -122,7 +122,7 @@
   "ADAPTIVE_TITLE": "Adaptive Frame Generation",
   "ADAPTIVE_DESC": "Adjusts frame generation to reach Target FPS. Steady 2x is the default for smoother pacing. Enable Fractional Adaptive below to keep more real frames, but test it per game. Raising the multiplier limit may require a restart.",
   "FRACTIONAL_ADAPTIVE_PRESET": "Fractional Adaptive (Preset)",
-  "FRACTIONAL_ADAPTIVE_PRESET_DESC": "Mixes generation ratios to reach targets such as 60 real FPS → 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. Cons: uneven frame spacing can feel choppy in some games. Off uses Steady 2x. Incompatible setting changes turn this preset off automatically.",
+  "FRACTIONAL_ADAPTIVE_PRESET_DESC": "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses Steady 2x. Incompatible setting changes turn this preset off automatically.",
   "ADAPTIVE_TARGET_FPS": "Target FPS",
   "ADAPTIVE_TARGET_FPS_DESC": "Desired displayed FPS. Fractional Adaptive may mix ratios to reach it; Steady 2x caps real FPS at half the target.",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "Steady 2x FPS Cap",

@@ -122,7 +122,7 @@
   "ADAPTIVE_TITLE": "自适应帧生成",
   "ADAPTIVE_DESC": "调整帧生成以达到目标 FPS。默认使用稳定 2x，让帧节奏更流畅。如果想保留更多真实帧，请针对每个游戏测试下方的“分数自适应”。提高倍率上限可能需要重启。",
   "FRACTIONAL_ADAPTIVE_PRESET": "小数倍率自适应（预设）",
-  "FRACTIONAL_ADAPTIVE_PRESET_DESC": "混合不同的生成倍率来达到目标，例如将 60 真实 FPS 提升到 90 显示 FPS。优点：保留更多真实帧，并可能降低输入延迟。缺点：帧间隔可能不均匀，部分游戏会感觉卡顿。关闭时使用稳定 2x；更改不兼容的设置后，此预设会自动关闭。",
+  "FRACTIONAL_ADAPTIVE_PRESET_DESC": "混合不同的生成倍率来达到目标，例如 60 真实 FPS > 90 显示 FPS。优点：保留更多真实帧，并可能降低输入延迟。部分游戏可能感觉卡顿，但在另一些游戏中会感觉格外流畅、响应更快。关闭时使用稳定 2x；更改不兼容的设置后，此预设会自动关闭。",
   "ADAPTIVE_TARGET_FPS": "目标 FPS",
   "ADAPTIVE_TARGET_FPS_DESC": "期望的显示 FPS。分数自适应会混合倍率来达到目标；稳定 2x 会把真实 FPS 限制为目标值的一半。",
   "ADAPTIVE_AUTO_BASE_FPS_CAP": "稳定 2x FPS 上限",

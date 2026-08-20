@@ -131,7 +131,7 @@ export function FpsMultiplierControl({
       <PanelSectionRow>
         <ToggleField
           label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive (Preset)")}
-          description={t("FRACTIONAL_ADAPTIVE_PRESET_DESC", "Mixes generation ratios to reach targets such as 60 real FPS → 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. Cons: uneven frame spacing can feel choppy in some games. Off uses Steady 2x. Incompatible setting changes turn this preset off automatically.")}
+          description={t("FRACTIONAL_ADAPTIVE_PRESET_DESC", "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses Steady 2x. Incompatible setting changes turn this preset off automatically.")}
           bottomSeparator={config.adaptive ? "standard" : "none"}
           checked={isFractionalAdaptivePresetEnabled(config)}
           onChange={(value) => onConfigUpdate(fractionalAdaptivePresetChanges(value))}
