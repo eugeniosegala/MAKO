@@ -50,7 +50,7 @@ compatibility plan.
 
 | Area | Responsibility | Primary locations |
 | --- | --- | --- |
-| Repository root | Product overview, cross-component orchestration, shared diagnostics, and releases | `README.md`, `justfile`, `TESTING.md`, `HOW_TO_RELEASE.md`, `scripts/` |
+| Repository root | Product overview, cross-component orchestration, shared diagnostics, compatibility cleanup, and releases | `README.md`, `justfile`, `TESTING.md`, `CLEANUPS.md`, `HOW_TO_RELEASE.md`, `scripts/` |
 | MAKO Renderer layer | Vulkan interception, swapchain handling, presentation, recovery, Gamescope integration | `engine/mako-render/` |
 | Renderer backend | Lossless Scaling resource extraction and private compute pipeline | `engine/mako-backend/` |
 | Renderer common code | Configuration, Vulkan wrappers, device features, and image-quality utilities | `engine/mako-common/` |
@@ -86,6 +86,7 @@ layer and Gamescope presentation ownership is owned by
 | Exercise the game/runtime matrix | `engine/docs/ADAPTIVE-VALIDATION.md` | Manual DXVK, VKD3D-Proton, native Vulkan, Gamescope, and supported desktop scenarios |
 | Build or package MAKO Decky | `plugin/docs/PACKAGING.md` | `plugin/package.json`, `plugin/scripts/package-local.sh` |
 | Review Armada/native AArch64 behavior | `plugin/docs/ARMADA.md` | `plugin/py_modules/mako_plugin/host_environment.py`, host/wrapper/Flatpak boundary tests |
+| Add or remove transitional compatibility | `CLEANUPS.md` | Owning migration/generator and its focused regression tests |
 | Deploy/reload a local Decky install | `plugin/docs/PACKAGING.md` | `plugin/scripts/deploy-dev.sh`, `plugin/scripts/reload-decky-plugin.mjs` |
 | Collect diagnostics | `COLLECT_DIAGNOSTICS.md` | `scripts/mako-diagnostics` |
 | Publish both components | `HOW_TO_RELEASE.md` | `scripts/publish-release.sh` |
@@ -161,6 +162,21 @@ format changes, update the collector, its tests, and both user guides together.
   repository, package it, upload it, or treat its presence as portable CI data.
 - Preserve unrelated worktree changes. Inspect `git status` before editing and
   do not clean generated or local files unless the task explicitly requests it.
+
+## Compatibility cleanup contract
+
+`CLEANUPS.md` is the registry for temporary migrations, legacy readers,
+deny-lists, and other compatibility cleanup. Update it in the same change that
+introduces or removes one of those paths. Generated wrappers are replaceable
+cache: support one current format and regenerate any other format from canonical
+state. Do not accumulate format-specific transforms, documentation, or tests
+when the implementation has no format-specific branch.
+
+Do preserve small, idempotent migrations for values that older releases stored
+only in generated wrappers or retired stores. MAKO currently permits skipped-
+version upgrades, so age or a "last three releases" rule alone does not make a
+data migration safe to delete. Use the removal gates and checklist in
+`CLEANUPS.md` before pruning compatibility code.
 
 ## Qt compatibility contract
 

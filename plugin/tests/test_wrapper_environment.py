@@ -488,11 +488,12 @@ class WrapperEnvironmentTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             self.service.mako_script_path = Path(temp_dir) / "wrapper"
             self.service.mako_script_path.write_text(
-                "\n".join([
-                    self.service._WRAPPER_FORMAT_MARKER,
+                self.service._generate_script_content(
+                    ConfigurationManager.get_defaults()
+                ).replace(
+                    self.service._diagnostics_default_marker(),
                     "# development presentation diagnostics default: enabled",
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
+                ),
                 encoding="utf-8",
             )
             self.service._get_profile_data = lambda: {}
@@ -502,149 +503,29 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
             self.assertTrue(self.service.migrate_launch_script_if_needed())
 
-    def test_format_30_wrapper_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    "# mako-wrapper-format: 30",
-                    self.service._diagnostics_default_marker(),
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
+    def test_any_non_current_wrapper_format_is_regenerated(self):
+        current_script = self.service._generate_script_content(
+            ConfigurationManager.get_defaults()
+        )
+        for stale_version in (1, 41, 999):
+            with self.subTest(stale_version=stale_version):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    self.service.mako_script_path = Path(temp_dir) / "wrapper"
+                    self.service.mako_script_path.write_text(
+                        current_script.replace(
+                            self.service._WRAPPER_FORMAT_MARKER,
+                            f"# mako-wrapper-format: {stale_version}",
+                        ),
+                        encoding="utf-8",
+                    )
+                    self.service._get_profile_data = lambda: {}
+                    self.service.update_mako_script_from_profile_data = (
+                        lambda _profile_data: {"success": True}
+                    )
 
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
-
-    def test_format_35_wrapper_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    "# mako-wrapper-format: 35",
-                    self.service._diagnostics_default_marker(),
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
-
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
-
-    def test_format_36_wrapper_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    "# mako-wrapper-format: 36",
-                    self.service._diagnostics_default_marker(),
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
-
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
-
-    def test_format_37_wrapper_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    "# mako-wrapper-format: 37",
-                    self.service._diagnostics_default_marker(),
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
-
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
-
-    def test_format_38_wrapper_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    "# mako-wrapper-format: 38",
-                    self.service._diagnostics_default_marker(),
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
-
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
-
-    def test_format_39_wrapper_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    "# mako-wrapper-format: 39",
-                    self.service._diagnostics_default_marker(),
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
-
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
-
-    def test_format_40_wrapper_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    "# mako-wrapper-format: 40",
-                    self.service._diagnostics_default_marker(),
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
-
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
-
-    def test_format_41_wrapper_is_regenerated_for_host_guard(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    "# mako-wrapper-format: 41",
-                    self.service._diagnostics_default_marker(),
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
-
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
+                    self.assertTrue(
+                        self.service.migrate_launch_script_if_needed()
+                    )
 
     def test_obsolete_wow64_profile_setting_is_discarded(self):
         settings = self.service._normalize_wrapper_settings({
@@ -673,41 +554,26 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
             self.assertEqual(self.service._read_wrapper_profile_settings(), {})
 
-    def test_current_marker_with_obsolete_wow64_export_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    self.service._WRAPPER_FORMAT_MARKER,
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                    "export PROTON_USE_WOW64=1",
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
+    def test_current_wrapper_with_any_obsolete_export_is_regenerated(self):
+        current_script = self.service._generate_script_content(
+            ConfigurationManager.get_defaults()
+        )
+        for obsolete_export in self.service._OBSOLETE_WRAPPER_EXPORTS:
+            with self.subTest(obsolete_export=obsolete_export):
+                with tempfile.TemporaryDirectory() as temp_dir:
+                    self.service.mako_script_path = Path(temp_dir) / "wrapper"
+                    self.service.mako_script_path.write_text(
+                        f"{current_script}\nexport {obsolete_export}=1\n",
+                        encoding="utf-8",
+                    )
+                    self.service._get_profile_data = lambda: {}
+                    self.service.update_mako_script_from_profile_data = (
+                        lambda _profile_data: {"success": True}
+                    )
 
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
-
-    def test_current_marker_with_obsolete_recreation_export_is_regenerated(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            self.service.mako_script_path = Path(temp_dir) / "wrapper"
-            self.service.mako_script_path.write_text(
-                "\n".join([
-                    self.service._WRAPPER_FORMAT_MARKER,
-                    *self.service._REQUIRED_WRAPPER_EXPORTS,
-                    "export MAKO_PRESENT_RECOVERY_RECREATE=1",
-                ]),
-                encoding="utf-8",
-            )
-            self.service._get_profile_data = lambda: {}
-            self.service.update_mako_script_from_profile_data = (
-                lambda _profile_data: {"success": True}
-            )
-
-            self.assertTrue(self.service.migrate_launch_script_if_needed())
+                    self.assertTrue(
+                        self.service.migrate_launch_script_if_needed()
+                    )
 
     def test_legacy_dxvk_cap_migrates_into_engine_profile(self):
         with tempfile.TemporaryDirectory() as temp_dir:

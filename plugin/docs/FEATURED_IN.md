@@ -25,6 +25,9 @@ Community creators have covered, tested, and explained both the earlier Decky LS
 - [Гайд: Як встановити FSR 4.1.1 + MAKO Frame Generation на Steam Deck OLED | SteamOS](https://www.youtube.com/watch?v=8pJx60dSHK8) by [👾BiGDeck👾_UA](https://www.youtube.com/@BiGDeck_UA): Ukrainian-language guide to installing FSR 4.1.1 and MAKO Frame Generation on Steam Deck OLED.
 - [LSFG-VK Experimental стал MAKO-Frame Generation+пошашовая установка.](https://www.youtube.com/watch?v=US4XQY_KZLw) by [Андрей-Канал Солянка](https://www.youtube.com/@Andrey_6777): Russian-language coverage of the transition from LSFG-VK Experimental to MAKO, with a step-by-step installation guide.
 - [Crimson Desert ACTUALIZADO + MAKO Frame Gen en Steam Deck 🦈](https://www.youtube.com/watch?v=YCcGTfDcTX0) by [Hooandee](https://www.youtube.com/@Hooandee): Spanish-language coverage of MAKO Frame Generation in Crimson Desert on Steam Deck.
+- [MAKO Frame Generation On Steam Deck: What Is It & How Does It Work?](https://www.youtube.com/watch?v=jgEyZdf3_0E) by [Deck Wizard](https://www.youtube.com/@DeckWizard): an explanation of what MAKO Frame Generation is and how it works on Steam Deck.
+- [Clair Obscur: Expedition 33 on Steam Deck | FSR 4.1 | MAKO vs LSFG Experimental | Performance Test](https://www.youtube.com/watch?v=p-N7HdWWcOU&t=349s) by [Deck Madness](https://www.youtube.com/@deck_madness): a Steam Deck performance comparison of MAKO and the earlier LSFG-VK Experimental plugin alongside FSR 4.1.
+- [Hogwarts Legacy on Steam Deck | FSR 4 | Mako vs LSFG-VK Experimental | Full Performance Test](https://www.youtube.com/watch?v=gmVcYXePqCQ&t=111s) by [Deck Madness](https://www.youtube.com/@deck_madness): a full Steam Deck performance test comparing MAKO with the earlier LSFG-VK Experimental plugin alongside FSR 4.
 
 ## Coverage includes
 
@@ -33,5 +36,6 @@ Community creators have covered, tested, and explained both the earlier Decky LS
 - Adaptive Frame Generation testing
 - Per-game setup guidance
 - FSR and LSFG-VK use together
+- MAKO and earlier LSFG-VK Experimental performance comparisons
 
 Coverage reflects each creator's own hardware, game settings, and conclusions. It is not an endorsement or a guarantee that a particular game will behave the same way on every system.

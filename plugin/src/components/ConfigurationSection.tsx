@@ -89,6 +89,14 @@ export function ConfigurationSection({
         .MAKO_ManualOverridesCollapseButton_Container > div > div > div > div > button {
           height: 10px !important;
         }
+        .MAKO_ManualOverrideFields {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+          width: 100%;
+          min-width: 0;
+          margin: 10px 0 6px;
+        }
         `}
       </style>
 
@@ -272,34 +280,30 @@ export function ConfigurationSection({
       </PanelSectionRow>
 
       {!manualOverridesCollapsed && (
-        <>
-          <PanelSectionRow>
+        <PanelSectionRow>
+          <div className="MAKO_ManualOverrideFields">
             <TextField
               label={t("CONFIG_DLL_PATH", "Lossless.dll Path")}
               description={t("CONFIG_DLL_PATH_DESC", "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.")}
               value={config.dll}
               onChange={(event) => onConfigChange(DLL, event.currentTarget.value)}
             />
-          </PanelSectionRow>
 
-          <PanelSectionRow>
             <TextField
               label={t("CONFIG_GPU", "GPU")}
               description={t("CONFIG_GPU_DESC", "Optional GPU name, vendor:device ID, or PCI bus ID.")}
               value={config.gpu}
               onChange={(event) => onConfigChange(GPU, event.currentTarget.value)}
             />
-          </PanelSectionRow>
 
-          <PanelSectionRow>
             <TextField
               label={t("CONFIG_ACTIVE_IN", "Matched Processes")}
               description={t("CONFIG_ACTIVE_IN_DESC", "Executable or process names separated by commas. Running-game capture fills these automatically; edit them only when a launcher or emulator needs an additional process alias.")}
               value={config.active_in}
               onChange={(event) => onConfigChange(ACTIVE_IN, event.currentTarget.value)}
             />
-          </PanelSectionRow>
-        </>
+          </div>
+        </PanelSectionRow>
       )}
     </>
   );

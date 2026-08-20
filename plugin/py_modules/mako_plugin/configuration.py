@@ -43,7 +43,10 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_MARKER = "# mako-wrapper-format: 42"
+    _WRAPPER_FORMAT_VERSION = 42
+    _WRAPPER_FORMAT_MARKER = (
+        f"# mako-wrapper-format: {_WRAPPER_FORMAT_VERSION}"
+    )
     _HOST_COMPATIBILITY_MARKER = (
         "# mako-host-compatibility: aarch64-passthrough-v1"
     )
@@ -877,38 +880,12 @@ class ConfigurationService(BaseService):
         ]
 
     def migrate_launch_script_if_needed(self) -> bool:
-        """Upgrade an installed generated wrapper without touching user data.
+        """Replace stale generated cache from canonical profile/config state.
 
-        Format 42 makes unsupported native AArch64 hosts an early passthrough:
-        MAKO remains disabled while Armada's required game launcher is
-        preserved. Format 41 restores v2's private SDR manifest directory on native Steam,
-        preventing Steam's Vulkan Fossilize/overlay layers from bypassing MAKO's
-        device and swapchain hooks. Format 40 briefly selected the standard
-        per-user directory. Format 39 restores deterministic implicit-layer
-        selection so MAKO remains the swapchain interceptor when Gamescope WSI
-        is absent.
-        Format 38 introduced the direct Gamescope presentation guard. It
-        suppresses Gamescope WSI's conflicting upper FIFO policy while the
-        regular compositor remains active. Format 37 restored the DXVK
-        environment policy then in use.
-        Format 36 makes high-volume presentation diagnostics opt-in in local
-        development builds as well as published builds while preserving the
-        Gamescope WSI and DXVK policies then in use. Format 35 keeps
-        23.08/24.08 Flatpak loaders working while using
-        additive discovery where the loader supports it. Format 34 preserves
-        normal implicit Vulkan layers and disables only competing LSFG
-        implementations. Format 33 keeps an unsaved game's
-        renderer context active with a low-priority default profile so a newly
-        captured process can take over live. Format 32 selects per-game
-        compatibility settings from persistent Steam app identity before
-        launch. Format 31 removes duplicate generated compatibility exports.
-        Format 30 introduced a build-flavour-aware presentation-diagnostics
-        default. Current wrappers keep every build quiet unless the caller
-        explicitly enables diagnostics.
-        Format 29 preserves a caller-provided profile for per-shortcut selection.
-        Format 28 moved Base FPS Cap from the DXVK-only wrapper export into the
-        engine. Regenerate any older or incomplete wrapper while retaining user
-        profiles and rejecting obsolete environment exports.
+        Only the current wrapper is supported in place. Any non-current,
+        incomplete, or contaminated wrapper is regenerated atomically; do not
+        add format-specific transforms here. Migrate unique user state before
+        calling this method.
         """
         if not self.mako_script_path.exists():
             return False
@@ -936,7 +913,10 @@ class ConfigurationService(BaseService):
             if not result["success"]:
                 raise OSError(result.get("error") or "could not refresh launch wrapper")
 
-            self.log.info("Upgraded installed MAKO launch wrapper to format 42")
+            self.log.info(
+                "Upgraded installed MAKO launch wrapper to format %s",
+                self._WRAPPER_FORMAT_VERSION,
+            )
             return True
         except OSError:
             raise
