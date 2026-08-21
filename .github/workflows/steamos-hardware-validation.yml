@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       deploy_to_decky:
-        description: Deploy to an existing MAKO Decky installation and reload it after package validation
+        description: Deploy the verified ZIP to an existing MAKO Decky test installation and reload it
         required: true
         default: false
         type: boolean
@@ -38,6 +38,30 @@ jobs:
         with:
           node-version: 24
 
+      - name: Configure scoped cache and disposable work storage
+        run: |
+          ci_root="${MAKO_HARDWARE_CI_ROOT:-$GITHUB_WORKSPACE/engine/build/cache}"
+          work_root="$RUNNER_TEMP/mako-build-work"
+          available_kib="$(df -Pk "$RUNNER_TEMP" | awk 'NR == 2 {print $4}')"
+          required_kib="$((30 * 1024 * 1024))"
+          if (( available_kib < required_kib )); then
+            echo "SteamOS hardware validation needs at least 30 GiB free under $RUNNER_TEMP." >&2
+            exit 1
+          fi
+          mkdir -p \
+            "$ci_root" \
+            "$ci_root/pnpm-store" \
+            "$work_root/tmp" \
+            "$work_root/flatpak"
+          {
+            echo "MAKO_HARDWARE_CI_ROOT=$ci_root"
+            echo "MAKO_BUILD_CACHE_ROOT=$ci_root"
+            echo "MAKO_BUILD_WORK_ROOT=$work_root"
+            echo "MAKO_FLATPAK_CACHE_ROOT=$ci_root/flatpak"
+            echo "MAKO_FLATPAK_TMP_ROOT=$work_root/flatpak"
+            echo "TMPDIR=$work_root/tmp"
+          } >> "$GITHUB_ENV"
+
       - name: Confirm dedicated hardware prerequisites
         run: |
           test "$(uname -s)" = Linux
@@ -56,23 +80,17 @@ jobs:
 
       - name: Install locked Decky dependencies
         working-directory: plugin
-        run: pnpm install --frozen-lockfile
+        run: >-
+          pnpm install --frozen-lockfile
+          --store-dir "$MAKO_HARDWARE_CI_ROOT/pnpm-store"
 
       - name: Record hardware and driver evidence
-        run: |
-          mkdir -p engine/out
-          {
-            echo "commit=${GITHUB_SHA}"
-            echo "generated_at=$(date --utc --iso-8601=seconds)"
-            uname -a
-            cat /etc/os-release
-            vulkaninfo --summary
-          } > engine/out/hardware-validation.txt 2>&1
+        run: ./scripts/collect-steamos-hardware-evidence.sh engine/out/hardware-validation.txt
 
       - name: Run native AMD image-quality validation
         working-directory: engine
         run: >-
-          MAKO_BUILD_DIR=build/cache/hardware-validation
+          MAKO_BUILD_DIR=build/hardware-validation
           ./scripts/build-steamos-dev.sh
 
       - name: Build and verify Renderer, Flatpaks, and the complete Decky ZIP
@@ -106,17 +124,39 @@ jobs:
       - name: Deploy to the dedicated Decky test installation
         if: inputs.deploy_to_decky
         working-directory: plugin
-        run: ./scripts/deploy-dev.sh --e2e --reload
+        run: |
+          python3 scripts/deploy-validated-package.py \
+            "${{ steps.package.outputs.decky_archive }}"
+          node scripts/activate-deployed-package.mjs
 
-      - name: Retain packages, GPU comparisons, and validation logs
+      - name: Retain the verified package, GPU comparisons, and sanitized evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: steamos-hardware-validation-${{ github.sha }}
           path: |
-            engine/out/*.tar.xz
             engine/out/hardware-validation.txt
-            engine/build/cache/hardware-validation/quality-regression
+            engine/build/hardware-validation/quality-regression
             plugin/out/*.zip
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 14
+
+      - name: Remove disposable hardware-validation data
+        if: always()
+        run: |
+          case "$MAKO_BUILD_WORK_ROOT" in
+            "$RUNNER_TEMP"/*)
+              rm -rf --one-file-system -- "$MAKO_BUILD_WORK_ROOT"
+              mkdir -p "$TMPDIR"
+              ;;
+            *)
+              echo "Refusing to remove unexpected build-work path: $MAKO_BUILD_WORK_ROOT" >&2
+              exit 1
+              ;;
+          esac
+          rm -rf --one-file-system -- \
+            "$GITHUB_WORKSPACE/engine/build/hardware-validation" \
+            "$GITHUB_WORKSPACE/engine/out" \
+            "$GITHUB_WORKSPACE/plugin/out" \
+            "$GITHUB_WORKSPACE/plugin/dist" \
+            "$GITHUB_WORKSPACE/plugin/coverage"

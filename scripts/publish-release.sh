@@ -250,6 +250,16 @@ if [[ -n "$(git status --porcelain --untracked-files=normal)" ]]; then
   exit 1
 fi
 
+rm -f -- \
+  "$repository_root/engine/out/$renderer_archive" \
+  "$repository_root/engine/out/$flatpak_archive" \
+  "$repository_root/plugin/out/$decky_archive"
+rm -rf --one-file-system -- \
+  "$repository_root/engine/build/work" \
+  "$repository_root/plugin/dist" \
+  "$repository_root/plugin/coverage"
+echo "Removed reproducible release outputs and staging; reusable build caches were preserved."
+
 echo "Published and verified MAKO v$version:"
 echo "  Renderer: https://github.com/$github_repository/releases/tag/$renderer_tag"
 echo "  Decky:    https://github.com/$github_repository/releases/tag/$decky_tag"

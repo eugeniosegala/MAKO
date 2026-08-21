@@ -271,7 +271,7 @@ printf '%s\n' \
 
 if [[ "$has_flatpak_bundle" == "true" ]]; then
   printf '%s\n' \
-    '> **First-time Heroic setup:** Read the [MAKO Decky README](https://github.com/eugeniosegala/MAKO/tree/main/plugin) before preparing Heroic.' \
+    '> **First-time Heroic or EmuDeck setup:** Read the [Heroic and other Flatpak applications guide](https://github.com/eugeniosegala/MAKO#heroic-and-other-flatpak-applications) before preparing either integration.' \
     '' \
     >> "$notes_file"
 fi

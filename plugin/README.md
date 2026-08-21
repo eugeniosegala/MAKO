@@ -47,6 +47,8 @@ pnpm run package:local-engine
 
 The resulting Decky ZIP is written under `plugin/out/`. Nothing is published by the local packaging commands.
 
+Use direct `dev:*` deployment for iteration, `package:local-engine` for a complete tester ZIP, the dedicated SteamOS/AMD workflow for a release candidate, and the root publisher only for the actual release. The exact boundaries are documented in [Packaging](docs/PACKAGING.md) and [Testing](../TESTING.md).
+
 ## Using a local build
 
 After installing the ZIP through Decky developer settings, open MAKO Decky and install MAKO Renderer. For a native Steam or Proton game, use:

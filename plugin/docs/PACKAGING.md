@@ -1,5 +1,19 @@
 # Local packaging and publishing
 
+## Choose the right cycle
+
+Run development and packaging commands from `plugin/`; run the hardware gate and publisher from the repository root.
+
+| Need | Command | Contract |
+| --- | --- | --- |
+| Fast installed-plugin iteration | `pnpm run dev:frontend`, `dev:backend`, `dev:engine`, or another `dev:*` scope | Mutates only the local development installation and does not create a ZIP |
+| Fast native tester ZIP | `pnpm run package:local-engine-fast` | Verified 64-bit native payload for focused testing; intentionally omits 32-bit and Flatpak payloads and cannot be published |
+| Complete tester ZIP | `pnpm run package:local-engine` | Self-contained native 64-bit/32-bit and Flatpak package suitable for trusted testers; does not tag or publish |
+| Release-candidate hardware gate | `cd .. && ./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Requires a clean, pushed commit; rebuilds it on the SteamOS/AMD host and optionally installs the already-verified ZIP without rebuilding |
+| Actual release | `cd .. && ./scripts/publish-release.sh X.Y.Z` | Publishes MAKO Renderer first, pins its immutable assets, then publishes MAKO Decky |
+
+A local or retained CI ZIP is never the published release. After publication, download the GitHub MAKO Decky asset and run the normal **Install MAKO Renderer** flow once to validate the exact public package. See [Testing](../../TESTING.md) for what each validation cycle proves and [How to release MAKO](../../HOW_TO_RELEASE.md) for the authoritative release sequence.
+
 ## Build a local installation ZIP
 
 Run the commands in this guide from the `plugin/` directory. Install pnpm and dependencies once; with Volta, run `volta install pnpm` first.
@@ -116,7 +130,7 @@ Use the root [How to release MAKO](../../HOW_TO_RELEASE.md) guide. From a clean 
 
 Before running it, update and commit both [`engine/RELEASE_NOTES.md`](../../engine/RELEASE_NOTES.md) and [`plugin/RELEASE_NOTES.md`](../RELEASE_NOTES.md). Their versioned “What’s new” headings and bodies are copied verbatim into the respective GitHub release notes; commit messages are never used as public change lists.
 
-The workflow publishes MAKO Renderer first, including the host and Flatpak assets, then commits its exact URLs and checksums before publishing the matching MAKO Decky ZIP as GitHub's **Latest** release. It is resumable and refuses a dirty worktree, the wrong branch, local-only payloads, mismatched pins, or reused tags that point at different code.
+The workflow publishes MAKO Renderer first, including the host and Flatpak assets, then commits its exact URLs and checksums before publishing the matching MAKO Decky ZIP as GitHub's **Latest** release. It is resumable and refuses a dirty worktree, the wrong branch, local-only payloads, mismatched pins, or reused tags that point at different code. Run it only after the committed release candidate has passed the SteamOS hardware gate and applicable manual game matrix; the publisher does not silently substitute for either test cycle.
 
 Release entry points:
 

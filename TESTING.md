@@ -2,6 +2,21 @@
 
 MAKO uses separate gates for deterministic product behavior and hardware behavior. A passing CPU-only suite is required for every change, but it is not treated as evidence that a Vulkan driver, Gamescope, or a game presents generated frames correctly.
 
+## Validation cycles
+
+Each cycle answers a different question and the later cycles do not erase evidence required by the earlier ones:
+
+| Cycle | What it proves | What it does not prove |
+| --- | --- | --- |
+| Portable change gates | Deterministic Renderer, backend, frontend, schema, packaging-policy, and sanitizer behavior | Real Vulkan presentation, AMD image quality, or installation |
+| Direct device iteration | The selected change works quickly on the current SteamOS development installation | Archive layout, clean-checkout reproducibility, 32-bit or Flatpak behavior unless explicitly included |
+| Full local tester ZIP | The complete local source can be packaged, installed, and upgraded as one self-contained build | A clean remote commit, the release hardware gate, or public assets |
+| SteamOS hardware release gate | The pushed commit rebuilds in a clean checkout and passes the real AMD, Vulkan-loader, dual-bitness, Flatpak, package, and optional exact-ZIP deployment boundaries | The full game/runtime matrix or a published release |
+| Manual release-candidate matrix | Selected real games survive the presentation, focus, overlay, hitch, and swapchain scenarios in scope | The public download and production release page |
+| Published-package check | The exact GitHub asset downloads and installs through the normal user path | Compatibility with every untested game or hardware configuration |
+
+Use [MAKO Decky packaging](plugin/docs/PACKAGING.md) for direct and tester cycles, [How to release MAKO](HOW_TO_RELEASE.md) for the release candidate and publication sequence, and the sections below for the required gates.
+
 ## Pull-request gates
 
 The `Tests` GitHub Actions workflow runs on every pull request and push to `main`:
@@ -40,7 +55,13 @@ ctest --test-dir engine/build/local --output-on-failure
 
 ## SteamOS hardware release gate
 
-Before publishing a release candidate, run the `SteamOS hardware validation` workflow for that commit. Its dedicated self-hosted runner must have the labels `steamos` and `amd-gpu`, the normal 64-bit and 32-bit Renderer/Flatpak build prerequisites, `vulkaninfo`, and access to the licensed `Lossless.dll` used for validation.
+Before publishing a release candidate, run the `SteamOS hardware validation` workflow for that commit. On the dedicated SteamOS/AMD test machine, the recommended entry point creates a verified one-job runner, dispatches the selected clean branch, waits for the result, and removes the runner registration, credentials, checkout, staging, generated packages, and local runner logs:
+
+```bash
+./scripts/run-steamos-hardware-validation.sh
+```
+
+The launcher refuses a dirty or remote-divergent branch, an existing queued hardware run, a non-SteamOS/non-AMD host, `/tmp`-backed runner storage, or less than 30 GiB of free work space. It downloads the latest official Linux x64 Actions runner and verifies the archive against the SHA-256 published in the same official release. The workflow still requires the normal 64-bit and 32-bit Renderer/Flatpak build prerequisites, `vulkaninfo`, and access to the licensed `Lossless.dll` used only for validation.
 
 The workflow:
 
@@ -49,9 +70,13 @@ The workflow:
 3. builds and installs each supported Flatpak runtime extension for verification;
 4. builds the complete Decky ZIP from the same source tree;
 5. extracts the packaged Renderer and proves that the real Vulkan loader activates `VK_LAYER_MAKO_render` on the runner's AMD GPU;
-6. retains packages, environment evidence, GPU comparison images, and logs under the tested commit.
+6. retains the complete verified Decky ZIP, sanitized environment evidence, and GPU comparison images for 14 days under the tested commit.
 
-Set the workflow's `deploy_to_decky` input only on a dedicated device with an existing MAKO Decky development installation. That option deploys both host architectures and all Flatpak bundles, then asks Decky Loader to reload the plugin. It intentionally does not run by default because it changes the installed test device.
+Pass `--deploy-to-decky` only on a dedicated device with an existing MAKO Decky development installation. That option safely synchronizes the already-verified ZIP into the existing plugin, asks Decky Loader to reload it, and invokes MAKO Decky's normal installer against that exact bundled Renderer. The production installer owns host libraries, manifests, wrappers, engine state, diagnostics, and refreshes of already-installed Flatpak runtime branches; no component is rebuilt or installed through a second CI-only implementation. It intentionally does not run by default because it changes the installed test device.
+
+The launcher reuses the repository's existing ignored `engine/build/cache` tree for compiler, Flatpak, native SDK, pnpm, and Actions tool caches instead of creating a second large cache under the user's home directory; the location can be changed with `MAKO_HARDWARE_CI_ROOT`. Inspect the retained data without deleting anything with `./scripts/prune-hardware-ci-cache.sh`, or add `--confirm` when the space is more valuable than the next build's warm cache. The workflow itself removes large staging and generated outputs even when a manually configured persistent runner is used.
+
+This gate is a fresh checkout on the real SteamOS/AMD host, not a fresh virtual SteamOS installation. It validates the physical GPU, driver, Vulkan loader, Flatpak, packaging, and optional Decky deployment boundaries. The GitHub-hosted pull-request jobs independently validate a clean portable Ubuntu environment; neither gate replaces the other.
 
 ## Runtime compatibility matrix
 

@@ -2,6 +2,20 @@
 
 MAKO Renderer and MAKO Decky normally ship as a matched pair with the same `X.Y.Z` release number. Run the release from a clean `main` checkout after committing the changes you want to ship.
 
+## Release lifecycle at a glance
+
+MAKO deliberately separates development, tester packaging, release-candidate validation, and publication:
+
+| Cycle | Purpose | Entry point | Result |
+| --- | --- | --- | --- |
+| Local iteration | Exercise a focused frontend, backend, native Renderer, host, or Flatpak change on the development machine | The `dev:*` commands in [MAKO Decky packaging](plugin/docs/PACKAGING.md) | Directly updates the installed development plugin; creates no release |
+| Tester package | Validate installation and upgrades with a self-contained package | `pnpm --dir plugin run package:local-engine` | Produces a complete local ZIP that can be sent to trusted testers; creates no tag or release |
+| Release candidate | Rebuild the committed, pushed source in a clean checkout on the dedicated SteamOS/AMD host | `./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Retains the verified ZIP and evidence for 14 days and optionally installs that exact ZIP; publishes nothing |
+| Published release | Publish immutable matched artifacts after the release candidate and manual game matrix pass | `./scripts/publish-release.sh X.Y.Z` | Publishes MAKO Renderer, pins it by checksum, then publishes MAKO Decky |
+| Published-package check | Prove the public asset installs through the user-facing path | Download the new MAKO Decky ZIP and use **Install MAKO Renderer** | Confirms the released asset, not a local or CI copy |
+
+The fast native-only package and direct deployment paths are intentionally incomplete and must not be promoted as release candidates. The hardware gate validates and may deploy a candidate, but only the publisher creates tags, GitHub releases, immutable assets, and the final Renderer pin.
+
 ## Recommended release order
 
 For a normal paired release, always use this order:
@@ -17,7 +31,7 @@ Treat **Renderer → pin → Decky** as the strongly recommended release strateg
 - Install the normal [renderer build prerequisites](engine/docs/BUILDING-FROM-SOURCE.md).
 - Install and authenticate GitHub CLI with `gh auth login -h github.com`.
 - Confirm `git status` is clean and the `origin` remote points to this repository.
-- Configure the dedicated `steamos` + `amd-gpu` self-hosted runner described in [Testing](TESTING.md).
+- Prepare the dedicated SteamOS/AMD test machine described in [Testing](TESTING.md). The release gate launcher creates and removes its `steamos` + `amd-gpu` runner for each job; do not leave a persistent repository runner online.
 
 The renderer packager rejects a `mako-ui` binary that requires a Qt ABI newer than 6.4. A Linux host with Qt 6.2–6.4 needs no container. Non-Linux packaging requires Docker or Podman. When a rolling Linux distribution only provides a newer Qt, either runtime is an optional compatibility fallback: prefix the release command with `MAKO_PORTABLE_PACKAGE=1` to build the UI against Ubuntu 22.04's Qt 6.2 baseline.
 
@@ -32,7 +46,13 @@ Give each normal paired release one shared codename without changing its semanti
 
 Change the version in each file’s first heading and edit the Markdown beneath it in the tone you want for that release. Commit both files with the changes being released. The publisher rejects a missing, empty, or stale heading before it changes a version or starts a build.
 
-Run the **SteamOS hardware validation** workflow for that commit and require it to pass before publishing. Use `deploy_to_decky` for the final candidate when the runner is the dedicated Decky test device. Review the retained GPU comparisons and environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate.
+Run the **SteamOS hardware validation** workflow for that commit and require it to pass before publishing:
+
+```bash
+./scripts/run-steamos-hardware-validation.sh --deploy-to-decky
+```
+
+Omit `--deploy-to-decky` when the machine is not the dedicated MAKO Decky test installation. Review the retained GPU comparisons and sanitized environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate. The launcher preserves only scoped reusable caches and removes its runner, checkout, credentials, staging, and generated outputs when the job ends.
 
 Then, from the repository root, replace `1.2.0` with the new version:
 
@@ -49,6 +69,7 @@ That one command:
 5. Updates and commits the plugin version, tests and verifies its bundled renderer payload, and builds the MAKO Decky ZIP.
 6. Publishes `plugin-v1.2.0` as GitHub's **Latest** release.
 7. Updates all versioned README release links, pushes `main`, and verifies that the remote release-asset checksums, pins, tags, and worktree agree.
+8. After complete verification only, removes the reproducible local release archives, generated frontend/coverage output, and disposable build staging while preserving the reusable compiler, SDK, Flatpak, dependency, and container caches.
 
 No version, checksum, binary URL, Flatpak pin, or README release link needs to be edited manually. The two “What’s new” files are intentionally the only manual release content; the stable installation, update, in-game, limitations, and payload sections are assembled by the component publishers.
 
@@ -69,4 +90,4 @@ Do not move an existing release tag or replace an asset by hand. If released con
 
 ## Final check
 
-The command prints both release pages when verification succeeds. Confirm the MAKO Decky page is marked **Latest**, then install its ZIP on a test SteamOS device and select **Install MAKO Renderer** in the plugin.
+The command prints both release pages when verification succeeds. Confirm the MAKO Decky page is marked **Latest**, download its published ZIP rather than reusing the retained release-candidate artifact, then install it on a test SteamOS device and select **Install MAKO Renderer** in the plugin. This last pass validates the actual public download and user-facing installation path.

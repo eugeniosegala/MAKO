@@ -44,11 +44,11 @@ class ProductBrandingTests(unittest.TestCase):
         self.assertNotIn("mako plugin", lifecycle.lower())
         self.assertIn('decky.logger.info("MAKO Decky loaded")', lifecycle)
 
-        reloader = (
-            PLUGIN_DIR / "scripts/reload-decky-plugin.mjs"
+        decky_client = (
+            PLUGIN_DIR / "scripts/decky-loader-client.mjs"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            'DEFAULT_PLUGIN_NAME = "MAKO - Frame Generation"', reloader
+            'DEFAULT_PLUGIN_NAME = "MAKO - Frame Generation"', decky_client
         )
 
         failure_guide = (
@@ -94,6 +94,39 @@ class ProductBrandingTests(unittest.TestCase):
         self.assertEqual(decky_version.group(1), engine_version.group(1))
         expected_heading = f"### Release codename: {codename}"
         self.assertIn(expected_heading, engine_notes)
+
+    def test_component_publishers_share_the_release_note_structure(self):
+        decky_publisher = (
+            PLUGIN_DIR / "scripts/publish-package.sh"
+        ).read_text(encoding="utf-8")
+        renderer_publisher = (
+            REPOSITORY_ROOT / "engine/scripts/publish-package.sh"
+        ).read_text(encoding="utf-8")
+
+        shared_headings = (
+            "## 🎮 In-game considerations",
+            "## Installation",
+            "## Known limitation",
+            "## Before you play",
+        )
+        for heading in shared_headings:
+            self.assertIn(heading, decky_publisher)
+            self.assertIn(heading, renderer_publisher)
+
+        self.assertIn(
+            "First-time Heroic or EmuDeck setup",
+            decky_publisher,
+        )
+        self.assertIn(
+            "## Updating an existing MAKO Renderer installation",
+            renderer_publisher,
+        )
+        self.assertIn(
+            "## MAKO Renderer release assets \\`$version\\`",
+            renderer_publisher,
+        )
+        self.assertNotIn("## MAKO Renderer Linux build", renderer_publisher)
+        self.assertNotIn("## Included files", renderer_publisher)
 
     def test_renderer_logs_use_the_mako_renderer_prefix(self):
         source_files = [

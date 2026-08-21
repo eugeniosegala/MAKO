@@ -60,7 +60,7 @@ Start architecture work with the root `README.md`, then use `engine/README.md` o
 | Change HDR colour handling | `engine/docs/HDR-PIPELINE.md` | `engine/mako-render/src/color_pipeline.cpp`, `engine/mako-backend/src/mako.cpp` |
 | Change WSI/layer isolation | `engine/docs/WSI-ISOLATION.md` | `engine/mako-render/src/presentation_policy.hpp`, `engine/scripts/mako-launch` |
 | Add or change an optional Vulkan layer chain | `engine/docs/LAYER-CHAINING.md`, `engine/docs/WSI-ISOLATION.md` | Owning launcher, manifest, package, and focused loader/runtime validation |
-| Validate real SteamOS hardware | `TESTING.md` | `.github/workflows/steamos-hardware-validation.yml` |
+| Validate real SteamOS hardware | `TESTING.md` | `scripts/run-steamos-hardware-validation.sh`, `.github/workflows/steamos-hardware-validation.yml` |
 | Exercise the game/runtime matrix | `engine/docs/ADAPTIVE-VALIDATION.md` | Manual DXVK, VKD3D-Proton, native Vulkan, Gamescope, and supported desktop scenarios |
 | Archive a completed comparative game trace | `TRACES.md` | `scripts/capture-trace.sh`, sibling private `MAKO-Traces` checkout |
 | Build or package MAKO Decky | `plugin/docs/PACKAGING.md` | `plugin/package.json`, `plugin/scripts/package-local.sh` |
@@ -124,4 +124,4 @@ Published host archives must remain runnable with Ubuntu 24.04's Qt 6.4. The ABI
 
 Local packaging does not publish. Direct development deployment does mutate an installed Decky test environment, and engine replacement requires games using the layer to be closed. Run deployment/reload actions only when the task calls for changing that installed environment.
 
-Publishing is a separate, explicitly authorized workflow. Follow `HOW_TO_RELEASE.md` from a clean `main` checkout, update the two component release-note files as the only manual release copy, require the SteamOS hardware gate, and let the scripts manage versions, pins, checksums, tags, assets, and README release links. Never move a published tag or replace a published asset.
+Publishing is a separate, explicitly authorized workflow. Follow `HOW_TO_RELEASE.md` from a clean `main` checkout, update the two component release-note files as the only manual release copy, require the SteamOS hardware gate, and let the scripts manage versions, pins, checksums, tags, assets, and README release links. The hardware gate uses `scripts/run-steamos-hardware-validation.sh` to create a one-job runner; never register a persistent public-repository runner as a release shortcut. Never move a published tag or replace a published asset.

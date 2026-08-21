@@ -66,3 +66,11 @@ package-plugin:
 # Build a fast native-only, 64-bit Decky development ZIP.
 package-plugin-fast:
     pnpm --dir plugin run package:local-engine-fast
+
+# Run the release gate on a verified one-job SteamOS/AMD runner.
+validate-steamos-hardware:
+    ./scripts/run-steamos-hardware-validation.sh
+
+# Inspect the scoped caches retained between SteamOS hardware jobs.
+inspect-hardware-cache:
+    ./scripts/prune-hardware-ci-cache.sh

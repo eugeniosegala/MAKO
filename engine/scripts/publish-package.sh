@@ -148,10 +148,6 @@ trap cleanup EXIT
 cat > "$notes_file" <<EOF
 > Looking for Decky integration? Download the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest).
 
-## MAKO Renderer Linux build
-
-MAKO Renderer v$version is a stable release. Test it game by game and retain a known-good rollback path.
-
 $manual_release_notes
 
 ## 🎮 In-game considerations
@@ -169,7 +165,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 ## Installation
 
-### Host installation
+### Host archive
 
 Download \`$(basename "$archive")\` and extract it to your local prefix:
 
@@ -187,7 +183,7 @@ Start the configuration UI after extraction:
 
 Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO through its private Vulkan layer directory, prevents Steam's Vulkan Fossilize/overlay hooks and competing presentation layers from bypassing its swapchain interception, and keeps Gamescope and the Steam/Game Mode interface active outside that application chain.
 
-### Flatpak extensions
+### Flatpak runtime extensions
 
 Download and extract \`$(basename "$flatpak_archive")\`. It contains one self-contained MAKO extension for each supported Flatpak runtime. Install the extension matching the application runtime, for example:
 
@@ -197,7 +193,7 @@ flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.fla
 
 - SHA-256: \`$flatpak_checksum\`
 
-## Updating an existing installation
+## Updating an existing MAKO Renderer installation
 
 1. Quit every game or application currently using MAKO Renderer.
 2. Download the newer host archive and extract it into the same local prefix. Existing files are replaced; your configuration remains under \`~/.config/mako-render/\`.
@@ -215,19 +211,12 @@ Keep the previous archives until the new version has been tested with your games
 - Confirm the detected \`Lossless.dll\` path. Leaving it blank permits normal discovery in common Steam locations.
 - Do not combine MAKO with another Lossless Scaling Vulkan wrapper for the same game.
 
-## Included files
+## MAKO Renderer release assets \`$version\`
 
-- 64-bit Vulkan implicit layer and manifest under \`lib/\` and \`share/vulkan/implicit_layer.d/\`
-- 32-bit Vulkan implicit layer and manifest under \`lib32/\` and \`share/vulkan/implicit_layer.d/\`
-- 64-bit CLI and Qt configuration UI
-- Standalone \`mako-launch\` game launcher
-- XDG desktop files
-
-## Build details
-
-- Source commit: \`$source_commit\`
-- Host archive SHA-256: \`$checksum\`
-- Flatpak archive SHA-256: \`$flatpak_checksum\`
+- Includes checksum-verified host archive \`$(basename "$archive")\` (SHA-256: \`$checksum\`).
+- Includes checksum-verified Flatpak runtime archive \`$(basename "$flatpak_archive")\` (SHA-256: \`$flatpak_checksum\`).
+- The host archive contains the 64-bit and 32-bit Vulkan layers, CLI, Qt configuration UI, standalone \`mako-launch\` launcher, and desktop integration.
+- Built from source commit \`$source_commit\`.
 EOF
 
 if [[ "$tag_exists" == false ]]; then
