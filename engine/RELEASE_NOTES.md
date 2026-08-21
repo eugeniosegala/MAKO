@@ -4,7 +4,11 @@
 
 ### Release codename: Leviathan Rising
 
-> **The deep has awakened.**
+> _“The deep has awakened. Even the oldest roots can feel it.”_
+>
+> **Ilyra, Warden of the Drowned Grove**
+
+---
 
 MAKO Renderer 2.1 makes Fractional Adaptive practical and can deliver major AMD image-quality gains, with stronger recovery and a cleaner SteamOS presentation path. Frame generation is available now; scaling is coming soon.
 
@@ -14,5 +18,3 @@ MAKO Renderer 2.1 makes Fractional Adaptive practical and can deliver major AMD 
 - **Native frames keep moving through generation stalls:** A missed render-fence budget now presents the game's original frame, pauses generation, and resumes it after recovery. This reduces the risk of a Renderer stall becoming a visible freeze, while broader backend and swapchain failures continue to fall back to native presentation.
 - **Standalone tools now speak more languages:** The optional desktop UI automatically selects and remembers English, Brazilian Portuguese, European Portuguese, or Spanish. The CLI offers the same language choices through an explicit `--lang` option without changing Renderer profiles or machine-oriented quality output.
 - **A stronger foundation for future releases:** Presentation responsibilities are separated, runtime policy is centralized, and managed launches use private Vulkan layer discovery for a predictable chain. Build and package gates reject missing or misidentified layers, compatibility paths fail closed, and broader validation protects supported production boundaries.
-
-**Leviathan Rising is only the beginning.**

@@ -4,7 +4,11 @@
 
 ### Release codename: Leviathan Rising
 
-> **Command the Leviathan.**
+> _“The Leviathan is awake. Take the helm.”_
+>
+> **Ilyra, Warden of the Drowned Grove**
+
+---
 
 MAKO Decky 2.1 brings easier Fractional Adaptive setup and potentially major AMD image-quality gains into Game Mode, with steadier SteamOS presentation and a more polished everyday experience. Frame generation is available now; scaling is coming soon.
 
@@ -13,5 +17,3 @@ MAKO Decky 2.1 brings easier Fractional Adaptive setup and potentially major AMD
 - **Experimental Gamescope WSI compatibility is now one toggle away:** MAKO's standard SDR path still isolates Gamescope WSI, while an off-by-default, per-profile control can restore it for affected games. The guarded 64-bit host path validates the real Gamescope manifest, fails closed if it is unavailable or invalid, and requires a game restart. The same control supports either MangoHud or experimental vkBasalt, with MangoHud able to report final generated FPS.
 - **Games keep presenting through Renderer stalls:** If generation misses its render-fence budget, the bundled Renderer presents the game's original frame, pauses generation, and resumes after recovery instead of allowing the wait to become a visible freeze. More initialization and recovery failures also fall back to native frames.
 - **A safer and more consistent foundation:** Installation, upgrades, profiles, generated wrappers, and packaging now follow clearer ownership rules. Managed launches use private Vulkan layer discovery to prevent accidental activation, unsupported compatibility paths fail closed, package checks catch incomplete builds, and MAKO-owned files update safely without rewriting user configuration.
-
-**The Leviathan is awake. Take the helm.**
