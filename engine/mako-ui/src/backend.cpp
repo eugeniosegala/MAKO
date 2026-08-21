@@ -59,6 +59,9 @@ Backend::Backend() {
     if (!this->m_profiles.empty())
         this->m_profile_index = 0;
 
+    // create process list model (empty until refreshProcesses is called)
+    this->m_process_list_model = new QStringListModel({}, this);
+
     // spawn saving thread
     std::thread([this, path]() {
         while (true) {

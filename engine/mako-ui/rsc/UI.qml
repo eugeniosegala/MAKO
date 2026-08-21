@@ -90,6 +90,20 @@ ApplicationWindow {
                 icon.name: "list-remove"
                 onClicked: backend.removeActiveIn()
             }
+            Button {
+                icon.name: "system-search"
+                tooltip: t.detectProcess
+                onClicked: process_dialog.open()
+            }
+        }
+    }
+
+    ProcessDialog {
+        id: process_dialog
+        parent: ApplicationWindow.contentItem
+        onSelected: processName => {
+            active_in_name.text = processName;
+            backend.addActiveIn(processName);
         }
     }
 

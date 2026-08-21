@@ -60,7 +60,13 @@ var strings = [
         "deckyIntegration": "Decky Integration",
         "deckyDesc": "Automatic game discovery, launch compatibility, Flatpak setup, and Renderer installation are managed in MAKO Decky.",
         "language": "Language",
-        "languageDesc": "Select the interface language"
+        "languageDesc": "Select the interface language",
+        "detectProcess": "Detect Process",
+        "processListDesc": "Select a running process. GPU usage is shown when available.",
+        "refresh": "Refresh",
+        "processesFound": "processes found",
+        "selectProcess": "Select",
+        "cancel": "Cancel"
     },
     {
         // Português (Brasil)
@@ -119,10 +125,14 @@ var strings = [
         "deckyIntegration": "Integração com Decky",
         "deckyDesc": "Descoberta automática de jogos, compatibilidade de inicialização, configuração Flatpak e instalação do Renderer são gerenciados no MAKO Decky.",
         "language": "Idioma",
-        "languageDesc": "Selecione o idioma da interface"
+        "languageDesc": "Selecione o idioma da interface",
+        "detectProcess": "Detectar Processo",
+        "processListDesc": "Selecione um processo em execução. O uso de GPU é mostrado quando disponível.",
+        "refresh": "Atualizar",
+        "processesFound": "processos encontrados",
+        "selectProcess": "Selecionar",
+        "cancel": "Cancelar"
     },
-    {
-        // Português (Portugal)
         "makoRendererConfig": "Configuração do MAKO Renderer",
         "createNewProfile": "Criar Novo Perfil",
         "renameProfile": "Renomear Perfil",
@@ -178,10 +188,14 @@ var strings = [
         "deckyIntegration": "Integração com Decky",
         "deckyDesc": "Descoberta automática de jogos, compatibilidade de arranque, configuração Flatpak e instalação do Renderer são geridos no MAKO Decky.",
         "language": "Idioma",
-        "languageDesc": "Selecione o idioma da interface"
+        "languageDesc": "Selecione o idioma da interface",
+        "detectProcess": "Detetar Processo",
+        "processListDesc": "Selecione um processo em execução. A utilização da GPU é mostrada quando disponível.",
+        "refresh": "Atualizar",
+        "processesFound": "processos encontrados",
+        "selectProcess": "Selecionar",
+        "cancel": "Cancelar"
     },
-    {
-        // Español
         "makoRendererConfig": "Configuración de MAKO Renderer",
         "createNewProfile": "Crear Nuevo Perfil",
         "renameProfile": "Renombrar Perfil",
@@ -237,6 +251,12 @@ var strings = [
         "deckyIntegration": "Integración con Decky",
         "deckyDesc": "El descubrimiento automático de juegos, compatibilidad de inicio, configuración Flatpak e instalación del Renderer se gestionan en MAKO Decky.",
         "language": "Idioma",
-        "languageDesc": "Seleccione el idioma de la interfaz"
+        "languageDesc": "Seleccione el idioma de la interfaz",
+        "detectProcess": "Detectar Proceso",
+        "processListDesc": "Seleccione un proceso en ejecución. El uso de GPU se muestra cuando está disponible.",
+        "refresh": "Actualizar",
+        "processesFound": "procesos encontrados",
+        "selectProcess": "Seleccionar",
+        "cancel": "Cancelar"
     }
 ];

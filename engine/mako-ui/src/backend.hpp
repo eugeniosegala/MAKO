@@ -5,8 +5,10 @@
 #include <QObject>
 #include <QStringListModel>
 #include <QString>
+#include <QList>
 
 #include "mako-common/configuration/config.hpp"
+#include "processes.hpp"
 
 #include <algorithm>
 #include <atomic>
@@ -43,6 +45,9 @@ namespace mako::ui {
         Q_PROPERTY(int pacing_mode READ getPacingMode WRITE pacingModeUpdated NOTIFY refreshUI)
         Q_PROPERTY(QStringList gpus READ calculateGPUList NOTIFY refreshUI)
         Q_PROPERTY(int gpu READ getGPU WRITE gpuUpdated NOTIFY refreshUI)
+
+        Q_PROPERTY(QStringListModel* processList READ getProcessList NOTIFY processListUpdated)
+        Q_PROPERTY(int processCount READ getProcessCount NOTIFY processListUpdated)
 
     public:
         explicit Backend();
@@ -132,6 +137,13 @@ namespace mako::ui {
             VALIDATE_AND_GET_PROFILE(0)
             auto gpu = QString::fromStdString(conf.gpu.value_or("Default"));
             return static_cast<int>(this->m_gpu_list.indexOf(gpu));
+        }
+
+        [[nodiscard]] QStringListModel* getProcessList() const {
+            return this->m_process_list_model;
+        }
+        [[nodiscard]] int getProcessCount() const {
+            return this->m_process_list_model->rowCount();
         }
 
 #undef VALIDATE_AND_GET_PROFILE
@@ -311,11 +323,49 @@ namespace mako::ui {
             MARK_DIRTY()
         }
 
+        Q_INVOKABLE void refreshProcesses() {
+            this->m_processes = getRunningProcesses();
+
+            QStringList displayList;
+            for (const auto& proc : this->m_processes) {
+                QString entry;
+                if (proc.gpuUsage >= 0)
+                    entry = QString("%1 — %2 (GPU: %3%)").arg(proc.name, proc.cmdline.left(40)).arg(proc.gpuUsage);
+                else
+                    entry = QString("%1 — %2").arg(proc.name, proc.cmdline.left(50));
+                displayList.append(entry);
+            }
+
+            this->m_process_list_model->setStringList(displayList);
+            emit processListUpdated();
+        }
+
+        Q_INVOKABLE QString getSelectedProcessName() const {
+            if (this->m_selected_process_index < 0
+                || this->m_selected_process_index >= this->m_processes.size())
+                return {};
+            const auto& proc = this->m_processes.at(this->m_selected_process_index);
+            // use the executable name (last part of cmdline) for best match
+            const auto parts = proc.cmdline.split(' ');
+            if (!parts.isEmpty()) {
+                auto exe = parts.first();
+                if (exe.contains('/'))
+                    exe = exe.section('/', -1);
+                return exe;
+            }
+            return proc.name;
+        }
+
+        Q_INVOKABLE void setSelectedProcessIndex(int index) {
+            this->m_selected_process_index = index;
+        }
+
 #undef VALIDATE_AND_GET_PROFILE
 #undef MARK_DIRTY
 
     signals:
         void refreshUI();
+        void processListUpdated();
 
     private:
         ls::GlobalConf m_global;
@@ -328,6 +378,10 @@ namespace mako::ui {
         int m_active_in_index{-1};
 
         QStringList m_gpu_list;
+
+        QList<ProcessInfo> m_processes;
+        QStringListModel* m_process_list_model;
+        int m_selected_process_index{-1};
 
         std::atomic_bool m_dirty{false};
     };

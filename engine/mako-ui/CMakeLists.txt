@@ -3,11 +3,13 @@ find_package(Qt6 REQUIRED COMPONENTS Quick)
 set(UI_SOURCES
     "src/backend.cpp"
     "src/main.cpp"
+    "src/processes.cpp"
     "src/utils.cpp")
 
 set(UI_RESOURCES
     "rsc/dialogs/CenteredDialog.qml"
     "rsc/dialogs/LargeDialog.qml"
+    "rsc/dialogs/ProcessDialog.qml"
     "rsc/panes/Group.qml"
     "rsc/panes/GroupEntry.qml"
     "rsc/panes/Pane.qml"
