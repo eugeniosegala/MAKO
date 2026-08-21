@@ -122,7 +122,7 @@ export function FpsMultiplierControl({
       <PanelSectionRow>
         <ToggleField
           label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
-          description={t("ADAPTIVE_DESC", "Adjusts frame generation to reach Target FPS. Steady 2x is the default for smoother pacing. Enable Fractional Adaptive below to keep more real frames, but test it per game. Raising the multiplier limit may require a restart.")}
+          description={t("ADAPTIVE_DESC", "Adjusts frame generation to reach Target FPS. The steady base cap is the default for smoother pacing. Enable Fractional Adaptive below to keep more real frames, but test it per game. Raising the multiplier limit may require a restart.")}
           checked={config.adaptive}
           onChange={(value) => onConfigChange(ADAPTIVE, value)}
         />
@@ -133,7 +133,7 @@ export function FpsMultiplierControl({
           <PanelSectionRow>
             <ToggleField
               label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive (Preset)")}
-              description={t("FRACTIONAL_ADAPTIVE_PRESET_DESC", "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses Steady 2x. Incompatible setting changes turn this preset off automatically.")}
+              description={t("FRACTIONAL_ADAPTIVE_PRESET_DESC", "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses the steady base cap. Incompatible setting changes turn this preset off automatically.")}
               checked={isFractionalAdaptivePresetEnabled(config)}
               onChange={(value) => onConfigUpdate(fractionalAdaptivePresetChanges(value))}
             />
@@ -141,7 +141,7 @@ export function FpsMultiplierControl({
           <PanelSectionRow>
             <SliderField
               label={`${t("ADAPTIVE_TARGET_FPS", "Target FPS")} (${targetFps})`}
-              description={t("ADAPTIVE_TARGET_FPS_DESC", "Desired displayed FPS. Fractional Adaptive may mix ratios to reach it; Steady 2x caps real FPS at half the target.")}
+              description={t("ADAPTIVE_TARGET_FPS_DESC", "Desired displayed FPS. Fractional Adaptive may mix ratios to reach it; the steady base cap limits real FPS to half the target.")}
               value={targetFps}
               min={30}
               max={240}
@@ -151,8 +151,8 @@ export function FpsMultiplierControl({
           </PanelSectionRow>
           <PanelSectionRow>
             <ToggleField
-              label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Steady 2x FPS Cap")} (${automaticBaseFpsCapLabel} FPS)`}
-              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "The default Adaptive mode. Caps real FPS to half the target and uses an even 2x cadence. Pros: usually smoother pacing. Cons: fewer real frames and potentially more input lag.")}
+              label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Steady Base Cap")} (${automaticBaseFpsCapLabel} FPS)`}
+              description={t("ADAPTIVE_AUTO_BASE_FPS_CAP_DESC", "The default Adaptive mode. Caps real FPS at half the target for an even cadence. Pros: usually smoother pacing. Cons: fewer real frames and potentially more input lag.")}
               checked={config.adaptive_auto_base_fps_cap ?? true}
               onChange={(value) => onConfigChange(ADAPTIVE_AUTO_BASE_FPS_CAP, value)}
             />

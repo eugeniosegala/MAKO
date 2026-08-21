@@ -10,7 +10,7 @@ The MAKO trace extractor turns one completed real-game session into a structured
 | --- | --- | --- |
 | `MAKO/scripts/capture-trace.sh` | Public | Session extraction, time slicing, sanitization, metadata generation, credential rejection, and checksums |
 | `MAKO/TRACES.md` | Public | Extractor behavior, safety contract, and maintainer workflow |
-| `MAKO-Traces` | Private | Versioned evidence, metadata schema, notes template, archive validation, and comparison history |
+| `MAKO-Traces` | Private | Controlled traces, external user reports, their metadata contracts, archive validation, and comparison history |
 
 The private repository is a development evidence store, not a runtime dependency or distribution input. MAKO must continue to behave normally when no trace checkout is present.
 
@@ -83,15 +83,21 @@ Each run is written to `traces/<version-label>/<game-slug>/<run-id>/` in the pri
 
 The extractor does not infer image quality from timing logs. Ghosting, fluidity, and visual artifacts remain tester observations unless supported by repeatable captures or image-quality evidence.
 
+## External user reports
+
+Externally supplied diagnostics belong under `user-reports/<issue>/<report-id>/` in the private archive rather than under `traces/`. A user report may preserve a compatibility observation tied to a specific issue even when exact build, host, session timing, configuration, or comparative evidence is unavailable. Its metadata and notes must state those limitations and must never present the report as a controlled benchmark.
+
+Do not run `capture-trace.sh` against another user's diagnostics. The extractor records the local source checkout and host, which would give imported evidence false provenance. Sanitize the supplied files, remove personal identifiers, record how private archival use was authorized, generate checksums, and validate the private archive's user-report contract instead.
+
 ## Protected inputs and privacy
 
-Never capture or upload `Lossless.dll`, game binaries, Vulkan layer binaries, shader caches, crash dumps containing process memory, access tokens, cookies, account data, or unrelated application logs. Sanitized `$HOME` paths are permitted; user-specific absolute home paths are not.
+Never capture or upload `Lossless.dll`, game binaries, Vulkan layer binaries, shader caches, crash dumps containing process memory, access tokens, cookies, account data, personal correspondence, or unrelated application logs. Sanitized `$HOME` paths are permitted; user-specific absolute home paths are not. Preserve only the minimum report text needed to understand an external observation.
 
 The archive being private reduces exposure but does not remove the need for minimization and review. Inspect every new run before committing or sharing it.
 
 ## Validation and contract changes
 
-Validate the private archive after every capture:
+Validate the private archive after every capture or user-report import:
 
 ```bash
 ../MAKO-Traces/scripts/validate.sh

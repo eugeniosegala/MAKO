@@ -63,6 +63,8 @@ MAKO Renderer installation validates the host's `/usr/share/vulkan/implicit_laye
 
 This exception remains SDR-only: `MAKO_DISABLE_HDR_EXPOSURE=1` stays set and inherited `DXVK_HDR` is removed. It is implemented only for direct host launches; Flatpak, Heroic/UMU, 32-bit validation, non-SteamOS layouts, HDR, and stable layer ordering remain outside the current evidence. Loader discovery is not a compatibility result. Verify the actual instance and device order, final generated FPS, image quality, and pacing before expanding this lane.
 
+Observed compatibility evidence now includes Helldivers 2 on Steam Deck: the reporter saw purple or pixelated artifacts during camera movement on the default WSI-isolated path, and the curated Gamescope WSI path removed them. The corresponding WSI-on diagnostics contained only successful Vulkan presentation results. This is SDR compatibility evidence rather than HDR validation, and it demonstrates that successful presentation calls do not prove image correctness; WSI validation must retain a visual A/B check.
+
 ## What remains and what is excluded
 
 | Component | Default managed launch result | Reason |

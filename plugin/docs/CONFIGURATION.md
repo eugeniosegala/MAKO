@@ -9,12 +9,12 @@ Test one change at a time. Games, displays, VRR, and compositors differ; try the
 - **Frame Generation (Live On/Off):** Turns synthesis on or off without losing the selected Fixed or Adaptive settings. Keep it on whenever you want either mode to generate frames.
 - **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Start at 2x for the best balance of image quality and latency.
 - **Adaptive Frame Generation:** Adjusts generation toward a target FPS. Adaptive cannot slow down a game that is already above the target or exceed the selected multiplier ceiling.
-- **Fractional Adaptive (Preset):** Mixes generation ratios over time, such as 60 real FPS to 90 displayed FPS. It keeps more real frames and may reduce input lag, but uneven frame spacing can feel choppy in some games. It is off by default. Turning it on enables Frame Generation and Adaptive and disables Steady 2x; incompatible setting changes turn the preset off automatically.
-- **Target FPS:** Desired displayed rate, from 30 to 240 FPS in Decky. Fractional Adaptive mixes ratios to approach it; Steady 2x caps real FPS at half the target.
-- **Steady 2x FPS Cap:** The default Adaptive mode. It caps real FPS at half the target and uses an even 2x cadence while the game can maintain the cap. This usually gives smoother pacing, but it means fewer real frames and may increase input latency. While enabled, it takes control from the regular **Base FPS Cap**.
+- **Fractional Adaptive (Preset):** Mixes generation ratios over time, such as 60 real FPS to 90 displayed FPS. It keeps more real frames and may reduce input lag, but uneven frame spacing can feel choppy in some games. It is off by default. Turning it on enables Frame Generation and Adaptive and disables the Steady Base Cap; incompatible setting changes turn the preset off automatically.
+- **Target FPS:** Desired displayed rate, from 30 to 240 FPS in Decky. Fractional Adaptive mixes ratios to approach it; the Steady Base Cap limits real FPS to half the target.
+- **Steady Base Cap:** The default Adaptive mode. It caps real FPS at half the target and uses an even 2x cadence while the game can maintain the cap. This usually gives smoother pacing, but it means fewer real frames and may increase input latency. While enabled, it takes control from the regular **Base FPS Cap**.
 - **Maximum Adaptive Multiplier:** The 2x, 3x, or 4x Adaptive ceiling. 2x usually looks best; 4x can help reach a higher target at the cost of more generated frames.
 - **Smooth Cadence:** Prefers a sustainable constant interpolation cadence. It can improve displayed motion but may reduce responsiveness. It is on by default; disable it if the game feels better with stricter target scheduling.
-- **Base FPS Cap:** Caps real frames before generation. It applies live and is disabled while **Steady 2x FPS Cap** controls the cap.
+- **Base FPS Cap:** Caps real frames before generation. It applies live and is disabled while **Steady Base Cap** controls the cap.
 
 Adaptive target, ceiling, and cadence changes normally apply while a game is running. Give the game a few seconds to settle before judging the result. Changes that need a different GPU backend or larger private resources can wait for a natural swapchain recreation; restarting the game applies them directly.
 
