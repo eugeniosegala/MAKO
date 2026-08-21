@@ -185,6 +185,10 @@ worktree_fingerprint() {
   } | "${checksum_command[@]}" | awk '{print substr($1, 1, 8)}'
 }
 
+component_commit() {
+  git -C "$1" log -1 --format=%H -- .
+}
+
 read -r archive_name archive_version archive_url archive_checksum flatpak_archive_name flatpak_archive_url flatpak_archive_checksum < <(
   node -e '
     const manifest = require(process.argv[1]);
@@ -250,7 +254,7 @@ if [[ -n "$local_engine_repo" ]]; then
     echo "Engine: $local_engine_version" >&2
     exit 1
   fi
-  local_engine_commit="$(git -C "$local_engine_repo" rev-parse HEAD)"
+  local_engine_commit="$(component_commit "$local_engine_repo")"
   local_engine_short_commit="${local_engine_commit:0:7}"
   local_engine_label="$local_engine_short_commit"
   if [[ -n "$(git -C "$local_engine_repo" status --porcelain --untracked-files=normal -- .)" ]]; then
@@ -263,7 +267,8 @@ if [[ -n "$local_engine_repo" ]]; then
   # package, otherwise Decky can keep the already-loaded Python backend and
   # leave an older generated launch wrapper in place. Include the Decky commit
   # and worktree diff as well as the engine source identity.
-  local_plugin_commit="$(git -C "$project_dir" rev-parse --short=8 HEAD)"
+  local_plugin_commit="$(component_commit "$project_dir")"
+  local_plugin_commit="${local_plugin_commit:0:8}"
   local_plugin_fingerprint="$(worktree_fingerprint "$project_dir")"
   local_plugin_label="$local_engine_label.$local_plugin_commit.$local_plugin_fingerprint"
   if [[ "$native_only" == true ]]; then
@@ -317,7 +322,8 @@ if [[ "$local_plugin_mode" == true ]]; then
     echo "Local plugin packaging requires command: git" >&2
     exit 1
   fi
-  local_plugin_commit="$(git -C "$project_dir" rev-parse --short=8 HEAD)"
+  local_plugin_commit="$(component_commit "$project_dir")"
+  local_plugin_commit="${local_plugin_commit:0:8}"
   local_plugin_label="wrapper.$local_plugin_commit.$(worktree_fingerprint "$project_dir")"
 fi
 
