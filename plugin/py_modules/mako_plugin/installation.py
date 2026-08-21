@@ -21,6 +21,10 @@ from .constants import (
 )
 from .config_schema import ConfigurationManager
 from .host_environment import detect_host_environment
+from .managed_files import (
+    copy_managed_file_atomically,
+    write_managed_text_atomically,
+)
 from .types import InstallationResponse, UninstallationResponse, InstallationCheckResponse
 
 
@@ -171,7 +175,12 @@ class InstallationService(BaseService):
                 "host_architectures", ["x86_64"]
             ),
         }
-        self._write_file(self.engine_state_file, json.dumps(state, indent=2) + "\n", 0o644)
+        write_managed_text_atomically(
+            self.engine_state_file,
+            json.dumps(state, indent=2) + "\n",
+            0o644,
+            self.log,
+        )
 
     def _detect_native_host_architecture(self) -> str:
         """Detect the host ISA even when Decky's Python runs through FEX."""
@@ -324,10 +333,11 @@ class InstallationService(BaseService):
                         # Replace the entry only after the complete file and its
                         # safe owner mode are ready. This avoids modifying a stale
                         # file or following a stale symlink in place.
-                        self._copy_file_atomically(
+                        copy_managed_file_atomically(
                             temp_file,
                             destination,
                             0o755 if filename == CLI_FILENAME else 0o644,
+                            self.log,
                         )
                     self.log.info("Installed %s to %s", filename, destination)
 
@@ -378,7 +388,12 @@ class InstallationService(BaseService):
             layer["disable_environment"] = {
                 MAKO_LAYER_DISABLE_ENV: "1",
             }
-            self._write_file(dst_file, json.dumps(json_data, indent=2) + "\n", 0o644)
+            write_managed_text_atomically(
+                dst_file,
+                json.dumps(json_data, indent=2) + "\n",
+                0o644,
+                self.log,
+            )
         except (json.JSONDecodeError, OSError, TypeError, ValueError) as error:
             raise OSError(
                 f"Could not install Vulkan layer manifest {dst_file} from {src_file}: {error}"
@@ -408,6 +423,16 @@ class InstallationService(BaseService):
 
         If a config file already exists, preserve existing profiles and only update global settings like DLL path.
         """
+        if (
+            self.config_file_path.exists()
+            and self.config_file_path.stat().st_mode & 0o222 == 0
+        ):
+            raise OSError(
+                "MAKO Renderer configuration is read-only at "
+                f"{self.config_file_path}. Restore owner write permission, then "
+                "retry. Installation does not override read-only user configuration."
+            )
+
         # Import here to avoid circular imports
         from .dll_detection import DllDetectionService
 
@@ -474,13 +499,23 @@ class InstallationService(BaseService):
         script_content = config_service._generate_script_content_for_profile(profile_data)
 
         # Write the script file
-        self._write_file(self.mako_launch_script_path, script_content, 0o755)
+        write_managed_text_atomically(
+            self.mako_launch_script_path,
+            script_content,
+            0o755,
+            self.log,
+        )
         self.log.info(f"Created MAKO launch script at {self.mako_launch_script_path}")
 
     def _install_diagnostics_helper(self, plugin_dir: Path) -> None:
         """Install the packaged read-only diagnostic filter beside the wrapper."""
         source = self._diagnostics_helper_source(plugin_dir)
-        self._copy_file_atomically(source, self.diagnostics_script_path, 0o755)
+        copy_managed_file_atomically(
+            source,
+            self.diagnostics_script_path,
+            0o755,
+            self.log,
+        )
         self.log.info("Installed diagnostics helper to %s", self.diagnostics_script_path)
 
     @staticmethod

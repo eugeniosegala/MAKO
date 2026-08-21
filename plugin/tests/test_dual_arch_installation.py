@@ -31,7 +31,7 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
 )
 from py_modules.mako_plugin.installation import InstallationService  # noqa: E402
 from py_modules.mako_plugin import installation as installation_module  # noqa: E402
-from py_modules.mako_plugin import base_service as base_service_module  # noqa: E402
+from py_modules.mako_plugin import managed_files as managed_files_module  # noqa: E402
 from py_modules.mako_plugin import host_environment as host_environment_module  # noqa: E402
 
 
@@ -388,7 +388,7 @@ class DualArchInstallationTests(unittest.TestCase):
 
     def test_fresh_install_does_not_require_chmod(self):
         with patch.object(
-            base_service_module.os,
+            managed_files_module.os,
             "fchmod",
             side_effect=PermissionError(1, "Operation not permitted"),
         ) as chmod:
@@ -406,12 +406,17 @@ class DualArchInstallationTests(unittest.TestCase):
         destination.write_bytes(b"existing")
 
         with patch.object(
-            base_service_module.os,
+            managed_files_module.os,
             "fsync",
             side_effect=OSError("simulated write failure"),
         ):
             with self.assertRaisesRegex(OSError, "atomically replace"):
-                self.service._copy_file_atomically(source, destination)
+                managed_files_module.copy_managed_file_atomically(
+                    source,
+                    destination,
+                    0o644,
+                    self.service.log,
+                )
 
         self.assertEqual(destination.read_bytes(), b"existing")
         self.assertEqual(list(self.root.glob(".managed-file.*")), [])
@@ -424,6 +429,24 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service._extract_and_install_files(self._archive())
 
         self.assertEqual(unmanaged_file.read_text(encoding="utf-8"), "keep")
+
+    def test_install_reports_read_only_user_configuration(self):
+        self.service.config_dir = self.root / "config"
+        self.service.config_file_path = self.service.config_dir / "conf.toml"
+        self.service.config_dir.mkdir(parents=True)
+        self.service.config_file_path.write_text("version = 2\n", encoding="utf-8")
+        self.service.config_file_path.chmod(0o444)
+
+        with self.assertRaisesRegex(
+            OSError,
+            "configuration is read-only.*Restore owner write permission",
+        ):
+            self.service._create_config_file()
+
+        self.assertEqual(
+            self.service.config_file_path.read_text(encoding="utf-8"),
+            "version = 2\n",
+        )
 
 
 if __name__ == "__main__":

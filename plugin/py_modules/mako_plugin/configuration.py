@@ -37,6 +37,7 @@ from .constants import (
     MAKO_LAYER_ENABLE_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
 )
+from .managed_files import write_managed_text_atomically
 from .process_detection import (
     detect_processes_for_steam_app,
     is_matchable_process_name,
@@ -593,7 +594,12 @@ class ConfigurationService(BaseService):
         try:
             script_content = self._generate_script_content(config)
 
-            self._write_file(self.mako_script_path, script_content, 0o755)
+            write_managed_text_atomically(
+                self.mako_script_path,
+                script_content,
+                0o755,
+                self.log,
+            )
 
             self.log.info(f"Updated MAKO launch script at {self.mako_script_path}")
 
@@ -630,7 +636,12 @@ class ConfigurationService(BaseService):
                 return False
         except OSError:
             pass
-        self._write_file(self.mako_script_path, content, 0o755)
+        write_managed_text_atomically(
+            self.mako_script_path,
+            content,
+            0o755,
+            self.log,
+        )
         return True
 
     def _generate_script_content(self, config: ConfigurationData) -> str:
@@ -1499,7 +1510,12 @@ class ConfigurationService(BaseService):
             script_content = self._generate_script_content_for_profile(profile_data)
 
             # Write the script file
-            self._write_file(self.mako_script_path, script_content, 0o755)
+            write_managed_text_atomically(
+                self.mako_script_path,
+                script_content,
+                0o755,
+                self.log,
+            )
 
             self.log.info(f"Updated MAKO launch script at {self.mako_script_path} for profile '{profile_data['current_profile']}'")
 
