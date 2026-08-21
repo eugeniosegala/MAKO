@@ -222,7 +222,7 @@ export const auditI18n = async (projectDirectory) => {
   const invalidMetadata = Object.entries(languageMetadata)
     .filter(
       ([language, metadata]) =>
-        !/^[a-z][a-z0-9-]*$/.test(language) ||
+        !/^[a-z]{2,3}(?:-[A-Z]{2})?$/.test(language) ||
         !isRecord(metadata) ||
         !sameOrderedValues(Object.keys(metadata), ["name"]) ||
         typeof metadata.name !== "string" ||
@@ -242,7 +242,8 @@ export const auditI18n = async (projectDirectory) => {
         source !== source.trim().toLowerCase().replaceAll("_", "-") ||
         typeof target !== "string" ||
         target === "" ||
-        target !== target.trim().toLowerCase().replaceAll("_", "-"),
+        target !== target.trim().replaceAll("_", "-") ||
+        !(target in languageMetadata),
     )
     .map(([source]) => source);
   if (invalidSteamMappings.length) {

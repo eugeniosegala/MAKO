@@ -2,6 +2,7 @@
 
 import json
 import re
+from threading import RLock
 from typing import Dict, Any, Optional
 
 from .build_flavor import LOCAL_DEVELOPMENT_BUILD
@@ -16,6 +17,7 @@ from .config_schema import (
 )
 from .config_schema_generated import (
     ConfigurationData,
+    ConfigurationPatch,
 )
 from .constants import (
     ARMADA_DEVICE_ENV,
@@ -57,6 +59,7 @@ class ConfigurationService(BaseService):
             if development_build is None
             else development_build
         )
+        self._configuration_write_lock = RLock()
 
     def _diagnostics_default_marker(self) -> str:
         return wrapper_generation.DIAGNOSTICS_DEFAULT_MARKER
@@ -1186,7 +1189,16 @@ class ConfigurationService(BaseService):
                 game_running=None,
             )
 
-    def update_profile_config(self, profile_name: str, config: ConfigurationData) -> ConfigurationResponse:
+    def update_profile_config(
+            self, profile_name: str, config: ConfigurationData
+    ) -> ConfigurationResponse:
+        """Serialize a complete profile replacement with field patches."""
+        with self._configuration_write_lock:
+            return self._persist_profile_config(profile_name, config)
+
+    def _persist_profile_config(
+            self, profile_name: str, config: ConfigurationData
+    ) -> ConfigurationResponse:
         """Update configuration for a specific profile
 
         Args:
@@ -1234,6 +1246,61 @@ class ConfigurationService(BaseService):
             error_msg = f"Error updating profile configuration: {str(e)}"
             self.log.error(error_msg)
             return self._error_response(ConfigurationResponse, str(e), config=None)
+
+    def update_profile_config_fields(
+            self, profile_name: str, changes: ConfigurationPatch
+    ) -> ConfigurationResponse:
+        """Merge validated field changes into the latest saved profile.
+
+        Decky's controls update independently and some writes are deliberately
+        deferred. Reading the canonical profile here prevents an older frontend
+        snapshot from reverting unrelated fields or writing into another
+        profile after the editor selection changes.
+        """
+        with self._configuration_write_lock:
+            return self._update_profile_config_fields(profile_name, changes)
+
+    def _update_profile_config_fields(
+            self, profile_name: str, changes: ConfigurationPatch
+    ) -> ConfigurationResponse:
+        """Execute one profile patch while holding the write lock."""
+        try:
+            self.migrate_wrapper_profile_settings_if_needed()
+            profile_data = self._get_profile_data()
+            if profile_name not in profile_data["profiles"]:
+                return self._error_response(
+                    ConfigurationResponse,
+                    f"Profile '{profile_name}' does not exist",
+                    config=None,
+                )
+
+            unknown_fields = sorted(
+                set(changes) - set(ConfigurationManager.get_field_names())
+            )
+            if unknown_fields:
+                return self._error_response(
+                    ConfigurationResponse,
+                    "Unknown configuration fields: " + ", ".join(unknown_fields),
+                    config=None,
+                )
+
+            current_config = self._config_for_profile(profile_data, profile_name)
+            merged_config = ConfigurationManager.validate_config({
+                **current_config,
+                **changes,
+            })
+            return self._persist_profile_config(profile_name, merged_config)
+        except (OSError, IOError, ValueError, TypeError) as error:
+            self.log.error(
+                "Error updating profile '%s' fields: %s",
+                profile_name,
+                error,
+            )
+            return self._error_response(
+                ConfigurationResponse,
+                str(error),
+                config=None,
+            )
 
     def update_mako_script_from_profile_data(self, profile_data: ProfileData) -> ConfigurationResponse:
         """Update the isolated per-game launch script from profile data

@@ -6,6 +6,7 @@ import {
   setCurrentProfile,
   syncCurrentProfile,
   updateProfileConfig,
+  updateProfileConfigFields,
   configFailureResult,
   profileFailureResult,
   profilesFailureResult,
@@ -15,6 +16,7 @@ import {
 } from "../api/makoApi";
 import {
   ConfigurationData,
+  ConfigurationPatch,
   DEFAULT_PROFILE_NAME,
 } from "../config/configSchema";
 import { showSuccessToast, showErrorToast } from "../utils/toastUtils";
@@ -248,6 +250,39 @@ export function useProfileManagement() {
     [currentProfile],
   );
 
+  const handleUpdateProfileConfigFields = useCallback(
+    async (profileName: string, changes: ConfigurationPatch) => {
+      setIsLoading(true);
+      try {
+        const result: ConfigUpdateResult = await updateProfileConfigFields(
+          profileName,
+          changes,
+        );
+        if (!result.success) {
+          console.error("Failed to update profile fields:", result.error);
+          showErrorToast(
+            t(
+              "PROFILE_UPDATE_CONFIG_FAILED",
+              "Failed to update profile config",
+            ),
+            result.error || t("PROFILE_UNKNOWN_ERROR", "Unknown error"),
+          );
+        }
+        return result;
+      } catch (error) {
+        console.error("Error updating profile fields:", error);
+        showErrorToast(
+          t("PROFILE_UPDATE_CONFIG_ERROR", "Error updating profile config"),
+          String(error),
+        );
+        return configFailureResult(String(error));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [],
+  );
+
   // Initialize profiles on mount
   useEffect(() => {
     loadProfiles();
@@ -263,5 +298,6 @@ export function useProfileManagement() {
     setCurrentProfile: handleSetCurrentProfile,
     syncCurrentProfile: handleSyncCurrentProfile,
     updateProfileConfig: handleUpdateProfileConfig,
+    updateProfileConfigFields: handleUpdateProfileConfigFields,
   };
 }

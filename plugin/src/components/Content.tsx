@@ -4,6 +4,7 @@ import { useInstallationStatus, useDllDetection, useMakoConfig } from "../hooks/
 import { useProfileManagement } from "../hooks/useProfileManagement";
 import { useInstallationActions } from "../hooks/useInstallationActions";
 import { useProfileSession } from "../hooks/useProfileSession";
+import { useProfileConfigWriter } from "../hooks/useProfileConfigWriter";
 import { StatusDisplay } from "./StatusDisplay";
 import { InstallationButton } from "./InstallationButton";
 import { ConfigurationSection } from "./ConfigurationSection";
@@ -15,7 +16,6 @@ import { FpsMultiplierControl } from "./FpsMultiplierControl";
 import { ContentNotices } from "./ContentNotices";
 import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
-import { ConfigurationData } from "../config/configSchema";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
 import { currentRelease } from "virtual:mako-release-info";
 import { MakoButtonTheme, MakoReleaseIdentity, MakoSectionHeader } from "./MakoUi";
@@ -42,7 +42,7 @@ export function Content() {
   } = useMakoConfig();
 
   const {
-    updateProfileConfig,
+    updateProfileConfigFields,
     syncCurrentProfile
   } = useProfileManagement();
 
@@ -65,18 +65,15 @@ export function Content() {
     syncCurrentProfile
   });
 
-  const handleConfigChanges = async (changes: Partial<ConfigurationData>) => {
-    const targetProfile = getEditingProfile();
-    const newConfig = { ...config, ...changes };
-    const result = await updateProfileConfig(targetProfile, newConfig);
-    if (result.success && getEditingProfile() === targetProfile) {
-      await loadMakoConfig(targetProfile);
-    }
-  };
-
-  const handleConfigChange = async (fieldName: keyof ConfigurationData, value: boolean | number | string) => {
-    await handleConfigChanges({ [fieldName]: value } as Partial<ConfigurationData>);
-  };
+  const {
+    saveConfigChanges: handleConfigChanges,
+    saveConfigField: handleConfigChange
+  } = useProfileConfigWriter({
+    editingProfile,
+    getEditingProfile,
+    updateProfileConfigFields,
+    loadProfileConfig: loadMakoConfig
+  });
 
   const onInstall = async () => {
     await handleInstall(

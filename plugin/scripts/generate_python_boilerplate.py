@@ -68,6 +68,20 @@ def generate_typed_dict() -> str:
     return "\n".join(lines)
 
 
+def generate_patch_typed_dict() -> str:
+    """Generate the public partial configuration update shape."""
+    lines = [
+        "class ConfigurationPatch(TypedDict, total=False):",
+        '    """Validated partial profile update - AUTO-GENERATED"""',
+    ]
+
+    for field_name, field_def in CONFIG_SCHEMA_DEF.items():
+        python_type = get_python_type(ConfigFieldType(field_def["fieldType"]))
+        lines.append(f"    {field_name}: {python_type}")
+
+    return "\n".join(lines)
+
+
 def generate_wrapper_settings_typed_dict() -> str:
     """Generate the canonical persisted launcher-only settings shape."""
     lines = [
@@ -259,6 +273,9 @@ def generate_complete_schema_file() -> str:
         '',
         '',
         generate_typed_dict(),
+        '',
+        '',
+        generate_patch_typed_dict(),
         '',
         '',
         generate_wrapper_settings_typed_dict(),

@@ -138,7 +138,7 @@ MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
 
 The configuration UI writes MAKO's normal configuration and does not launch games, so open `mako-ui` directly. Likewise, run `mako-cli` directly for validation, benchmarks, and quality tests; use `mako-launch` only for a Vulkan application that should load the frame-generation layer.
 
-The desktop UI supports English, Brazilian Portuguese, European Portuguese, and Spanish, automatically selecting a matching system language on first run and remembering later choices. The same languages are available for CLI output with a global option before the command, such as `mako-cli --lang pt-BR validate`; the language choice does not alter Renderer profiles.
+The desktop UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, and Simplified Chinese, matching MAKO Decky's supported language inventory. It automatically selects a matching system language on first run and remembers later choices. CLI output remains available in English, Brazilian Portuguese, European Portuguese, and Spanish with a global option before the command, such as `mako-cli --lang pt-BR validate`; the language choice does not alter Renderer profiles.
 
 ### Manual configuration
 

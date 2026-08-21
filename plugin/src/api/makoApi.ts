@@ -1,6 +1,7 @@
 import { callable } from "@decky/api";
 import type {
   ConfigurationData,
+  ConfigurationPatch,
   FlatpakRuntimeStatusField,
   FlatpakRuntimeVersion,
   ProfileKind,
@@ -269,3 +270,7 @@ export const updateProfileConfig = callable<
   [string, ConfigurationData],
   ConfigUpdateResult
 >("update_profile_config");
+export const updateProfileConfigFields = callable<
+  [string, ConfigurationPatch],
+  ConfigUpdateResult
+>("update_profile_config_fields");

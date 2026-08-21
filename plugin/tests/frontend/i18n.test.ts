@@ -26,11 +26,16 @@ describe("i18n runtime", () => {
     expect(normalizeLanguage("schinese")).toBe("zh");
     expect(normalizeLanguage("ja_JP")).toBe("ja");
     expect(normalizeLanguage(" spanish ")).toBe("es");
+    expect(normalizeLanguage("brazilian")).toBe("pt-BR");
+    expect(normalizeLanguage("pt_BR")).toBe("pt-BR");
+    expect(normalizeLanguage("portuguese")).toBe("pt-PT");
+    expect(normalizeLanguage("pt-PT")).toBe("pt-PT");
   });
 
   it("reports localized language names with a normalized fallback", () => {
     expect(getLanguageName("koreana")).toBe("한국어");
-    expect(getLanguageName("spanish")).toBe("es");
+    expect(getLanguageName("spanish")).toBe("Español");
+    expect(getLanguageName("brazilian")).toBe("Português (Brasil)");
   });
 
   it("uses the selected dictionary and replaces named placeholders", () => {
@@ -46,13 +51,30 @@ describe("i18n runtime", () => {
     ).toBe("ランタイム 24.08");
   });
 
+  it("uses translated regional dictionaries without collapsing their locale", () => {
+    setSteamLanguage("brazilian");
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
+      "Modo de geração de quadros",
+    );
+
+    setSteamLanguage("portuguese");
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
+      "Modo de geração de fotogramas",
+    );
+
+    setSteamLanguage("spanish");
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
+      "Modo de generación de cuadros",
+    );
+  });
+
   it("uses the caller fallback for English, unknown languages, and unknown keys", () => {
     setSteamLanguage("english");
     expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
       "Frame Generation Mode",
     );
 
-    setSteamLanguage("spanish");
+    setSteamLanguage("german");
     expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
       "Frame Generation Mode",
     );

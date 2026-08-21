@@ -213,6 +213,9 @@ def generate_typescript_schema():
     ] + interface_fields + [
         "}",
         "",
+        "// Validated partial profile update sent through Decky's RPC boundary",
+        "export type ConfigurationPatch = Partial<ConfigurationData>;",
+        "",
         "// Helper functions",
         "export function getFieldNames(): string[] {",
         "  return Object.keys(CONFIG_SCHEMA);",

@@ -34,6 +34,8 @@ The Decky dropdown is an editor selection, not a runtime override. Outside a gam
 
 Renderer fields remain canonical in `conf.toml`. MAKO Decky stores profile identity metadata and launcher-only compatibility settings in separate versioned JSON sidecars, then merges those three inputs only when serving the selected profile or regenerating `mako-run`. `profile_storage.py` owns the sidecar allowlists, normalization, and merged views; `configuration.py` owns RPC transactions, migrations, file persistence, and atomic regeneration; and `wrapper_generation.py` converts explicit canonical inputs into shell text without reading or writing user files.
 
+Decky controls send typed field patches rather than stale full-profile snapshots. The backend merges each patch into the latest canonical profile and validates the complete result before persistence, while deferred controls retain the profile selected when the change was made. Consequently, switching profiles or saving another field while the Target FPS debounce is pending cannot redirect that write or revert an intervening setting.
+
 The generated wrapper is disposable cache, not a source of profile state. Any stale, incomplete, or contaminated wrapper is regenerated from the Renderer TOML and Decky sidecars after unique legacy values have passed through their explicit migrations. This boundary is characterized byte for byte so a structural refactor cannot silently change launch exports, profile selection, or serialization.
 
 ## External Tools

@@ -41,6 +41,10 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
 
     def setUp(self):
         self.service = FlatpakService(logger=_Logger())
+        # Flatpak runtime tests model the supported x86_64 package unless a
+        # case explicitly overrides this boundary. Host detection itself has
+        # dedicated coverage in test_dual_arch_installation.py.
+        self.service._host_architecture_supported = lambda: True
 
     def test_runtime_descriptor_owns_bundle_and_extension_identity(self):
         self.assertEqual(

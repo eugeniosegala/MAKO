@@ -57,6 +57,31 @@ class ConfigurationData(TypedDict):
     force_alsa_audio: bool
 
 
+class ConfigurationPatch(TypedDict, total=False):
+    """Validated partial profile update - AUTO-GENERATED"""
+    dll: str
+    allow_fp16: bool
+    frame_generation_enabled: bool
+    base_fps_cap: int
+    multiplier: int
+    adaptive: bool
+    adaptive_auto_base_fps_cap: bool
+    target_fps: int
+    adaptive_max_multiplier: int
+    adaptive_stable_cadence: bool
+    flow_scale: float
+    performance_mode: bool
+    pacing: str
+    active_in: str
+    gpu: str
+    disable_mako: bool
+    disable_hdr_exposure: bool
+    external_vulkan_layer: str
+    disable_steamdeck_mode: bool
+    enable_zink: bool
+    force_alsa_audio: bool
+
+
 class WrapperSettingsData(TypedDict):
     """Canonical launcher-only profile settings - AUTO-GENERATED"""
     disable_mako: bool

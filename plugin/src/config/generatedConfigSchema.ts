@@ -253,6 +253,9 @@ export interface ConfigurationData {
   force_alsa_audio: boolean;
 }
 
+// Validated partial profile update sent through Decky's RPC boundary
+export type ConfigurationPatch = Partial<ConfigurationData>;
+
 // Helper functions
 export function getFieldNames(): string[] {
   return Object.keys(CONFIG_SCHEMA);

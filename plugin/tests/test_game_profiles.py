@@ -2,10 +2,12 @@
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import time
 from types import SimpleNamespace
 import unittest
 
@@ -43,6 +45,11 @@ class GameProfileTests(unittest.TestCase):
             self.service.config_dir / "profile-metadata.json"
         )
         self.service.mako_script_path = root / "bin" / "mako-run"
+        self.test_bin_dir = root / "test-bin"
+        self.test_bin_dir.mkdir()
+        test_uname = self.test_bin_dir / "uname"
+        test_uname.write_text("#!/bin/sh\nprintf 'x86_64\\n'\n", encoding="utf-8")
+        test_uname.chmod(0o755)
         self.service.local_share_dir = root / "implicit_layer.d"
         self.service.mako_script_path.parent.mkdir(parents=True)
 
@@ -140,6 +147,65 @@ class GameProfileTests(unittest.TestCase):
         })
 
         self.assertNotIn("removed_profile_option", validated)
+
+    def test_field_update_merges_with_latest_canonical_profile(self):
+        existing = dict(ConfigurationManager.get_defaults())
+        existing["performance_mode"] = True
+        self.assertTrue(
+            self.service.update_profile_config("mako", existing)["success"]
+        )
+
+        result = self.service.update_profile_config_fields(
+            "mako", {"target_fps": 120}
+        )
+
+        self.assertTrue(result["success"])
+        saved = self.service.get_profile_config("mako")["config"]
+        self.assertEqual(saved["target_fps"], 120)
+        self.assertTrue(saved["performance_mode"])
+
+    def test_field_update_rejects_unknown_options_without_rewriting_profile(self):
+        original = self.service.config_file_path.read_text(encoding="utf-8")
+
+        result = self.service.update_profile_config_fields(
+            "mako", {"removed_profile_option": True}
+        )
+
+        self.assertFalse(result["success"])
+        self.assertIn("removed_profile_option", result["error"])
+        self.assertEqual(
+            self.service.config_file_path.read_text(encoding="utf-8"),
+            original,
+        )
+
+    def test_field_updates_are_serialized_at_the_service_boundary(self):
+        active_calls = 0
+        maximum_active_calls = 0
+
+        def observe_serialization(_profile_name, _changes):
+            nonlocal active_calls, maximum_active_calls
+            active_calls += 1
+            maximum_active_calls = max(maximum_active_calls, active_calls)
+            time.sleep(0.02)
+            active_calls -= 1
+            return {
+                "success": True,
+                "message": "updated",
+                "error": None,
+                "config": ConfigurationManager.get_defaults(),
+            }
+
+        self.service._update_profile_config_fields = observe_serialization
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(executor.map(
+                lambda value: self.service.update_profile_config_fields(
+                    "mako", {"target_fps": value}
+                ),
+                (90, 120),
+            ))
+
+        self.assertTrue(all(result["success"] for result in results))
+        self.assertEqual(maximum_active_calls, 1)
 
     def test_capture_creates_then_updates_one_profile_for_the_same_app(self):
         previous = configuration_module.detect_processes_for_steam_app
@@ -418,7 +484,7 @@ class GameProfileTests(unittest.TestCase):
             capture_output=True,
             text=True,
             env={
-                "PATH": os.environ.get("PATH", ""),
+                "PATH": f"{self.test_bin_dir}:{os.environ.get('PATH', '')}",
                 "SteamAppId": app_id,
                 **(extra_environment or {}),
             },

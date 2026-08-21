@@ -599,6 +599,18 @@ class WrapperEnvironmentTests(unittest.TestCase):
             device_env = temp_path / "device-env"
             game_launch = temp_path / "armada-game-launch"
             game = temp_path / "game"
+            test_bin = temp_path / "test-bin"
+            test_bin.mkdir()
+            test_uname = test_bin / "uname"
+            test_uname.write_text(
+                "#!/bin/sh\nprintf 'x86_64\\n'\n",
+                encoding="utf-8",
+            )
+            test_uname.chmod(0o755)
+            test_environment = {
+                **os.environ,
+                "PATH": f"{test_bin}:{os.environ.get('PATH', '')}",
+            }
             game_launch.write_text(
                 "#!/bin/bash\nprintf 'armada\\n'\nexec \"$@\"\n",
                 encoding="utf-8",
@@ -626,6 +638,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 check=True,
                 capture_output=True,
                 text=True,
+                env=test_environment,
             )
             self.assertEqual(direct.stdout, "game enable=1 disable=\n")
 
@@ -635,6 +648,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 check=True,
                 capture_output=True,
                 text=True,
+                env=test_environment,
             )
             self.assertEqual(
                 wrapped.stdout,
@@ -649,11 +663,59 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 check=True,
                 capture_output=True,
                 text=True,
+                env=test_environment,
             )
             self.assertEqual(
                 already_wrapped.stdout,
                 "armada\ngame enable= disable=1\n",
             )
+
+    def test_native_aarch64_host_bypasses_without_armada_marker(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            test_bin = temp_path / "test-bin"
+            test_bin.mkdir()
+            test_uname = test_bin / "uname"
+            test_uname.write_text(
+                "#!/bin/sh\nprintf 'aarch64\\n'\n",
+                encoding="utf-8",
+            )
+            test_uname.chmod(0o755)
+            game = temp_path / "game"
+            game.write_text(
+                "#!/bin/sh\nprintf 'enable=%s disable=%s\\n' "
+                '"${ENABLE_MAKO:-}" "${DISABLE_MAKO:-}"\n',
+                encoding="utf-8",
+            )
+            game.chmod(0o755)
+
+            with (
+                patch.object(
+                    configuration_module,
+                    "ARMADA_DEVICE_ENV",
+                    temp_path / "missing-device-env",
+                ),
+                patch.object(
+                    configuration_module,
+                    "ARMADA_GAME_LAUNCH",
+                    temp_path / "missing-armada-game-launch",
+                ),
+            ):
+                lines = self.service._generate_host_compatibility_guard_lines()
+            lines.extend(["export ENABLE_MAKO=1", 'exec "$@"'])
+
+            result = subprocess.run(
+                ["bash", "-c", "\n".join(lines), "mako-test", str(game)],
+                check=True,
+                capture_output=True,
+                text=True,
+                env={
+                    **os.environ,
+                    "PATH": f"{test_bin}:{os.environ.get('PATH', '')}",
+                },
+            )
+
+            self.assertEqual(result.stdout, "enable= disable=1\n")
 
     def test_generated_wrapper_places_host_guard_before_mako_exports(self):
         script = self.service._generate_script_content(

@@ -116,7 +116,10 @@ jobs:
       - name: Install Renderer build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y cmake ninja-build g++ clang libvulkan-dev libx11-dev
+          sudo apt-get install -y \
+            cmake ninja-build g++ clang \
+            libvulkan-dev libx11-dev \
+            qt6-base-dev qt6-declarative-dev
 
       - name: Configure Renderer tests
         run: >-
@@ -124,7 +127,7 @@ jobs:
           -DCMAKE_BUILD_TYPE=Release
           -DBUILD_TESTING=ON
           -DMAKO_BUILD_VK_LAYER=ON
-          -DMAKO_BUILD_UI=OFF
+          -DMAKO_BUILD_UI=ON
           -DMAKO_BUILD_CLI=ON
           -DMAKO_GPU_QUALITY_TEST=OFF
 

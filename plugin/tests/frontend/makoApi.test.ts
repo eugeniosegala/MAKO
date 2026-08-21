@@ -43,7 +43,8 @@ describe("Decky RPC contract", () => {
       "capture_game_profile",
       "set_current_profile",
       "sync_current_profile",
-      "update_profile_config"
+      "update_profile_config",
+      "update_profile_config_fields",
     ]);
   });
 
@@ -56,5 +57,19 @@ describe("Decky RPC contract", () => {
     const updateIndex = callableMock.mock.calls.findIndex(([method]) => method === "update_mako_config");
     const updateBinding = callableMock.mock.results[updateIndex]?.value as ReturnType<typeof vi.fn>;
     expect(updateBinding).toHaveBeenCalledWith(config);
+  });
+
+  test("forwards a profile field patch without expanding stale defaults", async () => {
+    const api = await import("../../src/api/makoApi");
+    const changes = { target_fps: 90 };
+
+    await api.updateProfileConfigFields("game-profile", changes);
+
+    const updateIndex = callableMock.mock.calls.findIndex(
+      ([method]) => method === "update_profile_config_fields",
+    );
+    const updateBinding = callableMock.mock.results[updateIndex]
+      ?.value as ReturnType<typeof vi.fn>;
+    expect(updateBinding).toHaveBeenCalledWith("game-profile", changes);
   });
 });

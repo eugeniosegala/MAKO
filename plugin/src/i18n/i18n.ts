@@ -1,5 +1,5 @@
 // Generated from defaults/i18n by the normal frontend build.
-import * as languages from "./languages.json";
+import languageBundle from "./languages.json";
 
 type LanguageEntry = {
   name: string;
@@ -7,18 +7,25 @@ type LanguageEntry = {
 };
 
 const steamLanguageMap: Record<string, string> =
-  languages.steam_language_map as Record<string, string>;
-const languageMetadata = languages.language_metadata as unknown as Record<string, LanguageEntry>;
-const translationSets = languages as unknown as Record<string, Record<string, string>>;
+  languageBundle.steam_language_map as Record<string, string>;
+const languageMetadata = languageBundle.language_metadata as unknown as Record<string, LanguageEntry>;
+const translationSets = languageBundle as unknown as Record<string, Record<string, string>>;
+const canonicalLanguageCodes = new Map(
+  Object.keys(languageMetadata).map((language) => [language.toLowerCase(), language]),
+);
 
 export const normalizeLanguage = (language?: string): string => {
   const normalized = (language || "en").trim().toLowerCase().replace(/_/g, "-");
   const mapped = steamLanguageMap[normalized] ?? normalized;
 
   // Steam has used both language names (such as `schinese`) and standard
-  // locale identifiers (such as `zh-CN`) here. Translation files are keyed by
-  // their base language so either representation resolves consistently.
-  return mapped.split("-", 1)[0] || "en";
+  // locale identifiers (such as `pt-BR`) here. Prefer an exact advertised
+  // locale before falling back to its base language so regional Portuguese
+  // dictionaries remain distinct while ja-JP and zh-CN resolve normally.
+  const exact = canonicalLanguageCodes.get(mapped.toLowerCase());
+  if (exact) return exact;
+  const base = mapped.split("-", 1)[0] || "en";
+  return canonicalLanguageCodes.get(base) ?? base;
 };
 
 function getLangs(): Record<string, LanguageEntry> {

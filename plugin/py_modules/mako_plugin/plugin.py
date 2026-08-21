@@ -18,6 +18,7 @@ from .installation import InstallationService
 from .dll_detection import DllDetectionService
 from .configuration import ConfigurationService
 from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
+from .config_schema_generated import ConfigurationPatch
 from .flatpak_service import (
     FlatpakAppInfo,
     FlatpakExtensionStatus,
@@ -320,6 +321,14 @@ class Plugin:
         validated_config = ConfigurationManager.validate_config(config)
 
         return self.configuration_service.update_profile_config(profile_name, validated_config)
+
+    async def update_profile_config_fields(
+            self, profile_name: str, changes: ConfigurationPatch
+    ) -> ConfigurationResponse:
+        """Merge independent UI field changes into one canonical profile."""
+        return self.configuration_service.update_profile_config_fields(
+            profile_name, changes
+        )
 
     async def get_launch_option(self) -> LaunchOptionResponse:
         """Get the launch option that users need to set for their games

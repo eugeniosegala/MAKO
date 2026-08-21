@@ -1,6 +1,9 @@
 {
-  "ko": { "name": "한국어" },
   "en": { "name": "English" },
+  "pt-BR": { "name": "Português (Brasil)" },
+  "pt-PT": { "name": "Português (Portugal)" },
+  "es": { "name": "Español" },
+  "ko": { "name": "한국어" },
   "ja": { "name": "日本語" },
   "zh": { "name": "简体中文" }
 }

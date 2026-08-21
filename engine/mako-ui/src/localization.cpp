@@ -93,6 +93,15 @@ QString Localization::language_for_locale(const QLocale& locale) {
     if (locale.language() == QLocale::Spanish) {
         return QStringLiteral("es");
     }
+    if (locale.language() == QLocale::Korean) {
+        return QStringLiteral("ko");
+    }
+    if (locale.language() == QLocale::Japanese) {
+        return QStringLiteral("ja");
+    }
+    if (locale.language() == QLocale::Chinese) {
+        return QStringLiteral("zh");
+    }
     return QString::fromLatin1(DEFAULT_LANGUAGE);
 }
 

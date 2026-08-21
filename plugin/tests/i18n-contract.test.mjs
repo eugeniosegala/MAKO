@@ -70,6 +70,39 @@ test("accepts ordered string dictionaries and static call sites", async () => {
   });
 });
 
+test("accepts canonical regional language codes and Steam aliases", async () => {
+  await withFixture(
+    (sources) => {
+      sources["pt-BR.json"] = {
+        HELLO: "Olá {name}",
+        PLAIN: "Simples",
+      };
+      sources["language_metadata.json"]["pt-BR"] = {
+        name: "Português (Brasil)",
+      };
+      sources["steam_language_map.json"].brazilian = "pt-BR";
+    },
+    async (projectDirectory) => {
+      const result = await auditI18n(projectDirectory);
+      assert.equal(
+        result.translations.steam_language_map.brazilian,
+        "pt-BR",
+      );
+    },
+  );
+});
+
+test("rejects Steam aliases for unadvertised languages", async () => {
+  await withFixture(
+    (sources) => {
+      sources["steam_language_map.json"].german = "de";
+    },
+    async (projectDirectory) => {
+      await assert.rejects(auditI18n(projectDirectory), /invalid=\[german\]/);
+    },
+  );
+});
+
 test("rejects a translated dictionary with a different key order", async () => {
   await withFixture(
     (sources) => {

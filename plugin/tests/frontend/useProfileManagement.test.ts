@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   setCurrentProfile: vi.fn(),
   syncCurrentProfile: vi.fn(),
   updateProfileConfig: vi.fn(),
+  updateProfileConfigFields: vi.fn(),
   showSuccessToast: vi.fn(),
   showErrorToast: vi.fn(),
 }));
@@ -23,6 +24,7 @@ vi.mock("../../src/api/makoApi", async (importOriginal) => {
     setCurrentProfile: mocks.setCurrentProfile,
     syncCurrentProfile: mocks.syncCurrentProfile,
     updateProfileConfig: mocks.updateProfileConfig,
+    updateProfileConfigFields: mocks.updateProfileConfigFields,
   };
 });
 vi.mock("../../src/utils/toastUtils", () => ({
