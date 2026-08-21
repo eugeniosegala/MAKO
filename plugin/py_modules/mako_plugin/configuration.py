@@ -1247,6 +1247,12 @@ class ConfigurationService(BaseService):
                 for profile_name, config in profile_data["profiles"].items():
                     if profile_name == DEFAULT_PROFILE_NAME:
                         continue
+                    # Process-name matching may adopt a legacy or manually
+                    # created profile, but it must never repurpose a profile
+                    # already bound to a different Steam game. Many unrelated
+                    # games use the same generic executable name.
+                    if metadata.get(profile_name, {}).get("steam_app_id"):
+                        continue
                     configured_names = {
                         name.casefold() for name in self._processes_for_config(config)
                     }

@@ -166,6 +166,69 @@ class GameProfileTests(unittest.TestCase):
         self.assertEqual(detail["steam_app_id"], "12345")
         self.assertEqual(detail["processes"], ["UserAlias.exe", "CoolGame2.exe"])
 
+    def test_capture_keeps_saved_games_with_the_same_process_name_separate(self):
+        previous = configuration_module.detect_processes_for_steam_app
+        configuration_module.detect_processes_for_steam_app = (
+            lambda _app_id: ["Game.exe"]
+        )
+        try:
+            first = self.service.capture_game_profile("12345", "First Game")
+            second = self.service.capture_game_profile("67890", "Second Game")
+        finally:
+            configuration_module.detect_processes_for_steam_app = previous
+
+        self.assertTrue(first["success"])
+        self.assertTrue(second["success"])
+        self.assertNotEqual(first["profile_name"], second["profile_name"])
+        profiles = self.service.get_profiles()
+        self.assertEqual(
+            profiles["profiles"],
+            ["mako", first["profile_name"], second["profile_name"]],
+        )
+        app_ids = {
+            detail["profile_name"]: detail["steam_app_id"]
+            for detail in profiles["profile_details"]
+        }
+        self.assertEqual(app_ids[first["profile_name"]], "12345")
+        self.assertEqual(app_ids[second["profile_name"]], "67890")
+
+    def test_capture_can_still_adopt_a_matching_manual_profile(self):
+        manual = self.service.create_profile("Manual Game")
+        profile_name = manual["profile_name"]
+        config = self.service._get_profile_data()["profiles"][profile_name]
+        config["active_in"] = "Game.exe"
+        self.assertTrue(
+            self.service.update_profile_config(profile_name, config)["success"]
+        )
+
+        previous = configuration_module.detect_processes_for_steam_app
+        configuration_module.detect_processes_for_steam_app = (
+            lambda _app_id: ["Game.exe"]
+        )
+        try:
+            captured = self.service.capture_game_profile("12345", "Steam Game")
+        finally:
+            configuration_module.detect_processes_for_steam_app = previous
+
+        self.assertTrue(captured["success"])
+        self.assertEqual(captured["profile_name"], profile_name)
+        self.assertEqual(
+            self.service.get_profiles()["profiles"], ["mako", profile_name]
+        )
+        details = self.service.get_profiles()["profile_details"]
+        self.assertEqual(details[1]["steam_app_id"], "12345")
+
+    def test_profile_storage_is_not_limited_to_ten_entries(self):
+        for index in range(1, 13):
+            result = self.service.create_profile(f"Game {index}")
+            self.assertTrue(result["success"])
+
+        expected = ["mako", *(f"Game-{index}" for index in range(1, 13))]
+        self.assertEqual(self.service.get_profiles()["profiles"], expected)
+        self.assertEqual(
+            list(self.service._get_profile_data()["profiles"]), expected
+        )
+
     def test_named_profile_can_be_loaded_without_activating_it(self):
         created = self.service.create_profile("Offline Editor")
         self.assertTrue(created["success"])
