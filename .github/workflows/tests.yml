@@ -59,8 +59,10 @@ jobs:
         working-directory: plugin
         run: pnpm run test:frontend:coverage
 
-      - name: Build production frontend
+      - name: Build release-candidate frontend
         working-directory: plugin
+        env:
+          MAKO_LOCAL_RELEASE_BUILD: "1"
         run: pnpm run build
 
       - name: Retain frontend coverage
