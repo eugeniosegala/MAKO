@@ -133,6 +133,8 @@ var strings = [
         "selectProcess": "Selecionar",
         "cancel": "Cancelar"
     },
+    {
+        // Português (Portugal)
         "makoRendererConfig": "Configuração do MAKO Renderer",
         "createNewProfile": "Criar Novo Perfil",
         "renameProfile": "Renomear Perfil",
