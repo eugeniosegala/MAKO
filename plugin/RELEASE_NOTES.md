@@ -1,6 +1,6 @@
 ## What's new in MAKO Decky v2.1.0
 
-![Leviathan Rising: a Renaissance vision of the MAKO Leviathan](https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/leviathan-rising.png)
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/leviathan-rising.png" alt="Leviathan Rising: a Renaissance vision of the MAKO Leviathan" width="100%">
 
 ### Release codename: Leviathan Rising
 
