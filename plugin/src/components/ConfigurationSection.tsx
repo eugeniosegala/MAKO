@@ -17,6 +17,7 @@ interface ConfigurationSectionProps {
 
 const WORKAROUNDS_COLLAPSED_KEY = "mako-workarounds-collapsed";
 const CONFIG_COLLAPSED_KEY = "mako-config-collapsed";
+const EXTERNAL_TOOLS_COLLAPSED_KEY = "mako-external-tools-collapsed";
 const MANUAL_OVERRIDES_COLLAPSED_KEY = "mako-manual-overrides-collapsed";
 
 export function ConfigurationSection({
@@ -51,6 +52,15 @@ export function ConfigurationSection({
     }
   });
 
+  const [externalToolsCollapsed, setExternalToolsCollapsed] = useState(() => {
+    try {
+      const saved = localStorage.getItem(EXTERNAL_TOOLS_COLLAPSED_KEY);
+      return saved !== null ? JSON.parse(saved) : true;
+    } catch {
+      return true;
+    }
+  });
+
   // Persist workarounds collapse state to localStorage
   useEffect(() => {
     try {
@@ -76,6 +86,14 @@ export function ConfigurationSection({
     }
   }, [manualOverridesCollapsed]);
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(EXTERNAL_TOOLS_COLLAPSED_KEY, JSON.stringify(externalToolsCollapsed));
+    } catch (error) {
+      console.warn("Failed to save external tools collapse state:", error);
+    }
+  }, [externalToolsCollapsed]);
+
   return (
     <>
       <style>
@@ -83,10 +101,12 @@ export function ConfigurationSection({
         .MAKO_ConfigCollapseButton_Container > div > div > div > button,
         .MAKO_ConfigCollapseButton_Container > div > div > div > div > button,
         .MAKO_WorkaroundsCollapseButton_Container > div > div > div > button,
+        .MAKO_ExternalToolsCollapseButton_Container > div > div > div > button,
         .MAKO_ManualOverridesCollapseButton_Container > div > div > div > button {
           height: 10px !important;
         }
         .MAKO_WorkaroundsCollapseButton_Container > div > div > div > div > button,
+        .MAKO_ExternalToolsCollapseButton_Container > div > div > div > div > button,
         .MAKO_ManualOverridesCollapseButton_Container > div > div > div > div > button {
           height: 10px !important;
         }
@@ -228,6 +248,15 @@ export function ConfigurationSection({
 
           <PanelSectionRow>
             <ToggleField
+              label={t("CONFIG_GAMESCOPE_WSI_COMPATIBILITY", "Experimental Gamescope WSI (Restart)")}
+              description={t("CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC", "May reduce coloured or pixelated motion artifacts in some games. It can significantly reduce performance or interfere with frame generation. Initial testing is limited to 64-bit native Vulkan or Proton games launched directly by Steam.")}
+              checked={config.external_vulkan_layer === "gamescope-wsi"}
+              onChange={(value) => onConfigChange(EXTERNAL_VULKAN_LAYER, value ? "gamescope-wsi" : "")}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
               label={t("CONFIG_DISABLE_STEAMDECK_MODE", "Disable Steam Deck Mode")}
               description={t("CONFIG_DISABLE_STEAMDECK_MODE_DESC", "Disables Steam Deck mode. Unlocks hidden settings in some games.")}
               checked={config.disable_steamdeck_mode}
@@ -265,7 +294,7 @@ export function ConfigurationSection({
           <div>
             {t(
               "CONFIG_EXTERNAL_TOOLS_DESC",
-              "Optional and per profile. Enable a tool in Default for games without a saved profile, or save a game profile first to limit it to that title. Only one external Vulkan layer can be selected at a time. Restart the game after changing it."
+              "Optional and per profile. Enable a tool in Default for games without a saved profile, or save a game profile first to limit it to that title. Gamescope WSI, MangoHud, and vkBasalt are mutually exclusive. Restart the game after changing the selection."
             )}
           </div>
           <div style={{ marginTop: "6px", color: makoDangerTextColor, fontWeight: "500" }}>
@@ -278,23 +307,50 @@ export function ConfigurationSection({
       </PanelSectionRow>
 
       <PanelSectionRow>
-        <ToggleField
-          label={t("CONFIG_ENABLE_MANGOHUD", "Enable MangoHud (Restart)")}
-          description={t("CONFIG_ENABLE_MANGOHUD_DESC", "Uses the host-installed MangoHud and your existing MangoHud configuration. See the expert guide for per-game environment overrides.")}
-          checked={config.external_vulkan_layer === "mangohud"}
-          onChange={(value) => onConfigChange(EXTERNAL_VULKAN_LAYER, value ? "mangohud" : "")}
-        />
+        <div
+          className="MAKO_ExternalToolsCollapseButton_Container"
+          style={{ marginTop: "2px", marginBottom: "4px" }}
+        >
+          <ButtonItem
+            layout="below"
+            bottomSeparator="none"
+            onClick={() => setExternalToolsCollapsed(!externalToolsCollapsed)}
+          >
+            {externalToolsCollapsed ? (
+              <RiArrowDownSFill
+                style={{ transform: "translate(0, -13px)", fontSize: "1.5em" }}
+              />
+            ) : (
+              <RiArrowUpSFill
+                style={{ transform: "translate(0, -12px)", fontSize: "1.5em" }}
+              />
+            )}
+          </ButtonItem>
+        </div>
       </PanelSectionRow>
 
-      <PanelSectionRow>
-        <ToggleField
-          label={t("CONFIG_ENABLE_VKBASALT", "Enable vkBasalt (Experimental, Restart)")}
-          description={t("CONFIG_ENABLE_VKBASALT_DESC", "Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.")}
-          bottomSeparator="none"
-          checked={config.external_vulkan_layer === "vkbasalt"}
-          onChange={(value) => onConfigChange(EXTERNAL_VULKAN_LAYER, value ? "vkbasalt" : "")}
-        />
-      </PanelSectionRow>
+      {!externalToolsCollapsed && (
+        <>
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_ENABLE_MANGOHUD", "Enable MangoHud (Restart)")}
+              description={t("CONFIG_ENABLE_MANGOHUD_DESC", "Uses the host-installed MangoHud and your existing MangoHud configuration. See the expert guide for per-game environment overrides.")}
+              checked={config.external_vulkan_layer === "mangohud"}
+              onChange={(value) => onConfigChange(EXTERNAL_VULKAN_LAYER, value ? "mangohud" : "")}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_ENABLE_VKBASALT", "Enable vkBasalt (Experimental, Restart)")}
+              description={t("CONFIG_ENABLE_VKBASALT_DESC", "Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.")}
+              bottomSeparator="none"
+              checked={config.external_vulkan_layer === "vkbasalt"}
+              onChange={(value) => onConfigChange(EXTERNAL_VULKAN_LAYER, value ? "vkbasalt" : "")}
+            />
+          </PanelSectionRow>
+        </>
+      )}
 
       <MakoSectionHeader topMargin="26px">
         {t("CONFIG_MANUAL_OVERRIDES_TITLE", "Manual Overrides")}

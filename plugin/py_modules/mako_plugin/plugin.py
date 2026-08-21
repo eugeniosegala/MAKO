@@ -538,6 +538,15 @@ class Plugin:
             decky.logger.warning("Could not upgrade MAKO launch wrapper: %s", error)
 
         try:
+            if self.installation_service.migrate_gamescope_wsi_compatibility_manifest_if_needed():
+                decky.logger.info("Staged the guarded Gamescope WSI compatibility manifest")
+        except OSError as error:
+            decky.logger.warning(
+                "Could not stage the Gamescope WSI compatibility manifest: %s",
+                error,
+            )
+
+        try:
             if self.installation_service.migrate_diagnostics_helper_if_needed():
                 decky.logger.info("Installed the diagnostics helper")
         except OSError as error:

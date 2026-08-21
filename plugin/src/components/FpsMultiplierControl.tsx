@@ -128,18 +128,16 @@ export function FpsMultiplierControl({
         />
       </PanelSectionRow>
 
-      <PanelSectionRow>
-        <ToggleField
-          label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive (Preset)")}
-          description={t("FRACTIONAL_ADAPTIVE_PRESET_DESC", "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses Steady 2x. Incompatible setting changes turn this preset off automatically.")}
-          bottomSeparator={config.adaptive ? "standard" : "none"}
-          checked={isFractionalAdaptivePresetEnabled(config)}
-          onChange={(value) => onConfigUpdate(fractionalAdaptivePresetChanges(value))}
-        />
-      </PanelSectionRow>
-
       {config.adaptive && (
         <>
+          <PanelSectionRow>
+            <ToggleField
+              label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive (Preset)")}
+              description={t("FRACTIONAL_ADAPTIVE_PRESET_DESC", "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses Steady 2x. Incompatible setting changes turn this preset off automatically.")}
+              checked={isFractionalAdaptivePresetEnabled(config)}
+              onChange={(value) => onConfigUpdate(fractionalAdaptivePresetChanges(value))}
+            />
+          </PanelSectionRow>
           <PanelSectionRow>
             <SliderField
               label={`${t("ADAPTIVE_TARGET_FPS", "Target FPS")} (${targetFps})`}

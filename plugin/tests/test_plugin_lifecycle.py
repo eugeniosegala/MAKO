@@ -44,6 +44,9 @@ class PluginLifecycleTests(unittest.TestCase):
             current_package_host_compatibility=lambda: (
                 "x86_64", True, None
             ),
+            migrate_gamescope_wsi_compatibility_manifest_if_needed=lambda: calls.append(
+                "gamescope-wsi-manifest"
+            ) or False,
             migrate_diagnostics_helper_if_needed=lambda: calls.append(
                 "diagnostics-helper"
             ) or False,
@@ -62,6 +65,7 @@ class PluginLifecycleTests(unittest.TestCase):
             "wrapper-settings",
             "base-fps-cap",
             "launch-script",
+            "gamescope-wsi-manifest",
             "diagnostics-helper",
         ])
 

@@ -25,6 +25,10 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     MAKO_LAYER_BUILD_MARKER,
     MAKO_PROFILE_FALLBACK_MARKER,
     MAKO_LAYER_NAME,
+    GAMESCOPE_WSI_DISABLE_ENV,
+    GAMESCOPE_WSI_ENABLE_ENV,
+    GAMESCOPE_WSI_LAYER_NAME_64,
+    GAMESCOPE_WSI_MANIFEST_FILENAME_64,
     JSON32_FILENAME,
     JSON_FILENAME,
     LIB_FILENAME,
@@ -48,6 +52,13 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.local_share_dir = manifest_dir
         self.service.json_file = manifest_dir / JSON_FILENAME
         self.service.json32_file = manifest_dir / JSON32_FILENAME
+        self.service.gamescope_wsi_compatibility_dir = (
+            self.root / "share/vulkan/gamescope_wsi_compatibility.d"
+        )
+        self.service.gamescope_wsi_compatibility_manifest = (
+            self.service.gamescope_wsi_compatibility_dir /
+            GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        )
         registered_dir = self.root / "registered/vulkan/implicit_layer.d"
         self.service.user_vulkan_layer_dir = registered_dir
         self.service.registered_json_file = registered_dir / JSON_FILENAME
@@ -129,6 +140,85 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertEqual(
             registered32["layer"]["library_path"], str(self.service.lib32_file)
         )
+
+    def test_installs_only_a_valid_64_bit_gamescope_wsi_manifest(self):
+        self.service.lib_file.parent.mkdir(parents=True)
+        self.service.lib_file.write_bytes(b"installed")
+        system_dir = self.root / "system-implicit"
+        system_dir.mkdir()
+        library = self.root / "libVkLayer_FROG_gamescope_wsi_x86_64.so"
+        library.write_bytes(b"wsi")
+        source = system_dir / GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        source.write_text(json.dumps({
+            "file_format_version": "1.0.0",
+            "layer": {
+                "name": GAMESCOPE_WSI_LAYER_NAME_64,
+                "library_path": str(library),
+                "enable_environment": {GAMESCOPE_WSI_ENABLE_ENV: "1"},
+                "disable_environment": {GAMESCOPE_WSI_DISABLE_ENV: "1"},
+            },
+        }), encoding="utf-8")
+
+        with patch.object(
+            installation_module,
+            "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+            system_dir,
+        ):
+            self.assertTrue(
+                self.service.migrate_gamescope_wsi_compatibility_manifest_if_needed()
+            )
+            self.assertFalse(
+                self.service.migrate_gamescope_wsi_compatibility_manifest_if_needed()
+            )
+
+        installed = json.loads(
+            self.service.gamescope_wsi_compatibility_manifest.read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            installed["layer"]["name"],
+            GAMESCOPE_WSI_LAYER_NAME_64,
+        )
+
+    def test_invalid_gamescope_wsi_manifest_fails_closed(self):
+        self.service.lib_file.parent.mkdir(parents=True)
+        self.service.lib_file.write_bytes(b"installed")
+        system_dir = self.root / "system-implicit"
+        system_dir.mkdir()
+        source = system_dir / GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        source.write_text('{"layer":{"name":"unexpected"}}', encoding="utf-8")
+        destination = self.service.gamescope_wsi_compatibility_manifest
+        destination.parent.mkdir(parents=True)
+        destination.write_text("stale", encoding="utf-8")
+
+        with patch.object(
+            installation_module,
+            "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+            system_dir,
+        ):
+            self.assertFalse(
+                self.service.migrate_gamescope_wsi_compatibility_manifest_if_needed()
+            )
+
+        self.assertFalse(destination.exists())
+
+    def test_gamescope_wsi_startup_migration_skips_uninstalled_renderer(self):
+        system_dir = self.root / "system-implicit"
+        system_dir.mkdir()
+        source = system_dir / GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        source.write_text("{}", encoding="utf-8")
+
+        with patch.object(
+            installation_module,
+            "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+            system_dir,
+        ):
+            self.assertFalse(
+                self.service.migrate_gamescope_wsi_compatibility_manifest_if_needed()
+            )
+
+        self.assertFalse(self.service.gamescope_wsi_compatibility_manifest.exists())
 
     def test_installs_64bit_only_archive_and_removes_stale_32bit_files(self):
         self.service.lib32_file.parent.mkdir(parents=True, exist_ok=True)

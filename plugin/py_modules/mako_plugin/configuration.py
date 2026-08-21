@@ -26,11 +26,13 @@ from .constants import (
     COMPETING_LSFG_DISABLE_ENVS,
     DXVK_HDR_ENV,
     EXTERNAL_VULKAN_LAYER_ENV,
+    EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
     EXTERNAL_VULKAN_LAYER_MANGOHUD,
     EXTERNAL_VULKAN_LAYER_VKBASALT,
     FLATPAK_IMPLICIT_LAYER_DIR,
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
+    GAMESCOPE_WSI_MANIFEST_FILENAME_64,
     HDR_EXPOSURE_DISABLE_ENV,
     HOST_SYSTEM_IMPLICIT_LAYER_DIR,
     MAKO_LAYER_DISABLE_ENV,
@@ -48,7 +50,7 @@ from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_VERSION = 43
+    _WRAPPER_FORMAT_VERSION = 44
     _WRAPPER_FORMAT_MARKER = (
         f"# mako-wrapper-format: {_WRAPPER_FORMAT_VERSION}"
     )
@@ -835,12 +837,20 @@ class ConfigurationService(BaseService):
         intercept Wine's swapchain without Gamescope WSI, Steam's Vulkan
         Fossilize/overlay layers, or system-wide ordering changing the dispatch
         chain. A profile may admit the guarded host system directory for exactly
-        one selected external tool. The Gamescope compositor and Steam/Game
-        Mode UI remain outside this application layer chain. The explicit LSFG,
+        one selected external tool, or an experimental Gamescope WSI
+        compatibility lane. The Gamescope compositor and Steam/Game Mode UI
+        remain outside the default application layer chain. The explicit LSFG,
         Gamescope, Mesa, and HDR guards provide defence in depth.
         """
         diagnostics_log_path = self.config_dir / "present-diagnostics.log"
         system_layer_dir = shlex.quote(str(HOST_SYSTEM_IMPLICIT_LAYER_DIR))
+        gamescope_wsi_manifest = shlex.quote(str(
+            self.gamescope_wsi_compatibility_dir /
+            GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        ))
+        gamescope_wsi_layer_dir = shlex.quote(str(
+            self.gamescope_wsi_compatibility_dir
+        ))
         return [
             f'export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS="${{MAKO_PRESENT_ACQUIRE_TIMEOUT_MS:-{PRESENT_ACQUIRE_TIMEOUT_MS}}}"',
             # Presentation logging is intentionally opt-in for every build.
@@ -853,6 +863,7 @@ class ConfigurationService(BaseService):
             f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
             f'mako_external_vulkan_layer="${{{EXTERNAL_VULKAN_LAYER_ENV}:-}}"',
             f"unset {EXTERNAL_VULKAN_LAYER_ENV}",
+            f"mako_gamescope_wsi_layer_dir={gamescope_wsi_layer_dir}",
             "unset MANGOHUD",
             "unset ENABLE_VKBASALT",
             f"if [ -d {shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)} ]; then",
@@ -860,6 +871,15 @@ class ConfigurationService(BaseService):
             "else",
             f"    mako_implicit_layer_path={shlex.quote(str(self.local_share_dir))}",
             '    case "$mako_external_vulkan_layer" in',
+            f"        {EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI})",
+            f"            if [ -r {gamescope_wsi_manifest} ]; then",
+            f"                unset {GAMESCOPE_WSI_DISABLE_ENV}",
+            f"                export {GAMESCOPE_WSI_ENABLE_ENV}=1",
+            "                export NODEVICE_SELECT=1",
+            "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
+            '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_gamescope_wsi_layer_dir"',
+            "            fi",
+            "            ;;",
             f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
             "            export MANGOHUD=1",
             "            export NODEVICE_SELECT=1",

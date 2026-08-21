@@ -38,6 +38,9 @@ class WrapperEnvironmentTests(unittest.TestCase):
             development_build=False,
         )
         self.service.local_share_dir = Path("/private/mako/implicit_layer.d")
+        self.service.gamescope_wsi_compatibility_dir = Path(
+            "/private/mako/gamescope_wsi_compatibility.d"
+        )
 
     def _evaluate(self, extra_environment=None, config=None):
         lines = []
@@ -146,6 +149,52 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["VKBASALT_DISABLED"], "")
         self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
         self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
+
+    def test_gamescope_wsi_profile_admits_the_guarded_system_directory(self):
+        with tempfile.TemporaryDirectory() as compatibility_dir:
+            compatibility_path = Path(compatibility_dir)
+            (
+                compatibility_path /
+                configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            self.service.gamescope_wsi_compatibility_dir = compatibility_path
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "gamescope-wsi"
+            values = self._evaluate(
+                {
+                    "DISABLE_GAMESCOPE_WSI": "1",
+                    "MANGOHUD": "1",
+                    "ENABLE_VKBASALT": "1",
+                },
+                config,
+            )
+
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"/private/mako/implicit_layer.d:{compatibility_dir}",
+        )
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(values["VKBASALT"], "")
+        self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
+        self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
+
+    def test_gamescope_wsi_profile_fails_closed_without_its_manifest(self):
+        with tempfile.TemporaryDirectory() as compatibility_dir:
+            self.service.gamescope_wsi_compatibility_dir = Path(
+                compatibility_dir
+            )
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "gamescope-wsi"
+            values = self._evaluate(
+                {"ENABLE_GAMESCOPE_WSI": "1"},
+                config,
+            )
+
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
 
     def test_default_profile_rejects_inherited_external_activation(self):
         values = self._evaluate(
@@ -325,6 +374,30 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["IMPLICIT"], flatpak_dir)
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "")
+
+    def test_flatpak_does_not_admit_gamescope_wsi_compatibility_mode(self):
+        with tempfile.TemporaryDirectory() as flatpak_dir:
+            with tempfile.TemporaryDirectory() as compatibility_dir:
+                compatibility_path = Path(compatibility_dir)
+                (
+                    compatibility_path /
+                    configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+                ).write_text("{}", encoding="utf-8")
+                self.service.gamescope_wsi_compatibility_dir = (
+                    compatibility_path
+                )
+                config = ConfigurationManager.get_defaults()
+                config["external_vulkan_layer"] = "gamescope-wsi"
+                with patch.object(
+                    configuration_module,
+                    "FLATPAK_IMPLICIT_LAYER_DIR",
+                    flatpak_dir,
+                ):
+                    values = self._evaluate(config=config)
+
+        self.assertEqual(values["IMPLICIT"], flatpak_dir)
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
 
     def test_flatpak_sdr_boundary_keeps_gamescope_wsi_out_of_umu_chain(self):
         with tempfile.TemporaryDirectory() as temp_dir:

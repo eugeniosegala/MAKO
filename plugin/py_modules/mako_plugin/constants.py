@@ -8,6 +8,9 @@ MAKO_ROOT = ".local/share/mako-render"
 LOCAL_LIB = f"{MAKO_ROOT}/lib"
 LOCAL_LIB32 = f"{MAKO_ROOT}/lib32"
 VULKAN_LAYER_DIR = f"{MAKO_ROOT}/vulkan/implicit_layer.d"
+GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR = (
+    f"{MAKO_ROOT}/vulkan/gamescope_wsi_compatibility.d"
+)
 USER_VULKAN_LAYER_DIR = ".local/share/vulkan/implicit_layer.d"
 CONFIG_DIR = ".config/mako-render"
 
@@ -38,6 +41,7 @@ MAKO_LAYER_DISABLE_ENV = "DISABLE_MAKO"
 # overrides on the same supported SDR/WSI-isolated boundary.
 GAMESCOPE_WSI_DISABLE_ENV = "DISABLE_GAMESCOPE_WSI"
 GAMESCOPE_WSI_ENABLE_ENV = "ENABLE_GAMESCOPE_WSI"
+GAMESCOPE_WSI_LAYER_NAME_64 = "VK_LAYER_FROG_gamescope_wsi_x86_64"
 HDR_EXPOSURE_DISABLE_ENV = "MAKO_DISABLE_HDR_EXPOSURE"
 DXVK_HDR_ENV = "DXVK_HDR"
 # MAKO and the public LSFG-VK releases are separate frame-generation layers.
@@ -51,7 +55,9 @@ COMPETING_LSFG_DISABLE_ENVS = (
     "DISABLE_LSFGVK",  # LSFG-VK 2.x
 )
 HOST_SYSTEM_IMPLICIT_LAYER_DIR = Path("/usr/share/vulkan/implicit_layer.d")
+GAMESCOPE_WSI_MANIFEST_FILENAME_64 = "VkLayer_FROG_gamescope_wsi.x86_64.json"
 EXTERNAL_VULKAN_LAYER_ENV = "MAKO_EXTERNAL_VULKAN_LAYER"
+EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI = "gamescope-wsi"
 EXTERNAL_VULKAN_LAYER_MANGOHUD = "mangohud"
 EXTERNAL_VULKAN_LAYER_VKBASALT = "vkbasalt"
 MAKO_LAYER_BUILD_MARKER = (

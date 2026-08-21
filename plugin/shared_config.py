@@ -162,7 +162,7 @@ CONFIG_SCHEMA_DEF = {
         "name": "external_vulkan_layer",
         "fieldType": ConfigFieldType.STRING,
         "default": "",
-        "description": "optional guarded host Vulkan layer: mangohud or vkbasalt",
+        "description": "optional guarded host Vulkan layer: gamescope-wsi, mangohud, or vkbasalt",
         "location": "script"
     },
 

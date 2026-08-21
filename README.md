@@ -86,7 +86,7 @@ Every game, renderer, and display setup behaves differently. Compare Fixed and A
 
 ### Optional graphics integrations
 
-MAKO Decky supports host-installed MangoHud and experimental vkBasalt through mutually exclusive per-profile toggles under **External Tools**. Use the UI toggles for normal setup. See [optional graphics integrations](engine/docs/LAYER-CHAINING.md) to customize MangoHud, activate either tool manually without the toggles, or test advanced integrations such as OBS Vulkan Capture, RenderDoc, ReShade, and OptiScaler.
+MAKO Decky provides an experimental per-profile Gamescope WSI compatibility toggle and supports host-installed MangoHud and experimental vkBasalt under **External Tools**. These optional Vulkan layers are mutually exclusive. See [optional graphics integrations](engine/docs/LAYER-CHAINING.md) for limits, verification, MangoHud customization, manual activation, and advanced integrations such as OBS Vulkan Capture, RenderDoc, ReShade, and OptiScaler.
 
 ### Heroic and other Flatpak applications
 

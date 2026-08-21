@@ -146,7 +146,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "external_vulkan_layer",
     fieldType: ConfigFieldType.STRING,
     default: "",
-    description: "optional guarded host Vulkan layer: mangohud or vkbasalt"
+    description: "optional guarded host Vulkan layer: gamescope-wsi, mangohud, or vkbasalt"
   },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",

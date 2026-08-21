@@ -26,7 +26,7 @@ Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bi
 - Generates the `/home/deck/.local/bin/mako-run` per-game launcher.
 - Stores renderer settings in `~/.config/mako-render/conf.toml` and versioned game/process identity separately for automatic per-game selection.
 - Supports fixed and adaptive frame generation with live per-game controls.
-- Provides per-profile **External Tools** toggles for host-installed MangoHud and experimental vkBasalt.
+- Provides a per-profile experimental Gamescope WSI compatibility toggle plus **External Tools** controls for host-installed MangoHud and experimental vkBasalt; only one optional Vulkan layer can be selected.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Launches selected games through MAKO's private renderer and configuration.
 

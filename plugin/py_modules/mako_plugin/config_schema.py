@@ -121,9 +121,12 @@ class ConfigurationManager:
         if validated["pacing"] != "none":
             raise ValueError("only pacing = 'none' is currently available")
         external_vulkan_layer = validated["external_vulkan_layer"].strip().lower()
-        if external_vulkan_layer not in {"", "mangohud", "vkbasalt"}:
+        if external_vulkan_layer not in {
+            "", "gamescope-wsi", "mangohud", "vkbasalt"
+        }:
             raise ValueError(
-                "external_vulkan_layer must be empty, 'mangohud', or 'vkbasalt'"
+                "external_vulkan_layer must be empty, 'gamescope-wsi', "
+                "'mangohud', or 'vkbasalt'"
             )
         validated["external_vulkan_layer"] = external_vulkan_layer
         return cast(ConfigurationData, validated)

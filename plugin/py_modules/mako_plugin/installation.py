@@ -17,6 +17,9 @@ from .constants import (
     DIAGNOSTICS_HELPER_FILENAME, MAKO_LAYER_NAME,
     MAKO_LAYER_ENABLE_ENV, MAKO_LAYER_DISABLE_ENV,
     MAKO_LAYER_BUILD_MARKER, MAKO_PROFILE_FALLBACK_MARKER,
+    GAMESCOPE_WSI_DISABLE_ENV, GAMESCOPE_WSI_ENABLE_ENV,
+    GAMESCOPE_WSI_LAYER_NAME_64, GAMESCOPE_WSI_MANIFEST_FILENAME_64,
+    HOST_SYSTEM_IMPLICIT_LAYER_DIR,
     ARMADA_DEVICE_ENV,
 )
 from .config_schema import ConfigurationManager
@@ -38,6 +41,10 @@ class InstallationService(BaseService):
         self.lib32_file = self.local_lib32_dir / LIB_FILENAME
         self.json_file = self.local_share_dir / JSON_FILENAME
         self.json32_file = self.local_share_dir / JSON32_FILENAME
+        self.gamescope_wsi_compatibility_manifest = (
+            self.gamescope_wsi_compatibility_dir /
+            GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        )
         self.cli_file = self.user_home / CLI_DIR / CLI_FILENAME
         self.engine_state_file = self.local_lib_dir.parent / "installed-engine.json"
 
@@ -72,6 +79,8 @@ class InstallationService(BaseService):
             # that directory before the per-game wrapper starts, so relying on
             # a wrapper-only additive search path can miss the private payload.
             self._register_layer_manifests()
+
+            self.migrate_gamescope_wsi_compatibility_manifest_if_needed()
 
             self._create_config_file()
 
@@ -418,6 +427,74 @@ class InstallationService(BaseService):
         else:
             self._remove_if_exists(self.registered_json32_file)
 
+    def migrate_gamescope_wsi_compatibility_manifest_if_needed(self) -> bool:
+        """Validate and stage the host WSI manifest for installed Renderers.
+
+        MAKO Decky upgrades do not necessarily reinstall MAKO Renderer, so the
+        compatibility manifest must also be repairable during normal plugin
+        startup. Keep the operation idempotent and leave uninstalled Renderers
+        untouched.
+        """
+        if not self.lib_file.is_file():
+            return False
+
+        source = (
+            HOST_SYSTEM_IMPLICIT_LAYER_DIR /
+            GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        )
+        destination = self.gamescope_wsi_compatibility_manifest
+
+        try:
+            manifest = json.loads(source.read_text(encoding="utf-8"))
+            layer = manifest.get("layer")
+            if not isinstance(layer, dict):
+                raise ValueError("missing layer object")
+            if layer.get("name") != GAMESCOPE_WSI_LAYER_NAME_64:
+                raise ValueError("unexpected layer identity")
+            library_path = layer.get("library_path")
+            if not isinstance(library_path, str) or not Path(library_path).is_absolute():
+                raise ValueError("library_path must be absolute")
+            if not Path(library_path).is_file():
+                raise ValueError("library_path is unavailable")
+            if layer.get("enable_environment") != {
+                GAMESCOPE_WSI_ENABLE_ENV: "1"
+            }:
+                raise ValueError("unexpected enable_environment gate")
+            if layer.get("disable_environment") != {
+                GAMESCOPE_WSI_DISABLE_ENV: "1"
+            }:
+                raise ValueError("unexpected disable_environment gate")
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
+            destination.unlink(missing_ok=True)
+            self.log.warning(
+                "Gamescope WSI compatibility remains unavailable: %s",
+                error,
+            )
+            return False
+
+        try:
+            if (
+                destination.is_file()
+                and destination.read_bytes() == source.read_bytes()
+            ):
+                return False
+        except OSError:
+            # Atomic replacement below is also the repair path for an
+            # unreadable or otherwise damaged managed destination.
+            pass
+
+        copy_managed_file_atomically(
+            source,
+            destination,
+            0o644,
+            self.log,
+        )
+        self.log.info(
+            "Installed guarded Gamescope WSI compatibility manifest at %s",
+            destination,
+        )
+        return True
+
     def _create_config_file(self) -> None:
         """Create or update this plugin's private TOML config with detected DLL path.
 
@@ -654,6 +731,7 @@ class InstallationService(BaseService):
             files_to_remove = [
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
                 self.registered_json_file, self.registered_json32_file,
+                self.gamescope_wsi_compatibility_manifest,
                 self.cli_file, self.engine_state_file, self.mako_launch_script_path,
                 self.diagnostics_script_path,
             ]
@@ -706,6 +784,7 @@ class InstallationService(BaseService):
             files_to_remove = [
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
                 self.registered_json_file, self.registered_json32_file,
+                self.gamescope_wsi_compatibility_manifest,
                 self.cli_file, self.engine_state_file, self.mako_launch_script_path,
                 self.mako_script_path, self.diagnostics_script_path,
             ]

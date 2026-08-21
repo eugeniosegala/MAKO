@@ -108,6 +108,8 @@ Stable SDR/HDR feedback may rebuild MAKO's private images, backend context, and 
 
 ## Future discovery: curated Gamescope WSI injection
 
+MAKO Decky now has an off-by-default, per-profile **Experimental Gamescope WSI** compatibility control that stages the validated host 64-bit WSI manifest and admits it through a managed process-start path. This is deliberately an SDR-only evidence lane: it retains `MAKO_DISABLE_HDR_EXPOSURE=1`, removes inherited `DXVK_HDR`, and fails closed on Flatpak or when the manifest contract is unavailable. Its existence proves that selective UI-driven discovery can be exercised without reopening the global default; it does not validate HDR colour, metadata, presentation order, or performance.
+
 The validated [MangoHud layer chain](LAYER-CHAINING.md) established an important process-start capability: a Steam launch can carry a deliberately expanded implicit-layer set through Steam Runtime Pressure Vessel, and Vulkan loader diagnostics can prove the resulting instance and device order. That result does not prove HDR correctness, but it turns selective Gamescope WSI admission from an architectural assumption into a concrete experiment.
 
 This may be the missing HDR activation mechanism rather than a new colour-processing design. MAKO already contains HDR10/PQ and scRGB classification, high-precision transport, Gamescope application-HDR feedback, colour conversion shaders, private resource transitions, and the native-first `GamescopeHdr` presentation policy. The current managed launch prevents those pieces from meeting because it excludes Gamescope WSI before Vulkan starts.

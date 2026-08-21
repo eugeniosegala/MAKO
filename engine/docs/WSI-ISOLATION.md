@@ -7,7 +7,7 @@ This document is the architectural source of truth for MAKO Renderer's Vulkan la
 Gamescope the compositor and Gamescope's Vulkan WSI layer are different components:
 
 - **Gamescope compositor:** owns the display session, scanout, Game Mode UI, focus, refresh information, and final composition. It remains active.
-- **Gamescope WSI Vulkan layer:** joins the game's Vulkan dispatch chain and applies swapchain/presentation policy above MAKO. Managed MAKO launches exclude it from the game process.
+- **Gamescope WSI Vulkan layer:** joins the game's Vulkan dispatch chain and applies swapchain/presentation policy. Managed MAKO launches exclude it from the game process by default; MAKO Decky can admit it through one per-profile experimental compatibility lane.
 
 Disabling Gamescope WSI does not disable Gamescope, Steam, or Game Mode. It changes only the implicit Vulkan layers visible inside the launched application.
 
@@ -34,7 +34,7 @@ Game / Proton / DXVK or VKD3D-Proton
        Gamescope compositor remains active
 ```
 
-## Managed launch contract
+## Default managed launch contract
 
 The host `mako-launch` helper and MAKO Decky's generated wrapper establish the contract before the Vulkan loader creates an instance:
 
@@ -55,9 +55,17 @@ MAKO Decky uses the equivalent per-user path below `~/.local/share/mako-render/`
 
 `VK_IMPLICIT_LAYER_PATH` must be set before process startup. The Renderer cannot repair layer order after `vkCreateInstance`, so this behavior belongs in launchers, manifests, packaging checks, and Flatpak overrides as well as in C++ policy tests.
 
+## Experimental MAKO Decky Gamescope WSI exception
+
+MAKO Decky exposes **Experimental Gamescope WSI (Restart)** under **Compatibility Settings** for games affected by coloured or pixelated motion artifacts when the default WSI-isolated path is active. It is off by default, stored per profile, requires a game restart, and shares one mutually exclusive optional-layer selector with MangoHud and vkBasalt.
+
+MAKO Renderer installation validates the host's `/usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.x86_64.json`: the layer identity, absolute available library, and enable/disable gates must match the expected 64-bit Gamescope WSI contract. A valid manifest is copied into MAKO's managed `~/.local/share/mako-render/vulkan/gamescope_wsi_compatibility.d` directory. The wrapper admits only MAKO's private manifests plus that staged WSI manifest, sets `ENABLE_GAMESCOPE_WSI=1`, removes `DISABLE_GAMESCOPE_WSI`, and keeps the known LSFG-VK, Mesa device-selection, and Mesa anti-lag guards. Missing or invalid host evidence leaves the default isolated path active.
+
+This exception remains SDR-only: `MAKO_DISABLE_HDR_EXPOSURE=1` stays set and inherited `DXVK_HDR` is removed. It is implemented only for direct host launches; Flatpak, Heroic/UMU, 32-bit validation, non-SteamOS layouts, HDR, and stable layer ordering remain outside the current evidence. Loader discovery is not a compatibility result. Verify the actual instance and device order, final generated FPS, image quality, and pacing before expanding this lane.
+
 ## What remains and what is excluded
 
-| Component | Managed launch result | Reason |
+| Component | Default managed launch result | Reason |
 | --- | --- | --- |
 | MAKO Renderer | Included and gated by `ENABLE_MAKO=1` | Owns the swapchain sequence |
 | Gamescope compositor | Active | It is outside the application's implicit-layer chain |
@@ -104,7 +112,7 @@ Do not implement this by removing the SDR guards globally, guessing from output 
 Isolation is a strong boundary and has intentional tradeoffs:
 
 - Steam's implicit shader-cache and Vulkan overlay hooks do not join the game process. Steam and Game Mode remain usable, but a Vulkan-hook feature may be absent.
-- MangoHud, capture tools, post-processing layers, or vendor tools installed as implicit layers do not load through the normal managed path. The [optional graphics integrations guide](LAYER-CHAINING.md) documents MAKO Decky's mutually exclusive MangoHud and experimental vkBasalt controls plus the manual expert path; each is an opt-in compatibility lane rather than the default presentation contract.
+- MangoHud, capture tools, post-processing layers, or vendor tools installed as implicit layers do not load through the normal managed path. The [optional graphics integrations guide](LAYER-CHAINING.md) documents MAKO Decky's mutually exclusive experimental Gamescope WSI, MangoHud, and experimental vkBasalt selections plus the manual expert path; each is an opt-in compatibility lane rather than the default presentation contract.
 - A game that relied on another implicit layer for compatibility may behave differently. Compare against a native launch before assuming MAKO's scheduler is responsible.
 - Current managed launches intentionally do not expose HDR frame generation.
 - An incorrectly packaged private manifest can make MAKO appear active at the instance level while missing device or swapchain interception. Both architecture manifests and their relative library paths must be verified.
@@ -115,7 +123,7 @@ The dedicated integrations guide owns the Decky controls, manual commands, custo
 Signals that the boundary regressed include:
 
 - MAKO logs instance/profile activation but never logs backend GPU selection or swapchain colour-pipeline creation;
-- Gamescope WSI appears in loader logs for a managed SDR launch;
+- Gamescope WSI appears in loader logs for a default managed SDR launch or for a profile whose compatibility toggle is off;
 - target FPS collapses identically in Fixed and Adaptive mode;
 - the game runs at accelerated speed or the generated/original sequence loses cadence;
 - frame generation appears inactive after a focus, display, or settings change;
@@ -144,6 +152,8 @@ Expected Renderer evidence includes:
 - `swapchain colour pipeline`;
 - `Gamescope SDR presentation transport: mode=fifo-ordered` when Gamescope is detected; and
 - generated/original delivery records when presentation diagnostics are explicitly enabled.
+
+For the experimental compatibility exception, the process policy must instead report `gamescope_wsi=allowed` while `hdr_exposure=disabled`, and loader diagnostics must show both `VK_LAYER_MAKO_render` and `VK_LAYER_FROG_gamescope_wsi_x86_64`. That policy record proves only that MAKO did not set its isolation guard; loader evidence is still required to prove the WSI layer actually joined.
 
 Use `VK_LOADER_DEBUG=layer` only for a focused reproduction because loader logs are verbose. Presentation diagnostics are also opt-in; synchronous logging can distort the timing problem under investigation. Follow [Collect diagnostics](COLLECT_DIAGNOSTICS.md) and retain the `layers`, `startup`, `performance`, and `recovery` presets.
 

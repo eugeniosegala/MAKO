@@ -75,7 +75,7 @@ export function UsageInstructions() {
             marginTop: "4px"
           }}
         >
-          {t('USAGE_ISOLATION_NOTE', 'MAKO Renderer uses its proven private Vulkan layer boundary and disables Gamescope WSI for reliable swapchain ownership. Gamescope and Game Mode remain active; use only one frame-generation implementation per game.')}
+          {t('USAGE_ISOLATION_NOTE', 'MAKO Renderer uses its proven private Vulkan layer boundary and disables Gamescope WSI by default. The experimental per-profile compatibility setting can admit WSI after a game restart; Gamescope and Game Mode remain active either way. Use only one frame-generation implementation per game.')}
         </div>
       </PanelSectionRow>
     </>
