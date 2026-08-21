@@ -5,9 +5,13 @@ import QtQuick.Window
 import "dialogs"
 import "panes"
 import "widgets"
+import "i18n/translations.js" as Translations
 
 ApplicationWindow {
-    title: "MAKO Renderer Configuration"
+    property int lang: 0
+    property var t: Translations.strings[lang]
+
+    title: t.makoRendererConfig
     width: 900
     height: 550
     minimumWidth: 700
@@ -16,45 +20,45 @@ ApplicationWindow {
 
     CenteredDialog {
         id: create_dialog
-        name: "Create New Profile"
+        name: t.createNewProfile
         onConfirm: backend.createProfile(create_name.text)
 
         TextField {
             id: create_name
             Layout.fillWidth: true
-            placeholderText: "Choose a profile name"
+            placeholderText: t.chooseProfileName
             focus: true
         }
     }
 
     CenteredDialog {
         id: rename_dialog
-        name: "Rename Profile"
+        name: t.renameProfile
         onConfirm: backend.renameProfile(rename_name.text)
 
         TextField {
             id: rename_name
             Layout.fillWidth: true
-            placeholderText: "Choose a profile name"
+            placeholderText: t.chooseProfileName
             focus: true
         }
     }
 
     CenteredDialog {
         id: delete_dialog
-        name: "Confirm Deletion"
+        name: t.confirmDeletion
         onConfirm: backend.deleteProfile()
 
         Label {
             Layout.fillWidth: true
-            text: "Are you sure you want to delete the selected profile?"
+            text: t.confirmDeleteMsg
             horizontalAlignment: Text.AlignHCenter
         }
     }
 
     LargeDialog {
         id: active_in_dialog
-        name: "Active In"
+        name: t.activeIn
 
         List {
             Layout.fillWidth: true
@@ -75,7 +79,7 @@ ApplicationWindow {
             TextField {
                 id: active_in_name
                 Layout.fillWidth: true
-                placeholderText: "Specify linux binary / exe file / process name"
+                placeholderText: t.activeInPlaceholder
                 focus: true
             }
             Button {
@@ -99,7 +103,7 @@ ApplicationWindow {
             SplitView.maximumWidth: 300
 
             Label {
-                text: "Profiles"
+                text: t.profiles
                 Layout.fillWidth: true
                 font.bold: true
                 horizontalAlignment: Text.AlignHCenter
@@ -113,7 +117,7 @@ ApplicationWindow {
 
             Button {
                 Layout.fillWidth: true
-                text: "Create New Profile"
+                text: t.createNewProfile
                 onClicked: {
                     create_name.text = "";
                     create_dialog.open();
@@ -121,7 +125,7 @@ ApplicationWindow {
             }
             Button {
                 Layout.fillWidth: true
-                text: "Rename Profile"
+                text: t.renameProfile
                 onClicked: {
                     var idx = backend.profiles.index(backend.profile_index, 0);
                     rename_name.text = backend.profiles.data(idx);
@@ -130,7 +134,7 @@ ApplicationWindow {
             }
             Button {
                 Layout.fillWidth: true
-                text: "Delete Profile"
+                text: t.deleteProfile
                 onClicked: {
                     delete_dialog.open();
                 }
@@ -153,17 +157,17 @@ ApplicationWindow {
                 spacing: 12
 
                 Group {
-                    name: "Global Settings"
+                    name: t.globalSettings
 
                     GroupEntry {
-                        title: "Lossless.dll Path"
-                        description: "Leave blank for automatic discovery, or choose the licensed DLL explicitly"
+                        title: t.losslessDllPath
+                        description: t.losslessDllDesc
 
                         FileEdit {
                             Layout.fillWidth: true
 
-                            title: "Select Lossless.dll"
-                            filter: "Dynamic Link Library Files (*.dll)"
+                            title: t.selectLosslessDll
+                            filter: t.dllFilter
 
                             text: backend.dll
                             onUpdate: text => backend.dll = text
@@ -171,8 +175,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Allow FP16"
-                        description: "Improves performance on AMD; disable for older NVIDIA GPUs"
+                        title: t.allowFp16
+                        description: t.allowFp16Desc
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -184,12 +188,12 @@ ApplicationWindow {
                 }
 
                 Group {
-                    name: "Profile Settings"
+                    name: t.profileSettings
                     enabled: backend.available
 
                     GroupEntry {
-                        title: "Frame Generation"
-                        description: "Stop or resume frame synthesis live while preserving the selected mode"
+                        title: t.frameGeneration
+                        description: t.frameGenerationDesc
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -200,8 +204,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Base FPS Cap"
-                        description: "Cap real application frames before frame generation; set to Off to disable"
+                        title: t.baseFpsCap
+                        description: t.baseFpsCapDesc
                         enabled: !(backend.adaptive && backend.adaptive_auto_base_fps_cap)
 
                         SpinBox {
@@ -213,7 +217,7 @@ ApplicationWindow {
 
                             value: backend.base_fps_cap
                             textFromValue: function (value) {
-                                return value === 0 ? "Off" : value + " FPS";
+                                return value === 0 ? t.off : value + t.fps;
                             }
                             valueFromText: function (text) {
                                 var parsed = parseInt(text);
@@ -224,20 +228,20 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Active In"
-                        description: "Specify which applications this profile is active in"
+                        title: t.activeIn
+                        description: t.activeInDesc
 
                         Button {
                             Layout.alignment: Qt.AlignRight
 
-                            text: "Edit..."
+                            text: t.editEllipsis
                             onClicked: active_in_dialog.open()
                         }
                     }
 
                     GroupEntry {
-                        title: "Adaptive Frame Generation"
-                        description: "Vary generated frames to approach a target framerate (maximum 4x)"
+                        title: t.adaptiveFrameGen
+                        description: t.adaptiveFrameGenDesc
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -248,8 +252,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Target FPS"
-                        description: "Desired output; the multiplier limit may intentionally keep it below target"
+                        title: t.targetFps
+                        description: t.targetFpsDesc
                         enabled: backend.adaptive
 
                         SpinBox {
@@ -264,8 +268,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Adaptive FPS Cap (" + (backend.target_fps / 2) + " FPS)"
-                        description: "Cap real FPS to half the target for a steadier 2x baseline"
+                        title: t.adaptiveFpsCapPrefix + (backend.target_fps / 2) + t.adaptiveFpsCapSuffix
+                        description: t.adaptiveFpsCapDesc
                         enabled: backend.adaptive
 
                         CheckBox {
@@ -277,8 +281,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Maximum Adaptive Multiplier"
-                        description: "Limit interpolation to protect image quality when the real framerate falls"
+                        title: t.maxAdaptiveMultiplier
+                        description: t.maxAdaptiveMultiplierDesc
                         enabled: backend.adaptive
 
                         SpinBox {
@@ -289,7 +293,7 @@ ApplicationWindow {
 
                             value: backend.adaptive_max_multiplier
                             textFromValue: function (value) {
-                                return value + "x";
+                                return value + t.multiplierX;
                             }
                             valueFromText: function (text) {
                                 return parseInt(text);
@@ -299,8 +303,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Smooth Cadence"
-                        description: "Prefer smoother constant interpolation at the cost of lower real-frame cadence and responsiveness"
+                        title: t.smoothCadence
+                        description: t.smoothCadenceDesc
                         enabled: backend.adaptive
 
                         CheckBox {
@@ -312,8 +316,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Multiplier"
-                        description: "Control the amount of generated frames"
+                        title: t.multiplier
+                        description: t.multiplierDesc
                         enabled: !backend.adaptive
 
                         SpinBox {
@@ -328,8 +332,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Flow Scale"
-                        description: "Lower the internal motion estimation resolution"
+                        title: t.flowScale
+                        description: t.flowScaleDesc
 
                         FlowSlider {
                             Layout.fillWidth: true
@@ -343,8 +347,8 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Performance Mode"
-                        description: "Can improve performance at the cost of ghosting; start disabled and test per game"
+                        title: t.performanceMode
+                        description: t.performanceModeDesc
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -355,21 +359,21 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: "Pacing Mode"
-                        description: "Change how frames are presented to the display"
+                        title: t.pacingMode
+                        description: t.pacingModeDesc
 
                         ComboBox {
                             Layout.fillWidth: true
 
-                            model: ["None"]
+                            model: [t.none]
                             currentIndex: backend.pacing_mode
                             onActivated: index => backend.pacing_mode = index
                         }
                     }
 
                     GroupEntry {
-                        title: "GPU"
-                        description: "Select which GPU to use for frame generation"
+                        title: t.gpu
+                        description: t.gpuDesc
 
                         ComboBox {
                             Layout.fillWidth: true
@@ -382,13 +386,26 @@ ApplicationWindow {
                 }
 
                 Group {
-                    name: "Decky Integration"
+                    name: t.deckyIntegration
 
                     Label {
                         Layout.fillWidth: true
                         wrapMode: Text.WordWrap
-                        text: "Automatic game discovery, launch compatibility, Flatpak setup, and Renderer installation are managed in MAKO Decky."
+                        text: t.deckyDesc
                         color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                    }
+                }
+
+                Group {
+                    name: t.language
+
+                    ComboBox {
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignRight
+
+                        model: Translations.languageNames
+                        currentIndex: lang
+                        onActivated: index => lang = index
                     }
                 }
             }

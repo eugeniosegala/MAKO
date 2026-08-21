@@ -5,15 +5,14 @@
 #include <optional>
 #include <string>
 
+#include "../translations.hpp"
+
 namespace mako::cli::validate {
 
-    /// options for the "validate" command
     struct Options {
         std::optional<std::string> config;
     };
 
-    /// run the "validate" command
-    /// @param opts the command options
-    int run(const Options& opts);
+    int run(const Options& opts, i18n::Lang lang = i18n::Lang::En);
 
 }

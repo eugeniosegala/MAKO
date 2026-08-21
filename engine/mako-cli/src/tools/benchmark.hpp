@@ -5,9 +5,10 @@
 #include <optional>
 #include <string>
 
+#include "../translations.hpp"
+
 namespace mako::cli::benchmark {
 
-    /// options for the "benchmark" command
     struct Options {
         std::optional<std::string> dll;
         bool allow_fp16{false};
@@ -22,8 +23,6 @@ namespace mako::cli::benchmark {
         int duration{10};
     };
 
-    /// run the "benchmark" command
-    /// @param opts the command options
-    int run(const Options& opts);
+    int run(const Options& opts, i18n::Lang lang = i18n::Lang::En);
 
 }

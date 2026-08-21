@@ -6,9 +6,10 @@
 #include <optional>
 #include <string>
 
+#include "../translations.hpp"
+
 namespace mako::cli::debug {
 
-    /// options for the "debug" command
     struct Options {
         std::optional<std::string> dll;
         bool allow_fp16{true};
@@ -23,8 +24,6 @@ namespace mako::cli::debug {
         std::filesystem::path path;
     };
 
-    /// run the "debug" command
-    /// @param opts the command options
-    int run(const Options& opts);
+    int run(const Options& opts, i18n::Lang lang = i18n::Lang::En);
 
 }

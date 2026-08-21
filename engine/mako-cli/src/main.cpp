@@ -3,6 +3,7 @@
 #include "tools/benchmark.hpp"
 #include "tools/debug.hpp"
 #include "tools/validate.hpp"
+#include "translations.hpp"
 
 #include <array>
 #include <filesystem>
@@ -18,13 +19,15 @@
 using namespace mako::cli;
 
 namespace {
-    /// print usage information
     void usage(const std::string& prog) {
         std::cerr <<
 R"(Validate, benchmark, and debug mako.
 
 USAGE:
-    )" << prog << R"( <COMMAND> [OPTIONS] [ARGS]
+    )" << prog << R"( [GLOBAL OPTIONS] <COMMAND> [OPTIONS] [ARGS]
+
+GLOBAL OPTIONS:
+    --lang <LANG>               Language: en, pt-BR, pt-PT, es (default: en)
 
 COMMANDS:
     validate    Validate a configuration file
@@ -53,8 +56,7 @@ SUBCOMMAND OPTIONS:
         <folder>                        Path to the debug frames)" << '\n';
     }
 
-    /// parse the validate command options
-    [[noreturn]] void on_validate(int argc, char** argv) {
+    [[noreturn]] void on_validate(int argc, char** argv, i18n::Lang lang) {
         validate::Options opts{};
 
         const std::array<option, 3> GETOPT {{
@@ -80,11 +82,10 @@ SUBCOMMAND OPTIONS:
             std::exit(EXIT_FAILURE);
         }
 
-        std::exit(validate::run(opts));
+        std::exit(validate::run(opts, lang));
     }
 
-    /// parse the benchmark command options
-    [[noreturn]] void on_benchmark(int argc, char** argv) {
+    [[noreturn]] void on_benchmark(int argc, char** argv, i18n::Lang lang) {
         benchmark::Options opts{};
 
         const std::array<option, 10> GETOPT {{
@@ -142,11 +143,10 @@ SUBCOMMAND OPTIONS:
             std::exit(EXIT_FAILURE);
         }
 
-        std::exit(benchmark::run(opts));
+        std::exit(benchmark::run(opts, lang));
     }
 
-    /// parse the debug command options
-    [[noreturn]] void on_debug(int argc, char** argv) {
+    [[noreturn]] void on_debug(int argc, char** argv, i18n::Lang lang) {
         debug::Options opts{};
 
         const std::array<option, 9> GETOPT {{
@@ -202,7 +202,7 @@ SUBCOMMAND OPTIONS:
 
         opts.path = argv[optind];
 
-        std::exit(debug::run(opts));
+        std::exit(debug::run(opts, lang));
     }
 }
 
@@ -212,13 +212,40 @@ int main(int argc, char** argv) {
         return EXIT_FAILURE;
     }
 
-    const std::string command{argv[1]};
+    // parse global --lang option before subcommand
+    auto lang = i18n::Lang::En;
+    int subargc = argc - 1;
+    char** subargv = argv + 1;
+
+    for (int i = 1; i < argc; i++) {
+        if (std::string(argv[i]) == "--lang" && (i + 1) < argc) {
+            lang = i18n::parseLang(argv[i + 1]);
+            // shift arguments: remove --lang and its value
+            subargc = argc - 3;
+            subargv = argv + 1;
+            // build new subargv excluding --lang and its value
+            static char* filtered[64];
+            int fi = 0;
+            for (int j = 1; j < argc; j++) {
+                if (std::string(argv[j]) == "--lang") {
+                    j++; // skip value
+                    continue;
+                }
+                filtered[fi++] = argv[j];
+            }
+            subargc = fi;
+            subargv = filtered;
+            break;
+        }
+    }
+
+    const std::string command{subargv[0]};
     if (command == "validate")
-        on_validate(argc - 1, argv + 1);
+        on_validate(subargc, subargv, lang);
     else if (command == "benchmark")
-        on_benchmark(argc - 1, argv + 1);
+        on_benchmark(subargc, subargv, lang);
     else if (command == "debug")
-        on_debug(argc - 1, argv + 1);
+        on_debug(subargc, subargv, lang);
 
     usage(*argv);
     return EXIT_FAILURE;

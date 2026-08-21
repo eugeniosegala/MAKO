@@ -15,6 +15,7 @@ set(UI_RESOURCES
     "rsc/widgets/FlowSlider.qml"
     "rsc/widgets/List.qml"
     "rsc/io.github.eugeniosegala.mako.png"
+    "rsc/i18n/translations.js"
     "rsc/UI.qml")
 
 qt_add_executable(mako-ui ${UI_SOURCES})

@@ -7,6 +7,7 @@
 #include "mako-common/vulkan/image.hpp"
 #include "mako-common/vulkan/timeline_semaphore.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
+#include "../translations.hpp"
 
 #include <array>
 #include <cstddef>
@@ -29,7 +30,6 @@ using namespace mako::cli;
 using namespace mako::cli::benchmark;
 
 namespace {
-    // get current time in milliseconds
     uint64_t ms() {
         struct timespec ts{};
         clock_gettime(CLOCK_MONOTONIC, &ts);
@@ -39,27 +39,27 @@ namespace {
     }
 }
 
-int benchmark::run(const Options& opts) {
+int benchmark::run(const Options& opts, i18n::Lang lang) {
+    const auto& s = i18n::get(lang);
+
     try {
-        // parse options
         if (opts.flow < 0.25F || opts.flow > 1.0F)
-            throw ls::error("flow scale must be between 0.25 and 1.0");
+            throw ls::error(s.flowScaleRange);
         if (opts.multiplier < 2)
-            throw ls::error("multiplier must be 2 or greater");
+            throw ls::error(s.multiplierMin);
         if (opts.width <= 0 || opts.height <= 0)
-            throw ls::error("width and height must be positive integers");
+            throw ls::error(s.dimensionsPositive);
         if (opts.duration <= 0)
-            throw ls::error("duration must be a positive integer");
+            throw ls::error(s.durationPositive);
         const VkExtent2D extent{
             static_cast<uint32_t>(opts.width),
             static_cast<uint32_t>(opts.height)
         };
 
-        // create instance
         const vk::Vulkan vk{
             "mako-debug", vk::version{2, 0, 0},
             "mako-debug-engine", vk::version{2, 0, 0},
-            [opts](const vk::VulkanInstanceFuncs fi,
+            [opts, &s](const vk::VulkanInstanceFuncs fi,
                     const std::vector<VkPhysicalDevice>& devices) {
                 if (!opts.gpu.has_value())
                     return devices.front();
@@ -72,13 +72,13 @@ int benchmark::run(const Options& opts) {
 
                     auto& properties = props.properties;
                     std::array<char, 256> devname = std::to_array(properties.deviceName);
-                    devname.at(255) = '\0'; // ensure null-termination
+                    devname.at(255) = '\0';
 
                     if (std::string(devname.data()) == *opts.gpu)
                         return device;
                 }
 
-                throw ls::error("failed to find specified GPU: " + *opts.gpu);
+                throw ls::error(s.gpuNotFound + *opts.gpu);
             }
         };
 
@@ -108,7 +108,6 @@ int benchmark::run(const Options& opts) {
         int syncfd{};
         const vk::TimelineSemaphore sync{vk, 0, std::nullopt, &syncfd};
 
-        // initialize backend
         std::string dll{};
         if (opts.dll.has_value())
             dll = *opts.dll;
@@ -132,7 +131,6 @@ int benchmark::run(const Options& opts) {
             1.0F / opts.flow, opts.performance_mode
         );
 
-        // run the benchmark
         size_t iterations{0};
         size_t generated_frames{0};
         size_t total_frames{1};
@@ -146,7 +144,7 @@ int benchmark::run(const Options& opts) {
             for (size_t i = 0; i < destimgs.size(); i++) {
                 auto success = sync.wait(vk, total_frames++);
                 if (!success)
-                    throw ls::error("failed to wait for frame");
+                    throw ls::error(s.frameWaitFailed);
 
                 generated_frames++;
             }
@@ -159,25 +157,22 @@ int benchmark::run(const Options& opts) {
             }
         }
 
-        // output results
-
         std::cerr << (opts.duration < 40 ? "\r" : "\n");
-        std::cerr << "benchmark results (ran for " << opts.duration << " seconds):\n";
-        std::cerr << "  iterations:       " << iterations << "\n";
-        std::cerr << "  generated frames: " << generated_frames << "\n";
-        std::cerr << "  total frames:     " << total_frames << "\n";
+        std::cerr << s.benchResults << opts.duration << s.benchSeconds;
+        std::cerr << s.benchIterations << iterations << "\n";
+        std::cerr << s.benchGeneratedFrames << generated_frames << "\n";
+        std::cerr << s.benchTotalFrames << total_frames << "\n";
         const auto time = static_cast<double>(opts.duration);
         const double fps_generated = static_cast<double>(generated_frames) / time;
         const double fps_total = static_cast<double>(total_frames) / time;
         std::cerr << std::setprecision(2) << std::fixed;
-        std::cerr << "  fps (generated):  " << fps_generated << "fps\n";
-        std::cerr << "  fps (total):      " << fps_total << "fps\n";
+        std::cerr << s.benchFpsGenerated << fps_generated << "fps\n";
+        std::cerr << s.benchFpsTotal << fps_total << "fps\n";
 
-        // deinitialize mako
         mako.closeContext(mako_ctx);
         return EXIT_SUCCESS;
     } catch (const std::exception& e) {
-        std::cerr << "error: " << e.what() << "\n";
+        std::cerr << s.error << e.what() << "\n";
         return EXIT_FAILURE;
     }
 }
