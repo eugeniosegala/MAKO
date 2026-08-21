@@ -17,6 +17,7 @@ local_engine_commit=""
 local_engine_dirty=false
 local_engine_label=""
 local_plugin_label=""
+local_release_version=""
 
 usage() {
   cat <<'EOF'
@@ -252,7 +253,7 @@ if [[ -n "$local_engine_repo" ]]; then
   local_engine_commit="$(git -C "$local_engine_repo" rev-parse HEAD)"
   local_engine_short_commit="${local_engine_commit:0:7}"
   local_engine_label="$local_engine_short_commit"
-  if [[ -n "$(git -C "$local_engine_repo" status --porcelain --untracked-files=normal)" ]]; then
+  if [[ -n "$(git -C "$local_engine_repo" status --porcelain --untracked-files=normal -- .)" ]]; then
     local_engine_dirty=true
     local_engine_fingerprint="$(worktree_fingerprint "$local_engine_repo")"
     local_engine_label="$local_engine_label.dirty.$local_engine_fingerprint"
@@ -320,6 +321,13 @@ if [[ "$local_plugin_mode" == true ]]; then
   local_plugin_label="wrapper.$local_plugin_commit.$(worktree_fingerprint "$project_dir")"
 fi
 
+if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
+  local_release_version="$(
+    node "$project_dir/scripts/read-release-info.mjs" \
+      "$project_dir/RELEASE_NOTES.md" "MAKO Decky" --version
+  )"
+fi
+
 for local_archive in "$engine_archive_path" "$flatpak_archive_path"; do
   if [[ -n "$local_archive" && ! -f "$local_archive" ]]; then
     echo "Local archive not found: $local_archive" >&2
@@ -356,7 +364,11 @@ echo "Testing launch-wrapper environment..."
 npm --prefix "$project_dir" test
 
 echo "Building frontend..."
-npm --prefix "$project_dir" run build
+if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
+  MAKO_LOCAL_RELEASE_BUILD=1 npm --prefix "$project_dir" run build
+else
+  env -u MAKO_LOCAL_RELEASE_BUILD npm --prefix "$project_dir" run build
+fi
 
 mkdir -p "$package_dir/bin" "$package_dir/dist" "$package_dir/py_modules"
 cp "$repository_root/scripts/mako-diagnostics" \
@@ -469,7 +481,7 @@ if [[ "$local_engine_mode" == true ]]; then
     if (!binary) throw new Error("package.json has no remote_binary entry");
     const [archiveName, engineVersion, archiveChecksum, sourceCommit,
       sourceDirty, sourceLabel, flatpakName, flatpakChecksum,
-      localPluginLabel, build64Only] = process.argv.slice(2);
+      localPluginLabel, build64Only, localReleaseVersion] = process.argv.slice(2);
     const localLabel = sourceLabel;
     binary.name = archiveName;
     binary.version = `${engineVersion}-local.${localLabel}`;
@@ -487,17 +499,18 @@ if [[ "$local_engine_mode" == true ]]; then
     manifest.bundled_renderer = binary;
     delete manifest.remote_binary;
     delete manifest.remote_binary_bundling;
-    manifest.version = `${manifest.version}.local.${localPluginLabel}`;
+    manifest.version = `${localReleaseVersion}.local.${localPluginLabel}`;
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   ' "$package_dir/package.json" "$archive_name" "$archive_version" \
     "$archive_checksum" "$local_engine_commit" "$local_engine_dirty" \
     "$local_engine_label" "$flatpak_archive_name" "$flatpak_archive_checksum" \
-    "$local_plugin_label" "$build_64_only"
+    "$local_plugin_label" "$build_64_only" "$local_release_version"
 elif [[ "$local_plugin_mode" == true ]]; then
   node -e '
     const fs = require("node:fs");
     const manifestPath = process.argv[1];
     const localPluginLabel = process.argv[2];
+    const localReleaseVersion = process.argv[3];
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     const [binary] = manifest.remote_binary ?? [];
     if (!binary) throw new Error("package.json has no remote_binary entry");
@@ -508,9 +521,9 @@ elif [[ "$local_plugin_mode" == true ]]; then
     manifest.bundled_renderer = binary;
     delete manifest.remote_binary;
     delete manifest.remote_binary_bundling;
-    manifest.version = `${manifest.version}.local.${localPluginLabel}`;
+    manifest.version = `${localReleaseVersion}.local.${localPluginLabel}`;
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-  ' "$package_dir/package.json" "$local_plugin_label"
+  ' "$package_dir/package.json" "$local_plugin_label" "$local_release_version"
 fi
 cp -R "$project_dir/dist/." "$package_dir/dist/"
 cp -R "$project_dir/py_modules/." "$package_dir/py_modules/"

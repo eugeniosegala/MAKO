@@ -2,32 +2,25 @@ import deckyPlugin from "@decky/rollup";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readReleaseInfo } from "./scripts/read-release-info.mjs";
 
 const projectDirectory = path.dirname(fileURLToPath(import.meta.url));
 const packageManifest = JSON.parse(
-  readFileSync(path.join(projectDirectory, "package.json"), "utf8")
+  readFileSync(path.join(projectDirectory, "package.json"), "utf8"),
 );
-const releaseNotes = readFileSync(
+const releaseInfo = readReleaseInfo(
   path.join(projectDirectory, "RELEASE_NOTES.md"),
-  "utf8"
-).replace(/\r\n/g, "\n");
-const expectedHeading = `## What's new in MAKO Decky v${packageManifest.version}`;
-const firstContentLine = releaseNotes
-  .split("\n")
-  .find((line) => line.trim())
-  ?.trim();
-const releaseCodename = releaseNotes.match(
-  /^### Release codename:\s*(.+?)\s*$/m
-)?.[1];
+  "MAKO Decky",
+);
+const localReleaseBuild = process.env.MAKO_LOCAL_RELEASE_BUILD;
 
-if (firstContentLine !== expectedHeading) {
-  throw new Error(
-    `MAKO Decky release notes must start with '${expectedHeading}'`
-  );
+if (localReleaseBuild !== undefined && localReleaseBuild !== "1") {
+  throw new Error("MAKO_LOCAL_RELEASE_BUILD must be '1' when set");
 }
-if (!releaseCodename) {
+if (!localReleaseBuild && releaseInfo.version !== packageManifest.version) {
+  const expectedHeading = `## What's new in MAKO Decky v${packageManifest.version}`;
   throw new Error(
-    "MAKO Decky release notes must define '### Release codename: <name>'"
+    `MAKO Decky release notes must start with '${expectedHeading}'`,
   );
 }
 
@@ -42,12 +35,14 @@ const releaseInfoPlugin = {
   load(id) {
     if (id !== resolvedReleaseInfoModule) return null;
     return `export const currentRelease = ${JSON.stringify({
-      version: packageManifest.version,
-      codename: releaseCodename
+      version: localReleaseBuild
+        ? releaseInfo.version
+        : packageManifest.version,
+      codename: releaseInfo.codename,
     })};`;
-  }
+  },
 };
 
 export default deckyPlugin({
-  plugins: [releaseInfoPlugin]
+  plugins: [releaseInfoPlugin],
 });

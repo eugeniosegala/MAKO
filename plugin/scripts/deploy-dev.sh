@@ -325,7 +325,8 @@ if [[ "$deploy_frontend" == true ]]; then
   echo "Building Decky frontend..."
   (
     cd "$project_dir"
-    MAKO_DEV_BUILD_INFO_PATH="$dev_build_info_path" \
+    MAKO_LOCAL_RELEASE_BUILD=1 \
+      MAKO_DEV_BUILD_INFO_PATH="$dev_build_info_path" \
       node "$project_dir/scripts/build-frontend.mjs"
   )
   copy_file "$project_dir/dist/index.js" "$plugin_dir/dist/index.js"
