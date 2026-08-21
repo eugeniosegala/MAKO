@@ -5,6 +5,10 @@
 #include <optional>
 #include <string>
 
+namespace mako::cli::i18n {
+    enum class Language;
+}
+
 namespace mako::cli::validate {
 
     /// options for the "validate" command
@@ -14,6 +18,6 @@ namespace mako::cli::validate {
 
     /// run the "validate" command
     /// @param opts the command options
-    int run(const Options& opts);
+    int run(const Options& opts, i18n::Language language);
 
 }

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "debug.hpp"
+#include "i18n.hpp"
 #include "mako-backend/mako.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/paths.hpp"
@@ -33,11 +34,12 @@ using namespace mako::cli::debug;
 namespace {
     /// uploads an image from a dds file
     void upload_image(const vk::Vulkan& vk,
-            const vk::Image& image, const std::string& path) {
+            const vk::Image& image, const std::string& path,
+            const i18n::Strings& text) {
         // read image bytecode
         std::ifstream file(path.data(), std::ios::binary | std::ios::ate);
         if (!file.is_open())
-            throw ls::error("ifstream::ifstream() failed");
+            throw ls::error(std::string{text.debug_image_open_failed});
 
         std::streamsize size = static_cast<std::streamsize>(file.tellg());
         size -= 124 + 4; // dds header and magic bytes
@@ -45,7 +47,7 @@ namespace {
         std::vector<char> code(static_cast<size_t>(size));
         file.seekg(124 + 4, std::ios::beg);
         if (!file.read(code.data(), size))
-            throw ls::error("ifstream::read() failed");
+            throw ls::error(std::string{text.debug_image_read_failed});
 
         file.close();
 
@@ -63,34 +65,35 @@ namespace {
     }
 }
 
-int debug::run(const Options& opts) {
+int debug::run(const Options& opts, const i18n::Language language) {
+    const i18n::Strings& text = i18n::strings(language);
     try {
         // parse options
         if (opts.flow < 0.25F || opts.flow > 1.0F)
-            throw ls::error("flow scale must be between 0.25 and 1.0");
+            throw ls::error(std::string{text.flow_scale_range});
         if (opts.multiplier < 2)
-            throw ls::error("multiplier must be 2 or greater");
+            throw ls::error(std::string{text.multiplier_minimum});
         if (opts.width <= 0 || opts.height <= 0)
-            throw ls::error("width and height must be positive integers");
+            throw ls::error(std::string{text.dimensions_positive});
         const VkExtent2D extent{
             static_cast<uint32_t>(opts.width),
             static_cast<uint32_t>(opts.height)
         };
         if (!std::filesystem::exists(opts.path))
-            throw ls::error("debug path does not exist: " + opts.path.string());
+            throw ls::error(std::string{text.debug_path_missing} + opts.path.string());
         std::vector<std::filesystem::path> paths{};
         for (const auto& entry : std::filesystem::directory_iterator(opts.path))
             paths.push_back(entry.path());
-        std::ranges::sort(paths, [](const std::filesystem::path& a, const std::filesystem::path& b) {
+        std::ranges::sort(paths, [&text](const std::filesystem::path& a, const std::filesystem::path& b) {
             auto fa = a.filename().string();
             auto fb = b.filename().string();
 
             auto norm_a = fa.find_first_of('.');
             if (norm_a == std::string::npos)
-                throw ls::error("invalid debug file name: " + fa);
+                throw ls::error(std::string{text.debug_filename_invalid} + fa);
             auto norm_b = fb.find_first_of('.');
             if (norm_b == std::string::npos)
-                throw ls::error("invalid debug file name: " + fb);
+                throw ls::error(std::string{text.debug_filename_invalid} + fb);
 
             return std::stoi(fa.substr(0, norm_a)) < std::stoi(fb.substr(0, norm_b));
         });
@@ -99,7 +102,7 @@ int debug::run(const Options& opts) {
         const vk::Vulkan vk{
             "mako-debug", vk::version{2, 0, 0},
             "mako-debug-engine", vk::version{2, 0, 0},
-            [opts](const vk::VulkanInstanceFuncs fi,
+            [opts, &text](const vk::VulkanInstanceFuncs fi,
                     const std::vector<VkPhysicalDevice>& devices) {
                 if (!opts.gpu.has_value())
                     return devices.front();
@@ -118,7 +121,7 @@ int debug::run(const Options& opts) {
                         return device;
                 }
 
-                throw ls::error("failed to find specified GPU: " + *opts.gpu);
+                throw ls::error(std::string{text.gpu_not_found} + *opts.gpu);
             }
         };
 
@@ -176,7 +179,7 @@ int debug::run(const Options& opts) {
         for (size_t j = 0; j < paths.size(); j++) {
             upload_image(vk,
                 j % 2 == 0 ? frame_0 : frame_1,
-                paths.at(j).string()
+                paths.at(j).string(), text
             );
 
             sync.signal(vk, idx++);
@@ -185,7 +188,7 @@ int debug::run(const Options& opts) {
             for (size_t i = 0; i < destimgs.size(); i++) {
                 auto success = sync.wait(vk, idx++);
                 if (!success)
-                    throw ls::error("failed to wait for frame");
+                    throw ls::error(std::string{text.frame_wait_failed});
             }
         }
 
@@ -193,7 +196,7 @@ int debug::run(const Options& opts) {
         mako.closeContext(mako_ctx);
         return EXIT_SUCCESS;
     } catch (const std::exception& e) {
-        std::cerr << "error: " << e.what() << "\n";
+        std::cerr << text.error << e.what() << "\n";
         return EXIT_FAILURE;
     }
 }

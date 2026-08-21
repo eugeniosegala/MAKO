@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+#include "arguments.hpp"
+#include "i18n.hpp"
 #include "tools/benchmark.hpp"
 #include "tools/debug.hpp"
 #include "tools/quality.hpp"
@@ -10,7 +12,11 @@
 #include <cstdlib>
 #include <iostream>
 #include <optional>
+#include <span>
 #include <string>
+#include <string_view>
+#include <variant>
+#include <vector>
 
 #include <getopt.h> // NOLINT (IWYU)
 
@@ -20,10 +26,14 @@ namespace {
     /// print usage information
     void usage(const std::string& prog) {
         std::cerr <<
-R"(Validate, benchmark, and debug mako.
+R"(Validate, benchmark, debug, and inspect MAKO Renderer.
 
 USAGE:
-    )" << prog << R"( <COMMAND> [OPTIONS] [ARGS]
+    )" << prog << R"( [GLOBAL OPTIONS] <COMMAND> [OPTIONS] [ARGS]
+
+GLOBAL OPTIONS:
+    --lang <LANG>                       Output language: en, pt-BR, pt-PT, es
+    -h, --help                          Show this help
 
 COMMANDS:
     validate    Validate a configuration file
@@ -62,7 +72,8 @@ SUBCOMMAND OPTIONS:
     }
 
     /// parse the validate command options
-    [[noreturn]] void on_validate(int argc, char** argv) {
+    [[noreturn]] void on_validate(int argc, char** argv,
+            const i18n::Language language, const std::string& program) {
         validate::Options opts{};
 
         const std::array<option, 3> GETOPT {{
@@ -78,21 +89,22 @@ SUBCOMMAND OPTIONS:
                     break;
                 case '?':
                 default:
-                    usage(*argv);
+                    usage(program);
                     std::exit(EXIT_FAILURE);
             }
         }
 
         if (optind < argc) {
-            usage(*argv);
+            usage(program);
             std::exit(EXIT_FAILURE);
         }
 
-        std::exit(validate::run(opts));
+        std::exit(validate::run(opts, language));
     }
 
     /// parse the benchmark command options
-    [[noreturn]] void on_benchmark(int argc, char** argv) {
+    [[noreturn]] void on_benchmark(int argc, char** argv,
+            const i18n::Language language, const std::string& program) {
         benchmark::Options opts{};
 
         const std::array<option, 10> GETOPT {{
@@ -140,21 +152,22 @@ SUBCOMMAND OPTIONS:
                     break;
                 case '?':
                 default:
-                    usage(*argv);
+                    usage(program);
                     std::exit(EXIT_FAILURE);
             }
         }
 
         if (optind < argc) {
-            usage(*argv);
+            usage(program);
             std::exit(EXIT_FAILURE);
         }
 
-        std::exit(benchmark::run(opts));
+        std::exit(benchmark::run(opts, language));
     }
 
     /// parse the debug command options
-    [[noreturn]] void on_debug(int argc, char** argv) {
+    [[noreturn]] void on_debug(int argc, char** argv,
+            const i18n::Language language, const std::string& program) {
         debug::Options opts{};
 
         const std::array<option, 9> GETOPT {{
@@ -198,23 +211,24 @@ SUBCOMMAND OPTIONS:
                     break;
                 case '?':
                 default:
-                    usage(*argv);
+                    usage(program);
                     std::exit(EXIT_FAILURE);
             }
         }
 
         if ((optind + 1) != argc) {
-            usage(*argv);
+            usage(program);
             std::exit(EXIT_FAILURE);
         }
 
         opts.path = argv[optind];
 
-        std::exit(debug::run(opts));
+        std::exit(debug::run(opts, language));
     }
 
     /// parse the quality-regression command options
-    [[noreturn]] void on_quality_regression(int argc, char** argv) {
+    [[noreturn]] void on_quality_regression(int argc, char** argv,
+            const std::string& program) {
         quality::Options opts{};
         const std::array<option, 5> GETOPT {{
             { "dll",        required_argument, nullptr, 'd' },
@@ -241,12 +255,12 @@ SUBCOMMAND OPTIONS:
                     break;
                 case '?':
                 default:
-                    usage(*argv);
+                    usage(program);
                     std::exit(EXIT_FAILURE);
             }
         }
         if (optind < argc) {
-            usage(*argv);
+            usage(program);
             std::exit(EXIT_FAILURE);
         }
         std::exit(quality::run(opts));
@@ -254,21 +268,41 @@ SUBCOMMAND OPTIONS:
 }
 
 int main(int argc, char** argv) {
-    if (argc < 2) {
-        usage(*argv);
+    const std::string program{argv[0]};
+    std::vector<std::string_view> arguments;
+    if (argc > 1)
+        arguments.reserve(static_cast<size_t>(argc - 1));
+    for (int index = 1; index < argc; ++index)
+        arguments.emplace_back(argv[index]);
+
+    const GlobalArgumentResult parsed = parse_global_arguments(
+        std::span<const std::string_view>{arguments}
+    );
+    if (const auto* error = std::get_if<std::string>(&parsed)) {
+        std::cerr << "mako-cli: " << *error << "\n\n";
+        usage(program);
         return EXIT_FAILURE;
     }
+    const GlobalArguments global = std::get<GlobalArguments>(parsed);
+    if (global.show_help) {
+        usage(program);
+        return EXIT_SUCCESS;
+    }
 
-    const std::string command{argv[1]};
+    const int command_offset = static_cast<int>(global.command_index) + 1;
+    const int command_argc = argc - command_offset;
+    char** command_argv = argv + command_offset;
+    const std::string command{command_argv[0]};
+
     if (command == "validate")
-        on_validate(argc - 1, argv + 1);
+        on_validate(command_argc, command_argv, global.language, program);
     else if (command == "benchmark")
-        on_benchmark(argc - 1, argv + 1);
+        on_benchmark(command_argc, command_argv, global.language, program);
     else if (command == "debug")
-        on_debug(argc - 1, argv + 1);
+        on_debug(command_argc, command_argv, global.language, program);
     else if (command == "quality-regression")
-        on_quality_regression(argc - 1, argv + 1);
+        on_quality_regression(command_argc, command_argv, program);
 
-    usage(*argv);
+    usage(program);
     return EXIT_FAILURE;
 }

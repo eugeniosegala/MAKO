@@ -273,7 +273,8 @@ cmake --build "$build64_dir" --target \
     mako-presentation-policy-tests \
     mako-adaptive-tests mako-adaptive-matrix \
     mako-pnext-chain-tests mako-color-tests \
-    mako-hdr-color-math-tests mako-cli
+    mako-hdr-color-math-tests mako-cli \
+    mako-ui-localization-tests mako-cli-i18n-tests
 ctest --test-dir "$build64_dir" --output-on-failure
 cmake --build "$build64_dir"
 # Release archives do not need local symbol tables. CMake's install-time strip

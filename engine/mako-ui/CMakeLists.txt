@@ -14,8 +14,15 @@ set(UI_RESOURCES
     "rsc/widgets/FileEdit.qml"
     "rsc/widgets/FlowSlider.qml"
     "rsc/widgets/List.qml"
+    "rsc/i18n/translations.json"
     "rsc/io.github.eugeniosegala.mako.png"
     "rsc/UI.qml")
+
+add_library(mako-ui-localization STATIC
+    "src/localization.cpp")
+set_target_properties(mako-ui-localization PROPERTIES AUTOMOC ON)
+target_include_directories(mako-ui-localization PUBLIC "src")
+target_link_libraries(mako-ui-localization PUBLIC Qt6::Core)
 
 qt_add_executable(mako-ui ${UI_SOURCES})
 
@@ -37,7 +44,19 @@ target_compile_options(mako-ui PRIVATE # QT-codegen warnings
 target_link_libraries(mako-ui
     PRIVATE mako-common
     PRIVATE mako-backend
+    PRIVATE mako-ui-localization
     PRIVATE Qt6::Quick)
+
+if(BUILD_TESTING)
+    add_executable(mako-ui-localization-tests
+        "tests/localization_tests.cpp")
+    target_link_libraries(mako-ui-localization-tests
+        PRIVATE mako-ui-localization
+        PRIVATE Qt6::Core)
+    target_compile_definitions(mako-ui-localization-tests PRIVATE
+        MAKO_UI_TRANSLATIONS_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/i18n/translations.json")
+    add_test(NAME ui-localization-unit COMMAND mako-ui-localization-tests)
+endif()
 
 install(TARGETS mako-ui
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

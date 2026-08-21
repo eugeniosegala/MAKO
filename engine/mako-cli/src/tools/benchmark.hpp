@@ -5,6 +5,10 @@
 #include <optional>
 #include <string>
 
+namespace mako::cli::i18n {
+    enum class Language;
+}
+
 namespace mako::cli::benchmark {
 
     /// options for the "benchmark" command
@@ -24,6 +28,6 @@ namespace mako::cli::benchmark {
 
     /// run the "benchmark" command
     /// @param opts the command options
-    int run(const Options& opts);
+    int run(const Options& opts, i18n::Language language);
 
 }

@@ -2,6 +2,8 @@
 
 Configure MAKO Renderer with `mako-ui` or by editing `~/.config/mako-render/conf.toml`. The UI writes the same TOML file. MAKO creates profiles so different games can use different settings.
 
+The optional desktop UI supports English, Brazilian Portuguese, European Portuguese, and Spanish. It selects a matching system language on first run and stores later language choices as an interface preference, separately from Renderer profiles and `conf.toml`. For translated CLI output, place `--lang en`, `--lang pt-BR`, `--lang pt-PT`, or `--lang es` before the command, such as `mako-cli --lang es validate`.
+
 ## Profiles
 
 Each `[[profile]]` section is a game profile. `active_in` can match a Linux binary name, Windows executable, process name, or the end of an executable path. Use `MAKO_PROFILE` when you need to select a profile explicitly instead of matching it automatically.

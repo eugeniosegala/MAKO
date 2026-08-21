@@ -6,6 +6,10 @@
 #include <optional>
 #include <string>
 
+namespace mako::cli::i18n {
+    enum class Language;
+}
+
 namespace mako::cli::debug {
 
     /// options for the "debug" command
@@ -25,6 +29,6 @@ namespace mako::cli::debug {
 
     /// run the "debug" command
     /// @param opts the command options
-    int run(const Options& opts);
+    int run(const Options& opts, i18n::Language language);
 
 }

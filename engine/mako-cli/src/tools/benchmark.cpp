@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "benchmark.hpp"
+#include "i18n.hpp"
 #include "mako-backend/mako.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/paths.hpp"
@@ -38,17 +39,18 @@ namespace {
     }
 }
 
-int benchmark::run(const Options& opts) {
+int benchmark::run(const Options& opts, const i18n::Language language) {
+    const i18n::Strings& text = i18n::strings(language);
     try {
         // parse options
         if (opts.flow < 0.25F || opts.flow > 1.0F)
-            throw ls::error("flow scale must be between 0.25 and 1.0");
+            throw ls::error(std::string{text.flow_scale_range});
         if (opts.multiplier < 2)
-            throw ls::error("multiplier must be 2 or greater");
+            throw ls::error(std::string{text.multiplier_minimum});
         if (opts.width <= 0 || opts.height <= 0)
-            throw ls::error("width and height must be positive integers");
+            throw ls::error(std::string{text.dimensions_positive});
         if (opts.duration <= 0)
-            throw ls::error("duration must be a positive integer");
+            throw ls::error(std::string{text.duration_positive});
         const VkExtent2D extent{
             static_cast<uint32_t>(opts.width),
             static_cast<uint32_t>(opts.height)
@@ -58,7 +60,7 @@ int benchmark::run(const Options& opts) {
         const vk::Vulkan vk{
             "mako-debug", vk::version{2, 0, 0},
             "mako-debug-engine", vk::version{2, 0, 0},
-            [opts](const vk::VulkanInstanceFuncs fi,
+            [opts, &text](const vk::VulkanInstanceFuncs fi,
                     const std::vector<VkPhysicalDevice>& devices) {
                 if (!opts.gpu.has_value())
                     return devices.front();
@@ -77,7 +79,7 @@ int benchmark::run(const Options& opts) {
                         return device;
                 }
 
-                throw ls::error("failed to find specified GPU: " + *opts.gpu);
+                throw ls::error(std::string{text.gpu_not_found} + *opts.gpu);
             }
         };
 
@@ -145,7 +147,7 @@ int benchmark::run(const Options& opts) {
             for (size_t i = 0; i < destimgs.size(); i++) {
                 auto success = sync.wait(vk, total_frames++);
                 if (!success)
-                    throw ls::error("failed to wait for frame");
+                    throw ls::error(std::string{text.frame_wait_failed});
 
                 generated_frames++;
             }
@@ -161,22 +163,23 @@ int benchmark::run(const Options& opts) {
         // output results
 
         std::cerr << (opts.duration < 40 ? "\r" : "\n");
-        std::cerr << "benchmark results (ran for " << opts.duration << " seconds):\n";
-        std::cerr << "  iterations:       " << iterations << "\n";
-        std::cerr << "  generated frames: " << generated_frames << "\n";
-        std::cerr << "  total frames:     " << total_frames << "\n";
+        std::cerr << text.benchmark_results << opts.duration
+            << text.benchmark_seconds;
+        std::cerr << text.benchmark_iterations << iterations << "\n";
+        std::cerr << text.benchmark_generated_frames << generated_frames << "\n";
+        std::cerr << text.benchmark_total_frames << total_frames << "\n";
         const auto time = static_cast<double>(opts.duration);
         const double fps_generated = static_cast<double>(generated_frames) / time;
         const double fps_total = static_cast<double>(total_frames) / time;
         std::cerr << std::setprecision(2) << std::fixed;
-        std::cerr << "  fps (generated):  " << fps_generated << "fps\n";
-        std::cerr << "  fps (total):      " << fps_total << "fps\n";
+        std::cerr << text.benchmark_generated_fps << fps_generated << "fps\n";
+        std::cerr << text.benchmark_total_fps << fps_total << "fps\n";
 
         // deinitialize mako
         mako.closeContext(mako_ctx);
         return EXIT_SUCCESS;
     } catch (const std::exception& e) {
-        std::cerr << "error: " << e.what() << "\n";
+        std::cerr << text.error << e.what() << "\n";
         return EXIT_FAILURE;
     }
 }
