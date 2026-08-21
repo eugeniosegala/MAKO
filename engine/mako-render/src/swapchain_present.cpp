@@ -332,7 +332,7 @@ VkResult Swapchain::presentOriginalImage(
     return result;
 }
 
-bool Swapchain::recoverBackendIfReady() {
+bool Swapchain::recoverBackendIfReady(const vk::Vulkan& vk) {
     if (!this->recoveryState.backendPending)
         return true;
 
@@ -345,6 +345,22 @@ bool Swapchain::recoverBackendIfReady() {
     }
     if (!backendReady)
         return false;
+
+    // A fence-budget miss leaves the previous application-device submission
+    // in flight. Backend readiness alone does not make that fence reusable,
+    // so retain nonblocking native presentation until both sides are idle.
+    if (this->frameState.renderFenceInFlight) {
+        try {
+            if (!this->renderFence->wait(vk, 0))
+                return false;
+            this->frameState.renderFenceInFlight = false;
+        } catch (const std::exception& error) {
+            std::cerr << "MAKO Renderer: render fence recovery poll failed; "
+                         "native presentation retained: "
+                      << error.what() << '\n';
+            return false;
+        }
+    }
 
     this->recoveryState.backendPending = false;
     this->recoveryState.generatedImageAdmission.reset();
@@ -486,16 +502,44 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
     return true;
 }
 
-void Swapchain::prepareRenderFence(const vk::Vulkan& vk) {
+bool Swapchain::prepareRenderFence(const vk::Vulkan& vk) {
     if (this->frameState.renderFenceInFlight) {
         const bool fenceSignaled = this->renderFence->wait(
             vk, 150ULL * 1000 * 1000
         );
         if (!fenceSignaled)
-            throw ls::error("timed out waiting for the previous render fence");
+            return false;
         this->frameState.renderFenceInFlight = false;
     }
     this->renderFence->reset(vk);
+    return true;
+}
+
+void Swapchain::handleRenderFenceBudgetMiss(
+        const PresentationFramePlan& plan) {
+    std::cerr << "MAKO Renderer: previous render work missed the 150 ms "
+                 "fence budget; bypassing frame generation for this present; "
+                 "native presentation retained\n";
+    if (this->adaptiveScheduler) {
+        this->adaptiveScheduler->reportGeneratedFrameDelivery(
+            plan.generatedFrameCount, 0
+        );
+        this->adaptiveScheduler->cancelHistoryWarmup();
+    } else if (!plan.historyWarmupActive) {
+        // Fixed history warmup was already recorded as skipped when the plan
+        // was built, so count only a delivery that was still intended.
+        this->diagnosticsState.fixedSkippedFrames +=
+            plan.generatedFrameCount;
+    }
+    this->recoveryState.backendPending = true;
+    this->recoveryState.historyWarmupRemaining = 0;
+    if (presentDiagnosticsEnabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=render-fence-budget-missed"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " planned=" << plan.generatedFrameCount
+                  << " action=native-present\n";
+    }
 }
 
 void Swapchain::preacquireGeneratedImages(
@@ -979,7 +1023,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             !this->colorPipeline.generationSupported) {
         return this->presentNativeFrame(invocation);
     }
-    if (!this->recoverBackendIfReady())
+    if (!this->recoverBackendIfReady(vk))
         return this->presentNativeFrame(invocation);
 
     const auto swapchainImage = this->info.images.at(imageIndex);
@@ -1019,6 +1063,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     const std::span<const float> timestamps{
         scheduledTimestamps.data(), plan.scheduledGeneratedFrameCount
     };
+
+    // Resolve previous application-device work before scheduling another
+    // backend frame. If the fence budget is missed, no new backend work has
+    // been created and the current game image can be presented natively.
+    if (!this->prepareRenderFence(vk)) {
+        this->handleRenderFenceBudgetMiss(plan);
+        return this->presentNativeFrame(invocation);
+    }
 
     if (!bypassGeneratedFrames) {
         const auto scheduleStarted = startPresentDiagnostic();
@@ -1060,7 +1112,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         );
     }
 
-    this->prepareRenderFence(vk);
     this->submitSourceCopy(invocation, swapchainImage, sourceImage);
     if (bypassGeneratedFrames)
         return this->presentHistoryOnly(invocation, plan);

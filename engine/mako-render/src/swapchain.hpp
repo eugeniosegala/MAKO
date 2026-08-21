@@ -201,7 +201,7 @@ namespace mako::layer {
         [[nodiscard]] VkResult presentOriginalImage(
             const PresentInvocation& invocation, VkSemaphore waitSemaphore,
             const void* nextChain);
-        [[nodiscard]] bool recoverBackendIfReady();
+        [[nodiscard]] bool recoverBackendIfReady(const vk::Vulkan& vk);
         void ensureHistoryWarmup();
         [[nodiscard]] PresentationFramePlan prepareFramePlan(
             std::chrono::steady_clock::time_point presentNow,
@@ -210,7 +210,9 @@ namespace mako::layer {
             const vk::Vulkan& vk, bool gamescopeHdrTransport,
             size_t generatedFrameCount,
             std::chrono::steady_clock::time_point presentNow);
-        void prepareRenderFence(const vk::Vulkan& vk);
+        [[nodiscard]] bool prepareRenderFence(const vk::Vulkan& vk);
+        void handleRenderFenceBudgetMiss(
+            const PresentationFramePlan& plan);
         void preacquireGeneratedImages(
             const PresentInvocation& invocation,
             PresentationFramePlan& plan);

@@ -40,6 +40,7 @@ MAKO Renderer: present diagnostics: operation=acquire-generated-image context=1 
 MAKO Renderer: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
 MAKO Renderer: present diagnostics: operation=pipeline-busy-bypass context=1 consecutive_frames=1 total_bypassed_frames=16 duration_ms=0 planned=1 history_action=preserved action=native-present
 MAKO Renderer: present diagnostics: operation=pipeline-busy-recovered context=1 bypassed_frames=1 total_recoveries=16 duration_ms=8 history_warmup_requested=0
+MAKO Renderer: present diagnostics: operation=render-fence-budget-missed context=1 planned=1 action=native-present
 MAKO Renderer: frame-generation initialization failed; native presentation retained: test failure
 unrelated application output
 """
@@ -81,6 +82,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("runtime-state-applied", result.stdout)
         self.assertIn("skip-generated-frames", result.stdout)
         self.assertIn("pipeline-busy-bypass", result.stdout)
+        self.assertIn("render-fence-budget-missed", result.stdout)
         self.assertIn("render layer active", result.stdout)
         self.assertNotIn("mode=hdr10-pq", result.stdout)
         self.assertNotIn("HDR10 transport", result.stdout)

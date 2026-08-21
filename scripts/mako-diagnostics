@@ -149,7 +149,7 @@ for preset in "${presets[@]}"; do
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)"
       ;;
     recovery)
-      add_pattern "$renderer_prefix present diagnostics: operation=(skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-applied)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|render-fence-budget-missed|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-applied)"
       ;;
     performance)
       add_pattern "$renderer_prefix present diagnostics: operation=(fixed-plan|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|pipeline-busy-bypass|pipeline-busy-recovered|gamescope-refresh-rate-applied|present-|schedule-|submit-|acquire-|wait-|copy-|render-)"
