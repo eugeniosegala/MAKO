@@ -1855,6 +1855,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         if (!backendReady)
             return presentNativeFrame();
 
+        // A previous fence-budget miss leaves the render fence in flight.
+        // Poll it without adding another 150 ms wait to every native present;
+        // recovery can proceed only after the fence is actually complete.
+        if (this->renderFenceInFlight && !this->renderFence->wait(vk, 0))
+            return presentNativeFrame();
+        if (this->renderFenceInFlight)
+            this->renderFenceInFlight = false;
+
         this->backendRecoveryPending = false;
         this->generatedImageAdmission.reset();
         this->pipelineBusyRecovery.reset();
@@ -2019,22 +2027,50 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         }
     }
 
-    const auto prepareRenderFence = [&]() {
+    const auto prepareRenderFence = [&]() -> bool {
         if (renderFencePrepared)
-            return;
+            return true;
         if (this->renderFenceInFlight) {
             const bool fenceSignaled = this->renderFence->wait(
                 vk, 150ULL * 1000 * 1000
             );
             if (!fenceSignaled) {
-                throw ls::error(
-                    "timed out waiting for the previous render fence"
-                );
+                // A missed fence budget is queue congestion, not a fatal
+                // backend failure: during long application stalls (asset
+                // streaming, shader compilation) the previous generated
+                // submission can legitimately sit behind game work far
+                // beyond the 150 ms budget. Bypass generation for this
+                // present, retain native presentation, and recover through
+                // the regular backend recovery path instead of surfacing
+                // VK_ERROR_UNKNOWN to the application.
+                std::cerr << "mako: previous render work missed the 150 ms "
+                             "fence budget; bypassing frame generation for "
+                             "this present; native presentation retained\n";
+                if (this->adaptiveScheduler) {
+                    this->adaptiveScheduler->reportGeneratedFrameDelivery(
+                        generatedFrameCount, 0
+                    );
+                    this->adaptiveScheduler->cancelHistoryWarmup();
+                } else {
+                    this->fixedDiagnosticSkippedFrames +=
+                        generatedFrameCount;
+                }
+                this->backendRecoveryPending = true;
+                this->configurationHistoryWarmupRemaining = 0;
+                if (presentDiagnosticsEnabled()) {
+                    std::cerr << "mako: present diagnostics: "
+                                 "operation=render-fence-budget-missed"
+                              << " context=" << this->diagnosticsContextId
+                              << " planned=" << generatedFrameCount
+                              << " action=native-present\n";
+                }
+                return false;
             }
             this->renderFenceInFlight = false;
         }
         this->renderFence->reset(vk);
         renderFencePrepared = true;
+        return true;
     };
 
     // HDR bridge admission is nonblocking. Reserve every generated destination
@@ -2123,6 +2159,11 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         scheduledTimestamps.data(), scheduledGeneratedFrameCount
     };
 
+    // wait for completion of previous frame before new work is scheduled,
+    // so a missed fence budget cannot strand already-scheduled backend work
+    if (!prepareRenderFence())
+        return presentNativeFrame();
+
     // schedule frame generation
     if (!bypassGeneratedFrames) {
         const auto scheduleStarted = startPresentDiagnostic();
@@ -2158,9 +2199,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         this->backendFrameIndex++;
         logSlowPresentOperation("schedule-frames", this->fidx, this->idx, scheduleStarted);
     }
-
-    // wait for completion of previous frame
-    prepareRenderFence();
 
     // copy swapchain image into backend source image
     const auto& cmdbuf = *this->renderCommandBuffer;
