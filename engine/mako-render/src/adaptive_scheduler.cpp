@@ -30,7 +30,9 @@ namespace {
     constexpr double adaptiveBridgeTargetDeficitRatio = 0.90;
     constexpr double adaptiveStableCadenceMaximumProbeOvershootRatio = 1.40;
     constexpr double adaptiveStableCadenceMaximumRetainedOvershootRatio = 1.50;
-    constexpr double adaptiveStableCadenceMinimumTargetRatio = 0.98;
+    constexpr double adaptiveStableCadenceMinimumQualificationTargetRatio =
+        0.98;
+    constexpr double adaptiveStableCadenceMinimumRetentionTargetRatio = 0.95;
     constexpr double adaptiveStableCadenceMinimumBaseRetention = 0.74;
     constexpr double adaptiveStableCadenceMinimumDemandRatio = 0.95;
     constexpr auto adaptiveStabilizationDuration = std::chrono::seconds(1);
@@ -678,7 +680,7 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
 
         const double minimumUsefulOutputFps =
             static_cast<double>(this->config.targetFps) *
-                adaptiveStableCadenceMinimumTargetRatio;
+                adaptiveStableCadenceMinimumQualificationTargetRatio;
         const size_t candidateOutputs = static_cast<size_t>(std::ceil(
             minimumUsefulOutputFps / baseFps - 1e-9
         ));
@@ -717,7 +719,7 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
             desiredOutputsPerRealFrame > 1.0 &&
             cadenceDemandRatio >= adaptiveStableCadenceMinimumDemandRatio &&
             projectedOutputFps >=
-                targetFps * adaptiveStableCadenceMinimumTargetRatio &&
+                targetFps * adaptiveStableCadenceMinimumRetentionTargetRatio &&
             projectedOutputFps <=
                 targetFps * adaptiveStableCadenceMaximumRetainedOvershootRatio;
 
@@ -807,7 +809,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
                 evaluatedDemandRatio >=
                     adaptiveStableCadenceMinimumDemandRatio &&
                 evaluatedProjectedOutputFps >=
-                    targetFps * adaptiveStableCadenceMinimumTargetRatio &&
+                    targetFps *
+                        adaptiveStableCadenceMinimumQualificationTargetRatio &&
                 evaluatedProjectedOutputFps <=
                     targetFps *
                         adaptiveStableCadenceMaximumRetainedOvershootRatio &&

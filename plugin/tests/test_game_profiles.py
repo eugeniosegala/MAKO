@@ -96,7 +96,7 @@ class GameProfileTests(unittest.TestCase):
         self.assertNotIn("removed_profile_option", rewritten)
         self.assertNotIn("removed_global_option", rewritten)
 
-    def test_missing_steady_cap_preserves_fractional_for_existing_profiles(self):
+    def test_missing_steady_cap_uses_current_default_for_existing_profiles(self):
         content = "\n".join([
             "version = 2",
             "[global]",
@@ -111,6 +111,24 @@ class GameProfileTests(unittest.TestCase):
             ConfigurationManager.get_defaults()["adaptive_auto_base_fps_cap"]
         )
         profile_data = ConfigurationManager.parse_toml_content_multi_profile(content)
+        self.assertTrue(
+            profile_data["profiles"]["mako"]["adaptive_auto_base_fps_cap"]
+        )
+
+    def test_explicit_fractional_choice_is_preserved_for_existing_profiles(self):
+        content = "\n".join([
+            "version = 2",
+            "[global]",
+            "allow_fp16 = true",
+            "[[profile]]",
+            'name = "mako"',
+            "adaptive = true",
+            "adaptive_auto_base_fps_cap = false",
+            "",
+        ])
+
+        profile_data = ConfigurationManager.parse_toml_content_multi_profile(content)
+
         self.assertFalse(
             profile_data["profiles"]["mako"]["adaptive_auto_base_fps_cap"]
         )

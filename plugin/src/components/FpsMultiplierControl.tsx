@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from "react";
 import { PanelSectionRow, DialogButton, Focusable, SliderField, ToggleField } from "@decky/ui";
 import { ConfigurationData } from "../config/configSchema";
 import {
-  ADAPTIVE,
   ADAPTIVE_AUTO_BASE_FPS_CAP,
   ADAPTIVE_MAX_MULTIPLIER,
   ADAPTIVE_STABLE_CADENCE,
@@ -12,6 +11,7 @@ import {
   TARGET_FPS
 } from "../config/generatedConfigSchema";
 import {
+  adaptiveModeChanges,
   fractionalAdaptivePresetChanges,
   isFractionalAdaptivePresetEnabled
 } from "../config/fractionalAdaptivePreset";
@@ -124,7 +124,7 @@ export function FpsMultiplierControl({
           label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
           description={t("ADAPTIVE_DESC", "Adjusts frame generation to reach Target FPS. The steady base cap is the default for smoother pacing. Enable Fractional Adaptive below to keep more real frames, but test it per game. Raising the multiplier limit may require a restart.")}
           checked={config.adaptive}
-          onChange={(value) => onConfigChange(ADAPTIVE, value)}
+          onChange={(value) => onConfigUpdate(adaptiveModeChanges(value))}
         />
       </PanelSectionRow>
 

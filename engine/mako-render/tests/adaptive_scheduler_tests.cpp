@@ -918,6 +918,42 @@ namespace {
             "Smooth Cadence acceptance was not observable");
     }
 
+    void testSmoothCadenceRetainsValidatedTwoXThroughMildDip() {
+        Harness harness(120, 2, true);
+        harness.start();
+        harness.runAtFps(60.0, 12s);
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::StableCadence,
+            "precondition failed: 60 FPS did not settle on 2x for a 120 FPS target");
+
+        const auto plan = harness.runAtFps(57.1, 3s);
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.phase == AdaptiveSchedulerPhase::StableCadence &&
+                snapshot.stableCadenceLimit == 1,
+            "validated 2x cadence was discarded during a mild base-rate dip");
+        require(plan.size() == 1,
+            "mild base-rate dip resumed fractional generated-frame counts");
+    }
+
+    void testSmoothCadenceExitsBelowRetentionRange() {
+        Harness harness(120, 2, true);
+        harness.start();
+        harness.runAtFps(60.0, 12s);
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::StableCadence,
+            "precondition failed: 60 FPS did not settle on 2x for a 120 FPS target");
+
+        harness.runAtFps(56.5, 3s);
+        require(harness.scheduler.snapshot().phase !=
+                AdaptiveSchedulerPhase::StableCadence,
+            "Smooth Cadence remained locked below its retention range");
+        const auto* disabled = harness.diagnostics.last(
+            "adaptive-stable-cadence-disabled"
+        );
+        require(disabled && disabled->reason == "outside-useful-range",
+            "retention-range exit did not report the expected reason");
+    }
+
     void testPersistentDeliveryLossRejectsSmoothCadenceProbe() {
         Harness harness(90, 2, true);
         harness.start();
@@ -1246,6 +1282,8 @@ int main() {
         {"bridge probe handles misleading first step", testBridgeProbeCanRecoverMisleadingFirstStep},
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
         {"Smooth Cadence settles near integer demand", testSmoothCadenceSettlesNearIntegerDemand},
+        {"Smooth Cadence retains validated 2x through mild dip", testSmoothCadenceRetainsValidatedTwoXThroughMildDip},
+        {"Smooth Cadence exits below retention range", testSmoothCadenceExitsBelowRetentionRange},
         {"persistent loss rejects Smooth Cadence", testPersistentDeliveryLossRejectsSmoothCadenceProbe},
         {"Smooth Cadence exits after native recovery", testSmoothCadenceReturnsToTargetAfterBaseRecovery},
         {"Smooth Cadence resists oscillating-load chatter", testSmoothCadenceDoesNotChatterOnOscillatingLoad},

@@ -1,11 +1,22 @@
 import { describe, expect, test } from "vitest";
 import { getDefaults } from "../../src/config/configSchema";
 import {
+  adaptiveModeChanges,
   fractionalAdaptivePresetChanges,
   isFractionalAdaptivePresetEnabled
 } from "../../src/config/fractionalAdaptivePreset";
 
 describe("fractional Adaptive preset", () => {
+  test("selects the default Steady Base Cap when Adaptive is enabled", () => {
+    expect(adaptiveModeChanges(true)).toEqual({
+      adaptive: true,
+      adaptive_auto_base_fps_cap: true
+    });
+    expect(adaptiveModeChanges(false)).toEqual({
+      adaptive: false
+    });
+  });
+
   test("new profiles start with Steady 2x", () => {
     const config = getDefaults();
 

@@ -28,7 +28,7 @@ The suite currently locks down:
 - conservative recovery for longer menu or focus discontinuities;
 - rejection and cooldown of counterproductive load probes;
 - exclusion of impossible fast-present bursts;
-- Smooth Cadence validation near an integer output ratio;
+- Smooth Cadence validation near an integer output ratio, including separate qualification and retention hysteresis;
 - timestamp ordering, capacity bounds, and deterministic trace replay.
 
 `adaptive-scheduler-matrix` also runs 120 combinations of base cadence, target, multiplier ceiling, and Smooth Cadence. It checks output bounds and can emit CSV when built in a persistent directory and run directly:
@@ -54,6 +54,22 @@ scripts/benchmark-adaptive-scheduler.sh
 ```
 
 This reports scheduler nanoseconds per decision for real-only, strict 2x, strict 4x, and Smooth Cadence cases. It is intentionally not a pass/fail test: CPU frequency, compiler version, and host load affect absolute timings. Compare results only on the same machine and toolchain. The hot-path frame plan stores its maximum three timestamps inline, so planning performs no per-frame heap allocation.
+
+## Future Adaptive pacing work
+
+The current fractional scheduler is target-average rather than target-clock. It accumulates output credit from the smoothed real-frame interval, selects an integer number of generated frames for each real-frame interval, and spaces those generated frames evenly inside that interval. Integer relationships such as 45 real FPS to 90 displayed FPS can therefore use a uniform 2x cadence, while genuine fractional relationships such as 60 to 90 or 80 to 120 must alternate generated-frame counts. The long-term average reaches the target, but the displayed motion intervals can still vary and uneven game frame times can amplify that variation.
+
+Smooth Cadence is the near-term mitigation, not a complete fractional-pacing solution. A cadence must still qualify within 98% of the target before MAKO adopts a constant integer ratio; once validated, 2.1 retains it down to 95% so a mild performance dip does not immediately resume fractional decisions. The hysteresis deliberately changes neither initial admission nor genuinely fractional ratios. It prefers a slightly lower but more regular output rate during a modest dip and keeps the existing recovery path for a sustained collapse.
+
+Future work should proceed in this order:
+
+1. **Measure displayed cadence rather than only average FPS.** Add low-overhead counters for source-interval variance, generated-count changes, target-clock phase error, actual present intervals, and p95/p99 outliers. Synchronous diagnostics must remain off during subjective pacing comparisons.
+2. **Classify cadence quality.** Detect when a near-integer lock is preferable, when source jitter makes fractional output unstable, and when MAKO should fall back to a proven constant multiplier. Any automatic choice needs hysteresis and a bounded retry policy so it cannot chatter between modes.
+3. **Prototype a MAKO-owned target clock.** Schedule output against an absolute display-rate phase instead of independently filling each source interval. Presentation feedback or scheduling from [`VK_EXT_present_timing`](https://docs.vulkan.org/features/latest/features/proposals/VK_EXT_present_timing.html) may help when the device and surface expose it, but capability probing and a deterministic fallback are mandatory.
+4. **Define the real-frame and latency contract.** Perfectly regular fractional output may require bounded delay or occasional resampling of real frames; it cannot be achieved by changing the generated-frame count alone. A prototype must quantify latency, never reorder content, preserve nonblocking native presentation on failure, and make any real-frame drop policy explicit before it can become a supported mode.
+5. **Validate fixed-refresh and VRR separately.** Cover steady and noisy 45-to-90, 60-to-90, 60-to-120, 80-to-120, and 90-to-120 traces, then repeat the relevant cases in real DXVK, VKD3D-Proton, and native Vulkan games. AMD's frame-interpolation guidance likewise treats equal display time, precise presentation, a stable base limiter, and VRR behavior as separate pacing concerns; see the [FidelityFX Frame Interpolation Swapchain documentation](https://gpuopen.com/manuals/fidelityfx_sdk/techniques/frame-interpolation-swap-chain/).
+
+This research must preserve MAKO's WSI isolation: MAKO remains the sole owner of generated/original ordering, and the work must not re-admit a competing Gamescope WSI pacing policy merely to obtain timing data. Optional timing feedback is useful only when MAKO can consume it without surrendering presentation ownership. Until those gates are met, Fractional Adaptive remains an opt-in trade-off and Steady remains the safer default.
 
 ## Runtime compatibility matrix
 
