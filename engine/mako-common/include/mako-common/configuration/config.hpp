@@ -3,6 +3,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <cstdint>
 #include <filesystem>
 #include <optional>
@@ -25,6 +26,34 @@ namespace ls {
         None
     };
 
+    /// Renderer defaults used when a game profile omits fields
+    struct GameConfDefaults {
+        static constexpr size_t multiplier = 2;
+        static constexpr bool frameGenerationEnabled = true;
+        static constexpr uint32_t baseFpsCap = 0;
+        static constexpr bool adaptive = false;
+        static constexpr bool adaptiveAutoBaseFpsCap = false;
+        static constexpr uint32_t targetFps = 120;
+        static constexpr size_t adaptiveMaxMultiplier = 3;
+        static constexpr bool adaptiveStableCadence = false;
+        static constexpr float flowScale = 1.0F;
+        static constexpr bool performanceMode = false;
+        static constexpr Pacing pacing = Pacing::None;
+    };
+
+    /// ranges accepted by the Renderer configuration parser
+    struct GameConfLimits {
+        static constexpr size_t minimumMultiplier = 2;
+        static constexpr uint32_t minimumBaseFpsCap = 0;
+        static constexpr uint32_t maximumBaseFpsCap = 1000;
+        static constexpr uint32_t minimumTargetFps = 10;
+        static constexpr uint32_t maximumTargetFps = 1000;
+        static constexpr size_t minimumAdaptiveMaxMultiplier = 2;
+        static constexpr size_t maximumAdaptiveMaxMultiplier = 4;
+        static constexpr float minimumFlowScale = 0.25F;
+        static constexpr float maximumFlowScale = 1.0F;
+    };
+
     /// game profile configuration
     struct GameConf {
         /// name of the profile
@@ -34,32 +63,34 @@ namespace ls {
         /// gpu to use (in case of multiple)
         std::optional<std::string> gpu;
         /// multiplier for frame generation
-        size_t multiplier{2};
+        size_t multiplier{GameConfDefaults::multiplier};
         /// allow frame synthesis to be toggled live without changing its mode
-        bool frame_generation_enabled{true};
+        bool frame_generation_enabled{GameConfDefaults::frameGenerationEnabled};
         /// maximum application-present rate before frame generation; zero disables it
-        uint32_t base_fps_cap{0};
+        uint32_t base_fps_cap{GameConfDefaults::baseFpsCap};
         /// dynamically vary the generated-frame count toward a target framerate
-        bool adaptive{false};
+        bool adaptive{GameConfDefaults::adaptive};
         /// cap Adaptive's real-frame input to half its target for even 2x cadence
-        bool adaptive_auto_base_fps_cap{false};
+        bool adaptive_auto_base_fps_cap{GameConfDefaults::adaptiveAutoBaseFpsCap};
         /// desired displayed framerate when adaptive mode is enabled
-        uint32_t target_fps{120};
+        uint32_t target_fps{GameConfDefaults::targetFps};
         /// maximum total multiplier Adaptive may use
-        size_t adaptive_max_multiplier{3};
+        size_t adaptive_max_multiplier{GameConfDefaults::adaptiveMaxMultiplier};
         /// prefer a validated constant interpolation cadence when safe
-        bool adaptive_stable_cadence{false};
+        bool adaptive_stable_cadence{GameConfDefaults::adaptiveStableCadence};
         /// non-inverted flow scale
-        float flow_scale{1.00F};
+        float flow_scale{GameConfDefaults::flowScale};
         /// use performance mode
-        bool performance_mode{false};
+        bool performance_mode{GameConfDefaults::performanceMode};
         /// pacing method
-        Pacing pacing{Pacing::None};
+        Pacing pacing{GameConfDefaults::pacing};
     };
 
     /// parsed configuration file
     class ConfigFile {
     public:
+        static constexpr int64_t formatVersion = 2;
+
         /// create a default configuration file at the given path
         /// @param path path to configuration file
         /// @throws ls::error on failure

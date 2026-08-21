@@ -5,7 +5,8 @@ import {
   getMakoConfig,
   getProfileConfig,
   updateMakoConfigFromObject,
-  type ConfigUpdateResult
+  type ConfigUpdateResult,
+  configFailureResult,
 } from "../api/makoApi";
 import { ConfigurationData, getDefaults } from "../config/configSchema";
 import { showErrorToast, ToastMessages } from "../utils/toastUtils";
@@ -14,10 +15,16 @@ import t from "../i18n/i18n";
 export function useInstallationStatus() {
   const [isInstalled, setIsInstalled] = useState<boolean>(false);
   const [installationStatus, setInstallationStatus] = useState<string>("");
-  const [engineUpdateRequired, setEngineUpdateRequired] = useState<boolean>(false);
-  const [hostArchitectureSupported, setHostArchitectureSupported] = useState<boolean>(true);
-  const [installedEngineVersion, setInstalledEngineVersion] = useState<string | undefined>();
-  const [expectedEngineVersion, setExpectedEngineVersion] = useState<string | undefined>();
+  const [engineUpdateRequired, setEngineUpdateRequired] =
+    useState<boolean>(false);
+  const [hostArchitectureSupported, setHostArchitectureSupported] =
+    useState<boolean>(true);
+  const [installedEngineVersion, setInstalledEngineVersion] = useState<
+    string | null | undefined
+  >();
+  const [expectedEngineVersion, setExpectedEngineVersion] = useState<
+    string | null | undefined
+  >();
 
   const checkInstallation = async () => {
     try {
@@ -26,17 +33,25 @@ export function useInstallationStatus() {
       setEngineUpdateRequired(Boolean(status.engine_update_required));
       setInstalledEngineVersion(status.installed_engine_version);
       setExpectedEngineVersion(status.expected_engine_version);
-      setHostArchitectureSupported(status.host_architecture_supported !== false);
+      setHostArchitectureSupported(
+        status.host_architecture_supported !== false,
+      );
       if (status.installed) {
-        setInstallationStatus(t("STATUS_ENGINE_INSTALLED", "MAKO Renderer installed"));
+        setInstallationStatus(
+          t("STATUS_ENGINE_INSTALLED", "MAKO Renderer installed"),
+        );
       } else if (status.host_architecture_supported === false && status.error) {
         setInstallationStatus(status.error);
       } else {
-        setInstallationStatus(t("STATUS_ENGINE_NOT_INSTALLED", "MAKO Renderer not installed"));
+        setInstallationStatus(
+          t("STATUS_ENGINE_NOT_INSTALLED", "MAKO Renderer not installed"),
+        );
       }
       return status.installed;
     } catch (error) {
-      setInstallationStatus(t("STATUS_ENGINE_NOT_INSTALLED", "MAKO Renderer not installed"));
+      setInstallationStatus(
+        t("STATUS_ENGINE_NOT_INSTALLED", "MAKO Renderer not installed"),
+      );
       setEngineUpdateRequired(false);
       // A transient RPC failure is not evidence that the native host is
       // unsupported. Only the backend's explicit compatibility result should
@@ -61,7 +76,7 @@ export function useInstallationStatus() {
     expectedEngineVersion,
     setIsInstalled,
     setInstallationStatus,
-    checkInstallation
+    checkInstallation,
   };
 }
 
@@ -74,12 +89,18 @@ export function useDllDetection() {
       const result = await checkLosslessScalingDll();
       setDllDetected(result.detected);
       if (result.detected) {
-        setDllDetectionStatus(t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed"));
+        setDllDetectionStatus(
+          t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed"),
+        );
       } else {
-        setDllDetectionStatus(t("STATUS_LOSSLESS_NOT_INSTALLED", "Lossless Scaling not installed"));
+        setDllDetectionStatus(
+          t("STATUS_LOSSLESS_NOT_INSTALLED", "Lossless Scaling not installed"),
+        );
       }
     } catch (error) {
-      setDllDetectionStatus(t("STATUS_LOSSLESS_NOT_INSTALLED", "Lossless Scaling not installed"));
+      setDllDetectionStatus(
+        t("STATUS_LOSSLESS_NOT_INSTALLED", "Lossless Scaling not installed"),
+      );
     }
   };
 
@@ -89,7 +110,7 @@ export function useDllDetection() {
 
   return {
     dllDetected,
-    dllDetectionStatus
+    dllDetectionStatus,
   };
 }
 
@@ -111,7 +132,10 @@ export function useMakoConfig() {
         // response so an in-place plugin update never renders undefined values.
         setConfig({ ...getDefaults(), ...result.config });
       } else {
-        console.log("MAKO Renderer config not available, using defaults:", result.error);
+        console.log(
+          "MAKO Renderer config not available, using defaults:",
+          result.error,
+        );
         setConfig(getDefaults());
       }
     } catch (error) {
@@ -121,29 +145,38 @@ export function useMakoConfig() {
     }
   }, []);
 
-  const updateConfig = useCallback(async (newConfig: ConfigurationData): Promise<ConfigUpdateResult> => {
-    try {
-      const normalizedConfig = { ...getDefaults(), ...newConfig };
-      const result = await updateMakoConfigFromObject(normalizedConfig);
-      if (result.success) {
-        setConfig(normalizedConfig);
-      } else {
-        showErrorToast(
-          ToastMessages.CONFIG_UPDATE_ERROR.title,
-          result.error || ToastMessages.CONFIG_UPDATE_ERROR.body
-        );
+  const updateConfig = useCallback(
+    async (newConfig: ConfigurationData): Promise<ConfigUpdateResult> => {
+      try {
+        const normalizedConfig = { ...getDefaults(), ...newConfig };
+        const result = await updateMakoConfigFromObject(normalizedConfig);
+        if (result.success) {
+          setConfig(normalizedConfig);
+        } else {
+          showErrorToast(
+            ToastMessages.CONFIG_UPDATE_ERROR.title,
+            result.error || ToastMessages.CONFIG_UPDATE_ERROR.body,
+          );
+        }
+        return result;
+      } catch (error) {
+        showErrorToast(ToastMessages.CONFIG_UPDATE_ERROR.title, String(error));
+        return configFailureResult(String(error));
       }
-      return result;
-    } catch (error) {
-      showErrorToast(ToastMessages.CONFIG_UPDATE_ERROR.title, String(error));
-      return { success: false, error: String(error) };
-    }
-  }, []);
+    },
+    [],
+  );
 
-  const updateField = useCallback(async (fieldName: keyof ConfigurationData, value: boolean | number | string): Promise<ConfigUpdateResult> => {
-    const newConfig = { ...config, [fieldName]: value };
-    return updateConfig(newConfig);
-  }, [config, updateConfig]);
+  const updateField = useCallback(
+    async (
+      fieldName: keyof ConfigurationData,
+      value: boolean | number | string,
+    ): Promise<ConfigUpdateResult> => {
+      const newConfig = { ...config, [fieldName]: value };
+      return updateConfig(newConfig);
+    },
+    [config, updateConfig],
+  );
 
   useEffect(() => {
     loadMakoConfig();
@@ -154,6 +187,6 @@ export function useMakoConfig() {
     setConfig,
     loadMakoConfig,
     updateConfig,
-    updateField
+    updateField,
   };
 }

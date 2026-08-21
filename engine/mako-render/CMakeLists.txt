@@ -9,7 +9,8 @@ set(LAYER_SOURCES
 add_library(mako-adaptive STATIC
     "src/adaptive_scheduler.cpp")
 target_include_directories(mako-adaptive
-    PUBLIC "src")
+    PUBLIC "src"
+    PUBLIC "../mako-common/include")
 set_target_properties(mako-adaptive PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON)
@@ -48,12 +49,23 @@ if(MAKO_BUILD_VK_LAYER)
 endif()
 
 if(BUILD_TESTING)
+    # Keep portable build and CTest membership together so the shell runner
+    # cannot drift when another policy test is added.
+    add_custom_target(mako-portable-policy-test-binaries)
+    function(mako_register_portable_policy_test target test_name)
+        add_dependencies(mako-portable-policy-test-binaries ${target})
+        set_tests_properties(${test_name} PROPERTIES
+            LABELS "portable-policy")
+    endfunction()
+
     add_executable(mako-device-selection-tests
         "tests/device_selection_tests.cpp")
     target_include_directories(mako-device-selection-tests
         PRIVATE "src")
     add_test(NAME device-selection
         COMMAND mako-device-selection-tests)
+    mako_register_portable_policy_test(
+        mako-device-selection-tests device-selection)
 
     add_executable(mako-profile-update-tests
         "tests/profile_update_tests.cpp")
@@ -62,6 +74,17 @@ if(BUILD_TESTING)
         PRIVATE "../mako-common/include")
     add_test(NAME profile-update
         COMMAND mako-profile-update-tests)
+    mako_register_portable_policy_test(
+        mako-profile-update-tests profile-update)
+
+    add_executable(mako-generated-frame-plan-tests
+        "tests/generated_frame_plan_tests.cpp")
+    target_include_directories(mako-generated-frame-plan-tests
+        PRIVATE "src")
+    add_test(NAME generated-frame-plan
+        COMMAND mako-generated-frame-plan-tests)
+    mako_register_portable_policy_test(
+        mako-generated-frame-plan-tests generated-frame-plan)
 
     add_executable(mako-runtime-transition-tests
         "tests/runtime_transition_tests.cpp")
@@ -69,6 +92,8 @@ if(BUILD_TESTING)
         PRIVATE "src")
     add_test(NAME runtime-transition
         COMMAND mako-runtime-transition-tests)
+    mako_register_portable_policy_test(
+        mako-runtime-transition-tests runtime-transition)
 
     add_executable(mako-presentation-policy-tests
         "tests/presentation_policy_tests.cpp")
@@ -76,6 +101,8 @@ if(BUILD_TESTING)
         PRIVATE "src")
     add_test(NAME presentation-policy
         COMMAND mako-presentation-policy-tests)
+    mako_register_portable_policy_test(
+        mako-presentation-policy-tests presentation-policy)
 
     add_executable(mako-adaptive-tests
         "tests/adaptive_scheduler_tests.cpp")
@@ -83,6 +110,8 @@ if(BUILD_TESTING)
         PRIVATE mako-adaptive)
     add_test(NAME adaptive-scheduler
         COMMAND mako-adaptive-tests)
+    mako_register_portable_policy_test(
+        mako-adaptive-tests adaptive-scheduler)
 
     add_executable(mako-adaptive-matrix
         "tests/adaptive_scheduler_matrix.cpp")
@@ -90,6 +119,8 @@ if(BUILD_TESTING)
         PRIVATE mako-adaptive)
     add_test(NAME adaptive-scheduler-matrix
         COMMAND mako-adaptive-matrix)
+    mako_register_portable_policy_test(
+        mako-adaptive-matrix adaptive-scheduler-matrix)
 
     if(MAKO_BUILD_VK_LAYER)
         add_executable(mako-pnext-chain-tests
@@ -116,6 +147,8 @@ if(BUILD_TESTING)
         "tests/hdr_color_math_tests.cpp")
     add_test(NAME hdr-color-math
         COMMAND mako-hdr-color-math-tests)
+    mako_register_portable_policy_test(
+        mako-hdr-color-math-tests hdr-color-math)
 endif()
 
 if(MAKO_BUILD_VK_LAYER)

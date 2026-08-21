@@ -123,7 +123,13 @@ repo_dir="$build_root/repo"
 mkdir -p "$bundle_dir" "$repo_dir"
 
 extension_id="org.freedesktop.Platform.VulkanLayer.makorender"
-for runtime_version in 23.08 24.08 25.08; do
+runtime_versions_file="$repo_root/dist/flatpak/mako-render/runtime-versions.txt"
+runtime_count=0
+while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
+    if [[ -z "$runtime_version" || "$runtime_version" == \#* ]]; then
+        continue
+    fi
+    runtime_count=$((runtime_count + 1))
     manifest="$repo_root/dist/flatpak/mako-render/$extension_id"_"$runtime_version.yml"
     build_dir="$build_root/build-$runtime_version"
     bundle="$bundle_dir/$extension_id-$runtime_version.flatpak"
@@ -266,7 +272,12 @@ for runtime_version in 23.08 24.08 25.08; do
         echo "Flatpak packaging failed: deployed 32-bit manifest architecture is incorrect for $runtime_version" >&2
         exit 1
     fi
-done
+done < "$runtime_versions_file"
+
+if ((runtime_count == 0)); then
+    echo "Flatpak runtime matrix is empty: $runtime_versions_file" >&2
+    exit 1
+fi
 
 # The source directory is mounted into Flatpak-builder as a local source. Some
 # builder versions remove ignored output directories while cleaning the source

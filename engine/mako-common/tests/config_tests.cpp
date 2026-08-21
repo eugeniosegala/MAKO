@@ -3,6 +3,7 @@
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/detection.hpp"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
@@ -37,6 +38,24 @@ namespace {
         };
     }
 
+    bool sameGameConf(const ls::GameConf& left, const ls::GameConf& right) {
+        return left.name == right.name &&
+            left.active_in == right.active_in &&
+            left.gpu == right.gpu &&
+            left.multiplier == right.multiplier &&
+            left.frame_generation_enabled == right.frame_generation_enabled &&
+            left.base_fps_cap == right.base_fps_cap &&
+            left.adaptive == right.adaptive &&
+            left.adaptive_auto_base_fps_cap ==
+                right.adaptive_auto_base_fps_cap &&
+            left.target_fps == right.target_fps &&
+            left.adaptive_max_multiplier == right.adaptive_max_multiplier &&
+            left.adaptive_stable_cadence == right.adaptive_stable_cadence &&
+            left.flow_scale == right.flow_scale &&
+            left.performance_mode == right.performance_mode &&
+            left.pacing == right.pacing;
+    }
+
     constexpr std::string_view validConfiguration = R"(version = 2
 [global]
 allow_fp16 = true
@@ -55,9 +74,42 @@ adaptive_max_multiplier = 4
 }
 
 int main() {
+    const ls::GameConf defaults;
+    expect(defaults.multiplier == ls::GameConfDefaults::multiplier &&
+            defaults.frame_generation_enabled ==
+                ls::GameConfDefaults::frameGenerationEnabled &&
+            defaults.base_fps_cap == ls::GameConfDefaults::baseFpsCap &&
+            defaults.adaptive == ls::GameConfDefaults::adaptive &&
+            defaults.adaptive_auto_base_fps_cap ==
+                ls::GameConfDefaults::adaptiveAutoBaseFpsCap &&
+            defaults.target_fps == ls::GameConfDefaults::targetFps &&
+            defaults.adaptive_max_multiplier ==
+                ls::GameConfDefaults::adaptiveMaxMultiplier &&
+            defaults.adaptive_stable_cadence ==
+                ls::GameConfDefaults::adaptiveStableCadence &&
+            defaults.flow_scale == ls::GameConfDefaults::flowScale &&
+            defaults.performance_mode ==
+                ls::GameConfDefaults::performanceMode &&
+            defaults.pacing == ls::GameConfDefaults::pacing,
+        "GameConf must use the Renderer profile defaults");
+
     const auto directory = std::filesystem::temp_directory_path() /
         ("mako-config-test-" + std::to_string(static_cast<long long>(::getpid())));
     std::filesystem::create_directories(directory);
+
+    const auto defaultPath = directory / "default.toml";
+    ls::ConfigFile::createDefaultConfigFile(defaultPath);
+    const ls::ConfigFile generatedDefaults(defaultPath);
+    const ls::ConfigFile inMemoryDefaults;
+    expect(generatedDefaults.global().dll == inMemoryDefaults.global().dll &&
+            generatedDefaults.global().allow_fp16 ==
+                inMemoryDefaults.global().allow_fp16 &&
+            std::ranges::equal(
+                generatedDefaults.profiles(), inMemoryDefaults.profiles(),
+                sameGameConf
+            ),
+        "The documented default TOML and in-memory examples must stay equivalent");
+
     const auto path = directory / "conf.toml";
     writeText(path, validConfiguration);
 
@@ -113,6 +165,15 @@ int main() {
     expect(canonicalConfiguration.find("removed_global_option") == std::string::npos &&
             canonicalConfiguration.find("removed_profile_option") == std::string::npos,
         "A canonical Renderer write must remove unknown legacy options");
+
+    const auto fixedMultiplierPath = directory / "fixed-multiplier.toml";
+    writeText(fixedMultiplierPath, R"(version = 2
+[[profile]]
+multiplier = 5
+)");
+    const ls::ConfigFile fixedMultiplierConfiguration(fixedMultiplierPath);
+    expect(fixedMultiplierConfiguration.profiles().front().multiplier == 5,
+        "The fixed multiplier must retain its established open upper range");
 
     ls::ConfigFile detectionConfig;
     detectionConfig.profiles() = {

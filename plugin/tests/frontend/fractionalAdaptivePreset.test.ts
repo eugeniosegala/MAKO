@@ -25,6 +25,17 @@ describe("fractional Adaptive preset", () => {
       ...config,
       adaptive: true
     })).toBe(false);
+
+    const {
+      adaptive_auto_base_fps_cap: _missingSteadyCap,
+      ...legacyPartialConfig
+    } = {
+      ...config,
+      adaptive: true
+    };
+    expect(isFractionalAdaptivePresetEnabled(
+      legacyPartialConfig as ReturnType<typeof getDefaults>
+    )).toBe(false);
   });
 
   test("derives its state from the three compatible settings", () => {

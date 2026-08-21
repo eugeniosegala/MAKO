@@ -113,4 +113,4 @@ Keep screenshots, videos, and discussion in the original GitHub issue, but use t
 - **The report contains no `render layer active` line:** submit it anyway. The absence is useful evidence that the Vulkan layer did not load.
 - **The game no longer starts:** remove only the two temporary diagnostics variables and confirm the original standalone launch command still works.
 
-[diagnostic-form]: https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform
+[diagnostic-form]: https://docs.google.com/forms/d/e/1FAIpQLScSd9qgkYCq3Kbbc3_52k4_82iTmEqt3_FxOqGuxQ6FsjutgA/viewform

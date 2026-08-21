@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include "adaptive_policy_limits.hpp"
 #include "mako-common/configuration/config.hpp"
 
 #include <algorithm>
@@ -32,7 +33,8 @@ namespace mako::layer {
             const ls::GameConf& profile) {
         if (profile.adaptive && profile.adaptive_auto_base_fps_cap) {
             return std::max(
-                10.0, static_cast<double>(profile.target_fps) / 2.0
+                adaptiveMinimumBaseFps,
+                static_cast<double>(profile.target_fps) / 2.0
             );
         }
         return static_cast<double>(profile.base_fps_cap);
@@ -49,12 +51,6 @@ namespace mako::layer {
     [[nodiscard]] inline size_t fixedGeneratedFrameCount(
             const size_t multiplier, const size_t generatedFrameCapacity) {
         return std::min(multiplier - 1, generatedFrameCapacity);
-    }
-
-    [[nodiscard]] inline float fixedFrameTimestamp(
-            const size_t generatedFrameIndex, const size_t multiplier) {
-        return static_cast<float>(generatedFrameIndex + 1) /
-            static_cast<float>(multiplier);
     }
 
     /// Classify a profile change without touching Vulkan state.

@@ -49,17 +49,6 @@ namespace {
         return generatedFrameCapacityForProfile(profile);
     }
 
-    std::vector<float> buildFixedFrameTimestamps(
-            const size_t multiplier, const size_t generatedFrameCapacity) {
-        const size_t count = fixedGeneratedFrameCount(
-            multiplier, generatedFrameCapacity
-        );
-        std::vector<float> timestamps(count);
-        for (size_t i = 0; i < count; ++i)
-            timestamps[i] = fixedFrameTimestamp(i, multiplier);
-        return timestamps;
-    }
-
     SwapchainColorPipeline initialColorPipeline(
             const VkFormat format, const VkColorSpaceKHR colorSpace,
             const std::optional<bool> gamescopeHdrActive,
@@ -364,7 +353,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
             });
         }
 
-        this->fixedFrameTimestamps = buildFixedFrameTimestamps(
+        this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
             this->profile.multiplier, this->destinationImages.size()
         );
 
@@ -543,7 +532,7 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
     this->recoveryState.generatedImageAdmission.reset();
     this->recoveryState.pipelineBusyRecovery.reset();
     this->fixedRefreshBudget.reset();
-    this->fixedFrameTimestamps = buildFixedFrameTimestamps(
+    this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
     );
     this->diagnosticsState.fixedWindowStarted.reset();
@@ -707,7 +696,7 @@ ProfileUpdateAction Swapchain::updateProfile(
     const bool disabling = this->profile.frame_generation_enabled &&
         !nextProfile.frame_generation_enabled;
     this->profile = nextProfile;
-    this->fixedFrameTimestamps = buildFixedFrameTimestamps(
+    this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
     );
     if (decision.generationModeChanged || decision.fixedMultiplierChanged ||

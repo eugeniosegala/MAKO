@@ -209,8 +209,8 @@ ApplicationWindow {
                         SpinBox {
                             Layout.alignment: Qt.AlignRight
 
-                            from: 0
-                            to: 1000
+                            from: backend.minimum_base_fps_cap
+                            to: backend.maximum_base_fps_cap
                             editable: true
 
                             value: backend.base_fps_cap
@@ -219,7 +219,12 @@ ApplicationWindow {
                             }
                             valueFromText: function (text) {
                                 var parsed = parseInt(text);
-                                return isNaN(parsed) ? 0 : Math.max(0, Math.min(1000, parsed));
+                                return isNaN(parsed)
+                                    ? backend.minimum_base_fps_cap
+                                    : Math.max(
+                                        backend.minimum_base_fps_cap,
+                                        Math.min(backend.maximum_base_fps_cap, parsed)
+                                    );
                             }
                             onValueModified: backend.base_fps_cap = value
                         }
@@ -257,8 +262,8 @@ ApplicationWindow {
                         SpinBox {
                             Layout.alignment: Qt.AlignRight
 
-                            from: 10
-                            to: 1000
+                            from: backend.minimum_target_fps
+                            to: backend.maximum_target_fps
 
                             value: backend.target_fps
                             onValueModified: backend.target_fps = value
@@ -286,8 +291,8 @@ ApplicationWindow {
                         SpinBox {
                             Layout.alignment: Qt.AlignRight
 
-                            from: 2
-                            to: 4
+                            from: backend.minimum_adaptive_max_multiplier
+                            to: backend.maximum_adaptive_max_multiplier
 
                             value: backend.adaptive_max_multiplier
                             textFromValue: function (value) {
@@ -321,7 +326,7 @@ ApplicationWindow {
                         SpinBox {
                             Layout.alignment: Qt.AlignRight
 
-                            from: 2
+                            from: backend.minimum_multiplier
                             to: 100
 
                             value: backend.multiplier
@@ -336,8 +341,8 @@ ApplicationWindow {
                         FlowSlider {
                             Layout.fillWidth: true
 
-                            from: 0.25
-                            to: 1.00
+                            from: backend.minimum_flow_scale
+                            to: backend.maximum_flow_scale
 
                             value: backend.flow_scale
                             onUpdate: value => backend.flow_scale = value

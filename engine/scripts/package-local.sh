@@ -265,18 +265,10 @@ cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
     -DMAKO_INSTALL_XDG_FILES=ON \
     -DMAKO_LAYER_LIBRARY_PATH="../../../lib/libmako-render.so"
 
-cmake --build "$build64_dir" --target \
-    mako-config-tests mako-device-feature-tests mako-image-quality-tests \
-    mako-device-selection-tests \
-    mako-profile-update-tests \
-    mako-runtime-transition-tests \
-    mako-presentation-policy-tests \
-    mako-adaptive-tests mako-adaptive-matrix \
-    mako-pnext-chain-tests mako-color-tests \
-    mako-hdr-color-math-tests mako-cli \
-    mako-ui-localization-tests mako-cli-i18n-tests
-ctest --test-dir "$build64_dir" --output-on-failure
+# Build the complete configured tree before CTest so CMake remains the single
+# authority for every registered test executable and production dependency.
 cmake --build "$build64_dir"
+ctest --test-dir "$build64_dir" --output-on-failure
 # Release archives do not need local symbol tables. CMake's install-time strip
 # preserves the dynamic entrypoints required by the Vulkan loader while
 # keeping both the installed payload and compressed archive smaller.

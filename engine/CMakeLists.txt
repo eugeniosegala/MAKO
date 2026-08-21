@@ -47,10 +47,24 @@ if(MAKO_BUILD_VK_LAYER)
 endif()
 
 if(BUILD_TESTING AND UNIX)
+    find_program(MAKO_PYTHON3_EXECUTABLE NAMES python3)
+    if(NOT MAKO_PYTHON3_EXECUTABLE)
+        message(FATAL_ERROR "Python 3 is required for Renderer source-contract tests")
+    endif()
+
     add_test(NAME standalone-launcher
         COMMAND bash
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-mako-launch.sh"
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-launch")
+    set_tests_properties(standalone-launcher PROPERTIES
+        LABELS "portable-policy")
+
+    add_test(NAME embedded-color-conversion-spirv-freshness
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate-color-conversion-spirv.py"
+            --check)
+    set_tests_properties(embedded-color-conversion-spirv-freshness PROPERTIES
+        LABELS "portable-policy")
 endif()
 
 set(CMAKE_CXX_STANDARD 20)

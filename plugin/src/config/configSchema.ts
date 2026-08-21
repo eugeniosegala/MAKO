@@ -1,11 +1,1 @@
-export {
-  ConfigFieldType,
-  ConfigField,
-  CONFIG_SCHEMA,
-  ConfigurationData,
-  getFieldNames,
-  getDefaults,
-  getFieldTypes,
-  DLL, ALLOW_FP16, FRAME_GENERATION_ENABLED, BASE_FPS_CAP, MULTIPLIER, ADAPTIVE, ADAPTIVE_AUTO_BASE_FPS_CAP, TARGET_FPS, ADAPTIVE_MAX_MULTIPLIER, FLOW_SCALE, PERFORMANCE_MODE, PACING, ACTIVE_IN, GPU, DISABLE_MAKO,
-  DISABLE_STEAMDECK_MODE, ENABLE_ZINK
-} from './generatedConfigSchema';
+export * from "./generatedConfigSchema";

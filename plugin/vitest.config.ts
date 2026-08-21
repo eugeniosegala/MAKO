@@ -14,14 +14,19 @@ export default defineConfig({
         statements: 40,
         branches: 30,
         functions: 50,
-        lines: 40
+        lines: 40,
       },
       include: [
         "src/api/makoApi.ts",
+        "src/hooks/useClipboardFeedback.ts",
+        "src/hooks/useDeferredTargetFps.ts",
         "src/hooks/useInstallationActions.ts",
         "src/hooks/useMakoHooks.ts",
-        "src/hooks/useProfileManagement.ts"
-      ]
-    }
-  }
+        "src/hooks/usePersistentCollapseState.ts",
+        "src/hooks/useProfileEditorModel.ts",
+        "src/hooks/useProfileManagement.ts",
+        "src/hooks/useProfileSession.ts",
+      ],
+    },
+  },
 });

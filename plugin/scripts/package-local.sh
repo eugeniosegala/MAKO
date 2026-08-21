@@ -3,6 +3,17 @@
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+flatpak_runtime_bundle_output="$(
+  python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" bundles
+)"
+if [[ -z "$flatpak_runtime_bundle_output" ]]; then
+  echo "The shared Flatpak runtime contract contains no bundles." >&2
+  exit 1
+fi
+flatpak_runtime_bundles=()
+while IFS= read -r runtime_bundle; do
+  [[ -n "$runtime_bundle" ]] && flatpak_runtime_bundles+=("$runtime_bundle")
+done <<< "$flatpak_runtime_bundle_output"
 repository_root="$(cd "$project_dir/.." && pwd)"
 output_path=""
 output_path_set=false
@@ -462,10 +473,7 @@ if [[ -n "$flatpak_archive_name" ]]; then
   tar -xJf "$package_dir/bin/$flatpak_archive_name" -C "$package_dir/bin"
   rm -f "$package_dir/bin/$flatpak_archive_name"
 
-  for flatpak_bundle in \
-    org.freedesktop.Platform.VulkanLayer.makorender-23.08.flatpak \
-    org.freedesktop.Platform.VulkanLayer.makorender-24.08.flatpak \
-    org.freedesktop.Platform.VulkanLayer.makorender-25.08.flatpak; do
+  for flatpak_bundle in "${flatpak_runtime_bundles[@]}"; do
     if [[ ! -s "$package_dir/bin/$flatpak_bundle" ]]; then
       echo "Flatpak bundle archive is missing $flatpak_bundle" >&2
       exit 1

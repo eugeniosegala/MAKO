@@ -14,6 +14,20 @@ project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
 from shared_config import CONFIG_SCHEMA_DEF, ConfigFieldType
+from py_modules.mako_plugin.constants import (
+    EXTERNAL_VULKAN_LAYER_ENV,
+    HDR_EXPOSURE_DISABLE_ENV,
+    MAKO_LAYER_DISABLE_ENV,
+    SDL_AUDIO_DRIVER_ALSA_VALUE,
+    SDL_AUDIO_DRIVER_ENV,
+    STEAM_DECK_MODE_ENV,
+    WINE_DLL_OVERRIDES_ENV,
+    ZINK_DRIVER_VALUE,
+    ZINK_GALLIUM_DRIVER_ENV,
+    ZINK_GLX_VENDOR_ENV,
+    ZINK_GLX_VENDOR_VALUE,
+    ZINK_MESA_LOADER_ENV,
+)
 
 
 def get_python_type(field_type: ConfigFieldType) -> str:
@@ -30,12 +44,12 @@ def get_python_type(field_type: ConfigFieldType) -> str:
 def get_env_var_name(field_name: str) -> str:
     """Convert field name to environment variable name"""
     env_map = {
-        "disable_mako": "DISABLE_MAKO",
-        "disable_hdr_exposure": "MAKO_DISABLE_HDR_EXPOSURE",
-        "external_vulkan_layer": "MAKO_EXTERNAL_VULKAN_LAYER",
-        "disable_steamdeck_mode": "SteamDeck",
-        "enable_zink": "ZINK_ENABLE",
-        "force_alsa_audio": "SDL_AUDIODRIVER"
+        "disable_mako": MAKO_LAYER_DISABLE_ENV,
+        "disable_hdr_exposure": HDR_EXPOSURE_DISABLE_ENV,
+        "external_vulkan_layer": EXTERNAL_VULKAN_LAYER_ENV,
+        "disable_steamdeck_mode": STEAM_DECK_MODE_ENV,
+        "enable_zink": ZINK_GLX_VENDOR_ENV,
+        "force_alsa_audio": SDL_AUDIO_DRIVER_ENV,
     }
     return env_map.get(field_name, field_name.upper())
 
@@ -48,6 +62,22 @@ def generate_typed_dict() -> str:
     ]
 
     for field_name, field_def in CONFIG_SCHEMA_DEF.items():
+        python_type = get_python_type(ConfigFieldType(field_def["fieldType"]))
+        lines.append(f"    {field_name}: {python_type}")
+
+    return "\n".join(lines)
+
+
+def generate_wrapper_settings_typed_dict() -> str:
+    """Generate the canonical persisted launcher-only settings shape."""
+    lines = [
+        "class WrapperSettingsData(TypedDict):",
+        "    \"\"\"Canonical launcher-only profile settings - AUTO-GENERATED\"\"\"",
+    ]
+
+    for field_name, field_def in CONFIG_SCHEMA_DEF.items():
+        if field_def["location"] != "script":
+            continue
         python_type = get_python_type(ConfigFieldType(field_def["fieldType"]))
         lines.append(f"    {field_name}: {python_type}")
 
@@ -75,14 +105,26 @@ def generate_script_parsing() -> str:
                 lines.append(f'                        script_values["{field_name}"] = value == "0"')
             elif field_name == "enable_zink":
                 # Special case: Zink uses multiple environment variables
-                lines.append(f'                    elif key == "__GLX_VENDOR_LIBRARY_NAME" and value == "mesa":')
+                lines.append(
+                    f'                    elif key == "{ZINK_GLX_VENDOR_ENV}" '
+                    f'and value == "{ZINK_GLX_VENDOR_VALUE}":'
+                )
                 lines.append(f'                        script_values["{field_name}"] = True')
-                lines.append(f'                    elif key == "MESA_LOADER_DRIVER_OVERRIDE" and value == "zink":')
+                lines.append(
+                    f'                    elif key == "{ZINK_MESA_LOADER_ENV}" '
+                    f'and value == "{ZINK_DRIVER_VALUE}":'
+                )
                 lines.append(f'                        script_values["{field_name}"] = True')
-                lines.append(f'                    elif key == "GALLIUM_DRIVER" and value == "zink":')
+                lines.append(
+                    f'                    elif key == "{ZINK_GALLIUM_DRIVER_ENV}" '
+                    f'and value == "{ZINK_DRIVER_VALUE}":'
+                )
                 lines.append(f'                        script_values["{field_name}"] = True')
             elif field_name == "force_alsa_audio":
-                lines.append(f'                    elif key == "{env_var}" and value == "alsa":')
+                lines.append(
+                    f'                    elif key == "{env_var}" and value == '
+                    f'"{SDL_AUDIO_DRIVER_ALSA_VALUE}":'
+                )
                 lines.append(f'                        script_values["{field_name}"] = True')
             else:
                 lines.append(f'                    elif key == "{env_var}":')
@@ -128,23 +170,47 @@ def generate_script_generation() -> str:
             elif field_name == "enable_zink":
                 # Special case: enable_zink=True should export multiple Zink environment variables
                 lines.append(f'        if config.get("{field_name}", False):')
-                lines.append(f'            lines.append("export __GLX_VENDOR_LIBRARY_NAME=mesa")')
-                lines.append(f'            lines.append("export MESA_LOADER_DRIVER_OVERRIDE=zink")')
-                lines.append(f'            lines.append("export GALLIUM_DRIVER=zink")')
+                lines.append(
+                    f'            lines.append("export {ZINK_GLX_VENDOR_ENV}='
+                    f'{ZINK_GLX_VENDOR_VALUE}")'
+                )
+                lines.append(
+                    f'            lines.append("export {ZINK_MESA_LOADER_ENV}='
+                    f'{ZINK_DRIVER_VALUE}")'
+                )
+                lines.append(
+                    f'            lines.append("export {ZINK_GALLIUM_DRIVER_ENV}='
+                    f'{ZINK_DRIVER_VALUE}")'
+                )
             elif field_name == "force_alsa_audio":
                 # SDL honours the native ALSA driver. Wine/Proton honours the
                 # DLL override while retaining any caller-provided overrides.
                 # When disabled, emit nothing so platform defaults are restored.
                 lines.append(f'        if config.get("{field_name}", False):')
                 lines.append('            lines.extend([')
-                lines.append('                "export SDL_AUDIODRIVER=alsa",')
-                lines.append('                \'case ";${WINEDLLOVERRIDES:-};" in\',')
+                lines.append(
+                    f'                "export {SDL_AUDIO_DRIVER_ENV}='
+                    f'{SDL_AUDIO_DRIVER_ALSA_VALUE}",'
+                )
+                lines.append(
+                    f'                \'case ";${{{WINE_DLL_OVERRIDES_ENV}:-}};" in\','
+                )
                 lines.append('                \'    *";winepulse.drv=d;"*) ;;\',')
-                lines.append('                \'    *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winepulse.drv=d" ;;\',')
+                lines.append(
+                    f'                \'    *) export {WINE_DLL_OVERRIDES_ENV}='
+                    f'"${{{WINE_DLL_OVERRIDES_ENV}:+${WINE_DLL_OVERRIDES_ENV};}}'
+                    'winepulse.drv=d" ;;\','
+                )
                 lines.append('                "esac",')
-                lines.append('                \'case ";${WINEDLLOVERRIDES:-};" in\',')
+                lines.append(
+                    f'                \'case ";${{{WINE_DLL_OVERRIDES_ENV}:-}};" in\','
+                )
                 lines.append('                \'    *";winealsa.drv=b;"*) ;;\',')
-                lines.append('                \'    *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winealsa.drv=b" ;;\',')
+                lines.append(
+                    f'                \'    *) export {WINE_DLL_OVERRIDES_ENV}='
+                    f'"${{{WINE_DLL_OVERRIDES_ENV}:+${WINE_DLL_OVERRIDES_ENV};}}'
+                    'winealsa.drv=b" ;;\','
+                )
                 lines.append('                "esac",')
                 lines.append('            ])')
             else:
@@ -185,11 +251,7 @@ def generate_complete_schema_file() -> str:
         '',
         'from typing import TypedDict, Dict, Any, Union',
         'from enum import Enum',
-        'import sys',
-        'from pathlib import Path',
         '',
-        '# Import shared configuration constants',
-        'sys.path.insert(0, str(Path(__file__).parent.parent.parent))',
         'from shared_config import CONFIG_SCHEMA_DEF, ConfigFieldType',
         '',
         '# Field name constants for type-safe access',
@@ -197,6 +259,9 @@ def generate_complete_schema_file() -> str:
         '',
         '',
         generate_typed_dict(),
+        '',
+        '',
+        generate_wrapper_settings_typed_dict(),
         '',
         '',
         'def get_script_parsing_logic():',

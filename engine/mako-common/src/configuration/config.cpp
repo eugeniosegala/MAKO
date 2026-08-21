@@ -27,7 +27,7 @@ void ConfigFile::createDefaultConfigFile(const std::filesystem::path& path) {
         if (!ofs.is_open())
             throw ls::error("unable to create default configuration file");
 
-        ofs << R"(version = 2
+        ofs << "version = " << ConfigFile::formatVersion << R"(
 
 [global]
 # dll = '/media/games/Lossless Scaling/Lossless.dll' # if you don't have LS in the default location
@@ -75,16 +75,17 @@ ConfigFile::ConfigFile() {
             "vkcubepp"
         },
         .multiplier = 4,
-        .frame_generation_enabled = true,
-        .base_fps_cap = 0,
-        .adaptive = false,
-        .adaptive_auto_base_fps_cap = false,
-        .target_fps = 120,
-        .adaptive_max_multiplier = 3,
-        .adaptive_stable_cadence = false,
+        .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
+        .base_fps_cap = GameConfDefaults::baseFpsCap,
+        .adaptive = GameConfDefaults::adaptive,
+        .adaptive_auto_base_fps_cap =
+            GameConfDefaults::adaptiveAutoBaseFpsCap,
+        .target_fps = GameConfDefaults::targetFps,
+        .adaptive_max_multiplier = GameConfDefaults::adaptiveMaxMultiplier,
+        .adaptive_stable_cadence = GameConfDefaults::adaptiveStableCadence,
         .flow_scale = 0.85F,
         .performance_mode = true,
-        .pacing = Pacing::None
+        .pacing = GameConfDefaults::pacing
     });
     this->profileConfs.emplace_back(GameConf {
         .name = "2x FG / 100%",
@@ -92,12 +93,21 @@ ConfigFile::ConfigFile() {
             "GenshinImpact.exe"
         },
         .gpu = "NVIDIA GeForce RTX 5080",
-        .multiplier = 2
+        .multiplier = GameConfDefaults::multiplier
     });
 }
 
 namespace {
     constexpr auto configurationParseRetryDelay = std::chrono::milliseconds(50);
+
+    std::string formatFloatingLimit(const float value) {
+        auto result = std::to_string(value);
+        while (result.ends_with('0'))
+            result.pop_back();
+        if (result.ends_with('.'))
+            result.push_back('0');
+        return result;
+    }
 
     /// parse an activity array from toml value
     std::vector<std::string> activityFromString(const toml::node_view<const toml::node>& val) {
@@ -122,6 +132,57 @@ namespace {
             return Pacing::None;
         throw ls::error("unknown pacing method: " + str);
     }
+    /// validate the shared file/environment game-profile contract
+    void validateGameConf(const GameConf& conf) {
+        if (conf.multiplier < GameConfLimits::minimumMultiplier)
+            throw ls::error(
+                "multiplier must be greater than " + std::to_string(
+                    GameConfLimits::minimumMultiplier - 1
+                )
+            );
+        if (conf.base_fps_cap > GameConfLimits::maximumBaseFpsCap)
+            throw ls::error(
+                "base_fps_cap must be " + std::to_string(
+                    GameConfLimits::minimumBaseFpsCap
+                ) + " or between " + std::to_string(
+                    GameConfLimits::minimumBaseFpsCap + 1
+                ) + " and " + std::to_string(
+                    GameConfLimits::maximumBaseFpsCap
+                )
+            );
+        if (conf.target_fps < GameConfLimits::minimumTargetFps ||
+                conf.target_fps > GameConfLimits::maximumTargetFps) {
+            throw ls::error(
+                "target_fps must be between " + std::to_string(
+                    GameConfLimits::minimumTargetFps
+                ) + " and " + std::to_string(
+                    GameConfLimits::maximumTargetFps
+                )
+            );
+        }
+        if (conf.adaptive_max_multiplier <
+                GameConfLimits::minimumAdaptiveMaxMultiplier ||
+                conf.adaptive_max_multiplier >
+                    GameConfLimits::maximumAdaptiveMaxMultiplier) {
+            throw ls::error(
+                "adaptive_max_multiplier must be between " + std::to_string(
+                    GameConfLimits::minimumAdaptiveMaxMultiplier
+                ) + " and " + std::to_string(
+                    GameConfLimits::maximumAdaptiveMaxMultiplier
+                )
+            );
+        }
+        if (conf.flow_scale < GameConfLimits::minimumFlowScale ||
+                conf.flow_scale > GameConfLimits::maximumFlowScale) {
+            throw ls::error(
+                "flow_scale must be between " + formatFloatingLimit(
+                    GameConfLimits::minimumFlowScale
+                ) + " and " + formatFloatingLimit(
+                    GameConfLimits::maximumFlowScale
+                )
+            );
+        }
+    }
     /// parse the global configuration
     GlobalConf parseGlobalConf(const toml::table& tbl) {
         const GlobalConf conf{
@@ -140,31 +201,31 @@ namespace {
             .name = tbl["name"].value_or<std::string>("unnamed"),
             .active_in = activityFromString(tbl["active_in"]),
             .gpu = tbl["gpu"].value<std::string>(),
-            .multiplier = tbl["multiplier"].value_or(2U),
-            .frame_generation_enabled = tbl["frame_generation_enabled"].value_or(true),
-            .base_fps_cap = tbl["base_fps_cap"].value_or(0U),
-            .adaptive = tbl["adaptive"].value_or(false),
+            .multiplier = tbl["multiplier"].value_or(GameConfDefaults::multiplier),
+            .frame_generation_enabled = tbl["frame_generation_enabled"].value_or(
+                GameConfDefaults::frameGenerationEnabled
+            ),
+            .base_fps_cap = tbl["base_fps_cap"].value_or(GameConfDefaults::baseFpsCap),
+            .adaptive = tbl["adaptive"].value_or(GameConfDefaults::adaptive),
             .adaptive_auto_base_fps_cap =
-                tbl["adaptive_auto_base_fps_cap"].value_or(false),
-            .target_fps = tbl["target_fps"].value_or(120U),
-            .adaptive_max_multiplier = tbl["adaptive_max_multiplier"].value_or(3U),
-            .adaptive_stable_cadence = tbl["adaptive_stable_cadence"].value_or(false),
-            .flow_scale = tbl["flow_scale"].value_or(1.0F),
-            .performance_mode = tbl["performance_mode"].value_or(false),
+                tbl["adaptive_auto_base_fps_cap"].value_or(
+                    GameConfDefaults::adaptiveAutoBaseFpsCap
+                ),
+            .target_fps = tbl["target_fps"].value_or(GameConfDefaults::targetFps),
+            .adaptive_max_multiplier = tbl["adaptive_max_multiplier"].value_or(
+                GameConfDefaults::adaptiveMaxMultiplier
+            ),
+            .adaptive_stable_cadence = tbl["adaptive_stable_cadence"].value_or(
+                GameConfDefaults::adaptiveStableCadence
+            ),
+            .flow_scale = tbl["flow_scale"].value_or(GameConfDefaults::flowScale),
+            .performance_mode = tbl["performance_mode"].value_or(
+                GameConfDefaults::performanceMode
+            ),
             .pacing = parcingFromString(tbl["pacing"].value_or<std::string>("none"))
         };
 
-        if (conf.multiplier <= 1)
-            throw ls::error("multiplier must be greater than 1");
-        if (conf.base_fps_cap > 1000)
-            throw ls::error("base_fps_cap must be 0 or between 1 and 1000");
-        if (conf.target_fps < 10 || conf.target_fps > 1000)
-            throw ls::error("target_fps must be between 10 and 1000");
-        if (conf.adaptive_max_multiplier < 2 || conf.adaptive_max_multiplier > 4)
-            throw ls::error("adaptive_max_multiplier must be between 2 and 4");
-        if (conf.flow_scale < 0.25F || conf.flow_scale > 1.0F)
-            throw ls::error("flow_scale must be between 0.25 and 1.0");
-
+        validateGameConf(conf);
         return conf;
     }
     /// parse the global configuration from the environment
@@ -193,17 +254,18 @@ namespace {
             .active_in = {},
             .gpu = std::nullopt,
 
-            .multiplier = 2,
-            .frame_generation_enabled = true,
-            .base_fps_cap = 0,
-            .adaptive = false,
-            .adaptive_auto_base_fps_cap = false,
-            .target_fps = 120,
-            .adaptive_max_multiplier = 3,
-            .adaptive_stable_cadence = false,
-            .flow_scale = 1.0F,
-            .performance_mode = false,
-            .pacing = Pacing::None
+            .multiplier = GameConfDefaults::multiplier,
+            .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
+            .base_fps_cap = GameConfDefaults::baseFpsCap,
+            .adaptive = GameConfDefaults::adaptive,
+            .adaptive_auto_base_fps_cap =
+                GameConfDefaults::adaptiveAutoBaseFpsCap,
+            .target_fps = GameConfDefaults::targetFps,
+            .adaptive_max_multiplier = GameConfDefaults::adaptiveMaxMultiplier,
+            .adaptive_stable_cadence = GameConfDefaults::adaptiveStableCadence,
+            .flow_scale = GameConfDefaults::flowScale,
+            .performance_mode = GameConfDefaults::performanceMode,
+            .pacing = GameConfDefaults::pacing
         };
 
         const char* gpu = std::getenv("MAKO_GPU");
@@ -239,17 +301,7 @@ namespace {
         const char* pacing = std::getenv("MAKO_PACING");
         if (pacing) conf.pacing = parcingFromString(std::string(pacing));
 
-        if (conf.multiplier <= 1)
-            throw ls::error("multiplier must be greater than 1");
-        if (conf.base_fps_cap > 1000)
-            throw ls::error("base_fps_cap must be 0 or between 1 and 1000");
-        if (conf.target_fps < 10 || conf.target_fps > 1000)
-            throw ls::error("target_fps must be between 10 and 1000");
-        if (conf.adaptive_max_multiplier < 2 || conf.adaptive_max_multiplier > 4)
-            throw ls::error("adaptive_max_multiplier must be between 2 and 4");
-        if (conf.flow_scale < 0.25F || conf.flow_scale > 1.0F)
-            throw ls::error("flow_scale must be between 0.25 and 1.0");
-
+        validateGameConf(conf);
         return conf;
     }
 }
@@ -263,8 +315,10 @@ ConfigFile::ConfigFile(const std::filesystem::path& path) {
     }
 
     auto version = table["version"];
-    if (!version || !version.is_integer() || *version.as_integer() != 2)
+    if (!version || !version.is_integer() ||
+            *version.as_integer() != ConfigFile::formatVersion) {
         throw ls::error("unsupported configuration version");
+    }
 
     auto global = table["global"];
     if (global && global.is_table()) {
@@ -279,7 +333,7 @@ ConfigFile::ConfigFile(const std::filesystem::path& path) {
 
 void ConfigFile::write(const std::filesystem::path& path) const {
     toml::table table;
-    table.insert("version", 2);
+    table.insert("version", ConfigFile::formatVersion);
 
     toml::table global;
     if (this->globalConf.dll)

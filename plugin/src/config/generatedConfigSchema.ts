@@ -1,4 +1,64 @@
 // src/config/generatedConfigSchema.ts
+// Stable cross-language profile contract
+export const DEFAULT_PROFILE_NAME = "mako" as const;
+export const MAKO_WRAPPER_RELATIVE_PATH = ".local/bin/mako-run" as const;
+export const PER_GAME_WRAPPER_FLATPAK_APP_IDS = [
+  "com.heroicgameslauncher.hgl",
+] as const;
+export const PROFILE_KIND_DEFAULT = "default" as const;
+export const PROFILE_KIND_GAME = "game" as const;
+export const PROFILE_KIND_PROCESS = "process" as const;
+export const PROFILE_KIND_MANUAL = "manual" as const;
+export const PROFILE_KIND_VALUES = [
+  PROFILE_KIND_DEFAULT,
+  PROFILE_KIND_GAME,
+  PROFILE_KIND_PROCESS,
+  PROFILE_KIND_MANUAL,
+] as const;
+export type ProfileKind = (typeof PROFILE_KIND_VALUES)[number];
+
+// Ordered Flatpak runtime contract generated from shared_config.py
+export const SUPPORTED_FLATPAK_RUNTIMES = [
+  { version: "23.08", statusField: "installed_23_08", i18nKey: "FLATPAK_RUNTIME_VERSION" },
+  { version: "24.08", statusField: "installed_24_08", i18nKey: "FLATPAK_RUNTIME_VERSION" },
+  { version: "25.08", statusField: "installed_25_08", i18nKey: "FLATPAK_RUNTIME_VERSION" },
+] as const;
+export type FlatpakRuntimeVersion =
+  (typeof SUPPORTED_FLATPAK_RUNTIMES)[number]["version"];
+export type FlatpakRuntimeStatusField =
+  (typeof SUPPORTED_FLATPAK_RUNTIMES)[number]["statusField"];
+export type FlatpakRuntimeI18nKey =
+  (typeof SUPPORTED_FLATPAK_RUNTIMES)[number]["i18nKey"];
+
+// Shared backend validation and Decky UI limits
+export const BASE_FPS_CAP_MIN = 0 as const;
+export const BASE_FPS_CAP_MAX = 240 as const;
+export const BASE_FPS_CAP_UI_MAX = 60 as const;
+export const TARGET_FPS_MIN = 30 as const;
+export const TARGET_FPS_MAX = 240 as const;
+export const ADAPTIVE_MAX_MULTIPLIER_MIN = 2 as const;
+export const ADAPTIVE_MAX_MULTIPLIER_MAX = 4 as const;
+export const ADAPTIVE_MINIMUM_BASE_FPS = 10 as const;
+export const FLOW_SCALE_MIN = 0.25 as const;
+export const FLOW_SCALE_MAX = 1.0 as const;
+export const FIXED_MULTIPLIER_MIN = 2 as const;
+export const FIXED_MULTIPLIER_UI_MIN = 2 as const;
+export const FIXED_MULTIPLIER_UI_MAX = 4 as const;
+
+// Stable persisted values for the optional external Vulkan layer
+export const EXTERNAL_VULKAN_LAYER_NONE = "" as const;
+export const EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI = "gamescope-wsi" as const;
+export const EXTERNAL_VULKAN_LAYER_MANGOHUD = "mangohud" as const;
+export const EXTERNAL_VULKAN_LAYER_VKBASALT = "vkbasalt" as const;
+export const EXTERNAL_VULKAN_LAYER_VALUES = [
+  EXTERNAL_VULKAN_LAYER_NONE,
+  EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
+  EXTERNAL_VULKAN_LAYER_MANGOHUD,
+  EXTERNAL_VULKAN_LAYER_VKBASALT,
+] as const;
+export type ExternalVulkanLayer =
+  (typeof EXTERNAL_VULKAN_LAYER_VALUES)[number];
+
 // Configuration field type enum - matches Python
 export enum ConfigFieldType {
   BOOLEAN = "boolean",

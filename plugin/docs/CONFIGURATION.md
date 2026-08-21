@@ -30,6 +30,12 @@ Frame-generation, quality, GPU, and matched-process settings belong to the selec
 
 The Decky dropdown is an editor selection, not a runtime override. Outside a game, choose any saved profile and it remains available for editing without affecting another game's launch. When a live game is detected, MAKO follows its matching profile, or Default if no match exists. On game exit, the runtime and editor return to Default once; after the controls unlock, an offline selection stays in place until another game starts or the plugin is reopened.
 
+### Storage and launch boundaries
+
+Renderer fields remain canonical in `conf.toml`. MAKO Decky stores profile identity metadata and launcher-only compatibility settings in separate versioned JSON sidecars, then merges those three inputs only when serving the selected profile or regenerating `mako-run`. `profile_storage.py` owns the sidecar allowlists, normalization, and merged views; `configuration.py` owns RPC transactions, migrations, file persistence, and atomic regeneration; and `wrapper_generation.py` converts explicit canonical inputs into shell text without reading or writing user files.
+
+The generated wrapper is disposable cache, not a source of profile state. Any stale, incomplete, or contaminated wrapper is regenerated from the Renderer TOML and Decky sidecars after unique legacy values have passed through their explicit migrations. This boundary is characterized byte for byte so a structural refactor cannot silently change launch exports, profile selection, or serialization.
+
 ## External Tools
 
 **Enable MangoHud** and **Enable vkBasalt** are mutually exclusive per-profile controls under **External Tools**. They also share one selection with **Experimental Gamescope WSI** under **Compatibility Settings**, so enabling any one of the three disables the previous choice. Default applies to games without a saved profile; to limit an integration to one title, start that game, choose **Save profile for &lt;game&gt;**, and enable it in the captured profile. Restart the game after changing the selection.

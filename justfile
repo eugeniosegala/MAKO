@@ -23,8 +23,12 @@ check-markdown-format:
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 
-# Run the engine and plugin test suites.
-test: test-engine test-plugin
+# Run the engine, plugin, and trace-producer test suites.
+test: test-engine test-plugin test-trace-producer
+
+# Exercise the private-archive producer without requiring private evidence.
+test-trace-producer:
+    ./scripts/test-capture-trace.sh
 
 # Configure and build MAKO Renderer in release mode.
 build-engine:

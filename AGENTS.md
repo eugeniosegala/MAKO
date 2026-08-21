@@ -1,6 +1,6 @@
 # MAKO repository guide for coding agents
 
-This file is a navigation and operating guide. It points to the repository's authoritative build, test, diagnostic, packaging, and release sources instead of duplicating them. When a workflow changes, update the owning script or guide first and keep this index aligned with it.
+This root file is the sole repository-wide instruction source for coding agents and applies to the whole monorepo. Component READMEs, guides, and scripts refine its routing but do not override it; do not create nested `AGENTS.md` copies that can drift unless a genuinely scoped override is required. This guide points to the authoritative build, test, diagnostic, packaging, and release sources instead of duplicating them. When a workflow changes, update the owning script or guide first and keep this index aligned with it.
 
 Keep Markdown prose unwrapped: each paragraph and list item stays on one source line. Preserve line breaks only when they carry Markdown structure, such as blank paragraph boundaries, headings, tables, blockquotes or admonitions, and fenced or indented code.
 
@@ -28,23 +28,49 @@ The following are stable technical or compatibility identifiers and are not bran
 
 The diagnostics helper deliberately recognizes historical lowercase renderer prefixes so reports from older installations remain readable. Preserve that input compatibility while requiring current source to emit the branded prefix. Do not rename any stable identifier without an explicit migration and backward-compatibility plan.
 
+## Agent working flow
+
+1. Inspect the current branch and worktree before acting, preserve unrelated changes, and read this guide plus the owning component README and boundary-specific document.
+2. Trace the existing behavior to its canonical owner, generated outputs, compatibility obligations, and contract tests before editing. Extend that owner rather than creating a parallel path.
+3. Make the smallest behavior-appropriate change. Update an owning schema, generator, migration ledger, focused test, and documentation in the same change whenever their contract moves; never patch a generated output independently.
+4. Run the read-only freshness gates and the portable tests required by `TESTING.md`, then add package, sanitizer, Vulkan, hardware, or game-matrix evidence in proportion to the boundary affected.
+5. Review the complete diff and final worktree state for duplication, stale documentation, accidental generated artifacts, and unrelated edits. Report what passed, what was not testable, and the exact branch/staged/committed/pushed state without claiming unavailable hardware evidence.
+
 ## Project map
 
 | Area | Responsibility | Primary locations |
 | --- | --- | --- |
 | Repository root | Product overview, cross-component orchestration, shared diagnostics, compatibility cleanup, and releases | `README.md`, `justfile`, `TESTING.md`, `CLEANUPS.md`, `HOW_TO_RELEASE.md`, `scripts/` |
-| MAKO Renderer layer | Vulkan interception, swapchain handling, presentation, recovery, Gamescope integration | `engine/mako-render/` |
+| MAKO Renderer layer | Vulkan interception, deterministic Adaptive scheduling, generated-frame planning, swapchain handling, presentation, recovery, Gamescope integration | `engine/mako-render/` |
 | Renderer backend | Lossless Scaling resource extraction and private compute pipeline | `engine/mako-backend/` |
 | Renderer common code | Configuration, Vulkan wrappers, device features, and image-quality utilities | `engine/mako-common/` |
 | Renderer tools | Validation, benchmarking, debugging, and GPU quality regression | `engine/mako-cli/` |
 | Renderer UI | Optional Qt Quick configuration application | `engine/mako-ui/` |
 | Renderer distribution | Host manifests, Flatpak definitions, packaging, and build scripts | `engine/dist/`, `engine/scripts/` |
-| MAKO Decky frontend | Decky React/TypeScript interface and RPC consumers | `plugin/src/` |
-| MAKO Decky backend | Installation, profiles, wrappers, Flatpak preparation, and lifecycle RPCs | `plugin/py_modules/mako_plugin/` |
+| MAKO Decky frontend | Decky React/TypeScript composition, profile editor/runtime-session state, and RPC consumers | `plugin/src/` |
+| MAKO Decky backend | Installation, configuration orchestration, canonical profile sidecars, wrapper generation, Flatpak preparation, and lifecycle RPCs | `plugin/py_modules/mako_plugin/` |
 | Decky packaging | Frontend generation, local ZIPs, direct development deployment, reload, and publishing | `plugin/scripts/` |
+| Cross-component contracts | Static agreement for configuration, RPCs, package layout, paths, runtime versions, and stable identities | `plugin/tests/test_*_contract.py`, `plugin/tests/test_decky_loader_import.py`, `plugin/tests/test_flatpak_runtime_detection.py`, `plugin/tests/frontend/*Contract*.test.ts` |
 | Automation | Portable CI and dedicated SteamOS/AMD hardware validation | `.github/workflows/` |
 
-Start architecture work with the root `README.md`, then use `engine/README.md` or `plugin/README.md` for the selected component. Renderer configuration behavior is owned by `engine/docs/CONFIGURATION.md`; Decky's profile and compatibility UX is documented in `plugin/docs/CONFIGURATION.md`. Renderer HDR architecture is owned by `engine/docs/HDR-PIPELINE.md`; implicit layer and Gamescope presentation ownership is owned by `engine/docs/WSI-ISOLATION.md`; guarded exceptions and their evidence are owned by `engine/docs/LAYER-CHAINING.md`. Read the applicable guides before changing either boundary.
+Start architecture work with the root `README.md`, then use `engine/README.md` or `plugin/README.md` for the selected component. Renderer configuration behavior is owned by `engine/docs/CONFIGURATION.md`; Adaptive scheduler, frame-plan, and validation ownership is documented in `engine/docs/ADAPTIVE-VALIDATION.md`; Decky's profile and compatibility UX is documented in `plugin/docs/CONFIGURATION.md`. Renderer HDR architecture is owned by `engine/docs/HDR-PIPELINE.md`; implicit layer and Gamescope presentation ownership is owned by `engine/docs/WSI-ISOLATION.md`; guarded exceptions and their evidence are owned by `engine/docs/LAYER-CHAINING.md`. Read the applicable guides before changing either boundary.
+
+## Directory and module placement
+
+- Keep repository-root scripts and guides for cross-component orchestration. Renderer-only work belongs under `engine/`; Decky-only work belongs under `plugin/`. Do not create a second root-level utilities, constants, generated, or test area for component-owned behavior.
+- Place Renderer production code and its focused tests in the owning CMake component: interception, scheduling, generated-frame planning, delivery observations, presentation, and recovery in `engine/mako-render/src/` with tests in `engine/mako-render/tests/`; shared configuration, Vulkan helpers, device features, and quality primitives in `engine/mako-common/` with tests in `engine/mako-common/tests/`; backend inference and shader resources in `engine/mako-backend/`; CLI and Qt UI code in their respective component directories. Distribution manifests and runtime matrices belong under `engine/dist/`, while reusable build, validation, packaging, and launcher entry points belong under `engine/scripts/`.
+- Keep MAKO Decky's public async RPC adapter in `plugin/py_modules/mako_plugin/plugin.py`; configuration and profile transaction orchestration in `configuration.py`; canonical metadata and sidecar persistence in `profile_storage.py`; pure wrapper text generation in `wrapper_generation.py`; import-safe package-root discovery in `package_paths.py`; stable payload, layer, environment, and derived Flatpak identities in `constants.py`; and public response shapes in `types.py` or the owning service module. Build, generation, deployment, validation, and packaging entry points belong under `plugin/scripts/`, not inside runtime services.
+- Keep Decky frontend callable bindings and response types in `plugin/src/api/`; generated and hand-written configuration contracts, runtime paths, presets, release metadata, and shared UI constants in `plugin/src/config/`; reusable state and effect logic in `plugin/src/hooks/`; rendering and view composition in `plugin/src/components/`; translation loading in `plugin/src/i18n/`; and small domain-neutral helpers in `plugin/src/utils/`. A component should consume a reusable hook or helper instead of growing a second local implementation.
+- Place Decky Python tests in `plugin/tests/`, Decky frontend tests in `plugin/tests/frontend/`, and Renderer tests beside their owning CMake component. A cross-component contract test belongs in `plugin/tests/` when it imports Decky's canonical contract and statically verifies Renderer, shell, manifest, or package consumers; it must not make one runtime component import another at deployment time.
+- Extend the existing owner for a value or behavior instead of adding parallel constants, aliases, utility modules, path builders, response dictionaries, or serialization logic. When two independently deployed components cannot share a runtime module, retain their native declarations and add a focused cross-component contract test that proves the required agreement.
+
+## Structured mappings and localization contracts
+
+- Give every persisted or public RPC mapping one named Python `TypedDict` or generated schema type at its storage or service boundary. Canonical builders and normalizers must populate all required keys, copy mutable list or dictionary inputs, and express optional presence separately from nullable values. Use an open `Dict[str, Any]` only while reading legacy or otherwise untrusted input, then validate and normalize it before passing it to typed storage, generation, or RPC code.
+- `plugin/shared_config.py` owns Decky's cross-language configuration schema. Its generated Python and TypeScript bindings are read-only outputs. `profile_storage.py` owns profile metadata and wrapper-sidecar payload keys; `wrapper_generation.py` accepts normalized typed inputs and does not own persistence; `constants.py` and `flatpak_service.py` own Flatpak descriptor and status-field shapes rather than their call sites.
+- Public Decky RPC method names and response fields are mirrored between `plugin.py`/Python `TypedDict` owners and `plugin/src/api/makoApi.ts`. Keep field names, required-versus-optional presence, nullability, and nested shapes aligned, and extend `plugin/tests/test_rpc_contract.py` plus focused frontend response tests when that contract changes.
+- Decky and Qt localization are separate catalogs. Decky source catalogs live in `plugin/defaults/i18n/`: `template.json` owns the English key order and fallback text, `language_metadata.json` owns advertised languages, `steam_language_map.json` owns Steam aliases, and every translated catalog must preserve the template's ordered key set, string value types, and named placeholders. Every `t()` call must use a static key and fallback that match the template plus the exact replacement fields. `plugin/scripts/i18n-contract.mjs` owns dictionary and call-site validation, while `plugin/scripts/manage-i18n.mjs` owns the read-only check and generation CLI; from `plugin/`, run `npm run check:i18n` to check freshness or `npm run generate:i18n` to regenerate, and never edit `plugin/src/i18n/languages.json` directly.
+- MAKO Renderer's Qt catalog is independently owned by `engine/mako-ui/rsc/i18n/translations.json`. Keep every language catalog aligned with its English key order and value types and validate it through the Qt localization tests. Do not merge the Qt and Decky catalogs or copy one generated catalog into the other component.
 
 ## Authoritative workflow index
 
@@ -54,6 +80,7 @@ Start architecture work with the root `README.md`, then use `engine/README.md` o
 | Format Markdown or enable the commit hook | `AGENTS.md` | `just format-markdown`, `just check-markdown-format`, `just install-hooks` |
 | Build Renderer from source | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/CMakeLists.txt`, `engine/scripts/build-steamos-dev.sh` |
 | Run portable Renderer tests | `TESTING.md` | `engine/scripts/test-adaptive-scheduler.sh` |
+| Change Adaptive scheduling or generated-frame plans | `engine/docs/ADAPTIVE-VALIDATION.md` | `engine/mako-render/src/adaptive_scheduler.*`, `engine/mako-render/src/generated_frame_plan.hpp`, `engine/mako-render/src/generated_frame_delivery.hpp` |
 | Build host Renderer archives | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/scripts/package-local.sh` |
 | Build Flatpak runtime extensions | `engine/docs/FLATPAK-GUIDE.md` | `engine/scripts/package-flatpaks.sh` |
 | Test AMD image quality | `engine/docs/IMAGE-QUALITY-REGRESSION.md` | `engine/scripts/run-gpu-quality-regression.sh`, `engine/mako-cli/src/tools/quality.cpp` |
@@ -62,8 +89,11 @@ Start architecture work with the root `README.md`, then use `engine/README.md` o
 | Add or change an optional Vulkan layer chain | `engine/docs/LAYER-CHAINING.md`, `engine/docs/WSI-ISOLATION.md` | Owning launcher, manifest, package, and focused loader/runtime validation |
 | Validate real SteamOS hardware | `TESTING.md` | `scripts/run-steamos-hardware-validation.sh`, `.github/workflows/steamos-hardware-validation.yml` |
 | Exercise the game/runtime matrix | `engine/docs/ADAPTIVE-VALIDATION.md` | Manual DXVK, VKD3D-Proton, native Vulkan, Gamescope, and supported desktop scenarios |
-| Archive a completed comparative game trace | `TRACES.md` | `scripts/capture-trace.sh`, sibling private `MAKO-Traces` checkout |
+| Change or exercise comparative game capture | `TRACES.md` | `scripts/capture-trace.sh`, `scripts/test-capture-trace.sh`, sibling private `MAKO-Traces` checkout |
 | Build or package MAKO Decky | `plugin/docs/PACKAGING.md` | `plugin/package.json`, `plugin/scripts/package-local.sh` |
+| Change Decky's shared configuration or runtime contract | `plugin/README.md`, `plugin/docs/CONFIGURATION.md` | `plugin/shared_config.py`, `plugin/scripts/generate_ts_schema.py`, `plugin/scripts/check_generated_config.py` |
+| Change Decky's public RPC mappings | `plugin/README.md`, `TESTING.md` | `plugin/py_modules/mako_plugin/types.py`, owning service types, `plugin/src/api/makoApi.ts`, `plugin/tests/test_rpc_contract.py` |
+| Change Decky or Qt translations | This file and the owning component README | `plugin/defaults/i18n/`, `plugin/scripts/i18n-contract.mjs`, `plugin/scripts/manage-i18n.mjs`, `engine/mako-ui/rsc/i18n/translations.json`, localization tests |
 | Review Armada/native AArch64 behavior | `plugin/docs/ARMADA.md` | `plugin/py_modules/mako_plugin/host_environment.py`, host/wrapper/Flatpak boundary tests |
 | Add or remove transitional compatibility | `CLEANUPS.md` | Owning migration/generator and its focused regression tests |
 | Deploy/reload a local Decky install | `plugin/docs/PACKAGING.md` | `plugin/scripts/deploy-dev.sh`, `plugin/scripts/reload-decky-plugin.mjs` |
@@ -78,7 +108,7 @@ Start architecture work with the root `README.md`, then use `engine/README.md` o
 Run validation in proportion to the affected boundary:
 
 - Renderer C++ changes need the portable/full CTest coverage described in `TESTING.md`. Presentation, synchronization, device-feature, image-format, shader-selection, or frame-quality changes also need real Vulkan evidence.
-- Scheduling and presentation-policy changes should run the sanitizer path and the manual matrix in `engine/docs/ADAPTIVE-VALIDATION.md` where applicable.
+- Scheduling, generated-frame-plan, and presentation-policy changes should run the sanitizer path and the manual matrix in `engine/docs/ADAPTIVE-VALIDATION.md` where applicable. Preserve the allocation-free plan handoff and its requested, admitted, and scheduled ownership through the dedicated plan test.
 - AMD behavior must be checked in both FP32 and FP16 modes. The deterministic scene, scoring, and artifacts live in `engine/mako-common/src/quality/`, `engine/mako-common/tests/`, and the output directory selected by the GPU regression script.
 - MAKO Decky backend changes need the Python suite under `plugin/tests/`. Frontend changes need typechecking, focused Vitest coverage, and a production bundle. Use the exact gates listed in `TESTING.md`.
 - Packaging, installation, wrapper, architecture, or release-pin changes need the corresponding local package verification; unit tests alone do not prove archive layout or Vulkan-loader activation.
@@ -86,7 +116,7 @@ Run validation in proportion to the affected boundary:
 
 A skipped GPU test is not evidence of GPU correctness. The automated AMD scene is also not a substitute for the game/runtime compatibility matrix. State which hardware, driver, architecture, Flatpak runtime, and matrix rows were not tested.
 
-Completed comparative game sessions may be archived with `scripts/capture-trace.sh` into a sibling **private** `MAKO-Traces` checkout. Read `TRACES.md` before changing or running the extractor. The public MAKO repository owns extraction and sanitization behavior; the private trace repository owns stored evidence, its schema, and integrity validation. Normal MAKO builds, tests, packaging, installation, and releases must not require access to the private repository. Never copy licensed inputs or unrelated logs into a trace.
+Completed comparative game sessions may be archived with `scripts/capture-trace.sh` into a sibling **private** `MAKO-Traces` checkout. Read `TRACES.md` before changing or running the extractor. The public MAKO repository owns extraction, component containment, sanitization, metadata production, the initial controlled-trace checksum manifest, and the producer contract test. The private trace repository owns stored evidence, executable schemas, the canonical checksum contract and verification, guarded initialization and refresh, append-only history, and archive validation. Controlled-trace contract changes update both repositories together, while user-report-only contracts remain private-repository work. Normal MAKO builds, tests, packaging, installation, and releases must not require access to the private repository. Never copy licensed inputs or unrelated logs into a trace.
 
 ## Diagnostics map
 
@@ -95,14 +125,19 @@ Completed comparative game sessions may be archived with `scripts/capture-trace.
 - `engine/docs/COLLECT_DIAGNOSTICS.md` owns standalone Renderer collection.
 - `scripts/mako-diagnostics` filters current and legacy Renderer logs into a focused report; its deterministic coverage is in `plugin/tests/test_diagnostics_helper.py`.
 - `engine/mako-render/src/present_diagnostics.cpp` and `.hpp` own structured presentation records. Related state is emitted from `instance.cpp`, `swapchain.cpp`, and `swapchain_present.cpp`.
-- `plugin/py_modules/mako_plugin/configuration.py` controls wrapper-side log capture, while `installation.py` installs and migrates the helper.
+- `plugin/py_modules/mako_plugin/wrapper_generation.py` owns the generated wrapper environment, including opt-in wrapper-side log capture; `configuration.py` orchestrates canonical state, migrations, and atomic regeneration; and `installation.py` installs and migrates the helper.
 
 Keep diagnostic operation names and fields machine-filterable. If a current log format changes, update the collector, its tests, and both user guides together.
 
 ## Generated files, artifacts, and protected inputs
 
-- Treat `engine/build/`, `engine/out/`, `plugin/dist/`, `plugin/out/`, `plugin/coverage/`, and `plugin/node_modules/` as generated. Do not hand-edit or commit their contents.
-- `plugin/shared_config.py` owns the shared Decky configuration schema. `plugin/src/config/generatedConfigSchema.ts` and `plugin/py_modules/mako_plugin/config_schema_generated.py` are generated by `plugin/scripts/generate_ts_schema.py`; do not edit them independently.
+- Treat `engine/build/`, `engine/out/`, `.pnpm-store/`, `plugin/.pnpm-store/`, `plugin/dist/`, `plugin/out/`, `plugin/coverage/`, `plugin/node_modules/`, and Python `__pycache__/` directories as generated or local cache data. Do not hand-edit or commit their contents.
+- `engine/mako-backend/src/shaders/color_conversion_spirv.hpp` and `color_conversion_spirv.hashes` are generated from the adjacent GLSL sources by `engine/scripts/generate-color-conversion-spirv.py`. The portable CTest suite runs the script's read-only `--check` mode against both source and embedded-payload digests; regeneration additionally requires `glslangValidator`.
+- `plugin/shared_config.py` owns the shared Decky configuration schema, validation/UI limits, external-layer values, stable default-profile and profile-kind identifiers, install-relative wrapper path, ordered Flatpak runtime versions, and per-game-wrapper Flatpak application IDs. `plugin/src/config/generatedConfigSchema.ts` and `plugin/py_modules/mako_plugin/config_schema_generated.py` are generated by `plugin/scripts/generate_ts_schema.py`; do not edit them independently. From `plugin/`, `npm run check:generated-config` is the read-only freshness gate, and normal build, watch, and backend-test commands invoke it automatically.
+- `plugin/defaults/i18n/` owns Decky's translation sources, while `plugin/scripts/manage-i18n.mjs` generates `plugin/src/i18n/languages.json` after validating the catalogs and static call sites through `plugin/scripts/i18n-contract.mjs`. The frontend build, watch, typecheck, and test gates invoke that contract. `plugin/src/config/devBuildInfo.generated.ts` is local deployment metadata generated by the frontend build. Do not edit either generated TypeScript/JSON artifact directly.
+- `engine/dist/flatpak/mako-render/runtime-versions.txt` owns MAKO Renderer's ordered Flatpak build matrix. Decky's independently deployed runtime list remains in `plugin/shared_config.py`; `plugin/tests/test_flatpak_runtime_detection.py` requires the two owners to remain aligned, and `plugin/scripts/read_flatpak_runtime_contract.py` exposes the Decky contract to shell tooling without duplicating it.
+- `plugin/py_modules/mako_plugin/package_paths.py` owns Decky's import-safe installed package root; `constants.py` owns payload filenames, layer/environment identifiers, and derived Flatpak bundle descriptors. Cross-component names and archive layouts remain independently asserted by focused contract tests rather than making Renderer or shell tools import the Decky backend at runtime.
+- `plugin/py_modules/mako_plugin/profile_storage.py` owns canonical Decky profile metadata and wrapper-setting sidecars; `wrapper_generation.py` is a pure text generator and must not become a second file store; `configuration.py` remains the configuration/profile service and migration facade, while `plugin.py` owns the public async RPC surface.
 - Treat that schema as the Decky profile allowlist. Unknown keys are inert on read and removed by the next canonical write; wrapper keys cannot become environment exports unless the current schema and generator support them. Preserve changed semantics through an explicit, tested migration instead of retaining arbitrary legacy fields or reusing a retired name.
 - Published Renderer URLs, checksums, and pins in `plugin/package.json` are maintained by the release/pinning scripts. Local-engine packaging writes local identity into the ZIP without changing the tracked release pin.
 - `Lossless.dll` is a user-supplied licensed input. Never add it to the repository, package it, upload it, or treat its presence as portable CI data.
@@ -125,3 +160,7 @@ Published host archives must remain runnable with Ubuntu 24.04's Qt 6.4. The ABI
 Local packaging does not publish. Direct development deployment does mutate an installed Decky test environment, and engine replacement requires games using the layer to be closed. Run deployment/reload actions only when the task calls for changing that installed environment.
 
 Publishing is a separate, explicitly authorized workflow. Follow `HOW_TO_RELEASE.md` from a clean `main` checkout, update the two component release-note files as the only manual release copy, require the SteamOS hardware gate, and let the scripts manage versions, pins, checksums, tags, assets, and README release links. The hardware gate uses `scripts/run-steamos-hardware-validation.sh` to create a one-job runner; never register a persistent public-repository runner as a release shortcut. Never move a published tag or replace a published asset.
+
+## Source-control boundaries
+
+Inspect `git status` before editing, keep unrelated worktree changes intact, and remain on the branch selected for the task. A request to inspect, refactor, build, test, or package authorizes only the corresponding local worktree and generated artifacts; it does not authorize switching branches, pulling or rebasing over local work, staging, committing, pushing, tagging, publishing, or deploying to an installed Decky environment. Perform those source-control or external-state mutations only when the maintainer explicitly requests them, and report the final branch plus staged, committed, and pushed state precisely.

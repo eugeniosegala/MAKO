@@ -44,6 +44,16 @@ namespace mako::ui {
         Q_PROPERTY(QStringList gpus READ calculateGPUList NOTIFY refreshUI)
         Q_PROPERTY(int gpu READ getGPU WRITE gpuUpdated NOTIFY refreshUI)
 
+        Q_PROPERTY(uint minimum_multiplier READ getMinimumMultiplier CONSTANT)
+        Q_PROPERTY(uint minimum_base_fps_cap READ getMinimumBaseFPSCap CONSTANT)
+        Q_PROPERTY(uint maximum_base_fps_cap READ getMaximumBaseFPSCap CONSTANT)
+        Q_PROPERTY(uint minimum_target_fps READ getMinimumTargetFPS CONSTANT)
+        Q_PROPERTY(uint maximum_target_fps READ getMaximumTargetFPS CONSTANT)
+        Q_PROPERTY(uint minimum_adaptive_max_multiplier READ getMinimumAdaptiveMaxMultiplier CONSTANT)
+        Q_PROPERTY(uint maximum_adaptive_max_multiplier READ getMaximumAdaptiveMaxMultiplier CONSTANT)
+        Q_PROPERTY(float minimum_flow_scale READ getMinimumFlowScale CONSTANT)
+        Q_PROPERTY(float maximum_flow_scale READ getMaximumFlowScale CONSTANT)
+
     public:
         explicit Backend();
 
@@ -79,43 +89,43 @@ namespace mako::ui {
         }
 
         [[nodiscard]] size_t getMultiplier() const {
-            VALIDATE_AND_GET_PROFILE(2)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::multiplier)
             return conf.multiplier;
         }
         [[nodiscard]] bool getFrameGenerationEnabled() const {
-            VALIDATE_AND_GET_PROFILE(true)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::frameGenerationEnabled)
             return conf.frame_generation_enabled;
         }
         [[nodiscard]] uint getBaseFPSCap() const {
-            VALIDATE_AND_GET_PROFILE(0)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::baseFpsCap)
             return conf.base_fps_cap;
         }
         [[nodiscard]] bool getAdaptive() const {
-            VALIDATE_AND_GET_PROFILE(false)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptive)
             return conf.adaptive;
         }
         [[nodiscard]] bool getAdaptiveAutoBaseFPSCap() const {
-            VALIDATE_AND_GET_PROFILE(false)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptiveAutoBaseFpsCap)
             return conf.adaptive_auto_base_fps_cap;
         }
         [[nodiscard]] uint getTargetFPS() const {
-            VALIDATE_AND_GET_PROFILE(120)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::targetFps)
             return conf.target_fps;
         }
         [[nodiscard]] size_t getAdaptiveMaxMultiplier() const {
-            VALIDATE_AND_GET_PROFILE(3)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptiveMaxMultiplier)
             return conf.adaptive_max_multiplier;
         }
         [[nodiscard]] bool getAdaptiveStableCadence() const {
-            VALIDATE_AND_GET_PROFILE(false)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptiveStableCadence)
             return conf.adaptive_stable_cadence;
         }
         [[nodiscard]] float getFlowScale() const {
-            VALIDATE_AND_GET_PROFILE(1.0F)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::flowScale)
             return conf.flow_scale;
         }
         [[nodiscard]] bool getPerformanceMode() const {
-            VALIDATE_AND_GET_PROFILE(false)
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::performanceMode)
             return conf.performance_mode;
         }
         [[nodiscard]] int getPacingMode() const {
@@ -132,6 +142,38 @@ namespace mako::ui {
             VALIDATE_AND_GET_PROFILE(0)
             auto gpu = QString::fromStdString(conf.gpu.value_or("Default"));
             return static_cast<int>(this->m_gpu_list.indexOf(gpu));
+        }
+
+        [[nodiscard]] uint getMinimumMultiplier() const noexcept {
+            return static_cast<uint>(ls::GameConfLimits::minimumMultiplier);
+        }
+        [[nodiscard]] uint getMinimumBaseFPSCap() const noexcept {
+            return ls::GameConfLimits::minimumBaseFpsCap;
+        }
+        [[nodiscard]] uint getMaximumBaseFPSCap() const noexcept {
+            return ls::GameConfLimits::maximumBaseFpsCap;
+        }
+        [[nodiscard]] uint getMinimumTargetFPS() const noexcept {
+            return ls::GameConfLimits::minimumTargetFps;
+        }
+        [[nodiscard]] uint getMaximumTargetFPS() const noexcept {
+            return ls::GameConfLimits::maximumTargetFps;
+        }
+        [[nodiscard]] uint getMinimumAdaptiveMaxMultiplier() const noexcept {
+            return static_cast<uint>(
+                ls::GameConfLimits::minimumAdaptiveMaxMultiplier
+            );
+        }
+        [[nodiscard]] uint getMaximumAdaptiveMaxMultiplier() const noexcept {
+            return static_cast<uint>(
+                ls::GameConfLimits::maximumAdaptiveMaxMultiplier
+            );
+        }
+        [[nodiscard]] float getMinimumFlowScale() const noexcept {
+            return ls::GameConfLimits::minimumFlowScale;
+        }
+        [[nodiscard]] float getMaximumFlowScale() const noexcept {
+            return ls::GameConfLimits::maximumFlowScale;
         }
 
 #undef VALIDATE_AND_GET_PROFILE
@@ -181,7 +223,10 @@ namespace mako::ui {
         }
         void baseFPSCapUpdated(uint base_fps_cap) {
             VALIDATE_AND_GET_PROFILE()
-            conf.base_fps_cap = std::min(base_fps_cap, 1000U);
+            conf.base_fps_cap = std::min(
+                base_fps_cap,
+                static_cast<uint>(ls::GameConfLimits::maximumBaseFpsCap)
+            );
             MARK_DIRTY()
         }
         void adaptiveUpdated(bool adaptive) {
@@ -196,12 +241,20 @@ namespace mako::ui {
         }
         void targetFPSUpdated(uint target_fps) {
             VALIDATE_AND_GET_PROFILE()
-            conf.target_fps = std::clamp(target_fps, 10U, 1000U);
+            conf.target_fps = std::clamp(
+                target_fps,
+                static_cast<uint>(ls::GameConfLimits::minimumTargetFps),
+                static_cast<uint>(ls::GameConfLimits::maximumTargetFps)
+            );
             MARK_DIRTY()
         }
         void adaptiveMaxMultiplierUpdated(size_t adaptive_max_multiplier) {
             VALIDATE_AND_GET_PROFILE()
-            conf.adaptive_max_multiplier = std::clamp<size_t>(adaptive_max_multiplier, 2, 4);
+            conf.adaptive_max_multiplier = std::clamp(
+                adaptive_max_multiplier,
+                ls::GameConfLimits::minimumAdaptiveMaxMultiplier,
+                ls::GameConfLimits::maximumAdaptiveMaxMultiplier
+            );
             MARK_DIRTY()
         }
         void adaptiveStableCadenceUpdated(bool adaptive_stable_cadence) {

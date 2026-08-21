@@ -29,6 +29,8 @@ Local ZIPs are self-contained. Their generated manifest stores the embedded arch
 
 The ZIP keeps the established `Mako/` directory and installs to `~/homebrew/plugins/Mako` so a package replaces earlier versions instead of creating a second case-sensitive directory. This is an internal compatibility slug. The Decky manifest/listing name remains **MAKO - Frame Generation**, while project documentation, the frontend, and lifecycle logs identify the component as **MAKO Decky**.
 
+Profile sidecars remain canonical input and the generated `mako-run` file remains disposable cache during packaging and installation. `tests/test_configuration_boundaries.py` characterizes the exact wrapper and sidecar bytes produced by the pure generator/storage modules and the `ConfigurationService` facade; package verification remains necessary because those unit tests do not prove ZIP layout, permissions, or installed loader activation.
+
 Pass a path to choose the output location:
 
 ```bash
@@ -89,6 +91,8 @@ pnpm run dev:e2e       # Decky, both host layers, and all Flatpak bundles
 Each command deploys directly to Decky's installed MAKO Decky at `~/homebrew/plugins/Mako` and tells you to reload it from Decky's Developer menu. `dev:engine` calls MAKO Renderer's persistent incremental build, then atomically replaces only the private 64-bit host layer. It skips the archive, ZIP, Flatpak runtime matrix, 32-bit layer, CLI/UI, and full test suite, so it is for native 64-bit Steam-game testing only. Quit the game before deploying the engine. Use the regular package commands before publishing or testing release packaging.
 
 `dev:all` remains the fast native 64-bit loop. Use `dev:host` when you also need a genuine 32-bit Steam/Proton process, `dev:flatpaks` when testing the Flatpak Setup flow, and `dev:e2e` before a full local regression pass. The Flatpak commands build and place the three verified bundles in the installed plugin; open **Flatpak Setup** and choose **Update** for the target runtime to install a bundle into the application sandbox.
+
+The ordered Decky runtime list is owned by `shared_config.py`; backend bundle identities, frontend controls, and packaging/deployment loops derive from that contract. The Renderer build matrix remains independently owned by `engine/dist/flatpak/mako-render/runtime-versions.txt`, with a cross-component regression test requiring both boundaries to list the same versions.
 
 On SteamOS, the host commands require `lib32-glibc`; if `/usr/include/gnu/stubs-32.h` is missing despite the package appearing installed, reinstall it without `--needed`. The Flatpak commands additionally need `flatpak-builder`. The source-build guide gives the exact SteamOS commands for the former; for the latter use `sudo pacman -S flatpak-builder` while the SteamOS filesystem is temporarily writable.
 

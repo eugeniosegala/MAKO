@@ -1,6 +1,7 @@
 """Tests for Flatpak runtime-to-Vulkan-layer compatibility detection."""
 
 import sys
+import subprocess
 import tempfile
 from types import SimpleNamespace
 import unittest
@@ -16,8 +17,19 @@ sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 
 from py_modules.mako_plugin.flatpak_service import FlatpakService  # noqa: E402
 from py_modules.mako_plugin.constants import (  # noqa: E402
+    FLATPAK_23_08_FILENAME,
+    FLATPAK_24_08_FILENAME,
+    FLATPAK_25_08_FILENAME,
+    FLATPAK_EXTENSION_NAME,
+    FLATPAK_EXTENSION_PREFIX,
+    FLATPAK_HOST_ARCHITECTURE,
     FLATPAK_IMPLICIT_LAYER_DIR,
+    FLATPAK_RUNTIME_BUNDLES,
+    LIB_FILENAME,
+    LOCAL_LIB,
+    LOCAL_LIB32,
 )
+from shared_config import SUPPORTED_FLATPAK_RUNTIME_VERSIONS  # noqa: E402
 
 
 def _result(stdout="", stderr="", returncode=0):
@@ -29,6 +41,189 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
 
     def setUp(self):
         self.service = FlatpakService(logger=_Logger())
+
+    def test_runtime_descriptor_owns_bundle_and_extension_identity(self):
+        self.assertEqual(
+            tuple(FLATPAK_RUNTIME_BUNDLES),
+            SUPPORTED_FLATPAK_RUNTIME_VERSIONS,
+        )
+        for version, bundle in FLATPAK_RUNTIME_BUNDLES.items():
+            with self.subTest(version=version):
+                self.assertEqual(
+                    bundle.filename,
+                    f"{FLATPAK_EXTENSION_NAME}-{version}.flatpak",
+                )
+                self.assertEqual(
+                    bundle.extension_id,
+                    f"{FLATPAK_EXTENSION_NAME}/{FLATPAK_HOST_ARCHITECTURE}/{version}",
+                )
+                self.assertEqual(
+                    self.service._get_extension_id(version),
+                    bundle.extension_id,
+                )
+
+        self.assertEqual(
+            (
+                FLATPAK_23_08_FILENAME,
+                FLATPAK_24_08_FILENAME,
+                FLATPAK_25_08_FILENAME,
+            ),
+            tuple(
+                bundle.filename
+                for bundle in FLATPAK_RUNTIME_BUNDLES.values()
+            ),
+        )
+
+        self.service.extension_id_25_08 = "patched-extension-id"
+        self.assertEqual(
+            self.service._get_extension_id("25.08"),
+            "patched-extension-id",
+        )
+        self.assertIsNone(self.service._get_extension_id("26.08"))
+
+    def test_shell_tools_read_the_same_runtime_contract(self):
+        helper = (
+            Path(__file__).resolve().parents[1]
+            / "scripts/read_flatpak_runtime_contract.py"
+        )
+
+        def read(field):
+            return subprocess.run(
+                [sys.executable, str(helper), field],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+
+        self.assertEqual(
+            read("versions").splitlines(),
+            list(SUPPORTED_FLATPAK_RUNTIME_VERSIONS),
+        )
+        self.assertEqual(
+            read("bundles").splitlines(),
+            [bundle.filename for bundle in FLATPAK_RUNTIME_BUNDLES.values()],
+        )
+        self.assertEqual(read("summary"), "23.08, 24.08, and 25.08")
+        self.assertEqual(
+            read("renderer-paths").splitlines(),
+            [
+                LIB_FILENAME,
+                f"{LOCAL_LIB}/{LIB_FILENAME}",
+                f"{LOCAL_LIB32}/{LIB_FILENAME}",
+            ],
+        )
+
+    def test_renderer_and_decky_runtime_matrices_stay_aligned(self):
+        renderer_matrix_dir = (
+            Path(__file__).resolve().parents[2]
+            / "engine/dist/flatpak/mako-render"
+        )
+        renderer_versions = tuple(
+            line.strip()
+            for line in (
+                renderer_matrix_dir / "runtime-versions.txt"
+            ).read_text(encoding="utf-8").splitlines()
+            if line.strip() and not line.lstrip().startswith("#")
+        )
+
+        self.assertEqual(
+            renderer_versions,
+            SUPPORTED_FLATPAK_RUNTIME_VERSIONS,
+        )
+        llvm_versions = {
+            "23.08": "18",
+            "24.08": "20",
+            "25.08": "21",
+        }
+        normalized_manifests = []
+        for version in renderer_versions:
+            with self.subTest(version=version):
+                manifest = (
+                    renderer_matrix_dir
+                    / f"{FLATPAK_EXTENSION_NAME}_{version}.yml"
+                ).read_text(encoding="utf-8")
+                self.assertIn(f"id: {FLATPAK_EXTENSION_NAME}", manifest)
+                self.assertIn(f"runtime-version: '{version}'", manifest)
+                self.assertIn(f"branch: '{version}'", manifest)
+                self.assertIn(f"prefix: {FLATPAK_EXTENSION_PREFIX}", manifest)
+                self.assertIn(
+                    f"MAKO_LAYER_LIBRARY_PATH={FLATPAK_EXTENSION_PREFIX}"
+                    f"/lib64/{LIB_FILENAME}",
+                    manifest,
+                )
+                self.assertIn(
+                    f"MAKO_LAYER_LIBRARY_PATH={FLATPAK_EXTENSION_PREFIX}"
+                    f"/lib/i386-linux-gnu/{LIB_FILENAME}",
+                    manifest,
+                )
+                llvm_version = llvm_versions[version]
+                normalized_manifests.append(
+                    manifest.replace(version, "<runtime-version>")
+                    .replace(f"llvm{llvm_version}", "llvm<toolchain-version>")
+                )
+
+        self.assertTrue(normalized_manifests)
+        self.assertTrue(all(
+            manifest == normalized_manifests[0]
+            for manifest in normalized_manifests[1:]
+        ))
+
+    def test_runtime_status_preserves_public_fields_and_order(self):
+        self.service.check_flatpak_available = lambda: True
+        self.service._run_flatpak_command = lambda args, **_kwargs: (
+            _result(
+                f"{FLATPAK_EXTENSION_NAME}\tx86_64\t25.08\n"
+                f"{FLATPAK_EXTENSION_NAME}\tx86_64\t23.08\n"
+            )
+            if args == ["list", "--runtime"]
+            else self.fail(f"unexpected Flatpak command: {args}")
+        )
+
+        self.assertEqual(
+            self.service.get_extension_status(),
+            {
+                "success": True,
+                "message": (
+                    "23.08 runtime extension installed; "
+                    "25.08 runtime extension installed"
+                ),
+                "error": None,
+                "installed_23_08": True,
+                "installed_24_08": False,
+                "installed_25_08": True,
+            },
+        )
+
+    def test_runtime_status_failure_uses_the_same_generated_fields(self):
+        self.service.check_flatpak_available = lambda: False
+        self.service.flatpak_command = None
+
+        response = self.service.get_extension_status()
+
+        self.assertFalse(response["success"])
+        self.assertEqual(
+            {
+                key: value
+                for key, value in response.items()
+                if key.startswith("installed_")
+            },
+            {
+                f"installed_{version.replace('.', '_')}": False
+                for version in SUPPORTED_FLATPAK_RUNTIME_VERSIONS
+            },
+        )
+
+    def test_invalid_runtime_error_text_remains_stable(self):
+        expected_error = (
+            "Invalid version. Must be '23.08', '24.08', or '25.08'"
+        )
+        self.service._host_architecture_supported = lambda: True
+
+        install = self.service.install_extension("26.08")
+        uninstall = self.service.uninstall_extension("26.08")
+
+        self.assertEqual(install["error"], expected_error)
+        self.assertEqual(uninstall["error"], expected_error)
 
     def test_unsupported_host_cannot_install_or_activate_x86_flatpak_payload(self):
         self.service._host_architecture_supported = lambda: False

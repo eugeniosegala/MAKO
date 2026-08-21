@@ -3,14 +3,32 @@
 import json
 import logging
 import re
-import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, TypedDict, Union, cast
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
-from shared_config import CONFIG_SCHEMA_DEF, ConfigFieldType, get_defaults
+from shared_config import (
+    ADAPTIVE_MAX_MULTIPLIER_MAX,
+    ADAPTIVE_MAX_MULTIPLIER_MIN,
+    BASE_FPS_CAP_MAX,
+    BASE_FPS_CAP_MIN,
+    CONFIG_SCHEMA_DEF,
+    DEFAULT_PROFILE_NAME,
+    EXTERNAL_VULKAN_LAYER_VALUES,
+    FIXED_MULTIPLIER_MIN,
+    FLOW_SCALE_MAX,
+    FLOW_SCALE_MIN,
+    PROFILE_KIND_DEFAULT,
+    PROFILE_KIND_GAME,
+    PROFILE_KIND_MANUAL,
+    PROFILE_KIND_PROCESS,
+    PROFILE_KIND_VALUES,
+    TARGET_FPS_MAX,
+    TARGET_FPS_MIN,
+    ConfigFieldType,
+    get_defaults,
+)
 from .config_schema_generated import ConfigurationData, get_script_generation_logic, get_script_parsing_logic
 
 
@@ -24,7 +42,7 @@ class ConfigField:
 
 CONFIG_SCHEMA: Dict[str, ConfigField] = {
     name: ConfigField(
-        name=definition["name"],
+        name=name,
         field_type=ConfigFieldType(definition["fieldType"]),
         default=definition["default"],
         description=definition["description"],
@@ -43,8 +61,12 @@ PROFILE_TOML_FIELDS = {
     name for name, definition in CONFIG_SCHEMA_DEF.items()
     if definition["location"] in {"toml", "profile"}
 }
-DEFAULT_PROFILE_NAME = "mako"
-CURRENT_PROFILE_COMMENT = re.compile(r'^\s*#\s*decky-current-profile\s*=\s*"([^"]+)"\s*$')
+CONFIG_FORMAT_VERSION = 2
+LEGACY_CONFIG_FORMAT_VERSION = 1
+CURRENT_PROFILE_COMMENT_KEY = "decky-current-profile"
+CURRENT_PROFILE_COMMENT = re.compile(
+    rf'^\s*#\s*{re.escape(CURRENT_PROFILE_COMMENT_KEY)}\s*=\s*"([^"]+)"\s*$'
+)
 
 
 class ProfileData(TypedDict):
@@ -75,6 +97,16 @@ class ConfigurationManager:
             except (OSError, IOError, KeyError, TypeError) as error:
                 logging.getLogger(__name__).debug("DLL detection failed: %s", error)
         return defaults
+
+    @staticmethod
+    def _copy_profiles(
+            profiles: Dict[str, ConfigurationData],
+    ) -> Dict[str, ConfigurationData]:
+        """Copy the profile collection without retaining mutable config aliases."""
+        return {
+            name: cast(ConfigurationData, dict(config))
+            for name, config in profiles.items()
+        }
 
     @staticmethod
     def get_field_names() -> list[str]:
@@ -108,22 +140,37 @@ class ConfigurationManager:
                 value = str(value)
             validated[name] = value
 
-        if validated["multiplier"] < 2:
-            raise ValueError("multiplier must be 2 or greater")
-        if not 0 <= validated["base_fps_cap"] <= 240:
-            raise ValueError("base_fps_cap must be between 0 and 240")
-        if not 30 <= validated["target_fps"] <= 240:
-            raise ValueError("target_fps must be between 30 and 240")
-        if not 2 <= validated["adaptive_max_multiplier"] <= 4:
-            raise ValueError("adaptive_max_multiplier must be between 2 and 4")
-        if not 0.25 <= validated["flow_scale"] <= 1.0:
-            raise ValueError("flow_scale must be between 0.25 and 1.0")
-        if validated["pacing"] != "none":
+        if validated["multiplier"] < FIXED_MULTIPLIER_MIN:
+            raise ValueError(
+                f"multiplier must be {FIXED_MULTIPLIER_MIN} or greater"
+            )
+        if not BASE_FPS_CAP_MIN <= validated["base_fps_cap"] <= BASE_FPS_CAP_MAX:
+            raise ValueError(
+                "base_fps_cap must be between "
+                f"{BASE_FPS_CAP_MIN} and {BASE_FPS_CAP_MAX}"
+            )
+        if not TARGET_FPS_MIN <= validated["target_fps"] <= TARGET_FPS_MAX:
+            raise ValueError(
+                f"target_fps must be between {TARGET_FPS_MIN} and {TARGET_FPS_MAX}"
+            )
+        if not (
+            ADAPTIVE_MAX_MULTIPLIER_MIN
+            <= validated["adaptive_max_multiplier"]
+            <= ADAPTIVE_MAX_MULTIPLIER_MAX
+        ):
+            raise ValueError(
+                "adaptive_max_multiplier must be between "
+                f"{ADAPTIVE_MAX_MULTIPLIER_MIN} and "
+                f"{ADAPTIVE_MAX_MULTIPLIER_MAX}"
+            )
+        if not FLOW_SCALE_MIN <= validated["flow_scale"] <= FLOW_SCALE_MAX:
+            raise ValueError(
+                f"flow_scale must be between {FLOW_SCALE_MIN} and {FLOW_SCALE_MAX}"
+            )
+        if validated["pacing"] != CONFIG_SCHEMA["pacing"].default:
             raise ValueError("only pacing = 'none' is currently available")
         external_vulkan_layer = validated["external_vulkan_layer"].strip().lower()
-        if external_vulkan_layer not in {
-            "", "gamescope-wsi", "mangohud", "vkbasalt"
-        }:
+        if external_vulkan_layer not in EXTERNAL_VULKAN_LAYER_VALUES:
             raise ValueError(
                 "external_vulkan_layer must be empty, 'gamescope-wsi', "
                 "'mangohud', or 'vkbasalt'"
@@ -159,8 +206,9 @@ class ConfigurationManager:
     def generate_toml_content_multi_profile(profile_data: ProfileData) -> str:
         global_config = profile_data["global_config"]
         lines = [
-            "version = 2",
-            f"# decky-current-profile = {_toml_string(profile_data['current_profile'])}",
+            f"version = {CONFIG_FORMAT_VERSION}",
+            f"# {CURRENT_PROFILE_COMMENT_KEY} = "
+            f"{_toml_string(profile_data['current_profile'])}",
             "",
             "[global]",
         ]
@@ -204,7 +252,12 @@ class ConfigurationManager:
         for game in data.get("game", []):
             name = str(game.get("exe", DEFAULT_PROFILE_NAME))
             migrated_profile = dict(game)
-            migrated_profile["multiplier"] = max(2, int(migrated_profile.get("multiplier", 2)))
+            migrated_profile["multiplier"] = max(
+                FIXED_MULTIPLIER_MIN,
+                int(migrated_profile.get(
+                    "multiplier", FIXED_MULTIPLIER_MIN
+                )),
+            )
             profiles[name] = ConfigurationManager._config_from_profile(migrated_profile, global_config)
         if not profiles:
             profiles[DEFAULT_PROFILE_NAME] = ConfigurationManager.get_defaults()
@@ -221,9 +274,9 @@ class ConfigurationManager:
         only when a MAKO editor or migration later writes canonical config.
         """
         data = tomllib.loads(content)
-        if data.get("version") == 1:
+        if data.get("version") == LEGACY_CONFIG_FORMAT_VERSION:
             return ConfigurationManager._profile_data_from_previous_schema(data)
-        if data.get("version") != 2:
+        if data.get("version") != CONFIG_FORMAT_VERSION:
             raise ValueError("unsupported MAKO Renderer configuration version")
         global_config = dict(data.get("global", {}))
         global_config = {
@@ -278,7 +331,9 @@ class ConfigurationManager:
         if name in profile_data["profiles"]:
             raise ValueError(f"Profile '{name}' already exists")
         source = source_profile if source_profile in profile_data["profiles"] else profile_data["current_profile"]
-        return ProfileData(current_profile=profile_data["current_profile"], profiles={**profile_data["profiles"], name: dict(profile_data["profiles"][source])}, global_config=dict(profile_data["global_config"]))
+        profiles = ConfigurationManager._copy_profiles(profile_data["profiles"])
+        profiles[name] = cast(ConfigurationData, dict(profiles[source]))
+        return ProfileData(current_profile=profile_data["current_profile"], profiles=profiles, global_config=dict(profile_data["global_config"]))
 
     @staticmethod
     def delete_profile(profile_data: ProfileData, profile_name: str) -> ProfileData:
@@ -286,7 +341,7 @@ class ConfigurationManager:
             raise ValueError("Cannot delete the default profile")
         if profile_name not in profile_data["profiles"]:
             raise ValueError(f"Profile '{profile_name}' does not exist")
-        profiles = dict(profile_data["profiles"])
+        profiles = ConfigurationManager._copy_profiles(profile_data["profiles"])
         del profiles[profile_name]
         current = profile_data["current_profile"]
         if current == profile_name:
@@ -302,7 +357,12 @@ class ConfigurationManager:
         normalized = ConfigurationManager.normalize_profile_name(new_name)
         if normalized in profile_data["profiles"]:
             raise ValueError(f"Profile '{normalized}' already exists")
-        profiles = {normalized if name == old_name else name: value for name, value in profile_data["profiles"].items()}
+        profiles = {
+            normalized if name == old_name else name: config
+            for name, config in ConfigurationManager._copy_profiles(
+                profile_data["profiles"]
+            ).items()
+        }
         current = normalized if profile_data["current_profile"] == old_name else profile_data["current_profile"]
         return ProfileData(current_profile=current, profiles=profiles, global_config=dict(profile_data["global_config"]))
 
@@ -310,4 +370,10 @@ class ConfigurationManager:
     def set_current_profile(profile_data: ProfileData, profile_name: str) -> ProfileData:
         if profile_name not in profile_data["profiles"]:
             raise ValueError(f"Profile '{profile_name}' does not exist")
-        return ProfileData(current_profile=profile_name, profiles=dict(profile_data["profiles"]), global_config=dict(profile_data["global_config"]))
+        return ProfileData(
+            current_profile=profile_name,
+            profiles=ConfigurationManager._copy_profiles(
+                profile_data["profiles"]
+            ),
+            global_config=dict(profile_data["global_config"]),
+        )

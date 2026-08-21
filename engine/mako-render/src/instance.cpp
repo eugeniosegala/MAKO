@@ -1,13 +1,16 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "instance.hpp"
+
 #include "device_selection.hpp"
-#include "mako-common/helpers/paths.hpp"
+#include "pnext_chain.hpp"
+#include "present_diagnostics.hpp"
 #include "swapchain.hpp"
+
 #include "mako-common/configuration/detection.hpp"
 #include "mako-common/helpers/errors.hpp"
+#include "mako-common/helpers/paths.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
-#include "pnext_chain.hpp"
 
 #include <algorithm>
 #include <array>
@@ -126,11 +129,6 @@ namespace {
         std::string name;
         std::optional<std::string> previousValue;
     };
-
-    bool presentDiagnosticsEnabled() {
-        const char* value = std::getenv("MAKO_PRESENT_DIAGNOSTICS");
-        return value && std::string(value) != "0";
-    }
 
     std::string hdrFeedbackDiagnosticKey(
             const GamescopeHdrFeedbackSample& sample) {
@@ -625,7 +623,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
         ? insertedContext->second.diagnosticsId()
         : 0;
 
-    if (presentDiagnosticsEnabled()) {
+    if (present_diagnostics::enabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-create"
                   << " context=" << diagnosticsContextId
                   << " swapchain=" << swapchain
@@ -642,7 +640,7 @@ void Root::removeSwapchainContext(VkSwapchainKHR swapchain) {
         ? context->second.diagnosticsId()
         : 0;
     const size_t removed = this->swapchains.erase(swapchain);
-    if (presentDiagnosticsEnabled()) {
+    if (present_diagnostics::enabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-destroy"
                   << " context=" << diagnosticsContextId
                   << " swapchain=" << swapchain

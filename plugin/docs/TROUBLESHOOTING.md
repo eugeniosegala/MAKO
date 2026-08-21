@@ -17,7 +17,7 @@ Use **Disable MAKO Renderer on Next Launch** and restart the game if you need to
     ```
 
 2. Open MAKO Decky and select **Install MAKO Renderer**. Installing its ZIP alone does not replace the private renderer payload.
-3. Check the selected profile's `Lossless.dll` path, GPU choice, and **Active In** rule. Start with Fixed 2x before testing Adaptive settings.
+3. Check the selected profile's `Lossless.dll` path, GPU choice, and **Matched Processes** rule. Start with Fixed 2x before testing Adaptive settings.
 4. Test the game's V-Sync both on and off. Its own FPS limiter, VRR, or compositor configuration can affect frame pacing.
 
 For Heroic on SteamOS, use `/home/deck/.local/bin/mako-run` as the **Wrapper**, leave **Arguments** empty, and add no `%command%`. For an EmuDeck Flatpak emulator shortcut, prepare that emulator in **Flatpak Setup**, then use the same path as the shortcut's **Target** and leave EmuDeck's existing **Launch Options** unchanged. If **Wrapper path for this device** shows a different path, use the displayed value instead. See the [EmuDeck setup](../../README.md#emudeck).

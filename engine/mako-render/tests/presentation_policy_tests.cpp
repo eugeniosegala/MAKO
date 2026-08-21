@@ -126,17 +126,6 @@ int main() {
     expect(fixedWarmupRemaining == 0,
         "transient pipeline overlap trapped fixed mode in history warm-up");
 
-    expect(generatedDeliveryHealthy(0, 0),
-        "an empty delivery window should be healthy");
-    expect(!generatedDeliveryHealthy(1, 0),
-        "complete loss in a short window was incorrectly tolerated");
-    expect(!generatedDeliveryHealthy(19, 18),
-        "short evaluation windows must require complete delivery");
-    expect(generatedDeliveryHealthy(20, 19),
-        "one isolated miss in a full window should be tolerated");
-    expect(!generatedDeliveryHealthy(20, 18),
-        "persistent delivery pressure was incorrectly tolerated");
-
     RealFramePacer framePacer;
     const auto pacingStart = RealFramePacer::TimePoint{};
     expect(framePacer.schedule(pacingStart, 60) == pacingStart,

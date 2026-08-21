@@ -10,7 +10,6 @@
 #include "present_diagnostics.hpp"
 #include "pnext_chain.hpp"
 
-#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -33,6 +32,13 @@ namespace {
     using DiagnosticsContextScope = present_diagnostics::ContextScope;
     using present_diagnostics::logHistoryWarmup;
     using present_diagnostics::logPresentFallback;
+
+    constexpr auto renderFenceWaitBudget = std::chrono::milliseconds(150);
+    constexpr uint64_t renderFenceWaitBudgetNs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            renderFenceWaitBudget
+        ).count()
+    );
 
     bool presentDiagnosticsEnabled() {
         return present_diagnostics::enabled();
@@ -257,7 +263,7 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
                       << " multiplier=" << this->profile.multiplier
                       << " generated_per_real="
                       << (this->profile.frame_generation_enabled
-                            ? this->fixedFrameTimestamps.size() : 0)
+                            ? this->configuredFixedGeneratedFrames : 0)
                       << " observed_output_fps=" << observedOutputFps
                       << " generated_presented="
                       << this->diagnosticsState.fixedGeneratedFrames
@@ -417,24 +423,36 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         : (gamescopeHdrTransport
             ? this->fixedRefreshBudget.plan(
                 presentNow, this->gamescopeRefreshHz,
-                this->fixedFrameTimestamps.size()
+                this->configuredFixedGeneratedFrames
             )
-            : this->fixedFrameTimestamps.size());
+            : this->configuredFixedGeneratedFrames);
     if (!this->profile.adaptive &&
-            fixedGeneratedFrameCount < this->fixedFrameTimestamps.size()) {
+            fixedGeneratedFrameCount < this->configuredFixedGeneratedFrames) {
         this->diagnosticsState.fixedSkippedFrames +=
-            this->fixedFrameTimestamps.size() - fixedGeneratedFrameCount;
+            this->configuredFixedGeneratedFrames - fixedGeneratedFrameCount;
     }
-    plan.generatedFrameCount = this->profile.adaptive
-        ? adaptivePlan.size() : fixedGeneratedFrameCount;
-    plan.admittedGeneratedFrameCount = plan.generatedFrameCount;
+    plan.requestedGeneratedFrames = this->profile.adaptive
+        ? adaptivePlan
+        : GeneratedFramePlan::evenlySpaced(fixedGeneratedFrameCount);
+    plan.admittedGeneratedFrameCount = plan.requestedGeneratedFrames.size();
     plan.configuredAcquireTimeout = generatedImageAcquireTimeoutNs();
     return plan;
 }
 
+void Swapchain::reportAdaptiveDelivery(
+        const PresentationFramePlan& plan,
+        const size_t acceptedForPresentation) {
+    if (!this->adaptiveScheduler || plan.requestedGeneratedFrames.empty())
+        return;
+    this->adaptiveScheduler->reportGeneratedFrameDelivery({
+        .requested = plan.requestedGeneratedFrames.size(),
+        .acceptedForPresentation = acceptedForPresentation,
+    });
+}
+
 bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
         const bool gamescopeHdrTransport,
-        const size_t generatedFrameCount,
+        const PresentationFramePlan& plan,
         const DiagnosticsClock::time_point presentNow) {
     bool pipelineReady = true;
     if (gamescopeHdrTransport && this->frameState.renderFenceInFlight) {
@@ -453,13 +471,10 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
         }
     }
     if (gamescopeHdrTransport && !pipelineReady) {
-        if (this->adaptiveScheduler) {
-            this->adaptiveScheduler->reportGeneratedFrameDelivery(
-                generatedFrameCount, 0
-            );
-        }
+        this->reportAdaptiveDelivery(plan, 0);
         if (!this->profile.adaptive)
-            this->diagnosticsState.fixedSkippedFrames += generatedFrameCount;
+            this->diagnosticsState.fixedSkippedFrames +=
+                plan.requestedGeneratedFrames.size();
         const auto busy = this->recoveryState.pipelineBusyRecovery.reportBusy(presentNow);
         if (busy.requestHistoryWarmup)
             this->ensureHistoryWarmup();
@@ -474,7 +489,7 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
                       << std::chrono::duration<double, std::milli>(
                              busy.duration
                          ).count()
-                      << " planned=" << generatedFrameCount
+                      << " planned=" << plan.requestedGeneratedFrames.size()
                       << " history_action="
                       << (busy.requestHistoryWarmup
                           ? "warmup-requested" : "preserved")
@@ -505,7 +520,7 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
 bool Swapchain::prepareRenderFence(const vk::Vulkan& vk) {
     if (this->frameState.renderFenceInFlight) {
         const bool fenceSignaled = this->renderFence->wait(
-            vk, 150ULL * 1000 * 1000
+            vk, renderFenceWaitBudgetNs
         );
         if (!fenceSignaled)
             return false;
@@ -517,19 +532,18 @@ bool Swapchain::prepareRenderFence(const vk::Vulkan& vk) {
 
 void Swapchain::handleRenderFenceBudgetMiss(
         const PresentationFramePlan& plan) {
-    std::cerr << "MAKO Renderer: previous render work missed the 150 ms "
+    std::cerr << "MAKO Renderer: previous render work missed the "
+              << renderFenceWaitBudget.count() << " ms "
                  "fence budget; bypassing frame generation for this present; "
                  "native presentation retained\n";
     if (this->adaptiveScheduler) {
-        this->adaptiveScheduler->reportGeneratedFrameDelivery(
-            plan.generatedFrameCount, 0
-        );
+        this->reportAdaptiveDelivery(plan, 0);
         this->adaptiveScheduler->cancelHistoryWarmup();
     } else if (!plan.historyWarmupActive) {
         // Fixed history warmup was already recorded as skipped when the plan
         // was built, so count only a delivery that was still intended.
         this->diagnosticsState.fixedSkippedFrames +=
-            plan.generatedFrameCount;
+            plan.requestedGeneratedFrames.size();
     }
     this->recoveryState.backendPending = true;
     this->recoveryState.historyWarmupRemaining = 0;
@@ -537,7 +551,7 @@ void Swapchain::handleRenderFenceBudgetMiss(
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=render-fence-budget-missed"
                   << " context=" << this->diagnosticsState.contextId
-                  << " planned=" << plan.generatedFrameCount
+                  << " planned=" << plan.requestedGeneratedFrames.size()
                   << " action=native-present\n";
     }
 }
@@ -545,13 +559,13 @@ void Swapchain::handleRenderFenceBudgetMiss(
 void Swapchain::preacquireGeneratedImages(
         const PresentInvocation& invocation,
         PresentationFramePlan& plan) {
-    if (!plan.generatedFrameCount || plan.historyWarmupActive)
+    if (plan.requestedGeneratedFrames.empty() || plan.historyWarmupActive)
         return;
 
     plan.admittedGeneratedFrameCount = 0;
     bool logPressure = false;
     VkResult lastAcquireResult = VK_SUCCESS;
-    for (size_t i = 0; i < plan.generatedFrameCount; ++i) {
+    for (size_t i = 0; i < plan.requestedGeneratedFrames.size(); ++i) {
         uint32_t acquiredImage{};
         const auto acquireStarted = startPresentDiagnostic();
         lastAcquireResult = invocation.vk.df().AcquireNextImageKHR(
@@ -587,7 +601,8 @@ void Swapchain::preacquireGeneratedImages(
         );
     }
 
-    if (plan.admittedGeneratedFrameCount == plan.generatedFrameCount) {
+    if (plan.admittedGeneratedFrameCount ==
+            plan.requestedGeneratedFrames.size()) {
         const auto recovery = this->recoveryState.generatedImageAdmission.reportAvailable();
         if (recovery.resumed && presentDiagnosticsEnabled()) {
             std::cerr << "MAKO Renderer: present diagnostics: "
@@ -603,13 +618,14 @@ void Swapchain::preacquireGeneratedImages(
     this->recoveryState.generatedImageAdmission.reportBypassedFrame();
     if (!this->profile.adaptive) {
         this->diagnosticsState.fixedSkippedFrames +=
-            plan.generatedFrameCount - plan.admittedGeneratedFrameCount;
+            plan.requestedGeneratedFrames.size() -
+                plan.admittedGeneratedFrameCount;
     }
     if (logPressure && presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=generated-admission-pressure"
                   << " context=" << this->diagnosticsState.contextId
-                  << " planned=" << plan.generatedFrameCount
+                  << " planned=" << plan.requestedGeneratedFrames.size()
                   << " admitted=" << plan.admittedGeneratedFrameCount
                   << " acquire_timeout_ns=0"
                   << " action=native-first\n";
@@ -714,18 +730,18 @@ VkResult Swapchain::presentHistoryOnly(
     }
 
     this->frameState.backendFrameIndex++;
-    if (plan.generatedFrameCount > plan.admittedGeneratedFrameCount) {
+    if (plan.requestedGeneratedFrames.size() >
+            plan.admittedGeneratedFrameCount) {
         logPresentFallback(
             this->frameState.realFrameIndex, this->frameState.sequenceIndex, 0,
-            plan.generatedFrameCount - plan.admittedGeneratedFrameCount,
+            plan.requestedGeneratedFrames.size() -
+                plan.admittedGeneratedFrameCount,
             sourceTimelineValue, "nonblocking-admission", "history-only"
         );
     }
-    if (this->adaptiveScheduler && plan.generatedFrameCount > 0) {
-        this->adaptiveScheduler->reportGeneratedFrameDelivery(
-            plan.generatedFrameCount, plan.admittedGeneratedFrameCount
-        );
-    }
+    this->reportAdaptiveDelivery(
+        plan, plan.admittedGeneratedFrameCount
+    );
 
     if (this->adaptiveScheduler &&
             this->adaptiveScheduler->historyWarmupActive()) {
@@ -765,7 +781,7 @@ VkResult Swapchain::presentGeneratedFrames(
         const PresentInvocation& invocation,
         const PresentationFramePlan& plan,
         const bool gamescopeHdrTransport) {
-    for (size_t i = 0; i < plan.scheduledGeneratedFrameCount; ++i) {
+    for (size_t i = 0; i < plan.scheduledGeneratedFrames.size(); ++i) {
         auto& postCopy = this->postCopySemaphores.at(
             this->frameState.sequenceIndex % this->postCopySemaphores.size()
         );
@@ -801,16 +817,14 @@ VkResult Swapchain::presentGeneratedFrames(
             // its final timeline value without reclassifying the miss as an
             // adaptive timing discontinuity.
             const size_t skippedFrames =
-                plan.scheduledGeneratedFrameCount - i;
+                plan.scheduledGeneratedFrames.size() - i;
             if (!this->profile.adaptive)
                 this->diagnosticsState.fixedSkippedFrames += skippedFrames;
             const uint64_t finalGeneratedTimelineValue =
                 this->frameState.sequenceIndex + skippedFrames - 1;
             auto& fallbackSemaphore = postCopy.second;
             if (this->adaptiveScheduler) {
-                this->adaptiveScheduler->reportGeneratedFrameDelivery(
-                    plan.generatedFrameCount, i
-                );
+                this->reportAdaptiveDelivery(plan, i);
             }
 
             auto& fallbackCommandBuffer = pass.commandBuffer;
@@ -846,7 +860,8 @@ VkResult Swapchain::presentGeneratedFrames(
                 std::cerr << "MAKO Renderer: present diagnostics: "
                              "operation=generated-delivery-miss"
                           << " context=" << this->diagnosticsState.contextId
-                          << " planned=" << plan.generatedFrameCount
+                          << " planned="
+                          << plan.requestedGeneratedFrames.size()
                           << " on_time=" << i
                           << " deadline_ms="
                           << static_cast<double>(
@@ -914,10 +929,10 @@ VkResult Swapchain::presentGeneratedFrames(
             std::move(waitSemaphores),
             this->syncSemaphore->handle(), this->frameState.sequenceIndex,
             std::move(signalSemaphores), VK_NULL_HANDLE, 0,
-            i == plan.scheduledGeneratedFrameCount - 1
+            i == plan.scheduledGeneratedFrames.size() - 1
                 ? this->renderFence->handle() : VK_NULL_HANDLE
         );
-        if (i == plan.scheduledGeneratedFrameCount - 1)
+        if (i == plan.scheduledGeneratedFrames.size() - 1)
             this->frameState.renderFenceInFlight = true;
         logSlowPresentOperation(
             "submit-generated-copy", this->frameState.realFrameIndex,
@@ -962,11 +977,9 @@ VkResult Swapchain::presentGeneratedFrames(
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
 
-    if (this->adaptiveScheduler) {
-        this->adaptiveScheduler->reportGeneratedFrameDelivery(
-            plan.generatedFrameCount, plan.scheduledGeneratedFrameCount
-        );
-    }
+    this->reportAdaptiveDelivery(
+        plan, plan.scheduledGeneratedFrames.size()
+    );
     logSlowPresentOperation(
         "present-total", this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, invocation.started, result
@@ -1039,30 +1052,23 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     // real frame behind unfinished private work. Ordered SDR retains the
     // synchronous FIFO/fence behavior.
     if (!this->generationPipelineReady(
-            vk, gamescopeHdrTransport,
-            plan.generatedFrameCount, presentNow)) {
+            vk, gamescopeHdrTransport, plan, presentNow)) {
         return this->presentNativeFrame(invocation);
     }
 
     if (gamescopeHdrTransport)
         this->preacquireGeneratedImages(invocation, plan);
-    plan.scheduledGeneratedFrameCount = gamescopeHdrTransport
+    const size_t scheduledGeneratedFrameCount = gamescopeHdrTransport
         ? plan.admittedGeneratedFrameCount
-        : plan.generatedFrameCount;
+        : plan.requestedGeneratedFrames.size();
+    plan.scheduledGeneratedFrames = scheduleAdmittedGeneratedFrames(
+        plan.requestedGeneratedFrames, scheduledGeneratedFrameCount
+    );
     const bool bypassGeneratedFrames = plan.historyWarmupActive ||
-        plan.scheduledGeneratedFrameCount == 0;
+        plan.scheduledGeneratedFrames.empty();
     if (plan.historyWarmupActive && !this->profile.adaptive)
-        this->diagnosticsState.fixedSkippedFrames += plan.generatedFrameCount;
-
-    std::array<float, 3> scheduledTimestamps{};
-    for (size_t i = 0; i < plan.scheduledGeneratedFrameCount; ++i) {
-        scheduledTimestamps.at(i) = fixedFrameTimestamp(
-            i, plan.scheduledGeneratedFrameCount + 1
-        );
-    }
-    const std::span<const float> timestamps{
-        scheduledTimestamps.data(), plan.scheduledGeneratedFrameCount
-    };
+        this->diagnosticsState.fixedSkippedFrames +=
+            plan.requestedGeneratedFrames.size();
 
     // Resolve previous application-device work before scheduling another
     // backend frame. If the fence budget is missed, no new backend work has
@@ -1075,7 +1081,9 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     if (!bypassGeneratedFrames) {
         const auto scheduleStarted = startPresentDiagnostic();
         try {
-            this->instance.get().scheduleFrames(this->ctx.get(), timestamps);
+            this->instance.get().scheduleFrames(
+                this->ctx.get(), plan.scheduledGeneratedFrames.timestamps()
+            );
         } catch (const std::exception& error) {
             std::cerr << "MAKO Renderer: temporarily bypassing frame generation after "
                          "backend scheduling failure; native presentation retained: "
@@ -1083,9 +1091,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->recoveryState.backendPending = true;
             this->recoveryState.historyWarmupRemaining = 0;
             if (this->adaptiveScheduler) {
-                this->adaptiveScheduler->reportGeneratedFrameDelivery(
-                    plan.generatedFrameCount, 0
-                );
+                this->reportAdaptiveDelivery(plan, 0);
                 this->adaptiveScheduler->cancelHistoryWarmup();
             } else {
                 this->diagnosticsState.fixedSkippedFrames +=

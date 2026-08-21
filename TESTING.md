@@ -23,11 +23,20 @@ The `Tests` GitHub Actions workflow runs on every pull request and push to `main
 
 - **MAKO Decky:** the Python backend suite, focused frontend behavior tests with coverage thresholds, and the production Decky bundle build;
 - **MAKO Renderer:** the complete non-hardware CTest suite with both GCC and Clang on Linux;
-- **Renderer sanitizers:** the portable scheduling, presentation-policy, profile, transition, and colour-math boundaries under AddressSanitizer and UndefinedBehaviorSanitizer.
+- **Renderer sanitizers:** the portable scheduling, generated-frame-plan, presentation-policy, profile, transition, and colour-math boundaries under AddressSanitizer and UndefinedBehaviorSanitizer; and
+- **Trace producer:** safe capture staging, sanitization, metadata, checksum, containment, rollback, and concurrent no-clobber behavior on Linux and macOS.
 
 The Renderer suite also exercises the standalone `mako-launch` contract: deterministic implicit-layer selection, loader activation, LSFG-VK conflict guards, the Gamescope WSI/HDR process-start boundary, advanced environment forwarding, argument quoting, input validation, and child exit-status propagation. The packaged hardware smoke test proves instance/device insertion with `vulkaninfo` and, when a graphical compositor and `vkcube` are available, covers finite swapchain creation and presentation too. Presentation changes must preserve the invariants and expanded matrix in [WSI isolation](engine/docs/WSI-ISOLATION.md) and [HDR pipeline architecture](engine/docs/HDR-PIPELINE.md).
 
-The frontend suite intentionally tests operations where a UI/backend disagreement can damage or misrepresent user state: Renderer installation, configuration persistence, out-of-order profile loads, profile switching, default-profile protection, and Decky RPC method names. It does not use snapshots or test static labels and layout.
+The frontend suite intentionally tests operations where a UI/backend disagreement can damage or misrepresent user state: Renderer installation, configuration persistence, deferred Target FPS writes, profile runtime-session transitions, out-of-order profile loads, profile switching, default-profile protection, persistent section state, and Decky RPC method names. It does not use snapshots or test static labels and layout.
+
+The backend suite characterizes the exact generated wrapper and profile-sidecar bytes at the pure-module/service boundary. These tests ensure refactoring cannot silently change wrapper ordering, safety exports, profile metadata, or the allowlisted Decky-only settings that are merged with Renderer TOML.
+
+The Decky binding freshness gate is `npm --prefix plugin run check:generated-config`. It is read-only and fails when the tracked TypeScript or Python binding differs from `plugin/shared_config.py` and its generators; normal Decky build, watch, and backend-test commands invoke the same check automatically.
+
+The Decky localization gate is `npm --prefix plugin run check:i18n`. It verifies the ordered string-only dictionary contract, language metadata, Steam aliases, named-placeholder parity, static call-site keys and English fallbacks, exact replacement fields, complete template usage, and the tracked `src/i18n/languages.json` bundle without writing files. Intentional dictionary changes regenerate that tracked bundle with `npm --prefix plugin run generate:i18n`; frontend tests exercise language normalization, translated replacement, and safe English/unsupported-language fallbacks.
+
+The Renderer portable suite also verifies the adjacent GLSL source hashes and embedded payload hashes recorded for HDR colour-conversion SPIR-V. Regenerate `engine/mako-backend/src/shaders/color_conversion_spirv.hpp` and its hash manifest with `engine/scripts/generate-color-conversion-spirv.py` and `glslangValidator` when any owned conversion shader changes.
 
 The Decky job also runs the repository Markdown formatting check. Install the tracked local hook once with `just install-hooks`; it formats only staged Markdown through lint-staged, preserves partially staged work, and leaves JS/TS, Python, C++, generated output, and vendored code untouched.
 
@@ -37,6 +46,9 @@ Run the same gates locally with:
 
 ```bash
 just check-markdown-format
+./scripts/test-capture-trace.sh
+npm --prefix plugin run check:generated-config
+npm --prefix plugin run check:i18n
 npm --prefix plugin test
 npm --prefix plugin run test:frontend:typecheck
 npm --prefix plugin run test:frontend:coverage
@@ -86,6 +98,14 @@ The hardware workflow establishes packaging, loader activation, and deterministi
 
 Use `scripts/capture-trace.sh` after a completed game session to archive comparative evidence into a sibling **private** `MAKO-Traces` checkout. Read the [trace extractor guide](TRACES.md) first. Keep the private repository outside the MAKO worktree so licensed paths, large runtime logs, and subjective notes never become product artifacts; it is not required for normal MAKO builds, tests, packaging, installation, or releases.
 
+The public producer contract test is private-data-free and runs in pull-request CI:
+
+```bash
+./scripts/test-capture-trace.sh
+```
+
+It characterizes safe component normalization and containment, exact offset-aware timestamp ordering, common credential redaction, stable metadata identity fields, canonical checksums, aligned notes headings, validator rollback, concurrent no-clobber publication, and the single-path success output without requiring a MAKO-Traces checkout containing real evidence.
+
 The capture command requires a game name, explicit archive version label, and session start time. Development builds must include their source identity rather than masquerading as a released version. The script stores sanitized diagnostics and configuration, optionally clips Decky and Steam logs to the session window, records the exact MAKO source revision and host identity, generates an event index and notes template, rejects likely credentials, and writes checksums without overwriting an existing capture.
 
 ```bash
@@ -101,4 +121,4 @@ The capture command requires a game name, explicit archive version label, and se
   --steam-log "$HOME/.steam/steam/logs/console-linux.txt"
 ```
 
-Close the game first so buffered records are complete, then capture before launching another game because the development wrapper starts each session with a fresh presentation log. Validate the resulting archive with `../MAKO-Traces/scripts/validate.sh`. A stored trace supports repeatable comparison; a single run does not by itself prove a performance or image-quality regression.
+Close the game first so buffered records are complete, then capture before launching another game because the development wrapper starts each session with a fresh presentation log. The producer invokes the sibling validator when it is available; review the resulting private diff and run `./scripts/check.sh` from MAKO-Traces before committing it (`just check` is the equivalent convenience alias). A stored trace supports repeatable comparison; a single run does not by itself prove a performance or image-quality regression.

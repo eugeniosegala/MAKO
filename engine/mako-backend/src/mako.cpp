@@ -27,6 +27,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <cstdlib>
@@ -225,7 +226,12 @@ bool Instance::supportsPackedHdr10Transport() const {
 }
 
 namespace {
-    constexpr uint64_t previousWorkFenceTimeoutNs = 250'000'000ULL;
+    constexpr auto previousWorkFenceTimeout = std::chrono::milliseconds(250);
+    constexpr uint64_t previousWorkFenceTimeoutNs = static_cast<uint64_t>(
+        std::chrono::duration_cast<std::chrono::nanoseconds>(
+            previousWorkFenceTimeout
+        ).count()
+    );
     constexpr size_t maximumRetiredContextCount = 2;
 
     /// find the cache file path
@@ -778,7 +784,8 @@ bool Instance::contextReady(const Context& context) const {
 void Context::prepareWork() {
     if (this->workScheduled && !this->cmdbufFence.wait(
             this->ctx.vk, previousWorkFenceTimeoutNs)) {
-        std::cerr << "MAKO Renderer: backend work fence timed out after 250 ms; "
+        std::cerr << "MAKO Renderer: backend work fence timed out after "
+                  << previousWorkFenceTimeout.count() << " ms; "
                      "aborting frame scheduling\n";
         throw backend::error("Timeout waiting for previous frame to complete");
     }
@@ -927,7 +934,8 @@ void Instance::closeContext(const Context& context) {
     // Never issue a device-wide indefinite wait while the game is replacing a
     // swapchain. Keep the exceptional in-flight context alive and reclaim it
     // on a later open/close once its own completion fence signals.
-    std::cerr << "MAKO Renderer: backend context did not retire within 250 ms; "
+    std::cerr << "MAKO Renderer: backend context did not retire within "
+              << previousWorkFenceTimeout.count() << " ms; "
                  "deferring resource destruction\n";
     this->m_retiredContexts.push_back(std::move(*it));
     this->m_contexts.erase(it);

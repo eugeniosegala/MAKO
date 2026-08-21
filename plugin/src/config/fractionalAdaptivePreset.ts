@@ -1,7 +1,9 @@
-import type { ConfigurationData } from "./configSchema";
+import { getDefaults, type ConfigurationData } from "./configSchema";
+
+const DEFAULT_CONFIGURATION = getDefaults();
 
 export function adaptiveModeChanges(
-  enabled: boolean
+  enabled: boolean,
 ): Partial<ConfigurationData> {
   if (!enabled) {
     return { adaptive: false };
@@ -9,18 +11,24 @@ export function adaptiveModeChanges(
 
   return {
     adaptive: true,
-    adaptive_auto_base_fps_cap: true
+    adaptive_auto_base_fps_cap: true,
   };
 }
 
-export function isFractionalAdaptivePresetEnabled(config: ConfigurationData): boolean {
-  return (config.frame_generation_enabled ?? true)
-    && config.adaptive
-    && !(config.adaptive_auto_base_fps_cap ?? true);
+export function isFractionalAdaptivePresetEnabled(
+  config: ConfigurationData,
+): boolean {
+  return (
+    (config.frame_generation_enabled ??
+      DEFAULT_CONFIGURATION.frame_generation_enabled) &&
+    config.adaptive &&
+    !(config.adaptive_auto_base_fps_cap ??
+      DEFAULT_CONFIGURATION.adaptive_auto_base_fps_cap)
+  );
 }
 
 export function fractionalAdaptivePresetChanges(
-  enabled: boolean
+  enabled: boolean,
 ): Partial<ConfigurationData> {
   if (!enabled) {
     return { adaptive_auto_base_fps_cap: true };
@@ -29,6 +37,6 @@ export function fractionalAdaptivePresetChanges(
   return {
     frame_generation_enabled: true,
     adaptive: true,
-    adaptive_auto_base_fps_cap: false
+    adaptive_auto_base_fps_cap: false,
   };
 }

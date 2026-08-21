@@ -37,15 +37,8 @@ cmake -S "$repo_root" -B "$build_root" -G "$generator" \
     -DMAKO_BUILD_CLI=OFF \
     -DMAKO_ENABLE_SANITIZERS="$sanitizer_mode" \
     -DBUILD_TESTING=ON
-cmake --build "$build_root" --target \
-    mako-device-selection-tests \
-    mako-profile-update-tests \
-    mako-runtime-transition-tests \
-    mako-presentation-policy-tests \
-    mako-adaptive-tests \
-    mako-adaptive-matrix \
-    mako-hdr-color-math-tests
+cmake --build "$build_root" --target mako-portable-policy-test-binaries
 ctest --test-dir "$build_root" --output-on-failure \
-    -R '^(standalone-launcher|device-selection|profile-update|runtime-transition|presentation-policy|adaptive-scheduler|adaptive-scheduler-matrix|hdr-color-math)$'
+    -L '^portable-policy$'
 
 echo "MAKO Renderer portable policy tests passed."

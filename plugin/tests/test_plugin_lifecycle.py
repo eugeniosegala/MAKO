@@ -4,6 +4,7 @@ import asyncio
 import sys
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 
 class _Logger:
@@ -14,9 +15,70 @@ class _Logger:
 sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 
 from py_modules.mako_plugin.plugin import Plugin  # noqa: E402
+from py_modules.mako_plugin import plugin as plugin_module  # noqa: E402
 
 
 class PluginLifecycleTests(unittest.TestCase):
+    def test_decky_migration_preserves_every_legacy_package_location(self):
+        calls = []
+        plugin = Plugin.__new__(Plugin)
+
+        with (
+            patch.object(
+                plugin_module.decky,
+                "DECKY_USER_HOME",
+                "/home/deck",
+                create=True,
+            ),
+            patch.object(
+                plugin_module.decky,
+                "DECKY_HOME",
+                "/home/deck/homebrew",
+                create=True,
+            ),
+            patch.object(
+                plugin_module.decky,
+                "migrate_logs",
+                side_effect=lambda source: calls.append(("logs", source)),
+                create=True,
+            ),
+            patch.object(
+                plugin_module.decky,
+                "migrate_settings",
+                side_effect=lambda source, destination: calls.append(
+                    ("settings", source, destination)
+                ),
+                create=True,
+            ),
+            patch.object(
+                plugin_module.decky,
+                "migrate_runtime",
+                side_effect=lambda source, destination: calls.append(
+                    ("runtime", source, destination)
+                ),
+                create=True,
+            ),
+        ):
+            asyncio.run(plugin._migration())
+
+        self.assertEqual(calls, [
+            (
+                "logs",
+                "/home/deck/.config/decky-lossless-scaling-vk/"
+                "lossless-scaling-vk.log",
+            ),
+            (
+                "settings",
+                "/home/deck/homebrew/settings/lossless-scaling-vk.json",
+                "/home/deck/.config/decky-lossless-scaling-vk",
+            ),
+            (
+                "runtime",
+                "/home/deck/homebrew/lossless-scaling-vk",
+                "/home/deck/.local/share/decky-lossless-scaling-vk",
+            ),
+        ])
+
     def test_main_runs_every_current_startup_migration(self):
         calls = []
         plugin = Plugin.__new__(Plugin)

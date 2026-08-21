@@ -3,6 +3,21 @@ Constants for the MAKO Decky.
 """
 
 from pathlib import Path
+from typing import NamedTuple
+
+from shared_config import (
+    EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
+    EXTERNAL_VULKAN_LAYER_MANGOHUD,
+    EXTERNAL_VULKAN_LAYER_VKBASALT,
+    MAKO_WRAPPER_RELATIVE_PATH,
+    PER_GAME_WRAPPER_FLATPAK_APP_IDS,
+    SUPPORTED_FLATPAK_RUNTIME_VERSIONS,
+)
+
+from .package_paths import PLUGIN_ROOT
+
+
+PER_GAME_WRAPPER_FLATPAK_APPS = frozenset(PER_GAME_WRAPPER_FLATPAK_APP_IDS)
 
 MAKO_ROOT = ".local/share/mako-render"
 LOCAL_LIB = f"{MAKO_ROOT}/lib"
@@ -14,15 +29,35 @@ GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR = (
 USER_VULKAN_LAYER_DIR = ".local/share/vulkan/implicit_layer.d"
 CONFIG_DIR = ".config/mako-render"
 
-SCRIPT_NAME = ".local/bin/mako-run"
+SCRIPT_NAME = MAKO_WRAPPER_RELATIVE_PATH
 DIAGNOSTICS_SCRIPT_NAME = ".local/bin/mako-diagnostics"
-DIAGNOSTICS_HELPER_FILENAME = "mako-diagnostics"
+DIAGNOSTICS_HELPER_FILENAME = Path(DIAGNOSTICS_SCRIPT_NAME).name
 
 # Avoid persistent Gamescope presentation stalls by giving the generated-image
 # acquisition path a bounded first wait. During backoff, the engine probes
 # availability before scheduling inference and periodically reuses this bound
 # to avoid missing the compositor's image-release window indefinitely.
 PRESENT_ACQUIRE_TIMEOUT_MS = 50
+PRESENT_ACQUIRE_TIMEOUT_ENV = "MAKO_PRESENT_ACQUIRE_TIMEOUT_MS"
+PRESENT_DIAGNOSTICS_ENV = "MAKO_PRESENT_DIAGNOSTICS"
+PRESENT_DIAGNOSTICS_LOG_ENV = "MAKO_PRESENT_DIAGNOSTICS_LOG"
+PRESENT_DIAGNOSTICS_LOG_FILENAME = "present-diagnostics.log"
+MAKO_PROFILE_ENV = "MAKO_PROFILE"
+MAKO_PROFILE_FALLBACK_ENV = "MAKO_PROFILE_FALLBACK"
+STEAM_APP_ID_ENV_KEYS = (
+    "SteamAppId",
+    "SteamGameId",
+    "STEAM_COMPAT_APP_ID",
+)
+STEAM_DECK_MODE_ENV = "SteamDeck"
+ZINK_GLX_VENDOR_ENV = "__GLX_VENDOR_LIBRARY_NAME"
+ZINK_MESA_LOADER_ENV = "MESA_LOADER_DRIVER_OVERRIDE"
+ZINK_GALLIUM_DRIVER_ENV = "GALLIUM_DRIVER"
+ZINK_GLX_VENDOR_VALUE = "mesa"
+ZINK_DRIVER_VALUE = "zink"
+SDL_AUDIO_DRIVER_ENV = "SDL_AUDIODRIVER"
+SDL_AUDIO_DRIVER_ALSA_VALUE = "alsa"
+WINE_DLL_OVERRIDES_ENV = "WINEDLLOVERRIDES"
 CONFIG_FILENAME = "conf.toml"
 # The engine reads conf.toml directly, so Decky-only launcher settings must be
 # stored separately rather than adding unknown keys to an upstream profile.
@@ -57,18 +92,14 @@ COMPETING_LSFG_DISABLE_ENVS = (
 HOST_SYSTEM_IMPLICIT_LAYER_DIR = Path("/usr/share/vulkan/implicit_layer.d")
 GAMESCOPE_WSI_MANIFEST_FILENAME_64 = "VkLayer_FROG_gamescope_wsi.x86_64.json"
 EXTERNAL_VULKAN_LAYER_ENV = "MAKO_EXTERNAL_VULKAN_LAYER"
-EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI = "gamescope-wsi"
-EXTERNAL_VULKAN_LAYER_MANGOHUD = "mangohud"
-EXTERNAL_VULKAN_LAYER_VKBASALT = "vkbasalt"
 MAKO_LAYER_BUILD_MARKER = (
-    b"MAKO Renderer: render layer active; identity="
-    b"VK_LAYER_MAKO_render; build="
-)
+    f"MAKO Renderer: render layer active; identity={MAKO_LAYER_NAME}; build="
+).encode("ascii")
 # Decky's generated wrapper relies on the renderer understanding this
 # low-priority profile selector. Keep it as a payload compatibility marker so
 # an older same-name renderer cannot be installed alongside a newer wrapper
 # and silently remain inactive in Heroic or an emulator Flatpak.
-MAKO_PROFILE_FALLBACK_MARKER = b"MAKO_PROFILE_FALLBACK"
+MAKO_PROFILE_FALLBACK_MARKER = MAKO_PROFILE_FALLBACK_ENV.encode("ascii")
 JSON_FILENAME = "VkLayer_MAKO_render.json"
 JSON32_FILENAME = "VkLayer_MAKO_render.x86.json"
 CLI_FILENAME = "mako-cli"
@@ -81,17 +112,46 @@ FLATPAK_EXTENSION_NAME = "org.freedesktop.Platform.VulkanLayer.makorender"
 FLATPAK_HOST_ARCHITECTURE = "x86_64"
 FLATPAK_EXTENSION_PREFIX = "/usr/lib/extensions/vulkan/makorender"
 FLATPAK_IMPLICIT_LAYER_DIR = f"{FLATPAK_EXTENSION_PREFIX}/share/vulkan/implicit_layer.d"
-FLATPAK_23_08_FILENAME = f"{FLATPAK_EXTENSION_NAME}-23.08.flatpak"
-FLATPAK_24_08_FILENAME = f"{FLATPAK_EXTENSION_NAME}-24.08.flatpak"
-FLATPAK_25_08_FILENAME = f"{FLATPAK_EXTENSION_NAME}-25.08.flatpak"
+
+
+class FlatpakRuntimeBundle(NamedTuple):
+    """Identity of one bundled Freedesktop Vulkan-layer runtime."""
+
+    filename: str
+    extension_id: str
+
+
+FLATPAK_RUNTIME_BUNDLES = {
+    version: FlatpakRuntimeBundle(
+        filename=f"{FLATPAK_EXTENSION_NAME}-{version}.flatpak",
+        extension_id=(
+            f"{FLATPAK_EXTENSION_NAME}/{FLATPAK_HOST_ARCHITECTURE}/{version}"
+        ),
+    )
+    for version in SUPPORTED_FLATPAK_RUNTIME_VERSIONS
+}
+
+# Retain established imports while deriving every filename from the ordered
+# runtime descriptor above.
+FLATPAK_23_08_FILENAME = FLATPAK_RUNTIME_BUNDLES["23.08"].filename
+FLATPAK_24_08_FILENAME = FLATPAK_RUNTIME_BUNDLES["24.08"].filename
+FLATPAK_25_08_FILENAME = FLATPAK_RUNTIME_BUNDLES["25.08"].filename
+
+MAKO_CONFIG_ENV = "MAKO_CONFIG"
+VK_IMPLICIT_LAYER_PATH_ENV = "VK_IMPLICIT_LAYER_PATH"
+VK_ADD_IMPLICIT_LAYER_PATH_ENV = "VK_ADD_IMPLICIT_LAYER_PATH"
 
 # Armada runs Steam through FEX and requires its host launcher to apply the
 # game-specific runtime and controller configuration.
 ARMADA_DEVICE_ENV = Path("/usr/libexec/armada/device-env")
 ARMADA_GAME_LAUNCH = Path("/usr/libexec/armada/armada-game-launch")
 
-STEAM_COMMON_PATH = Path("steamapps/common/Lossless Scaling")
+LOSSLESS_SCALING_DIRECTORY = Path("Lossless Scaling")
 LOSSLESS_DLL_NAME = "Lossless.dll"
+STEAM_COMMON_PATH = Path("steamapps/common") / LOSSLESS_SCALING_DIRECTORY
+LEGACY_LOSSLESS_DLL_PLACEHOLDER = (
+    Path("/games") / LOSSLESS_SCALING_DIRECTORY / LOSSLESS_DLL_NAME
+)
 
 ENV_MAKO_DLL_PATH = "MAKO_DLL_PATH"
 ENV_XDG_DATA_HOME = "XDG_DATA_HOME"

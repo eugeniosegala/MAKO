@@ -1,11 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import {
-  AppOverview,
+  type AppOverview,
   ButtonItem,
   ConfirmModal,
   DialogButton,
   Dropdown,
-  DropdownOption,
   Field,
   Focusable,
   ModalRoot,
@@ -14,16 +13,14 @@ import {
   showModal
 } from "@decky/ui";
 import { RiArrowDownSFill, RiArrowUpSFill, RiDeleteBinLine, RiEditLine } from "react-icons/ri";
-import {
-  captureGameProfile,
-  deleteProfile,
-  getProfiles,
-  ProfileDetails,
-  ProfilesResult,
-  renameProfile
-} from "../api/makoApi";
-import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
 import t from "../i18n/i18n";
+import {
+  DEFAULT_PROFILE_NAME,
+  PROFILE_KIND_DEFAULT,
+  PROFILE_KIND_GAME,
+} from "../config/configSchema";
+import { useProfileEditorModel } from "../hooks/useProfileEditorModel";
+import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
 import { MakoSectionHeader, makoDialogButtonStyle } from "./MakoUi";
 
 const PROFILES_COLLAPSED_KEY = "mako-profiles-collapsed";
@@ -87,129 +84,27 @@ interface ProfileManagementProps {
 }
 
 export function ProfileManagement({ editingProfile, onProfileChange, mainRunningApp, topMargin }: ProfileManagementProps) {
-  const [profiles, setProfiles] = useState<string[]>([]);
-  const [profileDetails, setProfileDetails] = useState<ProfileDetails[]>([]);
-  const [selectedProfile, setSelectedProfile] = useState(editingProfile || "mako");
-  const editingProfileRef = useRef(editingProfile || "mako");
-  const [isLoading, setIsLoading] = useState(false);
   const [focusedAction, setFocusedAction] = useState<"edit" | "delete" | null>(null);
-  const [profilesCollapsed, setProfilesCollapsed] = useState(() => {
-    try {
-      const saved = localStorage.getItem(PROFILES_COLLAPSED_KEY);
-      return saved !== null ? JSON.parse(saved) : false;
-    } catch {
-      return false;
-    }
+  const [profilesCollapsed, setProfilesCollapsed] =
+    usePersistentCollapseState(PROFILES_COLLAPSED_KEY, false, "profiles");
+  const {
+    selectedProfile,
+    selectedDetails,
+    runningProfile,
+    profileOptions,
+    isLoading,
+    switchProfile,
+    saveRunningGame,
+    renameSelectedProfile,
+    deleteSelectedProfile
+  } = useProfileEditorModel({
+    editingProfile,
+    onProfileChange,
+    mainRunningApp
   });
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(PROFILES_COLLAPSED_KEY, JSON.stringify(profilesCollapsed));
-    } catch (error) {
-      console.warn("Failed to save profiles collapse state:", error);
-    }
-  }, [profilesCollapsed]);
-
-  const loadProfiles = async (preferredProfile?: string): Promise<string> => {
-    try {
-      const result: ProfilesResult = await getProfiles();
-      if (!result.success || !result.profiles) {
-        throw new Error(result.error || t("PROFILE_UNKNOWN_ERROR", "Unknown error"));
-      }
-      setProfiles(result.profiles);
-      setProfileDetails(result.profile_details || []);
-      const resolvedProfile = result.profiles.includes(editingProfileRef.current)
-        ? editingProfileRef.current
-        : preferredProfile && result.profiles.includes(preferredProfile)
-          ? preferredProfile
-          : result.current_profile && result.profiles.includes(result.current_profile)
-            ? result.current_profile
-            : result.profiles.includes("mako")
-              ? "mako"
-              : result.profiles[0];
-      if (resolvedProfile) setSelectedProfile(resolvedProfile);
-      return resolvedProfile || "mako";
-    } catch (error) {
-      console.error("Error loading profiles:", error);
-      showErrorToast(t("PROFILE_LOAD_FAILED", "Failed to load profiles"), String(error));
-      return "mako";
-    }
-  };
-
-  useEffect(() => {
-    void loadProfiles(editingProfile || "mako");
-  }, []);
-
-  useEffect(() => {
-    if (editingProfile) {
-      editingProfileRef.current = editingProfile;
-      setSelectedProfile(editingProfile);
-    }
-  }, [editingProfile]);
-
-  const selectedDetails = useMemo(
-    () => profileDetails.find((profile) => profile.profile_name === selectedProfile),
-    [profileDetails, selectedProfile]
-  );
-  const runningProfile = useMemo(
-    () => profileDetails.find(
-      (profile) => profile.steam_app_id && profile.steam_app_id === String(mainRunningApp?.appid || "")
-    ),
-    [profileDetails, mainRunningApp]
-  );
-
-  const notifyProfileChanged = async (profileName: string) => {
-    const resolvedProfile = await loadProfiles(profileName);
-    await onProfileChange?.(resolvedProfile || profileName);
-    return resolvedProfile;
-  };
-
-  const switchProfile = async (profileName: string) => {
-    setIsLoading(true);
-    try {
-      if (!profiles.includes(profileName)) {
-        throw new Error(`Profile '${profileName}' does not exist`);
-      }
-      editingProfileRef.current = profileName;
-      setSelectedProfile(profileName);
-      await onProfileChange?.(profileName);
-    } catch (error) {
-      showErrorToast(t("PROFILE_SWITCH_FAILED", "Failed to switch profile"), String(error));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const saveRunningGame = async () => {
-    if (!mainRunningApp) return;
-    setIsLoading(true);
-    try {
-      const result = await captureGameProfile(
-        String(mainRunningApp.appid),
-        mainRunningApp.display_name,
-        selectedProfile
-      );
-      if (!result.success || !result.profile_name) {
-        throw new Error(result.error || "Unknown error");
-      }
-      showSuccessToast(
-        t("PROFILE_GAME_SAVED", "Game profile saved"),
-        result.profile?.processes?.length
-          ? `${mainRunningApp.display_name}: ${result.profile.processes.join(", ")}`
-          : mainRunningApp.display_name
-      );
-      editingProfileRef.current = result.profile_name;
-      setSelectedProfile(result.profile_name);
-      await notifyProfileChanged(result.profile_name);
-    } catch (error) {
-      showErrorToast(t("PROFILE_GAME_SAVE_FAILED", "Could not save game profile"), String(error));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const showRenameProfile = () => {
-    if (selectedProfile === "mako") return;
+    if (selectedProfile === DEFAULT_PROFILE_NAME) return;
     showModal(
       <TextInputModal
         title={t("PROFILE_RENAME_TITLE", "Rename Profile")}
@@ -222,24 +117,8 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
     );
   };
 
-  const renameSelectedProfile = async (newName: string) => {
-    setIsLoading(true);
-    try {
-      const result = await renameProfile(selectedProfile, newName);
-      if (!result.success || !result.profile_name) throw new Error(result.error || "Unknown error");
-      editingProfileRef.current = result.profile_name;
-      setSelectedProfile(result.profile_name);
-      await notifyProfileChanged(result.profile_name);
-      showSuccessToast(t("PROFILE_RENAMED", "Profile renamed"), newName);
-    } catch (error) {
-      showErrorToast(t("PROFILE_RENAME_FAILED", "Failed to rename profile"), String(error));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
   const showDeleteProfile = () => {
-    if (selectedProfile === "mako") return;
+    if (selectedProfile === DEFAULT_PROFILE_NAME) return;
     showModal(
       <ConfirmModal
         strTitle={t("PROFILE_DELETE_TITLE", "Delete Game / Process Profile")}
@@ -254,32 +133,6 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
       />
     );
   };
-
-  const deleteSelectedProfile = async () => {
-    setIsLoading(true);
-    try {
-      const deletedName = selectedDetails?.display_name || selectedProfile;
-      const result = await deleteProfile(selectedProfile);
-      if (!result.success) throw new Error(result.error || "Unknown error");
-      const nextProfile = result.current_profile || "mako";
-      editingProfileRef.current = nextProfile;
-      setSelectedProfile(nextProfile);
-      await notifyProfileChanged(nextProfile);
-      showSuccessToast(t("PROFILE_DELETED", "Profile deleted"), deletedName);
-    } catch (error) {
-      showErrorToast(t("PROFILE_DELETE_FAILED", "Failed to delete profile"), String(error));
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const profileOptions: DropdownOption[] = profiles.map((profileName) => {
-    const detail = profileDetails.find((item) => item.profile_name === profileName);
-    return {
-      data: profileName,
-      label: detail?.display_name || (profileName === "mako" ? t("PROFILE_DEFAULT", "Default") : profileName)
-    };
-  });
 
   return (
     <>
@@ -344,16 +197,16 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
             <PanelSectionRow>
               <div style={{ width: "100%", padding: "6px 8px", boxSizing: "border-box", borderRadius: "4px", background: "rgba(255,255,255,0.06)", color: "#c8d3df", fontSize: "10px", lineHeight: "1.35", overflowWrap: "anywhere" }}>
                 <div>{
-                  selectedDetails.kind === "default"
+                  selectedDetails.kind === PROFILE_KIND_DEFAULT
                     ? t("PROFILE_DETAIL_DEFAULT", "Open a game to save its profile")
-                    : selectedDetails.kind === "game"
+                    : selectedDetails.kind === PROFILE_KIND_GAME
                       ? t("PROFILE_DETAIL_GAME", "Saved game")
                       : t("PROFILE_DETAIL_PROCESS", "Saved process")
                 }</div>
                 {selectedDetails.steam_app_id && (
                   <div>{t("PROFILE_STEAM_APP_ID", "Steam app ID: {app_id}", { app_id: selectedDetails.steam_app_id })}</div>
                 )}
-                {selectedDetails.kind !== "default" && (
+                {selectedDetails.kind !== PROFILE_KIND_DEFAULT && (
                   <div>{
                     selectedDetails.processes.length
                       ? t("PROFILE_PROCESSES", "Processes: {processes}", { processes: selectedDetails.processes.join(", ") })
@@ -399,7 +252,7 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
                 onClick={showRenameProfile}
                 onGamepadFocus={() => setFocusedAction("edit")}
                 onGamepadBlur={() => setFocusedAction(null)}
-                disabled={isLoading || selectedProfile === "mako" || !!mainRunningApp}
+                disabled={isLoading || selectedProfile === DEFAULT_PROFILE_NAME || !!mainRunningApp}
               >
                 <RiEditLine size={16} />
                 <span>{t("PROFILE_RENAME_BTN", "Rename")}</span>
@@ -420,7 +273,7 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
                 onClick={showDeleteProfile}
                 onGamepadFocus={() => setFocusedAction("delete")}
                 onGamepadBlur={() => setFocusedAction(null)}
-                disabled={isLoading || selectedProfile === "mako" || !!mainRunningApp}
+                disabled={isLoading || selectedProfile === DEFAULT_PROFILE_NAME || !!mainRunningApp}
               >
                 <RiDeleteBinLine size={16} />
                 <span>{t("PROFILE_DELETE_BTN", "Delete")}</span>

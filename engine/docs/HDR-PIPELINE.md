@@ -220,6 +220,7 @@ Look specifically for washed-out or crushed output, purple/green motion artifact
 | Native-first HDR presentation behavior | `mako-render/src/swapchain_present.cpp` |
 | Backend encoding and conversion passes | `mako-backend/src/mako.cpp` |
 | PQ/scRGB shaders | `mako-backend/src/shaders/` |
+| Embedded conversion SPIR-V generation and source/payload freshness | `scripts/generate-color-conversion-spirv.py`, exercised by the portable CTest suite |
 | Deterministic HDR and transport tests | `mako-render/tests/` |
 
 Useful logs include `swapchain colour pipeline`, `HDR10 transport`, `Gamescope application HDR feedback`, `runtime-transition-pending`, and `runtime-transition-applied`. Collect them with the `hdr`, `layers`, and `recovery` diagnostics presets described in [Collect diagnostics](COLLECT_DIAGNOSTICS.md).

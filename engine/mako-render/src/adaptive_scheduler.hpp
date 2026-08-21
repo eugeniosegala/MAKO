@@ -2,12 +2,14 @@
 
 #pragma once
 
-#include <array>
+#include "generated_frame_delivery.hpp"
+#include "generated_frame_plan.hpp"
+#include "mako-common/configuration/config.hpp"
+
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
-#include <span>
 #include <string>
 #include <string_view>
 
@@ -33,49 +35,16 @@ namespace mako::layer {
     };
 
     struct AdaptiveSchedulerConfig {
-        uint32_t targetFps{120};
-        size_t maximumMultiplier{3};
+        uint32_t targetFps{ls::GameConfDefaults::targetFps};
+        size_t maximumMultiplier{ls::GameConfDefaults::adaptiveMaxMultiplier};
         size_t generatedFrameCapacity{0};
-        bool stableCadence{false};
+        bool stableCadence{ls::GameConfDefaults::adaptiveStableCadence};
         AdaptiveRecoveryPolicy recoveryPolicy{
             AdaptiveRecoveryPolicy::ConservativeHdr
         };
     };
 
-    class AdaptiveScheduler;
-
-    /// Generated-frame timestamps for one real-frame interval.
-    ///
-    /// Adaptive is capped at 4x, so at most three timestamps can be produced.
-    /// Keeping them inline avoids a heap allocation on every generated frame.
-    class AdaptiveFramePlan {
-    public:
-        using const_iterator = std::array<float, 3>::const_iterator;
-
-        [[nodiscard]] size_t size() const { return this->count; }
-        [[nodiscard]] bool empty() const { return this->count == 0; }
-        [[nodiscard]] float front() const { return this->values.front(); }
-        [[nodiscard]] float operator[](const size_t index) const {
-            return this->values[index];
-        }
-        [[nodiscard]] const_iterator begin() const {
-            return this->values.begin();
-        }
-        [[nodiscard]] const_iterator end() const {
-            return this->values.begin() + static_cast<std::ptrdiff_t>(this->count);
-        }
-        [[nodiscard]] std::span<const float> timestamps() const {
-            return {this->values.data(), this->count};
-        }
-
-        bool operator==(const AdaptiveFramePlan&) const = default;
-
-    private:
-        friend class AdaptiveScheduler;
-
-        std::array<float, 3> values{};
-        size_t count{0};
-    };
+    using AdaptiveFramePlan = GeneratedFramePlan;
 
     enum class AdaptiveSchedulerPhase : uint8_t {
         Uninitialized,
@@ -194,53 +163,53 @@ namespace mako::layer {
         [[nodiscard]] AdaptiveSchedulerSnapshot snapshot() const;
 
         [[nodiscard]] bool historyWarmupActive() const {
-            return this->adaptiveHistoryWarmupRemaining > 0;
+            return this->state.historyWarmup.remaining > 0;
         }
         [[nodiscard]] size_t historyWarmupRemaining() const {
-            return this->adaptiveHistoryWarmupRemaining;
+            return this->state.historyWarmup.remaining;
         }
         [[nodiscard]] bool historyWarmupIsRecovery() const {
-            return this->adaptiveHistoryWarmupIsRecovery;
+            return this->state.historyWarmup.recovery;
         }
         void beginHistoryWarmup(size_t frames, bool recovery);
         void ensureHistoryWarmup(size_t frames, bool recovery);
         void cancelHistoryWarmup();
         void consumeHistoryWarmupFrame(TimePoint now);
-        void reportGeneratedFrameDelivery(size_t planned, size_t onTime);
+        void reportGeneratedFrameDelivery(GeneratedFrameDelivery delivery);
 
         [[nodiscard]] bool discontinuityRecoveryActive() const {
-            return this->adaptiveDiscontinuityRecoveryDeadline.has_value();
+            return this->state.discontinuityRecovery.deadline.has_value();
         }
         [[nodiscard]] size_t discontinuityGenerationLimit() const {
-            return this->adaptiveDiscontinuityGenerationLimit;
+            return this->state.discontinuityRecovery.generationLimit;
         }
         [[nodiscard]] double discontinuityBaselineBaseFps() const {
-            return this->adaptiveDiscontinuityBaselineBaseFps;
+            return this->state.discontinuityRecovery.baselineBaseFps;
         }
         [[nodiscard]] size_t discontinuityFallbackGenerationLimit() const {
-            return this->adaptiveDiscontinuityFallbackGenerationLimit;
+            return this->state.discontinuityRecovery.fallbackGenerationLimit;
         }
         [[nodiscard]] AdaptiveGenerationLoadBaseline generationLoadBaseline()
                 const {
-            if (this->adaptiveStrictLoadBaselineBaseFps <= 0.0 ||
+            if (this->state.strictLoad.baselineBaseFps <= 0.0 ||
                     this->validatedGenerationLimit() <=
-                        this->adaptiveStrictLoadBaselineLimit) {
+                        this->state.strictLoad.baselineLimit) {
                 return {};
             }
             return {
                 .fallbackGenerationLimit =
-                    this->adaptiveStrictLoadBaselineLimit,
-                .baseFps = this->adaptiveStrictLoadBaselineBaseFps,
+                    this->state.strictLoad.baselineLimit,
+                .baseFps = this->state.strictLoad.baselineBaseFps,
             };
         }
         [[nodiscard]] std::optional<TimePoint> discontinuityDeadline() const {
-            return this->adaptiveDiscontinuityRecoveryDeadline;
+            return this->state.discontinuityRecovery.deadline;
         }
         [[nodiscard]] bool discontinuitySoftRecoveryAttempted() const {
-            return this->adaptiveDiscontinuitySoftRecoveryAttempted;
+            return this->state.discontinuityRecovery.softRecoveryAttempted;
         }
         void markDiscontinuitySoftRecoveryAttempted() {
-            this->adaptiveDiscontinuitySoftRecoveryAttempted = true;
+            this->state.discontinuityRecovery.softRecoveryAttempted = true;
         }
 
         static size_t historyWarmupFrameCount();
@@ -249,86 +218,174 @@ namespace mako::layer {
         static Clock::duration stableRearmDuration();
 
     private:
+        struct CadenceObservation {
+            bool planningReady{false};
+            AdaptiveFramePlan terminalPlan;
+            double baseFps{0.0};
+        };
+
+        struct PlanningStageResult {
+            bool planningReady{false};
+            AdaptiveFramePlan terminalPlan;
+        };
+
+        // These named stages are still one per-present hot path. Their
+        // definitions remain inline in adaptive_scheduler.cpp so optimized
+        // flattening does not retain duplicate out-of-line implementations.
+        [[nodiscard]] inline CadenceObservation observeCadence(
+            TimePoint now, bool generatedImageAcquireBackoff);
+        [[nodiscard]] inline PlanningStageResult advanceDiscontinuityRecovery(
+            TimePoint now, double baseFps);
+        [[nodiscard]] inline PlanningStageResult advanceRescueMeasurement(
+            TimePoint now, double baseFps);
+        [[nodiscard]] inline PlanningStageResult advanceStableCadence(
+            TimePoint now, double baseFps,
+            double desiredOutputsPerRealFrame,
+            size_t maximumGeneratedFrameCount);
+        [[nodiscard]] inline size_t selectGeneratedFrameCount(
+            double desiredOutputsPerRealFrame,
+            size_t maximumGeneratedFrameCount);
+        [[nodiscard]] inline PlanningStageResult applyStrictLoadGuard(
+            TimePoint now, double baseFps, size_t& generatedFrameCount);
         void beginCadenceRefresh(TimePoint now, std::string_view reason);
         void scheduleRearm(TimePoint now, std::string_view reason,
             size_t fallbackLimit = 0, double baselineBaseFps = 0.0);
-        void updateGenerationLimit(TimePoint now, double baseFps);
+        // This larger multiplier-validation stage follows the same inline
+        // contract as the per-present stages above.
+        inline void updateGenerationLimit(TimePoint now, double baseFps);
         [[nodiscard]] size_t configuredGenerationLimit() const;
+
+        struct SchedulerState {
+            struct HistoryWarmup {
+                size_t remaining{0};
+                bool recovery{false};
+            } historyWarmup;
+
+            struct Cadence {
+                std::optional<TimePoint> lastRealFrame;
+                double smoothedIntervalSeconds{0.0};
+                size_t dropFrames{0};
+                // Ordered SDR keeps updating temporal history while native
+                // frames are presented. Once a hard cadence stall has already
+                // requested that refresh, do not restart the same warm-up on
+                // every sub-10-FPS frame. Resume normal policy only after
+                // several clearly viable intervals.
+                bool sdrStallBypass{false};
+                size_t sdrResumeFrames{0};
+                // An accepted Smooth Cadence 2x policy can bridge one short
+                // gameplay hitch. A second consecutive stall must use normal
+                // history recovery so loading screens and genuinely collapsed
+                // cadence remain safe.
+                bool sdrIsolatedHitchBridged{false};
+            } cadence;
+
+            struct DiagnosticThrottle {
+                std::optional<TimePoint> lastPlanAt;
+            } diagnosticThrottle;
+
+            struct FastBurst {
+                std::optional<TimePoint> startedAt;
+                std::optional<TimePoint> lastDiagnosticAt;
+                size_t frames{0};
+                size_t framesSinceDiagnostic{0};
+            } fastBurst;
+
+            struct OutputPlanner {
+                double credit{0.0};
+                size_t generationLimit{0};
+            } outputPlanner;
+
+            struct Stabilization {
+                std::optional<TimePoint> until;
+            } stabilization;
+
+            struct Ramp {
+                std::optional<TimePoint> nextAt;
+                std::optional<TimePoint> evaluationAt;
+                std::optional<TimePoint> targetDeficitSince;
+                GeneratedDeliveryWindow delivery;
+                size_t previousLimit{0};
+                double baselineBaseFps{0.0};
+                bool bridgeActive{false};
+                size_t bridgeBaselineLimit{0};
+                double bridgeBaselineBaseFps{0.0};
+                size_t lastFailedLimit{0};
+                size_t consecutiveFailures{0};
+                double failedBaselineBaseFps{0.0};
+            } ramp;
+
+            struct Rearm {
+                bool required{false};
+                std::optional<TimePoint> notBefore;
+                std::optional<TimePoint> stableSince;
+                std::optional<TimePoint> improvementSince;
+                std::string reason;
+                double baselineBaseFps{0.0};
+                size_t fallbackLimit{0};
+                size_t consecutiveProbeFailures{0};
+            } rearm;
+
+            struct StableCadence {
+                struct Candidate {
+                    std::optional<size_t> limit;
+                    std::optional<TimePoint> since;
+                    double minimumBaseFps{0.0};
+                    double maximumBaseFps{0.0};
+
+                    void reset() {
+                        this->limit.reset();
+                        this->since.reset();
+                        this->minimumBaseFps = 0.0;
+                        this->maximumBaseFps = 0.0;
+                    }
+                } candidate;
+
+                std::optional<size_t> limit;
+                std::optional<TimePoint> evaluationAt;
+                std::optional<TimePoint> outsideRangeSince;
+                std::optional<TimePoint> retryAt;
+                double baselineBaseFps{0.0};
+                GeneratedDeliveryWindow delivery;
+            } stableCadence;
+
+            struct Rescue {
+                std::optional<TimePoint> until;
+                std::optional<TimePoint> cooldownUntil;
+                size_t previousLimit{0};
+                double baselineBaseFps{0.0};
+                bool fromStrictLoad{false};
+                size_t strictLoadLimit{0};
+            } rescue;
+
+            struct StrictLoad {
+                size_t baselineLimit{0};
+                double baselineBaseFps{0.0};
+                std::optional<TimePoint> collapseSince;
+            } strictLoad;
+
+            struct DiscontinuityRecovery {
+                std::optional<TimePoint> deadline;
+                std::optional<TimePoint> stableSince;
+                size_t generationLimit{0};
+                size_t fallbackGenerationLimit{0};
+                double baselineBaseFps{0.0};
+                bool softRecoveryAttempted{false};
+
+                void reset() {
+                    this->deadline.reset();
+                    this->stableSince.reset();
+                    this->generationLimit = 0;
+                    this->fallbackGenerationLimit = 0;
+                    this->baselineBaseFps = 0.0;
+                    this->softRecoveryAttempted = false;
+                }
+            } discontinuityRecovery;
+        };
 
         AdaptiveSchedulerConfig config;
         AdaptiveSchedulerDiagnostics* diagnostics;
         bool diagnosticsActive;
-
-        size_t adaptiveHistoryWarmupRemaining{0};
-        bool adaptiveHistoryWarmupIsRecovery{false};
-        std::optional<TimePoint> adaptiveLastRealFrame;
-        std::optional<TimePoint> adaptiveLastDiagnostic;
-        std::optional<TimePoint> adaptiveFastBurstStartedAt;
-        std::optional<TimePoint> adaptiveLastFastBurstDiagnostic;
-        size_t adaptiveFastBurstFrames{0};
-        size_t adaptiveFastBurstFramesSinceDiagnostic{0};
-        double adaptiveSmoothedIntervalSeconds{0.0};
-        double adaptiveOutputCredit{0.0};
-        std::optional<TimePoint> adaptiveStabilizationUntil;
-        std::optional<TimePoint> adaptiveNextRampAt;
-        std::optional<TimePoint> adaptiveRampEvaluationAt;
-        std::optional<TimePoint> adaptiveTargetDeficitSince;
-        size_t adaptiveGenerationLimit{0};
-        size_t adaptiveRampPlannedGeneratedFrames{0};
-        size_t adaptiveRampOnTimeGeneratedFrames{0};
-        size_t adaptiveStableCadencePlannedGeneratedFrames{0};
-        size_t adaptiveStableCadenceOnTimeGeneratedFrames{0};
-        size_t adaptiveRampPreviousLimit{0};
-        size_t adaptiveCadenceDropFrames{0};
-        // Ordered SDR keeps updating temporal history while native frames are
-        // presented. Once a hard cadence stall has already requested that
-        // refresh, do not restart the same warm-up on every sub-10-FPS frame.
-        // Resume normal policy only after several clearly viable intervals.
-        bool adaptiveSdrCadenceStallBypass{false};
-        size_t adaptiveSdrCadenceResumeFrames{0};
-        // An accepted Smooth Cadence 2x policy can bridge one short gameplay
-        // hitch. A second consecutive stall must use normal history recovery
-        // so loading screens and genuinely collapsed cadence remain safe.
-        bool adaptiveSdrIsolatedHitchBridged{false};
-        double adaptiveRampBaselineBaseFps{0.0};
-        bool adaptiveBridgeActive{false};
-        size_t adaptiveBridgeBaselineLimit{0};
-        double adaptiveBridgeBaselineBaseFps{0.0};
-        bool adaptiveRearmRequired{false};
-        std::optional<TimePoint> adaptiveRearmNotBefore;
-        std::optional<TimePoint> adaptiveStableRearmSince;
-        std::optional<TimePoint> adaptiveRearmImprovementSince;
-        std::string adaptiveRearmReason;
-        double adaptiveRearmBaselineBaseFps{0.0};
-        size_t adaptiveRearmFallbackLimit{0};
-        std::optional<size_t> adaptiveStableCadenceLimit;
-        std::optional<TimePoint> adaptiveStableCadenceEvaluationAt;
-        std::optional<TimePoint> adaptiveStableCadenceOutsideRangeSince;
-        std::optional<TimePoint> adaptiveStableCadenceRetryAt;
-        double adaptiveStableCadenceBaselineBaseFps{0.0};
-        std::optional<size_t> adaptiveStableCadenceCandidateLimit;
-        std::optional<TimePoint> adaptiveStableCadenceCandidateSince;
-        double adaptiveStableCadenceCandidateMinimumBaseFps{0.0};
-        double adaptiveStableCadenceCandidateMaximumBaseFps{0.0};
-        std::optional<TimePoint> adaptiveRescueUntil;
-        std::optional<TimePoint> adaptiveRescueCooldownUntil;
-        size_t adaptiveRescuePreviousLimit{0};
-        double adaptiveRescueBaselineBaseFps{0.0};
-        bool adaptiveRescueFromStrictLoad{false};
-        size_t adaptiveRescueStrictLoadLimit{0};
-        size_t adaptiveStrictLoadBaselineLimit{0};
-        double adaptiveStrictLoadBaselineBaseFps{0.0};
-        std::optional<TimePoint> adaptiveStrictLoadCollapseSince;
-        std::optional<TimePoint> adaptiveDiscontinuityRecoveryDeadline;
-        std::optional<TimePoint> adaptiveDiscontinuityStableSince;
-        size_t adaptiveDiscontinuityGenerationLimit{0};
-        size_t adaptiveDiscontinuityFallbackGenerationLimit{0};
-        double adaptiveDiscontinuityBaselineBaseFps{0.0};
-        bool adaptiveDiscontinuitySoftRecoveryAttempted{false};
-        size_t adaptiveConsecutiveProbeFailures{0};
-        size_t adaptiveLastFailedRampLimit{0};
-        size_t adaptiveConsecutiveRampFailures{0};
-        double adaptiveFailedRampBaselineBaseFps{0.0};
+        SchedulerState state;
     };
 
 }

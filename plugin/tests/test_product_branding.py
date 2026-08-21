@@ -28,13 +28,13 @@ class ProductBrandingTests(unittest.TestCase):
         self.assertIn(">MAKO Decky</div>", frontend)
 
         content = (
-            PLUGIN_DIR / "src/components/Content.tsx"
+            PLUGIN_DIR / "src/components/ContentNotices.tsx"
         ).read_text(encoding="utf-8")
         self.assertRegex(content, r'MAKO Decky(?:\{" "\})?\s*<code>')
         self.assertIn('{" · MAKO Renderer "}', content)
 
         configuration = (
-            PLUGIN_DIR / "src/components/ConfigurationSection.tsx"
+            PLUGIN_DIR / "src/components/ConfigurationSectionGroups.tsx"
         ).read_text(encoding="utf-8")
         self.assertIn("Advanced Rendering Settings", configuration)
 

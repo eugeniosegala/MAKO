@@ -97,6 +97,8 @@ At swapchain creation, `selectPresentationTransport()` chooses one immutable tra
 
 The selected transport is stored in `SwapchainInfo::privateOrderedTransport`. Later feedback may rebuild private colour resources, but cannot reinterpret the game-owned swapchain's present mode or pNext compatibility.
 
+Per present, scheduling policy produces a small inline requested `GeneratedFramePlan`; transport admission records how many of those generated images are available; and the scheduled plan is the exact timestamp sequence sent to the backend. Ordered SDR admits the complete request. The Gamescope HDR bridge may admit fewer generated images under private-swapchain pressure, in which case MAKO evenly re-spaces the admitted count across the real-frame interval. Full admission preserves policy timestamps without reconstructing them from the count. These boundaries keep the native-first fallback independent from Adaptive policy and leave room for a future target-clock planner without changing presentation ownership.
+
 ## Why HDR cannot be a live toggle
 
 The experimental HDR lane depends on Gamescope WSI for its normalized colour space, metadata feedback, and lower presentation contract. The release SDR lane excludes that layer. Vulkan does not allow an implicit layer to be inserted into an existing instance, so changing a Decky or UI setting after launch cannot switch between the lanes.
@@ -186,7 +188,9 @@ A skipped GPU test proves no GPU behavior. A unit test cannot prove layer orderi
 | Package layout verification | `scripts/package-local.sh` |
 | Process-start policy and transport choice | `mako-render/src/presentation_policy.hpp` |
 | Swapchain creation/pNext filtering | `mako-render/src/instance.cpp`, `mako-render/src/swapchain.cpp` |
-| Generated/original presentation | `mako-render/src/swapchain_present.cpp` |
+| Generated-frame plan representation and partial-admission policy | `mako-render/src/generated_frame_plan.hpp` |
+| Adaptive requested/accepted delivery-window policy | `mako-render/src/generated_frame_delivery.hpp`, `mako-render/src/adaptive_scheduler.*` |
+| Requested/admitted/scheduled handoff and generated/original presentation | `mako-render/src/swapchain_present.cpp` |
 | Standalone deterministic test | `scripts/test-mako-launch.sh` |
-| Renderer transport tests | `mako-render/tests/presentation_policy_tests.cpp` |
+| Renderer transport and plan tests | `mako-render/tests/presentation_policy_tests.cpp`, `mako-render/tests/generated_frame_plan_tests.cpp` |
 | Decky wrapper and Flatpak equivalents | `../plugin/py_modules/mako_plugin/` and `../plugin/tests/` |

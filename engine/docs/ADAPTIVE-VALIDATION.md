@@ -29,7 +29,9 @@ The suite currently locks down:
 - rejection and cooldown of counterproductive load probes;
 - exclusion of impossible fast-present bursts;
 - Smooth Cadence validation near an integer output ratio, including separate qualification and retention hysteresis;
-- timestamp ordering, capacity bounds, and deterministic trace replay.
+- requested-versus-accepted delivery-window health for ramp and Smooth Cadence evaluation;
+- timestamp ordering, inline capacity bounds, full-admission preservation, and partial-admission respacing;
+- deterministic trace replay plus characterization fingerprints for 45-to-90, the 42.5-to-43 FPS transition region, and a mixed disruption corpus.
 
 `adaptive-scheduler-matrix` also runs 120 combinations of base cadence, target, multiplier ceiling, and Smooth Cadence. It checks output bounds and can emit CSV when built in a persistent directory and run directly:
 
@@ -53,7 +55,15 @@ For a local CPU-cost comparison, run:
 scripts/benchmark-adaptive-scheduler.sh
 ```
 
-This reports scheduler nanoseconds per decision for real-only, strict 2x, strict 4x, and Smooth Cadence cases. It is intentionally not a pass/fail test: CPU frequency, compiler version, and host load affect absolute timings. Compare results only on the same machine and toolchain. The hot-path frame plan stores its maximum three timestamps inline, so planning performs no per-frame heap allocation.
+This reports scheduler nanoseconds per decision for real-only, strict 2x, strict 4x, and Smooth Cadence cases. It is intentionally not a pass/fail test: CPU frequency, compiler version, and host load affect absolute timings. Compare results only on the same machine and toolchain.
+
+## Scheduler and frame-plan ownership
+
+`AdaptiveScheduler::planFrame()` is deterministic and advances explicit stages for cadence observation, discontinuity recovery, rescue measurement, stabilization and multiplier validation, Smooth Cadence, fractional output selection, and strict-load protection. Related mutable values are grouped under one `SchedulerState` by responsibility: history warm-up, cadence, diagnostics throttling, fast bursts, output credit, stabilization, ramp, rearm, stable cadence, rescue, strict load, and discontinuity recovery. The snapshot phase remains a derived diagnostic view of that state, not an independent state machine that can drift from the policy.
+
+Every decision returns a `GeneratedFramePlan`, which stores at most three normalized interpolation timestamps inline and performs no per-frame heap allocation. The presentation path keeps three distinct facts: the **requested** plan from Fixed or Adaptive policy, the **admitted** count allowed by the selected transport, and the **scheduled** plan sent to the backend. Full admission preserves the requested timestamps exactly. If the Gamescope HDR transport admits only part of a request, the accepted count is evenly re-spaced across the real-frame interval, preserving the established partial-admission behavior rather than taking an early timestamp prefix. The native original frame remains outside this generated-frame plan and retains presentation priority on failure.
+
+`GeneratedDeliveryWindow` records requested frames against frames accepted for presentation during one ramp or Smooth Cadence evaluation window. “Accepted” means queued within MAKO's delivery budget; it does not claim compositor scanout. The established integer tolerance allows at most five percent missed delivery, so windows with fewer than twenty requested generated frames require complete acceptance. This transport observation remains separate from cadence measurement and target-credit accounting.
 
 ## Future Adaptive pacing work
 

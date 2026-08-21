@@ -114,12 +114,17 @@ namespace mako::layer {
         };
 
         struct PresentationFramePlan {
-            size_t generatedFrameCount{0};
+            // Policy request before WSI admission. Fully admitted timestamps
+            // remain authoritative through backend submission.
+            GeneratedFramePlan requestedGeneratedFrames;
+            // Executable plan after transport-specific admission. Gamescope HDR
+            // may contain fewer, deliberately re-spaced timestamps.
+            GeneratedFramePlan scheduledGeneratedFrames;
             size_t admittedGeneratedFrameCount{0};
-            size_t scheduledGeneratedFrameCount{0};
             bool historyWarmupActive{false};
             std::optional<uint64_t> configuredAcquireTimeout;
-            std::array<uint32_t, 3> preacquiredGeneratedImages{};
+            std::array<uint32_t, GeneratedFramePlan::capacity>
+                preacquiredGeneratedImages{};
         };
 
         struct FrameState {
@@ -175,7 +180,7 @@ namespace mako::layer {
         DiagnosticsState diagnosticsState;
         ColorTransitionState colorTransitionState;
         std::optional<AdaptiveScheduler> adaptiveScheduler;
-        std::vector<float> fixedFrameTimestamps;
+        size_t configuredFixedGeneratedFrames{0};
 
         bool gamescopeDetected{false};
         // Immutable for this context; copied from SwapchainInfo rather than
@@ -206,9 +211,11 @@ namespace mako::layer {
         [[nodiscard]] PresentationFramePlan prepareFramePlan(
             std::chrono::steady_clock::time_point presentNow,
             bool gamescopeHdrTransport);
+        void reportAdaptiveDelivery(const PresentationFramePlan& plan,
+            size_t acceptedForPresentation);
         [[nodiscard]] bool generationPipelineReady(
             const vk::Vulkan& vk, bool gamescopeHdrTransport,
-            size_t generatedFrameCount,
+            const PresentationFramePlan& plan,
             std::chrono::steady_clock::time_point presentNow);
         [[nodiscard]] bool prepareRenderFence(const vk::Vulkan& vk);
         void handleRenderFenceBudgetMiss(

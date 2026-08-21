@@ -25,7 +25,7 @@ frame_generation_enabled = true
 
 - **`name`**: Display name and value accepted by `MAKO_PROFILE`.
 - **`active_in`**: Executables or process names that select this profile.
-- **`multiplier`**: Fixed frame-generation multiplier, from 2x upward. The direct Renderer default is `2`.
+- **`multiplier`**: Supported fixed multipliers are 2x, 3x, and 4x; do not configure larger values. The direct Renderer default is `2`.
 - **`frame_generation_enabled`**: Live on/off switch. `false` presents real frames while keeping the layer loaded. Default: `true`.
 - **`base_fps_cap`**: Caps the game's real frame rate before generation. `0` disables the cap; direct configuration accepts 1–1000 FPS.
 - **`adaptive`**: Enables Adaptive Frame Generation. It varies generated frames toward `target_fps` and ignores the fixed `multiplier`. Default: `false`.

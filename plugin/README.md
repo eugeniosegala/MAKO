@@ -47,6 +47,26 @@ pnpm run package:local-engine
 
 The resulting Decky ZIP is written under `plugin/out/`. Nothing is published by the local packaging commands.
 
+### Code boundaries
+
+| Responsibility | Source of truth |
+| --- | --- |
+| Cross-language configuration fields, defaults, limits, profile identities and kinds, install-relative wrapper path, supported Flatpak runtimes, and per-game-wrapper Flatpak app IDs | `shared_config.py`, emitted to TypeScript by `scripts/generate_ts_schema.py` |
+| Pre-RPC launcher fallback derived from the generated install-relative path | `src/config/runtimePaths.ts` |
+| Import-safe installed package root, payload identities, layer/environment identifiers, and Flatpak bundle descriptors | `py_modules/mako_plugin/package_paths.py`, `constants.py`, guarded across components by `tests/test_decky_loader_import.py`, `test_path_package_contract.py`, and focused contract tests |
+| RPC orchestration, migrations, persistence, and atomic wrapper regeneration | `py_modules/mako_plugin/configuration.py` |
+| Canonical profile metadata, Decky-only wrapper-setting sidecars, and merged profile views | `py_modules/mako_plugin/profile_storage.py` |
+| Pure generated-wrapper text, compatibility guards, profile selection, and launch environment | `py_modules/mako_plugin/wrapper_generation.py` |
+| Running-game/editor session synchronisation and profile transactions | `src/hooks/useProfileSession.ts`, `src/hooks/useProfileEditorModel.ts` |
+| Reusable UI state for deferred Target FPS writes and collapsed sections | `src/hooks/useDeferredTargetFps.ts`, `src/hooks/usePersistentCollapseState.ts` |
+| View composition | `src/components/Content.tsx`, `ContentNotices.tsx`, `ConfigurationSection.tsx`, `ConfigurationSectionGroups.tsx`, `ProfileManagement.tsx`, `FpsMultiplierControl.tsx` |
+| English translation keys, fallbacks, and dictionary order | `defaults/i18n/template.json` |
+| Advertised languages, Steam aliases, translated dictionaries, static call-site validation, and generated frontend bundle | `defaults/i18n/language_metadata.json`, `steam_language_map.json`, language JSON files, `scripts/i18n-contract.mjs`, and generated `src/i18n/languages.json` |
+
+The generated wrapper is disposable cache, not another configuration store. Backend characterization tests compare pure generator output with the service facade and lock exact wrapper and sidecar bytes; focused hook tests lock deferred writes, runtime profile transitions, offline editor selection, and local collapse-state recovery without snapshotting static layout.
+
+Every translated dictionary has the same ordered key set as `template.json`, contains only strings, and preserves each named placeholder exactly. Every frontend `t()` call uses a static key and English fallback matching that template plus the exact replacement fields. Run `pnpm run check:i18n` for the read-only dictionary, call-site, and generated-file gate; after an intentional source-dictionary change, run `pnpm run generate:i18n` to regenerate `src/i18n/languages.json` rather than editing it directly. The normal one-shot build requires the tracked bundle to be current before bundling, and watch mode intentionally regenerates it before Rollup starts.
+
 Use direct `dev:*` deployment for iteration, `package:local-engine` for a complete tester ZIP, the dedicated SteamOS/AMD workflow for a release candidate, and the root publisher only for the actual release. The exact boundaries are documented in [Packaging](docs/PACKAGING.md) and [Testing](../TESTING.md).
 
 ## Using a local build

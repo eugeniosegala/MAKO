@@ -65,8 +65,9 @@ Only after those gates pass should an AArch64 package declare `host_architecture
 - Native-host detection: `py_modules/mako_plugin/host_environment.py`
 - Package validation and installation status: `installation.py`
 - Startup boundary: `plugin.py`
-- Wrapper passthrough and Armada launcher: `configuration.py`
+- Wrapper passthrough and Armada launcher text: `wrapper_generation.py`
+- Wrapper regeneration and compatibility migration orchestration: `configuration.py`
 - Flatpak activation and old-override cleanup: `flatpak_service.py`
-- Deterministic coverage: `tests/test_dual_arch_installation.py`, `tests/test_wrapper_environment.py`, `tests/test_plugin_lifecycle.py`, and `tests/test_flatpak_runtime_detection.py`
+- Deterministic coverage: `tests/test_dual_arch_installation.py`, `tests/test_wrapper_environment.py`, `tests/test_configuration_boundaries.py`, `tests/test_plugin_lifecycle.py`, and `tests/test_flatpak_runtime_detection.py`
 
 Any future Armada change must update this document and those boundary tests. Native Armada hardware evidence is required before a release can describe the Renderer as supported there.

@@ -69,12 +69,20 @@ class BaseService:
         self.registered_json_file = self.user_vulkan_layer_dir / JSON_FILENAME
         self.registered_json32_file = self.user_vulkan_layer_dir / JSON32_FILENAME
         self.mako_script_path = self.user_home / SCRIPT_NAME
-        self.mako_launch_script_path = self.user_home / SCRIPT_NAME
         self.diagnostics_script_path = self.user_home / DIAGNOSTICS_SCRIPT_NAME
         self.config_dir = self.user_home / CONFIG_DIR
         self.config_file_path = self.config_dir / CONFIG_FILENAME
         self.wrapper_profile_settings_path = self.config_dir / WRAPPER_PROFILE_SETTINGS_FILENAME
         self.profile_metadata_path = self.config_dir / PROFILE_METADATA_FILENAME
+
+    @property
+    def mako_launch_script_path(self) -> Path:
+        """Compatibility alias for the canonical generated-wrapper path."""
+        return self.mako_script_path
+
+    @mako_launch_script_path.setter
+    def mako_launch_script_path(self, path: Path) -> None:
+        self.mako_script_path = path
 
     def _ensure_directories(self) -> None:
         """Create necessary directories if they don't exist"""

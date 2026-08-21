@@ -1,84 +1,51 @@
 """Configuration service for MAKO Renderer TOML and Decky profiles."""
 
 import json
-from pathlib import Path
 import re
-import shlex
 from typing import Dict, Any, Optional
 
 from .build_flavor import LOCAL_DEVELOPMENT_BUILD
 from .base_service import BaseService
 from .config_schema import (
+    BASE_FPS_CAP_MAX,
     ConfigurationManager,
-    CONFIG_SCHEMA,
-    SCRIPT_ONLY_FIELDS,
     ProfileData,
     DEFAULT_PROFILE_NAME,
+    PROFILE_KIND_GAME,
+    PROFILE_KIND_PROCESS,
 )
 from .config_schema_generated import (
     ConfigurationData,
-    DISABLE_HDR_EXPOSURE,
-    get_script_generation_logic,
 )
 from .constants import (
     ARMADA_DEVICE_ENV,
     ARMADA_GAME_LAUNCH,
-    COMPETING_LSFG_DISABLE_ENVS,
-    DXVK_HDR_ENV,
-    EXTERNAL_VULKAN_LAYER_ENV,
-    EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
-    EXTERNAL_VULKAN_LAYER_MANGOHUD,
-    EXTERNAL_VULKAN_LAYER_VKBASALT,
     FLATPAK_IMPLICIT_LAYER_DIR,
-    GAMESCOPE_WSI_DISABLE_ENV,
-    GAMESCOPE_WSI_ENABLE_ENV,
     GAMESCOPE_WSI_MANIFEST_FILENAME_64,
-    HDR_EXPOSURE_DISABLE_ENV,
     HOST_SYSTEM_IMPLICIT_LAYER_DIR,
-    MAKO_LAYER_DISABLE_ENV,
-    MAKO_LAYER_ENABLE_ENV,
-    PRESENT_ACQUIRE_TIMEOUT_MS,
 )
 from .managed_files import write_managed_text_atomically
 from .process_detection import (
     detect_processes_for_steam_app,
     is_matchable_process_name,
 )
+from . import profile_storage
+from . import wrapper_generation
 from .types import ConfigurationResponse, ProfilesResponse, ProfileResponse
 
 
 class ConfigurationService(BaseService):
     """Service for managing MAKO Renderer TOML configuration."""
 
-    _WRAPPER_FORMAT_VERSION = 44
-    _WRAPPER_FORMAT_MARKER = (
-        f"# mako-wrapper-format: {_WRAPPER_FORMAT_VERSION}"
-    )
+    _WRAPPER_FORMAT_VERSION = wrapper_generation.WRAPPER_FORMAT_VERSION
+    _WRAPPER_FORMAT_MARKER = wrapper_generation.WRAPPER_FORMAT_MARKER
     _HOST_COMPATIBILITY_MARKER = (
-        "# mako-host-compatibility: aarch64-passthrough-v1"
+        wrapper_generation.HOST_COMPATIBILITY_MARKER
     )
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _PROFILE_METADATA_VERSION = 1
-    _REQUIRED_WRAPPER_EXPORTS = (
-        "export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS=",
-        "export MAKO_PRESENT_DIAGNOSTICS=",
-        f"export {MAKO_LAYER_ENABLE_ENV}=1",
-        *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
-        f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
-        f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
-        f"export {EXTERNAL_VULKAN_LAYER_ENV}=",
-        "export VK_IMPLICIT_LAYER_PATH=",
-        "unset VK_ADD_IMPLICIT_LAYER_PATH",
-        "export MAKO_PROFILE_FALLBACK=",
-        "mako_diagnostics_default=",
-    )
-    _OBSOLETE_WRAPPER_EXPORTS = (
-        "DXVK_FRAME_RATE",
-        "PROTON_USE_WOW64",
-        "MAKO_PRESENT_RECOVERY_RECREATE",
-        "MAKO_EXPERIMENTAL_HDR",
-        "VK_INSTANCE_LAYERS",
-    )
+    _REQUIRED_WRAPPER_EXPORTS = wrapper_generation.REQUIRED_WRAPPER_EXPORTS
+    _OBSOLETE_WRAPPER_EXPORTS = wrapper_generation.OBSOLETE_WRAPPER_EXPORTS
 
     def __init__(
             self,
@@ -92,177 +59,115 @@ class ConfigurationService(BaseService):
         )
 
     def _diagnostics_default_marker(self) -> str:
-        return "# development presentation diagnostics default: disabled"
+        return wrapper_generation.DIAGNOSTICS_DEFAULT_MARKER
+
+    def _wrapper_generation_context(
+            self) -> wrapper_generation.WrapperGenerationContext:
+        """Capture current managed paths for one pure wrapper-generation call."""
+        return wrapper_generation.WrapperGenerationContext(
+            wrapper_format_marker=self._WRAPPER_FORMAT_MARKER,
+            host_compatibility_marker=self._HOST_COMPATIBILITY_MARKER,
+            diagnostics_default_marker=self._diagnostics_default_marker(),
+            config_dir=self.config_dir,
+            config_file_path=self.config_file_path,
+            local_share_dir=self.local_share_dir,
+            gamescope_wsi_compatibility_dir=(
+                self.gamescope_wsi_compatibility_dir
+            ),
+            flatpak_implicit_layer_dir=FLATPAK_IMPLICIT_LAYER_DIR,
+            host_system_implicit_layer_dir=HOST_SYSTEM_IMPLICIT_LAYER_DIR,
+            gamescope_wsi_manifest_filename_64=(
+                GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ),
+            armada_device_env=ARMADA_DEVICE_ENV,
+            armada_game_launch=ARMADA_GAME_LAUNCH,
+        )
 
     @staticmethod
-    def _wrapper_settings_defaults() -> Dict[str, Any]:
-        return {
-            field_name: CONFIG_SCHEMA[field_name].default
-            for field_name in SCRIPT_ONLY_FIELDS
-        }
+    def _wrapper_settings_defaults() -> profile_storage.WrapperSettingsData:
+        return profile_storage.wrapper_settings_defaults()
 
     @staticmethod
-    def _normalize_wrapper_settings(raw_settings: Dict[str, Any]) -> Dict[str, Any]:
+    def _normalize_wrapper_settings(
+            raw_settings: Dict[str, Any],
+    ) -> profile_storage.WrapperSettingsData:
         """Allowlist current wrapper settings without polluting engine TOML.
 
         Removed and unknown fields are intentionally discarded so profile data
         can never create an environment export unless the current schema and
         wrapper generator both support it.
         """
-        candidate = ConfigurationManager.get_defaults()
-        candidate.update({
-            field_name: raw_settings[field_name]
-            for field_name in SCRIPT_ONLY_FIELDS
-            if field_name in raw_settings
-        })
-        validated = ConfigurationManager.validate_config(candidate)
-        # HDR remains an engine foundation in this release, not a supported
-        # Decky launch mode. Override old per-profile opt-ins as well as new UI
-        # writes so the generated wrapper always retains the proven SDR path.
-        validated[DISABLE_HDR_EXPOSURE] = True
-        return {
-            field_name: validated[field_name]
-            for field_name in SCRIPT_ONLY_FIELDS
-        }
+        return profile_storage.normalize_wrapper_settings(raw_settings)
 
-    def _read_wrapper_profile_settings(self) -> Dict[str, Dict[str, Any]]:
+    def _read_wrapper_profile_settings(
+            self,
+    ) -> profile_storage.WrapperProfileSettings:
         """Read persisted per-profile launcher settings, falling back safely."""
-        if not self.wrapper_profile_settings_path.exists():
-            return {}
-
-        try:
-            raw_data = json.loads(
-                self.wrapper_profile_settings_path.read_text(encoding="utf-8")
-            )
-            if not isinstance(raw_data, dict):
-                raise ValueError("wrapper settings must be a JSON object")
-            if raw_data.get("version") != self._WRAPPER_PROFILE_SETTINGS_VERSION:
-                raise ValueError("unsupported wrapper settings version")
-            raw_profiles = raw_data.get("profiles", {})
-            if not isinstance(raw_profiles, dict):
-                raise ValueError("wrapper settings profiles must be an object")
-            settings: Dict[str, Dict[str, Any]] = {}
-            for profile_name, raw_settings in raw_profiles.items():
-                if isinstance(profile_name, str) and isinstance(raw_settings, dict):
-                    settings[profile_name] = self._normalize_wrapper_settings(raw_settings)
-            return settings
-        except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
-            self.log.warning(
-                "Ignoring invalid per-profile wrapper settings at %s: %s",
-                self.wrapper_profile_settings_path,
-                error,
-            )
-            return {}
+        return profile_storage.read_wrapper_profile_settings(
+            self.wrapper_profile_settings_path,
+            self._WRAPPER_PROFILE_SETTINGS_VERSION,
+            self.log,
+            self._normalize_wrapper_settings,
+        )
 
     def _write_wrapper_profile_settings(
-            self, profile_settings: Dict[str, Dict[str, Any]]) -> None:
-        normalized_profiles = {
-            profile_name: self._normalize_wrapper_settings(settings)
-            for profile_name, settings in profile_settings.items()
-        }
-        payload = {
-            "version": self._WRAPPER_PROFILE_SETTINGS_VERSION,
-            "profiles": normalized_profiles,
-        }
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-        self._write_file(
+            self,
+            profile_settings: profile_storage.WrapperProfileSettings,
+    ) -> None:
+        profile_storage.write_wrapper_profile_settings(
+            self.config_dir,
             self.wrapper_profile_settings_path,
-            json.dumps(payload, indent=2, sort_keys=True) + "\n",
-            0o644,
+            self._WRAPPER_PROFILE_SETTINGS_VERSION,
+            profile_settings,
+            self._write_file,
+            self._normalize_wrapper_settings,
         )
 
     def _wrapper_settings_for_profile(
             self,
             profile_name: str,
-            profile_settings: Dict[str, Dict[str, Any]] = None,
-    ) -> Dict[str, Any]:
-        settings = self._wrapper_settings_defaults()
-        stored_settings = (profile_settings or self._read_wrapper_profile_settings()).get(profile_name)
-        if stored_settings:
-            settings.update(stored_settings)
-        return self._normalize_wrapper_settings(settings)
+            profile_settings: profile_storage.WrapperProfileSettings = None,
+    ) -> profile_storage.WrapperSettingsData:
+        return profile_storage.wrapper_settings_for_profile(
+            profile_name,
+            profile_settings or self._read_wrapper_profile_settings(),
+            self._wrapper_settings_defaults,
+            self._normalize_wrapper_settings,
+        )
 
     @staticmethod
     def _processes_for_config(config: Dict[str, Any]) -> list[str]:
-        active_in = config.get("active_in", "")
-        if isinstance(active_in, (list, tuple)):
-            values = active_in
-        else:
-            values = str(active_in).split(",")
-        return [str(value).strip() for value in values if str(value).strip()]
+        return profile_storage.processes_for_config(config)
 
     @classmethod
     def _default_profile_metadata(
-            cls, profile_data: ProfileData) -> Dict[str, Dict[str, Any]]:
-        metadata: Dict[str, Dict[str, Any]] = {}
-        for profile_name, config in profile_data["profiles"].items():
-            processes = cls._processes_for_config(config)
-            metadata[profile_name] = {
-                "display_name": "Default" if profile_name == DEFAULT_PROFILE_NAME else profile_name,
-                "kind": (
-                    "default" if profile_name == DEFAULT_PROFILE_NAME
-                    else "process" if processes
-                    else "manual"
-                ),
-                "steam_app_id": None,
-                "captured_processes": [],
-            }
-        return metadata
+            cls, profile_data: ProfileData) -> profile_storage.ProfileMetadata:
+        return profile_storage.default_profile_metadata(
+            profile_data,
+            cls._processes_for_config,
+        )
 
     def _write_profile_metadata(
-            self, metadata: Dict[str, Dict[str, Any]]) -> None:
-        payload = {
-            "version": self._PROFILE_METADATA_VERSION,
-            "profiles": metadata,
-        }
-        self.config_dir.mkdir(parents=True, exist_ok=True)
-        self._write_file(
+            self, metadata: profile_storage.ProfileMetadata) -> None:
+        profile_storage.write_profile_metadata(
+            self.config_dir,
             self.profile_metadata_path,
-            json.dumps(payload, indent=2, sort_keys=True) + "\n",
-            0o644,
+            self._PROFILE_METADATA_VERSION,
+            metadata,
+            self._write_file,
         )
 
     def _read_profile_metadata(
-            self, profile_data: ProfileData = None) -> Dict[str, Dict[str, Any]]:
+            self,
+            profile_data: ProfileData = None,
+    ) -> profile_storage.ProfileMetadata:
         profile_data = profile_data or self._get_profile_data()
-        if not self.profile_metadata_path.exists():
-            return self._default_profile_metadata(profile_data)
-
-        payload = json.loads(self.profile_metadata_path.read_text(encoding="utf-8"))
-        if not isinstance(payload, dict):
-            raise ValueError("profile metadata must be a JSON object")
-        if payload.get("version") != self._PROFILE_METADATA_VERSION:
-            raise ValueError("unsupported profile metadata version")
-        raw_profiles = payload.get("profiles")
-        if not isinstance(raw_profiles, dict):
-            raise ValueError("profile metadata profiles must be an object")
-
-        defaults = self._default_profile_metadata(profile_data)
-        metadata: Dict[str, Dict[str, Any]] = {}
-        for profile_name in profile_data["profiles"]:
-            fallback = defaults[profile_name]
-            raw_entry = raw_profiles.get(profile_name, {})
-            if not isinstance(raw_entry, dict):
-                raw_entry = {}
-            steam_app_id = raw_entry.get("steam_app_id")
-            raw_captured = raw_entry.get("captured_processes", [])
-            if not isinstance(raw_captured, list):
-                raw_captured = []
-            metadata[profile_name] = {
-                "display_name": str(
-                    raw_entry.get("display_name") or fallback["display_name"]
-                ),
-                "kind": str(raw_entry.get("kind") or fallback["kind"]),
-                "steam_app_id": (
-                    str(steam_app_id).strip() if steam_app_id is not None else None
-                ) or None,
-                "captured_processes": [
-                    str(process).strip()
-                    for process in raw_captured
-                    if str(process).strip()
-                ],
-            }
-        return metadata
+        return profile_storage.read_profile_metadata(
+            self.profile_metadata_path,
+            self._PROFILE_METADATA_VERSION,
+            profile_data,
+            self._default_profile_metadata,
+        )
 
     def migrate_profile_metadata_if_needed(self) -> bool:
         """Create/synchronise the first public game/process profile model."""
@@ -289,7 +194,9 @@ class ConfigurationService(BaseService):
         changed = False
 
         for profile_name, entry in metadata.items():
-            captured = entry.get("captured_processes", [])
+            captured = profile_storage.metadata_captured_processes(
+                metadata, profile_name
+            )
             safe_captured = [
                 process_name
                 for process_name in captured
@@ -309,7 +216,9 @@ class ConfigurationService(BaseService):
                 for process_name in self._processes_for_config(config)
                 if process_name.casefold() not in unsafe_names
             )
-            entry["captured_processes"] = safe_captured
+            profile_storage.replace_captured_processes(
+                entry, safe_captured
+            )
             changed = True
 
         if not changed:
@@ -328,34 +237,27 @@ class ConfigurationService(BaseService):
     def _profile_details(
             self,
             profile_data: ProfileData,
-            metadata: Dict[str, Dict[str, Any]],
-    ) -> list[Dict[str, Any]]:
-        return [
-            {
-                "profile_name": profile_name,
-                "display_name": metadata[profile_name]["display_name"],
-                "kind": metadata[profile_name]["kind"],
-                "steam_app_id": metadata[profile_name]["steam_app_id"],
-                "processes": self._processes_for_config(config),
-            }
-            for profile_name, config in profile_data["profiles"].items()
-        ]
+            metadata: profile_storage.ProfileMetadata,
+    ) -> list[profile_storage.ProfileDetails]:
+        return profile_storage.profile_details(
+            profile_data,
+            metadata,
+            self._processes_for_config,
+        )
 
     def _config_for_profile(
             self,
             profile_data: ProfileData,
             profile_name: str,
-            profile_settings: Dict[str, Dict[str, Any]] = None,
+            profile_settings: profile_storage.WrapperProfileSettings = None,
     ) -> ConfigurationData:
         """Merge MAKO Renderer TOML, global, and Decky wrapper fields for one profile."""
-        config = dict(
-            profile_data["profiles"].get(
-                profile_name, ConfigurationManager.get_defaults()
-            )
+        return profile_storage.config_for_profile(
+            profile_data,
+            profile_name,
+            profile_settings or self._read_wrapper_profile_settings(),
+            self._wrapper_settings_for_profile,
         )
-        config.update(profile_data["global_config"])
-        config.update(self._wrapper_settings_for_profile(profile_name, profile_settings))
-        return ConfigurationManager.validate_config(config)
 
     def migrate_wrapper_profile_settings_if_needed(self) -> bool:
         """Preserve old current-wrapper compatibility settings on first upgrade.
@@ -425,7 +327,7 @@ class ConfigurationService(BaseService):
                 cap = int(raw_cap)
             except (TypeError, ValueError):
                 continue
-            if 0 < cap <= 240:
+            if 0 < cap <= BASE_FPS_CAP_MAX:
                 legacy_caps[profile_name] = cap
 
         if self.mako_script_path.exists():
@@ -439,7 +341,7 @@ class ConfigurationService(BaseService):
                 if match:
                     legacy_artifact_found = True
                     cap = int(match.group(1))
-                    if 0 < cap <= 240:
+                    if 0 < cap <= BASE_FPS_CAP_MAX:
                         legacy_caps.setdefault(
                             profile_data["current_profile"], cap
                         )
@@ -469,10 +371,7 @@ class ConfigurationService(BaseService):
     @staticmethod
     def _has_active_in(config: ConfigurationData) -> bool:
         """Return whether an engine profile can select itself by process name."""
-        active_in = config.get("active_in", "")
-        if isinstance(active_in, (list, tuple)):
-            return bool(active_in)
-        return bool(str(active_in).strip())
+        return wrapper_generation.has_active_in(config)
 
     @classmethod
     def _profile_selection_lines(
@@ -489,21 +388,12 @@ class ConfigurationService(BaseService):
         renderer checks executable/process matches first, so a profile captured
         while the game is running can replace this fallback without restarting.
         """
-        if automatic_matching_enabled is None:
-            automatic_matching_enabled = cls._has_active_in(config)
-
-        matching_comment = (
-            "# MAKO Renderer prefers active_in matches and uses this profile only as a fallback."
-            if automatic_matching_enabled
-            else "# Keep the default renderer context active so a newly captured profile can take over live."
+        return wrapper_generation.profile_selection_lines(
+            profile_name,
+            config,
+            automatic_matching_enabled,
+            cls._has_active_in,
         )
-        return [
-            matching_comment,
-            "# A caller-provided MAKO_PROFILE remains an explicit hard override.",
-            'if [ -z "${MAKO_PROFILE:-}" ]; then',
-            f"    export MAKO_PROFILE_FALLBACK={shlex.quote(profile_name)}",
-            "fi",
-        ]
 
     def get_config(self) -> ConfigurationResponse:
         """Read current TOML configuration merged with launch script environment variables
@@ -655,21 +545,13 @@ class ConfigurationService(BaseService):
         Returns:
             The complete script content as a string
         """
-        lines = [
-            "#!/bin/bash",
-            self._WRAPPER_FORMAT_MARKER,
-            self._diagnostics_default_marker(),
-            "# mako launch script generated by MAKO Decky",
-            "# This script sets up the environment for mako to work with the plugin configuration",
-        ]
-
-        lines.extend(self._generate_host_compatibility_guard_lines())
-        lines.extend(self._script_configuration_lines(config))
-        lines.extend(self._generate_layer_environment_lines())
-        lines.extend(self._profile_selection_lines(DEFAULT_PROFILE_NAME, config))
-        lines.append('exec "$@"')
-
-        return "\n".join(lines) + "\n"
+        return wrapper_generation.assemble_script_content(
+            self._wrapper_generation_context(),
+            self._generate_host_compatibility_guard_lines(),
+            self._script_configuration_lines(config),
+            self._generate_layer_environment_lines(),
+            self._profile_selection_lines(DEFAULT_PROFILE_NAME, config),
+        )
 
     def _generate_script_content_for_profile(self, profile_data: ProfileData) -> str:
         """Generate the isolated per-game launch script with profile support
@@ -687,129 +569,44 @@ class ConfigurationService(BaseService):
             else current_profile
         )
         fallback_config = self._config_for_profile(
-            profile_data, fallback_profile
+            profile_data,
+            fallback_profile,
         )
         automatic_matching_enabled = any(
             self._has_active_in(profile_config)
             for profile_config in profile_data["profiles"].values()
         )
-
-        lines = [
-            "#!/bin/bash",
-            self._WRAPPER_FORMAT_MARKER,
-            self._diagnostics_default_marker(),
-            f"# Current profile: {current_profile}",
-        ]
-
-        lines.extend(self._generate_host_compatibility_guard_lines())
-        lines.extend(self._wrapper_profile_configuration_lines(profile_data))
-        lines.extend(self._generate_layer_environment_lines())
-        # A low-priority default keeps the layer active for an unsaved game.
-        # Once capture adds Active In, the running process match supersedes it.
-        lines.extend(self._profile_selection_lines(
-            fallback_profile,
-            fallback_config,
-            automatic_matching_enabled,
-        ))
-        lines.append('exec "$@"')
-
-        return "\n".join(lines) + "\n"
+        return wrapper_generation.assemble_profile_script_content(
+            current_profile,
+            self._wrapper_generation_context(),
+            self._generate_host_compatibility_guard_lines(),
+            self._wrapper_profile_configuration_lines(profile_data),
+            self._generate_layer_environment_lines(),
+            self._profile_selection_lines(
+                fallback_profile,
+                fallback_config,
+                automatic_matching_enabled,
+            ),
+        )
 
     def _wrapper_profile_configuration_lines(
             self, profile_data: ProfileData) -> list[str]:
         """Select launcher-only settings by explicit profile or Steam app ID."""
-        current_profile = profile_data["current_profile"]
-        profile_settings = self._read_wrapper_profile_settings()
-        metadata = self._read_profile_metadata(profile_data)
-        app_profiles = [
-            (entry.get("steam_app_id"), profile_name)
-            for profile_name, entry in metadata.items()
-            if re.fullmatch(r"\d+", str(entry.get("steam_app_id") or ""))
-        ]
-        process_profiles = [
-            (profile_name, self._processes_for_config(config))
-            for profile_name, config in profile_data["profiles"].items()
-            if profile_name != DEFAULT_PROFILE_NAME
-            and self._processes_for_config(config)
-        ]
-
-        lines = [
-            'mako_wrapper_profile="${MAKO_PROFILE:-}"',
-            "mako_wrapper_profile_from_identity=0",
-            'mako_wrapper_app_id="${SteamAppId:-${SteamGameId:-${STEAM_COMPAT_APP_ID:-}}}"',
-            'if [ -z "$mako_wrapper_profile" ]; then',
-            '    if [ -n "$mako_wrapper_app_id" ]; then',
-            '        case "$mako_wrapper_app_id" in',
-        ]
-        for app_id, profile_name in app_profiles:
-            lines.extend([
-                f"            {app_id})",
-                f"                mako_wrapper_profile={shlex.quote(profile_name)}",
-                "                mako_wrapper_profile_from_identity=1",
-                "                ;;",
-            ])
-        lines.extend([
-            "            *)",
-            f"                mako_wrapper_profile={shlex.quote(DEFAULT_PROFILE_NAME if DEFAULT_PROFILE_NAME in profile_data['profiles'] else current_profile)}",
-            "                ;;",
-            "        esac",
-            "    else",
-            '        case " $* " in',
-        ])
-        for profile_name, processes in process_profiles:
-            patterns = "|".join(
-                f"*{shlex.quote(process_name)}*" for process_name in processes
-            )
-            lines.extend([
-                f"            {patterns})",
-                f"                mako_wrapper_profile={shlex.quote(profile_name)}",
-                "                mako_wrapper_profile_from_identity=1",
-                "                ;;",
-            ])
-        lines.extend([
-            "            *)",
-            f"                mako_wrapper_profile={shlex.quote(current_profile)}",
-            "                ;;",
-            "        esac",
-            "    fi",
-            "fi",
-            'case "$mako_wrapper_profile" in',
-        ])
-
-        for profile_name in profile_data["profiles"]:
-            config = self._config_for_profile(
-                profile_data, profile_name, profile_settings
-            )
-            lines.append(f"    {shlex.quote(profile_name)})")
-            lines.extend(
-                f"        {line}" for line in self._script_configuration_lines(config)
-            )
-            lines.append("        ;;")
-
-        fallback_config = self._config_for_profile(
-            profile_data, current_profile, profile_settings
+        return wrapper_generation.wrapper_profile_configuration_lines(
+            profile_data,
+            self._read_wrapper_profile_settings(),
+            self._read_profile_metadata(profile_data),
+            self._config_for_profile,
+            self._script_configuration_lines,
         )
-        lines.append("    *)")
-        lines.extend(
-            f"        {line}" for line in self._script_configuration_lines(fallback_config)
-        )
-        lines.extend([
-            "        ;;",
-            "esac",
-            'if [ "$mako_wrapper_profile_from_identity" = "1" ]; then',
-            '    export MAKO_PROFILE="$mako_wrapper_profile"',
-            "fi",
-        ])
-        return lines
 
     @classmethod
     def _script_configuration_lines(cls, config: ConfigurationData) -> list[str]:
         """Generate wrapper settings without repeating forced compatibility exports."""
-        lines = get_script_generation_logic()(config)
-        for line in cls._hdr_activation_lines(config):
-            if line not in lines:
-                lines.append(line)
-        return lines
+        return wrapper_generation.script_configuration_lines(
+            config,
+            cls._hdr_activation_lines,
+        )
 
     @staticmethod
     def _hdr_activation_lines(config: Dict[str, Any]) -> list[str]:
@@ -820,11 +617,7 @@ class ConfigurationService(BaseService):
         release. Remove inherited DXVK HDR exposure while MAKO enforces its
         supported SDR processing and presentation boundary.
         """
-        del config
-        return [
-            f"export {HDR_EXPOSURE_DISABLE_ENV}=1",
-            f"unset {DXVK_HDR_ENV}",
-        ]
+        return wrapper_generation.hdr_activation_lines(config)
 
     def _generate_layer_environment_lines(self) -> list[str]:
         """Activate MAKO through its deterministic Vulkan discovery boundary.
@@ -842,75 +635,9 @@ class ConfigurationService(BaseService):
         remain outside the default application layer chain. The explicit LSFG,
         Gamescope, Mesa, and HDR guards provide defence in depth.
         """
-        diagnostics_log_path = self.config_dir / "present-diagnostics.log"
-        system_layer_dir = shlex.quote(str(HOST_SYSTEM_IMPLICIT_LAYER_DIR))
-        gamescope_wsi_manifest = shlex.quote(str(
-            self.gamescope_wsi_compatibility_dir /
-            GAMESCOPE_WSI_MANIFEST_FILENAME_64
-        ))
-        gamescope_wsi_layer_dir = shlex.quote(str(
-            self.gamescope_wsi_compatibility_dir
-        ))
-        return [
-            f'export MAKO_PRESENT_ACQUIRE_TIMEOUT_MS="${{MAKO_PRESENT_ACQUIRE_TIMEOUT_MS:-{PRESENT_ACQUIRE_TIMEOUT_MS}}}"',
-            # Presentation logging is intentionally opt-in for every build.
-            # Slow-path records are synchronous and can distort the timing
-            # problem being measured when a compositor is already congested.
-            'export MAKO_PRESENT_DIAGNOSTICS="${MAKO_PRESENT_DIAGNOSTICS:-0}"',
-            f"export {MAKO_LAYER_ENABLE_ENV}=1",
-            *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
-            f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
-            f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
-            f'mako_external_vulkan_layer="${{{EXTERNAL_VULKAN_LAYER_ENV}:-}}"',
-            f"unset {EXTERNAL_VULKAN_LAYER_ENV}",
-            f"mako_gamescope_wsi_layer_dir={gamescope_wsi_layer_dir}",
-            "unset MANGOHUD",
-            "unset ENABLE_VKBASALT",
-            f"if [ -d {shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)} ]; then",
-            f"    mako_implicit_layer_path={shlex.quote(FLATPAK_IMPLICIT_LAYER_DIR)}",
-            "else",
-            f"    mako_implicit_layer_path={shlex.quote(str(self.local_share_dir))}",
-            '    case "$mako_external_vulkan_layer" in',
-            f"        {EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI})",
-            f"            if [ -r {gamescope_wsi_manifest} ]; then",
-            f"                unset {GAMESCOPE_WSI_DISABLE_ENV}",
-            f"                export {GAMESCOPE_WSI_ENABLE_ENV}=1",
-            "                export NODEVICE_SELECT=1",
-            "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
-            '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_gamescope_wsi_layer_dir"',
-            "            fi",
-            "            ;;",
-            f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
-            "            export MANGOHUD=1",
-            "            export NODEVICE_SELECT=1",
-            "            export DISABLE_LAYER_MESA_ANTI_LAG=1",
-            f"            if [ -d {system_layer_dir} ]; then",
-            f'                mako_implicit_layer_path="$mako_implicit_layer_path:{HOST_SYSTEM_IMPLICIT_LAYER_DIR}"',
-            "            fi",
-            "            ;;",
-            f"        {EXTERNAL_VULKAN_LAYER_VKBASALT})",
-            "            unset DISABLE_VKBASALT",
-            "            export ENABLE_VKBASALT=1",
-            "            export NODEVICE_SELECT=1",
-            "            export DISABLE_LAYER_MESA_ANTI_LAG=1",
-            f"            if [ -d {system_layer_dir} ]; then",
-            f'                mako_implicit_layer_path="$mako_implicit_layer_path:{HOST_SYSTEM_IMPLICIT_LAYER_DIR}"',
-            "            fi",
-            "            ;;",
-            "    esac",
-            "fi",
-            'export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"',
-            "unset VK_ADD_IMPLICIT_LAYER_PATH",
-            f"export MAKO_CONFIG={shlex.quote(str(self.config_file_path))}",
-            "# Heroic can discard a game's stderr. Capture opt-in engine diagnostics here instead.",
-            f"mako_diagnostics_default={shlex.quote(str(diagnostics_log_path))}",
-            'if [ "${MAKO_PRESENT_DIAGNOSTICS:-0}" != "0" ]; then',
-            '    mako_diagnostics_log="${MAKO_PRESENT_DIAGNOSTICS_LOG:-$mako_diagnostics_default}"',
-            '    if : > "$mako_diagnostics_log" 2>/dev/null; then',
-            '        exec 2>> "$mako_diagnostics_log"',
-            "    fi",
-            "fi",
-        ]
+        return wrapper_generation.layer_environment_lines(
+            self._wrapper_generation_context()
+        )
 
     def migrate_launch_script_if_needed(self) -> bool:
         """Replace stale generated cache from canonical profile/config state.
@@ -925,18 +652,13 @@ class ConfigurationService(BaseService):
 
         try:
             current_content = self.mako_script_path.read_text(encoding="utf-8")
-            wrapper_is_current = (
-                self._WRAPPER_FORMAT_MARKER in current_content
-                and self._HOST_COMPATIBILITY_MARKER in current_content
-                and self._diagnostics_default_marker() in current_content
-                and all(
-                    export in current_content
-                    for export in self._REQUIRED_WRAPPER_EXPORTS
-                )
-                and not any(
-                    export in current_content
-                    for export in self._OBSOLETE_WRAPPER_EXPORTS
-                )
+            wrapper_is_current = wrapper_generation.is_current_wrapper(
+                current_content,
+                self._WRAPPER_FORMAT_MARKER,
+                self._HOST_COMPATIBILITY_MARKER,
+                self._diagnostics_default_marker(),
+                self._REQUIRED_WRAPPER_EXPORTS,
+                self._OBSOLETE_WRAPPER_EXPORTS,
             )
             if wrapper_is_current:
                 return False
@@ -960,22 +682,11 @@ class ConfigurationService(BaseService):
     def _generate_unsupported_host_passthrough_lines(
             indent: str = "") -> list[str]:
         """Disable MAKO and preserve Armada's launcher exactly once."""
-        device_env = ARMADA_DEVICE_ENV.as_posix()
-        game_launch = ARMADA_GAME_LAUNCH.as_posix()
-        return [
-            f"{indent}unset {MAKO_LAYER_ENABLE_ENV}",
-            f"{indent}export {MAKO_LAYER_DISABLE_ENV}=1",
-            f'{indent}armada_game_launch="{game_launch}"',
-            f'{indent}if [ -f "{device_env}" ] && [ -x "$armada_game_launch" ]; then',
-            f'{indent}    for argument in "$@"; do',
-            f'{indent}        if [ "$argument" = "$armada_game_launch" ]; then',
-            f'{indent}            exec "$@"',
-            f"{indent}        fi",
-            f"{indent}    done",
-            f'{indent}    exec "$armada_game_launch" "$@"',
-            f"{indent}fi",
-            f'{indent}exec "$@"',
-        ]
+        return wrapper_generation.unsupported_host_passthrough_lines(
+            ARMADA_DEVICE_ENV,
+            ARMADA_GAME_LAUNCH,
+            indent,
+        )
 
     @staticmethod
     def _generate_host_compatibility_guard_lines() -> list[str]:
@@ -988,17 +699,14 @@ class ConfigurationService(BaseService):
         ordinary native AArch64 shell. This branch executes before MAKO, Vulkan
         path, diagnostics, HDR, or competing-layer variables are changed.
         """
-        device_env = ARMADA_DEVICE_ENV.as_posix()
-        return [
+        return wrapper_generation.host_compatibility_guard_lines(
+            ARMADA_DEVICE_ENV,
+            ARMADA_GAME_LAUNCH,
             ConfigurationService._HOST_COMPATIBILITY_MARKER,
-            'mako_native_arch="$(uname -m 2>/dev/null || true)"',
-            f'if [ -f "{device_env}" ] || [ "$mako_native_arch" = "aarch64" ] || [ "$mako_native_arch" = "arm64" ]; then',
-            "    # This release has no validated native AArch64 Renderer.",
-            *ConfigurationService._generate_unsupported_host_passthrough_lines(
+            ConfigurationService._generate_unsupported_host_passthrough_lines(
                 "    "
             ),
-            "fi",
-        ]
+        )
 
     def _get_profile_data(self) -> ProfileData:
         """Get current profile data from config file"""
@@ -1079,12 +787,9 @@ class ConfigurationService(BaseService):
             profile_settings[normalized_name] = dict(
                 self._wrapper_settings_for_profile(source_profile, profile_settings)
             )
-            metadata[normalized_name] = {
-                "display_name": profile_name.strip(),
-                "kind": "process",
-                "steam_app_id": None,
-                "captured_processes": [],
-            }
+            metadata[normalized_name] = profile_storage.profile_metadata_entry(
+                profile_name.strip(), PROFILE_KIND_PROCESS
+            )
             self._save_profile_data(new_profile_data)
             self._write_wrapper_profile_settings(profile_settings)
             self._write_profile_metadata(metadata)
@@ -1171,9 +876,9 @@ class ConfigurationService(BaseService):
             profile_settings = self._read_wrapper_profile_settings()
             if old_name in profile_settings:
                 profile_settings[normalized_name] = profile_settings.pop(old_name)
-            if old_name in metadata:
-                metadata[normalized_name] = metadata.pop(old_name)
-                metadata[normalized_name]["display_name"] = new_name.strip()
+            profile_storage.rename_profile_metadata(
+                metadata, old_name, normalized_name, new_name.strip()
+            )
             self._save_profile_data(new_profile_data)
             if self.wrapper_profile_settings_path.exists() or profile_settings:
                 self._write_wrapper_profile_settings(profile_settings)
@@ -1238,8 +943,10 @@ class ConfigurationService(BaseService):
 
             target_profile = next((
                 profile_name
-                for profile_name, entry in metadata.items()
-                if entry.get("steam_app_id") == normalized_app_id
+                for profile_name in metadata
+                if profile_storage.metadata_steam_app_id(
+                    metadata, profile_name
+                ) == normalized_app_id
             ), None)
 
             detected_names = {name.casefold() for name in processes}
@@ -1251,7 +958,8 @@ class ConfigurationService(BaseService):
                     # created profile, but it must never repurpose a profile
                     # already bound to a different Steam game. Many unrelated
                     # games use the same generic executable name.
-                    if metadata.get(profile_name, {}).get("steam_app_id"):
+                    if profile_storage.metadata_steam_app_id(
+                            metadata, profile_name):
                         continue
                     configured_names = {
                         name.casefold() for name in self._processes_for_config(config)
@@ -1289,8 +997,8 @@ class ConfigurationService(BaseService):
             )
             previous_captured = {
                 name.casefold()
-                for name in metadata.get(target_profile, {}).get(
-                    "captured_processes", []
+                for name in profile_storage.metadata_captured_processes(
+                    metadata, target_profile
                 )
             }
             # Refresh automatically captured identities, while retaining any
@@ -1310,12 +1018,12 @@ class ConfigurationService(BaseService):
             profile_data = ConfigurationManager.set_current_profile(
                 profile_data, target_profile
             )
-            metadata[target_profile] = {
-                "display_name": friendly_name,
-                "kind": "game",
-                "steam_app_id": normalized_app_id,
-                "captured_processes": processes,
-            }
+            metadata[target_profile] = profile_storage.profile_metadata_entry(
+                friendly_name,
+                PROFILE_KIND_GAME,
+                normalized_app_id,
+                processes,
+            )
 
             self._save_profile_data(profile_data)
             self._write_wrapper_profile_settings(profile_settings)
@@ -1406,9 +1114,11 @@ class ConfigurationService(BaseService):
             if detected_processes:
                 target_profile = next((
                     profile_name
-                    for profile_name, entry in metadata.items()
+                    for profile_name in metadata
                     if profile_name != DEFAULT_PROFILE_NAME
-                    and entry.get("steam_app_id") == normalized_app_id
+                    and profile_storage.metadata_steam_app_id(
+                        metadata, profile_name
+                    ) == normalized_app_id
                 ), None)
 
                 if target_profile is None:
@@ -1420,7 +1130,9 @@ class ConfigurationService(BaseService):
                         profile_name
                         for profile_name, config in profile_data["profiles"].items()
                         if profile_name != DEFAULT_PROFILE_NAME
-                        and not metadata.get(profile_name, {}).get("steam_app_id")
+                        and not profile_storage.metadata_steam_app_id(
+                            metadata, profile_name
+                        )
                         and detected_names & {
                             process_name.casefold()
                             for process_name in self._processes_for_config(config)

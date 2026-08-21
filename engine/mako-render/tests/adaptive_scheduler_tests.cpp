@@ -1,15 +1,21 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "adaptive_scheduler.hpp"
+#include "generated_frame_delivery.hpp"
 #include "presentation_policy.hpp"
 
+#include <array>
+#include <bit>
 #include <chrono>
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
+#include <exception>
 #include <iostream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace mako::layer;
@@ -321,6 +327,121 @@ namespace {
         }
     }
 
+    class TraceFingerprint {
+    public:
+        void mix(const uint64_t value) {
+            this->value ^= value;
+            this->value *= 1099511628211ULL;
+        }
+
+        void mix(const std::string_view text) {
+            for (const char character : text)
+                this->mix(static_cast<unsigned char>(character));
+            this->mix(0xffU);
+        }
+
+        [[nodiscard]] uint64_t get() const { return this->value; }
+
+    private:
+        uint64_t value{1469598103934665603ULL};
+    };
+
+    uint64_t characterizeTrace(const uint32_t targetFps,
+            const size_t maximumMultiplier, const bool stableCadence,
+            const AdaptiveRecoveryPolicy recoveryPolicy,
+            const std::vector<std::chrono::nanoseconds>& intervals) {
+        Harness harness(
+            targetFps, maximumMultiplier, stableCadence, recoveryPolicy
+        );
+        harness.start();
+        TraceFingerprint fingerprint;
+        for (const auto interval : intervals) {
+            const auto plan = harness.frame(interval);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+            fingerprint.mix(plan.size());
+            for (const float timestamp : plan)
+                fingerprint.mix(std::bit_cast<uint32_t>(timestamp));
+
+            const auto snapshot = harness.scheduler.snapshot();
+            fingerprint.mix(static_cast<uint8_t>(snapshot.phase));
+            fingerprint.mix(snapshot.generationLimit);
+            fingerprint.mix(snapshot.validatedGenerationLimit);
+            fingerprint.mix(snapshot.stableCadenceLimit.has_value());
+            fingerprint.mix(snapshot.stableCadenceLimit.value_or(0));
+            fingerprint.mix(snapshot.historyWarmupRemaining);
+            fingerprint.mix(snapshot.rampEvaluationActive);
+            fingerprint.mix(snapshot.rearmRequired);
+            fingerprint.mix(snapshot.discontinuityRecoveryActive);
+        }
+        for (const auto& event : harness.diagnostics.events) {
+            fingerprint.mix(event.operation);
+            fingerprint.mix(event.reason);
+            fingerprint.mix(event.accepted);
+            fingerprint.mix(event.previousLimit);
+            fingerprint.mix(event.testedLimit);
+        }
+        return fingerprint.get();
+    }
+
+    std::vector<std::chrono::nanoseconds> constantTrace(
+            const std::chrono::nanoseconds interval, const size_t frames) {
+        return std::vector<std::chrono::nanoseconds>(frames, interval);
+    }
+
+    void testCharacterizationTraceCorpus() {
+        const auto steady45 = characterizeTrace(
+            90, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            constantTrace(22'222'222ns, 540)
+        );
+        const auto boundary425 = characterizeTrace(
+            90, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            constantTrace(23'529'411ns, 510)
+        );
+        const auto boundary4275 = characterizeTrace(
+            90, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            constantTrace(23'391'812ns, 513)
+        );
+        const auto boundary43 = characterizeTrace(
+            90, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            constantTrace(23'255'813ns, 516)
+        );
+
+        std::vector<std::chrono::nanoseconds> disruptionTrace;
+        disruptionTrace.reserve(640);
+        constexpr std::array cadence{
+            17ms, 16ms, 17ms, 16ms, 50ms, 16ms, 17ms, 200ms,
+            16ms, 16ms, 17ms, 1ms, 1ms, 16ms, 33ms, 34ms,
+        };
+        for (size_t replay = 0; replay < 40; ++replay) {
+            disruptionTrace.insert(
+                disruptionTrace.end(), cadence.begin(), cadence.end()
+            );
+        }
+        const auto disruptions = characterizeTrace(
+            120, 4, true, AdaptiveRecoveryPolicy::ConservativeHdr,
+            disruptionTrace
+        );
+
+        require(steady45 == 12777908042654023899ULL,
+            "45-to-90 characterization changed: " +
+                std::to_string(steady45));
+        require(boundary425 == 1223184821884231205ULL,
+            "42.5-to-90 characterization changed: " +
+                std::to_string(boundary425));
+        require(boundary4275 == 15981559191712361698ULL,
+            "42.75-to-90 characterization changed: " +
+                std::to_string(boundary4275));
+        require(boundary43 == 8557601161360105282ULL,
+            "43-to-90 characterization changed: " +
+                std::to_string(boundary43));
+        require(disruptions == 1580889166940170359ULL,
+            "disruption characterization changed: " +
+                std::to_string(disruptions));
+    }
+
     void testStartupWarmupIsExplicit() {
         Harness harness(120, 3);
         require(harness.scheduler.historyWarmupRemaining() == 3,
@@ -417,6 +538,40 @@ namespace {
             "scheduler accepted more than three generated-frame slots");
     }
 
+    void testGeneratedDeliveryWindowContract() {
+        GeneratedDeliveryWindow window;
+        require(window.healthy(),
+            "an empty delivery window should be healthy");
+
+        window.record({.requested = 1, .acceptedForPresentation = 0});
+        require(!window.healthy(),
+            "complete loss in a short window was incorrectly tolerated");
+
+        window.reset();
+        window.record({.requested = 19, .acceptedForPresentation = 18});
+        require(!window.healthy(),
+            "short evaluation windows must require complete delivery");
+
+        window.reset();
+        window.record({.requested = 20, .acceptedForPresentation = 19});
+        require(window.healthy(),
+            "one isolated miss in a full window should be tolerated");
+        window.record({.requested = 0, .acceptedForPresentation = 20});
+        require(window.healthy(),
+            "accepted-frame clamping changed delivery health");
+
+        window.reset();
+        window.record({.requested = 1, .acceptedForPresentation = 2});
+        window.record({.requested = 1, .acceptedForPresentation = 0});
+        require(window.acceptedForPresentation() == 1 && !window.healthy(),
+            "surplus acceptance from one sample hid a later miss");
+
+        window.reset();
+        window.record({.requested = 20, .acceptedForPresentation = 18});
+        require(!window.healthy(),
+            "persistent delivery pressure was incorrectly tolerated");
+    }
+
     void testSteadySixtyRampsToTwoXFor120Target() {
         Harness harness(120, 3);
         harness.start();
@@ -441,14 +596,16 @@ namespace {
             const auto plan = harness.frameAtFps(60.0);
             if (harness.scheduler.snapshot().rampEvaluationActive &&
                     !reportedMiss && !plan.empty()) {
-                harness.scheduler.reportGeneratedFrameDelivery(
-                    plan.size(), plan.size() - 1
-                );
+                harness.scheduler.reportGeneratedFrameDelivery({
+                    .requested = plan.size(),
+                    .acceptedForPresentation = plan.size() - 1,
+                });
                 reportedMiss = true;
             } else {
-                harness.scheduler.reportGeneratedFrameDelivery(
-                    plan.size(), plan.size()
-                );
+                harness.scheduler.reportGeneratedFrameDelivery({
+                    .requested = plan.size(),
+                    .acceptedForPresentation = plan.size(),
+                });
             }
             if (reportedMiss && harness.diagnostics.contains("ramp-result"))
                 break;
@@ -468,12 +625,16 @@ namespace {
             const auto plan = harness.frameAtFps(60.0);
             if (harness.scheduler.snapshot().rampEvaluationActive &&
                     !plan.empty()) {
-                harness.scheduler.reportGeneratedFrameDelivery(plan.size(), 0);
+                harness.scheduler.reportGeneratedFrameDelivery({
+                    .requested = plan.size(),
+                    .acceptedForPresentation = 0,
+                });
                 reportedPressure = true;
             } else {
-                harness.scheduler.reportGeneratedFrameDelivery(
-                    plan.size(), plan.size()
-                );
+                harness.scheduler.reportGeneratedFrameDelivery({
+                    .requested = plan.size(),
+                    .acceptedForPresentation = plan.size(),
+                });
             }
             if (reportedPressure && harness.diagnostics.contains("ramp-result"))
                 break;
@@ -964,14 +1125,16 @@ namespace {
                 "adaptive-stable-cadence-probe"
             );
             if (probeStarted && !plan.empty()) {
-                harness.scheduler.reportGeneratedFrameDelivery(
-                    plan.size(), 0
-                );
+                harness.scheduler.reportGeneratedFrameDelivery({
+                    .requested = plan.size(),
+                    .acceptedForPresentation = 0,
+                });
                 reportedPressure = true;
             } else {
-                harness.scheduler.reportGeneratedFrameDelivery(
-                    plan.size(), plan.size()
-                );
+                harness.scheduler.reportGeneratedFrameDelivery({
+                    .requested = plan.size(),
+                    .acceptedForPresentation = plan.size(),
+                });
             }
             if (reportedPressure && harness.diagnostics.contains(
                     "adaptive-stable-cadence-rejected"))
@@ -1261,6 +1424,8 @@ int main() {
         {"busy warm-up notification is idempotent", testBusyWarmupNotificationIsIdempotent},
         {"transient busy frame does not rearm warm-up", testTransientBusyFrameDoesNotRearmCompletedWarmup},
         {"invalid configuration is rejected", testInvalidConfigurationIsRejectedAtBoundary},
+        {"generated delivery window contract", testGeneratedDeliveryWindowContract},
+        {"scheduler characterization corpus", testCharacterizationTraceCorpus},
         {"60 to 120 settles at 2x", testSteadySixtyRampsToTwoXFor120Target},
         {"isolated delivery miss keeps ramp", testIsolatedGeneratedFrameMissDoesNotRejectRamp},
         {"persistent delivery loss rejects ramp", testPersistentGeneratedFrameMissesRejectRamp},

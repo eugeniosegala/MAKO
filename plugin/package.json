@@ -5,8 +5,11 @@
   "type": "module",
   "packageManager": "pnpm@11.17.0",
   "scripts": {
-    "build": "node scripts/build-frontend.mjs",
-    "watch": "rollup -c -w",
+    "check:generated-config": "python3 scripts/check_generated_config.py",
+    "generate:i18n": "node scripts/manage-i18n.mjs --generate",
+    "check:i18n": "node scripts/manage-i18n.mjs --check",
+    "build": "npm run check:generated-config && npm run check:i18n && node scripts/build-frontend.mjs",
+    "watch": "npm run check:generated-config && npm run generate:i18n && rollup -c -w",
     "package:local": "./scripts/package-local.sh --local-engine-repo ../engine",
     "package:local-engine": "./scripts/package-local.sh --local-engine-repo ../engine",
     "package:local-engine-fast": "./scripts/package-local.sh --local-engine-repo ../engine --native-only --64-bit-only",
@@ -28,10 +31,11 @@
     "hooks:install": "../scripts/install-git-hooks.sh",
     "package:publish": "./scripts/publish-package.sh",
     "test": "npm run test:backend && npm run test:frontend",
-    "test:backend": "python3 -m unittest discover -s tests -p 'test_*.py'",
-    "test:frontend": "vitest run",
-    "test:frontend:coverage": "vitest run --coverage",
-    "test:frontend:typecheck": "tsc --noEmit -p tsconfig.test.json"
+    "test:backend": "npm run check:generated-config && python3 -m unittest discover -s tests -p 'test_*.py'",
+    "test:i18n": "npm run check:i18n && node --test tests/i18n-contract.test.mjs",
+    "test:frontend": "npm run test:i18n && vitest run",
+    "test:frontend:coverage": "npm run test:i18n && vitest run --coverage",
+    "test:frontend:typecheck": "npm run check:i18n && tsc --noEmit -p tsconfig.test.json"
   },
   "repository": {
     "type": "git",

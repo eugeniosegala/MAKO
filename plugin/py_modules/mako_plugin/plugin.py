@@ -17,8 +17,26 @@ import decky
 from .installation import InstallationService
 from .dll_detection import DllDetectionService
 from .configuration import ConfigurationService
-from .config_schema import ConfigurationManager
-from .flatpak_service import FlatpakService
+from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
+from .flatpak_service import (
+    FlatpakAppInfo,
+    FlatpakExtensionStatus,
+    FlatpakOverrideResponse,
+    FlatpakService,
+)
+from .types import (
+    ConfigSchemaResponse,
+    ConfigurationResponse,
+    DllDetectionResponse,
+    DllStatsResponse,
+    FgmodCheckResponse,
+    FileContentResponse,
+    InstallationCheckResponse,
+    InstallationResult,
+    LaunchOptionResponse,
+    ProfileResponse,
+    ProfilesResponse,
+)
 
 
 class Plugin:
@@ -37,7 +55,7 @@ class Plugin:
         self.configuration_service = ConfigurationService()
         self.flatpak_service = FlatpakService()
 
-    async def install_mako(self) -> Dict[str, Any]:
+    async def install_mako(self) -> InstallationResult:
         """Install MAKO Renderer and refresh existing Flatpak runtime copies.
 
         Returns:
@@ -69,7 +87,7 @@ class Plugin:
             )
         return result
 
-    async def check_mako_installed(self) -> Dict[str, Any]:
+    async def check_mako_installed(self) -> InstallationCheckResponse:
         """Check if MAKO Renderer is already installed
 
         Returns:
@@ -77,7 +95,7 @@ class Plugin:
         """
         return self.installation_service.check_installation()
 
-    async def uninstall_mako(self) -> Dict[str, Any]:
+    async def uninstall_mako(self) -> InstallationResult:
         """Uninstall MAKO Renderer by removing the installed files
 
         Returns:
@@ -85,7 +103,7 @@ class Plugin:
         """
         return self.installation_service.uninstall()
 
-    async def check_lossless_scaling_dll(self) -> Dict[str, Any]:
+    async def check_lossless_scaling_dll(self) -> DllDetectionResponse:
         """Check if Lossless Scaling DLL is available at the expected paths
 
         Returns:
@@ -93,7 +111,7 @@ class Plugin:
         """
         return self.dll_detection_service.check_lossless_scaling_dll()
 
-    async def get_dll_stats(self) -> Dict[str, Any]:
+    async def get_dll_stats(self) -> DllStatsResponse:
         """Get detailed statistics about the detected DLL
 
         Returns:
@@ -151,7 +169,7 @@ class Plugin:
                 "dll_sha256": None
             }
 
-    async def get_mako_config(self) -> Dict[str, Any]:
+    async def get_mako_config(self) -> ConfigurationResponse:
         """Read the current MAKO Renderer configuration.
 
         Returns:
@@ -159,11 +177,13 @@ class Plugin:
         """
         return self.configuration_service.get_config()
 
-    async def get_profile_config(self, profile_name: str) -> Dict[str, Any]:
+    async def get_profile_config(
+            self, profile_name: str
+    ) -> ConfigurationResponse:
         """Read a saved profile without making it the runtime profile."""
         return self.configuration_service.get_profile_config(profile_name)
 
-    async def get_config_schema(self) -> Dict[str, Any]:
+    async def get_config_schema(self) -> ConfigSchemaResponse:
         """Get configuration schema information for frontend
 
         Returns:
@@ -182,8 +202,8 @@ class Plugin:
                 schema_data["profiles"] = profiles_response.get("profiles", [])
                 schema_data["current_profile"] = profiles_response.get("current_profile")
             else:
-                schema_data["profiles"] = ["mako"]
-                schema_data["current_profile"] = "mako"
+                schema_data["profiles"] = [DEFAULT_PROFILE_NAME]
+                schema_data["current_profile"] = DEFAULT_PROFILE_NAME
 
             return schema_data
 
@@ -193,11 +213,13 @@ class Plugin:
                 "field_names": ConfigurationManager.get_field_names(),
                 "field_types": {name: field_type.value for name, field_type in ConfigurationManager.get_field_types().items()},
                 "defaults": ConfigurationManager.get_defaults(),
-                "profiles": ["mako"],
-                "current_profile": "mako"
+                "profiles": [DEFAULT_PROFILE_NAME],
+                "current_profile": DEFAULT_PROFILE_NAME
             }
 
-    async def update_mako_config(self, config: Dict[str, Any]) -> Dict[str, Any]:
+    async def update_mako_config(
+            self, config: Dict[str, Any]
+    ) -> ConfigurationResponse:
         """Update MAKO Renderer TOML configuration using the object API.
 
         Args:
@@ -210,7 +232,7 @@ class Plugin:
 
         return self.configuration_service.update_config_from_dict(validated_config)
 
-    async def get_profiles(self) -> Dict[str, Any]:
+    async def get_profiles(self) -> ProfilesResponse:
         """Get list of all profiles and current profile
 
         Returns:
@@ -218,7 +240,9 @@ class Plugin:
         """
         return self.configuration_service.get_profiles()
 
-    async def create_profile(self, profile_name: str, source_profile: str = None) -> Dict[str, Any]:
+    async def create_profile(
+            self, profile_name: str, source_profile: str = None
+    ) -> ProfileResponse:
         """Create a new profile
 
         Args:
@@ -230,7 +254,7 @@ class Plugin:
         """
         return self.configuration_service.create_profile(profile_name, source_profile)
 
-    async def delete_profile(self, profile_name: str) -> Dict[str, Any]:
+    async def delete_profile(self, profile_name: str) -> ProfileResponse:
         """Delete a profile
 
         Args:
@@ -241,7 +265,9 @@ class Plugin:
         """
         return self.configuration_service.delete_profile(profile_name)
 
-    async def rename_profile(self, old_name: str, new_name: str) -> Dict[str, Any]:
+    async def rename_profile(
+            self, old_name: str, new_name: str
+    ) -> ProfileResponse:
         """Rename a profile
 
         Args:
@@ -258,13 +284,13 @@ class Plugin:
             app_id: str,
             display_name: str,
             source_profile: str = None,
-    ) -> Dict[str, Any]:
+    ) -> ProfileResponse:
         """Create or refresh a profile from the currently running game."""
         return self.configuration_service.capture_game_profile(
             app_id, display_name, source_profile
         )
 
-    async def set_current_profile(self, profile_name: str) -> Dict[str, Any]:
+    async def set_current_profile(self, profile_name: str) -> ProfileResponse:
         """Set the current active profile
 
         Args:
@@ -275,11 +301,13 @@ class Plugin:
         """
         return self.configuration_service.set_current_profile(profile_name)
 
-    async def sync_current_profile(self, app_id: str = "") -> Dict[str, Any]:
+    async def sync_current_profile(self, app_id: str = "") -> ProfileResponse:
         """Select a live app's saved profile, or restore the default profile."""
         return self.configuration_service.sync_current_profile(app_id)
 
-    async def update_profile_config(self, profile_name: str, config: Dict[str, Any]) -> Dict[str, Any]:
+    async def update_profile_config(
+            self, profile_name: str, config: Dict[str, Any]
+    ) -> ConfigurationResponse:
         """Update configuration for a specific profile
 
         Args:
@@ -293,7 +321,7 @@ class Plugin:
 
         return self.configuration_service.update_profile_config(profile_name, validated_config)
 
-    async def get_launch_option(self) -> Dict[str, Any]:
+    async def get_launch_option(self) -> LaunchOptionResponse:
         """Get the launch option that users need to set for their games
 
         Returns:
@@ -307,7 +335,7 @@ class Plugin:
             "explanation": "The launcher is created during installation, enables MAKO Renderer's Vulkan layer for this game, and selects its private configuration"
         }
 
-    async def get_config_file_content(self) -> Dict[str, Any]:
+    async def get_config_file_content(self) -> FileContentResponse:
         """Get the current config file content
 
         Returns:
@@ -338,7 +366,7 @@ class Plugin:
                 "error": f"Error reading config file: {str(e)}"
             }
 
-    async def get_launch_script_content(self) -> Dict[str, Any]:
+    async def get_launch_script_content(self) -> FileContentResponse:
         """Get the content of the launch script file
 
         Returns:
@@ -370,7 +398,7 @@ class Plugin:
                 "error": str(e)
             }
 
-    async def check_fgmod_directory(self) -> Dict[str, Any]:
+    async def check_fgmod_directory(self) -> FgmodCheckResponse:
         """Check if the fgmod directory exists in the home directory
 
         Returns:
@@ -396,37 +424,41 @@ class Plugin:
                 "error": str(e)
             }
 
-    async def check_flatpak_extension_status(self) -> Dict[str, Any]:
+    async def check_flatpak_extension_status(self) -> FlatpakExtensionStatus:
         """Check status of MAKO Renderer Flatpak runtime extensions
 
         Returns:
-            FlatpakExtensionStatus dict with installation status for both runtime versions
+            FlatpakExtensionStatus dict with installation status for supported runtime versions
         """
         return self.flatpak_service.get_extension_status()
 
-    async def install_flatpak_extension(self, version: str) -> Dict[str, Any]:
+    async def install_flatpak_extension(
+            self, version: str
+    ) -> FlatpakOverrideResponse:
         """Install MAKO Renderer Flatpak runtime extension
 
         Args:
-            version: Runtime version to install ("23.08" or "24.08")
+            version: A supported runtime version to install
 
         Returns:
             BaseResponse dict with success status and message/error
         """
         return self.flatpak_service.install_extension(version)
 
-    async def uninstall_flatpak_extension(self, version: str) -> Dict[str, Any]:
+    async def uninstall_flatpak_extension(
+            self, version: str
+    ) -> FlatpakOverrideResponse:
         """Uninstall MAKO Renderer Flatpak runtime extension
 
         Args:
-            version: Runtime version to uninstall ("23.08" or "24.08")
+            version: A supported runtime version to uninstall
 
         Returns:
             BaseResponse dict with success status and message/error
         """
         return self.flatpak_service.uninstall_extension(version)
 
-    async def get_flatpak_apps(self) -> Dict[str, Any]:
+    async def get_flatpak_apps(self) -> FlatpakAppInfo:
         """Get list of installed Flatpak apps and their MAKO Renderer override status
 
         Returns:
@@ -434,7 +466,9 @@ class Plugin:
         """
         return self.flatpak_service.get_flatpak_apps()
 
-    async def set_flatpak_app_override(self, app_id: str) -> Dict[str, Any]:
+    async def set_flatpak_app_override(
+            self, app_id: str
+    ) -> FlatpakOverrideResponse:
         """Set MAKO Renderer overrides for a Flatpak app
 
         Args:
@@ -445,7 +479,9 @@ class Plugin:
         """
         return self.flatpak_service.set_app_override(app_id)
 
-    async def remove_flatpak_app_override(self, app_id: str) -> Dict[str, Any]:
+    async def remove_flatpak_app_override(
+            self, app_id: str
+    ) -> FlatpakOverrideResponse:
         """Remove MAKO Renderer overrides for a Flatpak app
 
         Args:

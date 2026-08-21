@@ -30,7 +30,7 @@ The fast SteamOS development builder also runs both passes after every successfu
 
 Use `--skip-quality-regression` only for an intentional short iteration. Set `MAKO_QUALITY_DLL=/custom/path/Lossless.dll` when Lossless Scaling is installed outside a standard Steam library, and set `MAKO_QUALITY_GPU="exact device name"` to choose a particular AMD GPU. If the development hardware uses a non-SteamOS distribution whose identity cannot be detected automatically, set `MAKO_STEAM_MACHINE=1` once in its development environment to apply the same mandatory policy.
 
-Recognized Steam Machine hosts already enforce the regression without extra configuration. Release CI can still set `REQUIRED` explicitly to document that hardware contract; the environment form also applies to `build-steamos-dev.sh`, `test-adaptive-scheduler.sh`, and `package-local.sh`:
+Recognized Steam Machine hosts already enforce the regression without extra configuration. Release CI can still set `REQUIRED` explicitly to document that hardware contract; the environment form also applies to `build-steamos-dev.sh` and `package-local.sh`:
 
 ```bash
 cmake -S . -B build -DMAKO_GPU_QUALITY_TEST=REQUIRED
@@ -46,10 +46,12 @@ The command exits successfully only when all broad corruption guardrails pass. I
 
 At startup, the renderer also reports whether `robustImageAccess2` is enabled. MAKO requests this optional Vulkan feature only when the selected device advertises both `VK_EXT_robustness2` and the `robustImageAccess2` feature bit. Unsupported devices retain the existing path. Robust buffer access and null descriptors are not requested.
 
-The scene generator, scoring rules, feature-selection policy, and preset shape are covered by CTest:
+The scene generator, scoring rules, feature-selection policy, and preset shape are covered by the full CTest build described in the [root testing guide](../../TESTING.md). From the `engine/` directory:
 
 ```bash
-./scripts/test-adaptive-scheduler.sh
+cmake -S . -B build/quality-policy -DBUILD_TESTING=ON -DMAKO_BUILD_UI=OFF
+cmake --build build/quality-policy --target mako-device-feature-tests mako-image-quality-tests
+ctest --test-dir build/quality-policy --output-on-failure -R '^(optional-device-features|amd-image-quality-scene)$'
 ```
 
 The synthetic tests do not require a GPU or the proprietary shader DLL. The hardware integration test is mandatory by default on recognized Steam Machine development and packaging builds, while `REQUIRED` records the same policy explicitly for release CI.

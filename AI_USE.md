@@ -41,6 +41,10 @@ Adaptive Frame Generation is a useful example. Agents helped accelerate the impl
 
 Development may involve multiple coding agents rather than a single assistant. Through event-driven automation and webhooks, focused tasks can run across real devices and virtual test environments, trigger scenarios, collect logs and performance metrics, and feed that evidence into the next investigation or implementation step. This creates a continuous loop between implementation, measurement, review, and validation.
 
+Repository agents follow [the repository guide](AGENTS.md) for directory placement, source-of-truth ownership, compatibility boundaries, generated files, and mutation limits, then use [the testing guide](TESTING.md) to select evidence in proportion to the affected boundary. They inspect the current worktree before editing, preserve unrelated changes, extend an existing owner instead of creating parallel constants or serialization paths, and report any hardware or runtime matrix that was not exercised.
+
+Local implementation, refactoring, testing, or packaging does not by itself authorize a branch change, commit, push, deployment, tag, or release. Those mutations remain explicit maintainer decisions, and the release scripts enforce a clean, reviewed, hardware-validated path from Renderer publication through the pinned MAKO Decky package.
+
 The current toolset includes Claude Code and Codex alongside conventional engineering, build, test, profiling, and source-control tools. The specific tools may change; the requirements for review and validation do not.
 
 ## Accountability
@@ -49,4 +53,7 @@ AI tools do not make final architectural or release decisions for MAKO. The main
 
 ## Further reading
 
+- [MAKO repository guide for coding agents](AGENTS.md)
+- [Testing MAKO](TESTING.md)
+- [How to release MAKO](HOW_TO_RELEASE.md)
 - [Event-Driven Development for AI Agents](https://eugeniosegala.dev/event-driven-development-for-ai-agents/)

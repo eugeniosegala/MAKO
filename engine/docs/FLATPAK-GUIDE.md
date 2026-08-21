@@ -24,6 +24,8 @@ cd engine
 
 The script builds and verifies both 64-bit and 32-bit MAKO Renderer libraries for every supported runtime. The resulting archive is written under `engine/out/`.
 
+`dist/flatpak/mako-render/runtime-versions.txt` owns the ordered Renderer build matrix. Each listed version must have a matching standalone manifest in that directory; MAKO Decky's shared runtime contract is regression-tested against the same ordered versions.
+
 ## Manual application override
 
 MAKO Decky normally manages Flatpak access per selected application. For direct development, replace `APP_ID` below and grant the application access to MAKO Renderer's configuration and the user's Steam library:

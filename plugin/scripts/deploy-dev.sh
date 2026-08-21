@@ -3,6 +3,46 @@
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+flatpak_runtime_version_output="$(
+  python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" versions
+)"
+flatpak_runtime_bundle_output="$(
+  python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" bundles
+)"
+renderer_path_output="$(
+  python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" renderer-paths
+)"
+flatpak_runtime_versions=()
+while IFS= read -r runtime_version; do
+  [[ -n "$runtime_version" ]] && flatpak_runtime_versions+=("$runtime_version")
+done <<< "$flatpak_runtime_version_output"
+flatpak_runtime_bundles=()
+while IFS= read -r runtime_bundle; do
+  [[ -n "$runtime_bundle" ]] && flatpak_runtime_bundles+=("$runtime_bundle")
+done <<< "$flatpak_runtime_bundle_output"
+renderer_paths=()
+while IFS= read -r renderer_path; do
+  [[ -n "$renderer_path" ]] && renderer_paths+=("$renderer_path")
+done <<< "$renderer_path_output"
+if ((${#flatpak_runtime_versions[@]} == 0 ||
+      ${#flatpak_runtime_versions[@]} != ${#flatpak_runtime_bundles[@]})); then
+  echo "The shared Flatpak runtime contract is empty or inconsistent." >&2
+  exit 1
+fi
+if ((${#renderer_paths[@]} != 3)); then
+  echo "The shared Renderer path contract is incomplete." >&2
+  exit 1
+fi
+renderer_library_filename="${renderer_paths[0]}"
+renderer_library_relative_path="${renderer_paths[1]}"
+renderer_library32_relative_path="${renderer_paths[2]}"
+flatpak_runtime_summary="$(
+  python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" summary
+)"
+if [[ -z "$flatpak_runtime_summary" ]]; then
+  echo "The shared Flatpak runtime summary is empty." >&2
+  exit 1
+fi
 plugin_dir="${DECKY_PLUGIN_DIR:-$HOME/homebrew/plugins/Mako}"
 engine_repo="${MAKO_ENGINE_REPO:-$project_dir/../engine}"
 deploy_frontend=false
@@ -14,7 +54,7 @@ reload_plugin=false
 action_selected=false
 
 usage() {
-  cat <<'EOF'
+  cat <<EOF
 Usage: scripts/deploy-dev.sh [options]
 
 Updates an already installed local MAKO Decky plugin in place.
@@ -28,7 +68,7 @@ Options:
   --engine                Incrementally build/deploy the 64-bit host layer plus refreshed dev UI.
   --engine-32             Incrementally build/deploy the 32-bit host layer plus refreshed dev UI.
   --host                  Deploy Decky plus both 64-bit and 32-bit host layers.
-  --flatpaks              Deploy Decky plus Flatpak runtimes 23.08, 24.08, and 25.08.
+  --flatpaks              Deploy Decky plus Flatpak runtimes $flatpak_runtime_summary.
   --e2e                   Deploy Decky, both host layers, and all Flatpak runtime bundles.
   --all                   Deploy frontend, backend, and engine.
   --reload                Reload only this plugin through Decky after deployment.
@@ -229,16 +269,16 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     engine_build_dir="$engine_repo/$engine_build_dir"
   fi
   if [[ "$deploy_engine" == true ]]; then
-    built_layer_64="$engine_build_dir/mako-render/libmako-render.so"
-    installed_layer_64="$HOME/.local/share/mako-render/lib/libmako-render.so"
+    built_layer_64="$engine_build_dir/mako-render/$renderer_library_filename"
+    installed_layer_64="$HOME/$renderer_library_relative_path"
   fi
   if [[ "$deploy_engine_32" == true ]]; then
     engine_build_32_dir="${MAKO_BUILD_32_DIR:-${engine_build_dir}-32}"
     if [[ "$engine_build_32_dir" != /* ]]; then
       engine_build_32_dir="$engine_repo/$engine_build_32_dir"
     fi
-    built_layer_32="$engine_build_32_dir/mako-render/libmako-render.so"
-    installed_layer_32="$HOME/.local/share/mako-render/lib32/libmako-render.so"
+    built_layer_32="$engine_build_32_dir/mako-render/$renderer_library_filename"
+    installed_layer_32="$HOME/$renderer_library32_relative_path"
   fi
   for layer_path in "$built_layer_64" "$built_layer_32"; do
     if [[ -n "$layer_path" && ! -f "$layer_path" ]]; then
@@ -279,8 +319,9 @@ if [[ "$deploy_flatpaks" == true ]]; then
     "$engine_repo/scripts/package-flatpaks.sh" "$flatpak_archive"
   flatpak_unpack_dir="$(mktemp -d "${TMPDIR:-/tmp}/mako-flatpaks.XXXXXX")"
   tar -xJf "$flatpak_archive" -C "$flatpak_unpack_dir"
-  for runtime_version in 23.08 24.08 25.08; do
-    flatpak_bundle="$flatpak_unpack_dir/org.freedesktop.Platform.VulkanLayer.makorender-$runtime_version.flatpak"
+  for ((runtime_index = 0; runtime_index < ${#flatpak_runtime_versions[@]}; runtime_index++)); do
+    runtime_version="${flatpak_runtime_versions[$runtime_index]}"
+    flatpak_bundle="$flatpak_unpack_dir/${flatpak_runtime_bundles[$runtime_index]}"
     if [[ ! -s "$flatpak_bundle" ]]; then
       echo "Flatpak archive is missing runtime $runtime_version: $flatpak_bundle" >&2
       exit 1
@@ -317,11 +358,12 @@ node "$project_dir/scripts/generate-dev-build-info.mjs" "${dev_build_info_args[@
 copy_file "$project_dir/defaults/build_flavor.dev.py" \
   "$plugin_dir/py_modules/mako_plugin/build_flavor.py"
 
+if [[ "$deploy_frontend" == true || "$deploy_backend" == true ]]; then
+  echo "Generating configuration bindings..."
+  python3 "$project_dir/scripts/generate_ts_schema.py"
+fi
+
 if [[ "$deploy_frontend" == true ]]; then
-  if [[ "$deploy_backend" == true ]]; then
-    echo "Generating configuration bindings..."
-    python3 "$project_dir/scripts/generate_ts_schema.py"
-  fi
   echo "Building Decky frontend..."
   (
     cd "$project_dir"
@@ -364,11 +406,10 @@ if [[ -n "$built_layer_32" ]]; then
   echo "Deployed incremental 32-bit engine layer."
 fi
 if [[ -n "$flatpak_archive" ]]; then
-  for runtime_version in 23.08 24.08 25.08; do
-    flatpak_bundle="org.freedesktop.Platform.VulkanLayer.makorender-$runtime_version.flatpak"
+  for flatpak_bundle in "${flatpak_runtime_bundles[@]}"; do
     copy_file "$flatpak_unpack_dir/$flatpak_bundle" "$plugin_dir/bin/$flatpak_bundle"
   done
-  echo "Deployed Flatpak runtime bundles 23.08, 24.08, and 25.08."
+  echo "Deployed Flatpak runtime bundles $flatpak_runtime_summary."
 fi
 
 if [[ "$reload_plugin" == true ]]; then

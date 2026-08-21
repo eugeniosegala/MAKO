@@ -13,11 +13,60 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from shared_config import CONFIG_SCHEMA_DEF, ConfigFieldType
+from shared_config import (
+    ADAPTIVE_MAX_MULTIPLIER_MAX,
+    ADAPTIVE_MAX_MULTIPLIER_MIN,
+    ADAPTIVE_MINIMUM_BASE_FPS,
+    BASE_FPS_CAP_MAX,
+    BASE_FPS_CAP_MIN,
+    BASE_FPS_CAP_UI_MAX,
+    CONFIG_SCHEMA_DEF,
+    DEFAULT_PROFILE_NAME,
+    EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
+    EXTERNAL_VULKAN_LAYER_MANGOHUD,
+    EXTERNAL_VULKAN_LAYER_NONE,
+    EXTERNAL_VULKAN_LAYER_VKBASALT,
+    FIXED_MULTIPLIER_MIN,
+    FIXED_MULTIPLIER_UI_MAX,
+    FIXED_MULTIPLIER_UI_MIN,
+    FLOW_SCALE_MAX,
+    FLOW_SCALE_MIN,
+    MAKO_WRAPPER_RELATIVE_PATH,
+    PER_GAME_WRAPPER_FLATPAK_APP_IDS,
+    PROFILE_KIND_VALUES,
+    SUPPORTED_FLATPAK_RUNTIME_VERSIONS,
+    TARGET_FPS_MAX,
+    TARGET_FPS_MIN,
+    ConfigFieldType,
+)
 
 
 def generate_typescript_schema():
     """Generate generatedConfigSchema.ts from Python schema"""
+
+    runtime_descriptors = []
+    for version in SUPPORTED_FLATPAK_RUNTIME_VERSIONS:
+        major, separator, minor = version.partition(".")
+        if not separator or not major.isdigit() or not minor.isdigit():
+            raise ValueError(f"Invalid Flatpak runtime version: {version}")
+        status_field = f"installed_{major}_{minor}"
+        i18n_key = "FLATPAK_RUNTIME_VERSION"
+        runtime_descriptors.append(
+            "  { "
+            f'version: "{version}", '
+            f'statusField: "{status_field}", '
+            f'i18nKey: "{i18n_key}" '
+            "},"
+        )
+
+    profile_kind_constants = [
+        f'export const PROFILE_KIND_{kind.upper()} = "{kind}" as const;'
+        for kind in PROFILE_KIND_VALUES
+    ]
+    profile_kind_references = [
+        f"  PROFILE_KIND_{kind.upper()},"
+        for kind in PROFILE_KIND_VALUES
+    ]
 
     # Generate field name constants
     field_constants = []
@@ -28,6 +77,71 @@ def generate_typescript_schema():
     # Generate enum
     enum_lines = [
         "// src/config/generatedConfigSchema.ts",
+        "// Stable cross-language profile contract",
+        f'export const DEFAULT_PROFILE_NAME = "{DEFAULT_PROFILE_NAME}" as const;',
+        "export const MAKO_WRAPPER_RELATIVE_PATH = "
+        f'"{MAKO_WRAPPER_RELATIVE_PATH}" as const;',
+        "export const PER_GAME_WRAPPER_FLATPAK_APP_IDS = [",
+        *(
+            f'  "{app_id}",'
+            for app_id in PER_GAME_WRAPPER_FLATPAK_APP_IDS
+        ),
+        "] as const;",
+        *profile_kind_constants,
+        "export const PROFILE_KIND_VALUES = [",
+        *profile_kind_references,
+        "] as const;",
+        "export type ProfileKind = (typeof PROFILE_KIND_VALUES)[number];",
+        "",
+        "// Ordered Flatpak runtime contract generated from shared_config.py",
+        "export const SUPPORTED_FLATPAK_RUNTIMES = [",
+        *runtime_descriptors,
+        "] as const;",
+        "export type FlatpakRuntimeVersion =",
+        "  (typeof SUPPORTED_FLATPAK_RUNTIMES)[number][\"version\"];",
+        "export type FlatpakRuntimeStatusField =",
+        "  (typeof SUPPORTED_FLATPAK_RUNTIMES)[number][\"statusField\"];",
+        "export type FlatpakRuntimeI18nKey =",
+        "  (typeof SUPPORTED_FLATPAK_RUNTIMES)[number][\"i18nKey\"];",
+        "",
+        "// Shared backend validation and Decky UI limits",
+        f"export const BASE_FPS_CAP_MIN = {BASE_FPS_CAP_MIN} as const;",
+        f"export const BASE_FPS_CAP_MAX = {BASE_FPS_CAP_MAX} as const;",
+        f"export const BASE_FPS_CAP_UI_MAX = {BASE_FPS_CAP_UI_MAX} as const;",
+        f"export const TARGET_FPS_MIN = {TARGET_FPS_MIN} as const;",
+        f"export const TARGET_FPS_MAX = {TARGET_FPS_MAX} as const;",
+        "export const ADAPTIVE_MAX_MULTIPLIER_MIN = "
+        f"{ADAPTIVE_MAX_MULTIPLIER_MIN} as const;",
+        "export const ADAPTIVE_MAX_MULTIPLIER_MAX = "
+        f"{ADAPTIVE_MAX_MULTIPLIER_MAX} as const;",
+        "export const ADAPTIVE_MINIMUM_BASE_FPS = "
+        f"{ADAPTIVE_MINIMUM_BASE_FPS} as const;",
+        f"export const FLOW_SCALE_MIN = {FLOW_SCALE_MIN} as const;",
+        f"export const FLOW_SCALE_MAX = {FLOW_SCALE_MAX} as const;",
+        f"export const FIXED_MULTIPLIER_MIN = {FIXED_MULTIPLIER_MIN} as const;",
+        "export const FIXED_MULTIPLIER_UI_MIN = "
+        f"{FIXED_MULTIPLIER_UI_MIN} as const;",
+        "export const FIXED_MULTIPLIER_UI_MAX = "
+        f"{FIXED_MULTIPLIER_UI_MAX} as const;",
+        "",
+        "// Stable persisted values for the optional external Vulkan layer",
+        "export const EXTERNAL_VULKAN_LAYER_NONE = "
+        f'"{EXTERNAL_VULKAN_LAYER_NONE}" as const;',
+        "export const EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI = "
+        f'"{EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI}" as const;',
+        "export const EXTERNAL_VULKAN_LAYER_MANGOHUD = "
+        f'"{EXTERNAL_VULKAN_LAYER_MANGOHUD}" as const;',
+        "export const EXTERNAL_VULKAN_LAYER_VKBASALT = "
+        f'"{EXTERNAL_VULKAN_LAYER_VKBASALT}" as const;',
+        "export const EXTERNAL_VULKAN_LAYER_VALUES = [",
+        "  EXTERNAL_VULKAN_LAYER_NONE,",
+        "  EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,",
+        "  EXTERNAL_VULKAN_LAYER_MANGOHUD,",
+        "  EXTERNAL_VULKAN_LAYER_VKBASALT,",
+        "] as const;",
+        "export type ExternalVulkanLayer =",
+        "  (typeof EXTERNAL_VULKAN_LAYER_VALUES)[number];",
+        "",
         "// Configuration field type enum - matches Python",
         "export enum ConfigFieldType {",
         "  BOOLEAN = \"boolean\",",
@@ -68,7 +182,7 @@ def generate_typescript_schema():
             default_str = str(default_value)
 
         schema_entries.append(f'  {field_name}: {{')
-        schema_entries.append(f'    name: "{field_def["name"]}",')
+        schema_entries.append(f'    name: "{field_name}",')
         schema_entries.append(f'    fieldType: ConfigFieldType.{field_def["fieldType"].upper()},')
         schema_entries.append(f'    default: {default_str},')
         schema_entries.append(f'    description: "{field_def["description"]}"')

@@ -14,6 +14,24 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  trace-producer:
+    name: Trace producer contract (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v6
+      - name: Set up portable Python runtime
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+      - name: Exercise safe capture staging and sanitization
+        run: ./scripts/test-capture-trace.sh
+
   decky:
     name: MAKO Decky
     runs-on: ubuntu-latest

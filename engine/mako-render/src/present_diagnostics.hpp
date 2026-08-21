@@ -17,7 +17,9 @@ namespace mako::layer::present_diagnostics {
     using Clock = std::chrono::steady_clock;
 
     [[nodiscard]] uint64_t allocateContextId();
+    /// Return the process-start diagnostic policy shared by all layer paths.
     [[nodiscard]] bool enabled();
+    /// Return the process-start slow-operation threshold in milliseconds.
     [[nodiscard]] double thresholdMilliseconds();
     [[nodiscard]] Clock::time_point start();
 

@@ -5,12 +5,7 @@ import os
 import re
 from typing import Dict, Iterable, Optional
 
-
-_APP_ID_ENV_KEYS = (
-    "SteamAppId",
-    "SteamGameId",
-    "STEAM_COMPAT_APP_ID",
-)
+from .constants import SCRIPT_NAME, STEAM_APP_ID_ENV_KEYS
 
 _HELPER_PROCESS_NAMES = {
     "bash",
@@ -20,7 +15,7 @@ _HELPER_PROCESS_NAMES = {
     "flatpak",
     "gameoverlayui",
     "gamescope",
-    "mako-run",
+    Path(SCRIPT_NAME).name,
     "ntoskrnl.exe",
     "plugplay.exe",
     "pressure-vessel-wrap",
@@ -151,7 +146,7 @@ def detect_processes_for_steam_app(
         except (OSError, ValueError):
             continue
         if normalized_app_id not in {
-            environment.get(key, "").strip() for key in _APP_ID_ENV_KEYS
+            environment.get(key, "").strip() for key in STEAM_APP_ID_ENV_KEYS
         }:
             continue
         candidates.update(_candidate_names(process_dir))

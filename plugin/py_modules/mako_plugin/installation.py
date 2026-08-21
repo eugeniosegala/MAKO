@@ -9,7 +9,7 @@ import tempfile
 import json
 import hashlib
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Any, Dict, Optional, TypedDict, cast
 
 from .base_service import BaseService
 from .constants import (
@@ -21,14 +21,41 @@ from .constants import (
     GAMESCOPE_WSI_LAYER_NAME_64, GAMESCOPE_WSI_MANIFEST_FILENAME_64,
     HOST_SYSTEM_IMPLICIT_LAYER_DIR,
     ARMADA_DEVICE_ENV,
+    LEGACY_LOSSLESS_DLL_PLACEHOLDER,
+    PLUGIN_ROOT,
 )
-from .config_schema import ConfigurationManager
+from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
 from .host_environment import detect_host_environment
 from .managed_files import (
     copy_managed_file_atomically,
     write_managed_text_atomically,
 )
 from .types import InstallationResponse, UninstallationResponse, InstallationCheckResponse
+
+
+class RendererArchiveMetadata(TypedDict):
+    """Validated Renderer payload metadata consumed by installation."""
+
+    name: str
+    version: str
+    sha256hash: str
+    architectures: list[str]
+    host_architectures: list[str]
+
+
+class InstalledEngineStateRequired(TypedDict):
+    """Fields required to identify an installed Renderer payload."""
+
+    archive: str
+    version: str
+    sha256hash: str
+
+
+class InstalledEngineState(InstalledEngineStateRequired, total=False):
+    """Installed payload record with optional legacy-compatible descriptors."""
+
+    architectures: list[str]
+    host_architectures: list[str]
 
 
 class InstallationService(BaseService):
@@ -55,10 +82,9 @@ class InstallationService(BaseService):
             InstallationResponse with success status and message/error
         """
         try:
-            plugin_dir = Path(__file__).parent.parent.parent
-            archive_metadata = self._bundled_archive_metadata(plugin_dir)
+            archive_metadata = self._bundled_archive_metadata(PLUGIN_ROOT)
             self._validate_host_architecture(archive_metadata)
-            archive_path = plugin_dir / BIN_DIR / archive_metadata["name"]
+            archive_path = PLUGIN_ROOT / BIN_DIR / archive_metadata["name"]
 
             if not archive_path.exists():
                 error_msg = f"Bundled MAKO Renderer archive not found at {archive_path}"
@@ -86,7 +112,7 @@ class InstallationService(BaseService):
 
             self._create_mako_launch_script()
 
-            self._install_diagnostics_helper(plugin_dir)
+            self._install_diagnostics_helper(PLUGIN_ROOT)
 
             self._write_engine_state(archive_metadata)
 
@@ -102,7 +128,8 @@ class InstallationService(BaseService):
             self.log.error(error_msg)
             return self._error_response(InstallationResponse, str(e), message="")
 
-    def _bundled_archive_metadata(self, plugin_dir: Path) -> Dict[str, Any]:
+    def _bundled_archive_metadata(
+            self, plugin_dir: Path) -> RendererArchiveMetadata:
         """Return the versioned host payload metadata from package.json."""
         manifest_path = plugin_dir / "package.json"
         try:
@@ -173,7 +200,8 @@ class InstallationService(BaseService):
         except (OSError, json.JSONDecodeError, TypeError, ValueError, KeyError) as exc:
             raise OSError(f"Could not read bundled MAKO Renderer metadata from {manifest_path}: {exc}") from exc
 
-    def _write_engine_state(self, archive_metadata: Dict[str, Any]) -> None:
+    def _write_engine_state(
+            self, archive_metadata: RendererArchiveMetadata) -> None:
         """Record exactly which pinned payload was installed by this plugin."""
         state = {
             "archive": archive_metadata["name"],
@@ -199,7 +227,9 @@ class InstallationService(BaseService):
         ).native_architecture
 
     def _host_compatibility(
-            self, archive_metadata: Dict[str, Any]) -> tuple[str, bool, Optional[str]]:
+            self,
+            archive_metadata: RendererArchiveMetadata,
+    ) -> tuple[str, bool, Optional[str]]:
         """Return the detected host, support result, and a stable user message."""
         detected = self._detect_native_host_architecture()
         supported = archive_metadata.get("host_architectures", ["x86_64"])
@@ -218,12 +248,12 @@ class InstallationService(BaseService):
     def current_package_host_compatibility(
             self) -> tuple[str, bool, Optional[str]]:
         """Evaluate the bundled Renderer against the native host."""
-        plugin_dir = Path(__file__).parent.parent.parent
         return self._host_compatibility(
-            self._bundled_archive_metadata(plugin_dir)
+            self._bundled_archive_metadata(PLUGIN_ROOT)
         )
 
-    def _validate_host_architecture(self, archive_metadata: Dict[str, Any]) -> None:
+    def _validate_host_architecture(
+            self, archive_metadata: RendererArchiveMetadata) -> None:
         """Reject a Renderer archive built for a different native host ISA."""
         _detected, supported, error = self._host_compatibility(archive_metadata)
         if supported:
@@ -244,7 +274,7 @@ class InstallationService(BaseService):
                 f"expected {expected_checksum.lower()}, got {actual_checksum}"
             )
 
-    def _read_engine_state(self) -> Optional[Dict[str, Any]]:
+    def _read_engine_state(self) -> Optional[InstalledEngineState]:
         """Return the plugin-managed payload record, if one exists."""
         try:
             state = json.loads(self.engine_state_file.read_text(encoding="utf-8"))
@@ -252,7 +282,7 @@ class InstallationService(BaseService):
                 return None
             if not all(isinstance(state.get(key), str) and state[key] for key in ("archive", "version", "sha256hash")):
                 return None
-            return state
+            return cast(InstalledEngineState, state)
         except (OSError, json.JSONDecodeError):
             return None
 
@@ -332,11 +362,11 @@ class InstallationService(BaseService):
                     destination.parent.mkdir(parents=True, exist_ok=True)
                     if filename == JSON_FILENAME:
                         self._copy_and_fix_json_file(
-                            temp_file, destination, "../../lib/libmako-render.so", "64"
+                            temp_file, destination, f"../../lib/{LIB_FILENAME}", "64"
                         )
                     elif filename == JSON32_FILENAME:
                         self._copy_and_fix_json_file(
-                            temp_file, destination, "../../lib32/libmako-render.so", "32"
+                            temp_file, destination, f"../../lib32/{LIB_FILENAME}", "32"
                         )
                     else:
                         # Replace the entry only after the complete file and its
@@ -570,19 +600,19 @@ class InstallationService(BaseService):
         config_service.config_file_path = self.config_file_path
         config_service.wrapper_profile_settings_path = self.wrapper_profile_settings_path
         config_service.profile_metadata_path = self.profile_metadata_path
-        config_service.mako_script_path = self.mako_launch_script_path
+        config_service.mako_script_path = self.mako_script_path
 
         profile_data = config_service._get_profile_data()
         script_content = config_service._generate_script_content_for_profile(profile_data)
 
         # Write the script file
         write_managed_text_atomically(
-            self.mako_launch_script_path,
+            self.mako_script_path,
             script_content,
             0o755,
             self.log,
         )
-        self.log.info(f"Created MAKO launch script at {self.mako_launch_script_path}")
+        self.log.info(f"Created MAKO launch script at {self.mako_script_path}")
 
     def _install_diagnostics_helper(self, plugin_dir: Path) -> None:
         """Install the packaged read-only diagnostic filter beside the wrapper."""
@@ -609,8 +639,7 @@ class InstallationService(BaseService):
 
     def migrate_diagnostics_helper_if_needed(self) -> bool:
         """Install or refresh the helper without requiring an engine reinstall."""
-        plugin_dir = Path(__file__).parent.parent.parent
-        source = self._diagnostics_helper_source(plugin_dir)
+        source = self._diagnostics_helper_source(PLUGIN_ROOT)
         try:
             current = self.diagnostics_script_path.read_bytes()
             bundled = source.read_bytes()
@@ -620,7 +649,7 @@ class InstallationService(BaseService):
         except OSError:
             pass
 
-        self._install_diagnostics_helper(plugin_dir)
+        self._install_diagnostics_helper(PLUGIN_ROOT)
         return True
 
     def get_launch_script_path(self) -> str:
@@ -629,7 +658,7 @@ class InstallationService(BaseService):
         Returns:
             String path to the launch script file
         """
-        return str(self.mako_launch_script_path)
+        return str(self.mako_script_path)
 
     def check_installation(self) -> InstallationCheckResponse:
         """Check if MAKO Renderer is already installed
@@ -644,12 +673,12 @@ class InstallationService(BaseService):
             json32_exists = self.json32_file.exists()
             registered_json_exists = self.registered_json_file.exists()
             registered_json32_exists = self.registered_json32_file.exists()
-            script_exists = self.mako_launch_script_path.exists()
+            script_exists = self.mako_script_path.exists()
             installed = (
                 lib_exists and json_exists and registered_json_exists
                 and script_exists
             )
-            expected = self._bundled_archive_metadata(Path(__file__).parent.parent.parent)
+            expected = self._bundled_archive_metadata(PLUGIN_ROOT)
             host_architecture, host_supported, host_error = (
                 self._host_compatibility(expected)
             )
@@ -687,7 +716,7 @@ class InstallationService(BaseService):
                 "script_exists": script_exists,
                 "lib_path": str(self.lib_file),
                 "json_path": str(self.registered_json_file),
-                "script_path": str(self.mako_launch_script_path),
+                "script_path": str(self.mako_script_path),
                 "installed_engine_version": installed_version,
                 "expected_engine_version": expected["version"],
                 "engine_version_known": version_known,
@@ -707,7 +736,7 @@ class InstallationService(BaseService):
                 "script_exists": False,
                 "lib_path": str(self.lib_file),
                 "json_path": str(self.json_file),
-                "script_path": str(self.mako_launch_script_path),
+                "script_path": str(self.mako_script_path),
                 "installed_engine_version": None,
                 "expected_engine_version": None,
                 "engine_version_known": False,
@@ -732,17 +761,13 @@ class InstallationService(BaseService):
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
                 self.registered_json_file, self.registered_json32_file,
                 self.gamescope_wsi_compatibility_manifest,
-                self.cli_file, self.engine_state_file, self.mako_launch_script_path,
+                self.cli_file, self.engine_state_file, self.mako_script_path,
                 self.diagnostics_script_path,
             ]
 
             for file_path in files_to_remove:
                 if self._remove_if_exists(file_path):
                     removed_files.append(str(file_path))
-
-            # Remove the generated launch script if it exists.
-            if self._remove_if_exists(self.mako_script_path):
-                removed_files.append(str(self.mako_script_path))
 
             # Don't remove config directory since we're preserving the config file
 
@@ -775,7 +800,6 @@ class InstallationService(BaseService):
             self.log.info(f"  32-bit JSON file: {self.json32_file}")
             self.log.info(f"  Config file: {self.config_file_path} (preserved)")
             self.log.info(f"  CLI file: {self.cli_file}")
-            self.log.info(f"  Launch script: {self.mako_launch_script_path}")
             self.log.info(f"  Launch script: {self.mako_script_path}")
             self.log.info(f"  Diagnostics helper: {self.diagnostics_script_path}")
 
@@ -785,8 +809,8 @@ class InstallationService(BaseService):
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
                 self.registered_json_file, self.registered_json32_file,
                 self.gamescope_wsi_compatibility_manifest,
-                self.cli_file, self.engine_state_file, self.mako_launch_script_path,
-                self.mako_script_path, self.diagnostics_script_path,
+                self.cli_file, self.engine_state_file, self.mako_script_path,
+                self.diagnostics_script_path,
             ]
 
             for file_path in files_to_remove:
@@ -833,7 +857,9 @@ class InstallationService(BaseService):
 
         # Start with existing data
         merged_data: ProfileData = {
-            "current_profile": existing_profile_data.get("current_profile", "mako"),
+            "current_profile": existing_profile_data.get(
+                "current_profile", DEFAULT_PROFILE_NAME
+            ),
             "global_config": existing_profile_data.get("global_config", {}).copy(),
             "profiles": {}
         }
@@ -851,12 +877,13 @@ class InstallationService(BaseService):
             merged_data["global_config"]["dll"] = dll_result["path"]
             if old_dll != dll_result["path"]:
                 self.log.info(f"Updated DLL path from '{old_dll}' to: {dll_result['path']}")
-        elif merged_data["global_config"].get("dll") == "/games/Lossless Scaling/Lossless.dll":
+        elif merged_data["global_config"].get("dll") == str(
+            LEGACY_LOSSLESS_DLL_PLACEHOLDER
+        ):
             # Releases before 0.13.0-experimental.2 wrote this placeholder when
             # detection failed. Removing a nonexistent placeholder lets MAKO Renderer
             # use its own automatic discovery instead.
-            legacy_path = Path("/games/Lossless Scaling/Lossless.dll")
-            if not legacy_path.exists():
+            if not LEGACY_LOSSLESS_DLL_PLACEHOLDER.exists():
                 merged_data["global_config"]["dll"] = ""
                 self.log.info("Removed obsolete Lossless.dll placeholder to enable upstream automatic discovery")
 
@@ -880,11 +907,11 @@ class InstallationService(BaseService):
 
         # If no profiles exist, create the default one
         if not merged_data["profiles"]:
-            merged_data["profiles"]["mako"] = {
+            merged_data["profiles"][DEFAULT_PROFILE_NAME] = {
                 k: v for k, v in default_config.items()
                 if k not in ["dll", "allow_fp16"]  # Exclude global fields
             }
-            merged_data["current_profile"] = "mako"
+            merged_data["current_profile"] = DEFAULT_PROFILE_NAME
             self.log.info("No existing profiles found, created default profile")
 
         return merged_data

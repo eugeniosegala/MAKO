@@ -249,18 +249,6 @@ namespace mako::layer {
         size_t totalRecoveries{0};
     };
 
-    /// Delivery evaluations tolerate up to five percent pressure over a full
-    /// evaluation window. Short windows must still deliver every requested
-    /// frame, so a single total miss cannot validate a multiplier.
-    [[nodiscard]] inline bool generatedDeliveryHealthy(
-            const size_t planned, const size_t delivered) {
-        if (planned == 0)
-            return true;
-        const size_t clampedDelivered = std::min(planned, delivered);
-        const size_t toleratedMisses = planned / 20;
-        return planned - clampedDelivered <= toleratedMisses;
-    }
-
     /// Limits application presents before frame-generation policy observes
     /// them. Deadlines stay on an absolute cadence while the application is
     /// early, but any late frame rebases immediately so a loading stall cannot

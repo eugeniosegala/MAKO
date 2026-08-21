@@ -6,8 +6,62 @@ by both Python and TypeScript code. Any changes to the configuration
 structure should be made here first.
 """
 
-from typing import Dict, Any, Union
+from typing import Dict, Literal, TypedDict, Union
 from enum import Enum
+
+
+# Stable built-in profile identifier shared by the backend and generated
+# frontend contract. This is persisted on disk and must not be renamed without
+# a migration.
+DEFAULT_PROFILE_NAME = "mako"
+# Stable install-relative launcher path. Backends resolve it against Decky's
+# actual user home; the frontend uses it only for its pre-RPC fallback text.
+MAKO_WRAPPER_RELATIVE_PATH = ".local/bin/mako-run"
+# Persisted profile categories shared by metadata writers and frontend RPC UX.
+PROFILE_KIND_DEFAULT = "default"
+PROFILE_KIND_GAME = "game"
+PROFILE_KIND_PROCESS = "process"
+PROFILE_KIND_MANUAL = "manual"
+PROFILE_KIND_VALUES = (
+    PROFILE_KIND_DEFAULT,
+    PROFILE_KIND_GAME,
+    PROFILE_KIND_PROCESS,
+    PROFILE_KIND_MANUAL,
+)
+# Ordered release matrix used by backend bundles and generated frontend status.
+SUPPORTED_FLATPAK_RUNTIME_VERSIONS = ("23.08", "24.08", "25.08")
+# Flatpak frontends whose games start in a child compatibility environment and
+# therefore require MAKO's wrapper to be configured per game rather than on the
+# launcher process itself.
+PER_GAME_WRAPPER_FLATPAK_APP_IDS = ("com.heroicgameslauncher.hgl",)
+
+# Cross-language validation limits. Keep the deliberately narrower Decky UI
+# ceiling separate from the canonical profile validation range.
+BASE_FPS_CAP_MIN = 0
+BASE_FPS_CAP_MAX = 240
+BASE_FPS_CAP_UI_MAX = 60
+TARGET_FPS_MIN = 30
+TARGET_FPS_MAX = 240
+ADAPTIVE_MAX_MULTIPLIER_MIN = 2
+ADAPTIVE_MAX_MULTIPLIER_MAX = 4
+ADAPTIVE_MINIMUM_BASE_FPS = 10
+FLOW_SCALE_MIN = 0.25
+FLOW_SCALE_MAX = 1.0
+FIXED_MULTIPLIER_MIN = 2
+FIXED_MULTIPLIER_UI_MIN = FIXED_MULTIPLIER_MIN
+FIXED_MULTIPLIER_UI_MAX = 4
+
+# Stable persisted values for the mutually exclusive optional Vulkan layer.
+EXTERNAL_VULKAN_LAYER_NONE = ""
+EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI = "gamescope-wsi"
+EXTERNAL_VULKAN_LAYER_MANGOHUD = "mangohud"
+EXTERNAL_VULKAN_LAYER_VKBASALT = "vkbasalt"
+EXTERNAL_VULKAN_LAYER_VALUES = (
+    EXTERNAL_VULKAN_LAYER_NONE,
+    EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
+    EXTERNAL_VULKAN_LAYER_MANGOHUD,
+    EXTERNAL_VULKAN_LAYER_VKBASALT,
+)
 
 
 class ConfigFieldType(str, Enum):
@@ -18,9 +72,21 @@ class ConfigFieldType(str, Enum):
     STRING = "string"
 
 
-CONFIG_SCHEMA_DEF = {
+ConfigValue = Union[bool, int, float, str]
+ConfigFieldLocation = Literal["global", "toml", "profile", "script"]
+
+
+class ConfigFieldDefinition(TypedDict):
+    """One canonical configuration field owned by this shared schema."""
+
+    fieldType: ConfigFieldType
+    default: ConfigValue
+    description: str
+    location: ConfigFieldLocation
+
+
+CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "dll": {
-        "name": "dll",
         "fieldType": ConfigFieldType.STRING,
         "default": "",
         "description": "optional full path to Lossless.dll; leave blank for automatic discovery",
@@ -28,7 +94,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "allow_fp16": {
-        "name": "allow_fp16",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
         "description": "allow FP16 acceleration (disable on older NVIDIA GPUs)",
@@ -36,7 +101,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "frame_generation_enabled": {
-        "name": "frame_generation_enabled",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
         "description": "live on/off switch; leave on for fixed or adaptive generation, off stops both modes",
@@ -44,7 +108,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "base_fps_cap": {
-        "name": "base_fps_cap",
         "fieldType": ConfigFieldType.INTEGER,
         "default": 0,
         "description": "backend-independent real framerate cap applied before frame generation",
@@ -52,7 +115,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "multiplier": {
-        "name": "multiplier",
         "fieldType": ConfigFieldType.INTEGER,
         "default": 2,
         "description": "change the fps multiplier",
@@ -60,7 +122,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "adaptive": {
-        "name": "adaptive",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "dynamically vary generated frames to approach a target framerate",
@@ -68,7 +129,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "adaptive_auto_base_fps_cap": {
-        "name": "adaptive_auto_base_fps_cap",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
         "description": "automatically cap real FPS at half the target for steadier 2x frame generation",
@@ -76,7 +136,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "target_fps": {
-        "name": "target_fps",
         "fieldType": ConfigFieldType.INTEGER,
         "default": 90,
         "description": "target displayed framerate for adaptive frame generation",
@@ -84,7 +143,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "adaptive_max_multiplier": {
-        "name": "adaptive_max_multiplier",
         "fieldType": ConfigFieldType.INTEGER,
         "default": 3,
         "description": "ceiling for generated frames in adaptive mode",
@@ -92,7 +150,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "adaptive_stable_cadence": {
-        "name": "adaptive_stable_cadence",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
         "description": "prefer smoother constant interpolation; may lower real-frame cadence and increase input lag",
@@ -100,7 +157,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "flow_scale": {
-        "name": "flow_scale",
         "fieldType": ConfigFieldType.FLOAT,
         "default": 0.9,
         "description": "change the flow scale",
@@ -108,7 +164,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "performance_mode": {
-        "name": "performance_mode",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "use a lighter FG model to reduce GPU overhead, at the cost of more visual artifacts",
@@ -116,7 +171,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "pacing": {
-        "name": "pacing",
         "fieldType": ConfigFieldType.STRING,
         "default": "none",
         "description": "frame pacing mode (currently only 'none' supported)",
@@ -124,7 +178,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "active_in": {
-        "name": "active_in",
         "fieldType": ConfigFieldType.STRING,
         "default": "",
         "description": "optional executable or process names, separated by commas",
@@ -132,7 +185,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "gpu": {
-        "name": "gpu",
         "fieldType": ConfigFieldType.STRING,
         "default": "",
         "description": "optional GPU name, vendor:device ID, or PCI bus ID",
@@ -140,7 +192,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "disable_mako": {
-        "name": "disable_mako",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "troubleshooting: prevent MAKO Renderer loading after restart",
@@ -151,7 +202,6 @@ CONFIG_SCHEMA_DEF = {
     # package deliberately locks this safety boundary on so existing profiles
     # cannot opt into the unfinished transport accidentally.
     "disable_hdr_exposure": {
-        "name": "disable_hdr_exposure",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
         "description": "required SDR safety boundary while HDR is unavailable",
@@ -159,7 +209,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "external_vulkan_layer": {
-        "name": "external_vulkan_layer",
         "fieldType": ConfigFieldType.STRING,
         "default": "",
         "description": "optional guarded host Vulkan layer: gamescope-wsi, mangohud, or vkbasalt",
@@ -169,7 +218,6 @@ CONFIG_SCHEMA_DEF = {
     # Unsupported controls are intentionally omitted from the current schema.
 
     "disable_steamdeck_mode": {
-        "name": "disable_steamdeck_mode",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "disable Steam Deck mode (unlocks hidden settings in some games)",
@@ -177,7 +225,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "enable_zink": {
-        "name": "enable_zink",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "Enable Zink (Vulkan-based OpenGL implementation) for OpenGL games",
@@ -185,7 +232,6 @@ CONFIG_SCHEMA_DEF = {
     },
 
     "force_alsa_audio": {
-        "name": "force_alsa_audio",
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "may improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds; restart required",
@@ -199,7 +245,7 @@ def get_field_names() -> list[str]:
     return list(CONFIG_SCHEMA_DEF.keys())
 
 
-def get_defaults() -> Dict[str, Union[bool, int, float, str]]:
+def get_defaults() -> Dict[str, ConfigValue]:
     """Get default configuration values"""
     return {
         field_name: field_def["default"]

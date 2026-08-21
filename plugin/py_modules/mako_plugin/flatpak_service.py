@@ -6,31 +6,43 @@ import subprocess
 import os
 import re
 from pathlib import Path
-from typing import Dict, Any, List, Optional
+from typing import Dict, List, Optional, TypedDict
 
 from .base_service import BaseService
 from .config_schema import ConfigurationManager
 from .constants import (
     BIN_DIR,
     COMPETING_LSFG_DISABLE_ENVS,
+    CONFIG_FILENAME,
     DXVK_HDR_ENV,
-    FLATPAK_23_08_FILENAME,
-    FLATPAK_24_08_FILENAME,
-    FLATPAK_25_08_FILENAME,
     FLATPAK_EXTENSION_NAME,
     FLATPAK_EXTENSION_PREFIX,
     FLATPAK_HOST_ARCHITECTURE,
     FLATPAK_IMPLICIT_LAYER_DIR,
+    FLATPAK_RUNTIME_BUNDLES,
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
     HDR_EXPOSURE_DISABLE_ENV,
+    MAKO_CONFIG_ENV,
     MAKO_LAYER_ENABLE_ENV,
+    PER_GAME_WRAPPER_FLATPAK_APPS,
+    PLUGIN_ROOT,
+    VK_ADD_IMPLICIT_LAYER_PATH_ENV,
+    VK_IMPLICIT_LAYER_PATH_ENV,
 )
 from .host_environment import detect_host_environment
-from .types import BaseResponse
+from .types import ServiceResponse
 
 
-_SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS = ("23.08", "24.08", "25.08")
+_SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS = tuple(FLATPAK_RUNTIME_BUNDLES)
+_SUPPORTED_VERSION_ERROR = (
+    "Invalid version. Must be "
+    + ", ".join(
+        f"'{version}'"
+        for version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS[:-1]
+    )
+    + f", or '{_SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS[-1]}'"
+)
 _FREEDESKTOP_VULKAN_LAYER_EXTENSION = (
     "org.freedesktop.Platform.VulkanLayer"
 )
@@ -40,46 +52,108 @@ _FREEDESKTOP_VULKAN_LAYER_EXTENSION = (
 # shortcuts) do not have that child boundary: Flatpak's persisted
 # ``unset-environment`` rules otherwise clear the wrapper's config and Vulkan
 # path before the app starts.
-_PER_GAME_WRAPPER_FLATPAK_APPS = {"com.heroicgameslauncher.hgl"}
 _LAYER_ENVIRONMENT_VARIABLES = (
-    "MAKO_CONFIG",
+    MAKO_CONFIG_ENV,
     MAKO_LAYER_ENABLE_ENV,
     *COMPETING_LSFG_DISABLE_ENVS,
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
     HDR_EXPOSURE_DISABLE_ENV,
     DXVK_HDR_ENV,
-    "VK_IMPLICIT_LAYER_PATH",
-    "VK_ADD_IMPLICIT_LAYER_PATH",
+    VK_IMPLICIT_LAYER_PATH_ENV,
+    VK_ADD_IMPLICIT_LAYER_PATH_ENV,
 )
 
 
-class FlatpakExtensionStatus(BaseResponse):
-    """Response for Flatpak extension status"""
-    def __init__(self, success: bool = False, message: str = "", error: str = "",
-                 installed_23_08: bool = False, installed_24_08: bool = False, installed_25_08: bool = False):
-        super().__init__(success, message, error)
-        self.installed_23_08 = installed_23_08
-        self.installed_24_08 = installed_24_08
-        self.installed_25_08 = installed_25_08
+FlatpakExtensionStatus = TypedDict(
+    "FlatpakExtensionStatus",
+    {
+        "success": bool,
+        "message": str,
+        "error": Optional[str],
+        **{
+            f"installed_{version.replace('.', '_')}": bool
+            for version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS
+        },
+    },
+)
 
 
-class FlatpakAppInfo(BaseResponse):
+def _empty_extension_status_fields() -> Dict[str, bool]:
+    return {
+        f"installed_{version.replace('.', '_')}": False
+        for version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS
+    }
+
+
+class FlatpakOverrideStatus(TypedDict):
+    """Internal normalized state read from one Flatpak app override."""
+
+    filesystem: bool
+    wrapper: bool
+    legacy_env: bool
+    mako_env: bool
+    required_env: bool
+
+
+def _empty_app_override_status() -> FlatpakOverrideStatus:
+    return {
+        "filesystem": False,
+        "wrapper": False,
+        "legacy_env": False,
+        "mako_env": False,
+        "required_env": False,
+    }
+
+
+class FlatpakRefreshRequiredResult(TypedDict):
+    """Fields emitted by every installed-runtime refresh path."""
+
+    success: bool
+    updated_versions: List[str]
+
+
+class FlatpakRefreshResult(FlatpakRefreshRequiredResult, total=False):
+    message: str
+    error: str
+
+
+class FlatpakCleanupRequiredResult(TypedDict):
+    """Fields emitted by every incompatible-override cleanup path."""
+
+    success: bool
+    disabled_apps: List[str]
+
+
+class FlatpakCleanupResult(FlatpakCleanupRequiredResult, total=False):
+    message: str
+    error: str
+
+
+class FlatpakApp(TypedDict):
+    """One installed Flatpak app and its MAKO override state."""
+
+    app_id: str
+    app_name: str
+    wrapper_path: str
+    has_filesystem_override: bool
+    has_wrapper_override: bool
+    has_env_override: bool
+    has_required_env_override: bool
+
+
+class FlatpakAppInfo(ServiceResponse):
     """Response for Flatpak app information"""
-    def __init__(self, success: bool = False, message: str = "", error: str = "",
-                 apps: List[Dict[str, Any]] = None, total_apps: int = 0):
-        super().__init__(success, message, error)
-        self.apps = apps or []
-        self.total_apps = total_apps
+
+    apps: List[FlatpakApp]
+    total_apps: int
 
 
-class FlatpakOverrideResponse(BaseResponse):
+class FlatpakOverrideResponse(ServiceResponse, total=False):
     """Response for Flatpak override operations"""
-    def __init__(self, success: bool = False, message: str = "", error: str = "",
-                 app_id: str = "", operation: str = ""):
-        super().__init__(success, message, error)
-        self.app_id = app_id
-        self.operation = operation
+
+    app_id: str
+    operation: str
 
 
 class FlatpakService(BaseService):
@@ -87,9 +161,12 @@ class FlatpakService(BaseService):
 
     def __init__(self, logger=None):
         super().__init__(logger)
-        self.extension_id_23_08 = f"{FLATPAK_EXTENSION_NAME}/x86_64/23.08"
-        self.extension_id_24_08 = f"{FLATPAK_EXTENSION_NAME}/x86_64/24.08"
-        self.extension_id_25_08 = f"{FLATPAK_EXTENSION_NAME}/x86_64/25.08"
+        for version, bundle in FLATPAK_RUNTIME_BUNDLES.items():
+            setattr(
+                self,
+                f"extension_id_{version.replace('.', '_')}",
+                bundle.extension_id,
+            )
         self.flatpak_command = None
 
     def _host_architecture_supported(self) -> bool:
@@ -154,12 +231,9 @@ class FlatpakService(BaseService):
 
     def _get_extension_id(self, version: str) -> Optional[str]:
         """Return the isolated MAKO extension reference for a runtime."""
-        extension_ids = {
-            "23.08": self.extension_id_23_08,
-            "24.08": self.extension_id_24_08,
-            "25.08": self.extension_id_25_08,
-        }
-        return extension_ids.get(version)
+        if version not in FLATPAK_RUNTIME_BUNDLES:
+            return None
+        return getattr(self, f"extension_id_{version.replace('.', '_')}")
 
     def _get_app_runtime_version(self, app_id: str) -> Optional[str]:
         """Return the Freedesktop Vulkan-layer version usable by an app.
@@ -296,7 +370,7 @@ class FlatpakService(BaseService):
                 self.log.error(error_msg)
                 return self._error_response(FlatpakExtensionStatus,
                                           error_msg,
-                                          installed_23_08=False, installed_24_08=False, installed_25_08=False)
+                                          **_empty_extension_status_fields())
 
             result = self._run_flatpak_command(
                 ["list", "--runtime"],
@@ -306,66 +380,61 @@ class FlatpakService(BaseService):
             installed_runtimes = result.stdout
 
             base_extension_name = FLATPAK_EXTENSION_NAME
-            installed_23_08 = False
-            installed_24_08 = False
-            installed_25_08 = False
+            installed_by_version = {
+                version: False
+                for version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS
+            }
 
             for line in installed_runtimes.split('\n'):
                 if base_extension_name in line:
-                    if "23.08" in line:
-                        installed_23_08 = True
-                    elif "24.08" in line:
-                        installed_24_08 = True
-                    elif "25.08" in line:
-                        installed_25_08 = True
+                    for version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS:
+                        if version in line:
+                            installed_by_version[version] = True
+                            break
 
-            status_msg = []
-            if installed_23_08:
-                status_msg.append("23.08 runtime extension installed")
-            if installed_24_08:
-                status_msg.append("24.08 runtime extension installed")
-            if installed_25_08:
-                status_msg.append("25.08 runtime extension installed")
+            status_msg = [
+                f"{version} runtime extension installed"
+                for version in _SUPPORTED_FREEDESKTOP_VULKAN_LAYER_VERSIONS
+                if installed_by_version[version]
+            ]
 
             if not status_msg:
                 status_msg.append("No MAKO Renderer runtime extensions installed")
 
+            status_fields = {
+                f"installed_{version.replace('.', '_')}": installed
+                for version, installed in installed_by_version.items()
+            }
             return self._success_response(FlatpakExtensionStatus,
                                         "; ".join(status_msg),
-                                        installed_23_08=installed_23_08,
-                                        installed_24_08=installed_24_08,
-                                        installed_25_08=installed_25_08)
+                                        **status_fields)
 
         except subprocess.CalledProcessError as e:
             error_msg = f"Error checking Flatpak extensions: {e.stderr if e.stderr else str(e)}"
             self.log.error(error_msg)
             return self._error_response(FlatpakExtensionStatus, error_msg,
-                                      installed_23_08=False, installed_24_08=False, installed_25_08=False)
+                                      **_empty_extension_status_fields())
 
-    def install_extension(self, version: str) -> BaseResponse:
+    def install_extension(self, version: str) -> ServiceResponse:
         """Install or refresh a specific MAKO Renderer Flatpak runtime extension."""
         try:
             if not self._host_architecture_supported():
                 return self._error_response(
-                    BaseResponse, self._unsupported_host_error()
+                    ServiceResponse, self._unsupported_host_error()
                 )
-            if version not in ["23.08", "24.08", "25.08"]:
-                return self._error_response(BaseResponse, "Invalid version. Must be '23.08', '24.08', or '25.08'")
+            if version not in FLATPAK_RUNTIME_BUNDLES:
+                return self._error_response(ServiceResponse, _SUPPORTED_VERSION_ERROR)
 
             if not self.check_flatpak_available():
-                return self._error_response(BaseResponse, "Flatpak is not available on this system")
+                return self._error_response(ServiceResponse, "Flatpak is not available on this system")
 
-            plugin_dir = Path(__file__).parent.parent.parent
-            filenames = {
-                "23.08": FLATPAK_23_08_FILENAME,
-                "24.08": FLATPAK_24_08_FILENAME,
-                "25.08": FLATPAK_25_08_FILENAME,
-            }
-            flatpak_path = plugin_dir / BIN_DIR / filenames[version]
+            flatpak_path = (
+                PLUGIN_ROOT / BIN_DIR / FLATPAK_RUNTIME_BUNDLES[version].filename
+            )
 
             if not flatpak_path.is_file():
                 return self._error_response(
-                    BaseResponse,
+                    ServiceResponse,
                     "Flatpak bundle is missing from this plugin package. "
                     "Install a release that includes Flatpak support.",
                 )
@@ -386,21 +455,21 @@ class FlatpakService(BaseService):
             if result.returncode != 0:
                 error_msg = f"Failed to install Flatpak extension: {result.stderr}"
                 self.log.error(error_msg)
-                return self._error_response(BaseResponse, error_msg)
+                return self._error_response(ServiceResponse, error_msg)
 
             action = "updated" if was_installed else "installed"
             self.log.info(f"Successfully {action} MAKO Renderer Flatpak extension {version}")
             return self._success_response(
-                BaseResponse,
+                ServiceResponse,
                 f"MAKO Renderer {version} runtime extension {action} successfully"
             )
 
         except Exception as e:
             error_msg = f"Error installing Flatpak extension {version}: {str(e)}"
             self.log.error(error_msg)
-            return self._error_response(BaseResponse, error_msg)
+            return self._error_response(ServiceResponse, error_msg)
 
-    def refresh_installed_extensions(self) -> Dict[str, Any]:
+    def refresh_installed_extensions(self) -> FlatpakRefreshResult:
         """Replace installed MAKO runtime branches with this plugin's payloads.
 
         Flatpak runtime branches keep a stable extension ID across renderer
@@ -461,18 +530,18 @@ class FlatpakService(BaseService):
             ),
         }
 
-    def uninstall_extension(self, version: str) -> BaseResponse:
+    def uninstall_extension(self, version: str) -> ServiceResponse:
         """Uninstall a specific version of the MAKO Renderer Flatpak extension"""
         try:
-            if version not in ["23.08", "24.08", "25.08"]:
-                return self._error_response(BaseResponse, "Invalid version. Must be '23.08', '24.08', or '25.08'")
+            if version not in FLATPAK_RUNTIME_BUNDLES:
+                return self._error_response(ServiceResponse, _SUPPORTED_VERSION_ERROR)
 
             if not self.check_flatpak_available():
-                return self._error_response(BaseResponse, "Flatpak is not available on this system")
+                return self._error_response(ServiceResponse, "Flatpak is not available on this system")
 
             extension_id = self._get_extension_id(version)
             if extension_id is None:
-                return self._error_response(BaseResponse, f"Unsupported Flatpak runtime: {version}")
+                return self._error_response(ServiceResponse, f"Unsupported Flatpak runtime: {version}")
 
             result = self._run_flatpak_command(
                 ["uninstall", "--user", "--noninteractive", extension_id],
@@ -482,15 +551,15 @@ class FlatpakService(BaseService):
             if result.returncode != 0:
                 error_msg = f"Failed to uninstall Flatpak extension: {result.stderr}"
                 self.log.error(error_msg)
-                return self._error_response(BaseResponse, error_msg)
+                return self._error_response(ServiceResponse, error_msg)
 
             self.log.info(f"Successfully uninstalled MAKO Renderer Flatpak extension {version}")
-            return self._success_response(BaseResponse, f"MAKO Renderer {version} runtime extension uninstalled successfully")
+            return self._success_response(ServiceResponse, f"MAKO Renderer {version} runtime extension uninstalled successfully")
 
         except Exception as e:
             error_msg = f"Error uninstalling Flatpak extension {version}: {str(e)}"
             self.log.error(error_msg)
-            return self._error_response(BaseResponse, error_msg)
+            return self._error_response(ServiceResponse, error_msg)
 
     def get_flatpak_apps(self) -> FlatpakAppInfo:
         """Get list of installed Flatpak apps and their MAKO Renderer override status"""
@@ -524,7 +593,7 @@ class FlatpakService(BaseService):
                     apps.append({
                         "app_id": app_id,
                         "app_name": app_name,
-                        "wrapper_path": str(self.mako_launch_script_path),
+                        "wrapper_path": str(self.mako_script_path),
                         "has_filesystem_override": override_status["filesystem"],
                         "has_wrapper_override": override_status["wrapper"],
                         "has_env_override": override_status["legacy_env"],
@@ -540,7 +609,8 @@ class FlatpakService(BaseService):
             self.log.error(error_msg)
             return self._error_response(FlatpakAppInfo, error_msg, apps=[], total_apps=0)
 
-    def _check_app_override_status(self, app_id: str) -> Dict[str, bool]:
+    def _check_app_override_status(
+            self, app_id: str) -> FlatpakOverrideStatus:
         """Check whether an app has the required MAKO layer access."""
         try:
             result = self._run_flatpak_command(
@@ -549,17 +619,11 @@ class FlatpakService(BaseService):
             )
 
             if result.returncode != 0:
-                return {
-                    "filesystem": False,
-                    "wrapper": False,
-                    "legacy_env": False,
-                    "mako_env": False,
-                    "required_env": False,
-                }
+                return _empty_app_override_status()
 
             output = result.stdout
             config_path, dll_directory = self._get_mako_paths()
-            wrapper_path = str(self.mako_launch_script_path)
+            wrapper_path = str(self.mako_script_path)
 
             filesystem_section = ""
             in_context = False
@@ -599,24 +663,24 @@ class FlatpakService(BaseService):
                 for variable in _LAYER_ENVIRONMENT_VARIABLES
             )
             mako_env_override = (
-                "MAKO_CONFIG" in environment_values
+                MAKO_CONFIG_ENV in environment_values
                 or MAKO_LAYER_ENABLE_ENV in environment_values
                 or HDR_EXPOSURE_DISABLE_ENV in environment_values
-                or environment_values.get("VK_IMPLICIT_LAYER_PATH")
+                or environment_values.get(VK_IMPLICIT_LAYER_PATH_ENV)
                 == FLATPAK_IMPLICIT_LAYER_DIR
                 or FLATPAK_EXTENSION_PREFIX
-                in environment_values.get("VK_ADD_IMPLICIT_LAYER_PATH", "")
+                in environment_values.get(VK_ADD_IMPLICIT_LAYER_PATH_ENV, "")
             )
             compatible_layer_path = (
-                environment_values.get("VK_IMPLICIT_LAYER_PATH") ==
+                environment_values.get(VK_IMPLICIT_LAYER_PATH_ENV) ==
                 FLATPAK_IMPLICIT_LAYER_DIR
-                and not environment_values.get("VK_ADD_IMPLICIT_LAYER_PATH")
+                and not environment_values.get(VK_ADD_IMPLICIT_LAYER_PATH_ENV)
             )
             required_env_override = (
-                app_id in _PER_GAME_WRAPPER_FLATPAK_APPS
+                app_id in PER_GAME_WRAPPER_FLATPAK_APPS
                 or (
-                    environment_values.get("MAKO_CONFIG") ==
-                    f"{config_path}/conf.toml"
+                    environment_values.get(MAKO_CONFIG_ENV) ==
+                    f"{config_path}/{CONFIG_FILENAME}"
                     and environment_values.get(MAKO_LAYER_ENABLE_ENV) == "1"
                     and all(
                         environment_values.get(variable) == "1"
@@ -652,15 +716,9 @@ class FlatpakService(BaseService):
 
         except Exception as e:
             self.log.error(f"Error checking override status for {app_id}: {e}")
-            return {
-                "filesystem": False,
-                "wrapper": False,
-                "legacy_env": False,
-                "mako_env": False,
-                "required_env": False,
-            }
+            return _empty_app_override_status()
 
-    def disable_incompatible_host_overrides(self) -> Dict[str, Any]:
+    def disable_incompatible_host_overrides(self) -> FlatpakCleanupResult:
         """Fail closed for MAKO-owned Flatpak overrides on unsupported hosts.
 
         Older plugin builds could prepare a direct Flatpak application before
@@ -806,7 +864,7 @@ class FlatpakService(BaseService):
                     operation="set",
                 )
 
-            if not self.mako_launch_script_path.is_file():
+            if not self.mako_script_path.is_file():
                 return self._error_response(
                     FlatpakOverrideResponse,
                     "Install MAKO Renderer before preparing a Flatpak application.",
@@ -815,7 +873,7 @@ class FlatpakService(BaseService):
                 )
 
             config_path, dll_directory = self._get_mako_paths()
-            wrapper_path = str(self.mako_launch_script_path)
+            wrapper_path = str(self.mako_script_path)
 
             filesystem_overrides = [
                 f"--filesystem={config_path}:rw",
@@ -833,7 +891,7 @@ class FlatpakService(BaseService):
                     return self._error_response(FlatpakOverrideResponse, error_msg,
                                               app_id=app_id, operation="set")
 
-            if app_id in _PER_GAME_WRAPPER_FLATPAK_APPS:
+            if app_id in PER_GAME_WRAPPER_FLATPAK_APPS:
                 # Heroic starts each game in a child compatibility environment.
                 # Keep its layer activation in the selected game's wrapper so
                 # preparing Heroic cannot enable frame generation in every game.
@@ -853,11 +911,11 @@ class FlatpakService(BaseService):
                 # including helper Vulkan processes launched after the host-side
                 # wrapper environment is filtered.
                 layer_environment = [
-                    f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
-                    "--unset-env=VK_ADD_IMPLICIT_LAYER_PATH",
+                    f"--env={VK_IMPLICIT_LAYER_PATH_ENV}={FLATPAK_IMPLICIT_LAYER_DIR}",
+                    f"--unset-env={VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
                 ]
                 environment_overrides = [
-                    f"--env=MAKO_CONFIG={config_path}/conf.toml",
+                    f"--env={MAKO_CONFIG_ENV}={config_path}/{CONFIG_FILENAME}",
                     f"--env={MAKO_LAYER_ENABLE_ENV}=1",
                     *(
                         f"--env={variable}=1"
@@ -900,7 +958,7 @@ class FlatpakService(BaseService):
                                           app_id=app_id, operation="remove")
 
             config_path, dll_directory = self._get_mako_paths()
-            wrapper_path = str(self.mako_launch_script_path)
+            wrapper_path = str(self.mako_script_path)
 
             filesystem_overrides = [
                 f"--nofilesystem={dll_directory}",
