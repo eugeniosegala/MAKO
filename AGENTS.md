@@ -2,6 +2,10 @@
 
 This root file is the sole repository-wide instruction source for coding agents and applies to the whole monorepo. Component READMEs, guides, and scripts refine its routing but do not override it; do not create nested `AGENTS.md` copies that can drift unless a genuinely scoped override is required. This guide points to the authoritative build, test, diagnostic, packaging, and release sources instead of duplicating them. When a workflow changes, update the owning script or guide first and keep this index aligned with it.
 
+## Engineering principles
+
+Before investigating or changing code, read the applicable repository, component, and boundary-specific documentation and use it to identify the intended architecture, canonical owner, generated outputs, and validation path. MAKO runs on thousands of devices, including resource-constrained and low-end hardware, so performance is a product requirement rather than an optional optimization: preserve efficient CPU and GPU use, memory behavior, synchronization, startup, and hot paths, and avoid unnecessary work, allocations, copies, dependencies, or abstraction overhead. Work efficiently by keeping discovery, implementation, and testing focused on the affected boundary while remaining thorough enough to preserve its contracts and performance characteristics. Respect separation of concerns and the established repository structure: extend the existing owner, place code and tests in their documented locations, reuse established abstractions, and do not introduce parallel implementations or leak responsibilities across components. Prefer the smallest cohesive change that fully solves the problem, and keep its code, tests, schemas or generators, performance evidence where applicable, and documentation aligned.
+
 Keep Markdown prose unwrapped: each paragraph and list item stays on one source line. Preserve line breaks only when they carry Markdown structure, such as blank paragraph boundaries, headings, tables, blockquotes or admonitions, and fenced or indented code.
 
 ## Product names and compatibility identifiers
