@@ -17,6 +17,7 @@
 #include <exception>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -260,26 +261,30 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
             const double observedOutputFps =
                 static_cast<double>(this->diagnosticsState.fixedRealFrames +
                     this->diagnosticsState.fixedGeneratedFrames) / windowSeconds;
-            std::cerr << "MAKO Renderer: present diagnostics: operation=fixed-plan"
-                      << " context=" << this->diagnosticsState.contextId
-                      << " base_fps=" << realFps
-                      << " multiplier=" << this->profile.multiplier
-                      << " generated_per_real="
-                      << (effectiveFrameGenerationEnabled(
-                                this->profile, this->gamescopeRefreshHz
-                            )
-                            ? this->configuredFixedGeneratedFrames : 0)
-                      << " observed_output_fps=" << observedOutputFps
-                      << " generated_presented="
-                      << this->diagnosticsState.fixedGeneratedFrames
-                      << " generated_skipped="
-                      << this->diagnosticsState.fixedSkippedFrames
-                      << " configured_adaptive_target_fps="
-                      << this->profile.target_fps
-                      << " target_applies=0"
-                      << " display_budget_hz="
-                      << this->gamescopeRefreshHz.value_or(0)
-                      << '\n';
+            // Keep opt-in diagnostics from adding field-by-field flush points
+            // to the presentation thread's once-per-second pacing report.
+            std::ostringstream message;
+            message << "MAKO Renderer: present diagnostics: operation=fixed-plan"
+                    << " context=" << this->diagnosticsState.contextId
+                    << " base_fps=" << realFps
+                    << " multiplier=" << this->profile.multiplier
+                    << " generated_per_real="
+                    << (effectiveFrameGenerationEnabled(
+                              this->profile, this->gamescopeRefreshHz
+                          )
+                          ? this->configuredFixedGeneratedFrames : 0)
+                    << " observed_output_fps=" << observedOutputFps
+                    << " generated_presented="
+                    << this->diagnosticsState.fixedGeneratedFrames
+                    << " generated_skipped="
+                    << this->diagnosticsState.fixedSkippedFrames
+                    << " configured_adaptive_target_fps="
+                    << this->profile.target_fps
+                    << " target_applies=0"
+                    << " display_budget_hz="
+                    << this->gamescopeRefreshHz.value_or(0)
+                    << '\n';
+            std::cerr << message.str();
             this->diagnosticsState.fixedWindowStarted = presentNow;
             this->diagnosticsState.fixedRealFrames = 0;
             this->diagnosticsState.fixedGeneratedFrames = 0;

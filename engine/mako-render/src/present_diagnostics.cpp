@@ -428,71 +428,76 @@ namespace {
             if (!present_diagnostics::enabled())
                 return;
 
-            std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-plan"
-                      << " context=" << activeContextId
-                      << " base_fps=" << plan.baseFps
-                      << " target_fps=" << plan.targetFps
-                      << " generated=" << plan.generatedFrames
-                      << " max_generated=" << plan.maximumGeneratedFrames
-                      << " stable_cadence=" << (plan.stableCadence ? 1 : 0);
+            // std::cerr is unbuffered, so emitting every field directly adds
+            // repeated flush points to the presentation thread. Assemble the
+            // opt-in aggregate first and publish it as one complete record.
+            std::ostringstream message;
+            message << "MAKO Renderer: present diagnostics: operation=adaptive-plan"
+                    << " context=" << activeContextId
+                    << " base_fps=" << plan.baseFps
+                    << " target_fps=" << plan.targetFps
+                    << " generated=" << plan.generatedFrames
+                    << " max_generated=" << plan.maximumGeneratedFrames
+                    << " stable_cadence=" << (plan.stableCadence ? 1 : 0);
             if (plan.configuredMaximumGeneratedFrames) {
-                std::cerr << " configured_max_generated="
-                          << plan.configuredMaximumGeneratedFrames;
+                message << " configured_max_generated="
+                        << plan.configuredMaximumGeneratedFrames;
             }
             if (!plan.phase.empty())
-                std::cerr << " phase=" << plan.phase;
+                message << " phase=" << plan.phase;
             if (plan.recoveryGenerationLimit) {
-                std::cerr << " recovery_generated_limit="
-                          << plan.recoveryGenerationLimit;
+                message << " recovery_generated_limit="
+                        << plan.recoveryGenerationLimit;
             }
             if (!plan.rearmReason.empty()) {
-                std::cerr << " rearm_reason=" << plan.rearmReason
-                          << " cooldown_remaining_ms="
-                          << std::chrono::duration_cast<std::chrono::milliseconds>(
-                                 plan.rearmCooldownRemaining
-                             ).count()
-                          << " rearm_baseline_base_fps="
-                          << plan.rearmBaselineBaseFps;
+                message << " rearm_reason=" << plan.rearmReason
+                        << " cooldown_remaining_ms="
+                        << std::chrono::duration_cast<std::chrono::milliseconds>(
+                               plan.rearmCooldownRemaining
+                           ).count()
+                        << " rearm_baseline_base_fps="
+                        << plan.rearmBaselineBaseFps;
             }
             if (plan.pacingSourceSamples) {
-                std::cerr << " target_clock="
-                          << (plan.targetOutputClockActive ? 1 : 0)
-                          << " target_budget_credit_outputs="
-                          << plan.targetOutputBudgetCreditOutputs
-                          << " target_deferred_budget_output="
-                          << (plan.targetOutputDeferredBudgetOutput ? 1 : 0)
-                          << " target_phase_error_ms="
-                          << plan.targetOutputPhaseErrorMilliseconds
-                          << " source_interval_samples="
-                          << plan.pacingSourceSamples
-                          << " source_interval_mean_ms="
-                          << plan.sourceIntervalMeanMilliseconds
-                          << " source_interval_stddev_ms="
-                          << plan.sourceIntervalStdDevMilliseconds
-                          << " source_interval_p95_ms="
-                          << plan.sourceIntervalP95Milliseconds
-                          << " source_interval_p99_ms="
-                          << plan.sourceIntervalP99Milliseconds
-                          << " generated_count_changes="
-                          << plan.generatedCountChanges
-                          << " requested_interval_samples="
-                          << plan.requestedIntervalSamples
-                          << " requested_interval_mean_ms="
-                          << plan.requestedIntervalMeanMilliseconds
-                          << " requested_interval_stddev_ms="
-                          << plan.requestedIntervalStdDevMilliseconds
-                          << " requested_interval_p95_ms="
-                          << plan.requestedIntervalP95Milliseconds
-                          << " requested_interval_p99_ms="
-                          << plan.requestedIntervalP99Milliseconds
-                          << " target_phase_error_samples="
-                          << plan.targetPhaseErrorSamples
-                          << " target_phase_error_rms_ms="
-                          << plan.targetPhaseErrorRmsMilliseconds
-                          << " target_phase_error_max_ms="
-                          << plan.targetPhaseErrorMaximumMilliseconds;
+                message << " target_clock="
+                        << (plan.targetOutputClockActive ? 1 : 0)
+                        << " target_budget_credit_outputs="
+                        << plan.targetOutputBudgetCreditOutputs
+                        << " target_deferred_budget_output="
+                        << (plan.targetOutputDeferredBudgetOutput ? 1 : 0)
+                        << " target_phase_error_ms="
+                        << plan.targetOutputPhaseErrorMilliseconds
+                        << " source_interval_samples="
+                        << plan.pacingSourceSamples
+                        << " source_interval_mean_ms="
+                        << plan.sourceIntervalMeanMilliseconds
+                        << " source_interval_stddev_ms="
+                        << plan.sourceIntervalStdDevMilliseconds
+                        << " source_interval_p95_ms="
+                        << plan.sourceIntervalP95Milliseconds
+                        << " source_interval_p99_ms="
+                        << plan.sourceIntervalP99Milliseconds
+                        << " generated_count_changes="
+                        << plan.generatedCountChanges
+                        << " requested_interval_samples="
+                        << plan.requestedIntervalSamples
+                        << " requested_interval_mean_ms="
+                        << plan.requestedIntervalMeanMilliseconds
+                        << " requested_interval_stddev_ms="
+                        << plan.requestedIntervalStdDevMilliseconds
+                        << " requested_interval_p95_ms="
+                        << plan.requestedIntervalP95Milliseconds
+                        << " requested_interval_p99_ms="
+                        << plan.requestedIntervalP99Milliseconds
+                        << " target_phase_error_samples="
+                        << plan.targetPhaseErrorSamples
+                        << " target_phase_error_rms_ms="
+                        << plan.targetPhaseErrorRmsMilliseconds
+                        << " target_phase_error_max_ms="
+                        << plan.targetPhaseErrorMaximumMilliseconds;
             }
-            std::cerr << '\n';
+            message << '\n';
+            std::cerr << message.str();
         }
 
         void stabilization(const std::string_view reason,
