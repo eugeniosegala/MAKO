@@ -1951,6 +1951,116 @@ namespace {
             "SDR load shed dropped the transition frame to native-only");
     }
 
+    void testSdrStrictLoadRetainsHigherOutputLevel() {
+        // A higher multiplier that still improves displayed throughput is not
+        // a useful load-shed candidate, even when its real cadence falls far
+        // enough to satisfy the strict collapse threshold.
+        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(50.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: target-positive SDR 3x was not validated");
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0; frame < 160; ++frame)
+            plan = harness.frameAtFps(36.0);
+
+        require(!harness.diagnostics.contains("load-shed"),
+            "SDR shed a higher multiplier that still improved displayed throughput");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "SDR did not retain the target-positive higher multiplier");
+        require(plan.size() == 2,
+            "SDR stopped requesting the target-positive generated workload");
+    }
+
+    void testSdrModerateDeficitDoesNotTrustHistoricalFallback() {
+        // Reproduce the Resident Evil 4 trace: the earlier 2x sample could
+        // theoretically provide about 104 FPS, while the current 3x sample
+        // provides about 103 FPS. That stale cross-scene comparison is not
+        // enough reason to shed load while output remains above 75% of target.
+        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(52.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: moderate-deficit SDR 3x was not validated");
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0; frame < 160; ++frame)
+            plan = harness.frameAtFps(34.5);
+
+        require(!harness.diagnostics.contains("load-shed"),
+            "SDR trusted a stale lower-level estimate during a moderate deficit");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "SDR discarded usable 3x output during a moderate target deficit");
+        require(plan.size() == 2,
+            "SDR stopped requesting 3x work during a moderate target deficit");
+    }
+
+    void testSdrSevereMarginalGainFallsBackAndBacksOff() {
+        // Reproduce the ordered-FIFO collapse observed while the Decky overlay
+        // was open: 2x provides roughly 50 FPS, while 3x lowers the base rate
+        // enough to provide only a marginal displayed-rate improvement.
+        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(50.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: severe-deficit SDR 3x was not validated");
+
+        for (size_t frame = 0;
+                frame < 160 && harness.diagnostics.count("load-shed") < 1;
+                ++frame) {
+            harness.frameAtFps(29.0);
+        }
+        require(harness.diagnostics.count("load-shed") == 1 &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: initial SDR collapse did not establish 2x fallback");
+
+        for (size_t frame = 0;
+                frame < 600 &&
+                    !harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(25.0);
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "SDR fallback never retried its higher level");
+
+        for (size_t frame = 0;
+                frame < 160 &&
+                    harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(18.0);
+        }
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: marginal 3x probe was not initially accepted");
+
+        for (size_t frame = 0;
+                frame < 160 && harness.diagnostics.count("load-shed") < 2;
+                ++frame) {
+            harness.frameAtFps(18.0);
+        }
+        require(harness.diagnostics.count("load-shed") == 2 &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "severe below-target marginal gain pinned the saturated 3x level");
+
+        const size_t rampsBeforeBackoff = harness.diagnostics.count("ramp");
+        harness.runAtFps(25.0, 20s);
+        require(harness.diagnostics.count("ramp") == rampsBeforeBackoff &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "repeated saturated 3x probe did not extend its retry backoff");
+
+        const size_t earlyRetries = harness.diagnostics.count(
+            "ramp-early-retry"
+        );
+        for (size_t frame = 0;
+                frame < 150 &&
+                    harness.diagnostics.count("ramp-early-retry") == earlyRetries;
+                ++frame) {
+            harness.frameAtFps(30.0);
+        }
+        require(harness.diagnostics.count("ramp-early-retry") > earlyRetries,
+            "sustained fallback-cadence recovery did not retry 3x early");
+    }
+
     void testSdrTwoXCollapseRetainsMinimumGeneratedPolicy() {
         Harness harness(180, 2, false, AdaptiveRecoveryPolicy::OrderedSdr);
         harness.start();
@@ -2156,6 +2266,9 @@ int main() {
         {"Smooth Cadence resists oscillating-load chatter", testSmoothCadenceDoesNotChatterOnOscillatingLoad},
         {"HDR strict load collapse measures real-only", testHdrStrictLoadCollapseMeasuresBeforeFallback},
         {"SDR load shed keeps generated fallback", testSdrStrictLoadCollapseKeepsGeneratedFallbackActive},
+        {"SDR load shed retains higher output", testSdrStrictLoadRetainsHigherOutputLevel},
+        {"SDR moderate deficit ignores stale fallback", testSdrModerateDeficitDoesNotTrustHistoricalFallback},
+        {"SDR severe marginal gain backs off", testSdrSevereMarginalGainFallsBackAndBacksOff},
         {"SDR 2x load shed stays generated", testSdrTwoXCollapseRetainsMinimumGeneratedPolicy},
         {"Smooth Cadence collapse measures real-only", testSmoothCadenceCollapseUsesRealOnlyMeasurement},
         {"restored load keeps collapse guard", testRestoredDiscontinuityLoadRetainsCollapseGuard},

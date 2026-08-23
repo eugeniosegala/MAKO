@@ -8,6 +8,9 @@ import {
 
 const pluginName = resolvePluginName(process.argv[2]);
 
+const wait = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+
 async function waitForDeployedVersion(expectedVersion) {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -20,10 +23,36 @@ async function waitForDeployedVersion(expectedVersion) {
     if (loaded?.version === expectedVersion) {
       return;
     }
-    await new Promise((resolve) => setTimeout(resolve, 500));
+    await wait(500);
   }
   throw new Error(
     `Decky did not load MAKO Decky package version ${expectedVersion} within 30 seconds`,
+  );
+}
+
+async function waitForBackendReady(pluginName) {
+  const deadline = Date.now() + 30_000;
+  let lastError = "the backend did not return an installation status";
+  while (Date.now() < deadline) {
+    try {
+      const status = await callDeckyRoute(
+        "loader/call_plugin_method",
+        [pluginName, "check_mako_installed"],
+        {
+          timeoutMs: 5_000,
+          operation: "confirm the reloaded MAKO Decky backend is ready",
+        },
+      );
+      if (status && typeof status === "object") {
+        return;
+      }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
+    }
+    await wait(500);
+  }
+  throw new Error(
+    `Decky reloaded MAKO Decky, but its backend was not ready within 30 seconds: ${lastError}`,
   );
 }
 
@@ -36,6 +65,7 @@ async function activateDeployedPackage() {
     operation: "reload the deployed MAKO Decky package",
   });
   await waitForDeployedVersion(expectedVersion);
+  await waitForBackendReady(pluginName);
   console.log(
     `Reloaded deployed MAKO Decky package: ${pluginName} ${expectedVersion}`,
   );
@@ -57,7 +87,8 @@ async function activateDeployedPackage() {
 
 try {
   await activateDeployedPackage();
+  process.exit(0);
 } catch (error) {
   console.error(error instanceof Error ? error.message : String(error));
-  process.exitCode = 1;
+  process.exit(1);
 }

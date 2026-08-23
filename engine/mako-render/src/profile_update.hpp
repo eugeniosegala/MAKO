@@ -110,6 +110,17 @@ namespace mako::layer {
         return std::max(profile.multiplier, profile.adaptive_max_multiplier) - 1;
     }
 
+    /// Live updates need only the capacity selected by the active policy.
+    /// The inactive mode remains reserved at initial creation, but a dormant
+    /// larger setting must not block a live switch to a cheaper policy.
+    [[nodiscard]] inline size_t generatedFrameCapacityForActivePolicy(
+            const ls::GameConf& profile) {
+        const size_t activeMultiplier = profile.adaptive
+            ? profile.adaptive_max_multiplier
+            : profile.multiplier;
+        return activeMultiplier - 1;
+    }
+
     [[nodiscard]] inline size_t fixedGeneratedFrameCount(
             const size_t multiplier, const size_t generatedFrameCapacity) {
         return std::min(multiplier - 1, generatedFrameCapacity);
@@ -151,7 +162,8 @@ namespace mako::layer {
             current.performance_mode != next.performance_mode;
         const bool presentationShapeChanged = current.pacing != next.pacing;
         const bool generatedCapacityExceeded =
-            generatedFrameCapacityForProfile(next) > generatedFrameCapacity;
+            generatedFrameCapacityForActivePolicy(next) >
+                generatedFrameCapacity;
         const bool resourcesNeeded = !current.frame_generation_enabled &&
             next.frame_generation_enabled &&
             !frameGenerationResourcesAvailable;

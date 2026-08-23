@@ -609,6 +609,11 @@ namespace mako::layer {
                 size_t baselineLimit{0};
                 double baselineBaseFps{0.0};
                 std::optional<TimePoint> collapseSince;
+                std::optional<TimePoint> healthySince;
+                std::optional<TimePoint> recoverySince;
+                size_t failedLimit{0};
+                size_t consecutiveFailures{0};
+                double failedBaselineBaseFps{0.0};
             } strictLoad;
 
             struct DiscontinuityRecovery {

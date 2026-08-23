@@ -41,6 +41,7 @@ namespace {
     constexpr double adaptiveRampMarginalGain = 1.15;
     constexpr double adaptiveRampTargetSatisfiedRatio = 0.95;
     constexpr double adaptiveStrictLoadCollapseRatio = 0.80;
+    constexpr double adaptiveStrictLoadSevereTargetDeficitRatio = 0.75;
     constexpr double adaptiveBridgeMinimumOutputRetention = 0.85;
     constexpr double adaptiveBridgeMinimumBaseRetention = 0.40;
     constexpr double adaptiveBridgeTargetDeficitRatio = 0.90;
@@ -76,6 +77,7 @@ namespace {
     constexpr auto adaptiveRescueMeasurementDuration = std::chrono::seconds(1);
     constexpr auto adaptiveRescueCooldown = std::chrono::seconds(15);
     constexpr auto adaptiveStrictLoadCollapseDuration = std::chrono::seconds(1);
+    constexpr auto adaptiveStrictLoadHealthyDuration = std::chrono::seconds(2);
     constexpr double adaptiveDiscontinuityRecoveredBaseRatio = 0.90;
     constexpr auto adaptiveDiscontinuityStableDuration = std::chrono::seconds(1);
     constexpr auto adaptiveDiscontinuityMaximumDuration = std::chrono::seconds(5);
@@ -343,6 +345,8 @@ AdaptiveScheduler::observeCadence(
         this->state.rearm.stableSince.reset();
         this->state.rearm.improvementSince.reset();
         this->state.strictLoad.collapseSince.reset();
+        this->state.strictLoad.healthySince.reset();
+        this->state.strictLoad.recoverySince.reset();
         this->state.stableCadence.outsideRangeSince.reset();
         this->state.discontinuityRecovery.stableSince.reset();
         if (this->state.cadence.sdrStallBypass)
@@ -1213,21 +1217,42 @@ AdaptiveScheduler::applyStrictLoadGuard(
         static_cast<double>(this->config.targetFps),
         baseFps * static_cast<double>(this->state.outputPlanner.generationLimit + 1)
     );
-    const bool strictLoadCollapse =
+    const double severeTargetDeficitFps =
+        static_cast<double>(this->config.targetFps) *
+            adaptiveStrictLoadSevereTargetDeficitRatio;
+    const bool fallbackPreservesOutput =
+        strictCurrentOutputFps <= strictBaselineOutputFps;
+    const bool severeCurrentOutputDeficit =
+        strictCurrentOutputFps <= severeTargetDeficitFps;
+    const bool severeMarginalOutputGain =
+        strictBaselineOutputFps < severeTargetDeficitFps &&
+        severeCurrentOutputDeficit &&
+        strictCurrentOutputFps < strictBaselineOutputFps *
+            adaptiveRampMarginalGain;
+    const bool strictOutputCollapse =
+        this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr
+        ? severeCurrentOutputDeficit &&
+            (fallbackPreservesOutput || severeMarginalOutputGain)
+        : strictCurrentOutputFps < strictBaselineOutputFps *
+            adaptiveRampMarginalGain;
+    const bool strictLoadMonitored =
         !this->state.stableCadence.limit &&
         !this->state.ramp.evaluationAt &&
         !this->state.rearm.required &&
         !this->state.rescue.until &&
         this->state.strictLoad.baselineBaseFps > 0.0 &&
         this->state.outputPlanner.generationLimit > this->state.strictLoad.baselineLimit &&
-        generatedFrameCount == this->state.outputPlanner.generationLimit &&
+        generatedFrameCount == this->state.outputPlanner.generationLimit;
+    const bool strictLoadCollapse =
+        strictLoadMonitored &&
         baseFps < this->state.strictLoad.baselineBaseFps *
             adaptiveStrictLoadCollapseRatio &&
-        strictCurrentOutputFps < strictBaselineOutputFps *
-            adaptiveRampMarginalGain &&
+        strictOutputCollapse &&
         (!this->state.rescue.cooldownUntil ||
          now >= *this->state.rescue.cooldownUntil);
     if (strictLoadCollapse) {
+        this->state.strictLoad.healthySince.reset();
+        this->state.strictLoad.recoverySince.reset();
         if (!this->state.strictLoad.collapseSince)
             this->state.strictLoad.collapseSince = now;
         if (now - *this->state.strictLoad.collapseSince >=
@@ -1236,23 +1261,37 @@ AdaptiveScheduler::applyStrictLoadGuard(
             if (this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr) {
                 // The ordered SDR path does not need a disruptive one-second
                 // real-only measurement. A higher multiplier can immediately
-                // fall back to its cheaper proven level; 2x is retained because
-                // there is no cheaper generated policy to compare against.
+                // fall back to its cheaper proven level during a severe target
+                // deficit when that level can preserve the current displayed
+                // rate; 2x is retained because there is no cheaper generated
+                // policy to compare against.
                 const size_t fallbackLimit =
                     this->state.strictLoad.baselineLimit;
                 const size_t resumedLimit = fallbackLimit > 0
                     ? fallbackLimit : collapsedLimit;
                 const double baselineBaseFps =
                     this->state.strictLoad.baselineBaseFps;
+                if (this->state.strictLoad.failedLimit != collapsedLimit) {
+                    this->state.strictLoad.failedLimit = collapsedLimit;
+                    this->state.strictLoad.consecutiveFailures = 0;
+                }
+                this->state.strictLoad.consecutiveFailures++;
+                this->state.strictLoad.failedBaselineBaseFps =
+                    baselineBaseFps;
+                const auto retryDelay = adaptiveRampRetryDelayForFailures(
+                    this->state.strictLoad.consecutiveFailures + 1
+                );
                 this->state.outputPlanner.generationLimit = resumedLimit;
                 this->state.ramp.previousLimit = resumedLimit;
-                this->state.ramp.nextAt = now + adaptiveRescueCooldown;
+                this->state.ramp.nextAt = now + retryDelay;
                 this->state.rescue.cooldownUntil =
-                    now + adaptiveRescueCooldown;
+                    now + retryDelay;
                 this->state.ramp.targetDeficitSince.reset();
                 this->state.strictLoad.baselineLimit = 0;
                 this->state.strictLoad.baselineBaseFps = 0.0;
                 this->state.strictLoad.collapseSince.reset();
+                this->state.strictLoad.healthySince.reset();
+                this->state.strictLoad.recoverySince.reset();
                 this->state.outputPlanner.resetTargetClock();
                 generatedFrameCount = std::min(
                     generatedFrameCount, resumedLimit
@@ -1265,6 +1304,12 @@ AdaptiveScheduler::applyStrictLoadGuard(
                     fallbackLimit > 0
                         ? "sdr-direct-fallback"
                         : "sdr-retain-2x"
+                );
+                this->diagnostics->rampBackoff(
+                    collapsedLimit,
+                    this->state.strictLoad.consecutiveFailures,
+                    baselineBaseFps,
+                    retryDelay
                 );
             } else {
                 this->state.rescue.previousLimit =
@@ -1280,6 +1325,8 @@ AdaptiveScheduler::applyStrictLoadGuard(
                 this->state.strictLoad.baselineLimit = 0;
                 this->state.strictLoad.baselineBaseFps = 0.0;
                 this->state.strictLoad.collapseSince.reset();
+                this->state.strictLoad.healthySince.reset();
+                this->state.strictLoad.recoverySince.reset();
                 this->state.outputPlanner.resetTargetClock();
                 this->diagnostics->rescueStart(
                     collapsedLimit,
@@ -1293,6 +1340,23 @@ AdaptiveScheduler::applyStrictLoadGuard(
         }
     } else {
         this->state.strictLoad.collapseSince.reset();
+        if (strictLoadMonitored &&
+                this->state.strictLoad.failedLimit ==
+                    this->state.outputPlanner.generationLimit &&
+                this->state.strictLoad.consecutiveFailures > 0) {
+            if (!this->state.strictLoad.healthySince)
+                this->state.strictLoad.healthySince = now;
+            if (now - *this->state.strictLoad.healthySince >=
+                    adaptiveStrictLoadHealthyDuration) {
+                this->state.strictLoad.failedLimit = 0;
+                this->state.strictLoad.consecutiveFailures = 0;
+                this->state.strictLoad.failedBaselineBaseFps = 0.0;
+                this->state.strictLoad.healthySince.reset();
+                this->state.strictLoad.recoverySince.reset();
+            }
+        } else {
+            this->state.strictLoad.healthySince.reset();
+        }
     }
 
     return {.planningReady = true};
@@ -1565,6 +1629,8 @@ void AdaptiveScheduler::restoreGenerationLimit(
         ? monitoredBaselineBaseFps
         : 0.0;
     this->state.strictLoad.collapseSince.reset();
+    this->state.strictLoad.healthySince.reset();
+    this->state.strictLoad.recoverySince.reset();
     this->state.outputPlanner.resetTargetClock();
 
     const auto stabilizationEnd = this->state.stabilization.until.value_or(now);
@@ -1784,6 +1850,11 @@ void AdaptiveScheduler::beginStabilization(
     this->state.strictLoad.baselineLimit = 0;
     this->state.strictLoad.baselineBaseFps = 0.0;
     this->state.strictLoad.collapseSince.reset();
+    this->state.strictLoad.healthySince.reset();
+    this->state.strictLoad.recoverySince.reset();
+    this->state.strictLoad.failedLimit = 0;
+    this->state.strictLoad.consecutiveFailures = 0;
+    this->state.strictLoad.failedBaselineBaseFps = 0.0;
     this->state.cadence.dropFrames = 0;
     this->state.cadence.sdrStallBypass = false;
     this->state.cadence.sdrResumeFrames = 0;
@@ -1923,6 +1994,8 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             this->state.strictLoad.baselineBaseFps =
                 this->state.ramp.bridgeBaselineBaseFps;
             this->state.strictLoad.collapseSince.reset();
+            this->state.strictLoad.healthySince.reset();
+            this->state.strictLoad.recoverySince.reset();
             this->state.ramp.lastFailedLimit = 0;
             this->state.ramp.consecutiveFailures = 0;
             this->state.ramp.failedBaselineBaseFps = 0.0;
@@ -2033,6 +2106,8 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         this->state.strictLoad.baselineBaseFps =
             this->state.ramp.baselineBaseFps;
         this->state.strictLoad.collapseSince.reset();
+        this->state.strictLoad.healthySince.reset();
+        this->state.strictLoad.recoverySince.reset();
         this->state.ramp.lastFailedLimit = 0;
         this->state.ramp.consecutiveFailures = 0;
         this->state.ramp.failedBaselineBaseFps = 0.0;
@@ -2054,6 +2129,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             adaptiveRampTargetSatisfiedRatio;
     if (targetSatisfied) {
         this->state.ramp.targetDeficitSince.reset();
+        this->state.strictLoad.recoverySince.reset();
         return;
     }
 
@@ -2077,15 +2153,37 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             this->state.ramp.failedBaselineBaseFps > 0.0 &&
             baseFps >= this->state.ramp.failedBaselineBaseFps *
                 adaptiveRampEarlyRetryBaseImprovement;
-        if (!failedRampRecovered)
+        const bool failedStrictLoadRecovered =
+            this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
+            this->state.strictLoad.failedLimit == nextLimit &&
+            this->state.strictLoad.consecutiveFailures > 0 &&
+            this->state.strictLoad.failedBaselineBaseFps > 0.0 &&
+            baseFps >= this->state.strictLoad.failedBaselineBaseFps *
+                adaptiveRampEarlyRetryBaseImprovement;
+        if (failedStrictLoadRecovered) {
+            if (!this->state.strictLoad.recoverySince)
+                this->state.strictLoad.recoverySince = now;
+        } else {
+            this->state.strictLoad.recoverySince.reset();
+        }
+        const bool strictLoadRecoveryConfirmed =
+            this->state.strictLoad.recoverySince &&
+            now - *this->state.strictLoad.recoverySince >=
+                adaptiveStrictLoadHealthyDuration;
+        if (!failedRampRecovered && !strictLoadRecoveryConfirmed)
             return;
 
         this->diagnostics->rampEarlyRetry(
             nextLimit,
-            this->state.ramp.failedBaselineBaseFps,
+            strictLoadRecoveryConfirmed
+                ? this->state.strictLoad.failedBaselineBaseFps
+                : this->state.ramp.failedBaselineBaseFps,
             baseFps
         );
         this->state.ramp.nextAt.reset();
+        if (strictLoadRecoveryConfirmed)
+            this->state.rescue.cooldownUntil.reset();
+        this->state.strictLoad.recoverySince.reset();
     }
 
     this->state.ramp.previousLimit = this->state.outputPlanner.generationLimit;

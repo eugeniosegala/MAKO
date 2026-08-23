@@ -223,6 +223,29 @@ int main() {
     auto fixed = current;
     fixed.adaptive = false;
     fixed.multiplier = 2;
+
+    auto fixedWithDormantFourX = fixed;
+    fixedWithDormantFourX.adaptive_max_multiplier = 4;
+    expect(classifyProfileUpdate(
+            current, fixedWithDormantFourX, 2, true).action ==
+            ProfileUpdateAction::ApplyLive,
+        "Adaptive-to-Fixed must ignore dormant Adaptive capacity growth");
+    expect(generatedFrameCapacityForActivePolicy(fixedWithDormantFourX) == 1,
+        "Fixed 2x active capacity must ignore the dormant Adaptive ceiling");
+
+    auto adaptiveFourX = fixedWithDormantFourX;
+    adaptiveFourX.adaptive = true;
+    expect(classifyProfileUpdate(
+            fixedWithDormantFourX, adaptiveFourX, 2, true).action ==
+            ProfileUpdateAction::DeferUntilSwapchainRecreation,
+        "Fixed-to-Adaptive 4x must defer when active capacity is unavailable");
+    expect(classifyProfileUpdate(
+            fixedWithDormantFourX, adaptiveFourX, 3, true).action ==
+            ProfileUpdateAction::ApplyLive,
+        "Fixed-to-Adaptive 4x must apply when active capacity is available");
+    expect(generatedFrameCapacityForActivePolicy(adaptiveFourX) == 3,
+        "Adaptive 4x active capacity was not selected");
+
     next = current;
     expect(classifyProfileUpdate(fixed, next, 1, true).action ==
             ProfileUpdateAction::DeferUntilSwapchainRecreation,
