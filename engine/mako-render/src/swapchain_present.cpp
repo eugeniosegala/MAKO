@@ -79,6 +79,12 @@ namespace {
     }
 }
 
+static thread_local std::vector<vk::Barrier> preBarriers;
+static thread_local std::vector<vk::Barrier> postBarriers;
+// thread_local 재사용으로 매 프레임 std::vector 생성/할당 방지
+static thread_local std::vector<VkSemaphore> sourceWaitSemaphoresTL;
+static thread_local std::vector<VkSemaphore> retireWaitSemaphoresTL;
+
 VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
         const VkQueue queue, const VkSwapchainKHR swapchain,
         const void* nextChain, const uint32_t originalImageIndex,
@@ -104,7 +110,7 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             acquiredImageIndices[i]
         );
 
-        std::vector<vk::Barrier> preBarriers;
+        preBarriers.clear();
         if (first) {
             preBarriers.push_back(barrierHelper(
                 originalImage,
@@ -122,15 +128,14 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
         ));
 
-        std::vector<vk::Barrier> postBarriers{
-            barrierHelper(
-                acquiredImage,
-                VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_ACCESS_MEMORY_READ_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-            )
-        };
+        postBarriers.clear();
+        postBarriers.push_back(barrierHelper(
+            acquiredImage,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_ACCESS_MEMORY_READ_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+        ));
         if (last) {
             postBarriers.push_back(barrierHelper(
                 originalImage,
@@ -149,24 +154,24 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
         );
         commandBuffer.end(vk);
 
-        std::vector<VkSemaphore> waits{
-            pass.acquireSemaphore.handle()
-        };
+        // [최적화 1] thread_local 버퍼 재사용을 통해 루프 내 동적 vector 생성 및 reallocation 제거
+        retireWaitSemaphoresTL.clear();
+        retireWaitSemaphoresTL.push_back(pass.acquireSemaphore.handle());
         if (first) {
-            waits.insert(
-                waits.end(), applicationWaitSemaphores.begin(),
+            retireWaitSemaphoresTL.insert(
+                retireWaitSemaphoresTL.end(), applicationWaitSemaphores.begin(),
                 applicationWaitSemaphores.end()
             );
         } else {
             const size_t previousSemaphoreIndex =
                 (semaphoreBase + i - 1) % this->postCopySemaphores.size();
-            waits.push_back(
+            retireWaitSemaphoresTL.push_back(
                 this->postCopySemaphores.at(previousSemaphoreIndex)
                     .second.handle()
             );
         }
         commandBuffer.submit(
-            vk, std::move(waits), VK_NULL_HANDLE, 0,
+            vk, retireWaitSemaphoresTL, VK_NULL_HANDLE, 0,
             {pcs.first.handle(), pcs.second.handle()},
             VK_NULL_HANDLE, 0,
             last ? this->renderFence->handle() : VK_NULL_HANDLE
@@ -346,9 +351,6 @@ bool Swapchain::recoverBackendIfReady(const vk::Vulkan& vk) {
     if (!backendReady)
         return false;
 
-    // A fence-budget miss leaves the previous application-device submission
-    // in flight. Backend readiness alone does not make that fence reusable,
-    // so retain nonblocking native presentation until both sides are idle.
     if (this->frameState.renderFenceInFlight) {
         try {
             if (!this->renderFence->wait(vk, 0))
@@ -526,8 +528,6 @@ void Swapchain::handleRenderFenceBudgetMiss(
         );
         this->adaptiveScheduler->cancelHistoryWarmup();
     } else if (!plan.historyWarmupActive) {
-        // Fixed history warmup was already recorded as skipped when the plan
-        // was built, so count only a delivery that was still intended.
         this->diagnosticsState.fixedSkippedFrames +=
             plan.generatedFrameCount;
     }
@@ -649,11 +649,15 @@ void Swapchain::submitSourceCopy(const PresentInvocation& invocation,
     commandBuffer.end(invocation.vk);
 
     const auto sourceSubmitStarted = startPresentDiagnostic();
-    std::vector<VkSemaphore> sourceWaitSemaphores(
-        invocation.waitSemaphores.begin(), invocation.waitSemaphores.end()
+
+    // [최적화 2] 매 프레임 std::vector 복사 생성 및 std::move 힙 할당 제거
+    sourceWaitSemaphoresTL.assign(
+        invocation.waitSemaphores.begin(),
+        invocation.waitSemaphores.end()
     );
+
     commandBuffer.submit(invocation.vk,
-        std::move(sourceWaitSemaphores), VK_NULL_HANDLE, 0,
+        sourceWaitSemaphoresTL, VK_NULL_HANDLE, 0,
         {}, this->syncSemaphore->handle(), this->frameState.sequenceIndex++
     );
     logSlowPresentOperation(
@@ -685,9 +689,6 @@ VkResult Swapchain::presentHistoryOnly(
     try {
         this->instance.get().scheduleFrameHistory(this->ctx.get());
     } catch (const std::exception& error) {
-        // The fallback copy is already queued and signals fallbackSemaphore.
-        // Present the real image through it and quarantine generation instead
-        // of returning an error to the application.
         std::cerr << "MAKO Renderer: temporarily bypassing frame generation after "
                      "history scheduling failure; native presentation retained: "
                   << error.what() << '\n';
@@ -761,6 +762,9 @@ VkResult Swapchain::presentHistoryOnly(
     return result;
 }
 
+static thread_local std::vector<VkSemaphore> waitSemaphores;
+static thread_local std::vector<VkSemaphore> signalSemaphores;
+
 VkResult Swapchain::presentGeneratedFrames(
         const PresentInvocation& invocation,
         const PresentationFramePlan& plan,
@@ -796,10 +800,6 @@ VkResult Swapchain::presentGeneratedFrames(
 
         if (plan.configuredAcquireTimeout &&
                 (result == VK_TIMEOUT || result == VK_NOT_READY)) {
-            // The explicit legacy timeout is an anti-freeze ceiling. Backend
-            // work is already scheduled on this non-Gamescope path, so drain
-            // its final timeline value without reclassifying the miss as an
-            // adaptive timing discontinuity.
             const size_t skippedFrames =
                 plan.scheduledGeneratedFrameCount - i;
             if (!this->profile.adaptive)
@@ -895,28 +895,29 @@ VkResult Swapchain::presentGeneratedFrames(
             }
         );
 
-        std::vector<VkSemaphore> waitSemaphores{
-            pass.acquireSemaphore.handle()
-        };
+        waitSemaphores.clear();
+        waitSemaphores.push_back(pass.acquireSemaphore.handle());
         if (i) {
             const auto& previousPostCopy = this->postCopySemaphores.at(
                 (this->frameState.sequenceIndex - 1) % this->postCopySemaphores.size()
             );
             waitSemaphores.push_back(previousPostCopy.second.handle());
         }
-        std::vector<VkSemaphore> signalSemaphores{
-            postCopy.first.handle(), postCopy.second.handle()
-        };
+
+        signalSemaphores.clear();
+        signalSemaphores.push_back(postCopy.first.handle());
+        signalSemaphores.push_back(postCopy.second.handle());
 
         commandBuffer.end(invocation.vk);
         const auto generatedSubmitStarted = startPresentDiagnostic();
         commandBuffer.submit(invocation.vk,
-            std::move(waitSemaphores),
+            waitSemaphores,
             this->syncSemaphore->handle(), this->frameState.sequenceIndex,
-            std::move(signalSemaphores), VK_NULL_HANDLE, 0,
+            signalSemaphores, VK_NULL_HANDLE, 0,
             i == plan.scheduledGeneratedFrameCount - 1
                 ? this->renderFence->handle() : VK_NULL_HANDLE
         );
+
         if (i == plan.scheduledGeneratedFrameCount - 1)
             this->frameState.renderFenceInFlight = true;
         logSlowPresentOperation(
@@ -983,10 +984,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         this->diagnosticsState.contextId
     );
     const void* lowerNextChain = nextChain;
-    // Match the immutable create-time choice. Ordered SDR filters Gamescope's
-    // dynamic MAILBOX override so the lower FIFO swapchain stays ordered. HDR
-    // preserves it. A feedback transition cannot change the game-owned
-    // VkSwapchainKHR's creation contract.
     ScopedPNextRemoval presentMode(
         lowerNextChain, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT,
         this->privateOrderedTransport
@@ -1016,9 +1013,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     if (!this->applyPendingColorPipeline(vk))
         return this->presentNativeFrame(invocation);
 
-    // Frame generation is live-disabled; hand the game's own image directly
-    // to the driver without copies, model scheduling, fences or generated
-    // images.
     if (!this->profile.frame_generation_enabled ||
             !this->colorPipeline.generationSupported) {
         return this->presentNativeFrame(invocation);
@@ -1027,17 +1021,11 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         return this->presentNativeFrame(invocation);
 
     const auto swapchainImage = this->info.images.at(imageIndex);
-    // Presentation counters continue across live-off intervals, while the
-    // backend's temporal history does not. Index sources by frames actually
-    // submitted to the backend so native-only frames cannot invert history.
     const auto& sourceImage = this->sourceImages.at(
         this->frameState.backendFrameIndex % 2
     );
     auto plan = this->prepareFramePlan(presentNow, gamescopeHdrTransport);
 
-    // The Gamescope HDR bridge is native-first: never hold the application's
-    // real frame behind unfinished private work. Ordered SDR retains the
-    // synchronous FIFO/fence behavior.
     if (!this->generationPipelineReady(
             vk, gamescopeHdrTransport,
             plan.generatedFrameCount, presentNow)) {
@@ -1064,9 +1052,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         scheduledTimestamps.data(), plan.scheduledGeneratedFrameCount
     };
 
-    // Resolve previous application-device work before scheduling another
-    // backend frame. If the fence budget is missed, no new backend work has
-    // been created and the current game image can be presented natively.
     if (!this->prepareRenderFence(vk)) {
         this->handleRenderFenceBudgetMiss(plan);
         return this->presentNativeFrame(invocation);
