@@ -87,7 +87,7 @@ Use the full `$HOME/.local/bin/mako-diagnostics` path in that command when it is
 
 The helper prefers a MAKO Decky private log when one exists. Otherwise, it selects the newest native or Flatpak Steam console log. The `all` preset keeps the most recent 2,000 relevant MAKO, Vulkan-loader, and compositor lines rather than copying the complete source log.
 
-Open the **Desktop** folder and confirm that `MAKO-diagnostics.txt` exists. Focused presets such as `startup`, `errors`, `adaptive`, `recovery`, `performance`, `layers`, or `hdr` are for follow-up reports requested by the maintainer; `recovery` includes generated-image pressure, pipeline bypasses, history warmup, and render-fence budget misses.
+Open the **Desktop** folder and confirm that `MAKO-diagnostics.txt` exists. Focused presets such as `startup`, `errors`, `adaptive`, `recovery`, `performance`, `layers`, or `hdr` are for follow-up reports requested by the maintainer. The `adaptive` preset includes contiguous requested-policy pacing aggregates and target-clock state; these are scheduler measurements rather than compositor scanout timestamps. The `recovery` preset includes generated-image pressure, pipeline bypasses, history warmup, and render-fence budget misses.
 
 ## 4. Restore normal launch settings
 

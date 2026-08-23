@@ -35,6 +35,7 @@ MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources action=wait-for-natural-swapchain-recreation
 MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 hdr=1
 MAKO Renderer: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
+MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=60 target_fps=90 generated=1 max_generated=1 stable_cadence=0 target_clock=1 target_budget_credit_outputs=0.25 target_deferred_budget_output=1 target_phase_error_ms=-2.1 source_interval_samples=60 source_interval_mean_ms=16.6 source_interval_stddev_ms=1.2 source_interval_p95_ms=18.5 source_interval_p99_ms=20.5 generated_count_changes=29 requested_interval_samples=90 requested_interval_mean_ms=11.1 requested_interval_stddev_ms=1.3 requested_interval_p95_ms=13.5 requested_interval_p99_ms=13.5 target_phase_error_samples=60 target_phase_error_rms_ms=2.2 target_phase_error_max_ms=5.5
 MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
 MAKO Renderer: present diagnostics: operation=acquire-generated-image context=1 duration_ms=50 result=VK_TIMEOUT
 MAKO Renderer: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
@@ -92,6 +93,41 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("render layer active", result.stdout)
         self.assertNotIn("mode=hdr10-pq", result.stdout)
         self.assertNotIn("HDR10 transport", result.stdout)
+
+    def test_adaptive_preset_keeps_fractional_pacing_contract(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = self._fixture_path(Path(temporary_directory))
+            result = self._run("--log", str(path), "adaptive")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("operation=adaptive-plan", result.stdout)
+
+        producer = (
+            REPOSITORY_ROOT / "engine/mako-render/src/present_diagnostics.cpp"
+        ).read_text(encoding="utf-8")
+        for field in (
+            "stable_cadence=",
+            "target_clock=",
+            "target_budget_credit_outputs=",
+            "target_deferred_budget_output=",
+            "target_phase_error_ms=",
+            "source_interval_samples=",
+            "source_interval_mean_ms=",
+            "source_interval_stddev_ms=",
+            "source_interval_p95_ms=",
+            "source_interval_p99_ms=",
+            "generated_count_changes=",
+            "requested_interval_samples=",
+            "requested_interval_mean_ms=",
+            "requested_interval_stddev_ms=",
+            "requested_interval_p95_ms=",
+            "requested_interval_p99_ms=",
+            "target_phase_error_samples=",
+            "target_phase_error_rms_ms=",
+            "target_phase_error_max_ms=",
+        ):
+            with self.subTest(field=field):
+                self.assertIn(field, result.stdout)
+                self.assertIn(field, producer)
 
     def test_current_recovery_operations_have_renderer_producers(self):
         renderer_source = "\n".join(

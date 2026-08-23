@@ -26,8 +26,8 @@
 | **MAKO Renderer** | Direct Vulkan-layer installation without Decky | [Latest MAKO Renderer release (Linux archive under Assets)](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.1.0) |
 
 <!-- prettier-ignore -->
-> [!NOTE]
-> Check the Downloads table regularly for updates. MAKO Decky and MAKO Renderer are published independently.
+> [!TIP]
+> **Want update alerts?** MAKO Decky and MAKO Renderer are published independently. At the top-right of the [MAKO GitHub repository](https://github.com/eugeniosegala/MAKO) page, click **Watch** > **Custom**, select **Releases**, then click **Apply**. GitHub will notify you when a new release is published, subject to your GitHub notification settings.
 
 Published Renderer packages currently target x86_64 Linux hosts and include layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages are not included in this release.
 
@@ -47,7 +47,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 
 ## What MAKO is
 
-MAKO is a next-generation, Vulkan-powered graphics project for Linux gaming, built to bring Lossless Scaling frame generation and scaling (**scaling coming soon**) to Steam Deck, Steam Machine, SteamOS, and Linux more broadly. Frame generation is available today, with scaling as the next planned capability.
+MAKO (**Motion-Adaptive Kernel Orchestration**) is a next-generation, Vulkan-powered graphics project for Linux gaming, built to bring Lossless Scaling frame generation and scaling (**scaling coming soon**) to Steam Deck, Steam Machine, SteamOS, and Linux more broadly. Frame generation is available today, with scaling as the next planned capability.
 
 The project consists of two closely integrated components:
 

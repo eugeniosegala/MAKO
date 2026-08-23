@@ -19,6 +19,7 @@ namespace {
         uint32_t targetFps;
         size_t maximumMultiplier;
         bool stableCadence;
+        double intervalJitter;
     };
 
     struct BenchmarkResult {
@@ -58,15 +59,36 @@ namespace {
 
         uint64_t checksum = 0;
         uint64_t generatedFrameTotal = 0;
+        const std::array noisyIntervals{
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                interval * (1.0 - benchmark.intervalJitter)
+            ),
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                interval * (1.0 + benchmark.intervalJitter)
+            ),
+        };
         const auto started = std::chrono::steady_clock::now();
-        for (size_t frame = 0; frame < iterations; ++frame) {
-            simulatedNow += interval;
-            const auto plan = scheduler.planFrame(simulatedNow, false);
-            generatedFrameTotal += plan.size();
-            if (!plan.empty()) {
-                checksum += static_cast<uint64_t>(
-                    plan.front() * 1'000'000.0F
-                );
+        if (benchmark.intervalJitter == 0.0) {
+            for (size_t frame = 0; frame < iterations; ++frame) {
+                simulatedNow += interval;
+                const auto plan = scheduler.planFrame(simulatedNow, false);
+                generatedFrameTotal += plan.size();
+                if (!plan.empty()) {
+                    checksum += static_cast<uint64_t>(
+                        plan.front() * 1'000'000.0F
+                    );
+                }
+            }
+        } else {
+            for (size_t frame = 0; frame < iterations; ++frame) {
+                simulatedNow += noisyIntervals[frame & 1U];
+                const auto plan = scheduler.planFrame(simulatedNow, false);
+                generatedFrameTotal += plan.size();
+                if (!plan.empty()) {
+                    checksum += static_cast<uint64_t>(
+                        plan.front() * 1'000'000.0F
+                    );
+                }
             }
         }
         const auto elapsed = std::chrono::steady_clock::now() - started;
@@ -85,11 +107,12 @@ namespace {
 
 int main() {
     constexpr size_t iterations = 2'000'000;
-    constexpr std::array<BenchmarkCase, 4> cases{{
-        {"above-target-real-only", 144.0, 120, 4, false},
-        {"strict-2x", 60.0, 120, 3, false},
-        {"strict-4x", 30.0, 120, 4, false},
-        {"smooth-fractional", 47.0, 90, 2, true},
+    constexpr std::array<BenchmarkCase, 5> cases{{
+        {"above-target-real-only", 144.0, 120, 4, false, 0.0},
+        {"strict-2x", 60.0, 120, 3, false, 0.0},
+        {"strict-4x", 30.0, 120, 4, false, 0.0},
+        {"fractional-noisy-placement", 60.0, 90, 2, false, 0.22},
+        {"smooth-fractional", 47.0, 90, 2, true, 0.0},
     }};
 
     std::cout << "case,base_fps,target_fps,max_multiplier,smooth_cadence,"

@@ -433,7 +433,8 @@ namespace {
                       << " base_fps=" << plan.baseFps
                       << " target_fps=" << plan.targetFps
                       << " generated=" << plan.generatedFrames
-                      << " max_generated=" << plan.maximumGeneratedFrames;
+                      << " max_generated=" << plan.maximumGeneratedFrames
+                      << " stable_cadence=" << (plan.stableCadence ? 1 : 0);
             if (plan.configuredMaximumGeneratedFrames) {
                 std::cerr << " configured_max_generated="
                           << plan.configuredMaximumGeneratedFrames;
@@ -452,6 +453,44 @@ namespace {
                              ).count()
                           << " rearm_baseline_base_fps="
                           << plan.rearmBaselineBaseFps;
+            }
+            if (plan.pacingSourceSamples) {
+                std::cerr << " target_clock="
+                          << (plan.targetOutputClockActive ? 1 : 0)
+                          << " target_budget_credit_outputs="
+                          << plan.targetOutputBudgetCreditOutputs
+                          << " target_deferred_budget_output="
+                          << (plan.targetOutputDeferredBudgetOutput ? 1 : 0)
+                          << " target_phase_error_ms="
+                          << plan.targetOutputPhaseErrorMilliseconds
+                          << " source_interval_samples="
+                          << plan.pacingSourceSamples
+                          << " source_interval_mean_ms="
+                          << plan.sourceIntervalMeanMilliseconds
+                          << " source_interval_stddev_ms="
+                          << plan.sourceIntervalStdDevMilliseconds
+                          << " source_interval_p95_ms="
+                          << plan.sourceIntervalP95Milliseconds
+                          << " source_interval_p99_ms="
+                          << plan.sourceIntervalP99Milliseconds
+                          << " generated_count_changes="
+                          << plan.generatedCountChanges
+                          << " requested_interval_samples="
+                          << plan.requestedIntervalSamples
+                          << " requested_interval_mean_ms="
+                          << plan.requestedIntervalMeanMilliseconds
+                          << " requested_interval_stddev_ms="
+                          << plan.requestedIntervalStdDevMilliseconds
+                          << " requested_interval_p95_ms="
+                          << plan.requestedIntervalP95Milliseconds
+                          << " requested_interval_p99_ms="
+                          << plan.requestedIntervalP99Milliseconds
+                          << " target_phase_error_samples="
+                          << plan.targetPhaseErrorSamples
+                          << " target_phase_error_rms_ms="
+                          << plan.targetPhaseErrorRmsMilliseconds
+                          << " target_phase_error_max_ms="
+                          << plan.targetPhaseErrorMaximumMilliseconds;
             }
             std::cerr << '\n';
         }

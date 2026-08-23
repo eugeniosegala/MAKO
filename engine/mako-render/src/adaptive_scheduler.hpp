@@ -6,7 +6,10 @@
 #include "generated_frame_plan.hpp"
 #include "mako-common/configuration/config.hpp"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -73,6 +76,10 @@ namespace mako::layer {
         bool rearmRequired{false};
         bool discontinuityRecoveryActive{false};
         bool nativeCadenceProbeActive{false};
+        bool targetOutputClockActive{false};
+        double targetOutputBudgetCreditOutputs{0.0};
+        double targetOutputPhaseErrorOutputs{0.0};
+        bool targetOutputDeferredBudgetOutput{false};
     };
 
     struct AdaptivePlanDiagnostic {
@@ -88,6 +95,24 @@ namespace mako::layer {
         std::string_view rearmReason;
         std::chrono::steady_clock::duration rearmCooldownRemaining{};
         double rearmBaselineBaseFps{0.0};
+        bool targetOutputClockActive{false};
+        double targetOutputBudgetCreditOutputs{0.0};
+        double targetOutputPhaseErrorMilliseconds{0.0};
+        bool targetOutputDeferredBudgetOutput{false};
+        size_t pacingSourceSamples{0};
+        double sourceIntervalMeanMilliseconds{0.0};
+        double sourceIntervalStdDevMilliseconds{0.0};
+        double sourceIntervalP95Milliseconds{0.0};
+        double sourceIntervalP99Milliseconds{0.0};
+        size_t generatedCountChanges{0};
+        size_t requestedIntervalSamples{0};
+        double requestedIntervalMeanMilliseconds{0.0};
+        double requestedIntervalStdDevMilliseconds{0.0};
+        double requestedIntervalP95Milliseconds{0.0};
+        double requestedIntervalP99Milliseconds{0.0};
+        size_t targetPhaseErrorSamples{0};
+        double targetPhaseErrorRmsMilliseconds{0.0};
+        double targetPhaseErrorMaximumMilliseconds{0.0};
     };
 
     class AdaptiveSchedulerDiagnostics {
@@ -230,6 +255,7 @@ namespace mako::layer {
             AdaptiveFramePlan terminalPlan;
             double baseFps{0.0};
             double instantaneousBaseFps{0.0};
+            double rawIntervalSeconds{0.0};
         };
 
         struct PlanningStageResult {
@@ -252,6 +278,7 @@ namespace mako::layer {
             size_t maximumGeneratedFrameCount);
         [[nodiscard]] inline size_t selectGeneratedFrameCount(
             double desiredOutputsPerRealFrame,
+            double rawIntervalSeconds,
             size_t maximumGeneratedFrameCount);
         [[nodiscard]] inline PlanningStageResult advanceNativeCadenceProbe(
             TimePoint now, double baseFps, double instantaneousBaseFps,
@@ -296,6 +323,171 @@ namespace mako::layer {
                 std::optional<TimePoint> lastPlanAt;
             } diagnosticThrottle;
 
+            struct PacingWindow {
+                struct Distribution {
+                    static constexpr size_t histogramBinCount = 101;
+                    static constexpr double histogramBinWidthMilliseconds = 1.0;
+
+                    std::array<uint32_t, histogramBinCount> histogram{};
+                    size_t samples{0};
+                    double mean{0.0};
+                    double squaredDeviation{0.0};
+
+                    void record(const double milliseconds) {
+                        const double bounded = std::max(0.0, milliseconds);
+                        const size_t bin = std::min(
+                            histogramBinCount - 1,
+                            static_cast<size_t>(
+                                bounded / histogramBinWidthMilliseconds
+                            )
+                        );
+                        this->histogram[bin]++;
+                        this->samples++;
+                        const double delta = bounded - this->mean;
+                        this->mean += delta / static_cast<double>(this->samples);
+                        this->squaredDeviation +=
+                            delta * (bounded - this->mean);
+                    }
+
+                    [[nodiscard]] double standardDeviation() const {
+                        return this->samples > 1
+                            ? std::sqrt(
+                                std::max(0.0, this->squaredDeviation) /
+                                static_cast<double>(this->samples)
+                            )
+                            : 0.0;
+                    }
+
+                    [[nodiscard]] double percentile(
+                            const double quantile) const {
+                        if (this->samples == 0)
+                            return 0.0;
+                        const size_t rank = static_cast<size_t>(std::ceil(
+                            std::clamp(quantile, 0.0, 1.0) *
+                            static_cast<double>(this->samples)
+                        ));
+                        size_t cumulative = 0;
+                        for (size_t bin = 0;
+                                bin < this->histogram.size(); ++bin) {
+                            cumulative += this->histogram[bin];
+                            if (cumulative >= std::max<size_t>(rank, 1)) {
+                                return (static_cast<double>(bin) + 0.5) *
+                                    histogramBinWidthMilliseconds;
+                            }
+                        }
+                        return static_cast<double>(histogramBinCount) *
+                            histogramBinWidthMilliseconds;
+                    }
+
+                    void reset() {
+                        this->histogram.fill(0);
+                        this->samples = 0;
+                        this->mean = 0.0;
+                        this->squaredDeviation = 0.0;
+                    }
+                } sourceIntervals, requestedIntervals;
+
+                std::optional<size_t> previousGeneratedFrameCount;
+                size_t generatedCountChanges{0};
+                size_t phaseErrorSamples{0};
+                double phaseErrorSquaredMilliseconds{0.0};
+                double maximumAbsolutePhaseErrorMilliseconds{0.0};
+                size_t frameSequence{0};
+                std::optional<size_t> lastRecordedFrameSequence;
+                std::optional<bool> recordedTargetClockActive;
+                std::optional<bool> recordedStableCadence;
+                std::optional<size_t> recordedGenerationLimit;
+                std::optional<size_t> recordedTargetClockEpoch;
+
+                void beginFrame() {
+                    this->frameSequence++;
+                }
+
+                void record(const double rawIntervalSeconds,
+                        const size_t generatedFrameCount,
+                        const bool targetClockActive,
+                        const double targetPhaseErrorOutputs,
+                        const uint32_t targetFps,
+                        const bool stableCadence,
+                        const size_t generationLimit,
+                        const size_t targetClockEpoch) {
+                    const bool skippedPolicyFrame =
+                        this->lastRecordedFrameSequence &&
+                        this->frameSequence !=
+                            *this->lastRecordedFrameSequence + 1;
+                    const bool policyChanged =
+                        (this->recordedTargetClockActive &&
+                         *this->recordedTargetClockActive !=
+                            targetClockActive) ||
+                        (this->recordedStableCadence &&
+                         *this->recordedStableCadence != stableCadence) ||
+                        (this->recordedGenerationLimit &&
+                         *this->recordedGenerationLimit != generationLimit) ||
+                        (this->recordedTargetClockEpoch &&
+                         *this->recordedTargetClockEpoch != targetClockEpoch);
+                    if (skippedPolicyFrame || policyChanged) {
+                        this->resetWindow();
+                        this->previousGeneratedFrameCount.reset();
+                    }
+                    this->lastRecordedFrameSequence = this->frameSequence;
+                    this->recordedTargetClockActive = targetClockActive;
+                    this->recordedStableCadence = stableCadence;
+                    this->recordedGenerationLimit = generationLimit;
+                    this->recordedTargetClockEpoch = targetClockEpoch;
+
+                    const double sourceIntervalMilliseconds =
+                        rawIntervalSeconds * 1000.0;
+                    this->sourceIntervals.record(sourceIntervalMilliseconds);
+                    const size_t outputCount = generatedFrameCount + 1;
+                    const double requestedIntervalMilliseconds =
+                        sourceIntervalMilliseconds /
+                        static_cast<double>(outputCount);
+                    for (size_t output = 0; output < outputCount; ++output)
+                        this->requestedIntervals.record(
+                            requestedIntervalMilliseconds
+                        );
+                    if (this->previousGeneratedFrameCount &&
+                            *this->previousGeneratedFrameCount !=
+                                generatedFrameCount) {
+                        this->generatedCountChanges++;
+                    }
+                    this->previousGeneratedFrameCount = generatedFrameCount;
+
+                    if (!targetClockActive || targetFps == 0)
+                        return;
+                    const double phaseErrorMilliseconds =
+                        targetPhaseErrorOutputs * 1000.0 /
+                        static_cast<double>(targetFps);
+                    this->phaseErrorSamples++;
+                    this->phaseErrorSquaredMilliseconds +=
+                        phaseErrorMilliseconds * phaseErrorMilliseconds;
+                    this->maximumAbsolutePhaseErrorMilliseconds = std::max(
+                        this->maximumAbsolutePhaseErrorMilliseconds,
+                        std::abs(phaseErrorMilliseconds)
+                    );
+                }
+
+                void resetWindow() {
+                    this->sourceIntervals.reset();
+                    this->requestedIntervals.reset();
+                    this->generatedCountChanges = 0;
+                    this->phaseErrorSamples = 0;
+                    this->phaseErrorSquaredMilliseconds = 0.0;
+                    this->maximumAbsolutePhaseErrorMilliseconds = 0.0;
+                }
+
+                void reset() {
+                    this->resetWindow();
+                    this->previousGeneratedFrameCount.reset();
+                    this->frameSequence = 0;
+                    this->lastRecordedFrameSequence.reset();
+                    this->recordedTargetClockActive.reset();
+                    this->recordedStableCadence.reset();
+                    this->recordedGenerationLimit.reset();
+                    this->recordedTargetClockEpoch.reset();
+                }
+            } pacingWindow;
+
             struct FastBurst {
                 std::optional<TimePoint> startedAt;
                 std::optional<TimePoint> lastDiagnosticAt;
@@ -304,8 +496,35 @@ namespace mako::layer {
             } fastBurst;
 
             struct OutputPlanner {
-                double credit{0.0};
+                // Smoothed cadence owns the generated-work budget, preserving
+                // the established load envelope. Raw cadence owns only the
+                // bounded placement phase and may defer one already-budgeted
+                // output from a clearly short interval.
+                double budgetCreditOutputs{0.0};
+                double targetPhaseErrorOutputs{0.0};
+                bool deferredBudgetOutput{false};
+                double deferredPlacementBenefit{0.0};
+                double maximumBaselineSpacingOutputs{0.0};
+                bool targetClockActive{false};
+                size_t targetClockEpoch{0};
                 size_t generationLimit{0};
+
+                void resetTargetClock() {
+                    if (this->budgetCreditOutputs != 0.0 ||
+                            this->targetPhaseErrorOutputs != 0.0 ||
+                            this->deferredBudgetOutput ||
+                            this->deferredPlacementBenefit != 0.0 ||
+                            this->maximumBaselineSpacingOutputs != 0.0 ||
+                            this->targetClockActive) {
+                        this->targetClockEpoch++;
+                    }
+                    this->budgetCreditOutputs = 0.0;
+                    this->targetPhaseErrorOutputs = 0.0;
+                    this->deferredBudgetOutput = false;
+                    this->deferredPlacementBenefit = 0.0;
+                    this->maximumBaselineSpacingOutputs = 0.0;
+                    this->targetClockActive = false;
+                }
             } outputPlanner;
 
             struct NativeCadenceProbe {

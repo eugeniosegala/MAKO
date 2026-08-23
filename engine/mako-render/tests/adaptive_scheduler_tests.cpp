@@ -4,6 +4,7 @@
 #include "generated_frame_delivery.hpp"
 #include "presentation_policy.hpp"
 
+#include <algorithm>
 #include <array>
 #include <bit>
 #include <chrono>
@@ -52,8 +53,15 @@ namespace {
         };
 
         std::vector<Event> events;
+        std::vector<AdaptivePlanDiagnostic> plans;
+        std::optional<AdaptivePlanDiagnostic> latestPlan;
 
         [[nodiscard]] bool enabled() const override { return true; }
+
+        void plan(const AdaptivePlanDiagnostic& plan) override {
+            this->plans.push_back(plan);
+            this->latestPlan = plan;
+        }
 
         void stabilization(const std::string_view reason,
                 std::chrono::steady_clock::duration) override {
@@ -437,7 +445,7 @@ namespace {
         require(steady45 == 12777908042654023899ULL,
             "45-to-90 characterization changed: " +
                 std::to_string(steady45));
-        require(boundary425 == 1223184821884231205ULL,
+        require(boundary425 == 8941383692458771123ULL,
             "42.5-to-90 characterization changed: " +
                 std::to_string(boundary425));
         require(boundary4275 == 15981559191712361698ULL,
@@ -595,6 +603,590 @@ namespace {
             "2x level was not validated after its evaluation window");
         require(!snapshot.rampEvaluationActive,
             "steady 2x policy remained in a transient probe");
+        require(snapshot.targetOutputClockActive &&
+                std::abs(snapshot.targetOutputPhaseErrorOutputs) <= 0.5,
+            "steady 2x output was not phase-bounded by the target clock");
+    }
+
+    void testFractionalTargetClockAssignsWorkToLongIntervals() {
+        Harness harness(90, 2);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: fractional clock had no generated capacity");
+
+        harness.scheduler.resetTiming(harness.now);
+        constexpr auto shortInterval = 13ms;
+        constexpr auto longInterval = 20'333'333ns;
+        for (size_t pair = 0; pair < 20; ++pair) {
+            harness.frame(shortInterval);
+            harness.frame(longInterval);
+        }
+        size_t scheduledOutputs = 0;
+        double elapsedSeconds = 0.0;
+        std::vector<double> plannedIntervalsMilliseconds;
+        std::vector<double> legacyPlannedIntervalsMilliseconds;
+        plannedIntervalsMilliseconds.reserve(540);
+        legacyPlannedIntervalsMilliseconds.reserve(540);
+
+        for (size_t pair = 0; pair < 180; ++pair) {
+            const auto shortPlan = harness.frame(shortInterval);
+            const auto longPlan = harness.frame(longInterval);
+            require(shortPlan.empty(),
+                "fractional clock assigned the extra output to a short interval");
+            require(longPlan.size() == 1,
+                "fractional clock did not subdivide the longer interval");
+            requireNear(longPlan.front(), 0.5F, 0.0001F,
+                "fractional target clock changed the minimum-variance timestamp");
+
+            scheduledOutputs += shortPlan.size() + longPlan.size() + 2;
+            elapsedSeconds += std::chrono::duration<double>(
+                shortInterval + longInterval
+            ).count();
+            plannedIntervalsMilliseconds.push_back(13.0);
+            plannedIntervalsMilliseconds.push_back(20.333333 / 2.0);
+            plannedIntervalsMilliseconds.push_back(20.333333 / 2.0);
+            legacyPlannedIntervalsMilliseconds.push_back(13.0 / 2.0);
+            legacyPlannedIntervalsMilliseconds.push_back(13.0 / 2.0);
+            legacyPlannedIntervalsMilliseconds.push_back(20.333333);
+
+            const auto snapshot = harness.scheduler.snapshot();
+            require(snapshot.targetOutputClockActive &&
+                    std::abs(snapshot.targetOutputPhaseErrorOutputs) <=
+                        0.5 + 1e-9,
+                "fractional target-clock phase escaped its half-output bound");
+        }
+
+        const double outputFps = static_cast<double>(scheduledOutputs) /
+            elapsedSeconds;
+        require(std::abs(outputFps - 90.0) < 0.001,
+            "fractional target clock lost the requested long-term output rate");
+
+        const auto populationStandardDeviation = [](const auto& samples) {
+            double mean = 0.0;
+            for (const double sample : samples)
+                mean += sample;
+            mean /= static_cast<double>(samples.size());
+            double squaredDeviation = 0.0;
+            for (const double sample : samples) {
+                const double delta = sample - mean;
+                squaredDeviation += delta * delta;
+            }
+            return std::sqrt(
+                squaredDeviation / static_cast<double>(samples.size())
+            );
+        };
+        const double standardDeviation = populationStandardDeviation(
+            plannedIntervalsMilliseconds
+        );
+        const double legacyStandardDeviation = populationStandardDeviation(
+            legacyPlannedIntervalsMilliseconds
+        );
+        require(standardDeviation < 1.5 &&
+                standardDeviation < legacyStandardDeviation * 0.25,
+            "noisy fractional plan retained excessive temporal-spacing variance");
+
+        require(harness.diagnostics.latestPlan.has_value(),
+            "fractional pacing aggregate was not reported");
+        const auto& pacing = *harness.diagnostics.latestPlan;
+        require(pacing.targetOutputClockActive &&
+                pacing.pacingSourceSamples > 0 &&
+                pacing.generatedCountChanges > 0,
+            "fractional pacing aggregate omitted target-clock activity");
+        require(pacing.requestedIntervalStdDevMilliseconds < 1.5 &&
+                std::abs(pacing.requestedIntervalP99Milliseconds - 13.5) <
+                    1e-6,
+            "fractional pacing aggregate did not expose the improved outliers");
+        require(pacing.targetPhaseErrorSamples == pacing.pacingSourceSamples,
+            "fractional pacing aggregate omitted phase-error sample coverage");
+        require(pacing.targetPhaseErrorMaximumMilliseconds <=
+                1000.0 / 90.0 / 2.0 + 1e-6,
+            "reported target-clock error exceeded half an output interval");
+    }
+
+    void testTargetClockCoversSteadyAndNoisyCadenceMatrix() {
+        struct PacingCase {
+            double baseFps;
+            uint32_t targetFps;
+        };
+        constexpr std::array cases{
+            PacingCase{45.0, 90},
+            PacingCase{60.0, 90},
+            PacingCase{60.0, 120},
+            PacingCase{80.0, 120},
+            PacingCase{90.0, 120},
+        };
+
+        for (const auto pacingCase : cases) {
+            Harness harness(pacingCase.targetFps, 2);
+            harness.start();
+            harness.runAtFps(pacingCase.baseFps, 7s);
+            require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+                "pacing matrix did not validate 2x capacity");
+
+            size_t steadyOutputs = 0;
+            bool steadySawRealOnly = false;
+            bool steadySawGenerated = false;
+            constexpr size_t steadyFrames = 240;
+            for (size_t frame = 0; frame < steadyFrames; ++frame) {
+                const auto plan = harness.frameAtFps(pacingCase.baseFps);
+                requireValidTimestamps(plan, 1);
+                steadyOutputs += plan.size() + 1;
+                steadySawRealOnly |= plan.empty();
+                steadySawGenerated |= !plan.empty();
+            }
+            const double steadyOutputFps =
+                static_cast<double>(steadyOutputs) /
+                (static_cast<double>(steadyFrames) / pacingCase.baseFps);
+            require(std::abs(
+                    steadyOutputFps -
+                        static_cast<double>(pacingCase.targetFps)
+                ) < 0.2,
+                "steady pacing matrix lost its requested target average");
+            const bool integerRelationship =
+                (pacingCase.baseFps == 45.0 &&
+                 pacingCase.targetFps == 90) ||
+                (pacingCase.baseFps == 60.0 &&
+                 pacingCase.targetFps == 120);
+            if (integerRelationship) {
+                require(!steadySawRealOnly && steadySawGenerated,
+                    "integer pacing matrix did not retain constant 2x");
+            } else {
+                require(steadySawRealOnly && steadySawGenerated,
+                    "fractional steady pacing did not exercise both counts");
+            }
+
+            harness.scheduler.resetTiming(harness.now);
+            const auto meanInterval = std::chrono::duration<double>(
+                1.0 / pacingCase.baseFps
+            );
+            const auto shortInterval =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    meanInterval * 0.9
+                );
+            const auto longInterval =
+                std::chrono::duration_cast<std::chrono::nanoseconds>(
+                    meanInterval * 1.1
+                );
+            size_t scheduledOutputs = 0;
+            double elapsedSeconds = 0.0;
+
+            for (size_t pair = 0; pair < 240; ++pair) {
+                for (const auto interval : {shortInterval, longInterval}) {
+                    const auto plan = harness.frame(interval);
+                    requireValidTimestamps(plan, 1);
+                    scheduledOutputs += plan.size() + 1;
+                    elapsedSeconds += std::chrono::duration<double>(
+                        interval
+                    ).count();
+                    const auto snapshot = harness.scheduler.snapshot();
+                    require(snapshot.targetOutputClockActive &&
+                            std::abs(snapshot.targetOutputPhaseErrorOutputs) <=
+                                0.5 + 1e-9,
+                        "noisy pacing matrix escaped the target-clock phase bound");
+                }
+            }
+
+            const double outputFps =
+                static_cast<double>(scheduledOutputs) / elapsedSeconds;
+            require(std::abs(
+                    outputFps - static_cast<double>(pacingCase.targetFps)
+                ) < 0.2,
+                "noisy pacing matrix lost its requested target average");
+        }
+    }
+
+    void testTargetClockHandlesMultiLevelFractionalCadence() {
+        Harness harness(120, 3);
+        harness.start();
+        harness.runAtFps(45.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: multi-level test had no 3x capacity");
+
+        constexpr std::chrono::nanoseconds shortInterval = 18'888'889ns;
+        constexpr std::chrono::nanoseconds longInterval = 25'555'555ns;
+        size_t scheduledOutputs = 0;
+        double elapsedSeconds = 0.0;
+        bool sawOneGeneratedFrame = false;
+        bool sawTwoGeneratedFrames = false;
+        bool sawDeferredOutput = false;
+        for (size_t pair = 0; pair < 600; ++pair) {
+            for (const auto interval : {shortInterval, longInterval}) {
+                const auto plan = harness.frame(interval);
+                requireValidTimestamps(plan, 2);
+                sawOneGeneratedFrame |= plan.size() == 1;
+                sawTwoGeneratedFrames |= plan.size() == 2;
+                scheduledOutputs += plan.size() + 1;
+                elapsedSeconds +=
+                    std::chrono::duration<double>(interval).count();
+                const auto snapshot = harness.scheduler.snapshot();
+                sawDeferredOutput |=
+                    snapshot.targetOutputDeferredBudgetOutput;
+                require(snapshot.targetOutputClockActive &&
+                        std::abs(snapshot.targetOutputPhaseErrorOutputs) <=
+                            0.5 + 1e-9,
+                    "multi-level fractional phase escaped its bound");
+            }
+        }
+
+        require(sawOneGeneratedFrame && sawTwoGeneratedFrames,
+            "multi-level fractional cadence did not exercise both counts");
+        require(sawDeferredOutput,
+            "multi-level fractional cadence did not exercise placement");
+        require(std::abs(
+                static_cast<double>(scheduledOutputs) / elapsedSeconds - 120.0
+            ) < 0.2,
+            "multi-level fractional cadence lost its target average");
+
+        constexpr std::array<std::chrono::nanoseconds, 4> tailTrace{
+            11ms, 18'333'333ns, 20'833'333ns, 20'833'334ns,
+        };
+        const auto tailTraceDuration =
+            tailTrace[0] + tailTrace[1] + tailTrace[2] + tailTrace[3];
+        const double tailBaseFps = 4.0 /
+            std::chrono::duration<double>(tailTraceDuration).count();
+        Harness tailHarness(120, 3);
+        tailHarness.start();
+        tailHarness.runAtFps(tailBaseFps, 10s);
+        for (size_t frame = 0;
+                frame < 120 && tailHarness.scheduler.snapshot().
+                    targetOutputDeferredBudgetOutput;
+                ++frame) {
+            tailHarness.frameAtFps(tailBaseFps);
+        }
+        const auto initial = tailHarness.scheduler.snapshot();
+        require(initial.validatedGenerationLimit == 2 &&
+                !initial.targetOutputDeferredBudgetOutput,
+            "precondition failed: tail guard had no 3x capacity");
+
+        double legacyCredit = initial.targetOutputBudgetCreditOutputs;
+        size_t actualOutputCount = 0;
+        size_t legacyOutputCount = 0;
+        double actualMaximumInterval = 0.0;
+        double legacyMaximumInterval = 0.0;
+        std::vector<double> actualIntervals;
+        std::vector<double> legacyIntervals;
+        actualIntervals.reserve(7'200);
+        legacyIntervals.reserve(7'200);
+
+        for (size_t cycle = 0; cycle < 600; ++cycle) {
+            for (const auto interval : tailTrace) {
+                const auto plan = tailHarness.frame(interval);
+                requireValidTimestamps(plan, 2);
+                const auto snapshot = tailHarness.scheduler.snapshot();
+                legacyCredit += 120.0 / snapshot.smoothedBaseFps;
+                const size_t requestedOutputs = std::max<size_t>(
+                    1,
+                    static_cast<size_t>(std::floor(legacyCredit + 1e-9))
+                );
+                const size_t baselineOutputs = std::min<size_t>(
+                    requestedOutputs, 3
+                );
+                legacyCredit -= static_cast<double>(baselineOutputs);
+                if (legacyCredit < 0.0)
+                    legacyCredit = 0.0;
+                if (baselineOutputs == 3 && legacyCredit >= 1.0)
+                    legacyCredit = std::fmod(legacyCredit, 1.0);
+
+                const size_t actualOutputs = plan.size() + 1;
+                actualOutputCount += actualOutputs;
+                legacyOutputCount += baselineOutputs;
+                require(actualOutputCount <= legacyOutputCount &&
+                        legacyOutputCount - actualOutputCount <= 1,
+                    "multi-level placement changed the workload envelope");
+
+                const double intervalMilliseconds =
+                    std::chrono::duration<double, std::milli>(interval).count();
+                const double actualSpacing = intervalMilliseconds /
+                    static_cast<double>(actualOutputs);
+                const double legacySpacing = intervalMilliseconds /
+                    static_cast<double>(baselineOutputs);
+                actualMaximumInterval = std::max(
+                    actualMaximumInterval, actualSpacing
+                );
+                legacyMaximumInterval = std::max(
+                    legacyMaximumInterval, legacySpacing
+                );
+                require(actualMaximumInterval <=
+                        legacyMaximumInterval + 1e-9,
+                    "multi-level placement worsened the requested maximum");
+                for (size_t output = 0; output < actualOutputs; ++output)
+                    actualIntervals.push_back(actualSpacing);
+                for (size_t output = 0; output < baselineOutputs; ++output)
+                    legacyIntervals.push_back(legacySpacing);
+            }
+        }
+
+        std::sort(actualIntervals.begin(), actualIntervals.end());
+        std::sort(legacyIntervals.begin(), legacyIntervals.end());
+        const auto percentile = [](const std::vector<double>& samples,
+                const double quantile) {
+            const size_t rank = std::max<size_t>(
+                1,
+                static_cast<size_t>(std::ceil(
+                    quantile * static_cast<double>(samples.size())
+                ))
+            );
+            return samples[rank - 1];
+        };
+        require(percentile(actualIntervals, 0.95) <=
+                percentile(legacyIntervals, 0.95) + 1e-9 &&
+                percentile(actualIntervals, 0.99) <=
+                    percentile(legacyIntervals, 0.99) + 1e-9,
+            "multi-level placement worsened requested tail intervals");
+    }
+
+    void testTargetClockPreservesNoisyIntegerCeiling() {
+        Harness harness(120, 2);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: noisy integer test had no 2x capacity");
+
+        constexpr std::chrono::nanoseconds shortInterval = 10ms;
+        constexpr std::chrono::nanoseconds longInterval = 23'333'333ns;
+        for (size_t pair = 0; pair < 20; ++pair) {
+            harness.frame(shortInterval);
+            harness.frame(longInterval);
+        }
+
+        size_t scheduledOutputs = 0;
+        double elapsedSeconds = 0.0;
+        for (size_t pair = 0; pair < 240; ++pair) {
+            for (const auto interval : {shortInterval, longInterval}) {
+                const auto plan = harness.frame(interval);
+                require(plan.size() == 1,
+                    "raw placement reduced an achievable noisy 2x cadence");
+                scheduledOutputs += plan.size() + 1;
+                elapsedSeconds +=
+                    std::chrono::duration<double>(interval).count();
+                require(std::abs(
+                        harness.scheduler.snapshot().
+                            targetOutputPhaseErrorOutputs
+                    ) <= 0.5 + 1e-9,
+                    "noisy integer target phase escaped its bounded residual");
+            }
+        }
+        require(std::abs(
+                static_cast<double>(scheduledOutputs) / elapsedSeconds - 120.0
+            ) < 0.001,
+            "noisy achievable 2x cadence lost the target average");
+    }
+
+    void testDeferredOutputRepaymentPreservesPacingBenefit() {
+        constexpr std::array traces{
+            std::array<std::chrono::nanoseconds, 3>{
+                27'777'778ns, 13'333'333ns, 8'888'889ns,
+            },
+            std::array<std::chrono::nanoseconds, 3>{
+                23'333'333ns, 23'333'333ns, 8'888'889ns,
+            },
+        };
+
+        for (const auto& trace : traces) {
+            const auto traceDuration = trace[0] + trace[1] + trace[2];
+            const double baseFps = 3.0 /
+                std::chrono::duration<double>(traceDuration).count();
+            Harness harness(90, 2);
+            harness.start();
+            harness.runAtFps(baseFps, 7s);
+            const auto initial = harness.scheduler.snapshot();
+            require(initial.validatedGenerationLimit == 1 &&
+                    !initial.targetOutputDeferredBudgetOutput,
+                "precondition failed: irregular trace had stale placement debt");
+
+            double legacyCredit = initial.targetOutputBudgetCreditOutputs;
+            double actualSquaredError = 0.0;
+            double legacySquaredError = 0.0;
+            size_t actualOutputs = 0;
+            size_t legacyOutputs = 0;
+            bool sawDeferredOutput = false;
+            bool sawRepaidOutput = false;
+            bool deferredOutputPending = false;
+            constexpr double targetIntervalMilliseconds = 1000.0 / 90.0;
+
+            for (size_t cycle = 0; cycle < 600; ++cycle) {
+                for (const auto interval : trace) {
+                    const auto plan = harness.frame(interval);
+                    const auto snapshot = harness.scheduler.snapshot();
+                    require(snapshot.targetOutputClockActive &&
+                            snapshot.smoothedBaseFps > 0.0,
+                        "irregular trace left active fractional scheduling");
+
+                    legacyCredit += 90.0 / snapshot.smoothedBaseFps;
+                    const size_t requestedOutputs = std::max<size_t>(
+                        1,
+                        static_cast<size_t>(std::floor(
+                            legacyCredit + 1e-9
+                        ))
+                    );
+                    const size_t baselineOutputs = std::min<size_t>(
+                        requestedOutputs, 2
+                    );
+                    legacyCredit -= static_cast<double>(baselineOutputs);
+                    if (legacyCredit < 0.0)
+                        legacyCredit = 0.0;
+                    if (baselineOutputs == 2 && legacyCredit >= 1.0)
+                        legacyCredit = std::fmod(legacyCredit, 1.0);
+
+                    const size_t scheduledOutputs = plan.size() + 1;
+                    actualOutputs += scheduledOutputs;
+                    legacyOutputs += baselineOutputs;
+                    require(actualOutputs <= legacyOutputs &&
+                            legacyOutputs - actualOutputs <= 1,
+                        "raw placement changed the smoothed workload envelope");
+                    sawDeferredOutput |=
+                        snapshot.targetOutputDeferredBudgetOutput;
+                    const bool repaidOutput = deferredOutputPending &&
+                        !snapshot.targetOutputDeferredBudgetOutput;
+                    sawRepaidOutput |= repaidOutput;
+                    if (repaidOutput) {
+                        require(actualOutputs == legacyOutputs,
+                            "deferred repayment did not restore baseline work");
+                    }
+                    deferredOutputPending =
+                        snapshot.targetOutputDeferredBudgetOutput;
+
+                    const double intervalMilliseconds =
+                        std::chrono::duration<double, std::milli>(
+                            interval
+                        ).count();
+                    const auto squaredError = [intervalMilliseconds](
+                            const size_t outputCount) {
+                        const double error = intervalMilliseconds /
+                            static_cast<double>(outputCount) -
+                            targetIntervalMilliseconds;
+                        return static_cast<double>(outputCount) *
+                            error * error;
+                    };
+                    actualSquaredError += squaredError(scheduledOutputs);
+                    legacySquaredError += squaredError(baselineOutputs);
+                    require(actualSquaredError <=
+                            legacySquaredError + 1e-6,
+                        "placement worsened a prefix of requested pacing");
+                }
+            }
+
+            require(sawDeferredOutput,
+                "irregular trace did not exercise deferred placement");
+            require(sawRepaidOutput,
+                "irregular trace never repaid a deferred output");
+            require(legacyOutputs - actualOutputs <= 1,
+                "deferred placement lost more than one bounded output");
+            require(actualSquaredError <= legacySquaredError + 1e-6,
+                "deferred repayment made requested pacing worse than baseline");
+        }
+    }
+
+    void testTargetClockResetClearsDeferredOutput() {
+        Harness harness(90, 2);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+
+        constexpr std::array<std::chrono::nanoseconds, 3> trace{
+            27'777'778ns, 13'333'333ns, 8'888'889ns,
+        };
+        bool createdDeferredOutput = false;
+        for (size_t cycle = 0;
+                cycle < 120 && !createdDeferredOutput; ++cycle) {
+            for (const auto interval : trace) {
+                harness.frame(interval);
+                if (harness.scheduler.snapshot().
+                        targetOutputDeferredBudgetOutput) {
+                    createdDeferredOutput = true;
+                    break;
+                }
+            }
+        }
+        require(createdDeferredOutput,
+            "precondition failed: reset test created no deferred output");
+
+        harness.scheduler.resetTiming(harness.now);
+        const auto reset = harness.scheduler.snapshot();
+        require(!reset.targetOutputClockActive &&
+                reset.targetOutputBudgetCreditOutputs == 0.0 &&
+                reset.targetOutputPhaseErrorOutputs == 0.0 &&
+                !reset.targetOutputDeferredBudgetOutput,
+            "timing reset retained fractional placement state");
+    }
+
+    void testRawPlacementCannotMintGeneratedWork() {
+        Harness harness(90, 2);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: placement guard had no generated capacity");
+
+        harness.scheduler.resetTiming(harness.now);
+        require(harness.frame(10ms).empty(),
+            "above-target source interval unexpectedly generated a frame");
+        const auto delayedIntervalPlan = harness.frame(19ms);
+        require(delayedIntervalPlan.empty(),
+            "raw interval minted work before the smoothed budget earned it");
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.targetOutputClockActive &&
+                snapshot.targetOutputBudgetCreditOutputs > 0.0 &&
+                snapshot.targetOutputBudgetCreditOutputs < 1.0,
+            "fractional placement clock did not activate for the delayed interval");
+    }
+
+    void testTargetClockDiscardsUnreachableCeilingDebt() {
+        Harness harness(240, 3);
+        harness.start();
+        const auto saturatedPlan = harness.runAtFps(60.0, 10s);
+        require(saturatedPlan.size() == 2 &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: target clock did not reach its 3x ceiling");
+        require(harness.scheduler.snapshot().
+                    targetOutputBudgetCreditOutputs < 1.0,
+            "unreachable ceiling accumulated whole-output budget debt");
+
+        harness.scheduler.resetTiming(harness.now);
+        for (size_t frame = 0; frame < 120; ++frame) {
+            const auto recoveredPlan = harness.frameAtFps(120.0);
+            require(recoveredPlan.size() <= 1,
+                "unreachable target debt produced a catch-up output after recovery");
+            require(std::abs(
+                    harness.scheduler.snapshot().targetOutputPhaseErrorOutputs
+                ) <= 0.5 + 1e-9,
+                "ceiling saturation retained whole-output target debt");
+        }
+    }
+
+    void testPacingDiagnosticsRestartAfterPolicyGap() {
+        Harness harness(90, 2);
+        harness.start();
+        harness.runAtFps(60.0, 7s);
+
+        const size_t initialPlanCount = harness.diagnostics.plans.size();
+        for (size_t frame = 0;
+                frame < 120 &&
+                    harness.diagnostics.plans.size() == initialPlanCount;
+                ++frame) {
+            harness.frameAtFps(60.0);
+        }
+        require(harness.diagnostics.plans.size() > initialPlanCount,
+            "precondition failed: no baseline pacing aggregate was emitted");
+
+        for (size_t frame = 0; frame < 30; ++frame)
+            harness.frameAtFps(60.0);
+        harness.diagnostics.plans.clear();
+        harness.frameAtFps(60.0, true);
+
+        size_t postGapFrames = 0;
+        while (harness.diagnostics.plans.empty() && postGapFrames < 120) {
+            harness.frameAtFps(60.0);
+            postGapFrames++;
+        }
+        require(!harness.diagnostics.plans.empty(),
+            "no pacing aggregate was emitted after acquisition bypass");
+        const auto& postGap = harness.diagnostics.plans.front();
+        require(postGap.pacingSourceSamples > 0 &&
+                postGap.pacingSourceSamples <= postGapFrames,
+            "post-bypass aggregate retained pre-bypass pacing samples");
+        require(postGap.targetPhaseErrorSamples ==
+                postGap.pacingSourceSamples,
+            "post-bypass phase RMS mixed a different policy window");
     }
 
     void testIsolatedGeneratedFrameMissDoesNotRejectRamp() {
@@ -678,6 +1270,8 @@ namespace {
             "scheduler generated frames when real cadence exceeded target");
         require(harness.scheduler.snapshot().validatedGenerationLimit == 0,
             "above-target cadence raised the validated generation level");
+        require(!harness.scheduler.snapshot().targetOutputClockActive,
+            "above-target cadence retained fractional target-clock debt");
     }
 
     void testAcquireBackoffDoesNotAdvancePolicy() {
@@ -698,6 +1292,8 @@ namespace {
         require(after.validatedGenerationLimit ==
                 before.validatedGenerationLimit,
             "acquire backoff changed the validated level");
+        require(!after.targetOutputClockActive,
+            "acquire backoff retained a stale fractional target phase");
     }
 
     void testValidatedTwoXSurvivesShortGameplayHitch() {
@@ -1521,6 +2117,15 @@ int main() {
         {"generated delivery window contract", testGeneratedDeliveryWindowContract},
         {"scheduler characterization corpus", testCharacterizationTraceCorpus},
         {"60 to 120 settles at 2x", testSteadySixtyRampsToTwoXFor120Target},
+        {"fractional target clock follows raw intervals", testFractionalTargetClockAssignsWorkToLongIntervals},
+        {"target clock covers steady and noisy cadence matrix", testTargetClockCoversSteadyAndNoisyCadenceMatrix},
+        {"target clock handles multi-level fractional cadence", testTargetClockHandlesMultiLevelFractionalCadence},
+        {"target clock preserves noisy integer ceiling", testTargetClockPreservesNoisyIntegerCeiling},
+        {"deferred output repayment preserves pacing benefit", testDeferredOutputRepaymentPreservesPacingBenefit},
+        {"target clock reset clears deferred output", testTargetClockResetClearsDeferredOutput},
+        {"raw placement cannot mint generated work", testRawPlacementCannotMintGeneratedWork},
+        {"target clock discards unreachable ceiling debt", testTargetClockDiscardsUnreachableCeilingDebt},
+        {"pacing diagnostics restart after policy gap", testPacingDiagnosticsRestartAfterPolicyGap},
         {"isolated delivery miss keeps ramp", testIsolatedGeneratedFrameMissDoesNotRejectRamp},
         {"persistent delivery loss rejects ramp", testPersistentGeneratedFrameMissesRejectRamp},
         {"4x timestamps remain evenly spaced", testFourXPlanUsesEvenInterpolationTimestamps},

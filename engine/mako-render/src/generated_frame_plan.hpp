@@ -40,7 +40,7 @@ namespace mako::layer {
         }
 
         /// Construct a validated explicit plan. This factory is the extension
-        /// seam for a future target clock; presentation must not reconstruct a
+        /// seam for policy-owned timing; presentation must not reconstruct a
         /// fully admitted plan from its count and discard these timestamps.
         [[nodiscard]] static GeneratedFramePlan fromTimestamps(
                 const std::span<const float> timestamps) {

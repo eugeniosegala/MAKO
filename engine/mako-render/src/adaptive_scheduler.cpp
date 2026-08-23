@@ -87,6 +87,15 @@ namespace {
     constexpr auto adaptivePlanDiagnosticInterval = std::chrono::seconds(1);
     constexpr auto adaptiveFastBurstDiagnosticInterval = std::chrono::seconds(1);
     constexpr auto adaptiveNativeCadenceProbeDelay = std::chrono::seconds(5);
+    constexpr double adaptiveTargetClockPlacementDeadbandRatio = 0.01;
+    constexpr double adaptiveTargetClockMinimumRepaymentHeadroomOutputs = 0.25;
+    constexpr std::array adaptiveOutputCountReciprocals{
+        0.0, 1.0, 0.5, 1.0 / 3.0, 0.25,
+    };
+    static_assert(
+        adaptiveOutputCountReciprocals.size() ==
+            GeneratedFramePlan::capacity + 2
+    );
 
     AdaptiveSchedulerDiagnostics nullDiagnostics;
 
@@ -213,6 +222,14 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
         .discontinuityRecoveryActive =
             this->state.discontinuityRecovery.deadline.has_value(),
         .nativeCadenceProbeActive = this->state.nativeCadenceProbe.active,
+        .targetOutputClockActive =
+            this->state.outputPlanner.targetClockActive,
+        .targetOutputBudgetCreditOutputs =
+            this->state.outputPlanner.budgetCreditOutputs,
+        .targetOutputPhaseErrorOutputs =
+            this->state.outputPlanner.targetPhaseErrorOutputs,
+        .targetOutputDeferredBudgetOutput =
+            this->state.outputPlanner.deferredBudgetOutput,
     };
 }
 
@@ -240,6 +257,7 @@ AdaptiveScheduler::observeCadence(
         // cadence. Keep the real-frame clock current so clearing pressure does
         // not manufacture a cadence stall from the bypass interval.
         this->state.cadence.lastRealFrame = now;
+        this->state.outputPlanner.resetTargetClock();
         return {
             .terminalPlan = AdaptiveFramePlan::evenlySpaced(1),
         };
@@ -278,7 +296,7 @@ AdaptiveScheduler::observeCadence(
         if (this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr) {
             if (this->state.cadence.sdrStallBypass) {
                 this->state.cadence.sdrResumeFrames = 0;
-                this->state.outputPlanner.credit = 0.0;
+                this->state.outputPlanner.resetTargetClock();
                 return {};
             }
             this->beginCadenceRefresh(now, "cadence-stall");
@@ -319,7 +337,7 @@ AdaptiveScheduler::observeCadence(
         pauseEvaluation(this->state.stableCadence.evaluationAt);
         pauseEvaluation(this->state.rescue.until);
 
-        this->state.outputPlanner.credit = 0.0;
+        this->state.outputPlanner.resetTargetClock();
         this->state.cadence.dropFrames = 0;
         this->state.ramp.targetDeficitSince.reset();
         this->state.rearm.stableSince.reset();
@@ -368,7 +386,7 @@ AdaptiveScheduler::observeCadence(
                 // interval into four native-only frames. Preserve the proven
                 // cadence once; a consecutive stall takes the refresh path.
                 this->state.cadence.sdrIsolatedHitchBridged = true;
-                this->state.outputPlanner.credit = 0.0;
+                this->state.outputPlanner.resetTargetClock();
                 this->state.cadence.dropFrames = 0;
                 this->diagnostics->sdrGameplayHitchBridge(
                     validatedGenerationLimit,
@@ -388,7 +406,7 @@ AdaptiveScheduler::observeCadence(
                 // viable again, then re-establish the normal policy below.
                 this->state.cadence.smoothedIntervalSeconds = rawIntervalSeconds;
                 this->state.cadence.dropFrames = 0;
-                this->state.outputPlanner.credit = 0.0;
+                this->state.outputPlanner.resetTargetClock();
                 this->state.cadence.sdrResumeFrames = 0;
                 return {};
             }
@@ -434,7 +452,7 @@ AdaptiveScheduler::observeCadence(
         // another history refresh on the next long interval.
         this->state.cadence.smoothedIntervalSeconds = rawIntervalSeconds;
         this->state.cadence.dropFrames = 0;
-        this->state.outputPlanner.credit = 0.0;
+        this->state.outputPlanner.resetTargetClock();
         if (instantaneousBaseFps < adaptiveSdrCadenceResumeBaseFps) {
             this->state.cadence.sdrResumeFrames = 0;
             return {};
@@ -493,6 +511,7 @@ AdaptiveScheduler::observeCadence(
         .planningReady = true,
         .baseFps = 1.0 / this->state.cadence.smoothedIntervalSeconds,
         .instantaneousBaseFps = instantaneousBaseFps,
+        .rawIntervalSeconds = rawIntervalSeconds,
     };
 }
 
@@ -532,7 +551,7 @@ AdaptiveScheduler::advanceDiscontinuityRecovery(
                 : "timeout-ramp-from-zero";
             this->state.discontinuityRecovery.reset();
             this->state.stabilization.until.reset();
-            this->state.outputPlanner.credit = 0.0;
+            this->state.outputPlanner.resetTargetClock();
             if (recoveredCadenceStable) {
                 this->restoreGenerationLimit(
                     now,
@@ -576,7 +595,7 @@ AdaptiveScheduler::advanceDiscontinuityRecovery(
             return {};
         }
 
-        this->state.outputPlanner.credit = 0.0;
+        this->state.outputPlanner.resetTargetClock();
         if (this->diagnosticsActive &&
                 (!this->state.diagnosticThrottle.lastPlanAt ||
                  now - *this->state.diagnosticThrottle.lastPlanAt >=
@@ -600,7 +619,7 @@ AdaptiveScheduler::advanceRescueMeasurement(
         const TimePoint now, const double baseFps) {
     if (this->state.rescue.until) {
         if (now < *this->state.rescue.until) {
-            this->state.outputPlanner.credit = 0.0;
+            this->state.outputPlanner.resetTargetClock();
             if (this->diagnosticsActive &&
                     (!this->state.diagnosticThrottle.lastPlanAt ||
                      now - *this->state.diagnosticThrottle.lastPlanAt >=
@@ -679,7 +698,7 @@ AdaptiveScheduler::advanceRescueMeasurement(
         this->state.rescue.fromStrictLoad = false;
         this->state.rescue.strictLoadLimit = 0;
         this->state.ramp.targetDeficitSince.reset();
-        this->state.outputPlanner.credit = 0.0;
+        this->state.outputPlanner.resetTargetClock();
         if (this->state.rescue.cooldownUntil)
             this->state.stableCadence.retryAt = this->state.rescue.cooldownUntil;
         this->diagnostics->rescueComplete(
@@ -804,7 +823,7 @@ AdaptiveScheduler::advanceStableCadence(
                     this->state.rescue.cooldownUntil =
                         now + adaptiveRescueCooldown;
                     this->state.ramp.targetDeficitSince.reset();
-                    this->state.outputPlanner.credit = 0.0;
+                    this->state.outputPlanner.resetTargetClock();
                     this->diagnostics->rescueStart(
                         generatedLimit,
                         rescueBaselineBaseFps,
@@ -912,7 +931,7 @@ AdaptiveScheduler::advanceStableCadence(
         this->state.stableCadence.outsideRangeSince.reset();
         this->state.stableCadence.retryAt.reset();
         this->state.stableCadence.candidate.reset();
-        this->state.outputPlanner.credit = 0.0;
+        this->state.outputPlanner.resetTargetClock();
         this->diagnostics->stableCadence(
             "adaptive-stable-cadence-probe",
             *this->state.stableCadence.limit,
@@ -926,36 +945,139 @@ AdaptiveScheduler::advanceStableCadence(
 
 MAKO_ADAPTIVE_STAGE_INLINE size_t AdaptiveScheduler::selectGeneratedFrameCount(
         const double desiredOutputsPerRealFrame,
+        const double rawIntervalSeconds,
         const size_t maximumGeneratedFrameCount) {
     size_t generatedFrameCount = 0;
     if (this->state.stableCadence.limit) {
         generatedFrameCount = *this->state.stableCadence.limit;
-        this->state.outputPlanner.credit = 0.0;
-    } else if (desiredOutputsPerRealFrame > 1.0) {
-        this->state.outputPlanner.credit += desiredOutputsPerRealFrame;
+        this->state.outputPlanner.resetTargetClock();
+    } else if (desiredOutputsPerRealFrame > 1.0 &&
+            maximumGeneratedFrameCount > 0) {
+        auto& targetClock = this->state.outputPlanner;
+        targetClock.targetClockActive = true;
+        targetClock.budgetCreditOutputs += desiredOutputsPerRealFrame;
         const size_t requestedOutputs = std::max<size_t>(
             1,
-            static_cast<size_t>(std::floor(this->state.outputPlanner.credit + 1e-9))
+            static_cast<size_t>(std::floor(
+                targetClock.budgetCreditOutputs + 1e-9
+            ))
         );
-        generatedFrameCount = std::min(
-            requestedOutputs - 1,
-            maximumGeneratedFrameCount
+        const size_t maximumOutputs = maximumGeneratedFrameCount + 1;
+        const size_t baselineOutputs = std::min(
+            requestedOutputs, maximumOutputs
         );
-        this->state.outputPlanner.credit -= static_cast<double>(generatedFrameCount + 1);
-        if (this->state.outputPlanner.credit < 0.0)
-            this->state.outputPlanner.credit = 0.0;
-        if (generatedFrameCount == maximumGeneratedFrameCount &&
-                this->state.outputPlanner.credit >= 1.0) {
-            // The requested target is currently above the configured ceiling. Keep
-            // only the fractional phase instead of accumulating an impossible
-            // backlog that would delay adaptation when the base rate recovers.
-            this->state.outputPlanner.credit = std::fmod(this->state.outputPlanner.credit, 1.0);
+        targetClock.budgetCreditOutputs -=
+            static_cast<double>(baselineOutputs);
+        if (targetClock.budgetCreditOutputs < 0.0)
+            targetClock.budgetCreditOutputs = 0.0;
+        if (baselineOutputs == maximumOutputs &&
+                targetClock.budgetCreditOutputs >= 1.0) {
+            targetClock.budgetCreditOutputs = std::fmod(
+                targetClock.budgetCreditOutputs, 1.0
+            );
         }
+        size_t scheduledOutputs = baselineOutputs;
+
+        const double rawIntervalOutputs =
+            rawIntervalSeconds * static_cast<double>(this->config.targetFps);
+        const double rawAccumulatedOutputs =
+            targetClock.targetPhaseErrorOutputs +
+            rawIntervalOutputs;
+        const size_t rawPreferredOutputs = std::clamp<size_t>(
+            static_cast<size_t>(std::max(
+                1.0,
+                std::floor(rawAccumulatedOutputs + 0.5 + 1e-9)
+            )),
+            1,
+            maximumOutputs
+        );
+        const auto placementSquaredError = [rawIntervalOutputs](
+                const size_t outputCount) {
+            const double spacingError =
+                rawIntervalOutputs *
+                    adaptiveOutputCountReciprocals[outputCount] -
+                1.0;
+            return static_cast<double>(outputCount) *
+                spacingError * spacingError;
+        };
+        const double baselineSpacingOutputs =
+            rawIntervalOutputs *
+                adaptiveOutputCountReciprocals[baselineOutputs];
+        const double maximumBaselineSpacingOutputs = std::max(
+            targetClock.maximumBaselineSpacingOutputs,
+            baselineSpacingOutputs
+        );
+
+        // Raw timing is a placement signal, never a source of additional
+        // generated work. It may defer one output already earned by the
+        // smoothed workload budget when the current interval is materially
+        // better left undivided. A separate one-output ledger then makes that
+        // earned work available to a later interval without confusing it with
+        // impossible ceiling debt. A deferral may not exceed the running worst
+        // requested spacing of the unmodified workload plan.
+        if (targetClock.deferredBudgetOutput &&
+                scheduledOutputs < maximumOutputs &&
+                placementSquaredError(scheduledOutputs + 1) -
+                    placementSquaredError(scheduledOutputs) <=
+                    targetClock.deferredPlacementBenefit + 1e-12) {
+            // Repay exactly one output previously earned by the baseline
+            // workload ledger. Keeping it separate from fractional credit
+            // prevents ceiling normalization from discarding intentional
+            // placement work or confusing it with impossible target debt.
+            // The saved squared-spacing benefit is the repayment budget, so
+            // a still-short interval cannot undo the pacing improvement.
+            scheduledOutputs++;
+            targetClock.deferredBudgetOutput = false;
+            targetClock.deferredPlacementBenefit = 0.0;
+        } else if (!targetClock.deferredBudgetOutput &&
+                requestedOutputs <= maximumOutputs &&
+                baselineOutputs > 1 &&
+                desiredOutputsPerRealFrame <=
+                    static_cast<double>(maximumOutputs) -
+                        adaptiveTargetClockMinimumRepaymentHeadroomOutputs &&
+                rawPreferredOutputs < baselineOutputs) {
+            const size_t deferredOutputs = baselineOutputs - 1;
+            const double deferredSpacingOutputs =
+                rawIntervalOutputs *
+                    adaptiveOutputCountReciprocals[deferredOutputs];
+            const double deferredSpacingError = std::abs(
+                deferredSpacingOutputs - 1.0
+            );
+            const double budgetedSpacingError = std::abs(
+                rawIntervalOutputs *
+                    adaptiveOutputCountReciprocals[baselineOutputs] -
+                1.0
+            );
+            const double placementBenefit =
+                placementSquaredError(baselineOutputs) -
+                placementSquaredError(deferredOutputs);
+            if (deferredSpacingError +
+                    adaptiveTargetClockPlacementDeadbandRatio <
+                    budgetedSpacingError &&
+                    deferredSpacingOutputs <=
+                        maximumBaselineSpacingOutputs + 1e-12 &&
+                    placementBenefit > 0.0) {
+                scheduledOutputs = deferredOutputs;
+                targetClock.deferredBudgetOutput = true;
+                targetClock.deferredPlacementBenefit = placementBenefit;
+            }
+        }
+        targetClock.maximumBaselineSpacingOutputs =
+            maximumBaselineSpacingOutputs;
+
+        generatedFrameCount = scheduledOutputs - 1;
+        targetClock.targetPhaseErrorOutputs =
+            rawAccumulatedOutputs - static_cast<double>(scheduledOutputs);
+        targetClock.targetPhaseErrorOutputs -= std::floor(
+            targetClock.targetPhaseErrorOutputs + 0.5
+        );
+        if (std::abs(targetClock.targetPhaseErrorOutputs) < 1e-12)
+            targetClock.targetPhaseErrorOutputs = 0.0;
     } else {
         // A Vulkan layer cannot present fewer real frames than the application
-        // submits. Do not carry debt when the base rate is already at or above
-        // the requested target.
-        this->state.outputPlanner.credit = 0.0;
+        // submits. Do not carry phase debt when the base rate is already at or
+        // above the target, or while no generated-frame capacity is admitted.
+        this->state.outputPlanner.resetTargetClock();
     }
     return generatedFrameCount;
 }
@@ -1003,7 +1125,7 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
             probe.minimumMeasuredBaseFps = 0.0;
             probe.confirmedSamples = 0;
             probe.nextAt = now + adaptiveNativeCadenceProbeDelay;
-            this->state.outputPlanner.credit = 0.0;
+            this->state.outputPlanner.resetTargetClock();
             generatedFrameCount = std::max<size_t>(generatedFrameCount, 1);
             return {.planningReady = true};
         }
@@ -1016,7 +1138,7 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
                 probe.minimumMeasuredBaseFps, instantaneousBaseFps
             );
         }
-        this->state.outputPlanner.credit = 0.0;
+        this->state.outputPlanner.resetTargetClock();
         generatedFrameCount = 0;
         if (probe.confirmedSamples <
                 adaptiveNativeCadenceConfirmationFrames) {
@@ -1061,7 +1183,7 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
     probe.baselineBaseFps = baseFps;
     probe.minimumMeasuredBaseFps = 0.0;
     probe.confirmedSamples = 0;
-    this->state.outputPlanner.credit = 0.0;
+    this->state.outputPlanner.resetTargetClock();
     generatedFrameCount = 0;
     this->diagnostics->nativeCadenceProbe(
         "dynamic-cadence-probe-start",
@@ -1131,7 +1253,7 @@ AdaptiveScheduler::applyStrictLoadGuard(
                 this->state.strictLoad.baselineLimit = 0;
                 this->state.strictLoad.baselineBaseFps = 0.0;
                 this->state.strictLoad.collapseSince.reset();
-                this->state.outputPlanner.credit = 0.0;
+                this->state.outputPlanner.resetTargetClock();
                 generatedFrameCount = std::min(
                     generatedFrameCount, resumedLimit
                 );
@@ -1158,7 +1280,7 @@ AdaptiveScheduler::applyStrictLoadGuard(
                 this->state.strictLoad.baselineLimit = 0;
                 this->state.strictLoad.baselineBaseFps = 0.0;
                 this->state.strictLoad.collapseSince.reset();
-                this->state.outputPlanner.credit = 0.0;
+                this->state.outputPlanner.resetTargetClock();
                 this->diagnostics->rescueStart(
                     collapsedLimit,
                     this->state.rescue.baselineBaseFps,
@@ -1184,6 +1306,8 @@ __attribute__((flatten))
 AdaptiveFramePlan AdaptiveScheduler::planFrame(
         const std::chrono::steady_clock::time_point now,
         const bool generatedImageAcquireBackoff) {
+    if (this->diagnosticsActive)
+        this->state.pacingWindow.beginFrame();
     const auto cadence = this->observeCadence(
         now, generatedImageAcquireBackoff
     );
@@ -1202,7 +1326,7 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
         return rescue.terminalPlan;
     if (this->state.stabilization.until &&
             now < *this->state.stabilization.until) {
-        this->state.outputPlanner.credit = 0.0;
+        this->state.outputPlanner.resetTargetClock();
         if (this->diagnosticsActive &&
                 (!this->state.diagnosticThrottle.lastPlanAt ||
                  now - *this->state.diagnosticThrottle.lastPlanAt >=
@@ -1239,7 +1363,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
         return stableCadence.terminalPlan;
 
     size_t generatedFrameCount = this->selectGeneratedFrameCount(
-        desiredOutputsPerRealFrame, maximumGeneratedFrameCount
+        desiredOutputsPerRealFrame, cadence.rawIntervalSeconds,
+        maximumGeneratedFrameCount
     );
     if (this->config.dynamicCadenceRecovery) {
         const auto nativeCadenceProbe = this->advanceNativeCadenceProbe(
@@ -1258,11 +1383,31 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
     );
     if (!strictLoad.planningReady)
         return strictLoad.terminalPlan;
+    const size_t effectiveMaximumGeneratedFrameCount = std::min(
+        {
+            this->config.generatedFrameCapacity,
+            this->config.maximumMultiplier - 1,
+            this->state.outputPlanner.generationLimit,
+        }
+    );
+    if (this->diagnosticsActive) {
+        this->state.pacingWindow.record(
+            cadence.rawIntervalSeconds,
+            generatedFrameCount,
+            this->state.outputPlanner.targetClockActive,
+            this->state.outputPlanner.targetPhaseErrorOutputs,
+            this->config.targetFps,
+            this->state.stableCadence.limit.has_value(),
+            effectiveMaximumGeneratedFrameCount,
+            this->state.outputPlanner.targetClockEpoch
+        );
+    }
     if (this->diagnosticsActive &&
             (!this->state.diagnosticThrottle.lastPlanAt ||
              now - *this->state.diagnosticThrottle.lastPlanAt >=
                 adaptivePlanDiagnosticInterval)) {
         this->state.diagnosticThrottle.lastPlanAt = now;
+        const auto& pacing = this->state.pacingWindow;
         const auto rearmRemaining = this->state.rearm.required &&
                 this->state.rearm.notBefore &&
                 now < *this->state.rearm.notBefore
@@ -1272,7 +1417,7 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
             .baseFps = baseFps,
             .targetFps = this->config.targetFps,
             .generatedFrames = generatedFrameCount,
-            .maximumGeneratedFrames = maximumGeneratedFrameCount,
+            .maximumGeneratedFrames = effectiveMaximumGeneratedFrameCount,
             .configuredMaximumGeneratedFrames =
                 this->configuredGenerationLimit(),
             .stableCadence = this->state.stableCadence.limit.has_value(),
@@ -1281,7 +1426,44 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
             .rearmReason = this->state.rearm.reason,
             .rearmCooldownRemaining = rearmRemaining,
             .rearmBaselineBaseFps = this->state.rearm.baselineBaseFps,
+            .targetOutputClockActive =
+                this->state.outputPlanner.targetClockActive,
+            .targetOutputBudgetCreditOutputs =
+                this->state.outputPlanner.budgetCreditOutputs,
+            .targetOutputPhaseErrorMilliseconds =
+                this->state.outputPlanner.targetPhaseErrorOutputs * 1000.0 /
+                static_cast<double>(this->config.targetFps),
+            .targetOutputDeferredBudgetOutput =
+                this->state.outputPlanner.deferredBudgetOutput,
+            .pacingSourceSamples = pacing.sourceIntervals.samples,
+            .sourceIntervalMeanMilliseconds = pacing.sourceIntervals.mean,
+            .sourceIntervalStdDevMilliseconds =
+                pacing.sourceIntervals.standardDeviation(),
+            .sourceIntervalP95Milliseconds =
+                pacing.sourceIntervals.percentile(0.95),
+            .sourceIntervalP99Milliseconds =
+                pacing.sourceIntervals.percentile(0.99),
+            .generatedCountChanges = pacing.generatedCountChanges,
+            .requestedIntervalSamples = pacing.requestedIntervals.samples,
+            .requestedIntervalMeanMilliseconds =
+                pacing.requestedIntervals.mean,
+            .requestedIntervalStdDevMilliseconds =
+                pacing.requestedIntervals.standardDeviation(),
+            .requestedIntervalP95Milliseconds =
+                pacing.requestedIntervals.percentile(0.95),
+            .requestedIntervalP99Milliseconds =
+                pacing.requestedIntervals.percentile(0.99),
+            .targetPhaseErrorSamples = pacing.phaseErrorSamples,
+            .targetPhaseErrorRmsMilliseconds = pacing.phaseErrorSamples > 0
+                ? std::sqrt(
+                    pacing.phaseErrorSquaredMilliseconds /
+                    static_cast<double>(pacing.phaseErrorSamples)
+                )
+                : 0.0,
+            .targetPhaseErrorMaximumMilliseconds =
+                pacing.maximumAbsolutePhaseErrorMilliseconds,
         });
+        this->state.pacingWindow.resetWindow();
     }
 
     return AdaptiveFramePlan::evenlySpaced(generatedFrameCount);
@@ -1319,8 +1501,9 @@ void AdaptiveScheduler::resetTiming(
     this->state.fastBurst.frames = 0;
     this->state.fastBurst.framesSinceDiagnostic = 0;
     this->state.ramp.targetDeficitSince.reset();
-    this->state.outputPlanner.credit = 0.0;
+    this->state.outputPlanner.resetTargetClock();
     this->state.nativeCadenceProbe.reset();
+    this->state.pacingWindow.reset();
 }
 
 size_t AdaptiveScheduler::validatedGenerationLimit() const {
@@ -1382,7 +1565,7 @@ void AdaptiveScheduler::restoreGenerationLimit(
         ? monitoredBaselineBaseFps
         : 0.0;
     this->state.strictLoad.collapseSince.reset();
-    this->state.outputPlanner.credit = 0.0;
+    this->state.outputPlanner.resetTargetClock();
 
     const auto stabilizationEnd = this->state.stabilization.until.value_or(now);
     const auto higherProbeDelay = restoredLimit > 0 && restoredLimit < configuredLimit
@@ -1463,7 +1646,7 @@ void AdaptiveScheduler::beginDiscontinuityRecovery(
     this->state.discontinuityRecovery.stableSince.reset();
     this->state.discontinuityRecovery.softRecoveryAttempted = softRecoveryAttempted;
     this->state.ramp.targetDeficitSince.reset();
-    this->state.outputPlanner.credit = 0.0;
+    this->state.outputPlanner.resetTargetClock();
 
     const auto remainingDuration =
         *this->state.discontinuityRecovery.deadline > now
@@ -1722,7 +1905,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             this->state.ramp.evaluationAt.reset();
             this->state.ramp.delivery.reset();
             this->state.ramp.bridgeActive = false;
-            this->state.outputPlanner.credit = 0.0;
+            this->state.outputPlanner.resetTargetClock();
             if (!accepted) {
                 this->state.outputPlanner.generationLimit = this->state.ramp.bridgeBaselineLimit;
                 this->scheduleRearm(
@@ -1797,7 +1980,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             this->state.outputPlanner.generationLimit = bridgeLimit;
             this->state.ramp.evaluationAt = now + adaptiveRampEvaluationDuration;
             this->state.ramp.delivery.reset();
-            this->state.outputPlanner.credit = 0.0;
+            this->state.outputPlanner.resetTargetClock();
             return;
         }
 
@@ -1813,7 +1996,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
 
         this->state.ramp.evaluationAt.reset();
         this->state.ramp.delivery.reset();
-        this->state.outputPlanner.credit = 0.0;
+        this->state.outputPlanner.resetTargetClock();
         if (!accepted) {
             this->state.outputPlanner.generationLimit = this->state.ramp.previousLimit;
             if (this->state.ramp.previousLimit == 0) {
@@ -1911,7 +2094,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
     this->state.ramp.evaluationAt = now + adaptiveRampEvaluationDuration;
     this->state.ramp.delivery.reset();
     this->state.ramp.targetDeficitSince.reset();
-    this->state.outputPlanner.credit = 0.0;
+    this->state.outputPlanner.resetTargetClock();
     this->diagnostics->ramp(
         this->state.ramp.previousLimit,
         this->state.outputPlanner.generationLimit,
