@@ -148,6 +148,27 @@ class GameProfileTests(unittest.TestCase):
 
         self.assertNotIn("removed_profile_option", validated)
 
+    def test_dynamic_cadence_recovery_disables_both_base_caps(self):
+        validated = ConfigurationManager.validate_config({
+            **ConfigurationManager.get_defaults(),
+            "adaptive": True,
+            "adaptive_auto_base_fps_cap": True,
+            "base_fps_cap": 30,
+            "dynamic_cadence_recovery": True,
+        })
+
+        self.assertFalse(validated["adaptive_auto_base_fps_cap"])
+        self.assertEqual(validated["base_fps_cap"], 0)
+
+        fixed = ConfigurationManager.validate_config({
+            **validated,
+            "adaptive": False,
+            "adaptive_auto_base_fps_cap": True,
+            "base_fps_cap": 30,
+        })
+        self.assertFalse(fixed["adaptive_auto_base_fps_cap"])
+        self.assertEqual(fixed["base_fps_cap"], 0)
+
     def test_field_update_merges_with_latest_canonical_profile(self):
         existing = dict(ConfigurationManager.get_defaults())
         existing["performance_mode"] = True

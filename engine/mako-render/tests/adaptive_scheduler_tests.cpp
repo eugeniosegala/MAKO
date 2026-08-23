@@ -195,6 +195,13 @@ namespace {
             });
         }
 
+        void nativeCadenceProbe(std::string_view operation, size_t,
+                double, double, size_t) override {
+            this->events.push_back({
+                .operation = std::string(operation),
+            });
+        }
+
         void stableCadence(const std::string_view operation, size_t, double,
                 double, const std::string_view reason) override {
             this->events.push_back({
@@ -267,13 +274,15 @@ namespace {
         Harness(const uint32_t targetFps, const size_t maximumMultiplier,
                 const bool stableCadence = false,
                 const AdaptiveRecoveryPolicy recoveryPolicy =
-                    AdaptiveRecoveryPolicy::ConservativeHdr) :
+                    AdaptiveRecoveryPolicy::ConservativeHdr,
+                const bool dynamicCadenceRecovery = false) :
             scheduler(
                 AdaptiveSchedulerConfig{
                     .targetFps = targetFps,
                     .maximumMultiplier = maximumMultiplier,
                     .generatedFrameCapacity = 3,
                     .stableCadence = stableCadence,
+                    .dynamicCadenceRecovery = dynamicCadenceRecovery,
                     .recoveryPolicy = recoveryPolicy,
                 },
                 &this->diagnostics
@@ -1176,6 +1185,91 @@ namespace {
             "strict scheduling did not return recovered cadence to the 100 FPS target");
     }
 
+    void testDynamicCadenceRecoversSelfHiddenNativeRateIncrease() {
+        Harness harness(
+            60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true
+        );
+        harness.start();
+        AdaptiveFramePlan previousPlan = harness.runAtFps(30.0, 8s);
+        require(previousPlan.size() == 1,
+            "precondition failed: 30 FPS gameplay did not settle at 2x");
+
+        for (size_t frame = 0;
+                frame < 600 &&
+                    !harness.diagnostics.contains(
+                        "dynamic-cadence-recovered"
+                    );
+                ++frame) {
+            const double observedFps = previousPlan.empty() ? 60.0 : 30.0;
+            previousPlan = harness.frameAtFps(observedFps);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = previousPlan.size(),
+                .acceptedForPresentation = previousPlan.size(),
+            });
+        }
+
+        require(harness.diagnostics.contains(
+                "dynamic-cadence-probe-start"),
+            "dynamic cadence recovery never exposed native cadence");
+        require(harness.diagnostics.contains(
+                "dynamic-cadence-recovered"),
+            "native 60 FPS menu cadence remained hidden behind generated FIFO work");
+        require(harness.frameAtFps(60.0).empty(),
+            "recovered native target cadence continued generating frames");
+    }
+
+    void testDynamicCadenceProbeRejectsTrueThirtyFpsCadence() {
+        Harness harness(
+            60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true
+        );
+        harness.start();
+        require(harness.runAtFps(30.0, 7s).size() == 1,
+            "precondition failed: true 30 FPS cadence did not settle at 2x");
+
+        size_t consecutiveNativeFrames = 0;
+        size_t maximumConsecutiveNativeFrames = 0;
+        for (size_t frame = 0; frame < 420; ++frame) {
+            const auto plan = harness.frameAtFps(30.0);
+            consecutiveNativeFrames = plan.empty()
+                ? consecutiveNativeFrames + 1
+                : 0;
+            maximumConsecutiveNativeFrames = std::max(
+                maximumConsecutiveNativeFrames, consecutiveNativeFrames
+            );
+        }
+
+        require(harness.diagnostics.contains(
+                "dynamic-cadence-probe-rejected"),
+            "a true 30 FPS cadence did not reject the native-only probe");
+        require(!harness.diagnostics.contains(
+                "dynamic-cadence-recovered"),
+            "a true 30 FPS cadence was mistaken for native recovery");
+        require(maximumConsecutiveNativeFrames == 1,
+            "a rejected native-cadence probe suppressed generation for multiple frames");
+        require(harness.frameAtFps(30.0).size() == 1,
+            "a rejected native-cadence probe did not resume 2x generation");
+    }
+
+    void testDynamicCadenceRecoveryIsOptInAndSdrOnly() {
+        Harness disabled(
+            60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, false
+        );
+        disabled.start();
+        disabled.runAtFps(30.0, 12s);
+        require(!disabled.diagnostics.contains(
+                "dynamic-cadence-probe-start"),
+            "default Adaptive policy performed a native-cadence probe");
+
+        Harness hdr(
+            60, 2, false, AdaptiveRecoveryPolicy::ConservativeHdr, true
+        );
+        hdr.start();
+        hdr.runAtFps(30.0, 12s);
+        require(!hdr.diagnostics.contains(
+                "dynamic-cadence-probe-start"),
+            "nonblocking HDR transport performed an ordered-cadence probe");
+    }
+
     void testSmoothCadenceDoesNotChatterOnOscillatingLoad() {
         Harness harness(110, 3, true);
         harness.start();
@@ -1451,6 +1545,9 @@ int main() {
         {"Smooth Cadence exits below retention range", testSmoothCadenceExitsBelowRetentionRange},
         {"persistent loss rejects Smooth Cadence", testPersistentDeliveryLossRejectsSmoothCadenceProbe},
         {"Smooth Cadence exits after native recovery", testSmoothCadenceReturnsToTargetAfterBaseRecovery},
+        {"dynamic cadence recovers a self-hidden native rate", testDynamicCadenceRecoversSelfHiddenNativeRateIncrease},
+        {"dynamic cadence rejects true 30 FPS", testDynamicCadenceProbeRejectsTrueThirtyFpsCadence},
+        {"dynamic cadence remains opt-in and SDR-only", testDynamicCadenceRecoveryIsOptInAndSdrOnly},
         {"Smooth Cadence resists oscillating-load chatter", testSmoothCadenceDoesNotChatterOnOscillatingLoad},
         {"HDR strict load collapse measures real-only", testHdrStrictLoadCollapseMeasuresBeforeFallback},
         {"SDR load shed keeps generated fallback", testSdrStrictLoadCollapseKeepsGeneratedFallbackActive},

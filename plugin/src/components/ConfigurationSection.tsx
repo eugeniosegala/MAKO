@@ -13,6 +13,7 @@ interface ConfigurationSectionProps {
     fieldName: keyof ConfigurationData,
     value: boolean | number | string,
   ) => Promise<void>;
+  onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
 }
 
 const WORKAROUNDS_COLLAPSED_KEY = "mako-workarounds-collapsed";
@@ -23,6 +24,7 @@ const MANUAL_OVERRIDES_COLLAPSED_KEY = "mako-manual-overrides-collapsed";
 export function ConfigurationSection({
   config,
   onConfigChange,
+  onConfigUpdate,
 }: ConfigurationSectionProps) {
   const [configCollapsed, setConfigCollapsed] = usePersistentCollapseState(
     CONFIG_COLLAPSED_KEY,
@@ -86,6 +88,7 @@ export function ConfigurationSection({
       <AdvancedRenderingConfigurationGroup
         config={config}
         onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
         collapsed={configCollapsed}
         onToggle={() => setConfigCollapsed(!configCollapsed)}
       />
@@ -93,6 +96,7 @@ export function ConfigurationSection({
       <CompatibilityConfigurationGroup
         config={config}
         onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
         collapsed={workaroundsCollapsed}
         onToggle={() => setWorkaroundsCollapsed(!workaroundsCollapsed)}
       />

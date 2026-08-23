@@ -33,6 +33,7 @@ frame_generation_enabled = true
 - **`target_fps`**: Adaptive displayed-frame-rate target. It is not a frame limiter; MAKO cannot reduce a game already rendering above the target or exceed the selected ceiling. Direct configuration accepts 10–1000. Default: `120`.
 - **`adaptive_max_multiplier`**: Adaptive ceiling of 2x, 3x, or 4x. Start at 2x for image quality; use a higher ceiling only when the game benefits. Default: `3`.
 - **`adaptive_stable_cadence`**: Prefers a constant interpolation cadence when it is sustainable. It can look smoother but may increase input lag. Default: `false`.
+- **`dynamic_cadence_recovery`**: Optional per-profile compatibility recovery for games and emulators that switch native frame rates. It periodically presents a short native-only cadence probe on ordered SDR so FIFO-generated work cannot hide a faster mode. Adaptive recalibrates against `target_fps`; Fixed uses a confirmed Gamescope refresh as its target and treats `multiplier` as a ceiling, falling back to exact Fixed behavior when that signal is unavailable or the multiplier is outside 2x-4x. Enabling it sets `base_fps_cap` to `0` and disables `adaptive_auto_base_fps_cap`; the MAKO UIs keep the controls available and turn Recovery off if either cap is enabled later. A true fixed-rate game can receive a brief pacing check. Default: `false`.
 - **`flow_scale`**: Motion-vector resolution from 0.25 to 1.0. Lower is faster; higher favours image quality. Default: `1.0`.
 - **`performance_mode`**: Uses a lighter model for lower GPU cost and more artifacts. Default: `false`.
 - **`pacing`**: Presentation policy. `none` is the only supported value.
@@ -50,7 +51,7 @@ When a setting is renamed or its value must be carried forward, add a one-time, 
 
 ## Applying changes
 
-Frame Generation, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, and Smooth Cadence can usually apply while the game is running. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Performance Mode, HDR-related settings, or a setting that requires more private GPU resources.
+Frame Generation, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, Smooth Cadence, and Dynamic Cadence Recovery can usually apply while the game is running. Fixed recovery also recalibrates live when Gamescope reports a refresh-rate change. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Performance Mode, HDR-related settings, or a setting that requires more private GPU resources.
 
 Test V-Sync both on and off for each game. It can steady the real-frame cadence, but can also add latency or conflict with an FPS cap, VRR, or the compositor.
 
@@ -80,7 +81,7 @@ For a configuration that comes entirely from environment variables, set `MAKO_EN
 
 - `MAKO_DLL_PATH`, `MAKO_NO_FP16`, `MAKO_GPU`
 - `MAKO_MULTIPLIER`, `MAKO_FRAME_GENERATION_ENABLED`, `MAKO_BASE_FPS_CAP`
-- `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`
+- `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`
 - `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`
 
 `MAKO_DISABLE_HDR_EXPOSURE=1` keeps MAKO's unfinished HDR path disabled. It is part of the normal MAKO Decky and standalone `mako-launch` boundary. `DISABLE_GAMESCOPE_WSI=1` also closes that engine path defensively because the required HDR bridge is unavailable without the WSI layer. HDR and WSI settings are process-start policy and require a game restart; they are not live profile controls.

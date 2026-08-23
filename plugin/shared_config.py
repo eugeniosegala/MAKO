@@ -156,6 +156,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "toml"
     },
 
+    "dynamic_cadence_recovery": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "mode-independent compatibility recovery for native frame-rate switches; Fixed follows confirmed refresh, enabling clears both base FPS caps, and choosing an incompatible preset or cap disables recovery",
+        "location": "toml"
+    },
+
     "flow_scale": {
         "fieldType": ConfigFieldType.FLOAT,
         "default": 0.9,

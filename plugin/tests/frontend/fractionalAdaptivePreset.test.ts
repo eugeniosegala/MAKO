@@ -15,6 +15,11 @@ describe("fractional Adaptive preset", () => {
     expect(adaptiveModeChanges(false)).toEqual({
       adaptive: false
     });
+    expect(adaptiveModeChanges(true, true)).toEqual({
+      adaptive: true,
+      adaptive_auto_base_fps_cap: false,
+      base_fps_cap: 0
+    });
   });
 
   test("new profiles start with Steady 2x", () => {
@@ -59,6 +64,10 @@ describe("fractional Adaptive preset", () => {
     })).toBe(false);
     expect(isFractionalAdaptivePresetEnabled({
       ...enabledConfig,
+      dynamic_cadence_recovery: true
+    })).toBe(false);
+    expect(isFractionalAdaptivePresetEnabled({
+      ...enabledConfig,
       target_fps: 120
     })).toBe(true);
   });
@@ -67,10 +76,12 @@ describe("fractional Adaptive preset", () => {
     expect(fractionalAdaptivePresetChanges(true)).toEqual({
       frame_generation_enabled: true,
       adaptive: true,
-      adaptive_auto_base_fps_cap: false
+      adaptive_auto_base_fps_cap: false,
+      dynamic_cadence_recovery: false
     });
     expect(fractionalAdaptivePresetChanges(false)).toEqual({
-      adaptive_auto_base_fps_cap: true
+      adaptive_auto_base_fps_cap: true,
+      dynamic_cadence_recovery: false
     });
   });
 });

@@ -7,7 +7,7 @@ Test one change at a time. Games, displays, VRR, and compositors differ; try the
 ## Frame generation
 
 - **Frame Generation (Live On/Off):** Turns synthesis on or off without losing the selected Fixed or Adaptive settings. Keep it on whenever you want either mode to generate frames.
-- **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Start at 2x for the best balance of image quality and latency.
+- **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Start at 2x for the best balance of image quality and latency. Dynamic Cadence Recovery changes this from an exact ratio into a ceiling against the confirmed Gamescope refresh.
 - **Adaptive Frame Generation:** Adjusts generation toward a target FPS. Adaptive cannot slow down a game that is already above the target or exceed the selected multiplier ceiling.
 - **Fractional Adaptive (Preset):** Mixes generation ratios over time, such as 60 real FPS to 90 displayed FPS. It keeps more real frames and may reduce input lag, but uneven frame spacing can feel choppy in some games. It is off by default. Turning it on enables Frame Generation and Adaptive and disables the Steady Base Cap; incompatible setting changes turn the preset off automatically.
 - **Target FPS:** Desired displayed rate, from 30 to 240 FPS in Decky. Fractional Adaptive mixes ratios to approach it; the Steady Base Cap limits real FPS to half the target.
@@ -16,7 +16,7 @@ Test one change at a time. Games, displays, VRR, and compositors differ; try the
 - **Smooth Cadence:** Prefers a sustainable constant interpolation cadence. It can improve displayed motion but may reduce responsiveness. It is on by default; disable it if the game feels better with stricter target scheduling.
 - **Base FPS Cap:** Caps real frames before generation. It applies live and is disabled while **Steady Base Cap** controls the cap.
 
-Adaptive target, ceiling, and cadence changes normally apply while a game is running. Give the game a few seconds to settle before judging the result. Changes that need a different GPU backend or larger private resources can wait for a natural swapchain recreation; restarting the game applies them directly.
+Adaptive target and ceiling changes plus mode-independent cadence-recovery changes normally apply while a game is running. Give the game a few seconds to settle before judging the result. Changes that need a different GPU backend or larger private resources can wait for a natural swapchain recreation; restarting the game applies them directly.
 
 ## Game / Process Profiles
 
@@ -63,6 +63,8 @@ Settings that still carry useful meaning are migrated explicitly before their ol
 ## Compatibility and HDR
 
 The package includes 64-bit and 32-bit Vulkan layers. Vulkan chooses the right layer for the game process; the CLI and configuration UI are 64-bit only.
+
+- **Dynamic Cadence Recovery:** Optional per-profile compatibility for games and emulators that switch native frame rates, such as 30 FPS gameplay and 60 FPS menus. It works across generation modes: Adaptive recalibrates against Target FPS, while Fixed follows the confirmed Gamescope refresh and treats the selected multiplier as a ceiling. Fixed remains exact if that refresh signal is unavailable. A true fixed-rate game receives a brief pacing check on each retry, so leave it off unless needed. Enabling it turns off **Steady Base Cap** and **Base FPS Cap** because either cap could hide the native rate change. The controls remain available: selecting **Fractional Adaptive** or turning either cap back on turns Recovery off automatically.
 
 - **Disable MAKO Renderer on Next Launch:** Troubleshooting control that stops the layer loading after restart. Use **Frame Generation** for a live on/off test instead.
 - **Experimental Gamescope WSI (Restart):** Reintroduces the host's 64-bit Gamescope WSI manifest for the selected profile while keeping HDR disabled and excluding known Mesa and competing frame-generation layers. MAKO Decky validates and stages the manifest during installation and repairs the managed copy automatically for existing installations after a plugin upgrade. It may reduce coloured or pixelated motion artifacts in affected games, but can severely reduce performance or interfere with generated output. It is off by default, requires a game restart, and fails closed to normal isolation when the expected host manifest is unavailable or the game uses a Flatpak runtime.

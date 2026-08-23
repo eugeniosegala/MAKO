@@ -190,6 +190,7 @@ export function Content() {
         <ConfigurationSection
           config={config}
           onConfigChange={handleConfigChange}
+          onConfigUpdate={handleConfigChanges}
         />
       )}
 

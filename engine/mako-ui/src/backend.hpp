@@ -38,6 +38,7 @@ namespace mako::ui {
         Q_PROPERTY(uint target_fps READ getTargetFPS WRITE targetFPSUpdated NOTIFY refreshUI)
         Q_PROPERTY(size_t adaptive_max_multiplier READ getAdaptiveMaxMultiplier WRITE adaptiveMaxMultiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive_stable_cadence READ getAdaptiveStableCadence WRITE adaptiveStableCadenceUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool dynamic_cadence_recovery READ getDynamicCadenceRecovery WRITE dynamicCadenceRecoveryUpdated NOTIFY refreshUI)
         Q_PROPERTY(float flow_scale READ getFlowScale WRITE flowScaleUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool performance_mode READ getPerformanceMode WRITE performanceModeUpdated NOTIFY refreshUI)
         Q_PROPERTY(int pacing_mode READ getPacingMode WRITE pacingModeUpdated NOTIFY refreshUI)
@@ -119,6 +120,10 @@ namespace mako::ui {
         [[nodiscard]] bool getAdaptiveStableCadence() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptiveStableCadence)
             return conf.adaptive_stable_cadence;
+        }
+        [[nodiscard]] bool getDynamicCadenceRecovery() const {
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::dynamicCadenceRecovery)
+            return conf.dynamic_cadence_recovery;
         }
         [[nodiscard]] float getFlowScale() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::flowScale)
@@ -227,6 +232,8 @@ namespace mako::ui {
                 base_fps_cap,
                 static_cast<uint>(ls::GameConfLimits::maximumBaseFpsCap)
             );
+            if (conf.base_fps_cap > 0)
+                conf.dynamic_cadence_recovery = false;
             MARK_DIRTY()
         }
         void adaptiveUpdated(bool adaptive) {
@@ -237,6 +244,8 @@ namespace mako::ui {
         void adaptiveAutoBaseFPSCapUpdated(bool adaptive_auto_base_fps_cap) {
             VALIDATE_AND_GET_PROFILE()
             conf.adaptive_auto_base_fps_cap = adaptive_auto_base_fps_cap;
+            if (adaptive_auto_base_fps_cap)
+                conf.dynamic_cadence_recovery = false;
             MARK_DIRTY()
         }
         void targetFPSUpdated(uint target_fps) {
@@ -260,6 +269,15 @@ namespace mako::ui {
         void adaptiveStableCadenceUpdated(bool adaptive_stable_cadence) {
             VALIDATE_AND_GET_PROFILE()
             conf.adaptive_stable_cadence = adaptive_stable_cadence;
+            MARK_DIRTY()
+        }
+        void dynamicCadenceRecoveryUpdated(bool dynamic_cadence_recovery) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.dynamic_cadence_recovery = dynamic_cadence_recovery;
+            if (dynamic_cadence_recovery) {
+                conf.adaptive_auto_base_fps_cap = false;
+                conf.base_fps_cap = 0;
+            }
             MARK_DIRTY()
         }
         void flowScaleUpdated(float flow_scale) {

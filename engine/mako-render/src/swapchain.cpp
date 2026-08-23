@@ -215,6 +215,12 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         applicationPackedHdr10Supported, backendPackedHdr10Supported
     );
 
+    const auto initialGenerationPolicy = generationSchedulerPolicy(
+        this->profile, this->gamescopeRefreshHz
+    );
+    const bool initialDynamicCadenceRecoveryActive =
+        this->privateOrderedTransport && initialGenerationPolicy &&
+        initialGenerationPolicy->dynamicCadenceRecovery;
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-state-applied"
                   << " context=" << this->diagnosticsState.contextId
@@ -231,6 +237,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                   << this->profile.adaptive_max_multiplier
                   << " stable_cadence="
                   << this->profile.adaptive_stable_cadence
+                  << " dynamic_cadence_recovery="
+                  << this->profile.dynamic_cadence_recovery
+                  << " effective_dynamic_cadence_recovery="
+                  << initialDynamicCadenceRecoveryActive
                   << " hdr=" << this->colorPipeline.hdr
                   << '\n';
     }
@@ -304,21 +314,6 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                 std::nullopt, &fd);
 
-        if (this->profile.adaptive) {
-            this->adaptiveScheduler.emplace(
-                AdaptiveSchedulerConfig{
-                    .targetFps = this->profile.target_fps,
-                    .maximumMultiplier = this->profile.adaptive_max_multiplier,
-                    .generatedFrameCapacity = this->destinationImages.size(),
-                    .stableCadence = this->profile.adaptive_stable_cadence,
-                    .recoveryPolicy = this->privateOrderedTransport
-                        ? AdaptiveRecoveryPolicy::OrderedSdr
-                        : AdaptiveRecoveryPolicy::ConservativeHdr,
-                },
-                &present_diagnostics::adaptiveScheduler()
-            );
-        }
-
         int syncFd{};
         this->syncSemaphore.emplace(vk, 0, std::nullopt, &syncFd);
 
@@ -390,18 +385,30 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                       << " ms for the legacy non-Gamescope path; stalled "
                          "generated frames will be skipped\n";
         }
-        if (this->profile.adaptive) {
-            std::cerr << "MAKO Renderer: adaptive frame generation enabled; target="
-                      << this->profile.target_fps
+        const bool schedulerEnabled = this->resetGenerationScheduler(
+            DiagnosticsClock::now(), "startup"
+        );
+        if (schedulerEnabled) {
+            const auto policy = generationSchedulerPolicy(
+                this->profile, this->gamescopeRefreshHz
+            ).value();
+            std::cerr << "MAKO Renderer: target-driven frame generation enabled; mode="
+                      << (this->profile.adaptive
+                            ? "adaptive" : "fixed-refresh-compatibility")
+                      << ", target=" << policy.targetFps
                       << " fps, maximum multiplier="
-                      << this->profile.adaptive_max_multiplier
+                      << policy.maximumMultiplier
                       << "x, stable cadence="
-                      << (this->profile.adaptive_stable_cadence ? "enabled" : "disabled")
+                      << (policy.stableCadence ? "enabled" : "disabled")
+                      << ", dynamic cadence recovery="
+                      << (policy.dynamicCadenceRecovery
+                            ? "enabled" : "disabled")
                       << '\n';
-            const auto schedulerNow = DiagnosticsClock::now();
-            this->adaptiveScheduler->beginStabilization(
-                schedulerNow, "startup"
-            );
+        } else if (!this->profile.adaptive &&
+                this->profile.dynamic_cadence_recovery) {
+            std::cerr << "MAKO Renderer: Dynamic Cadence Recovery is unavailable "
+                         "for Fixed mode without a supported Gamescope refresh "
+                         "signal and 2x-4x multiplier; exact Fixed policy retained\n";
         }
     } catch (const std::exception& e) {
         // Swapchain creation belongs to the game. A failure in MAKO's optional
@@ -422,6 +429,35 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         std::cerr << "MAKO Renderer: " << this->colorPipeline.reason
                   << ": " << e.what() << '\n';
     }
+}
+
+bool Swapchain::resetGenerationScheduler(
+        const DiagnosticsClock::time_point now,
+        const std::string_view reason) {
+    const auto policy = generationSchedulerPolicy(
+        this->profile, this->gamescopeRefreshHz
+    );
+    if (!policy || this->destinationImages.empty()) {
+        this->adaptiveScheduler.reset();
+        return false;
+    }
+
+    this->adaptiveScheduler.emplace(
+        AdaptiveSchedulerConfig{
+            .targetFps = policy->targetFps,
+            .maximumMultiplier = policy->maximumMultiplier,
+            .generatedFrameCapacity = this->destinationImages.size(),
+            .stableCadence = policy->stableCadence,
+            .dynamicCadenceRecovery = policy->dynamicCadenceRecovery,
+            .recoveryPolicy = this->privateOrderedTransport
+                ? AdaptiveRecoveryPolicy::OrderedSdr
+                : AdaptiveRecoveryPolicy::ConservativeHdr,
+        },
+        &present_diagnostics::adaptiveScheduler()
+    );
+    this->adaptiveScheduler->beginStabilization(now, reason);
+    this->recoveryState.historyWarmupRemaining = 0;
+    return true;
 }
 
 void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
@@ -540,25 +576,8 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
     this->diagnosticsState.fixedGeneratedFrames = 0;
     this->diagnosticsState.fixedSkippedFrames = 0;
 
-    if (this->profile.adaptive) {
-        this->adaptiveScheduler.emplace(
-            AdaptiveSchedulerConfig{
-                .targetFps = this->profile.target_fps,
-                .maximumMultiplier = this->profile.adaptive_max_multiplier,
-                .generatedFrameCapacity = this->destinationImages.size(),
-                .stableCadence = this->profile.adaptive_stable_cadence,
-                .recoveryPolicy = this->privateOrderedTransport
-                    ? AdaptiveRecoveryPolicy::OrderedSdr
-                    : AdaptiveRecoveryPolicy::ConservativeHdr,
-            },
-            &present_diagnostics::adaptiveScheduler()
-        );
-        this->adaptiveScheduler->beginStabilization(
-            DiagnosticsClock::now(), "hdr-private-transition"
-        );
-        this->recoveryState.historyWarmupRemaining = 0;
-    } else {
-        this->adaptiveScheduler.reset();
+    if (!this->resetGenerationScheduler(
+            DiagnosticsClock::now(), "hdr-private-transition")) {
         this->recoveryState.historyWarmupRemaining =
             AdaptiveScheduler::historyWarmupFrameCount();
     }
@@ -690,7 +709,7 @@ ProfileUpdateAction Swapchain::updateProfile(
         return decision.action;
     }
 
-    const bool wasAdaptive = this->profile.adaptive;
+    const bool hadGenerationScheduler = this->adaptiveScheduler.has_value();
     const bool enabling = !this->profile.frame_generation_enabled &&
         nextProfile.frame_generation_enabled;
     const bool disabling = this->profile.frame_generation_enabled &&
@@ -719,36 +738,37 @@ ProfileUpdateAction Swapchain::updateProfile(
     if (enabling) {
         this->recoveryState.generatedImageAdmission.reset();
         this->recoveryState.pipelineBusyRecovery.reset();
-        this->recoveryState.historyWarmupRemaining = this->profile.adaptive
+        this->recoveryState.historyWarmupRemaining =
+            generationSchedulerPolicy(this->profile, this->gamescopeRefreshHz)
             ? 0
             : AdaptiveScheduler::historyWarmupFrameCount();
     }
 
-    if (this->profile.adaptive &&
-            (decision.adaptivePolicyChanged ||
+    const bool schedulerPolicyAvailable = generationSchedulerPolicy(
+        this->profile, this->gamescopeRefreshHz
+    ).has_value();
+    const bool fixedSchedulerPolicyChanged = !this->profile.adaptive &&
+        decision.fixedMultiplierChanged;
+    if (schedulerPolicyAvailable &&
+            (decision.generationPolicyChanged ||
              decision.generationModeChanged ||
+             fixedSchedulerPolicyChanged ||
              decision.baseFpsCapChanged || enabling)) {
-        this->adaptiveScheduler.emplace(
-            AdaptiveSchedulerConfig{
-                .targetFps = this->profile.target_fps,
-                .maximumMultiplier = this->profile.adaptive_max_multiplier,
-                .generatedFrameCapacity = this->destinationImages.size(),
-                .stableCadence = this->profile.adaptive_stable_cadence,
-                .recoveryPolicy = this->privateOrderedTransport
-                    ? AdaptiveRecoveryPolicy::OrderedSdr
-                    : AdaptiveRecoveryPolicy::ConservativeHdr,
-            },
-            &present_diagnostics::adaptiveScheduler()
-        );
-        this->adaptiveScheduler->beginStabilization(
+        static_cast<void>(this->resetGenerationScheduler(
             DiagnosticsClock::now(), "configuration-update"
-        );
-    } else if (wasAdaptive && !this->profile.adaptive) {
+        ));
+    } else if (hadGenerationScheduler && !schedulerPolicyAvailable) {
         this->adaptiveScheduler.reset();
         this->recoveryState.historyWarmupRemaining =
             AdaptiveScheduler::historyWarmupFrameCount();
     }
 
+    const auto updatedGenerationPolicy = generationSchedulerPolicy(
+        this->profile, this->gamescopeRefreshHz
+    );
+    const bool updatedDynamicCadenceRecoveryActive =
+        this->privateOrderedTransport && updatedGenerationPolicy &&
+        updatedGenerationPolicy->dynamicCadenceRecovery;
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-state-applied"
                   << " context=" << this->diagnosticsState.contextId
@@ -766,6 +786,10 @@ ProfileUpdateAction Swapchain::updateProfile(
                   << this->profile.adaptive_max_multiplier
                   << " stable_cadence="
                   << this->profile.adaptive_stable_cadence
+                  << " dynamic_cadence_recovery="
+                  << this->profile.dynamic_cadence_recovery
+                  << " effective_dynamic_cadence_recovery="
+                  << updatedDynamicCadenceRecoveryActive
                   << " hdr=" << this->colorPipeline.hdr
                   << '\n';
     }
@@ -808,6 +832,14 @@ void Swapchain::updateGamescopeRefreshRate(
         return;
     this->gamescopeRefreshHz = refreshHz;
     this->fixedRefreshBudget.reset();
+    if (!this->profile.adaptive &&
+            this->profile.dynamic_cadence_recovery) {
+        if (!this->resetGenerationScheduler(
+                DiagnosticsClock::now(), "gamescope-refresh-change")) {
+            this->recoveryState.historyWarmupRemaining =
+                AdaptiveScheduler::historyWarmupFrameCount();
+        }
+    }
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=gamescope-refresh-rate-applied"

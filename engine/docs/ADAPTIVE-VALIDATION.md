@@ -30,6 +30,7 @@ The suite currently locks down:
 - exclusion of impossible fast-present bursts;
 - Smooth Cadence validation near an integer output ratio, including separate qualification and retention hysteresis;
 - requested-versus-accepted delivery-window health for ramp and Smooth Cadence evaluation;
+- opt-in ordered-SDR native-cadence probes, including Adaptive and refresh-targeted Fixed recovery from a self-hidden 30-to-60 FPS transition, rejection at a true fixed 30 FPS, and exclusion from the nonblocking HDR transport;
 - timestamp ordering, inline capacity bounds, full-admission preservation, and partial-admission respacing;
 - deterministic trace replay plus characterization fingerprints for 45-to-90, the 42.5-to-43 FPS transition region, and a mixed disruption corpus.
 
@@ -59,7 +60,9 @@ This reports scheduler nanoseconds per decision for real-only, strict 2x, strict
 
 ## Scheduler and frame-plan ownership
 
-`AdaptiveScheduler::planFrame()` is deterministic and advances explicit stages for cadence observation, discontinuity recovery, rescue measurement, stabilization and multiplier validation, Smooth Cadence, fractional output selection, and strict-load protection. Related mutable values are grouped under one `SchedulerState` by responsibility: history warm-up, cadence, diagnostics throttling, fast bursts, output credit, stabilization, ramp, rearm, stable cadence, rescue, strict load, and discontinuity recovery. The snapshot phase remains a derived diagnostic view of that state, not an independent state machine that can drift from the policy.
+`AdaptiveScheduler::planFrame()` is deterministic and advances explicit stages for cadence observation, discontinuity recovery, rescue measurement, stabilization and multiplier validation, Smooth Cadence, fractional output selection, optional native-cadence recovery, and strict-load protection. Related mutable values are grouped under one `SchedulerState` by responsibility: history warm-up, cadence, diagnostics throttling, fast bursts, output credit, native-cadence probing, stabilization, ramp, rearm, stable cadence, rescue, strict load, and discontinuity recovery. The snapshot phase remains a derived diagnostic view of that state, not an independent state machine that can drift from the policy.
+
+On MAKO's ordered SDR FIFO path, application-present timing while generation is active cannot distinguish a game that truly runs at 30 FPS from a native 60 FPS menu held to 30 FPS by one generated plus one original FIFO present. Dynamic Cadence Recovery resolves that ambiguity in either generation mode by periodically requesting one native-only frame and requiring three consecutive samples at least 25% faster than the captured baseline before rebasing cadence. Adaptive retains its configured Target FPS and maximum multiplier. Fixed uses the confirmed Gamescope refresh as its target and treats the selected 2x-4x multiplier as a ceiling; without a supported refresh signal, it fails closed to exact Fixed behavior rather than borrowing Adaptive's hidden target. A failed probe resumes the validated generated policy on the next frame and waits five seconds before retrying. Because even a rejected probe briefly changes pacing in a genuine fixed-rate game, the compatibility policy is per-profile and off by default. Enabling it clears both base-FPS caps automatically; the probe excludes the nonblocking HDR bridge, where the presentation signal has different ownership.
 
 Every decision returns a `GeneratedFramePlan`, which stores at most three normalized interpolation timestamps inline and performs no per-frame heap allocation. The presentation path keeps three distinct facts: the **requested** plan from Fixed or Adaptive policy, the **admitted** count allowed by the selected transport, and the **scheduled** plan sent to the backend. Full admission preserves the requested timestamps exactly. If the Gamescope HDR transport admits only part of a request, the accepted count is evenly re-spaced across the real-frame interval, preserving the established partial-admission behavior rather than taking an early timestamp prefix. The native original frame remains outside this generated-frame plan and retains presentation priority on failure.
 
@@ -92,6 +95,7 @@ Use this minimum matrix for a release candidate:
 | Platform | API path | Required scenarios |
 | --- | --- | --- |
 | Steam Deck / AMD RDNA2 / Gamescope | DXVK (DX11) | Fixed baseline, Adaptive steady target, Steam overlay, live Off → On |
+| Steam Deck / AMD RDNA2 / Gamescope | Native Vulkan emulator | Adaptive and Fixed 2x 30 FPS gameplay ↔ 60 FPS menu with Dynamic Cadence Recovery, true fixed-30 rejection |
 | Steam Deck / AMD RDNA2 / Gamescope | VKD3D-Proton (DX12) | Menu transition, fast-present burst, 100–250 ms hitch, longer interruption |
 | Desktop AMD or Intel / Wayland compositor | Native Vulkan or DXVK | Fractional target, Smooth Cadence, unreachable target, resize/recreation |
 | Desktop NVIDIA / current proprietary driver | Native Vulkan or DXVK | Fixed regression baseline, Adaptive ramp/load shedding, resize/recreation |
@@ -106,7 +110,7 @@ For each run, capture:
 | Device | CPU, GPU, handheld/desktop |
 | Software | Kernel, Mesa/NVIDIA driver, compositor, Proton version |
 | Game path | Game, renderer/API, resolution, quality settings |
-| Policy | Fixed/Adaptive, target, maximum multiplier, Smooth Cadence |
+| Policy | Fixed/Adaptive, target, maximum multiplier, Smooth Cadence, Dynamic Cadence Recovery |
 | Baseline | Real FPS and frame-time percentiles with generation off |
 | Result | Real FPS, displayed FPS, average generated ratio, p95/p99 frame time |
 | Transitions | Startup, menu/overlay, focus, hitch, resize, Off → On |

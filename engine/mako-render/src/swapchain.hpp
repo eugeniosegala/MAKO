@@ -199,6 +199,9 @@ namespace mako::layer {
             generatedImageAcquireTimeoutNs();
         void rebuildPrivateResources(const vk::Vulkan& vk,
             SwapchainColorPipeline pipeline);
+        [[nodiscard]] bool resetGenerationScheduler(
+            std::chrono::steady_clock::time_point now,
+            std::string_view reason);
         void recordPresentCadence(
             std::chrono::steady_clock::time_point presentNow);
         [[nodiscard]] VkResult presentNativeFrame(

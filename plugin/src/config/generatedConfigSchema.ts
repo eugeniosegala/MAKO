@@ -78,6 +78,7 @@ export const ADAPTIVE_AUTO_BASE_FPS_CAP = "adaptive_auto_base_fps_cap" as const;
 export const TARGET_FPS = "target_fps" as const;
 export const ADAPTIVE_MAX_MULTIPLIER = "adaptive_max_multiplier" as const;
 export const ADAPTIVE_STABLE_CADENCE = "adaptive_stable_cadence" as const;
+export const DYNAMIC_CADENCE_RECOVERY = "dynamic_cadence_recovery" as const;
 export const FLOW_SCALE = "flow_scale" as const;
 export const PERFORMANCE_MODE = "performance_mode" as const;
 export const PACING = "pacing" as const;
@@ -160,6 +161,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: true,
     description: "prefer smoother constant interpolation; may lower real-frame cadence and increase input lag"
   },
+  dynamic_cadence_recovery: {
+    name: "dynamic_cadence_recovery",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "mode-independent compatibility recovery for native frame-rate switches; Fixed follows confirmed refresh, enabling clears both base FPS caps, and choosing an incompatible preset or cap disables recovery"
+  },
   flow_scale: {
     name: "flow_scale",
     fieldType: ConfigFieldType.FLOAT,
@@ -240,6 +247,7 @@ export interface ConfigurationData {
   target_fps: number;
   adaptive_max_multiplier: number;
   adaptive_stable_cadence: boolean;
+  dynamic_cadence_recovery: boolean;
   flow_scale: number;
   performance_mode: boolean;
   pacing: string;
@@ -273,6 +281,7 @@ export function getDefaults(): ConfigurationData {
     target_fps: 90,
     adaptive_max_multiplier: 3,
     adaptive_stable_cadence: true,
+    dynamic_cadence_recovery: false,
     flow_scale: 0.9,
     performance_mode: false,
     pacing: "none",
@@ -299,6 +308,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     target_fps: ConfigFieldType.INTEGER,
     adaptive_max_multiplier: ConfigFieldType.INTEGER,
     adaptive_stable_cadence: ConfigFieldType.BOOLEAN,
+    dynamic_cadence_recovery: ConfigFieldType.BOOLEAN,
     flow_scale: ConfigFieldType.FLOAT,
     performance_mode: ConfigFieldType.BOOLEAN,
     pacing: ConfigFieldType.STRING,

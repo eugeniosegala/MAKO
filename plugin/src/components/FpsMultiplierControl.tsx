@@ -13,6 +13,7 @@ import {
   ADAPTIVE_MAX_MULTIPLIER,
   ADAPTIVE_MINIMUM_BASE_FPS,
   ADAPTIVE_STABLE_CADENCE,
+  DYNAMIC_CADENCE_RECOVERY,
   FIXED_MULTIPLIER_UI_MAX,
   FIXED_MULTIPLIER_UI_MIN,
   FRAME_GENERATION_ENABLED,
@@ -31,8 +32,8 @@ import {
 import t from "../i18n/i18n";
 import { useDeferredTargetFps } from "../hooks/useDeferredTargetFps";
 import {
+  MakoInlineWarning,
   MakoSectionHeader,
-  makoDangerTextColor,
   makoDialogButtonStyle,
 } from "./MakoUi";
 
@@ -102,18 +103,12 @@ export function FpsMultiplierControl({
                   "Live on/off. Leave it on to use Fixed or Adaptive Frame Generation. When off, neither mode generates frames; your settings stay saved.",
                 )}
               </div>
-              <div
-                style={{
-                  marginTop: "6px",
-                  color: makoDangerTextColor,
-                  fontWeight: "500",
-                }}
-              >
+              <MakoInlineWarning>
                 {t(
                   "FRAME_GENERATION_ENABLED_WARNING",
                   "Keep this on if you want frame generation.",
                 )}
-              </div>
+              </MakoInlineWarning>
             </>
           }
           checked={
@@ -144,7 +139,11 @@ export function FpsMultiplierControl({
             "Adjusts frame generation to reach Target FPS. The steady base cap is the default for smoother pacing. Enable Fractional Adaptive below to keep more real frames, but test it per game. Raising the multiplier limit may require a restart.",
           )}
           checked={config.adaptive}
-          onChange={(value) => onConfigUpdate(adaptiveModeChanges(value))}
+          onChange={(value) =>
+            onConfigUpdate(
+              adaptiveModeChanges(value, config.dynamic_cadence_recovery),
+            )
+          }
         />
       </PanelSectionRow>
 
@@ -192,7 +191,10 @@ export function FpsMultiplierControl({
                 DEFAULT_CONFIGURATION.adaptive_auto_base_fps_cap
               }
               onChange={(value) =>
-                onConfigChange(ADAPTIVE_AUTO_BASE_FPS_CAP, value)
+                onConfigUpdate({
+                  [ADAPTIVE_AUTO_BASE_FPS_CAP]: value,
+                  ...(value ? { [DYNAMIC_CADENCE_RECOVERY]: false } : {}),
+                })
               }
             />
           </PanelSectionRow>
@@ -244,7 +246,7 @@ export function FpsMultiplierControl({
         topMargin="26px"
         description={t(
           "MULTIPLIER_DESC",
-          "Sets Fixed mode to 2x–4x. An increase beyond the running game's reserved capacity applies after restart. Adaptive manages the multiplier automatically.",
+          "Sets Fixed mode to 2x–4x. With Dynamic Cadence Recovery, it becomes a ceiling against the confirmed Gamescope refresh. Capacity increases may require a restart; Adaptive manages its multiplier automatically.",
         )}
       >
         {t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}

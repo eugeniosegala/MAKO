@@ -8,6 +8,7 @@ import {
 import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
 import {
   ACTIVE_IN,
+  ADAPTIVE_AUTO_BASE_FPS_CAP,
   ALLOW_FP16,
   BASE_FPS_CAP_MIN,
   BASE_FPS_CAP_UI_MAX,
@@ -15,6 +16,7 @@ import {
   DISABLE_MAKO,
   DISABLE_STEAMDECK_MODE,
   DLL,
+  DYNAMIC_CADENCE_RECOVERY,
   ENABLE_ZINK,
   EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
   EXTERNAL_VULKAN_LAYER_MANGOHUD,
@@ -29,7 +31,7 @@ import {
   type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
-import { makoDangerTextColor, MakoSectionHeader } from "./MakoUi";
+import { MakoInlineWarning, MakoSectionHeader } from "./MakoUi";
 
 type SaveConfigurationField = (
   fieldName: keyof ConfigurationData,
@@ -41,6 +43,10 @@ interface ConfigurationGroupProps {
   onConfigChange: SaveConfigurationField;
   collapsed: boolean;
   onToggle: () => void;
+}
+
+interface ConfigurationUpdateGroupProps extends ConfigurationGroupProps {
+  onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
 }
 
 function CollapseControl({
@@ -77,9 +83,10 @@ function CollapseControl({
 export function AdvancedRenderingConfigurationGroup({
   config,
   onConfigChange,
+  onConfigUpdate,
   collapsed,
   onToggle,
-}: ConfigurationGroupProps) {
+}: ConfigurationUpdateGroupProps) {
   return (
     <>
       <MakoSectionHeader topMargin="37px">
@@ -121,7 +128,14 @@ export function AdvancedRenderingConfigurationGroup({
               max={BASE_FPS_CAP_UI_MAX}
               step={1}
               disabled={config.adaptive && config.adaptive_auto_base_fps_cap}
-              onChange={(value) => onConfigChange(BASE_FPS_CAP, value)}
+              onChange={(value) =>
+                onConfigUpdate({
+                  [BASE_FPS_CAP]: value,
+                  ...(value > 0
+                    ? { [DYNAMIC_CADENCE_RECOVERY]: false }
+                    : {}),
+                })
+              }
             />
           </PanelSectionRow>
 
@@ -161,9 +175,10 @@ export function AdvancedRenderingConfigurationGroup({
 export function CompatibilityConfigurationGroup({
   config,
   onConfigChange,
+  onConfigUpdate,
   collapsed,
   onToggle,
-}: ConfigurationGroupProps) {
+}: ConfigurationUpdateGroupProps) {
   return (
     <>
       <MakoSectionHeader topMargin="26px">
@@ -178,6 +193,31 @@ export function CompatibilityConfigurationGroup({
 
       {!collapsed && (
         <>
+          <PanelSectionRow>
+            <ToggleField
+              label={t(
+                "DYNAMIC_CADENCE_RECOVERY",
+                "Dynamic Cadence Recovery",
+              )}
+              description={t(
+                "DYNAMIC_CADENCE_RECOVERY_DESC",
+                "Compatibility recovery for games and emulators that switch native frame rates. Adaptive recalibrates its target policy; Fixed follows the confirmed Gamescope refresh with its selected multiplier as a ceiling. A brief pacing check may occur. Enabling it turns off both base FPS caps; selecting Fractional Adaptive or turning either cap back on turns Recovery off.",
+              )}
+              checked={config.dynamic_cadence_recovery}
+              onChange={(value) =>
+                onConfigUpdate(
+                  value
+                    ? {
+                        [DYNAMIC_CADENCE_RECOVERY]: true,
+                        [ADAPTIVE_AUTO_BASE_FPS_CAP]: false,
+                        [BASE_FPS_CAP]: 0,
+                      }
+                    : { [DYNAMIC_CADENCE_RECOVERY]: false },
+                )
+              }
+            />
+          </PanelSectionRow>
+
           <PanelSectionRow>
             <ToggleField
               label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR (Restart)")}
@@ -205,18 +245,12 @@ export function CompatibilityConfigurationGroup({
                       "May reduce coloured or pixelated motion artifacts in affected games. Tested only with 64-bit native Vulkan or Proton games launched through Steam.",
                     )}
                   </div>
-                  <div
-                    style={{
-                      marginTop: "6px",
-                      color: makoDangerTextColor,
-                      fontWeight: "500",
-                    }}
-                  >
+                  <MakoInlineWarning>
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
                       "Keep it off if not needed. It may reduce performance or interfere with frame generation.",
                     )}
-                  </div>
+                  </MakoInlineWarning>
                 </>
               }
               checked={
@@ -308,18 +342,12 @@ export function ExternalToolsConfigurationGroup({
               "Optional and per profile. Enable a tool in Default for games without a saved profile, or save a game profile first to limit it to that title. Gamescope WSI, MangoHud, and vkBasalt are mutually exclusive. Restart the game after changing the selection.",
             )}
           </div>
-          <div
-            style={{
-              marginTop: "6px",
-              color: makoDangerTextColor,
-              fontWeight: "500",
-            }}
-          >
+          <MakoInlineWarning>
             {t(
               "CONFIG_EXTERNAL_TOOLS_WARNING",
               "External tools may affect performance. Test each game carefully.",
             )}
-          </div>
+          </MakoInlineWarning>
         </div>
       </PanelSectionRow>
 

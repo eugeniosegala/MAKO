@@ -51,6 +51,8 @@ namespace {
     constexpr double adaptiveStableCadenceMinimumRetentionTargetRatio = 0.95;
     constexpr double adaptiveStableCadenceMinimumBaseRetention = 0.74;
     constexpr double adaptiveStableCadenceMinimumDemandRatio = 0.95;
+    constexpr double adaptiveNativeCadenceMinimumRiseRatio = 1.25;
+    constexpr size_t adaptiveNativeCadenceConfirmationFrames = 3;
     constexpr auto adaptiveStabilizationDuration = std::chrono::seconds(1);
     constexpr auto adaptiveRecoveryStabilizationDuration = std::chrono::seconds(3);
     constexpr auto adaptiveRampEvaluationDuration = std::chrono::seconds(1);
@@ -84,6 +86,7 @@ namespace {
     constexpr auto adaptiveStableRearmDuration = std::chrono::seconds(2);
     constexpr auto adaptivePlanDiagnosticInterval = std::chrono::seconds(1);
     constexpr auto adaptiveFastBurstDiagnosticInterval = std::chrono::seconds(1);
+    constexpr auto adaptiveNativeCadenceProbeDelay = std::chrono::seconds(5);
 
     AdaptiveSchedulerDiagnostics nullDiagnostics;
 
@@ -190,6 +193,8 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
         phase = AdaptiveSchedulerPhase::RearmCooldown;
     } else if (this->state.ramp.evaluationAt) {
         phase = AdaptiveSchedulerPhase::RampEvaluation;
+    } else if (this->state.nativeCadenceProbe.active) {
+        phase = AdaptiveSchedulerPhase::NativeCadenceProbe;
     } else if (this->state.stableCadence.limit) {
         phase = AdaptiveSchedulerPhase::StableCadence;
     }
@@ -207,6 +212,7 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
         .rearmRequired = this->state.rearm.required,
         .discontinuityRecoveryActive =
             this->state.discontinuityRecovery.deadline.has_value(),
+        .nativeCadenceProbeActive = this->state.nativeCadenceProbe.active,
     };
 }
 
@@ -486,6 +492,7 @@ AdaptiveScheduler::observeCadence(
     return {
         .planningReady = true,
         .baseFps = 1.0 / this->state.cadence.smoothedIntervalSeconds,
+        .instantaneousBaseFps = instantaneousBaseFps,
     };
 }
 
@@ -954,6 +961,119 @@ MAKO_ADAPTIVE_STAGE_INLINE size_t AdaptiveScheduler::selectGeneratedFrameCount(
 }
 
 MAKO_ADAPTIVE_STAGE_INLINE AdaptiveScheduler::PlanningStageResult
+AdaptiveScheduler::advanceNativeCadenceProbe(
+        const TimePoint now, const double baseFps,
+        const double instantaneousBaseFps,
+        const double desiredOutputsPerRealFrame,
+        const size_t maximumGeneratedFrameCount,
+        size_t& generatedFrameCount) {
+    // Ordered FIFO work makes a genuine 30-FPS source observationally
+    // identical to a native 60-FPS source held at 30 by MAKO's previous
+    // generated-plus-original present. The opt-in probe removes generated
+    // work for one frame, then requires a short faster run before rebasing.
+    // A rejected probe immediately resumes the proven generated policy.
+    const bool eligible =
+        this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
+        desiredOutputsPerRealFrame > 1.0 &&
+        maximumGeneratedFrameCount > 0 &&
+        !this->state.ramp.evaluationAt &&
+        !this->state.rearm.required &&
+        !this->state.rescue.until &&
+        !this->state.discontinuityRecovery.deadline &&
+        !this->state.stableCadence.evaluationAt;
+    if (!eligible) {
+        this->state.nativeCadenceProbe.reset();
+        return {.planningReady = true};
+    }
+
+    auto& probe = this->state.nativeCadenceProbe;
+    if (probe.active) {
+        const bool fasterCadence = instantaneousBaseFps >=
+            probe.baselineBaseFps * adaptiveNativeCadenceMinimumRiseRatio;
+        if (!fasterCadence) {
+            this->diagnostics->nativeCadenceProbe(
+                "dynamic-cadence-probe-rejected",
+                this->state.outputPlanner.generationLimit,
+                probe.baselineBaseFps,
+                instantaneousBaseFps,
+                probe.confirmedSamples
+            );
+            probe.active = false;
+            probe.baselineBaseFps = 0.0;
+            probe.minimumMeasuredBaseFps = 0.0;
+            probe.confirmedSamples = 0;
+            probe.nextAt = now + adaptiveNativeCadenceProbeDelay;
+            this->state.outputPlanner.credit = 0.0;
+            generatedFrameCount = std::max<size_t>(generatedFrameCount, 1);
+            return {.planningReady = true};
+        }
+
+        probe.confirmedSamples++;
+        if (probe.minimumMeasuredBaseFps == 0.0) {
+            probe.minimumMeasuredBaseFps = instantaneousBaseFps;
+        } else {
+            probe.minimumMeasuredBaseFps = std::min(
+                probe.minimumMeasuredBaseFps, instantaneousBaseFps
+            );
+        }
+        this->state.outputPlanner.credit = 0.0;
+        generatedFrameCount = 0;
+        if (probe.confirmedSamples <
+                adaptiveNativeCadenceConfirmationFrames) {
+            return {};
+        }
+
+        const double recoveredBaseFps = probe.minimumMeasuredBaseFps;
+        this->state.cadence.smoothedIntervalSeconds = 1.0 / recoveredBaseFps;
+        this->state.cadence.dropFrames = 0;
+        this->state.ramp.targetDeficitSince.reset();
+        this->state.stableCadence.limit.reset();
+        this->state.stableCadence.evaluationAt.reset();
+        this->state.stableCadence.delivery.reset();
+        this->state.stableCadence.outsideRangeSince.reset();
+        this->state.stableCadence.retryAt.reset();
+        this->state.stableCadence.baselineBaseFps = 0.0;
+        this->state.stableCadence.candidate.reset();
+        this->diagnostics->nativeCadenceProbe(
+            "dynamic-cadence-recovered",
+            this->state.outputPlanner.generationLimit,
+            probe.baselineBaseFps,
+            recoveredBaseFps,
+            probe.confirmedSamples
+        );
+        probe.active = false;
+        probe.baselineBaseFps = 0.0;
+        probe.minimumMeasuredBaseFps = 0.0;
+        probe.confirmedSamples = 0;
+        probe.nextAt = now + adaptiveNativeCadenceProbeDelay;
+        return {};
+    }
+
+    if (!probe.nextAt) {
+        probe.nextAt = now + adaptiveNativeCadenceProbeDelay;
+        return {.planningReady = true};
+    }
+    if (now < *probe.nextAt)
+        return {.planningReady = true};
+
+    probe.active = true;
+    probe.nextAt.reset();
+    probe.baselineBaseFps = baseFps;
+    probe.minimumMeasuredBaseFps = 0.0;
+    probe.confirmedSamples = 0;
+    this->state.outputPlanner.credit = 0.0;
+    generatedFrameCount = 0;
+    this->diagnostics->nativeCadenceProbe(
+        "dynamic-cadence-probe-start",
+        this->state.outputPlanner.generationLimit,
+        baseFps,
+        0.0,
+        0
+    );
+    return {};
+}
+
+MAKO_ADAPTIVE_STAGE_INLINE AdaptiveScheduler::PlanningStageResult
 AdaptiveScheduler::applyStrictLoadGuard(
         const TimePoint now, const double baseFps,
         size_t& generatedFrameCount) {
@@ -1121,6 +1241,18 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
     size_t generatedFrameCount = this->selectGeneratedFrameCount(
         desiredOutputsPerRealFrame, maximumGeneratedFrameCount
     );
+    if (this->config.dynamicCadenceRecovery) {
+        const auto nativeCadenceProbe = this->advanceNativeCadenceProbe(
+            now,
+            baseFps,
+            cadence.instantaneousBaseFps,
+            desiredOutputsPerRealFrame,
+            maximumGeneratedFrameCount,
+            generatedFrameCount
+        );
+        if (!nativeCadenceProbe.planningReady)
+            return nativeCadenceProbe.terminalPlan;
+    }
     const auto strictLoad = this->applyStrictLoadGuard(
         now, baseFps, generatedFrameCount
     );
@@ -1188,6 +1320,7 @@ void AdaptiveScheduler::resetTiming(
     this->state.fastBurst.framesSinceDiagnostic = 0;
     this->state.ramp.targetDeficitSince.reset();
     this->state.outputPlanner.credit = 0.0;
+    this->state.nativeCadenceProbe.reset();
 }
 
 size_t AdaptiveScheduler::validatedGenerationLimit() const {

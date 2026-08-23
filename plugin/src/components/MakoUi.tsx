@@ -1,5 +1,6 @@
 import { PanelSectionRow, Spinner } from "@decky/ui";
 import type { CSSProperties, ReactNode } from "react";
+import { FiAlertTriangle } from "react-icons/fi";
 
 interface MakoSectionHeaderProps {
   children: ReactNode;
@@ -14,8 +15,7 @@ interface MakoReleaseIdentityProps {
 }
 
 export const makoPanelDivider = "1px solid rgba(77, 170, 190, 0.2)";
-export const makoDangerTextColor = "#d08aa0";
-export const makoReleaseAccentColor = "#d58a39";
+export const makoAccentColor = "#83bff0";
 
 export const makoPanelStyle: CSSProperties = {
   overflow: "hidden",
@@ -38,6 +38,41 @@ export const makoPanelItemStyle: CSSProperties = {
   padding: "12px 14px",
   borderTop: makoPanelDivider
 };
+
+export function MakoInlineWarning({ children }: { children: ReactNode }) {
+  return (
+    <div
+      role="note"
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "6px",
+        marginTop: "7px",
+        padding: "6px 8px",
+        border: "1px solid rgba(91, 163, 209, 0.24)",
+        borderLeft: "2px solid rgba(131, 191, 240, 0.78)",
+        borderRadius: "5px",
+        background: "linear-gradient(90deg, rgba(24, 67, 94, 0.42), rgba(8, 39, 56, 0.18))",
+        color: "#c8dce8",
+        fontSize: "10px",
+        fontWeight: 450,
+        lineHeight: 1.35,
+        letterSpacing: "0.05px"
+      }}
+    >
+      <FiAlertTriangle
+        aria-hidden="true"
+        size={11}
+        style={{
+          flex: "0 0 11px",
+          marginTop: "1px",
+          color: makoAccentColor
+        }}
+      />
+      <span style={{ minWidth: 0 }}>{children}</span>
+    </div>
+  );
+}
 
 export function MakoReleaseIdentity({ version, codename, bottomMargin = "2px" }: MakoReleaseIdentityProps) {
   const codenameSlug = codename
@@ -69,7 +104,7 @@ export function MakoReleaseIdentity({ version, codename, bottomMargin = "2px" }:
       >
         <span>v{version}</span>
         <span aria-hidden="true" style={{ padding: "0 6px", color: "#557f88" }}>-</span>
-        <span style={{ color: makoReleaseAccentColor }}>{codenameSlug}</span>
+        <span style={{ color: makoAccentColor }}>{codenameSlug}</span>
       </div>
     </PanelSectionRow>
   );

@@ -401,6 +401,23 @@ namespace {
                   << " action=retain-generated-output\n";
     }
 
+    void logDynamicCadenceRecovery(const std::string_view operation,
+            const size_t generationLimit, const double baselineBaseFps,
+            const double measuredBaseFps,
+            const size_t confirmedSamples) {
+        if (!enabled())
+            return;
+
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
+                  << operation
+                  << " context=" << activeContextId
+                  << " generated_limit=" << generationLimit
+                  << " baseline_base_fps=" << baselineBaseFps
+                  << " measured_base_fps=" << measuredBaseFps
+                  << " confirmed_samples=" << confirmedSamples
+                  << '\n';
+    }
+
     class SchedulerDiagnostics final : public AdaptiveSchedulerDiagnostics {
     public:
         [[nodiscard]] bool enabled() const override {
@@ -611,6 +628,17 @@ namespace {
             logAdaptiveLoadShed(
                 previousLimit, resumedLimit, baselineBaseFps,
                 currentBaseFps, reason
+            );
+        }
+
+        void nativeCadenceProbe(const std::string_view operation,
+                const size_t generationLimit,
+                const double baselineBaseFps,
+                const double measuredBaseFps,
+                const size_t confirmedSamples) override {
+            logDynamicCadenceRecovery(
+                operation, generationLimit, baselineBaseFps,
+                measuredBaseFps, confirmedSamples
             );
         }
     };

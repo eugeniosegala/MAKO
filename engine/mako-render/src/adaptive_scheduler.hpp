@@ -39,6 +39,9 @@ namespace mako::layer {
         size_t maximumMultiplier{ls::GameConfDefaults::adaptiveMaxMultiplier};
         size_t generatedFrameCapacity{0};
         bool stableCadence{ls::GameConfDefaults::adaptiveStableCadence};
+        bool dynamicCadenceRecovery{
+            ls::GameConfDefaults::dynamicCadenceRecovery
+        };
         AdaptiveRecoveryPolicy recoveryPolicy{
             AdaptiveRecoveryPolicy::ConservativeHdr
         };
@@ -56,6 +59,7 @@ namespace mako::layer {
         RampEvaluation,
         StableCadence,
         Active,
+        NativeCadenceProbe,
     };
 
     struct AdaptiveSchedulerSnapshot {
@@ -68,6 +72,7 @@ namespace mako::layer {
         bool rampEvaluationActive{false};
         bool rearmRequired{false};
         bool discontinuityRecoveryActive{false};
+        bool nativeCadenceProbeActive{false};
     };
 
     struct AdaptivePlanDiagnostic {
@@ -130,6 +135,8 @@ namespace mako::layer {
         virtual void cadenceRefresh(std::string_view, size_t, size_t) {}
         virtual void loadShed(size_t, size_t, double, double,
             std::string_view) {}
+        virtual void nativeCadenceProbe(std::string_view, size_t, double,
+            double, size_t) {}
     };
 
     /// Pure adaptive frame-generation policy.
@@ -222,6 +229,7 @@ namespace mako::layer {
             bool planningReady{false};
             AdaptiveFramePlan terminalPlan;
             double baseFps{0.0};
+            double instantaneousBaseFps{0.0};
         };
 
         struct PlanningStageResult {
@@ -245,6 +253,11 @@ namespace mako::layer {
         [[nodiscard]] inline size_t selectGeneratedFrameCount(
             double desiredOutputsPerRealFrame,
             size_t maximumGeneratedFrameCount);
+        [[nodiscard]] inline PlanningStageResult advanceNativeCadenceProbe(
+            TimePoint now, double baseFps, double instantaneousBaseFps,
+            double desiredOutputsPerRealFrame,
+            size_t maximumGeneratedFrameCount,
+            size_t& generatedFrameCount);
         [[nodiscard]] inline PlanningStageResult applyStrictLoadGuard(
             TimePoint now, double baseFps, size_t& generatedFrameCount);
         void beginCadenceRefresh(TimePoint now, std::string_view reason);
@@ -294,6 +307,22 @@ namespace mako::layer {
                 double credit{0.0};
                 size_t generationLimit{0};
             } outputPlanner;
+
+            struct NativeCadenceProbe {
+                std::optional<TimePoint> nextAt;
+                bool active{false};
+                double baselineBaseFps{0.0};
+                double minimumMeasuredBaseFps{0.0};
+                size_t confirmedSamples{0};
+
+                void reset() {
+                    this->nextAt.reset();
+                    this->active = false;
+                    this->baselineBaseFps = 0.0;
+                    this->minimumMeasuredBaseFps = 0.0;
+                    this->confirmedSamples = 0;
+                }
+            } nativeCadenceProbe;
 
             struct Stabilization {
                 std::optional<TimePoint> until;

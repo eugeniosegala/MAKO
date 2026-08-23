@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 
 namespace mako::layer {
 
@@ -20,7 +21,7 @@ namespace mako::layer {
     struct ProfileUpdateDecision {
         ProfileUpdateAction action{ProfileUpdateAction::NoRuntimeChange};
         bool frameGenerationChanged{false};
-        bool adaptivePolicyChanged{false};
+        bool generationPolicyChanged{false};
         bool generationModeChanged{false};
         bool fixedMultiplierChanged{false};
         bool baseFpsCapChanged{false};
@@ -38,6 +39,53 @@ namespace mako::layer {
             );
         }
         return static_cast<double>(profile.base_fps_cap);
+    }
+
+    [[nodiscard]] inline bool dynamicCadenceRecoveryEnabled(
+            const ls::GameConf& profile) {
+        return profile.dynamic_cadence_recovery &&
+            effectiveBaseFpsCap(profile) <= 0.0;
+    }
+
+    struct GenerationSchedulerPolicy {
+        uint32_t targetFps{0};
+        size_t maximumMultiplier{0};
+        bool stableCadence{false};
+        bool dynamicCadenceRecovery{false};
+    };
+
+    /// Adaptive owns an explicit output target. Fixed + Dynamic Cadence
+    /// Recovery instead follows a confirmed Gamescope refresh rate and treats
+    /// the selected Fixed multiplier as a ceiling. Without that external
+    /// signal, Fixed remains exact rather than borrowing a hidden target.
+    [[nodiscard]] inline std::optional<GenerationSchedulerPolicy>
+    generationSchedulerPolicy(const ls::GameConf& profile,
+            const std::optional<uint32_t> gamescopeRefreshHz) {
+        if (profile.adaptive) {
+            return GenerationSchedulerPolicy{
+                .targetFps = profile.target_fps,
+                .maximumMultiplier = profile.adaptive_max_multiplier,
+                .stableCadence = profile.adaptive_stable_cadence,
+                .dynamicCadenceRecovery =
+                    dynamicCadenceRecoveryEnabled(profile),
+            };
+        }
+        if (!dynamicCadenceRecoveryEnabled(profile) ||
+                !gamescopeRefreshHz ||
+                *gamescopeRefreshHz < ls::GameConfLimits::minimumTargetFps ||
+                *gamescopeRefreshHz > ls::GameConfLimits::maximumTargetFps ||
+                profile.multiplier <
+                    ls::GameConfLimits::minimumAdaptiveMaxMultiplier ||
+                profile.multiplier >
+                    ls::GameConfLimits::maximumAdaptiveMaxMultiplier) {
+            return std::nullopt;
+        }
+        return GenerationSchedulerPolicy{
+            .targetFps = *gamescopeRefreshHz,
+            .maximumMultiplier = profile.multiplier,
+            .stableCadence = false,
+            .dynamicCadenceRecovery = true,
+        };
     }
 
     /// Reserve one private output set that can serve both Fixed and Adaptive.
@@ -69,11 +117,16 @@ namespace mako::layer {
         const bool fixedMultiplierChanged = current.multiplier != next.multiplier;
         const bool baseFpsCapChanged =
             effectiveBaseFpsCap(current) != effectiveBaseFpsCap(next);
-        const bool adaptivePolicyChanged = current.adaptive && next.adaptive && (
-            current.target_fps != next.target_fps ||
-            current.adaptive_max_multiplier != next.adaptive_max_multiplier ||
-            current.adaptive_stable_cadence != next.adaptive_stable_cadence
-        );
+        const bool generationPolicyChanged =
+            current.dynamic_cadence_recovery !=
+                next.dynamic_cadence_recovery ||
+            (current.adaptive && next.adaptive && (
+                current.target_fps != next.target_fps ||
+                current.adaptive_max_multiplier !=
+                    next.adaptive_max_multiplier ||
+                current.adaptive_stable_cadence !=
+                    next.adaptive_stable_cadence
+            ));
 
         const bool backendConstructionChanged =
             current.gpu != next.gpu ||
@@ -91,20 +144,20 @@ namespace mako::layer {
             return {
                 .action = ProfileUpdateAction::DeferUntilSwapchainRecreation,
                 .frameGenerationChanged = frameGenerationChanged,
-                .adaptivePolicyChanged = adaptivePolicyChanged,
+                .generationPolicyChanged = generationPolicyChanged,
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,
                 .baseFpsCapChanged = baseFpsCapChanged,
             };
         }
 
-        if (frameGenerationChanged || adaptivePolicyChanged ||
+        if (frameGenerationChanged || generationPolicyChanged ||
                 generationModeChanged || fixedMultiplierChanged ||
                 baseFpsCapChanged) {
             return {
                 .action = ProfileUpdateAction::ApplyLive,
                 .frameGenerationChanged = frameGenerationChanged,
-                .adaptivePolicyChanged = adaptivePolicyChanged,
+                .generationPolicyChanged = generationPolicyChanged,
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,
                 .baseFpsCapChanged = baseFpsCapChanged,

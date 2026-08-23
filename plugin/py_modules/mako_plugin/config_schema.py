@@ -176,6 +176,9 @@ class ConfigurationManager:
                 "'mangohud', or 'vkbasalt'"
             )
         validated["external_vulkan_layer"] = external_vulkan_layer
+        if validated["dynamic_cadence_recovery"]:
+            validated["adaptive_auto_base_fps_cap"] = False
+            validated["base_fps_cap"] = 0
         return cast(ConfigurationData, validated)
 
     @staticmethod
@@ -235,6 +238,7 @@ class ConfigurationManager:
                 f"target_fps = {config['target_fps']}",
                 f"adaptive_max_multiplier = {config['adaptive_max_multiplier']}",
                 f"adaptive_stable_cadence = {str(config['adaptive_stable_cadence']).lower()}",
+                f"dynamic_cadence_recovery = {str(config['dynamic_cadence_recovery']).lower()}",
                 f"flow_scale = {config['flow_scale']}",
                 f"performance_mode = {str(config['performance_mode']).lower()}",
                 "pacing = 'none'",

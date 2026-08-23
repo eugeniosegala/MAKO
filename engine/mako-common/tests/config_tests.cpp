@@ -51,6 +51,7 @@ namespace {
             left.target_fps == right.target_fps &&
             left.adaptive_max_multiplier == right.adaptive_max_multiplier &&
             left.adaptive_stable_cadence == right.adaptive_stable_cadence &&
+            left.dynamic_cadence_recovery == right.dynamic_cadence_recovery &&
             left.flow_scale == right.flow_scale &&
             left.performance_mode == right.performance_mode &&
             left.pacing == right.pacing;
@@ -65,11 +66,12 @@ removed_global_option = "inert"
 name = "test"
 active_in = "game"
 removed_profile_option = true
-adaptive = true
+adaptive = false
 base_fps_cap = 60
 adaptive_auto_base_fps_cap = true
 target_fps = 144
 adaptive_max_multiplier = 4
+dynamic_cadence_recovery = true
 )";
 }
 
@@ -87,6 +89,8 @@ int main() {
                 ls::GameConfDefaults::adaptiveMaxMultiplier &&
             defaults.adaptive_stable_cadence ==
                 ls::GameConfDefaults::adaptiveStableCadence &&
+            defaults.dynamic_cadence_recovery ==
+                ls::GameConfDefaults::dynamicCadenceRecovery &&
             defaults.flow_scale == ls::GameConfDefaults::flowScale &&
             defaults.performance_mode ==
                 ls::GameConfDefaults::performanceMode &&
@@ -152,10 +156,11 @@ int main() {
         "The accepted configuration must replace the previous profile set");
     expect(config.get().profiles().front().target_fps == 144,
         "The accepted configuration must expose its new policy");
-    expect(config.get().profiles().front().base_fps_cap == 60,
-        "The accepted configuration must expose its base FPS cap");
-    expect(config.get().profiles().front().adaptive_auto_base_fps_cap,
-        "The accepted configuration must expose Adaptive auto-cap");
+    expect(config.get().profiles().front().dynamic_cadence_recovery,
+        "The accepted configuration must expose dynamic cadence recovery");
+    expect(config.get().profiles().front().base_fps_cap == 0 &&
+            !config.get().profiles().front().adaptive_auto_base_fps_cap,
+        "Dynamic cadence recovery must disable both base FPS caps");
     expect(config.get().profiles().front().multiplier == 2,
         "Unknown legacy options must be inert without disturbing known defaults");
 
@@ -215,6 +220,22 @@ multiplier = 5
             detectedProfile->first == ls::IdentType::OVERRIDE &&
             detectedProfile->second.name == "mako",
         "An explicit caller profile must remain a hard override");
+
+    setenv("MAKO_ENV", "1", 1);
+    setenv("MAKO_ADAPTIVE", "0", 1);
+    setenv("MAKO_BASE_FPS_CAP", "30", 1);
+    setenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP", "1", 1);
+    setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);
+    const ls::WatchedConfig environmentConfig;
+    expect(environmentConfig.get().profiles().front().dynamic_cadence_recovery &&
+            environmentConfig.get().profiles().front().base_fps_cap == 0 &&
+            !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap,
+        "Environment dynamic cadence recovery must disable both base FPS caps");
+    unsetenv("MAKO_DYNAMIC_CADENCE_RECOVERY");
+    unsetenv("MAKO_ADAPTIVE");
+    unsetenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");
+    unsetenv("MAKO_BASE_FPS_CAP");
+    unsetenv("MAKO_ENV");
 
     std::filesystem::remove_all(directory);
     std::cout << "configuration watcher tests passed\n";

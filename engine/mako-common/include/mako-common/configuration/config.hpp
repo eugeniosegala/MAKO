@@ -36,6 +36,7 @@ namespace ls {
         static constexpr uint32_t targetFps = 120;
         static constexpr size_t adaptiveMaxMultiplier = 3;
         static constexpr bool adaptiveStableCadence = false;
+        static constexpr bool dynamicCadenceRecovery = false;
         static constexpr float flowScale = 1.0F;
         static constexpr bool performanceMode = false;
         static constexpr Pacing pacing = Pacing::None;
@@ -78,6 +79,8 @@ namespace ls {
         size_t adaptive_max_multiplier{GameConfDefaults::adaptiveMaxMultiplier};
         /// prefer a validated constant interpolation cadence when safe
         bool adaptive_stable_cadence{GameConfDefaults::adaptiveStableCadence};
+        /// periodically expose native cadence to detect upward rate changes
+        bool dynamic_cadence_recovery{GameConfDefaults::dynamicCadenceRecovery};
         /// non-inverted flow scale
         float flow_scale{GameConfDefaults::flowScale};
         /// use performance mode

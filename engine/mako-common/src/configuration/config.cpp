@@ -48,6 +48,7 @@ adaptive_auto_base_fps_cap = false
 target_fps = 120
 adaptive_max_multiplier = 3
 adaptive_stable_cadence = false
+dynamic_cadence_recovery = false
 flow_scale = 0.85
 performance_mode = true
 pacing = 'none' # see the wiki for more info
@@ -83,6 +84,7 @@ ConfigFile::ConfigFile() {
         .target_fps = GameConfDefaults::targetFps,
         .adaptive_max_multiplier = GameConfDefaults::adaptiveMaxMultiplier,
         .adaptive_stable_cadence = GameConfDefaults::adaptiveStableCadence,
+        .dynamic_cadence_recovery = GameConfDefaults::dynamicCadenceRecovery,
         .flow_scale = 0.85F,
         .performance_mode = true,
         .pacing = GameConfDefaults::pacing
@@ -197,7 +199,7 @@ namespace {
     }
     /// parse a game profile configuration
     GameConf parseGameConf(const toml::table& tbl) {
-        const GameConf conf{
+        GameConf conf{
             .name = tbl["name"].value_or<std::string>("unnamed"),
             .active_in = activityFromString(tbl["active_in"]),
             .gpu = tbl["gpu"].value<std::string>(),
@@ -218,6 +220,9 @@ namespace {
             .adaptive_stable_cadence = tbl["adaptive_stable_cadence"].value_or(
                 GameConfDefaults::adaptiveStableCadence
             ),
+            .dynamic_cadence_recovery = tbl["dynamic_cadence_recovery"].value_or(
+                GameConfDefaults::dynamicCadenceRecovery
+            ),
             .flow_scale = tbl["flow_scale"].value_or(GameConfDefaults::flowScale),
             .performance_mode = tbl["performance_mode"].value_or(
                 GameConfDefaults::performanceMode
@@ -226,6 +231,10 @@ namespace {
         };
 
         validateGameConf(conf);
+        if (conf.dynamic_cadence_recovery) {
+            conf.adaptive_auto_base_fps_cap = false;
+            conf.base_fps_cap = 0;
+        }
         return conf;
     }
     /// parse the global configuration from the environment
@@ -263,6 +272,7 @@ namespace {
             .target_fps = GameConfDefaults::targetFps,
             .adaptive_max_multiplier = GameConfDefaults::adaptiveMaxMultiplier,
             .adaptive_stable_cadence = GameConfDefaults::adaptiveStableCadence,
+            .dynamic_cadence_recovery = GameConfDefaults::dynamicCadenceRecovery,
             .flow_scale = GameConfDefaults::flowScale,
             .performance_mode = GameConfDefaults::performanceMode,
             .pacing = GameConfDefaults::pacing
@@ -294,6 +304,12 @@ namespace {
         const char* adaptive_stable_cadence = std::getenv("MAKO_ADAPTIVE_STABLE_CADENCE");
         if (adaptive_stable_cadence)
             conf.adaptive_stable_cadence = std::string(adaptive_stable_cadence) != "0";
+        const char* dynamic_cadence_recovery =
+            std::getenv("MAKO_DYNAMIC_CADENCE_RECOVERY");
+        if (dynamic_cadence_recovery) {
+            conf.dynamic_cadence_recovery =
+                std::string(dynamic_cadence_recovery) != "0";
+        }
         const char* flow_scale = std::getenv("MAKO_FLOW_SCALE");
         if (flow_scale) conf.flow_scale = std::stof(flow_scale);
         const char* performance = std::getenv("MAKO_PERFORMANCE_MODE");
@@ -302,6 +318,10 @@ namespace {
         if (pacing) conf.pacing = parcingFromString(std::string(pacing));
 
         validateGameConf(conf);
+        if (conf.dynamic_cadence_recovery) {
+            conf.adaptive_auto_base_fps_cap = false;
+            conf.base_fps_cap = 0;
+        }
         return conf;
     }
 }
@@ -368,6 +388,7 @@ void ConfigFile::write(const std::filesystem::path& path) const {
         profile.insert("target_fps", static_cast<int64_t>(conf.target_fps));
         profile.insert("adaptive_max_multiplier", static_cast<int64_t>(conf.adaptive_max_multiplier));
         profile.insert("adaptive_stable_cadence", conf.adaptive_stable_cadence);
+        profile.insert("dynamic_cadence_recovery", conf.dynamic_cadence_recovery);
         profile.insert("flow_scale", conf.flow_scale);
         profile.insert("performance_mode", conf.performance_mode);
         switch (conf.pacing) {

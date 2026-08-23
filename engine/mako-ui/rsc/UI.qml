@@ -389,6 +389,23 @@ ApplicationWindow {
                 }
 
                 Group {
+                    name: t.compatibilitySettings
+                    enabled: backend.available
+
+                    GroupEntry {
+                        title: t.dynamicCadence
+                        description: t.dynamicCadenceDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.dynamic_cadence_recovery
+                            onToggled: backend.dynamic_cadence_recovery = checked
+                        }
+                    }
+                }
+
+                Group {
                     name: t.deckyIntegration
 
                     Label {

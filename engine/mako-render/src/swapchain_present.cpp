@@ -244,7 +244,7 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
     }
     this->frameState.lastPresentStarted = presentNow;
 
-    if (presentDiagnosticsEnabled() && !this->profile.adaptive) {
+    if (presentDiagnosticsEnabled() && !this->adaptiveScheduler) {
         if (!this->diagnosticsState.fixedWindowStarted)
             this->diagnosticsState.fixedWindowStarted = presentNow;
         const double windowSeconds = std::chrono::duration<double>(
@@ -281,7 +281,7 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
             this->diagnosticsState.fixedSkippedFrames = 0;
         }
         this->diagnosticsState.fixedRealFrames++;
-    } else if (this->profile.adaptive) {
+    } else if (this->adaptiveScheduler) {
         this->diagnosticsState.fixedWindowStarted.reset();
         this->diagnosticsState.fixedRealFrames = 0;
         this->diagnosticsState.fixedGeneratedFrames = 0;
@@ -371,23 +371,8 @@ bool Swapchain::recoverBackendIfReady(const vk::Vulkan& vk) {
     this->recoveryState.backendPending = false;
     this->recoveryState.generatedImageAdmission.reset();
     this->recoveryState.pipelineBusyRecovery.reset();
-    if (this->profile.adaptive) {
-        this->adaptiveScheduler.emplace(
-            AdaptiveSchedulerConfig{
-                .targetFps = this->profile.target_fps,
-                .maximumMultiplier = this->profile.adaptive_max_multiplier,
-                .generatedFrameCapacity = this->destinationImages.size(),
-                .stableCadence = this->profile.adaptive_stable_cadence,
-                .recoveryPolicy = this->privateOrderedTransport
-                    ? AdaptiveRecoveryPolicy::OrderedSdr
-                    : AdaptiveRecoveryPolicy::ConservativeHdr,
-            },
-            &present_diagnostics::adaptiveScheduler()
-        );
-        this->adaptiveScheduler->beginStabilization(
-            DiagnosticsClock::now(), "backend-recovery"
-        );
-    } else {
+    if (!this->resetGenerationScheduler(
+            DiagnosticsClock::now(), "backend-recovery")) {
         this->recoveryState.historyWarmupRemaining =
             AdaptiveScheduler::historyWarmupFrameCount();
     }
@@ -414,11 +399,12 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         this->recoveryState.historyWarmupRemaining > 0 ||
         (this->adaptiveScheduler &&
             this->adaptiveScheduler->historyWarmupActive());
-    const auto adaptivePlan = this->profile.adaptive &&
+    const bool schedulerEnabled = this->adaptiveScheduler.has_value();
+    const auto adaptivePlan = schedulerEnabled &&
             !plan.historyWarmupActive
         ? this->adaptiveScheduler->planFrame(presentNow, false)
         : AdaptiveFramePlan{};
-    const size_t fixedGeneratedFrameCount = this->profile.adaptive
+    const size_t fixedGeneratedFrameCount = schedulerEnabled
         ? 0
         : (gamescopeHdrTransport
             ? this->fixedRefreshBudget.plan(
@@ -426,12 +412,12 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
                 this->configuredFixedGeneratedFrames
             )
             : this->configuredFixedGeneratedFrames);
-    if (!this->profile.adaptive &&
+    if (!schedulerEnabled &&
             fixedGeneratedFrameCount < this->configuredFixedGeneratedFrames) {
         this->diagnosticsState.fixedSkippedFrames +=
             this->configuredFixedGeneratedFrames - fixedGeneratedFrameCount;
     }
-    plan.requestedGeneratedFrames = this->profile.adaptive
+    plan.requestedGeneratedFrames = schedulerEnabled
         ? adaptivePlan
         : GeneratedFramePlan::evenlySpaced(fixedGeneratedFrameCount);
     plan.admittedGeneratedFrameCount = plan.requestedGeneratedFrames.size();
@@ -472,7 +458,7 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
     }
     if (gamescopeHdrTransport && !pipelineReady) {
         this->reportAdaptiveDelivery(plan, 0);
-        if (!this->profile.adaptive)
+        if (!this->adaptiveScheduler)
             this->diagnosticsState.fixedSkippedFrames +=
                 plan.requestedGeneratedFrames.size();
         const auto busy = this->recoveryState.pipelineBusyRecovery.reportBusy(presentNow);
@@ -616,7 +602,7 @@ void Swapchain::preacquireGeneratedImages(
     }
 
     this->recoveryState.generatedImageAdmission.reportBypassedFrame();
-    if (!this->profile.adaptive) {
+    if (!this->adaptiveScheduler) {
         this->diagnosticsState.fixedSkippedFrames +=
             plan.requestedGeneratedFrames.size() -
                 plan.admittedGeneratedFrameCount;
@@ -818,7 +804,7 @@ VkResult Swapchain::presentGeneratedFrames(
             // adaptive timing discontinuity.
             const size_t skippedFrames =
                 plan.scheduledGeneratedFrames.size() - i;
-            if (!this->profile.adaptive)
+            if (!this->adaptiveScheduler)
                 this->diagnosticsState.fixedSkippedFrames += skippedFrames;
             const uint64_t finalGeneratedTimelineValue =
                 this->frameState.sequenceIndex + skippedFrames - 1;
@@ -961,7 +947,7 @@ VkResult Swapchain::presentGeneratedFrames(
         );
         if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
             throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
-        if (!this->profile.adaptive)
+        if (!this->adaptiveScheduler)
             this->diagnosticsState.fixedGeneratedFrames++;
 
         this->frameState.sequenceIndex++;
@@ -1066,7 +1052,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     );
     const bool bypassGeneratedFrames = plan.historyWarmupActive ||
         plan.scheduledGeneratedFrames.empty();
-    if (plan.historyWarmupActive && !this->profile.adaptive)
+    if (plan.historyWarmupActive && !this->adaptiveScheduler)
         this->diagnosticsState.fixedSkippedFrames +=
             plan.requestedGeneratedFrames.size();
 

@@ -28,6 +28,7 @@ namespace {
             .target_fps = 90,
             .adaptive_max_multiplier = 3,
             .adaptive_stable_cadence = false,
+            .dynamic_cadence_recovery = false,
             .flow_scale = 1.0F,
             .performance_mode = false,
             .pacing = ls::Pacing::None,
@@ -37,13 +38,19 @@ namespace {
 
 int main() {
     const auto current = adaptiveProfile();
+    const auto adaptiveSchedulerPolicy = generationSchedulerPolicy(current, 60);
+    expect(adaptiveSchedulerPolicy &&
+            adaptiveSchedulerPolicy->targetFps == current.target_fps &&
+            adaptiveSchedulerPolicy->maximumMultiplier ==
+                current.adaptive_max_multiplier,
+        "Adaptive must retain its configured target when refresh is available");
 
     auto next = current;
     next.target_fps = 120;
     auto decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive,
         "Adaptive target changes must apply without rebuilding GPU resources");
-    expect(decision.adaptivePolicyChanged,
+    expect(decision.generationPolicyChanged,
         "Adaptive target changes must reset scheduler policy");
 
     next = current;
@@ -51,6 +58,53 @@ int main() {
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive,
         "Stable cadence must be a live policy update");
+
+    next = current;
+    next.dynamic_cadence_recovery = true;
+    decision = classifyProfileUpdate(current, next, 3, true);
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.generationPolicyChanged,
+        "Dynamic cadence recovery must be a live policy update");
+    expect(dynamicCadenceRecoveryEnabled(next),
+        "An uncapped Adaptive profile must allow dynamic cadence recovery");
+    next.base_fps_cap = 30;
+    expect(!dynamicCadenceRecoveryEnabled(next),
+        "A base FPS cap must suppress native-cadence probes");
+    next.base_fps_cap = 0;
+    next.adaptive_auto_base_fps_cap = true;
+    expect(!dynamicCadenceRecoveryEnabled(next),
+        "Adaptive auto-cap must suppress native-cadence probes");
+    next.adaptive_auto_base_fps_cap = false;
+    next.adaptive = false;
+    expect(dynamicCadenceRecoveryEnabled(next),
+        "Fixed mode must allow global cadence recovery");
+    const auto fixedRecoveryPolicy = generationSchedulerPolicy(next, 60);
+    expect(fixedRecoveryPolicy &&
+            fixedRecoveryPolicy->targetFps == 60 &&
+            fixedRecoveryPolicy->maximumMultiplier == 2 &&
+            !fixedRecoveryPolicy->stableCadence &&
+            fixedRecoveryPolicy->dynamicCadenceRecovery,
+        "Fixed recovery must follow refresh with its multiplier as a ceiling");
+    expect(!generationSchedulerPolicy(next, std::nullopt),
+        "Fixed recovery must not borrow Adaptive's hidden target");
+    expect(generationSchedulerPolicy(next, 90)->targetFps == 90,
+        "Fixed recovery must recalibrate when confirmed refresh changes");
+    expect(!generationSchedulerPolicy(next, 0),
+        "Fixed recovery must reject an unsupported refresh target");
+    next.multiplier = 5;
+    expect(!generationSchedulerPolicy(next, 60),
+        "Fixed recovery must fail closed beyond scheduler plan capacity");
+
+    auto fixedWithoutRecovery = current;
+    fixedWithoutRecovery.adaptive = false;
+    auto fixedWithRecovery = fixedWithoutRecovery;
+    fixedWithRecovery.dynamic_cadence_recovery = true;
+    decision = classifyProfileUpdate(
+        fixedWithoutRecovery, fixedWithRecovery, 3, true
+    );
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.generationPolicyChanged,
+        "Fixed recovery must be a live generation-policy change");
 
     next = current;
     next.adaptive_max_multiplier = 4;
@@ -78,6 +132,22 @@ int main() {
         "Adaptive auto-cap changes must reset presentation timing");
     expect(effectiveBaseFpsCap(next) == 45.0,
         "Adaptive auto-cap did not derive half of the 90 FPS target");
+
+    auto overlappingCaps = next;
+    overlappingCaps.base_fps_cap = 30;
+    expect(effectiveBaseFpsCap(overlappingCaps) == 45.0,
+        "Adaptive auto-cap must take priority over the saved manual cap");
+
+    auto resumedManualCap = overlappingCaps;
+    resumedManualCap.adaptive_auto_base_fps_cap = false;
+    expect(effectiveBaseFpsCap(resumedManualCap) == 30.0,
+        "Disabling Adaptive auto-cap must restore the saved manual cap");
+    decision = classifyProfileUpdate(
+        overlappingCaps, resumedManualCap, 3, true
+    );
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.baseFpsCapChanged,
+        "Restoring the manual cap must reset presentation timing live");
 
     auto oddTarget = next;
     oddTarget.target_fps = 165;

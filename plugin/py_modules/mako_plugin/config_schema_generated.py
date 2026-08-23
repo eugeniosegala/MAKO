@@ -19,6 +19,7 @@ ADAPTIVE_AUTO_BASE_FPS_CAP = "adaptive_auto_base_fps_cap"
 TARGET_FPS = "target_fps"
 ADAPTIVE_MAX_MULTIPLIER = "adaptive_max_multiplier"
 ADAPTIVE_STABLE_CADENCE = "adaptive_stable_cadence"
+DYNAMIC_CADENCE_RECOVERY = "dynamic_cadence_recovery"
 FLOW_SCALE = "flow_scale"
 PERFORMANCE_MODE = "performance_mode"
 PACING = "pacing"
@@ -44,6 +45,7 @@ class ConfigurationData(TypedDict):
     target_fps: int
     adaptive_max_multiplier: int
     adaptive_stable_cadence: bool
+    dynamic_cadence_recovery: bool
     flow_scale: float
     performance_mode: bool
     pacing: str
@@ -69,6 +71,7 @@ class ConfigurationPatch(TypedDict, total=False):
     target_fps: int
     adaptive_max_multiplier: int
     adaptive_stable_cadence: bool
+    dynamic_cadence_recovery: bool
     flow_scale: float
     performance_mode: bool
     pacing: str
@@ -160,4 +163,4 @@ def get_script_generation_logic():
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'external_vulkan_layer', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']
+ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'dynamic_cadence_recovery', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'external_vulkan_layer', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']
