@@ -169,6 +169,30 @@ class GameProfileTests(unittest.TestCase):
         self.assertFalse(fixed["adaptive_auto_base_fps_cap"])
         self.assertEqual(fixed["base_fps_cap"], 0)
 
+    def test_frame_generation_refresh_threshold_is_validated(self):
+        defaults = ConfigurationManager.get_defaults()
+        configured = ConfigurationManager.validate_config({
+            **defaults,
+            "frame_generation_refresh_threshold": 130,
+        })
+        self.assertEqual(configured["frame_generation_refresh_threshold"], 130)
+        content = ConfigurationManager.generate_toml_content(configured)
+        self.assertIn("frame_generation_refresh_threshold = 130", content)
+        self.assertEqual(
+            ConfigurationManager.parse_toml_content(content)[
+                "frame_generation_refresh_threshold"
+            ],
+            130,
+        )
+
+        with self.assertRaisesRegex(
+            ValueError, "frame_generation_refresh_threshold must be 0 or between"
+        ):
+            ConfigurationManager.validate_config({
+                **defaults,
+                "frame_generation_refresh_threshold": 29,
+            })
+
     def test_field_update_merges_with_latest_canonical_profile(self):
         existing = dict(ConfigurationManager.get_defaults())
         existing["performance_mode"] = True

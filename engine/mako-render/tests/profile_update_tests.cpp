@@ -38,6 +38,32 @@ namespace {
 
 int main() {
     const auto current = adaptiveProfile();
+    expect(effectiveFrameGenerationEnabled(current, std::nullopt) &&
+            effectiveFrameGenerationEnabled(current, 60),
+        "An unset refresh threshold must preserve configured frame generation");
+    auto refreshGuarded = current;
+    refreshGuarded.frame_generation_refresh_threshold = 60;
+    expect(effectiveFrameGenerationEnabled(refreshGuarded, std::nullopt),
+        "Missing Gamescope refresh feedback must fail open");
+    expect(!effectiveFrameGenerationEnabled(refreshGuarded, 40) &&
+            !effectiveFrameGenerationEnabled(refreshGuarded, 60) &&
+            effectiveFrameGenerationEnabled(refreshGuarded, 61),
+        "The display guard must pause at or below its configured threshold");
+    refreshGuarded.frame_generation_refresh_threshold = 130;
+    expect(!effectiveFrameGenerationEnabled(refreshGuarded, 120) &&
+            !effectiveFrameGenerationEnabled(refreshGuarded, 130) &&
+            effectiveFrameGenerationEnabled(refreshGuarded, 165),
+        "A custom threshold must support high-refresh display transitions");
+    auto manuallyDisabledRefreshGuard = refreshGuarded;
+    manuallyDisabledRefreshGuard.frame_generation_enabled = false;
+    expect(!effectiveFrameGenerationEnabled(
+            manuallyDisabledRefreshGuard, std::nullopt),
+        "Missing refresh feedback must not override the live off switch");
+    auto decision = classifyProfileUpdate(current, refreshGuarded, 3, true);
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.refreshRateThresholdChanged,
+        "Refresh threshold changes must apply live");
+
     const auto adaptiveSchedulerPolicy = generationSchedulerPolicy(current, 60);
     expect(adaptiveSchedulerPolicy &&
             adaptiveSchedulerPolicy->targetFps == current.target_fps &&
@@ -47,7 +73,7 @@ int main() {
 
     auto next = current;
     next.target_fps = 120;
-    auto decision = classifyProfileUpdate(current, next, 3, true);
+    decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive,
         "Adaptive target changes must apply without rebuilding GPU resources");
     expect(decision.generationPolicyChanged,

@@ -34,7 +34,7 @@ vi.mock("@decky/ui", () => ({
   }) => (
     <button
       disabled={disabled}
-      onClick={() => onChange(value === 0 ? 30 : value)}
+      onClick={() => onChange(value === 0 ? 30 : value + 1)}
     >
       {label}
     </button>
@@ -146,5 +146,40 @@ describe("External Tools controls", () => {
       base_fps_cap: 30,
       dynamic_cadence_recovery: false,
     });
+  });
+
+  test("enables and configures the per-profile refresh-rate guard", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const { rerender } = render(
+      <ConfigurationSection
+        config={getDefaults()}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      screen.getByText("Auto-disable Frame Generation by Refresh Rate"),
+    );
+    expect(onConfigChange).toHaveBeenCalledWith(
+      "frame_generation_refresh_threshold",
+      60,
+    );
+
+    rerender(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          frame_generation_refresh_threshold: 130,
+        }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+    fireEvent.click(screen.getByText("Refresh Rate Threshold (130 Hz)"));
+    expect(onConfigChange).toHaveBeenLastCalledWith(
+      "frame_generation_refresh_threshold",
+      131,
+    );
   });
 });

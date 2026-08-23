@@ -44,6 +44,8 @@ namespace {
             left.gpu == right.gpu &&
             left.multiplier == right.multiplier &&
             left.frame_generation_enabled == right.frame_generation_enabled &&
+            left.frame_generation_refresh_threshold ==
+                right.frame_generation_refresh_threshold &&
             left.base_fps_cap == right.base_fps_cap &&
             left.adaptive == right.adaptive &&
             left.adaptive_auto_base_fps_cap ==
@@ -67,6 +69,7 @@ name = "test"
 active_in = "game"
 removed_profile_option = true
 adaptive = false
+frame_generation_refresh_threshold = 60
 base_fps_cap = 60
 adaptive_auto_base_fps_cap = true
 target_fps = 144
@@ -80,6 +83,8 @@ int main() {
     expect(defaults.multiplier == ls::GameConfDefaults::multiplier &&
             defaults.frame_generation_enabled ==
                 ls::GameConfDefaults::frameGenerationEnabled &&
+            defaults.frame_generation_refresh_threshold ==
+                ls::GameConfDefaults::frameGenerationRefreshThreshold &&
             defaults.base_fps_cap == ls::GameConfDefaults::baseFpsCap &&
             defaults.adaptive == ls::GameConfDefaults::adaptive &&
             defaults.adaptive_auto_base_fps_cap ==
@@ -158,6 +163,8 @@ int main() {
         "The accepted configuration must expose its new policy");
     expect(config.get().profiles().front().dynamic_cadence_recovery,
         "The accepted configuration must expose dynamic cadence recovery");
+    expect(config.get().profiles().front().frame_generation_refresh_threshold == 60,
+        "The accepted configuration must expose the refresh-rate threshold");
     expect(config.get().profiles().front().base_fps_cap == 0 &&
             !config.get().profiles().front().adaptive_auto_base_fps_cap,
         "Dynamic cadence recovery must disable both base FPS caps");
@@ -226,12 +233,16 @@ multiplier = 5
     setenv("MAKO_BASE_FPS_CAP", "30", 1);
     setenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);
+    setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
     const ls::WatchedConfig environmentConfig;
     expect(environmentConfig.get().profiles().front().dynamic_cadence_recovery &&
+            environmentConfig.get().profiles().front().frame_generation_refresh_threshold ==
+                130 &&
             environmentConfig.get().profiles().front().base_fps_cap == 0 &&
             !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap,
         "Environment dynamic cadence recovery must disable both base FPS caps");
     unsetenv("MAKO_DYNAMIC_CADENCE_RECOVERY");
+    unsetenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
     unsetenv("MAKO_ADAPTIVE");
     unsetenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");
     unsetenv("MAKO_BASE_FPS_CAP");

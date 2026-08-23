@@ -50,6 +50,10 @@ FLOW_SCALE_MAX = 1.0
 FIXED_MULTIPLIER_MIN = 2
 FIXED_MULTIPLIER_UI_MIN = FIXED_MULTIPLIER_MIN
 FIXED_MULTIPLIER_UI_MAX = 4
+FRAME_GENERATION_REFRESH_THRESHOLD_MIN = 0
+FRAME_GENERATION_REFRESH_THRESHOLD_MAX = 240
+FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = 30
+FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = 60
 
 # Stable persisted values for the mutually exclusive optional Vulkan layer.
 EXTERNAL_VULKAN_LAYER_NONE = ""
@@ -104,6 +108,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
         "description": "live on/off switch; leave on for fixed or adaptive generation, off stops both modes",
+        "location": "toml"
+    },
+
+    "frame_generation_refresh_threshold": {
+        "fieldType": ConfigFieldType.INTEGER,
+        "default": 0,
+        "description": "pause frame generation at or below a confirmed Gamescope refresh rate; zero disables the guard",
         "location": "toml"
     },
 

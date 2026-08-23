@@ -14,6 +14,8 @@ from shared_config import (
     FIXED_MULTIPLIER_UI_MIN,
     FLOW_SCALE_MAX,
     FLOW_SCALE_MIN,
+    FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
+    FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
 )
@@ -100,6 +102,13 @@ class RendererConfigContractTests(unittest.TestCase):
                 CONFIG_SCHEMA_DEF["target_fps"]["default"],
                 renderer_constant("minimumTargetFps"),
                 renderer_constant("maximumTargetFps"),
+            ),
+            (
+                FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
+                FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
+                CONFIG_SCHEMA_DEF["frame_generation_refresh_threshold"]["default"],
+                renderer_constant("minimumFrameGenerationRefreshThreshold"),
+                renderer_constant("maximumFrameGenerationRefreshThreshold"),
             ),
             (
                 ADAPTIVE_MAX_MULTIPLIER_MIN,

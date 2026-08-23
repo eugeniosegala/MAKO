@@ -44,6 +44,10 @@ export const FLOW_SCALE_MAX = 1.0 as const;
 export const FIXED_MULTIPLIER_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MAX = 4 as const;
+export const FRAME_GENERATION_REFRESH_THRESHOLD_MIN = 0 as const;
+export const FRAME_GENERATION_REFRESH_THRESHOLD_MAX = 240 as const;
+export const FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = 30 as const;
+export const FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = 60 as const;
 
 // Stable persisted values for the optional external Vulkan layer
 export const EXTERNAL_VULKAN_LAYER_NONE = "" as const;
@@ -71,6 +75,7 @@ export enum ConfigFieldType {
 export const DLL = "dll" as const;
 export const ALLOW_FP16 = "allow_fp16" as const;
 export const FRAME_GENERATION_ENABLED = "frame_generation_enabled" as const;
+export const FRAME_GENERATION_REFRESH_THRESHOLD = "frame_generation_refresh_threshold" as const;
 export const BASE_FPS_CAP = "base_fps_cap" as const;
 export const MULTIPLIER = "multiplier" as const;
 export const ADAPTIVE = "adaptive" as const;
@@ -118,6 +123,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
     description: "live on/off switch; leave on for fixed or adaptive generation, off stops both modes"
+  },
+  frame_generation_refresh_threshold: {
+    name: "frame_generation_refresh_threshold",
+    fieldType: ConfigFieldType.INTEGER,
+    default: 0,
+    description: "pause frame generation at or below a confirmed Gamescope refresh rate; zero disables the guard"
   },
   base_fps_cap: {
     name: "base_fps_cap",
@@ -240,6 +251,7 @@ export interface ConfigurationData {
   dll: string;
   allow_fp16: boolean;
   frame_generation_enabled: boolean;
+  frame_generation_refresh_threshold: number;
   base_fps_cap: number;
   multiplier: number;
   adaptive: boolean;
@@ -274,6 +286,7 @@ export function getDefaults(): ConfigurationData {
     dll: "",
     allow_fp16: true,
     frame_generation_enabled: true,
+    frame_generation_refresh_threshold: 0,
     base_fps_cap: 0,
     multiplier: 2,
     adaptive: false,
@@ -301,6 +314,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     dll: ConfigFieldType.STRING,
     allow_fp16: ConfigFieldType.BOOLEAN,
     frame_generation_enabled: ConfigFieldType.BOOLEAN,
+    frame_generation_refresh_threshold: ConfigFieldType.INTEGER,
     base_fps_cap: ConfigFieldType.INTEGER,
     multiplier: ConfigFieldType.INTEGER,
     adaptive: ConfigFieldType.BOOLEAN,

@@ -262,7 +262,9 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
                       << " base_fps=" << realFps
                       << " multiplier=" << this->profile.multiplier
                       << " generated_per_real="
-                      << (this->profile.frame_generation_enabled
+                      << (effectiveFrameGenerationEnabled(
+                                this->profile, this->gamescopeRefreshHz
+                            )
                             ? this->configuredFixedGeneratedFrames : 0)
                       << " observed_output_fps=" << observedOutputFps
                       << " generated_presented="
@@ -1018,7 +1020,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     // Frame generation is live-disabled; hand the game's own image directly
     // to the driver without copies, model scheduling, fences or generated
     // images.
-    if (!this->profile.frame_generation_enabled ||
+    if (!effectiveFrameGenerationEnabled(
+            this->profile, this->gamescopeRefreshHz) ||
             !this->colorPipeline.generationSupported) {
         return this->presentNativeFrame(invocation);
     }

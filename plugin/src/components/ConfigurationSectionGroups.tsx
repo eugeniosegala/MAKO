@@ -27,6 +27,10 @@ import {
   FLOW_SCALE_MIN,
   FLOW_SCALE,
   FORCE_ALSA_AUDIO,
+  FRAME_GENERATION_REFRESH_THRESHOLD,
+  FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
+  FRAME_GENERATION_REFRESH_THRESHOLD_PRESET,
+  FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
   GPU,
   type ConfigurationData,
 } from "../config/configSchema";
@@ -161,11 +165,57 @@ export function AdvancedRenderingConfigurationGroup({
                 "CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC",
                 "Troubleshooting only. Stops MAKO Renderer loading after restart. Use Frame Generation above for live on/off.",
               )}
-              bottomSeparator="none"
               checked={config.disable_mako}
               onChange={(value) => onConfigChange(DISABLE_MAKO, value)}
             />
           </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t(
+                "CONFIG_FRAME_GENERATION_REFRESH_GUARD",
+                "Auto-disable Frame Generation by Refresh Rate",
+              )}
+              description={t(
+                "CONFIG_FRAME_GENERATION_REFRESH_GUARD_DESC",
+                "Pauses frame generation when Gamescope confirms the current display is at or below the threshold, then resumes your selected mode above it. Does nothing when refresh feedback is unavailable.",
+              )}
+              bottomSeparator={
+                config.frame_generation_refresh_threshold > 0
+                  ? undefined
+                  : "none"
+              }
+              checked={config.frame_generation_refresh_threshold > 0}
+              onChange={(value) =>
+                onConfigChange(
+                  FRAME_GENERATION_REFRESH_THRESHOLD,
+                  value ? FRAME_GENERATION_REFRESH_THRESHOLD_PRESET : 0,
+                )
+              }
+            />
+          </PanelSectionRow>
+
+          {config.frame_generation_refresh_threshold > 0 && (
+            <PanelSectionRow>
+              <SliderField
+                label={`${t(
+                  "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD",
+                  "Refresh Rate Threshold",
+                )} (${config.frame_generation_refresh_threshold} Hz)`}
+                description={t(
+                  "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC",
+                  "Choose the highest refresh rate where frame generation should remain paused. Changes apply live.",
+                )}
+                value={config.frame_generation_refresh_threshold}
+                min={FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN}
+                max={FRAME_GENERATION_REFRESH_THRESHOLD_MAX}
+                step={1}
+                onChange={(value) =>
+                  onConfigChange(FRAME_GENERATION_REFRESH_THRESHOLD, value)
+                }
+              />
+            </PanelSectionRow>
+          )}
         </>
       )}
     </>

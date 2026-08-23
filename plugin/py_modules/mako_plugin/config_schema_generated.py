@@ -12,6 +12,7 @@ from shared_config import CONFIG_SCHEMA_DEF, ConfigFieldType
 DLL = "dll"
 ALLOW_FP16 = "allow_fp16"
 FRAME_GENERATION_ENABLED = "frame_generation_enabled"
+FRAME_GENERATION_REFRESH_THRESHOLD = "frame_generation_refresh_threshold"
 BASE_FPS_CAP = "base_fps_cap"
 MULTIPLIER = "multiplier"
 ADAPTIVE = "adaptive"
@@ -38,6 +39,7 @@ class ConfigurationData(TypedDict):
     dll: str
     allow_fp16: bool
     frame_generation_enabled: bool
+    frame_generation_refresh_threshold: int
     base_fps_cap: int
     multiplier: int
     adaptive: bool
@@ -64,6 +66,7 @@ class ConfigurationPatch(TypedDict, total=False):
     dll: str
     allow_fp16: bool
     frame_generation_enabled: bool
+    frame_generation_refresh_threshold: int
     base_fps_cap: int
     multiplier: int
     adaptive: bool
@@ -163,4 +166,4 @@ def get_script_generation_logic():
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'dynamic_cadence_recovery', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'external_vulkan_layer', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']
+ALL_FIELDS = ['dll', 'allow_fp16', 'frame_generation_enabled', 'frame_generation_refresh_threshold', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'dynamic_cadence_recovery', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'external_vulkan_layer', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']

@@ -42,6 +42,7 @@ active_in = [ # see the wiki for more info
 # gpu = 'NVIDIA GeForce RTX 5080' # see the wiki for more info
 multiplier = 4
 frame_generation_enabled = true
+frame_generation_refresh_threshold = 0
 base_fps_cap = 0
 adaptive = false
 adaptive_auto_base_fps_cap = false
@@ -77,6 +78,8 @@ ConfigFile::ConfigFile() {
         },
         .multiplier = 4,
         .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
+        .frame_generation_refresh_threshold =
+            GameConfDefaults::frameGenerationRefreshThreshold,
         .base_fps_cap = GameConfDefaults::baseFpsCap,
         .adaptive = GameConfDefaults::adaptive,
         .adaptive_auto_base_fps_cap =
@@ -152,6 +155,18 @@ namespace {
                     GameConfLimits::maximumBaseFpsCap
                 )
             );
+        if (conf.frame_generation_refresh_threshold >
+                GameConfLimits::maximumFrameGenerationRefreshThreshold) {
+            throw ls::error(
+                "frame_generation_refresh_threshold must be " + std::to_string(
+                    GameConfLimits::minimumFrameGenerationRefreshThreshold
+                ) + " or between " + std::to_string(
+                    GameConfLimits::minimumFrameGenerationRefreshThreshold + 1
+                ) + " and " + std::to_string(
+                    GameConfLimits::maximumFrameGenerationRefreshThreshold
+                )
+            );
+        }
         if (conf.target_fps < GameConfLimits::minimumTargetFps ||
                 conf.target_fps > GameConfLimits::maximumTargetFps) {
             throw ls::error(
@@ -207,6 +222,10 @@ namespace {
             .frame_generation_enabled = tbl["frame_generation_enabled"].value_or(
                 GameConfDefaults::frameGenerationEnabled
             ),
+            .frame_generation_refresh_threshold =
+                tbl["frame_generation_refresh_threshold"].value_or(
+                    GameConfDefaults::frameGenerationRefreshThreshold
+                ),
             .base_fps_cap = tbl["base_fps_cap"].value_or(GameConfDefaults::baseFpsCap),
             .adaptive = tbl["adaptive"].value_or(GameConfDefaults::adaptive),
             .adaptive_auto_base_fps_cap =
@@ -265,6 +284,8 @@ namespace {
 
             .multiplier = GameConfDefaults::multiplier,
             .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
+            .frame_generation_refresh_threshold =
+                GameConfDefaults::frameGenerationRefreshThreshold,
             .base_fps_cap = GameConfDefaults::baseFpsCap,
             .adaptive = GameConfDefaults::adaptive,
             .adaptive_auto_base_fps_cap =
@@ -285,6 +306,13 @@ namespace {
         const char* frame_generation_enabled = std::getenv("MAKO_FRAME_GENERATION_ENABLED");
         if (frame_generation_enabled)
             conf.frame_generation_enabled = std::string(frame_generation_enabled) != "0";
+        const char* frame_generation_refresh_threshold =
+            std::getenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
+        if (frame_generation_refresh_threshold) {
+            conf.frame_generation_refresh_threshold = static_cast<uint32_t>(
+                std::stoul(frame_generation_refresh_threshold)
+            );
+        }
         const char* base_fps_cap = std::getenv("MAKO_BASE_FPS_CAP");
         if (base_fps_cap)
             conf.base_fps_cap = static_cast<uint32_t>(std::stoul(base_fps_cap));
@@ -380,6 +408,10 @@ void ConfigFile::write(const std::filesystem::path& path) const {
             profile.insert("gpu", conf.gpu.value_or(""));
         profile.insert("multiplier", static_cast<int64_t>(conf.multiplier));
         profile.insert("frame_generation_enabled", conf.frame_generation_enabled);
+        profile.insert(
+            "frame_generation_refresh_threshold",
+            static_cast<int64_t>(conf.frame_generation_refresh_threshold)
+        );
         profile.insert("base_fps_cap", static_cast<int64_t>(conf.base_fps_cap));
         profile.insert("adaptive", conf.adaptive);
         profile.insert(

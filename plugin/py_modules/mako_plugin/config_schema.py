@@ -19,6 +19,9 @@ from shared_config import (
     FIXED_MULTIPLIER_MIN,
     FLOW_SCALE_MAX,
     FLOW_SCALE_MIN,
+    FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
+    FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
+    FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
     PROFILE_KIND_DEFAULT,
     PROFILE_KIND_GAME,
     PROFILE_KIND_MANUAL,
@@ -149,6 +152,17 @@ class ConfigurationManager:
                 "base_fps_cap must be between "
                 f"{BASE_FPS_CAP_MIN} and {BASE_FPS_CAP_MAX}"
             )
+        refresh_threshold = validated["frame_generation_refresh_threshold"]
+        if refresh_threshold != FRAME_GENERATION_REFRESH_THRESHOLD_MIN and not (
+            FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN
+            <= refresh_threshold
+            <= FRAME_GENERATION_REFRESH_THRESHOLD_MAX
+        ):
+            raise ValueError(
+                "frame_generation_refresh_threshold must be 0 or between "
+                f"{FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN} and "
+                f"{FRAME_GENERATION_REFRESH_THRESHOLD_MAX}"
+            )
         if not TARGET_FPS_MIN <= validated["target_fps"] <= TARGET_FPS_MAX:
             raise ValueError(
                 f"target_fps must be between {TARGET_FPS_MIN} and {TARGET_FPS_MAX}"
@@ -231,6 +245,8 @@ class ConfigurationManager:
                 lines.append(f"gpu = {_toml_string(config['gpu'])}")
             lines.extend([
                 f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
+                "frame_generation_refresh_threshold = "
+                f"{config['frame_generation_refresh_threshold']}",
                 f"base_fps_cap = {config['base_fps_cap']}",
                 f"multiplier = {config['multiplier']}",
                 f"adaptive = {str(config['adaptive']).lower()}",

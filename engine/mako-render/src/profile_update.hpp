@@ -21,6 +21,7 @@ namespace mako::layer {
     struct ProfileUpdateDecision {
         ProfileUpdateAction action{ProfileUpdateAction::NoRuntimeChange};
         bool frameGenerationChanged{false};
+        bool refreshRateThresholdChanged{false};
         bool generationPolicyChanged{false};
         bool generationModeChanged{false};
         bool fixedMultiplierChanged{false};
@@ -45,6 +46,19 @@ namespace mako::layer {
             const ls::GameConf& profile) {
         return profile.dynamic_cadence_recovery &&
             effectiveBaseFpsCap(profile) <= 0.0;
+    }
+
+    /// Preserve the user's live Frame Generation switch while applying the
+    /// optional display guard. Missing Gamescope feedback fails open so an
+    /// unsupported compositor cannot silently disable synthesis.
+    [[nodiscard]] inline bool effectiveFrameGenerationEnabled(
+            const ls::GameConf& profile,
+            const std::optional<uint32_t> gamescopeRefreshHz) {
+        if (!profile.frame_generation_enabled)
+            return false;
+        return profile.frame_generation_refresh_threshold == 0 ||
+            !gamescopeRefreshHz ||
+            *gamescopeRefreshHz > profile.frame_generation_refresh_threshold;
     }
 
     struct GenerationSchedulerPolicy {
@@ -113,6 +127,9 @@ namespace mako::layer {
             const bool frameGenerationResourcesAvailable) {
         const bool frameGenerationChanged =
             current.frame_generation_enabled != next.frame_generation_enabled;
+        const bool refreshRateThresholdChanged =
+            current.frame_generation_refresh_threshold !=
+                next.frame_generation_refresh_threshold;
         const bool generationModeChanged = current.adaptive != next.adaptive;
         const bool fixedMultiplierChanged = current.multiplier != next.multiplier;
         const bool baseFpsCapChanged =
@@ -144,6 +161,7 @@ namespace mako::layer {
             return {
                 .action = ProfileUpdateAction::DeferUntilSwapchainRecreation,
                 .frameGenerationChanged = frameGenerationChanged,
+                .refreshRateThresholdChanged = refreshRateThresholdChanged,
                 .generationPolicyChanged = generationPolicyChanged,
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,
@@ -151,12 +169,14 @@ namespace mako::layer {
             };
         }
 
-        if (frameGenerationChanged || generationPolicyChanged ||
+        if (frameGenerationChanged || refreshRateThresholdChanged ||
+                generationPolicyChanged ||
                 generationModeChanged || fixedMultiplierChanged ||
                 baseFpsCapChanged) {
             return {
                 .action = ProfileUpdateAction::ApplyLive,
                 .frameGenerationChanged = frameGenerationChanged,
+                .refreshRateThresholdChanged = refreshRateThresholdChanged,
                 .generationPolicyChanged = generationPolicyChanged,
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,

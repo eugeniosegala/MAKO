@@ -7,6 +7,7 @@ Test one change at a time. Games, displays, VRR, and compositors differ; try the
 ## Frame generation
 
 - **Frame Generation (Live On/Off):** Turns synthesis on or off without losing the selected Fixed or Adaptive settings. Keep it on whenever you want either mode to generate frames.
+- **Auto-disable Frame Generation by Refresh Rate:** Optional per-profile guard at the bottom of **Advanced Rendering Settings**. Enable it to start with a 60 Hz threshold, then choose any value from 30–240 Hz. MAKO pauses generation when Gamescope confirms that the current display is at or below the threshold and resumes the selected Fixed or Adaptive mode above it, so dock and display changes do not overwrite the profile's normal settings. The guard does nothing when Gamescope refresh feedback is unavailable and never turns on a profile whose main **Frame Generation** switch is off.
 - **FPS Multiplier:** Fixed 2x, 3x, or 4x generation. Start at 2x for the best balance of image quality and latency. Dynamic Cadence Recovery changes this from an exact ratio into a ceiling against the confirmed Gamescope refresh.
 - **Adaptive Frame Generation:** Adjusts generation toward a target FPS. Adaptive cannot slow down a game that is already above the target or exceed the selected multiplier ceiling.
 - **Fractional Adaptive (Preset):** Mixes generation ratios over time, such as 60 real FPS to 90 displayed FPS. It keeps more real frames and may reduce input lag, but uneven frame spacing can feel choppy in some games. It is off by default. Turning it on enables Frame Generation and Adaptive and disables the Steady Base Cap; incompatible setting changes turn the preset off automatically.
@@ -16,7 +17,7 @@ Test one change at a time. Games, displays, VRR, and compositors differ; try the
 - **Smooth Cadence:** Prefers a sustainable constant interpolation cadence. It can improve displayed motion but may reduce responsiveness. It is on by default; disable it if the game feels better with stricter target scheduling.
 - **Base FPS Cap:** Caps real frames before generation. It applies live and is disabled while **Steady Base Cap** controls the cap.
 
-Adaptive target and ceiling changes plus mode-independent cadence-recovery changes normally apply while a game is running. Give the game a few seconds to settle before judging the result. Changes that need a different GPU backend or larger private resources can wait for a natural swapchain recreation; restarting the game applies them directly.
+Adaptive target and ceiling changes, refresh-threshold changes, and mode-independent cadence-recovery changes normally apply while a game is running. Give the game a few seconds to settle before judging the result. Changes that need a different GPU backend or larger private resources can wait for a natural swapchain recreation; restarting the game applies them directly.
 
 ## Game / Process Profiles
 
@@ -26,7 +27,7 @@ The saved Steam app ID selects launcher compatibility settings before the game s
 
 For launchers and emulators, start the title from its Steam or Game Mode shortcut and use the same running-game capture action. Profile creation is not available while no game is running: MAKO relies on process discovery instead of asking you to guess an executable name. After capture, edit **Matched Processes** only if a launcher or emulator needs an additional process alias. Linux binary names and Windows `.exe` names are supported.
 
-Frame-generation, quality, GPU, and matched-process settings belong to the selected profile. Launcher compatibility settings, including **Disable MAKO Renderer on Next Launch**, **Disable HDR**, experimental Gamescope WSI, Steam Deck Mode, Zink, ALSA, and the optional Vulkan-layer selection, are also stored per profile. The DLL path and FP16 permission remain global.
+Frame-generation settings, including the optional refresh-rate guard, plus quality, GPU, and matched-process settings belong to the selected profile. Launcher compatibility settings, including **Disable MAKO Renderer on Next Launch**, **Disable HDR**, experimental Gamescope WSI, Steam Deck Mode, Zink, ALSA, and the optional Vulkan-layer selection, are also stored per profile. The DLL path and FP16 permission remain global.
 
 The Decky dropdown is an editor selection, not a runtime override. Outside a game, choose any saved profile and it remains available for editing without affecting another game's launch. When a live game is detected, MAKO follows its matching profile, or Default if no match exists. On game exit, the runtime and editor return to Default once; after the controls unlock, an offline selection stays in place until another game starts or the plugin is reopened.
 

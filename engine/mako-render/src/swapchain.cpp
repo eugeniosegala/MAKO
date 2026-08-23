@@ -218,6 +218,9 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
     const auto initialGenerationPolicy = generationSchedulerPolicy(
         this->profile, this->gamescopeRefreshHz
     );
+    const bool initialFrameGenerationEnabled = effectiveFrameGenerationEnabled(
+        this->profile, this->gamescopeRefreshHz
+    );
     const bool initialDynamicCadenceRecoveryActive =
         this->privateOrderedTransport && initialGenerationPolicy &&
         initialGenerationPolicy->dynamicCadenceRecovery;
@@ -225,6 +228,12 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-state-applied"
                   << " context=" << this->diagnosticsState.contextId
                   << " state_revision=" << runtimeStateRevision
+                  << " frame_generation_enabled="
+                  << this->profile.frame_generation_enabled
+                  << " frame_generation_refresh_threshold="
+                  << this->profile.frame_generation_refresh_threshold
+                  << " effective_frame_generation_enabled="
+                  << initialFrameGenerationEnabled
                   << " adaptive=" << this->profile.adaptive
                   << " target_fps=" << this->profile.target_fps
                   << " multiplier=" << this->profile.multiplier
@@ -352,7 +361,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
             this->profile.multiplier, this->destinationImages.size()
         );
 
-        if (!this->profile.frame_generation_enabled)
+        if (!initialFrameGenerationEnabled)
             std::cerr << "MAKO Renderer: frame generation is off; retained private "
                          "resources permit a live enable\n";
 
@@ -710,10 +719,14 @@ ProfileUpdateAction Swapchain::updateProfile(
     }
 
     const bool hadGenerationScheduler = this->adaptiveScheduler.has_value();
-    const bool enabling = !this->profile.frame_generation_enabled &&
-        nextProfile.frame_generation_enabled;
-    const bool disabling = this->profile.frame_generation_enabled &&
-        !nextProfile.frame_generation_enabled;
+    const bool generationWasEnabled = effectiveFrameGenerationEnabled(
+        this->profile, this->gamescopeRefreshHz
+    );
+    const bool generationWillBeEnabled = effectiveFrameGenerationEnabled(
+        nextProfile, this->gamescopeRefreshHz
+    );
+    const bool enabling = !generationWasEnabled && generationWillBeEnabled;
+    const bool disabling = generationWasEnabled && !generationWillBeEnabled;
     this->profile = nextProfile;
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
@@ -774,6 +787,14 @@ ProfileUpdateAction Swapchain::updateProfile(
                   << " context=" << this->diagnosticsState.contextId
                   << " state_revision=" << runtimeStateRevision
                   << " transition=live"
+                  << " frame_generation_enabled="
+                  << this->profile.frame_generation_enabled
+                  << " frame_generation_refresh_threshold="
+                  << this->profile.frame_generation_refresh_threshold
+                  << " effective_frame_generation_enabled="
+                  << effectiveFrameGenerationEnabled(
+                        this->profile, this->gamescopeRefreshHz
+                     )
                   << " adaptive=" << this->profile.adaptive
                   << " target_fps=" << this->profile.target_fps
                   << " multiplier=" << this->profile.multiplier
@@ -830,9 +851,35 @@ void Swapchain::updateGamescopeRefreshRate(
         const std::optional<uint32_t> refreshHz) {
     if (refreshHz == this->gamescopeRefreshHz)
         return;
+    const bool generationWasEnabled = effectiveFrameGenerationEnabled(
+        this->profile, this->gamescopeRefreshHz
+    );
     this->gamescopeRefreshHz = refreshHz;
+    const bool generationIsEnabled = effectiveFrameGenerationEnabled(
+        this->profile, this->gamescopeRefreshHz
+    );
+    const bool generationAvailabilityChanged =
+        generationWasEnabled != generationIsEnabled;
     this->fixedRefreshBudget.reset();
-    if (!this->profile.adaptive &&
+    if (generationAvailabilityChanged) {
+        this->diagnosticsState.fixedWindowStarted.reset();
+        this->diagnosticsState.fixedRealFrames = 0;
+        this->diagnosticsState.fixedGeneratedFrames = 0;
+        this->diagnosticsState.fixedSkippedFrames = 0;
+        if (!generationIsEnabled) {
+            this->recoveryState.historyWarmupRemaining = 0;
+            if (this->adaptiveScheduler)
+                this->adaptiveScheduler->cancelHistoryWarmup();
+        } else {
+            this->recoveryState.generatedImageAdmission.reset();
+            this->recoveryState.pipelineBusyRecovery.reset();
+            if (!this->resetGenerationScheduler(
+                    DiagnosticsClock::now(), "refresh-rate-threshold")) {
+                this->recoveryState.historyWarmupRemaining =
+                    AdaptiveScheduler::historyWarmupFrameCount();
+            }
+        }
+    } else if (!this->profile.adaptive &&
             this->profile.dynamic_cadence_recovery) {
         if (!this->resetGenerationScheduler(
                 DiagnosticsClock::now(), "gamescope-refresh-change")) {
@@ -844,7 +891,11 @@ void Swapchain::updateGamescopeRefreshRate(
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=gamescope-refresh-rate-applied"
                   << " context=" << this->diagnosticsState.contextId
-                  << " refresh_hz=" << refreshHz.value_or(0) << '\n';
+                  << " refresh_hz=" << refreshHz.value_or(0)
+                  << " frame_generation_refresh_threshold="
+                  << this->profile.frame_generation_refresh_threshold
+                  << " effective_frame_generation_enabled="
+                  << generationIsEnabled << '\n';
     }
 }
 

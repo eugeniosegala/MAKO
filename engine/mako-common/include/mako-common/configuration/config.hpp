@@ -30,6 +30,7 @@ namespace ls {
     struct GameConfDefaults {
         static constexpr size_t multiplier = 2;
         static constexpr bool frameGenerationEnabled = true;
+        static constexpr uint32_t frameGenerationRefreshThreshold = 0;
         static constexpr uint32_t baseFpsCap = 0;
         static constexpr bool adaptive = false;
         static constexpr bool adaptiveAutoBaseFpsCap = false;
@@ -47,6 +48,8 @@ namespace ls {
         static constexpr size_t minimumMultiplier = 2;
         static constexpr uint32_t minimumBaseFpsCap = 0;
         static constexpr uint32_t maximumBaseFpsCap = 1000;
+        static constexpr uint32_t minimumFrameGenerationRefreshThreshold = 0;
+        static constexpr uint32_t maximumFrameGenerationRefreshThreshold = 1000;
         static constexpr uint32_t minimumTargetFps = 10;
         static constexpr uint32_t maximumTargetFps = 1000;
         static constexpr size_t minimumAdaptiveMaxMultiplier = 2;
@@ -67,6 +70,10 @@ namespace ls {
         size_t multiplier{GameConfDefaults::multiplier};
         /// allow frame synthesis to be toggled live without changing its mode
         bool frame_generation_enabled{GameConfDefaults::frameGenerationEnabled};
+        /// pause synthesis at or below a confirmed refresh rate; zero disables it
+        uint32_t frame_generation_refresh_threshold{
+            GameConfDefaults::frameGenerationRefreshThreshold
+        };
         /// maximum application-present rate before frame generation; zero disables it
         uint32_t base_fps_cap{GameConfDefaults::baseFpsCap};
         /// dynamically vary the generated-frame count toward a target framerate

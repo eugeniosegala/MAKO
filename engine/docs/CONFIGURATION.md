@@ -14,6 +14,7 @@ name = "My game"
 active_in = ["Game.exe"]
 multiplier = 2
 frame_generation_enabled = true
+frame_generation_refresh_threshold = 0
 ```
 
 ## Global settings
@@ -27,6 +28,7 @@ frame_generation_enabled = true
 - **`active_in`**: Executables or process names that select this profile.
 - **`multiplier`**: Supported fixed multipliers are 2x, 3x, and 4x; do not configure larger values. The direct Renderer default is `2`.
 - **`frame_generation_enabled`**: Live on/off switch. `false` presents real frames while keeping the layer loaded. Default: `true`.
+- **`frame_generation_refresh_threshold`**: Pauses frame generation when Gamescope confirms that the current display is at or below this refresh rate, then resumes the configured mode above it. `0` disables the guard. Missing refresh feedback fails open, and this setting never overrides `frame_generation_enabled = false`. Direct configuration accepts 0–1000 Hz; MAKO Decky's slider uses 30–240 Hz and starts at 60 Hz when enabled. Default: `0`.
 - **`base_fps_cap`**: Caps the game's real frame rate before generation. `0` disables the cap; direct configuration accepts 1–1000 FPS.
 - **`adaptive`**: Enables Adaptive Frame Generation. It varies generated frames toward `target_fps` and ignores the fixed `multiplier`. Default: `false`.
 - **`adaptive_auto_base_fps_cap`**: In Adaptive mode, caps the real frame rate to half of `target_fps` for an even 2x baseline. It can trade real-frame headroom and responsiveness for steadier output. Default: `false`.
@@ -51,7 +53,7 @@ When a setting is renamed or its value must be carried forward, add a one-time, 
 
 ## Applying changes
 
-Frame Generation, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, Smooth Cadence, and Dynamic Cadence Recovery can usually apply while the game is running. Fixed recovery also recalibrates live when Gamescope reports a refresh-rate change. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Performance Mode, HDR-related settings, or a setting that requires more private GPU resources.
+Frame Generation, its refresh-rate threshold, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, Smooth Cadence, and Dynamic Cadence Recovery can usually apply while the game is running. The threshold guard and Fixed recovery also react live when Gamescope reports a refresh-rate change. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Performance Mode, HDR-related settings, or a setting that requires more private GPU resources.
 
 Test V-Sync both on and off for each game. It can steady the real-frame cadence, but can also add latency or conflict with an FPS cap, VRR, or the compositor.
 
@@ -80,7 +82,7 @@ The UI and CLI do not need the launcher. Run `mako-ui` directly to edit the same
 For a configuration that comes entirely from environment variables, set `MAKO_ENV=1` and use any of the following:
 
 - `MAKO_DLL_PATH`, `MAKO_NO_FP16`, `MAKO_GPU`
-- `MAKO_MULTIPLIER`, `MAKO_FRAME_GENERATION_ENABLED`, `MAKO_BASE_FPS_CAP`
+- `MAKO_MULTIPLIER`, `MAKO_FRAME_GENERATION_ENABLED`, `MAKO_FRAME_GENERATION_REFRESH_THRESHOLD`, `MAKO_BASE_FPS_CAP`
 - `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`
 - `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`
 

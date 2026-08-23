@@ -31,6 +31,10 @@ from shared_config import (
     FIXED_MULTIPLIER_UI_MIN,
     FLOW_SCALE_MAX,
     FLOW_SCALE_MIN,
+    FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
+    FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
+    FRAME_GENERATION_REFRESH_THRESHOLD_PRESET,
+    FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
     MAKO_WRAPPER_RELATIVE_PATH,
     PER_GAME_WRAPPER_FLATPAK_APP_IDS,
     PROFILE_KIND_VALUES,
@@ -123,6 +127,14 @@ def generate_typescript_schema():
         f"{FIXED_MULTIPLIER_UI_MIN} as const;",
         "export const FIXED_MULTIPLIER_UI_MAX = "
         f"{FIXED_MULTIPLIER_UI_MAX} as const;",
+        "export const FRAME_GENERATION_REFRESH_THRESHOLD_MIN = "
+        f"{FRAME_GENERATION_REFRESH_THRESHOLD_MIN} as const;",
+        "export const FRAME_GENERATION_REFRESH_THRESHOLD_MAX = "
+        f"{FRAME_GENERATION_REFRESH_THRESHOLD_MAX} as const;",
+        "export const FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = "
+        f"{FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN} as const;",
+        "export const FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = "
+        f"{FRAME_GENERATION_REFRESH_THRESHOLD_PRESET} as const;",
         "",
         "// Stable persisted values for the optional external Vulkan layer",
         "export const EXTERNAL_VULKAN_LAYER_NONE = "
