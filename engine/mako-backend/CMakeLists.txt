@@ -28,6 +28,15 @@ target_link_libraries(mako-backend
 set_target_properties(mako-backend PROPERTIES
     CXX_VISIBILITY_PRESET hidden)
 
+if(BUILD_TESTING)
+    add_executable(mako-backend-hot-path-tests
+        "tests/hot_path_tests.cpp")
+    target_include_directories(mako-backend-hot-path-tests
+        PRIVATE src)
+    add_test(NAME backend-hot-path
+        COMMAND mako-backend-hot-path-tests)
+endif()
+
 if(MAKO_INSTALL_DEVELOP)
     install(TARGETS mako-backend
         ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}")

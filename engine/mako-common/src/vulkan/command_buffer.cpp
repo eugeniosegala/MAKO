@@ -9,11 +9,11 @@
 #include "mako-common/vulkan/image.hpp"
 #include "mako-common/vulkan/shader.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
+#include "command_buffer_submit_storage.hpp"
 
 #include <cstdint>
 #include <optional>
 #include <utility>
-#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -66,7 +66,7 @@ void CommandBuffer::begin(const vk::Vulkan& vk) const {
 }
 
 void CommandBuffer::insertBarriers(const vk::Vulkan& vk,
-        const std::vector<vk::Barrier>& barriers) const {
+        const std::span<const vk::Barrier> barriers) const {
     vk.df().CmdPipelineBarrier(*this->commandBuffer,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
         0,
@@ -79,7 +79,7 @@ void CommandBuffer::insertBarriers(const vk::Vulkan& vk,
 void CommandBuffer::dispatch(const vk::Vulkan& vk,
         const vk::Shader& shader,
         const vk::DescriptorSet& set,
-        const std::vector<vk::Barrier>& barriers,
+        const std::span<const vk::Barrier> barriers,
         uint32_t x, uint32_t y, uint32_t z) const {
     vk.df().CmdPipelineBarrier(*this->commandBuffer,
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
@@ -103,9 +103,9 @@ void CommandBuffer::dispatch(const vk::Vulkan& vk,
 }
 
 void CommandBuffer::blitImage(const vk::Vulkan& vk,
-        const std::vector<vk::Barrier>& preBarriers,
+        const std::span<const vk::Barrier> preBarriers,
         std::pair<VkImage, VkImage> images, VkExtent2D extent,
-        const std::vector<vk::Barrier>& postBarriers) const {
+        const std::span<const vk::Barrier> postBarriers) const {
     vk.df().CmdPipelineBarrier(*this->commandBuffer,
         VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT,
         0,
@@ -243,46 +243,47 @@ void CommandBuffer::end(const vk::Vulkan& vk) const {
 }
 
 void CommandBuffer::submit(const vk::Vulkan& vk,
-        std::vector<VkSemaphore> waitSemaphores,
+        const std::span<const VkSemaphore> waitSemaphores,
         VkSemaphore waitTimelineSemaphore, uint64_t waitValue,
-        std::vector<VkSemaphore> signalSemaphores,
+        const std::span<const VkSemaphore> signalSemaphores,
         VkSemaphore signalTimelineSemaphore, uint64_t signalValue,
         VkFence fence) const {
-    // create arrays of semaphores and values
-    if (waitTimelineSemaphore)
-        waitSemaphores.push_back(waitTimelineSemaphore);
-
-    std::vector<uint64_t> waitValues(waitSemaphores.size(), 0);
-    if (waitTimelineSemaphore)
-        waitValues.back() = waitValue;
-
-    if (signalTimelineSemaphore)
-        signalSemaphores.push_back(signalTimelineSemaphore);
-
-    std::vector<uint64_t> signalValues(signalSemaphores.size(), 0);
-    if (signalTimelineSemaphore)
-        signalValues.back() = signalValue;
+    const vk::detail::CommandBufferSubmitStorage storage{
+        waitSemaphores, waitTimelineSemaphore, waitValue,
+        signalSemaphores, signalTimelineSemaphore, signalValue
+    };
+    const auto combinedWaitSemaphores = storage.waits();
+    const auto combinedSignalSemaphores = storage.signals();
+    const auto waitValues = storage.waitValues();
+    const auto signalValues = storage.signalValues();
+    const auto stages = storage.stages();
 
     // create submit info
     const VkTimelineSemaphoreSubmitInfo timelineInfo{
         .sType = VK_STRUCTURE_TYPE_TIMELINE_SEMAPHORE_SUBMIT_INFO,
-        .waitSemaphoreValueCount = static_cast<uint32_t>(waitValues.size()),
+        .waitSemaphoreValueCount = static_cast<uint32_t>(
+            waitValues.size()
+        ),
         .pWaitSemaphoreValues = waitValues.data(),
-        .signalSemaphoreValueCount = static_cast<uint32_t>(signalValues.size()),
+        .signalSemaphoreValueCount = static_cast<uint32_t>(
+            signalValues.size()
+        ),
         .pSignalSemaphoreValues = signalValues.data()
     };
-    std::vector<VkPipelineStageFlags> stages(waitSemaphores.size(),
-        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT);
     const VkSubmitInfo submitInfo{
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .pNext = &timelineInfo,
-        .waitSemaphoreCount = static_cast<uint32_t>(waitSemaphores.size()),
-        .pWaitSemaphores = waitSemaphores.data(),
+        .waitSemaphoreCount = static_cast<uint32_t>(
+            combinedWaitSemaphores.size()
+        ),
+        .pWaitSemaphores = combinedWaitSemaphores.data(),
         .pWaitDstStageMask = stages.data(),
         .commandBufferCount = 1,
         .pCommandBuffers = &*this->commandBuffer,
-        .signalSemaphoreCount = static_cast<uint32_t>(signalSemaphores.size()),
-        .pSignalSemaphores = signalSemaphores.data()
+        .signalSemaphoreCount = static_cast<uint32_t>(
+            combinedSignalSemaphores.size()
+        ),
+        .pSignalSemaphores = combinedSignalSemaphores.data()
     };
     auto res = vk.df().QueueSubmit(vk.queue(), 1, &submitInfo, fence);
     if (res != VK_SUCCESS)

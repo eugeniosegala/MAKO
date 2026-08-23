@@ -10,8 +10,8 @@
 #include "vulkan.hpp"
 
 #include <cstdint>
+#include <span>
 #include <utility>
-#include <vector>
 
 #include <vulkan/vulkan_core.h>
 
@@ -40,16 +40,16 @@ namespace vk {
         /// @param postBarriers image memory barriers to apply after blit
         /// throws ls::vulkan_error on failure
         void blitImage(const vk::Vulkan& vk,
-            const std::vector<vk::Barrier>& preBarriers,
+            std::span<const vk::Barrier> preBarriers,
             std::pair<VkImage, VkImage> images, VkExtent2D extent,
-            const std::vector<vk::Barrier>& postBarriers) const;
+            std::span<const vk::Barrier> postBarriers) const;
 
         /// insert a bunch of barriers
         /// @param vk the vulkan instance
         /// @param barriers image memory barriers to apply
         /// throws ls::vulkan_error on failure
         void insertBarriers(const vk::Vulkan& vk,
-            const std::vector<vk::Barrier>& barriers) const;
+            std::span<const vk::Barrier> barriers) const;
 
         /// dispatch a compute shader
         /// @param vk the vulkan instance
@@ -60,7 +60,7 @@ namespace vk {
         /// @param y dispatch size in Y
         /// @param z dispatch size in Z
         void dispatch(const vk::Vulkan& vk, const vk::Shader& shader, const vk::DescriptorSet& set,
-            const std::vector<vk::Barrier>& barriers,
+            std::span<const vk::Barrier> barriers,
             uint32_t x, uint32_t y, uint32_t z) const;
 
         /// copy buffer to image
@@ -93,9 +93,9 @@ namespace vk {
         /// @param fence optional fence to signal on completion
         /// @throws ls::vulkan_error on failure
         void submit(const vk::Vulkan& vk,
-            std::vector<VkSemaphore> waitSemaphores,
+            std::span<const VkSemaphore> waitSemaphores,
             VkSemaphore waitTimelineSemaphore, uint64_t waitValue,
-            std::vector<VkSemaphore> signalSemaphores,
+            std::span<const VkSemaphore> signalSemaphores,
             VkSemaphore signalTimelineSemaphore, uint64_t signalValue,
             VkFence fence = VK_NULL_HANDLE) const;
 

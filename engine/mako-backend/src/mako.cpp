@@ -4,6 +4,7 @@
 #include "extraction/dll_reader.hpp"
 #include "extraction/shader_registry.hpp"
 #include "helpers/limits.hpp"
+#include "helpers/timestamp_upload_cache.hpp"
 #include "helpers/utils.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/pointers.hpp"
@@ -133,6 +134,7 @@ namespace mako::backend {
 
         std::vector<vk::CommandBuffer> cmdbufs;
         vk::Fence cmdbufFence;
+        std::vector<float> constantBufferTimestamps;
 
         void prepareWork();
         void schedulePrepass(VkFence completionFence);
@@ -721,6 +723,16 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
     cmdbuf.insertBarriers(ctx.vk, barriers);
     cmdbuf.end(ctx.vk);
     cmdbuf.submit(ctx.vk); // wait for completion
+
+    this->constantBufferTimestamps.reserve(this->ctx.constantBuffers.size());
+    for (size_t i = 0; i < this->ctx.constantBuffers.size(); ++i) {
+        this->constantBufferTimestamps.push_back(
+            backend::getDefaultConstantBuffer(
+                i, this->ctx.constantBuffers.size(),
+                this->ctx.hdr, this->ctx.flow
+            ).timestamp
+        );
+    }
 }
 
 void Instance::scheduleFrames(Context& context) { // NOLINT (static)
@@ -842,15 +854,22 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
     this->prepareWork();
 
     // Every generated pass has its own uniform buffer and descriptor sets.
-    // Previous GPU work is complete at this point, so the timestamp can be
-    // safely replaced before recording the next set of dispatches.
+    // Previous GPU work is complete at this point, so a changed timestamp can
+    // be safely uploaded before recording the next set of dispatches.
     if (explicitTimestamps) {
         for (size_t i = 0; i < timestamps.size(); ++i) {
-            auto constants = backend::getDefaultConstantBuffer(
-                0, 1, this->ctx.hdr, this->ctx.flow
+            backend::uploadChangedTimestamp(
+                this->constantBufferTimestamps, i, timestamps[i],
+                [this, i](const float timestamp) {
+                    auto constants = backend::getDefaultConstantBuffer(
+                        0, 1, this->ctx.hdr, this->ctx.flow
+                    );
+                    constants.timestamp = timestamp;
+                    this->ctx.constantBuffers.at(i).write(
+                        this->ctx.vk, constants
+                    );
+                }
             );
-            constants.timestamp = timestamps[i];
-            this->ctx.constantBuffers.at(i).write(this->ctx.vk, constants);
         }
     }
 

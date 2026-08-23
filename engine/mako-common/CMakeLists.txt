@@ -39,6 +39,13 @@ if(BUILD_TESTING)
     add_test(NAME optional-device-features
         COMMAND mako-device-feature-tests)
 
+    add_executable(mako-command-buffer-submit-storage-tests
+        "tests/command_buffer_submit_storage_tests.cpp")
+    target_include_directories(mako-command-buffer-submit-storage-tests
+        PRIVATE src)
+    add_test(NAME command-buffer-submit-storage
+        COMMAND mako-command-buffer-submit-storage-tests)
+
     add_executable(mako-image-quality-tests
         "tests/image_quality_tests.cpp")
     target_link_libraries(mako-image-quality-tests

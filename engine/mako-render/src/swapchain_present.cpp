@@ -10,6 +10,7 @@
 #include "present_diagnostics.hpp"
 #include "pnext_chain.hpp"
 
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -110,48 +111,50 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             acquiredImageIndices[i]
         );
 
-        std::vector<vk::Barrier> preBarriers;
+        std::array<vk::Barrier, 2> preBarriers{};
+        size_t preBarrierCount = 0;
         if (first) {
-            preBarriers.push_back(barrierHelper(
+            preBarriers.at(preBarrierCount++) = barrierHelper(
                 originalImage,
                 VK_ACCESS_NONE,
                 VK_ACCESS_TRANSFER_READ_BIT,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-            ));
+            );
         }
-        preBarriers.push_back(barrierHelper(
+        preBarriers.at(preBarrierCount++) = barrierHelper(
             acquiredImage,
             VK_ACCESS_NONE,
             VK_ACCESS_TRANSFER_WRITE_BIT,
             VK_IMAGE_LAYOUT_UNDEFINED,
             VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-        ));
+        );
 
-        std::vector<vk::Barrier> postBarriers{
-            barrierHelper(
+        std::array<vk::Barrier, 2> postBarriers{};
+        size_t postBarrierCount = 0;
+        postBarriers.at(postBarrierCount++) = barrierHelper(
                 acquiredImage,
                 VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_ACCESS_MEMORY_READ_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-            )
-        };
+        );
         if (last) {
-            postBarriers.push_back(barrierHelper(
+            postBarriers.at(postBarrierCount++) = barrierHelper(
                 originalImage,
                 VK_ACCESS_TRANSFER_READ_BIT,
                 VK_ACCESS_MEMORY_READ_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-            ));
+            );
         }
 
         auto& commandBuffer = pass.commandBuffer;
         commandBuffer.begin(vk);
         commandBuffer.blitImage(
-            vk, preBarriers, {originalImage, acquiredImage},
-            this->info.extent, postBarriers
+            vk, std::span{preBarriers}.first(preBarrierCount),
+            {originalImage, acquiredImage}, this->info.extent,
+            std::span{postBarriers}.first(postBarrierCount)
         );
         commandBuffer.end(vk);
 
@@ -172,8 +175,8 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             );
         }
         commandBuffer.submit(
-            vk, std::move(waits), VK_NULL_HANDLE, 0,
-            {pcs.first.handle(), pcs.second.handle()},
+            vk, waits, VK_NULL_HANDLE, 0,
+            std::array{pcs.first.handle(), pcs.second.handle()},
             VK_NULL_HANDLE, 0,
             last ? this->renderFence->handle() : VK_NULL_HANDLE
         );
@@ -623,41 +626,40 @@ void Swapchain::preacquireGeneratedImages(
 void Swapchain::submitSourceCopy(const PresentInvocation& invocation,
         const VkImage swapchainImage, const vk::Image& sourceImage) {
     const auto& commandBuffer = *this->renderCommandBuffer;
+    const std::array preBarriers{
+        barrierHelper(swapchainImage,
+            VK_ACCESS_NONE,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+        ),
+        barrierHelper(sourceImage.handle(),
+            VK_ACCESS_NONE,
+            VK_ACCESS_TRANSFER_WRITE_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        ),
+    };
+    const std::array postBarriers{
+        barrierHelper(swapchainImage,
+            VK_ACCESS_TRANSFER_READ_BIT,
+            VK_ACCESS_MEMORY_READ_BIT,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+        ),
+    };
     commandBuffer.begin(invocation.vk);
     commandBuffer.blitImage(invocation.vk,
-        {
-            barrierHelper(swapchainImage,
-                VK_ACCESS_NONE,
-                VK_ACCESS_TRANSFER_READ_BIT,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-            ),
-            barrierHelper(sourceImage.handle(),
-                VK_ACCESS_NONE,
-                VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-            ),
-        },
+        preBarriers,
         {swapchainImage, sourceImage.handle()},
         sourceImage.getExtent(),
-        {
-            barrierHelper(swapchainImage,
-                VK_ACCESS_TRANSFER_READ_BIT,
-                VK_ACCESS_MEMORY_READ_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-            ),
-        }
+        postBarriers
     );
     commandBuffer.end(invocation.vk);
 
     const auto sourceSubmitStarted = startPresentDiagnostic();
-    std::vector<VkSemaphore> sourceWaitSemaphores(
-        invocation.waitSemaphores.begin(), invocation.waitSemaphores.end()
-    );
     commandBuffer.submit(invocation.vk,
-        std::move(sourceWaitSemaphores), VK_NULL_HANDLE, 0,
+        invocation.waitSemaphores, VK_NULL_HANDLE, 0,
         {}, this->syncSemaphore->handle(), this->frameState.sequenceIndex++
     );
     logSlowPresentOperation(
@@ -681,7 +683,7 @@ VkResult Swapchain::presentHistoryOnly(
     fallbackCommandBuffer.end(invocation.vk);
     fallbackCommandBuffer.submit(invocation.vk,
         {}, this->syncSemaphore->handle(), sourceTimelineValue,
-        {fallbackSemaphore.handle()}, VK_NULL_HANDLE, 0,
+        std::array{fallbackSemaphore.handle()}, VK_NULL_HANDLE, 0,
         this->renderFence->handle()
     );
     this->frameState.renderFenceInFlight = true;
@@ -821,7 +823,7 @@ VkResult Swapchain::presentGeneratedFrames(
             fallbackCommandBuffer.submit(invocation.vk,
                 {}, this->syncSemaphore->handle(),
                 finalGeneratedTimelineValue,
-                {fallbackSemaphore.handle()}, VK_NULL_HANDLE, 0,
+                std::array{fallbackSemaphore.handle()}, VK_NULL_HANDLE, 0,
                 this->renderFence->handle()
             );
             this->frameState.renderFenceInFlight = true;
@@ -870,53 +872,57 @@ VkResult Swapchain::presentGeneratedFrames(
             acquiredImageIndex
         );
         auto& commandBuffer = pass.commandBuffer;
+        const std::array preBarriers{
+            barrierHelper(destinationImage.handle(),
+                VK_ACCESS_NONE,
+                VK_ACCESS_TRANSFER_READ_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+            ),
+            barrierHelper(acquiredSwapchainImage,
+                VK_ACCESS_NONE,
+                VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_IMAGE_LAYOUT_UNDEFINED,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+            ),
+        };
+        const std::array postBarriers{
+            barrierHelper(acquiredSwapchainImage,
+                VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_ACCESS_MEMORY_READ_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+            ),
+        };
         commandBuffer.begin(invocation.vk);
         commandBuffer.blitImage(invocation.vk,
-            {
-                barrierHelper(destinationImage.handle(),
-                    VK_ACCESS_NONE,
-                    VK_ACCESS_TRANSFER_READ_BIT,
-                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-                ),
-                barrierHelper(acquiredSwapchainImage,
-                    VK_ACCESS_NONE,
-                    VK_ACCESS_TRANSFER_WRITE_BIT,
-                    VK_IMAGE_LAYOUT_UNDEFINED,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-                ),
-            },
+            preBarriers,
             {destinationImage.handle(), acquiredSwapchainImage},
             destinationImage.getExtent(),
-            {
-                barrierHelper(acquiredSwapchainImage,
-                    VK_ACCESS_TRANSFER_WRITE_BIT,
-                    VK_ACCESS_MEMORY_READ_BIT,
-                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-                ),
-            }
+            postBarriers
         );
 
-        std::vector<VkSemaphore> waitSemaphores{
-            pass.acquireSemaphore.handle()
+        std::array<VkSemaphore, 2> waitSemaphores{
+            pass.acquireSemaphore.handle(), VK_NULL_HANDLE
         };
+        size_t waitSemaphoreCount = 1;
         if (i) {
             const auto& previousPostCopy = this->postCopySemaphores.at(
                 (this->frameState.sequenceIndex - 1) % this->postCopySemaphores.size()
             );
-            waitSemaphores.push_back(previousPostCopy.second.handle());
+            waitSemaphores.at(waitSemaphoreCount++) =
+                previousPostCopy.second.handle();
         }
-        std::vector<VkSemaphore> signalSemaphores{
+        const std::array signalSemaphores{
             postCopy.first.handle(), postCopy.second.handle()
         };
 
         commandBuffer.end(invocation.vk);
         const auto generatedSubmitStarted = startPresentDiagnostic();
         commandBuffer.submit(invocation.vk,
-            std::move(waitSemaphores),
+            std::span{waitSemaphores}.first(waitSemaphoreCount),
             this->syncSemaphore->handle(), this->frameState.sequenceIndex,
-            std::move(signalSemaphores), VK_NULL_HANDLE, 0,
+            signalSemaphores, VK_NULL_HANDLE, 0,
             i == plan.scheduledGeneratedFrames.size() - 1
                 ? this->renderFence->handle() : VK_NULL_HANDLE
         );
