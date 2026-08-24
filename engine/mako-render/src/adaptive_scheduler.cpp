@@ -71,6 +71,10 @@ namespace {
     constexpr auto adaptiveStableCadenceStrictSettlingDuration = std::chrono::seconds(2);
     constexpr auto adaptiveStableCadenceCandidateDuration = std::chrono::seconds(2);
     constexpr double adaptiveStableCadenceMaximumCandidateSpreadRatio = 1.15;
+    constexpr auto adaptiveEfficiencyProbeHoldDuration = std::chrono::seconds(5);
+    constexpr auto adaptiveEfficiencyProbeEvaluationDuration = std::chrono::milliseconds(250);
+    constexpr auto adaptiveEfficiencyProbeRetryDelay = std::chrono::seconds(60);
+    constexpr double adaptiveEfficiencyProbeMinimumTargetRatio = 0.98;
     constexpr double adaptiveRescueBaseCollapseRatio = 0.78;
     constexpr double adaptiveRescueOutputCollapseRatio = 0.80;
     constexpr double adaptiveRescueRecoveredBaseRatio = 0.90;
@@ -186,6 +190,9 @@ void AdaptiveScheduler::reportGeneratedFrameDelivery(
     if (this->state.stableCadence.evaluationAt) {
         this->state.stableCadence.delivery.record(delivery);
     }
+    if (this->state.efficiencyProbe.evaluationAt) {
+        this->state.efficiencyProbe.delivery.record(delivery);
+    }
 }
 
 AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
@@ -258,6 +265,13 @@ AdaptiveScheduler::observeCadence(
         // Pressure belongs to the compositor admission path, not the game's
         // cadence. Keep the real-frame clock current so clearing pressure does
         // not manufacture a cadence stall from the bypass interval.
+        if (this->state.cadence.lastRealFrame) {
+            const auto bypassDuration = now - *this->state.cadence.lastRealFrame;
+            if (this->state.efficiencyProbe.eligibleSince)
+                *this->state.efficiencyProbe.eligibleSince += bypassDuration;
+            if (this->state.efficiencyProbe.evaluationAt)
+                *this->state.efficiencyProbe.evaluationAt += bypassDuration;
+        }
         this->state.cadence.lastRealFrame = now;
         this->state.outputPlanner.resetTargetClock();
         return {
@@ -337,6 +351,8 @@ AdaptiveScheduler::observeCadence(
         pauseEvaluation(this->state.stabilization.until);
         pauseEvaluation(this->state.ramp.evaluationAt);
         pauseEvaluation(this->state.stableCadence.evaluationAt);
+        pauseEvaluation(this->state.efficiencyProbe.eligibleSince);
+        pauseEvaluation(this->state.efficiencyProbe.evaluationAt);
         pauseEvaluation(this->state.rescue.until);
 
         this->state.outputPlanner.resetTargetClock();
@@ -724,6 +740,13 @@ AdaptiveScheduler::advanceStableCadence(
         const TimePoint now, const double baseFps,
         const double desiredOutputsPerRealFrame,
         const size_t maximumGeneratedFrameCount) {
+    // A downward efficiency probe deliberately runs one cheaper constant
+    // cadence while retaining the previously qualified policy for immediate
+    // rollback. Do not let normal retention interpret that temporary workload
+    // change as a reason to disable or requalify Smooth Cadence.
+    if (this->state.efficiencyProbe.evaluationAt)
+        return {.planningReady = true};
+
     const auto stableCadenceCandidate = [&]() -> std::optional<size_t> {
         if (!this->config.stableCadence)
             return std::nullopt;
@@ -947,12 +970,134 @@ AdaptiveScheduler::advanceStableCadence(
     return {.planningReady = true};
 }
 
+MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
+        const TimePoint now, const double baseFps) {
+    auto& probe = this->state.efficiencyProbe;
+    const double targetFps = static_cast<double>(this->config.targetFps);
+
+    if (probe.evaluationAt) {
+        if (now < *probe.evaluationAt)
+            return;
+
+        const size_t testedLimit = probe.testedLimit;
+        const double projectedOutputFps = baseFps *
+            static_cast<double>(testedLimit + 1);
+        const bool deliveryHealthy = probe.delivery.healthy();
+        const bool accepted = deliveryHealthy &&
+            baseFps >= adaptiveMinimumBaseFps &&
+            projectedOutputFps >=
+                targetFps * adaptiveEfficiencyProbeMinimumTargetRatio;
+        this->diagnostics->stableCadence(
+            accepted
+                ? "adaptive-efficiency-probe-accepted"
+                : "adaptive-efficiency-probe-rejected",
+            testedLimit,
+            probe.baselineBaseFps,
+            baseFps,
+            accepted
+                ? "target-preserved"
+                : deliveryHealthy ? "target-deficit" : "delivery-pressure"
+        );
+
+        probe.evaluationAt.reset();
+        probe.eligibleSince.reset();
+        probe.delivery.reset();
+        if (accepted) {
+            // The cheaper constant cadence preserved the requested output, so
+            // make it the qualified policy rather than immediately ramping
+            // back into the more expensive local optimum.
+            this->state.stableCadence.limit = testedLimit;
+            this->state.stableCadence.baselineBaseFps = baseFps;
+            this->state.stableCadence.evaluationAt.reset();
+            this->state.stableCadence.delivery.reset();
+            this->state.stableCadence.outsideRangeSince.reset();
+            this->state.stableCadence.retryAt.reset();
+            this->state.stableCadence.candidate.reset();
+            this->state.outputPlanner.generationLimit = testedLimit;
+            this->state.ramp.previousLimit = testedLimit;
+            this->state.ramp.targetDeficitSince.reset();
+            this->state.strictLoad.baselineLimit = 0;
+            this->state.strictLoad.baselineBaseFps = 0.0;
+            this->state.strictLoad.collapseSince.reset();
+            this->state.strictLoad.healthySince.reset();
+            this->state.strictLoad.recoverySince.reset();
+            probe.retryAt.reset();
+        } else {
+            // Resume the retained qualified multiplier on this same decision
+            // and keep failed probes rare enough that an unreachable lower
+            // cadence cannot create periodic gameplay stutter.
+            probe.retryAt = now + adaptiveEfficiencyProbeRetryDelay;
+        }
+        probe.testedLimit = 0;
+        probe.baselineBaseFps = 0.0;
+        this->state.outputPlanner.resetTargetClock();
+        return;
+    }
+
+    const bool eligible =
+        this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
+        this->state.stableCadence.limit &&
+        *this->state.stableCadence.limit > 1 &&
+        !this->state.stableCadence.evaluationAt &&
+        !this->state.stableCadence.outsideRangeSince &&
+        !this->state.ramp.evaluationAt &&
+        !this->state.rearm.required &&
+        !this->state.rescue.until &&
+        !this->state.discontinuityRecovery.deadline &&
+        !this->state.stabilization.until &&
+        !this->state.nativeCadenceProbe.active;
+    if (!eligible) {
+        probe.eligibleSince.reset();
+        if (!this->state.stableCadence.limit)
+            probe.reset();
+        return;
+    }
+    if (probe.retryAt && now < *probe.retryAt) {
+        probe.eligibleSince.reset();
+        return;
+    }
+
+    const size_t currentLimit = *this->state.stableCadence.limit;
+    const double currentOutputFps = baseFps *
+        static_cast<double>(currentLimit + 1);
+    if (currentOutputFps <
+            targetFps * adaptiveEfficiencyProbeMinimumTargetRatio) {
+        probe.eligibleSince.reset();
+        return;
+    }
+    if (!probe.eligibleSince) {
+        probe.eligibleSince = now;
+        return;
+    }
+    if (now - *probe.eligibleSince < adaptiveEfficiencyProbeHoldDuration)
+        return;
+
+    probe.testedLimit = currentLimit - 1;
+    probe.baselineBaseFps = baseFps;
+    probe.evaluationAt = now + adaptiveEfficiencyProbeEvaluationDuration;
+    probe.eligibleSince.reset();
+    probe.retryAt.reset();
+    probe.delivery.reset();
+    this->state.nativeCadenceProbe.reset();
+    this->state.outputPlanner.resetTargetClock();
+    this->diagnostics->stableCadence(
+        "adaptive-efficiency-probe",
+        probe.testedLimit,
+        probe.baselineBaseFps,
+        baseFps,
+        "lower-generated-load"
+    );
+}
+
 MAKO_ADAPTIVE_STAGE_INLINE size_t AdaptiveScheduler::selectGeneratedFrameCount(
         const double desiredOutputsPerRealFrame,
         const double rawIntervalSeconds,
         const size_t maximumGeneratedFrameCount) {
     size_t generatedFrameCount = 0;
-    if (this->state.stableCadence.limit) {
+    if (this->state.efficiencyProbe.evaluationAt) {
+        generatedFrameCount = this->state.efficiencyProbe.testedLimit;
+        this->state.outputPlanner.resetTargetClock();
+    } else if (this->state.stableCadence.limit) {
         generatedFrameCount = *this->state.stableCadence.limit;
         this->state.outputPlanner.resetTargetClock();
     } else if (desiredOutputsPerRealFrame > 1.0 &&
@@ -1106,7 +1251,8 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         !this->state.rearm.required &&
         !this->state.rescue.until &&
         !this->state.discontinuityRecovery.deadline &&
-        !this->state.stableCadence.evaluationAt;
+        !this->state.stableCadence.evaluationAt &&
+        !this->state.efficiencyProbe.evaluationAt;
     if (!eligible) {
         this->state.nativeCadenceProbe.reset();
         return {.planningReady = true};
@@ -1160,6 +1306,7 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         this->state.stableCadence.retryAt.reset();
         this->state.stableCadence.baselineBaseFps = 0.0;
         this->state.stableCadence.candidate.reset();
+        this->state.efficiencyProbe.reset();
         this->diagnostics->nativeCadenceProbe(
             "dynamic-cadence-recovered",
             this->state.outputPlanner.generationLimit,
@@ -1426,6 +1573,8 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
     if (!stableCadence.planningReady)
         return stableCadence.terminalPlan;
 
+    this->advanceEfficiencyProbe(now, baseFps);
+
     size_t generatedFrameCount = this->selectGeneratedFrameCount(
         desiredOutputsPerRealFrame, cadence.rawIntervalSeconds,
         maximumGeneratedFrameCount
@@ -1447,11 +1596,15 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
     );
     if (!strictLoad.planningReady)
         return strictLoad.terminalPlan;
+    const size_t policyGenerationLimit =
+        this->state.efficiencyProbe.evaluationAt
+        ? this->state.efficiencyProbe.testedLimit
+        : this->state.outputPlanner.generationLimit;
     const size_t effectiveMaximumGeneratedFrameCount = std::min(
         {
             this->config.generatedFrameCapacity,
             this->config.maximumMultiplier - 1,
-            this->state.outputPlanner.generationLimit,
+            policyGenerationLimit,
         }
     );
     if (this->diagnosticsActive) {
@@ -1567,6 +1720,7 @@ void AdaptiveScheduler::resetTiming(
     this->state.ramp.targetDeficitSince.reset();
     this->state.outputPlanner.resetTargetClock();
     this->state.nativeCadenceProbe.reset();
+    this->state.efficiencyProbe.reset();
     this->state.pacingWindow.reset();
 }
 
@@ -1631,6 +1785,7 @@ void AdaptiveScheduler::restoreGenerationLimit(
     this->state.strictLoad.collapseSince.reset();
     this->state.strictLoad.healthySince.reset();
     this->state.strictLoad.recoverySince.reset();
+    this->state.efficiencyProbe.reset();
     this->state.outputPlanner.resetTargetClock();
 
     const auto stabilizationEnd = this->state.stabilization.until.value_or(now);

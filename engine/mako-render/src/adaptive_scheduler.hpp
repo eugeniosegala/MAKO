@@ -276,6 +276,7 @@ namespace mako::layer {
             TimePoint now, double baseFps,
             double desiredOutputsPerRealFrame,
             size_t maximumGeneratedFrameCount);
+        inline void advanceEfficiencyProbe(TimePoint now, double baseFps);
         [[nodiscard]] inline size_t selectGeneratedFrameCount(
             double desiredOutputsPerRealFrame,
             double rawIntervalSeconds,
@@ -595,6 +596,24 @@ namespace mako::layer {
                 double baselineBaseFps{0.0};
                 GeneratedDeliveryWindow delivery;
             } stableCadence;
+
+            struct EfficiencyProbe {
+                std::optional<TimePoint> eligibleSince;
+                std::optional<TimePoint> evaluationAt;
+                std::optional<TimePoint> retryAt;
+                GeneratedDeliveryWindow delivery;
+                size_t testedLimit{0};
+                double baselineBaseFps{0.0};
+
+                void reset() {
+                    this->eligibleSince.reset();
+                    this->evaluationAt.reset();
+                    this->retryAt.reset();
+                    this->delivery.reset();
+                    this->testedLimit = 0;
+                    this->baselineBaseFps = 0.0;
+                }
+            } efficiencyProbe;
 
             struct Rescue {
                 std::optional<TimePoint> until;

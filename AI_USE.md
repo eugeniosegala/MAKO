@@ -57,3 +57,4 @@ AI tools do not make final architectural or release decisions for MAKO. The main
 - [Testing MAKO](TESTING.md)
 - [How to release MAKO](HOW_TO_RELEASE.md)
 - [Event-Driven Development for AI Agents](https://eugeniosegala.dev/event-driven-development-for-ai-agents/)
+- [Bare-Metal Development for AI Agents](https://eugeniosegala.dev/bare-metal-development-for-ai-agents/)

@@ -210,11 +210,15 @@ namespace {
             });
         }
 
-        void stableCadence(const std::string_view operation, size_t, double,
+        void stableCadence(const std::string_view operation,
+                const size_t generatedLimit, double,
                 double, const std::string_view reason) override {
             this->events.push_back({
                 .operation = std::string(operation),
                 .reason = std::string(reason),
+                .testedLimit = operation.starts_with(
+                    "adaptive-efficiency-probe"
+                ) ? generatedLimit : 0,
             });
         }
 
@@ -1684,6 +1688,163 @@ namespace {
             "Smooth Cadence acceptance was not observable");
     }
 
+    void testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0; frame < 2400; ++frame) {
+            plan = harness.frameAtFps(40.0);
+            if (harness.diagnostics.contains("adaptive-efficiency-probe"))
+                break;
+        }
+        const auto* probe = harness.diagnostics.last(
+            "adaptive-efficiency-probe"
+        );
+        require(probe && probe->testedLimit == 1 && plan.size() == 1,
+            "qualified 3x cadence did not test the cheaper 2x policy");
+
+        for (size_t frame = 0; frame < 120; ++frame) {
+            plan = harness.frameAtFps(60.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+        }
+        const auto snapshot = harness.scheduler.snapshot();
+        const auto* accepted = harness.diagnostics.last(
+            "adaptive-efficiency-probe-accepted"
+        );
+        require(accepted && accepted->testedLimit == 1,
+            "target-preserving 2x efficiency probe was not accepted");
+        require(snapshot.stableCadenceLimit == 1 &&
+                snapshot.validatedGenerationLimit == 1 &&
+                snapshot.generationLimit == 1,
+            "accepted efficiency probe did not make 2x the qualified policy");
+        require(plan.size() == 1,
+            "accepted 2x efficiency probe resumed the previous 3x workload");
+    }
+
+    void testSmoothCadenceRejectsInsufficientDownshiftAndBacksOff() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+
+        for (size_t frame = 0; frame < 2400; ++frame) {
+            harness.frameAtFps(40.0);
+            if (harness.diagnostics.contains("adaptive-efficiency-probe"))
+                break;
+        }
+        require(harness.diagnostics.contains("adaptive-efficiency-probe"),
+            "precondition failed: 3x efficiency probe did not begin");
+
+        const auto plan = harness.runAtFps(40.0, 2s);
+        const auto snapshot = harness.scheduler.snapshot();
+        const auto* rejected = harness.diagnostics.last(
+            "adaptive-efficiency-probe-rejected"
+        );
+        require(rejected && rejected->reason == "target-deficit",
+            "2x probe that could not preserve target was not rejected");
+        require(snapshot.stableCadenceLimit == 2 &&
+                snapshot.validatedGenerationLimit == 2 &&
+                plan.size() == 2,
+            "rejected efficiency probe did not immediately restore 3x");
+
+        const size_t probes = harness.diagnostics.count(
+            "adaptive-efficiency-probe"
+        );
+        harness.runAtFps(40.0, 30s);
+        require(harness.diagnostics.count("adaptive-efficiency-probe") == probes,
+            "failed efficiency probe retried before its long backoff elapsed");
+    }
+
+    void testSmoothCadenceDownshiftRejectsDeliveryPressure() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+
+        for (size_t frame = 0; frame < 2400; ++frame) {
+            harness.frameAtFps(40.0);
+            if (harness.diagnostics.contains("adaptive-efficiency-probe"))
+                break;
+        }
+        require(harness.diagnostics.contains("adaptive-efficiency-probe"),
+            "precondition failed: delivery-pressure probe did not begin");
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0; frame < 60; ++frame) {
+            plan = harness.frameAtFps(60.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = 0,
+            });
+            if (harness.diagnostics.contains(
+                    "adaptive-efficiency-probe-rejected")) {
+                break;
+            }
+        }
+        const auto* rejected = harness.diagnostics.last(
+            "adaptive-efficiency-probe-rejected"
+        );
+        require(rejected && rejected->reason == "delivery-pressure",
+            "delivery loss did not reject the cheaper cadence probe");
+        require(harness.scheduler.snapshot().stableCadenceLimit == 2 &&
+                plan.size() == 2,
+            "delivery-pressure rejection did not restore qualified 3x");
+    }
+
+    void testSmoothCadenceDownshiftPausesDuringAcquireBackoff() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+
+        for (size_t frame = 0; frame < 2400; ++frame) {
+            harness.frameAtFps(40.0);
+            if (harness.diagnostics.contains("adaptive-efficiency-probe"))
+                break;
+        }
+        require(harness.diagnostics.contains("adaptive-efficiency-probe"),
+            "precondition failed: acquire-backoff probe did not begin");
+
+        for (size_t frame = 0; frame < 120; ++frame)
+            harness.frameAtFps(60.0, true);
+        require(!harness.diagnostics.contains(
+                "adaptive-efficiency-probe-accepted") &&
+                !harness.diagnostics.contains(
+                    "adaptive-efficiency-probe-rejected"),
+            "generated-image backoff advanced the efficiency evaluation");
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0; frame < 120; ++frame) {
+            plan = harness.frameAtFps(60.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+        }
+        require(harness.diagnostics.contains(
+                "adaptive-efficiency-probe-accepted") &&
+                harness.scheduler.snapshot().stableCadenceLimit == 1,
+            "paused efficiency probe did not resume and accept healthy 2x");
+    }
+
+    void testSmoothCadenceDownshiftProbeIsOrderedSdrOnly() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::ConservativeHdr
+        );
+        harness.start();
+        harness.runAtFps(40.0, 30s);
+        require(harness.scheduler.snapshot().stableCadenceLimit == 2,
+            "precondition failed: HDR cadence did not qualify 3x");
+        require(!harness.diagnostics.contains("adaptive-efficiency-probe"),
+            "nonblocking HDR transport performed a 3x-to-2x efficiency probe");
+    }
+
     void testSmoothCadenceRetainsValidatedTwoXThroughMildDip() {
         Harness harness(120, 2, true);
         harness.start();
@@ -2256,6 +2417,11 @@ int main() {
         {"bridge probe handles misleading first step", testBridgeProbeCanRecoverMisleadingFirstStep},
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
         {"Smooth Cadence settles near integer demand", testSmoothCadenceSettlesNearIntegerDemand},
+        {"Smooth Cadence accepts target-preserving downshift", testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget},
+        {"Smooth Cadence rejects insufficient downshift", testSmoothCadenceRejectsInsufficientDownshiftAndBacksOff},
+        {"Smooth Cadence downshift rejects delivery pressure", testSmoothCadenceDownshiftRejectsDeliveryPressure},
+        {"Smooth Cadence downshift pauses during acquire backoff", testSmoothCadenceDownshiftPausesDuringAcquireBackoff},
+        {"Smooth Cadence downshift is ordered-SDR only", testSmoothCadenceDownshiftProbeIsOrderedSdrOnly},
         {"Smooth Cadence retains validated 2x through mild dip", testSmoothCadenceRetainsValidatedTwoXThroughMildDip},
         {"Smooth Cadence exits below retention range", testSmoothCadenceExitsBelowRetentionRange},
         {"persistent loss rejects Smooth Cadence", testPersistentDeliveryLossRejectsSmoothCadenceProbe},
