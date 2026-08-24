@@ -482,6 +482,7 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         const bool gamescopeHdrTransport,
         const bool orderedAcquireRecoveryProbe) {
     PresentationFramePlan plan;
+    plan.orderedAcquireRecoveryProbe = orderedAcquireRecoveryProbe;
     plan.historyWarmupActive =
         this->recoveryState.historyWarmupRemaining > 0 ||
         (this->adaptiveScheduler &&
@@ -530,7 +531,8 @@ void Swapchain::reportAdaptiveDelivery(
     // probe completes. Its synthetic delivery must not advance an unrelated
     // Adaptive ramp or stable-cadence evaluation.
     if (this->privateOrderedTransport &&
-            this->recoveryState.orderedAcquireRecovery.active()) {
+            (plan.orderedAcquireRecoveryProbe ||
+             this->recoveryState.orderedAcquireRecovery.active())) {
         return;
     }
     this->adaptiveScheduler->reportGeneratedFrameDelivery({

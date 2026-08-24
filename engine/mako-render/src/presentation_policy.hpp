@@ -340,12 +340,22 @@ namespace mako::layer {
 
             this->consecutiveSlowFrames = 0;
             const bool guardCleared = this->guardPending;
-            const bool recovered = guardCleared || this->probePending;
+            const bool drainProbeRecovered = this->probePending;
+            const bool recovered = guardCleared || drainProbeRecovered;
             if (recovered) {
                 this->guardPending = false;
                 this->probePending = false;
                 this->healthySince = now;
-                this->stabilizingUntil = now + stabilizationDuration();
+                // One immediately available image is enough to clear an
+                // isolated slow-acquire guard: the guarded scheduler sample
+                // already excluded transport delay and no native drain needs
+                // to be qualified. Reserve the sustained zero-wait window for
+                // recovery from an actual quarantine, where FIFO readiness
+                // has not yet been demonstrated across normal presentation.
+                if (drainProbeRecovered) {
+                    this->stabilizingUntil =
+                        now + stabilizationDuration();
+                }
                 this->nonblockingProbeMisses = 0;
             } else if (this->consecutiveFailures > 0 &&
                     !this->stabilizingUntil) {
@@ -361,7 +371,7 @@ namespace mako::layer {
 
             return {
                 .recovered = recovered,
-                .stabilizing = recovered,
+                .stabilizing = drainProbeRecovered,
                 .guardCleared = guardCleared,
                 .consecutiveFailures = this->consecutiveFailures,
                 .bypassedFrames = this->bypassedFrames,

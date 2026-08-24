@@ -123,6 +123,10 @@ namespace mako::layer {
             size_t admittedGeneratedFrameCount{0};
             bool historyWarmupActive{false};
             bool generatedImagesPreacquired{false};
+            // Recovery probes are transport-owned synthetic delivery. Keep
+            // them out of Adaptive ramp and Smooth Cadence qualification even
+            // when an isolated guard clears before delivery is reported.
+            bool orderedAcquireRecoveryProbe{false};
             std::optional<uint64_t> configuredAcquireTimeout;
             // Opt-in diagnostic phase accounting stays inline with the frame
             // plan so a slow total can expose multiple sub-threshold waits

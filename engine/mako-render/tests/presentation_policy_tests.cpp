@@ -109,12 +109,13 @@ int main() {
         acquireStart + 2ms, 0ms, 25ms, false
     );
     expect(observation.recovered && observation.guardCleared &&
-            observation.stabilizing && acquireRecovery.active(),
-        "a successful zero-wait guard did not begin stabilization");
-    acquireDecision = acquireRecovery.beforePresent(acquireStart + 2003ms);
-    expect(acquireDecision.recoveryStabilized &&
-            acquireDecision.resetCadenceClock && !acquireRecovery.active(),
-        "successful slow-acquire protection did not resume normal policy");
+            !observation.stabilizing && !acquireRecovery.active(),
+        "a successful zero-wait guard did not resume normal policy");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 3ms);
+    expect(!acquireDecision.bypassGeneration &&
+            !acquireDecision.limitGeneratedFrames &&
+            !acquireDecision.resetCadenceClock,
+        "successful slow-acquire protection retained recovery constraints");
 
     acquireRecovery.reset();
     observation = acquireRecovery.observe(
