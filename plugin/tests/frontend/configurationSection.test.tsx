@@ -55,9 +55,13 @@ vi.mock("../../src/components/MakoUi", () => ({
   MakoInlineWarning: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  MakoSectionHeader: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
+  MakoSectionHeader: ({
+    children,
+    topMargin,
+  }: {
+    children: React.ReactNode;
+    topMargin?: React.CSSProperties["marginTop"];
+  }) => <div data-top-margin={topMargin}>{children}</div>,
 }));
 vi.mock("../../src/i18n/i18n", () => ({
   default: (_key: string, fallback: string) => fallback,
@@ -74,6 +78,27 @@ describe("External Tools controls", () => {
     localStorage.clear();
   });
 
+  test("uses consistent spacing before configuration section headers", () => {
+    render(
+      <ConfigurationSection
+        config={getDefaults()}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      screen
+        .getByText("Advanced Rendering Settings")
+        .getAttribute("data-top-margin"),
+    ).toBe("26px");
+    expect(
+      screen
+        .getByText("Compatibility Settings")
+        .getAttribute("data-top-margin"),
+    ).toBe("26px");
+  });
+
   test("starts collapsed and remembers when it is expanded", () => {
     const { container } = render(
       <ConfigurationSection
@@ -85,7 +110,9 @@ describe("External Tools controls", () => {
 
     expect(screen.getByText("External Tools")).toBeTruthy();
     expect(screen.queryByText("Enable MangoHud (Restart)")).toBeNull();
-    expect(screen.queryByText("Enable vkBasalt (Experimental, Restart)")).toBeNull();
+    expect(
+      screen.queryByText("Enable vkBasalt (Experimental, Restart)"),
+    ).toBeNull();
 
     const collapseButton = container.querySelector<HTMLButtonElement>(
       ".MAKO_ExternalToolsCollapseButton_Container button",
@@ -94,7 +121,9 @@ describe("External Tools controls", () => {
     fireEvent.click(collapseButton!);
 
     expect(screen.getByText("Enable MangoHud (Restart)")).toBeTruthy();
-    expect(screen.getByText("Enable vkBasalt (Experimental, Restart)")).toBeTruthy();
+    expect(
+      screen.getByText("Enable vkBasalt (Experimental, Restart)"),
+    ).toBeTruthy();
     expect(localStorage.getItem("mako-external-tools-collapsed")).toBe("false");
   });
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   PanelSectionRow,
   DialogButton,
+  Field,
   Focusable,
   SliderField,
   ToggleField,
@@ -30,11 +31,7 @@ import {
 } from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
 import { useDeferredTargetFps } from "../hooks/useDeferredTargetFps";
-import {
-  MakoInlineWarning,
-  MakoSectionHeader,
-  makoDialogButtonStyle,
-} from "./MakoUi";
+import { MakoInlineWarning, makoDialogButtonStyle } from "./MakoUi";
 
 const DEFAULT_CONFIGURATION = getDefaults();
 
@@ -137,7 +134,6 @@ export function FpsMultiplierControl({
             "ADAPTIVE_DESC",
             "Adjusts frame generation to reach Target FPS. The steady base cap is the default for smoother pacing. Enable Fractional Adaptive below to keep more real frames, but test it per game. Raising the multiplier limit may require a restart.",
           )}
-          bottomSeparator={config.adaptive ? undefined : "none"}
           checked={config.adaptive}
           onChange={(value) => onConfigUpdate(adaptiveModeChanges(value))}
         />
@@ -231,90 +227,94 @@ export function FpsMultiplierControl({
         </>
       )}
 
-      <MakoSectionHeader
-        topMargin="26px"
-        description={t(
-          "MULTIPLIER_DESC",
-          "Sets Fixed mode to 2x–4x. With Dynamic Cadence Recovery, it becomes a ceiling against the confirmed Gamescope refresh. Capacity increases may require a restart; Adaptive manages its multiplier automatically.",
-        )}
-      >
-        {t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
-      </MakoSectionHeader>
-
       <PanelSectionRow>
-        <Focusable
-          style={{
-            marginTop: "8px",
-            marginBottom: "8px",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-          }}
-          flow-children="horizontal"
-          noFocusRing
+        <Field
+          label={t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
+          description={
+            <span style={{ display: "block", paddingTop: "8px" }}>
+              {t(
+                "MULTIPLIER_DESC",
+                "Sets Fixed mode to 2x–4x. Fixed may perform better than Adaptive when a game has uneven or unstable frame pacing. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh. Increasing it may require a restart; Adaptive manages its own multiplier.",
+              )}
+            </span>
+          }
+          childrenLayout="below"
         >
-          <DialogButton
+          <Focusable
             style={{
-              ...multiplierButtonStyle(focusedControl === "decrease"),
-              marginLeft: "0px",
+              width: "100%",
+              boxSizing: "border-box",
+              marginTop: "6px",
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
             }}
-            onClick={() =>
-              onConfigChange(
-                MULTIPLIER,
-                Math.max(FIXED_MULTIPLIER_UI_MIN, config.multiplier - 1),
-              )
-            }
-            onGamepadFocus={() => setFocusedControl("decrease")}
-            onGamepadBlur={() =>
-              setFocusedControl((current) =>
-                current === "decrease" ? null : current,
-              )
-            }
-            disabled={
-              config.adaptive || config.multiplier <= FIXED_MULTIPLIER_UI_MIN
-            }
+            flow-children="horizontal"
+            noFocusRing
           >
-            −
-          </DialogButton>
-          <div
-            style={{
-              marginLeft: "20px",
-              marginRight: "20px",
-              fontSize: "16px",
-              fontWeight: "bold",
-              color: config.adaptive ? "rgba(255, 255, 255, 0.45)" : "white",
-              minWidth: "60px",
-              textAlign: "center",
-            }}
-          >
-            {config.adaptive
-              ? t("ADAPTIVE_VALUE", "Adaptive")
-              : `${config.multiplier}X`}
-          </div>
-          <DialogButton
-            style={{
-              ...multiplierButtonStyle(focusedControl === "increase"),
-              marginLeft: "0px",
-            }}
-            onClick={() =>
-              onConfigChange(
-                MULTIPLIER,
-                Math.min(FIXED_MULTIPLIER_UI_MAX, config.multiplier + 1),
-              )
-            }
-            onGamepadFocus={() => setFocusedControl("increase")}
-            onGamepadBlur={() =>
-              setFocusedControl((current) =>
-                current === "increase" ? null : current,
-              )
-            }
-            disabled={
-              config.adaptive || config.multiplier >= FIXED_MULTIPLIER_UI_MAX
-            }
-          >
-            +
-          </DialogButton>
-        </Focusable>
+            <DialogButton
+              style={{
+                ...multiplierButtonStyle(focusedControl === "decrease"),
+                marginLeft: "0px",
+              }}
+              onClick={() =>
+                onConfigChange(
+                  MULTIPLIER,
+                  Math.max(FIXED_MULTIPLIER_UI_MIN, config.multiplier - 1),
+                )
+              }
+              onGamepadFocus={() => setFocusedControl("decrease")}
+              onGamepadBlur={() =>
+                setFocusedControl((current) =>
+                  current === "decrease" ? null : current,
+                )
+              }
+              disabled={
+                config.adaptive || config.multiplier <= FIXED_MULTIPLIER_UI_MIN
+              }
+            >
+              −
+            </DialogButton>
+            <div
+              style={{
+                marginLeft: "20px",
+                marginRight: "20px",
+                fontSize: "16px",
+                fontWeight: "bold",
+                color: config.adaptive ? "rgba(255, 255, 255, 0.45)" : "white",
+                minWidth: "60px",
+                textAlign: "center",
+              }}
+            >
+              {config.adaptive
+                ? t("ADAPTIVE_VALUE", "Adaptive")
+                : `${config.multiplier}X`}
+            </div>
+            <DialogButton
+              style={{
+                ...multiplierButtonStyle(focusedControl === "increase"),
+                marginLeft: "0px",
+              }}
+              onClick={() =>
+                onConfigChange(
+                  MULTIPLIER,
+                  Math.min(FIXED_MULTIPLIER_UI_MAX, config.multiplier + 1),
+                )
+              }
+              onGamepadFocus={() => setFocusedControl("increase")}
+              onGamepadBlur={() =>
+                setFocusedControl((current) =>
+                  current === "increase" ? null : current,
+                )
+              }
+              disabled={
+                config.adaptive || config.multiplier >= FIXED_MULTIPLIER_UI_MAX
+              }
+            >
+              +
+            </DialogButton>
+          </Focusable>
+        </Field>
       </PanelSectionRow>
     </>
   );

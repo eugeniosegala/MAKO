@@ -94,7 +94,7 @@ export function AdvancedRenderingConfigurationGroup({
 }: ConfigurationUpdateGroupProps) {
   return (
     <>
-      <MakoSectionHeader topMargin="37px">
+      <MakoSectionHeader topMargin="26px">
         {t("CONFIG_SECTION_TITLE", "Advanced Rendering Settings")}
       </MakoSectionHeader>
 

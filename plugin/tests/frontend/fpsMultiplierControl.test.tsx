@@ -6,6 +6,26 @@ vi.mock("@decky/ui", () => ({
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
+  Field: ({
+    children,
+    label,
+    description,
+    bottomSeparator,
+  }: {
+    children: React.ReactNode;
+    label: React.ReactNode;
+    description?: React.ReactNode;
+    bottomSeparator?: string;
+  }) => (
+    <div
+      data-field-kind="standard"
+      data-bottom-separator={bottomSeparator ?? "default"}
+    >
+      <span>{label}</span>
+      {description && <span>{description}</span>}
+      {children}
+    </div>
+  ),
   ToggleField: ({
     label,
     checked,
@@ -29,8 +49,16 @@ vi.mock("@decky/ui", () => ({
     </button>
   ),
   SliderField: ({ label }: { label: React.ReactNode }) => <div>{label}</div>,
-  Focusable: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+  Focusable: ({
+    children,
+    style,
+  }: {
+    children: React.ReactNode;
+    style?: React.CSSProperties;
+  }) => (
+    <div data-focusable="true" style={style}>
+      {children}
+    </div>
   ),
   DialogButton: ({ children }: { children: React.ReactNode }) => (
     <button>{children}</button>
@@ -38,9 +66,6 @@ vi.mock("@decky/ui", () => ({
 }));
 vi.mock("../../src/components/MakoUi", () => ({
   MakoInlineWarning: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
-  MakoSectionHeader: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
   makoDialogButtonStyle: () => ({}),
@@ -55,7 +80,7 @@ import { getDefaults } from "../../src/config/configSchema";
 afterEach(cleanup);
 
 describe("Frame Generation Mode controls", () => {
-  test("shows the Fractional preset only while Adaptive is enabled", () => {
+  test("keeps Adaptive and Fixed Multiplier as standard rows", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
     const onConfigUpdate = vi.fn(async () => undefined);
@@ -73,7 +98,21 @@ describe("Frame Generation Mode controls", () => {
       screen
         .getByText("Adaptive Frame Generation")
         .getAttribute("data-bottom-separator"),
-    ).toBe("none");
+    ).toBe("default");
+    expect(
+      screen
+        .getByText("Fixed FPS Multiplier")
+        .closest('[data-field-kind="standard"]'),
+    ).toBeTruthy();
+    const fixedMultiplierControls = screen
+      .getByText("−")
+      .closest<HTMLElement>('[data-focusable="true"]');
+    expect(fixedMultiplierControls?.style.marginTop).toBe("6px");
+    const fixedMultiplierDescription = screen.getByText(
+      /Fixed may perform better than Adaptive when a game has uneven or unstable frame pacing/,
+    );
+    expect(fixedMultiplierDescription.style.paddingTop).toBe("8px");
+    expect(fixedMultiplierDescription.style.marginBottom).toBe("");
 
     rerender(
       <FpsMultiplierControl
@@ -89,6 +128,11 @@ describe("Frame Generation Mode controls", () => {
         .getByText("Adaptive Frame Generation")
         .getAttribute("data-bottom-separator"),
     ).toBe("default");
+    expect(
+      screen
+        .getByText("Fixed FPS Multiplier")
+        .closest('[data-field-kind="standard"]'),
+    ).toBeTruthy();
   });
 
   test("keeps the saved Fractional selection visible while generation is off", () => {

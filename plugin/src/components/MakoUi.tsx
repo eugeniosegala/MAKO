@@ -94,6 +94,7 @@ export function MakoReleaseIdentity({ version, codename, bottomMargin = "2px" }:
           margin: "-2px 0 0",
           marginBottom: bottomMargin,
           padding: "2px 4px 4px",
+          opacity: 0.5,
           color: "#a8bdc2",
           fontSize: "10px",
           fontWeight: 600,

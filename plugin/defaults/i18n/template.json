@@ -122,7 +122,7 @@
   "CONTENT_UPDATE_RENDERER": "Update MAKO Renderer",
   "CONTENT_UPDATING_RENDERER": "Updating MAKO Renderer...",
   "MULTIPLIER_TITLE": "Fixed FPS Multiplier",
-  "MULTIPLIER_DESC": "Sets Fixed mode to 2x–4x. With Dynamic Cadence Recovery, it becomes a ceiling against the confirmed Gamescope refresh. Capacity increases may require a restart; Adaptive manages its multiplier automatically.",
+  "MULTIPLIER_DESC": "Sets Fixed mode to 2x–4x. Fixed may perform better than Adaptive when a game has uneven or unstable frame pacing. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh. Increasing it may require a restart; Adaptive manages its own multiplier.",
   "ADAPTIVE_TITLE": "Adaptive Frame Generation",
   "ADAPTIVE_DESC": "Adjusts frame generation to reach Target FPS. The steady base cap is the default for smoother pacing. Enable Fractional Adaptive below to keep more real frames, but test it per game. Raising the multiplier limit may require a restart.",
   "FRACTIONAL_ADAPTIVE_PRESET": "Fractional Adaptive (Preset)",

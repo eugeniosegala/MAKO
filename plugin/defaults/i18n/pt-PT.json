@@ -122,7 +122,7 @@
   "CONTENT_UPDATE_RENDERER": "Atualizar o MAKO Renderer",
   "CONTENT_UPDATING_RENDERER": "A atualizar o MAKO Renderer...",
   "MULTIPLIER_TITLE": "Multiplicador de FPS fixo",
-  "MULTIPLIER_DESC": "Define o modo Fixo entre 2x e 4x. Com Recuperação de cadência dinâmica, passa a ser um limite para a atualização confirmada do Gamescope. Aumentar a capacidade pode exigir reinício; o modo Adaptativo gere o multiplicador automaticamente.",
+  "MULTIPLIER_DESC": "Define o modo Fixo entre 2x e 4x. O Fixo pode funcionar melhor do que o Adaptativo quando o jogo tem um ritmo de fotogramas irregular ou instável. Com Recuperação de cadência dinâmica, passa a ser um limite para a atualização confirmada do Gamescope. Aumentar o multiplicador pode exigir reinício; o Adaptativo gere o seu próprio multiplicador.",
   "ADAPTIVE_TITLE": "Geração de fotogramas adaptativa",
   "ADAPTIVE_DESC": "Ajusta a geração de fotogramas para alcançar os FPS alvo. O limite base estável é a predefinição para uma cadência mais suave. Ative o Adaptativo fracionário abaixo para manter mais fotogramas reais, mas teste-o em cada jogo. Aumentar o limite do multiplicador pode exigir um reinício.",
   "FRACTIONAL_ADAPTIVE_PRESET": "Adaptativo fracionário (predefinição)",
