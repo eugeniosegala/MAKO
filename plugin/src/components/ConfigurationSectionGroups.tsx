@@ -242,7 +242,7 @@ export function CompatibilityConfigurationGroup({
               label={t("DYNAMIC_CADENCE_RECOVERY", "Dynamic Cadence Recovery")}
               description={t(
                 "DYNAMIC_CADENCE_RECOVERY_DESC",
-                "Compatibility recovery for games and emulators that switch native frame rates. Adaptive recalibrates its target policy; Fixed follows the confirmed Gamescope refresh with its selected multiplier as a ceiling. A brief pacing check may occur. Enabling it turns off both base FPS caps and, in Adaptive mode, activates Fractional Adaptive. Changing Fractional Adaptive or either base cap directly turns Recovery off.",
+                "Recovers when a game or emulator changes native frame rate. Adaptive recalibrates; Fixed follows confirmed Gamescope refresh up to its multiplier. Enabling it briefly checks pacing, disables both base caps, and selects Fractional Adaptive. Changing Fractional or either cap turns Recovery off.",
               )}
               checked={config.dynamic_cadence_recovery}
               onChange={(value) =>

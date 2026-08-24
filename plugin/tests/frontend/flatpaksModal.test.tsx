@@ -55,7 +55,7 @@ vi.mock("@decky/ui", () => ({
   Focusable: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  Router: navigation,
+  Navigation: navigation,
   showModal: vi.fn(),
   ConfirmModal: () => <div />,
 }));
@@ -139,7 +139,12 @@ describe("Flatpak application preparation", () => {
     toggle.focus();
     fireEvent.click(toggle);
 
-    await screen.findByRole("status");
+    const busyOverlay = await screen.findByRole("status");
+    expect(busyOverlay.style.inset).toBe("1px 4px 1px 1px");
+    expect(busyOverlay.style.borderRadius).toBe("999px");
+    expect(busyOverlay.style.alignItems).toBe("center");
+    expect(busyOverlay.style.justifyContent).toBe("center");
+    expect(busyOverlay.parentElement?.style.display).toBe("inline-flex");
     expect(
       screen.getByRole("button", { name: "Flatpak application toggle" }),
     ).toBe(toggle);
@@ -194,6 +199,11 @@ describe("Flatpak application preparation", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(/Preparation applies to this entire Flatpak app/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Heroic and EmuDeck use different per-game steps; check the MAKO README on GitHub/,
+      ),
     ).toBeTruthy();
 
     fireEvent.click(screen.getByText("Open Heroic and EmuDeck guide"));

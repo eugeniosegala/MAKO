@@ -8,7 +8,7 @@ import {
   PanelSectionRow,
   Toggle,
   Focusable,
-  Router,
+  Navigation,
   showModal,
   ConfirmModal,
 } from "@decky/ui";
@@ -580,6 +580,9 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                         style={{
                           flex: "0 0 auto",
                           position: "relative",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
                         }}
                       >
                         <Toggle
@@ -593,15 +596,19 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                             role="status"
                             style={{
                               position: "absolute",
-                              inset: 0,
+                              inset: "1px 4px 1px 1px",
                               display: "flex",
                               alignItems: "center",
                               justifyContent: "center",
+                              boxSizing: "border-box",
                               pointerEvents: "none",
-                              background: "rgba(8, 39, 56, 0.78)",
+                              overflow: "hidden",
+                              border: "1px solid rgba(101, 185, 201, 0.42)",
+                              borderRadius: "999px",
+                              background: "rgba(8, 39, 56, 0.9)",
                             }}
                           >
-                            <MakoCompactSpinner />
+                            <MakoCompactSpinner size={14} />
                           </div>
                         )}
                       </div>
@@ -688,7 +695,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               >
                 {t(
                   "FLATPAK_STEAM_CONFIG_DESC",
-                  "Use this only for a manually added Steam shortcut whose original Target is /usr/bin/flatpak. Prepare that Flatpak application above first, then leave Start In and Launch Options unchanged. Heroic and EmuDeck use different per-game steps in the MAKO README.",
+                  "Use this only for a manually added Steam shortcut whose original Target is /usr/bin/flatpak. Prepare that Flatpak application above first, then leave Start In and Launch Options unchanged. Heroic and EmuDeck use different per-game steps; check the MAKO README on GitHub.",
                 )}
               </div>
               <div
@@ -722,7 +729,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                 <ButtonItem
                   layout="below"
                   onClick={() =>
-                    Router.NavigateToExternalWeb(MAKO_FLATPAK_GUIDE_URL)
+                    Navigation.NavigateToExternalWeb(MAKO_FLATPAK_GUIDE_URL)
                   }
                 >
                   {t("FLATPAK_OPEN_README", "Open Heroic and EmuDeck guide")}
