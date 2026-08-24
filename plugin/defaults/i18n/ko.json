@@ -153,7 +153,7 @@
   "FRAME_GENERATION_ENABLED_DESC": "실시간으로 켜고 끕니다. 고정 또는 적응형 프레임 생성을 사용하려면 켜 둡니다. 끄면 두 모드 모두 프레임을 생성하지 않으며 설정은 유지됩니다.",
   "FRAME_GENERATION_ENABLED_WARNING": "프레임 생성을 사용하려면 이 설정을 켜 두세요.",
   "CONFIG_ALLOW_FP16": "FP16 허용",
-  "CONFIG_ALLOW_FP16_DESC": "AMD에서 성능을 향상할 수 있습니다. 오래된 NVIDIA GPU에서는 비활성화하세요.",
+  "CONFIG_ALLOW_FP16_DESC": "전역 렌더러 설정입니다. 모든 프로필에 적용되며 게임별로 변경할 수 없습니다. AMD에서 성능을 향상할 수 있습니다. 오래된 NVIDIA GPU에서는 비활성화하세요.",
   "CONFIG_GPU": "GPU (재시작)",
   "CONFIG_GPU_DESC": "선택적 GPU 이름, vendor:device ID 또는 PCI 버스 ID입니다. 변경 후 게임을 다시 시작하세요.",
   "CONFIG_ACTIVE_IN": "일치하는 프로세스",

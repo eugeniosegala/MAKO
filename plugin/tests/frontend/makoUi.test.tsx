@@ -9,7 +9,11 @@ vi.mock("@decky/ui", () => ({
   Spinner: () => <span />,
 }));
 
-import { MakoReleaseIdentity } from "../../src/components/MakoUi";
+import {
+  MakoButtonTheme,
+  MakoReleaseIdentity,
+  makoDialogButtonStyle,
+} from "../../src/components/MakoUi";
 
 afterEach(cleanup);
 
@@ -24,5 +28,21 @@ describe("MAKO release identity", () => {
     );
     expect(identity.style.opacity).toBe("0.5");
     expect(screen.getByText("abyss-ascending")).toBeTruthy();
+  });
+});
+
+describe("MAKO button theme", () => {
+  test("keeps dialog-button hover and focus within the MAKO palette", () => {
+    window.SP_REACT = React;
+
+    const { container } = render(<MakoButtonTheme />);
+    const theme = container.querySelector("style")?.textContent;
+
+    expect(theme).toContain(".Mako_DialogButton:not(.disabled)");
+    expect(theme).toContain(".Mako_DialogButton--danger:not(.disabled)");
+    expect(theme).toContain("#0d6875");
+    expect(theme).toContain("#913852");
+    expect(theme).toContain("outline: 2px solid #52d5e8");
+    expect(makoDialogButtonStyle(true).outline).toBe("2px solid #52d5e8");
   });
 });

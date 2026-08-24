@@ -145,7 +145,7 @@ export function AdvancedRenderingConfigurationGroup({
               label={t("CONFIG_ALLOW_FP16", "Allow FP16")}
               description={t(
                 "CONFIG_ALLOW_FP16_DESC",
-                "Improves performance on AMD; disable for older NVIDIA GPUs.",
+                "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs.",
               )}
               checked={config.allow_fp16}
               onChange={(value) => onConfigChange(ALLOW_FP16, value)}

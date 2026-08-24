@@ -153,7 +153,7 @@
   "FRAME_GENERATION_ENABLED_DESC": "ライブでオン/オフを切り替えます。固定またはアダプティブのフレーム生成を使うにはオンのままにしてください。オフにすると、どちらのモードでもフレーム生成を行いません。設定は保持されます。",
   "FRAME_GENERATION_ENABLED_WARNING": "フレーム生成を使う場合は、オンのままにしてください。",
   "CONFIG_ALLOW_FP16": "FP16 を許可",
-  "CONFIG_ALLOW_FP16_DESC": "AMD では性能が向上する場合があります。古い NVIDIA GPU では無効にしてください。",
+  "CONFIG_ALLOW_FP16_DESC": "グローバルなレンダラー設定です。すべてのプロファイルに適用され、ゲームごとに変更できません。AMD では性能が向上する場合があります。古い NVIDIA GPU では無効にしてください。",
   "CONFIG_GPU": "GPU（再起動）",
   "CONFIG_GPU_DESC": "任意の GPU 名、vendor:device ID、または PCI バス ID。変更後はゲームを再起動してください。",
   "CONFIG_ACTIVE_IN": "一致するプロセス",

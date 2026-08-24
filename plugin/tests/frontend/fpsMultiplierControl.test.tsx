@@ -60,8 +60,14 @@ vi.mock("@decky/ui", () => ({
       {children}
     </div>
   ),
-  DialogButton: ({ children }: { children: React.ReactNode }) => (
-    <button>{children}</button>
+  DialogButton: ({
+    children,
+    className,
+  }: {
+    children: React.ReactNode;
+    className?: string;
+  }) => (
+    <button className={className}>{children}</button>
   ),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
@@ -113,6 +119,8 @@ describe("Frame Generation Mode controls", () => {
     );
     expect(fixedMultiplierDescription.style.paddingTop).toBe("8px");
     expect(fixedMultiplierDescription.style.marginBottom).toBe("");
+    expect(screen.getByText("−").className).toBe("Mako_DialogButton");
+    expect(screen.getByText("+").className).toBe("Mako_DialogButton");
 
     rerender(
       <FpsMultiplierControl

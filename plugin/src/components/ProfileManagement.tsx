@@ -237,6 +237,7 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
               noFocusRing
             >
               <DialogButton
+                className="Mako_DialogButton"
                 style={{
                   width: "100%",
                   minWidth: 0,
@@ -258,6 +259,7 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
                 <span>{t("PROFILE_RENAME_BTN", "Rename")}</span>
               </DialogButton>
               <DialogButton
+                className="Mako_DialogButton Mako_DialogButton--danger"
                 style={{
                   width: "100%",
                   minWidth: 0,

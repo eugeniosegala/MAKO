@@ -57,7 +57,7 @@ Settings that still carry useful meaning are migrated explicitly before their ol
 
 - **Flow Scale (Restart):** 0.25–1.0. Lower values reduce GPU cost; higher values favour optical-flow quality. Restart the game after changing it because the setting is part of backend construction.
 - **Performance Mode (Restart):** Uses a lighter model with lower GPU overhead and more visible artifacts. Restart the game after changing it because the setting is part of backend construction.
-- **Allow FP16:** Usually improves performance on AMD. Disable it if an older NVIDIA GPU performs worse.
+- **Allow FP16:** Global renderer setting that applies to every profile and cannot be changed per game. It usually improves performance on AMD; disable it if an older NVIDIA GPU performs worse.
 - **Lossless.dll Path:** Overrides automatic discovery. Leave it empty for normal Steam-library discovery.
 - **GPU (Restart):** Optional GPU name, vendor/device ID, or PCI bus ID. It must identify the GPU used by the game; dual-GPU frame generation is not supported. Restart the game after changing it because device selection is part of backend construction.
 

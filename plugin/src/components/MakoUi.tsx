@@ -202,10 +202,10 @@ export function makoDialogButtonStyle(
       ? "1px solid rgba(183, 82, 118, 0.62)"
       : "1px solid rgba(65, 158, 178, 0.62)",
     borderRadius: "4px",
-    outline: isFocused ? "2px solid #d58a39" : "none",
+    outline: isFocused ? "2px solid #52d5e8" : "none",
     outlineOffset: "2px",
     boxShadow: isFocused
-      ? "0 0 0 3px rgba(213, 138, 57, 0.2), 0 0 10px rgba(43, 142, 163, 0.28)"
+      ? "0 0 0 3px rgba(82, 213, 232, 0.2), 0 0 10px rgba(43, 142, 163, 0.32)"
       : "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 5px rgba(0, 0, 0, 0.22)",
     transition: "background 120ms ease, box-shadow 120ms ease"
   };
@@ -214,6 +214,20 @@ export function makoDialogButtonStyle(
 export function MakoButtonTheme() {
   return (
     <style>{`
+      .Mako_DialogButton:not(.disabled):not([disabled]):not([aria-disabled="true"]):hover,
+      .Mako_DialogButton button:hover:not(:disabled) {
+        background: linear-gradient(135deg, #092a40 0%, #0b5067 58%, #0d6875 100%) !important;
+        border-color: rgba(79, 188, 209, 0.78) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 9px rgba(39, 150, 171, 0.26) !important;
+      }
+
+      .Mako_DialogButton--danger:not(.disabled):not([disabled]):not([aria-disabled="true"]):hover,
+      .Mako_DialogButton--danger button:hover:not(:disabled) {
+        background: linear-gradient(135deg, #481b2c 0%, #732a43 58%, #913852 100%) !important;
+        border-color: rgba(208, 102, 139, 0.78) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 9px rgba(170, 57, 98, 0.24) !important;
+      }
+
       .Mako_BrandButton button {
         color: #eefbfe !important;
         background: linear-gradient(135deg, #071f31 0%, #0a4358 58%, #0b5967 100%) !important;
@@ -230,9 +244,9 @@ export function MakoButtonTheme() {
 
       .Mako_BrandButton button:focus,
       .Mako_BrandButton button:focus-visible {
-        outline: 2px solid #d58a39 !important;
+        outline: 2px solid #52d5e8 !important;
         outline-offset: 2px !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 3px rgba(213, 138, 57, 0.2), 0 0 10px rgba(43, 142, 163, 0.28) !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 0 0 3px rgba(82, 213, 232, 0.2), 0 0 10px rgba(43, 142, 163, 0.32) !important;
       }
 
       .Mako_BrandButton button:disabled {

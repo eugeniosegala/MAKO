@@ -153,7 +153,7 @@
   "FRAME_GENERATION_ENABLED_DESC": "Live on/off. Leave it on to use Fixed or Adaptive Frame Generation. When off, neither mode generates frames; your settings stay saved.",
   "FRAME_GENERATION_ENABLED_WARNING": "Keep this on if you want frame generation.",
   "CONFIG_ALLOW_FP16": "Allow FP16",
-  "CONFIG_ALLOW_FP16_DESC": "Improves performance on AMD; disable for older NVIDIA GPUs.",
+  "CONFIG_ALLOW_FP16_DESC": "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs.",
   "CONFIG_GPU": "GPU (Restart)",
   "CONFIG_GPU_DESC": "Optional GPU name, vendor:device ID, or PCI bus ID. Restart the game after changing it.",
   "CONFIG_ACTIVE_IN": "Matched Processes",

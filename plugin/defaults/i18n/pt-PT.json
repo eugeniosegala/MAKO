@@ -153,7 +153,7 @@
   "FRAME_GENERATION_ENABLED_DESC": "Ativação em tempo real. Deixe ativada para utilizar a geração Fixa ou Adaptativa. Quando desativada, nenhum modo gera fotogramas; as definições permanecem guardadas.",
   "FRAME_GENERATION_ENABLED_WARNING": "Mantenha esta opção ativada se pretender gerar fotogramas.",
   "CONFIG_ALLOW_FP16": "Permitir FP16",
-  "CONFIG_ALLOW_FP16_DESC": "Melhora o desempenho em AMD; desative para GPUs NVIDIA mais antigas.",
+  "CONFIG_ALLOW_FP16_DESC": "Definição global do renderizador: aplica-se a todos os perfis e não pode ser alterada por jogo. Melhora o desempenho em AMD; desative para GPUs NVIDIA mais antigas.",
   "CONFIG_GPU": "GPU (reinício)",
   "CONFIG_GPU_DESC": "Nome opcional da GPU, ID fornecedor:dispositivo ou ID do barramento PCI. Reinicie o jogo após a alteração.",
   "CONFIG_ACTIVE_IN": "Processos correspondentes",

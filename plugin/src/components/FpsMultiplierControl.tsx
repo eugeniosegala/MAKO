@@ -253,6 +253,7 @@ export function FpsMultiplierControl({
             noFocusRing
           >
             <DialogButton
+              className="Mako_DialogButton"
               style={{
                 ...multiplierButtonStyle(focusedControl === "decrease"),
                 marginLeft: "0px",
@@ -291,6 +292,7 @@ export function FpsMultiplierControl({
                 : `${config.multiplier}X`}
             </div>
             <DialogButton
+              className="Mako_DialogButton"
               style={{
                 ...multiplierButtonStyle(focusedControl === "increase"),
                 marginLeft: "0px",
