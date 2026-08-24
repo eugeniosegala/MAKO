@@ -1,20 +1,20 @@
 ## What's new in MAKO Decky v2.1.0
 
-<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/leviathan-rising.png" alt="Leviathan Rising: a Renaissance vision of the MAKO Leviathan" width="100%">
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/abyss-ascending.png" alt="Abyss Ascending: a Renaissance vision of the dormant MAKO beneath a Tuscan bay" width="100%">
 
-### Release codename: Leviathan Rising
+### Release codename: Abyss Ascending
 
-> _“The Leviathan is awake. Take the helm.”_
+> _“A moment's pause, and then the abyss stretched, beckoned. We all do.”_
 >
-> **Ilyra, Warden of the Drowned Grove**
+> **Nylah, _Hour of Eternity_**
 
 ---
 
-MAKO Decky 2.1 brings easier Fractional Adaptive setup and potentially major AMD image-quality gains into Game Mode, with steadier SteamOS presentation and a more polished everyday experience. Frame generation is available now; scaling is coming soon.
+MAKO Decky’s Abyss Ascending release makes Adaptive Frame Generation dramatically more capable in Game Mode. It gives players a better reason to use high targets, Fractional Adaptive, and per-game tuning: the bundled Renderer now pursues smooth delivery more intelligently, while Decky makes those controls safe, understandable, and specific to each game. Frame generation is available now; scaling is coming soon.
 
-- **Fractional Adaptive is now an explicit per-game choice:** It can mix generation ratios, such as 60 real FPS to 90 displayed FPS, to keep more real frames and potentially reduce input lag. Uneven cadence can feel choppy in some games, so MAKO Decky defaults to the smoother Steady Base Cap with an even 2x cadence. Older profiles without a saved choice adopt Steady, while explicitly selected Fractional profiles stay Fractional; a one-click preset makes either mode easy to select.
-- **AMD generated frames can look substantially cleaner:** Supported GPUs gain predictable image-boundary handling that can greatly reduce ghost trails, corrupted moving edges, disocclusion noise, and lost thin detail in affected games. Results vary by workload, unsupported GPUs keep the established fallback, and dedicated scenes guard FP32 and FP16 quality.
-- **Experimental Gamescope WSI compatibility is now one toggle away:** MAKO's standard SDR path still isolates Gamescope WSI, while an off-by-default, per-profile control can restore it for affected games. The guarded 64-bit host path validates the real Gamescope manifest, fails closed if it is unavailable or invalid, and requires a game restart. The same control supports either MangoHud or experimental vkBasalt, with MangoHud able to report final generated FPS.
-- **Games keep presenting through Renderer stalls:** If generation misses its render-fence budget, the bundled Renderer presents the game's original frame, pauses generation, and resumes after recovery instead of allowing the wait to become a visible freeze. More initialization and recovery failures also fall back to native frames.
-- **Both interfaces now speak the same languages:** MAKO Decky and the MAKO Renderer desktop UI have complete English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, and Simplified Chinese catalogs. Regional Portuguese stays distinct, Steam aliases resolve to canonical locale codes, and contract tests prevent either interface from drifting to a different language inventory.
-- **A safer and more consistent foundation:** Installation, upgrades, profiles, generated wrappers, and packaging now follow clearer ownership rules. Managed launches use private Vulkan layer discovery to prevent accidental activation, unsupported compatibility paths fail closed, package checks catch incomplete builds, and MAKO-owned files update safely without rewriting user configuration.
+- **A real upgrade for high-target Adaptive play:** The bundled Renderer now uses a target-aware placement clock, sustained-load protection, and AMD-informed pacing principles to make 90, 120, and fractional targets more deliberate. Rather than blindly pushing a multiplier, it balances real and generated frames around the selected display rate and sheds unnecessary generation when the game cannot sustain it.
+- **Fractional Adaptive is now a performance and pacing tool:** Pick it for targets between integer ratios—such as 60-to-90 or 80-to-120—when you want more real frames than a forced high multiplier can preserve. Decky keeps Steady as the smooth, even-cadence baseline, makes the trade-off clear, and gives each game its own saved choice instead of one global compromise.
+- **Made for emulators and games that change speed:** Dynamic Cadence Recovery is a per-profile compatibility option for 30 FPS gameplay ↔ 60 FPS menus, including Vulkan emulators. It safely samples native presentation, then keeps Adaptive synced to Target FPS or lets Fixed follow confirmed Gamescope refresh. A true fixed-rate game simply resumes its validated policy, and the option stays off unless a game needs it.
+- **Tune while playing, without state drift:** Target, ceiling, cadence, recovery, and live frame-generation changes flow through the active game session and its canonical profile together. Decky applies what can safely change now and clearly marks settings that need a natural swapchain recreation or game restart.
+- **Menus and overlays no longer have to mean a restart:** The bundled Renderer can drain ordered presentation pressure with native frames, re-establish temporal history, and return through a zero-wait one-frame probe before restoring the full plan. Decky’s recovery diagnostics surface each phase, so a difficult game can be tuned with evidence instead of guesswork.
+- **Profiles, installation, and support are ready for serious testing:** Canonical per-game profiles, managed host and Flatpak setup, typed runtime contracts, machine-filterable diagnostics, and controlled private trace capture give players and maintainers a safer path from “this feels wrong” to a useful performance report—without publishing personal logs.
