@@ -51,6 +51,7 @@ htmlcov/
 /plugin/node_modules/
 /plugin/bower_components/
 /plugin/.pnpm-store/
+/plugin/.flatpak-builder/
 /plugin/dist/
 /plugin/src/config/devBuildInfo.generated.ts
 /plugin/.dev-build-info.json
