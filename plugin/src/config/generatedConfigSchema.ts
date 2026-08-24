@@ -33,7 +33,7 @@ export type FlatpakRuntimeI18nKey =
 // Shared backend validation and Decky UI limits
 export const BASE_FPS_CAP_MIN = 0 as const;
 export const BASE_FPS_CAP_MAX = 240 as const;
-export const BASE_FPS_CAP_UI_MAX = 60 as const;
+export const BASE_FPS_CAP_UI_MAX = 120 as const;
 export const TARGET_FPS_MIN = 30 as const;
 export const TARGET_FPS_MAX = 240 as const;
 export const ADAPTIVE_MAX_MULTIPLIER_MIN = 2 as const;

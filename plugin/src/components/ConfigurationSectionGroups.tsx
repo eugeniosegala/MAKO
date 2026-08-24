@@ -8,15 +8,12 @@ import {
 import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
 import {
   ACTIVE_IN,
-  ADAPTIVE_AUTO_BASE_FPS_CAP,
   ALLOW_FP16,
   BASE_FPS_CAP_MIN,
   BASE_FPS_CAP_UI_MAX,
-  BASE_FPS_CAP,
   DISABLE_MAKO,
   DISABLE_STEAMDECK_MODE,
   DLL,
-  DYNAMIC_CADENCE_RECOVERY,
   ENABLE_ZINK,
   EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
   EXTERNAL_VULKAN_LAYER_MANGOHUD,
@@ -34,6 +31,10 @@ import {
   GPU,
   type ConfigurationData,
 } from "../config/configSchema";
+import {
+  baseFpsCapChanges,
+  dynamicCadenceRecoveryChanges,
+} from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
 import { MakoInlineWarning, MakoSectionHeader } from "./MakoUi";
 
@@ -132,14 +133,7 @@ export function AdvancedRenderingConfigurationGroup({
               max={BASE_FPS_CAP_UI_MAX}
               step={1}
               disabled={config.adaptive && config.adaptive_auto_base_fps_cap}
-              onChange={(value) =>
-                onConfigUpdate({
-                  [BASE_FPS_CAP]: value,
-                  ...(value > 0
-                    ? { [DYNAMIC_CADENCE_RECOVERY]: false }
-                    : {}),
-                })
-              }
+              onChange={(value) => onConfigUpdate(baseFpsCapChanges(value))}
             />
           </PanelSectionRow>
 
@@ -245,25 +239,14 @@ export function CompatibilityConfigurationGroup({
         <>
           <PanelSectionRow>
             <ToggleField
-              label={t(
-                "DYNAMIC_CADENCE_RECOVERY",
-                "Dynamic Cadence Recovery",
-              )}
+              label={t("DYNAMIC_CADENCE_RECOVERY", "Dynamic Cadence Recovery")}
               description={t(
                 "DYNAMIC_CADENCE_RECOVERY_DESC",
-                "Compatibility recovery for games and emulators that switch native frame rates. Adaptive recalibrates its target policy; Fixed follows the confirmed Gamescope refresh with its selected multiplier as a ceiling. A brief pacing check may occur. Enabling it turns off both base FPS caps; selecting Fractional Adaptive or turning either cap back on turns Recovery off.",
+                "Compatibility recovery for games and emulators that switch native frame rates. Adaptive recalibrates its target policy; Fixed follows the confirmed Gamescope refresh with its selected multiplier as a ceiling. A brief pacing check may occur. Enabling it turns off both base FPS caps and, in Adaptive mode, activates Fractional Adaptive. Changing Fractional Adaptive or either base cap directly turns Recovery off.",
               )}
               checked={config.dynamic_cadence_recovery}
               onChange={(value) =>
-                onConfigUpdate(
-                  value
-                    ? {
-                        [DYNAMIC_CADENCE_RECOVERY]: true,
-                        [ADAPTIVE_AUTO_BASE_FPS_CAP]: false,
-                        [BASE_FPS_CAP]: 0,
-                      }
-                    : { [DYNAMIC_CADENCE_RECOVERY]: false },
-                )
+                onConfigUpdate(dynamicCadenceRecoveryChanges(value))
               }
             />
           </PanelSectionRow>

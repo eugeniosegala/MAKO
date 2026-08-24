@@ -24,15 +24,18 @@ vi.mock("@decky/ui", () => ({
   SliderField: ({
     label,
     value,
+    max,
     disabled,
     onChange,
   }: {
     label: React.ReactNode;
     value: number;
+    max?: number;
     disabled?: boolean;
     onChange: (value: number) => void;
   }) => (
     <button
+      data-maximum={max}
       disabled={disabled}
       onClick={() => onChange(value === 0 ? 30 : value + 1)}
     >
@@ -146,6 +149,20 @@ describe("External Tools controls", () => {
       base_fps_cap: 30,
       dynamic_cadence_recovery: false,
     });
+  });
+
+  test("offers manual Base FPS caps through 120 FPS", () => {
+    render(
+      <ConfigurationSection
+        config={getDefaults()}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      screen.getByText("Base FPS Cap (Off)").getAttribute("data-maximum"),
+    ).toBe("120");
   });
 
   test("enables and configures the per-profile refresh-rate guard", () => {

@@ -10,15 +10,18 @@ vi.mock("@decky/ui", () => ({
     label,
     checked,
     disabled,
+    bottomSeparator,
     onChange,
   }: {
     label: React.ReactNode;
     checked: boolean;
     disabled?: boolean;
+    bottomSeparator?: string;
     onChange: (value: boolean) => void;
   }) => (
     <button
       data-checked={String(checked)}
+      data-bottom-separator={bottomSeparator ?? "default"}
       disabled={disabled}
       onClick={() => onChange(!checked)}
     >
@@ -66,6 +69,11 @@ describe("Frame Generation Mode controls", () => {
     );
 
     expect(screen.queryByText("Fractional Adaptive (Preset)")).toBeNull();
+    expect(
+      screen
+        .getByText("Adaptive Frame Generation")
+        .getAttribute("data-bottom-separator"),
+    ).toBe("none");
 
     rerender(
       <FpsMultiplierControl
@@ -76,6 +84,59 @@ describe("Frame Generation Mode controls", () => {
     );
 
     expect(screen.getByText("Fractional Adaptive (Preset)")).toBeTruthy();
+    expect(
+      screen
+        .getByText("Adaptive Frame Generation")
+        .getAttribute("data-bottom-separator"),
+    ).toBe("default");
+  });
+
+  test("keeps the saved Fractional selection visible while generation is off", () => {
+    window.SP_REACT = React;
+
+    render(
+      <FpsMultiplierControl
+        config={{
+          ...getDefaults(),
+          frame_generation_enabled: false,
+          adaptive: true,
+          adaptive_auto_base_fps_cap: false,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      screen
+        .getByText("Fractional Adaptive (Preset)")
+        .getAttribute("data-checked"),
+    ).toBe("true");
+  });
+
+  test("preserves every Adaptive subsetting when the mode is re-enabled", () => {
+    window.SP_REACT = React;
+    const onConfigUpdate = vi.fn(async () => undefined);
+    const fractionalConfig = {
+      ...getDefaults(),
+      adaptive: false,
+      adaptive_auto_base_fps_cap: false,
+      target_fps: 120,
+      adaptive_max_multiplier: 4,
+      adaptive_stable_cadence: false,
+      dynamic_cadence_recovery: true,
+    };
+
+    render(
+      <FpsMultiplierControl
+        config={fractionalConfig}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Adaptive Frame Generation"));
+    expect(onConfigUpdate).toHaveBeenCalledWith({ adaptive: true });
   });
 
   test("uses the canonical steady-cap default for a partial legacy config", () => {
@@ -99,7 +160,7 @@ describe("Frame Generation Mode controls", () => {
     ).toBe("true");
   });
 
-  test("lets incompatible Adaptive presets replace cadence recovery", () => {
+  test("shows Recovery's fractional state and direct preset changes disable Recovery", () => {
     window.SP_REACT = React;
     const defaults = getDefaults();
     const onConfigUpdate = vi.fn(async () => undefined);
@@ -121,20 +182,42 @@ describe("Frame Generation Mode controls", () => {
     const fractional = screen.getByText("Fractional Adaptive (Preset)");
     const steady = screen.getByText("Steady Base Cap (45 FPS)");
     expect((fractional as HTMLButtonElement).disabled).toBe(false);
-    expect(fractional.getAttribute("data-checked")).toBe("false");
+    expect(fractional.getAttribute("data-checked")).toBe("true");
     expect((steady as HTMLButtonElement).disabled).toBe(false);
 
     fireEvent.click(fractional);
     expect(onConfigUpdate).toHaveBeenCalledWith({
-      frame_generation_enabled: true,
-      adaptive: true,
-      adaptive_auto_base_fps_cap: false,
+      adaptive_auto_base_fps_cap: true,
       dynamic_cadence_recovery: false,
     });
 
     fireEvent.click(steady);
     expect(onConfigUpdate).toHaveBeenCalledWith({
       adaptive_auto_base_fps_cap: true,
+      dynamic_cadence_recovery: false,
+    });
+  });
+
+  test("turning Steady Base Cap off explicitly keeps Recovery disabled", () => {
+    window.SP_REACT = React;
+    const onConfigUpdate = vi.fn(async () => undefined);
+
+    render(
+      <FpsMultiplierControl
+        config={{
+          ...getDefaults(),
+          adaptive: true,
+          adaptive_auto_base_fps_cap: true,
+          dynamic_cadence_recovery: false,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Steady Base Cap (45 FPS)"));
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      adaptive_auto_base_fps_cap: false,
       dynamic_cadence_recovery: false,
     });
   });

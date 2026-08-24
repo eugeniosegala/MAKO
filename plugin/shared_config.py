@@ -39,7 +39,7 @@ PER_GAME_WRAPPER_FLATPAK_APP_IDS = ("com.heroicgameslauncher.hgl",)
 # ceiling separate from the canonical profile validation range.
 BASE_FPS_CAP_MIN = 0
 BASE_FPS_CAP_MAX = 240
-BASE_FPS_CAP_UI_MAX = 60
+BASE_FPS_CAP_UI_MAX = 120
 TARGET_FPS_MIN = 30
 TARGET_FPS_MAX = 240
 ADAPTIVE_MAX_MULTIPLIER_MIN = 2

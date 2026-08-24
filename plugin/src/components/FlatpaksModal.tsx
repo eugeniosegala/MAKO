@@ -559,14 +559,34 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                           </div>
                         )}
                       </div>
-                      <div style={{ flex: "0 0 auto" }}>
-                        {appBusy ? (
-                          <MakoCompactSpinner />
-                        ) : (
-                          <Toggle
-                            value={hasOverrides}
-                            onChange={() => handleAppOverrideToggle(app)}
-                          />
+                      <div
+                        aria-busy={appBusy}
+                        style={{
+                          flex: "0 0 auto",
+                          position: "relative",
+                        }}
+                      >
+                        <Toggle
+                          value={hasOverrides}
+                          onChange={() => {
+                            if (!appBusy) void handleAppOverrideToggle(app);
+                          }}
+                        />
+                        {appBusy && (
+                          <div
+                            role="status"
+                            style={{
+                              position: "absolute",
+                              inset: 0,
+                              display: "flex",
+                              alignItems: "center",
+                              justifyContent: "center",
+                              pointerEvents: "none",
+                              background: "rgba(8, 39, 56, 0.78)",
+                            }}
+                          >
+                            <MakoCompactSpinner />
+                          </div>
                         )}
                       </div>
                     </div>

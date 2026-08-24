@@ -7,13 +7,11 @@ import {
   ToggleField,
 } from "@decky/ui";
 import {
-  ADAPTIVE_AUTO_BASE_FPS_CAP,
   ADAPTIVE_MAX_MULTIPLIER_MAX,
   ADAPTIVE_MAX_MULTIPLIER_MIN,
   ADAPTIVE_MAX_MULTIPLIER,
   ADAPTIVE_MINIMUM_BASE_FPS,
   ADAPTIVE_STABLE_CADENCE,
-  DYNAMIC_CADENCE_RECOVERY,
   FIXED_MULTIPLIER_UI_MAX,
   FIXED_MULTIPLIER_UI_MIN,
   FRAME_GENERATION_ENABLED,
@@ -28,6 +26,7 @@ import {
   adaptiveModeChanges,
   fractionalAdaptivePresetChanges,
   isFractionalAdaptivePresetEnabled,
+  steadyBaseCapChanges,
 } from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
 import { useDeferredTargetFps } from "../hooks/useDeferredTargetFps";
@@ -138,12 +137,9 @@ export function FpsMultiplierControl({
             "ADAPTIVE_DESC",
             "Adjusts frame generation to reach Target FPS. The steady base cap is the default for smoother pacing. Enable Fractional Adaptive below to keep more real frames, but test it per game. Raising the multiplier limit may require a restart.",
           )}
+          bottomSeparator={config.adaptive ? undefined : "none"}
           checked={config.adaptive}
-          onChange={(value) =>
-            onConfigUpdate(
-              adaptiveModeChanges(value, config.dynamic_cadence_recovery),
-            )
-          }
+          onChange={(value) => onConfigUpdate(adaptiveModeChanges(value))}
         />
       </PanelSectionRow>
 
@@ -157,7 +153,7 @@ export function FpsMultiplierControl({
               )}
               description={t(
                 "FRACTIONAL_ADAPTIVE_PRESET_DESC",
-                "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses the steady base cap. Incompatible setting changes turn this preset off automatically.",
+                "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses the steady base cap. Dynamic Cadence Recovery also uses this uncapped Adaptive setup; changing Fractional Adaptive or Steady Base Cap directly turns Recovery off.",
               )}
               checked={isFractionalAdaptivePresetEnabled(config)}
               onChange={(value) =>
@@ -190,12 +186,7 @@ export function FpsMultiplierControl({
                 config.adaptive_auto_base_fps_cap ??
                 DEFAULT_CONFIGURATION.adaptive_auto_base_fps_cap
               }
-              onChange={(value) =>
-                onConfigUpdate({
-                  [ADAPTIVE_AUTO_BASE_FPS_CAP]: value,
-                  ...(value ? { [DYNAMIC_CADENCE_RECOVERY]: false } : {}),
-                })
-              }
+              onChange={(value) => onConfigUpdate(steadyBaseCapChanges(value))}
             />
           </PanelSectionRow>
           <PanelSectionRow>
@@ -212,9 +203,7 @@ export function FpsMultiplierControl({
               validValues="steps"
               minimumDpadGranularity={1}
               notchCount={
-                ADAPTIVE_MAX_MULTIPLIER_MAX -
-                ADAPTIVE_MAX_MULTIPLIER_MIN +
-                1
+                ADAPTIVE_MAX_MULTIPLIER_MAX - ADAPTIVE_MAX_MULTIPLIER_MIN + 1
               }
               notchTicksVisible
               onChange={(value) =>

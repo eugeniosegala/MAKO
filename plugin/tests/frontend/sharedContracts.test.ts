@@ -101,7 +101,7 @@ describe("generated cross-language contracts", () => {
       externalVulkanLayers: [...EXTERNAL_VULKAN_LAYER_VALUES],
     }).toEqual({
       baseFpsCap: [0, 240],
-      baseFpsCapUiMax: 60,
+      baseFpsCapUiMax: 120,
       targetFps: [30, 240],
       adaptiveMaxMultiplier: [2, 4],
       adaptiveMinimumBaseFps: 10,
