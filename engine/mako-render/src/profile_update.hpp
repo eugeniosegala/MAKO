@@ -26,6 +26,7 @@ namespace mako::layer {
         bool generationModeChanged{false};
         bool fixedMultiplierChanged{false};
         bool baseFpsCapChanged{false};
+        bool dynamicCadenceProbeIntervalChanged{false};
     };
 
     /// Auto-cap aligns the common healthy path with an exact 2x cadence.
@@ -66,6 +67,9 @@ namespace mako::layer {
         size_t maximumMultiplier{0};
         bool stableCadence{false};
         bool dynamicCadenceRecovery{false};
+        uint32_t dynamicCadenceProbeIntervalSeconds{
+            ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+        };
     };
 
     /// Adaptive owns an explicit output target. Fixed + Dynamic Cadence
@@ -82,6 +86,8 @@ namespace mako::layer {
                 .stableCadence = profile.adaptive_stable_cadence,
                 .dynamicCadenceRecovery =
                     dynamicCadenceRecoveryEnabled(profile),
+                .dynamicCadenceProbeIntervalSeconds =
+                    profile.dynamic_cadence_probe_interval_seconds,
             };
         }
         if (!dynamicCadenceRecoveryEnabled(profile) ||
@@ -99,6 +105,8 @@ namespace mako::layer {
             .maximumMultiplier = profile.multiplier,
             .stableCadence = false,
             .dynamicCadenceRecovery = true,
+            .dynamicCadenceProbeIntervalSeconds =
+                profile.dynamic_cadence_probe_interval_seconds,
         };
     }
 
@@ -145,6 +153,11 @@ namespace mako::layer {
         const bool fixedMultiplierChanged = current.multiplier != next.multiplier;
         const bool baseFpsCapChanged =
             effectiveBaseFpsCap(current) != effectiveBaseFpsCap(next);
+        const bool dynamicCadenceProbeIntervalChanged =
+            current.dynamic_cadence_probe_interval_seconds !=
+                next.dynamic_cadence_probe_interval_seconds &&
+            (current.dynamic_cadence_recovery ||
+             next.dynamic_cadence_recovery);
         const bool generationPolicyChanged =
             current.dynamic_cadence_recovery !=
                 next.dynamic_cadence_recovery ||
@@ -178,13 +191,15 @@ namespace mako::layer {
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,
                 .baseFpsCapChanged = baseFpsCapChanged,
+                .dynamicCadenceProbeIntervalChanged =
+                    dynamicCadenceProbeIntervalChanged,
             };
         }
 
         if (frameGenerationChanged || refreshRateThresholdChanged ||
                 generationPolicyChanged ||
                 generationModeChanged || fixedMultiplierChanged ||
-                baseFpsCapChanged) {
+                baseFpsCapChanged || dynamicCadenceProbeIntervalChanged) {
             return {
                 .action = ProfileUpdateAction::ApplyLive,
                 .frameGenerationChanged = frameGenerationChanged,
@@ -193,6 +208,8 @@ namespace mako::layer {
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,
                 .baseFpsCapChanged = baseFpsCapChanged,
+                .dynamicCadenceProbeIntervalChanged =
+                    dynamicCadenceProbeIntervalChanged,
             };
         }
 

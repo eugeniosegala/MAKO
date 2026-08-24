@@ -403,6 +403,32 @@ ApplicationWindow {
                             onToggled: backend.dynamic_cadence_recovery = checked
                         }
                     }
+
+                    GroupEntry {
+                        visible: backend.dynamic_cadence_recovery
+                        title: t.dynamicCadenceProbeInterval
+                        description: t.dynamicCadenceProbeIntervalDesc
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Slider {
+                                id: dynamic_cadence_probe_interval
+                                Layout.fillWidth: true
+                                from: backend.minimum_dynamic_cadence_probe_interval_seconds
+                                to: backend.maximum_dynamic_cadence_probe_interval_seconds
+                                stepSize: 1
+                                snapMode: Slider.SnapAlways
+                                value: backend.dynamic_cadence_probe_interval_seconds
+                                onMoved: backend.dynamic_cadence_probe_interval_seconds = Math.round(value)
+                            }
+
+                            Label {
+                                text: Math.round(dynamic_cadence_probe_interval.value) + t.secondsSuffix
+                            }
+                        }
+                    }
                 }
 
                 Group {

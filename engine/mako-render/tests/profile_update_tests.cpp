@@ -29,6 +29,7 @@ namespace {
             .adaptive_max_multiplier = 3,
             .adaptive_stable_cadence = false,
             .dynamic_cadence_recovery = false,
+            .dynamic_cadence_probe_interval_seconds = 2,
             .flow_scale = 1.0F,
             .performance_mode = false,
             .pacing = ls::Pacing::None,
@@ -115,6 +116,9 @@ int main() {
         "Fixed recovery must not borrow Adaptive's hidden target");
     expect(generationSchedulerPolicy(next, 90)->targetFps == 90,
         "Fixed recovery must recalibrate when confirmed refresh changes");
+    expect(generationSchedulerPolicy(next, 90)
+                ->dynamicCadenceProbeIntervalSeconds == 2,
+        "Fixed recovery must retain its configured probe interval");
     expect(!generationSchedulerPolicy(next, 0),
         "Fixed recovery must reject an unsupported refresh target");
     next.multiplier = 5;
@@ -131,6 +135,23 @@ int main() {
     expect(decision.action == ProfileUpdateAction::ApplyLive &&
             decision.generationPolicyChanged,
         "Fixed recovery must be a live generation-policy change");
+
+    auto fasterRecovery = next;
+    fasterRecovery.multiplier = 2;
+    fasterRecovery.dynamic_cadence_probe_interval_seconds = 1;
+    next.multiplier = 2;
+    decision = classifyProfileUpdate(next, fasterRecovery, 3, true);
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.dynamicCadenceProbeIntervalChanged &&
+            !decision.generationPolicyChanged,
+        "Probe-interval changes must apply live without resetting policy");
+
+    auto dormantRecoveryInterval = current;
+    dormantRecoveryInterval.dynamic_cadence_probe_interval_seconds = 3;
+    decision = classifyProfileUpdate(current, dormantRecoveryInterval, 3, true);
+    expect(decision.action == ProfileUpdateAction::NoRuntimeChange &&
+            !decision.dynamicCadenceProbeIntervalChanged,
+        "A dormant probe interval must remain saved without disturbing runtime");
 
     next = current;
     next.adaptive_max_multiplier = 4;

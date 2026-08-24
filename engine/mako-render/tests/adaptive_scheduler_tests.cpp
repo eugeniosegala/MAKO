@@ -283,7 +283,12 @@ namespace {
                 const bool stableCadence = false,
                 const AdaptiveRecoveryPolicy recoveryPolicy =
                     AdaptiveRecoveryPolicy::ConservativeHdr,
-                const bool dynamicCadenceRecovery = false) :
+                const bool dynamicCadenceRecovery = false,
+                const std::chrono::seconds dynamicCadenceProbeInterval =
+                    std::chrono::seconds(
+                        ls::GameConfDefaults::
+                            dynamicCadenceProbeIntervalSeconds
+                    )) :
             scheduler(
                 AdaptiveSchedulerConfig{
                     .targetFps = targetFps,
@@ -291,6 +296,8 @@ namespace {
                     .generatedFrameCapacity = 3,
                     .stableCadence = stableCadence,
                     .dynamicCadenceRecovery = dynamicCadenceRecovery,
+                    .dynamicCadenceProbeInterval =
+                        dynamicCadenceProbeInterval,
                     .recoveryPolicy = recoveryPolicy,
                 },
                 &this->diagnostics
@@ -1814,6 +1821,72 @@ namespace {
             "recovered native target cadence continued generating frames");
     }
 
+    void testDynamicCadenceBoundsSelfHiddenRecoveryLatency() {
+        Harness harness(
+            60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true
+        );
+        harness.start();
+
+        while (!harness.diagnostics.contains(
+                "dynamic-cadence-probe-rejected")) {
+            harness.frameAtFps(30.0);
+        }
+
+        const auto transitionAt = harness.now;
+        AdaptiveFramePlan previousPlan =
+            AdaptiveFramePlan::evenlySpaced(1);
+        while (!harness.diagnostics.contains("dynamic-cadence-recovered")) {
+            const double observedFps = previousPlan.empty() ? 60.0 : 30.0;
+            previousPlan = harness.frameAtFps(observedFps);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = previousPlan.size(),
+                .acceptedForPresentation = previousPlan.size(),
+            });
+            require(harness.now - transitionAt <= 2100ms,
+                "self-hidden native cadence recovery exceeded its latency bound");
+        }
+
+        require(harness.now - transitionAt <= 2100ms,
+            "self-hidden native cadence recovery did not complete promptly");
+    }
+
+    void testDynamicCadenceProbeIntervalUpdatesLive() {
+        Harness harness(
+            60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true, 3s
+        );
+        harness.start();
+
+        while (!harness.diagnostics.contains(
+                "dynamic-cadence-probe-rejected")) {
+            harness.frameAtFps(30.0);
+        }
+
+        const auto generationLimit =
+            harness.scheduler.snapshot().generationLimit;
+        const size_t stabilizationEvents =
+            harness.diagnostics.count("stabilization");
+        harness.scheduler.updateDynamicCadenceProbeInterval(harness.now, 1s);
+        require(harness.scheduler.snapshot().generationLimit == generationLimit,
+            "live probe interval update reset the validated generation limit");
+        require(harness.diagnostics.count("stabilization") ==
+                stabilizationEvents,
+            "live probe interval update restarted scheduler stabilization");
+
+        const auto transitionAt = harness.now;
+        AdaptiveFramePlan previousPlan =
+            AdaptiveFramePlan::evenlySpaced(1);
+        while (!harness.diagnostics.contains("dynamic-cadence-recovered")) {
+            const double observedFps = previousPlan.empty() ? 60.0 : 30.0;
+            previousPlan = harness.frameAtFps(observedFps);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = previousPlan.size(),
+                .acceptedForPresentation = previousPlan.size(),
+            });
+            require(harness.now - transitionAt <= 1100ms,
+                "live probe interval update did not reschedule the next probe");
+        }
+    }
+
     void testDynamicCadenceProbeRejectsTrueThirtyFpsCadence() {
         Harness harness(
             60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true
@@ -2261,6 +2334,8 @@ int main() {
         {"persistent loss rejects Smooth Cadence", testPersistentDeliveryLossRejectsSmoothCadenceProbe},
         {"Smooth Cadence exits after native recovery", testSmoothCadenceReturnsToTargetAfterBaseRecovery},
         {"dynamic cadence recovers a self-hidden native rate", testDynamicCadenceRecoversSelfHiddenNativeRateIncrease},
+        {"dynamic cadence bounds self-hidden recovery latency", testDynamicCadenceBoundsSelfHiddenRecoveryLatency},
+        {"dynamic cadence probe interval updates live", testDynamicCadenceProbeIntervalUpdatesLive},
         {"dynamic cadence rejects true 30 FPS", testDynamicCadenceProbeRejectsTrueThirtyFpsCadence},
         {"dynamic cadence remains opt-in and SDR-only", testDynamicCadenceRecoveryIsOptInAndSdrOnly},
         {"Smooth Cadence resists oscillating-load chatter", testSmoothCadenceDoesNotChatterOnOscillatingLoad},

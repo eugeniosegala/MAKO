@@ -412,6 +412,9 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                       << ", dynamic cadence recovery="
                       << (policy.dynamicCadenceRecovery
                             ? "enabled" : "disabled")
+                      << ", cadence probe interval="
+                      << policy.dynamicCadenceProbeIntervalSeconds
+                      << " s"
                       << '\n';
         } else if (!this->profile.adaptive &&
                 this->profile.dynamic_cadence_recovery) {
@@ -458,6 +461,9 @@ bool Swapchain::resetGenerationScheduler(
             .generatedFrameCapacity = this->destinationImages.size(),
             .stableCadence = policy->stableCadence,
             .dynamicCadenceRecovery = policy->dynamicCadenceRecovery,
+            .dynamicCadenceProbeInterval = std::chrono::seconds(
+                policy->dynamicCadenceProbeIntervalSeconds
+            ),
             .recoveryPolicy = this->privateOrderedTransport
                 ? AdaptiveRecoveryPolicy::OrderedSdr
                 : AdaptiveRecoveryPolicy::ConservativeHdr,
@@ -766,18 +772,28 @@ ProfileUpdateAction Swapchain::updateProfile(
     ).has_value();
     const bool fixedSchedulerPolicyChanged = !this->profile.adaptive &&
         decision.fixedMultiplierChanged;
-    if (schedulerPolicyAvailable &&
+    const auto profileUpdateNow = DiagnosticsClock::now();
+    const bool resetSchedulerPolicy = schedulerPolicyAvailable &&
             (decision.generationPolicyChanged ||
              decision.generationModeChanged ||
              fixedSchedulerPolicyChanged ||
-             decision.baseFpsCapChanged || enabling)) {
+             decision.baseFpsCapChanged || enabling);
+    if (resetSchedulerPolicy) {
         static_cast<void>(this->resetGenerationScheduler(
-            DiagnosticsClock::now(), "configuration-update"
+            profileUpdateNow, "configuration-update"
         ));
     } else if (hadGenerationScheduler && !schedulerPolicyAvailable) {
         this->adaptiveScheduler.reset();
         this->recoveryState.historyWarmupRemaining =
             AdaptiveScheduler::historyWarmupFrameCount();
+    } else if (decision.dynamicCadenceProbeIntervalChanged &&
+            this->adaptiveScheduler) {
+        this->adaptiveScheduler->updateDynamicCadenceProbeInterval(
+            profileUpdateNow,
+            std::chrono::seconds(
+                this->profile.dynamic_cadence_probe_interval_seconds
+            )
+        );
     }
 
     const auto updatedGenerationPolicy = generationSchedulerPolicy(
@@ -813,6 +829,8 @@ ProfileUpdateAction Swapchain::updateProfile(
                   << this->profile.adaptive_stable_cadence
                   << " dynamic_cadence_recovery="
                   << this->profile.dynamic_cadence_recovery
+                  << " dynamic_cadence_probe_interval_seconds="
+                  << this->profile.dynamic_cadence_probe_interval_seconds
                   << " effective_dynamic_cadence_recovery="
                   << updatedDynamicCadenceRecoveryActive
                   << " hdr=" << this->colorPipeline.hdr

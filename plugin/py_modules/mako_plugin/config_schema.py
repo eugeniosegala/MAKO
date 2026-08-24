@@ -15,6 +15,8 @@ from shared_config import (
     BASE_FPS_CAP_MIN,
     CONFIG_SCHEMA_DEF,
     DEFAULT_PROFILE_NAME,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
     EXTERNAL_VULKAN_LAYER_VALUES,
     FIXED_MULTIPLIER_MIN,
     FLOW_SCALE_MAX,
@@ -177,6 +179,16 @@ class ConfigurationManager:
                 f"{ADAPTIVE_MAX_MULTIPLIER_MIN} and "
                 f"{ADAPTIVE_MAX_MULTIPLIER_MAX}"
             )
+        if not (
+            DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN
+            <= validated["dynamic_cadence_probe_interval_seconds"]
+            <= DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX
+        ):
+            raise ValueError(
+                "dynamic_cadence_probe_interval_seconds must be between "
+                f"{DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN} and "
+                f"{DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX}"
+            )
         if not FLOW_SCALE_MIN <= validated["flow_scale"] <= FLOW_SCALE_MAX:
             raise ValueError(
                 f"flow_scale must be between {FLOW_SCALE_MIN} and {FLOW_SCALE_MAX}"
@@ -255,6 +267,8 @@ class ConfigurationManager:
                 f"adaptive_max_multiplier = {config['adaptive_max_multiplier']}",
                 f"adaptive_stable_cadence = {str(config['adaptive_stable_cadence']).lower()}",
                 f"dynamic_cadence_recovery = {str(config['dynamic_cadence_recovery']).lower()}",
+                "dynamic_cadence_probe_interval_seconds = "
+                f"{config['dynamic_cadence_probe_interval_seconds']}",
                 f"flow_scale = {config['flow_scale']}",
                 f"performance_mode = {str(config['performance_mode']).lower()}",
                 "pacing = 'none'",

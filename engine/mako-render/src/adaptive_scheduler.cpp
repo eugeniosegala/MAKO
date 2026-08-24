@@ -88,7 +88,6 @@ namespace {
     constexpr auto adaptiveStableRearmDuration = std::chrono::seconds(2);
     constexpr auto adaptivePlanDiagnosticInterval = std::chrono::seconds(1);
     constexpr auto adaptiveFastBurstDiagnosticInterval = std::chrono::seconds(1);
-    constexpr auto adaptiveNativeCadenceProbeDelay = std::chrono::seconds(5);
     constexpr double adaptiveTargetClockPlacementDeadbandRatio = 0.01;
     constexpr double adaptiveTargetClockMinimumRepaymentHeadroomOutputs = 0.25;
     constexpr std::array adaptiveOutputCountReciprocals{
@@ -129,6 +128,20 @@ AdaptiveScheduler::AdaptiveScheduler(AdaptiveSchedulerConfig config,
             )
         );
     }
+    if (this->config.dynamicCadenceProbeInterval < std::chrono::seconds(
+            ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds) ||
+            this->config.dynamicCadenceProbeInterval > std::chrono::seconds(
+                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
+            )) {
+        throw std::invalid_argument(
+            "Dynamic cadence probe interval must be between " +
+            std::to_string(
+                ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds
+            ) + " and " + std::to_string(
+                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
+            ) + " seconds"
+        );
+    }
     if (this->config.maximumMultiplier <
             ls::GameConfLimits::minimumAdaptiveMaxMultiplier ||
             this->config.maximumMultiplier >
@@ -146,6 +159,29 @@ AdaptiveScheduler::AdaptiveScheduler(AdaptiveSchedulerConfig config,
             "Adaptive generated-frame capacity exceeds plan capacity"
         );
     }
+}
+
+void AdaptiveScheduler::updateDynamicCadenceProbeInterval(
+        const TimePoint now, const std::chrono::seconds interval) {
+    if (interval < std::chrono::seconds(
+            ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds) ||
+            interval > std::chrono::seconds(
+                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
+            )) {
+        throw std::invalid_argument(
+            "Dynamic cadence probe interval must be between " +
+            std::to_string(
+                ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds
+            ) + " and " + std::to_string(
+                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
+            ) + " seconds"
+        );
+    }
+
+    this->config.dynamicCadenceProbeInterval = interval;
+    auto& probe = this->state.nativeCadenceProbe;
+    if (!probe.active && probe.nextAt)
+        probe.nextAt = now + interval;
 }
 
 void AdaptiveScheduler::beginHistoryWarmup(const size_t frames,
@@ -1128,7 +1164,7 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
             probe.baselineBaseFps = 0.0;
             probe.minimumMeasuredBaseFps = 0.0;
             probe.confirmedSamples = 0;
-            probe.nextAt = now + adaptiveNativeCadenceProbeDelay;
+            probe.nextAt = now + this->config.dynamicCadenceProbeInterval;
             this->state.outputPlanner.resetTargetClock();
             generatedFrameCount = std::max<size_t>(generatedFrameCount, 1);
             return {.planningReady = true};
@@ -1171,12 +1207,12 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         probe.baselineBaseFps = 0.0;
         probe.minimumMeasuredBaseFps = 0.0;
         probe.confirmedSamples = 0;
-        probe.nextAt = now + adaptiveNativeCadenceProbeDelay;
+        probe.nextAt = now + this->config.dynamicCadenceProbeInterval;
         return {};
     }
 
     if (!probe.nextAt) {
-        probe.nextAt = now + adaptiveNativeCadenceProbeDelay;
+        probe.nextAt = now + this->config.dynamicCadenceProbeInterval;
         return {.planningReady = true};
     }
     if (now < *probe.nextAt)

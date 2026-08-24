@@ -137,6 +137,8 @@
   "ADAPTIVE_SMOOTH_CADENCE_DESC": "검증된 일정 보간 케이던스를 사용합니다. 화면의 움직임이 더 부드럽게 보일 수 있지만 실제 프레임 케이던스를 낮추고 입력 지연을 늘릴 수 있습니다. 기본값은 활성화이며, 끈 상태에서 게임 반응성이 더 좋다고 느껴지면 비활성화하세요.",
   "DYNAMIC_CADENCE_RECOVERY": "동적 케이던스 복구",
   "DYNAMIC_CADENCE_RECOVERY_DESC": "게임이나 에뮬레이터의 기본 프레임 속도가 바뀌면 복구합니다. 적응형은 재조정되고 고정 모드는 배율을 상한으로 확인된 Gamescope 주사율을 따릅니다. 활성화하면 짧게 페이싱을 확인하고 두 기본 제한을 끄며 분수 적응형을 선택합니다. 분수 적응형이나 제한을 변경하면 복구가 꺼집니다.",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL": "케이던스 검사 간격",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "복구 기능이 기본 프레임 속도를 확인하는 간격입니다. 1초는 가장 빠르게 반응하지만 짧은 페이싱 끊김이 더 자주 발생할 수 있고, 3초는 검사 빈도가 낮습니다. 게임별로 테스트하세요. 변경 사항은 실시간으로 적용됩니다.",
   "ADAPTIVE_VALUE": "적응형",
   "CONFIG_DLL_PATH": "Lossless.dll 경로",
   "CONFIG_DLL_PATH_DESC": "Lossless.dll의 전체 경로입니다. 비워 두면 MAKO Renderer 자동 검색을 사용합니다.",

@@ -11,6 +11,8 @@ from shared_config import (
     BASE_FPS_CAP_MAX,
     BASE_FPS_CAP_MIN,
     CONFIG_SCHEMA_DEF,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
     FIXED_MULTIPLIER_UI_MIN,
     FLOW_SCALE_MAX,
     FLOW_SCALE_MIN,
@@ -116,6 +118,19 @@ class RendererConfigContractTests(unittest.TestCase):
                 CONFIG_SCHEMA_DEF["adaptive_max_multiplier"]["default"],
                 renderer_constant("minimumAdaptiveMaxMultiplier"),
                 renderer_constant("maximumAdaptiveMaxMultiplier"),
+            ),
+            (
+                DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
+                DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
+                CONFIG_SCHEMA_DEF[
+                    "dynamic_cadence_probe_interval_seconds"
+                ]["default"],
+                renderer_constant(
+                    "minimumDynamicCadenceProbeIntervalSeconds"
+                ),
+                renderer_constant(
+                    "maximumDynamicCadenceProbeIntervalSeconds"
+                ),
             ),
             (
                 FLOW_SCALE_MIN,

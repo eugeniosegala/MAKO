@@ -45,6 +45,9 @@ namespace mako::layer {
         bool dynamicCadenceRecovery{
             ls::GameConfDefaults::dynamicCadenceRecovery
         };
+        std::chrono::seconds dynamicCadenceProbeInterval{
+            ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+        };
         AdaptiveRecoveryPolicy recoveryPolicy{
             AdaptiveRecoveryPolicy::ConservativeHdr
         };
@@ -181,6 +184,8 @@ namespace mako::layer {
             bool generatedImageAcquireBackoff);
 
         void resetTiming(TimePoint now);
+        void updateDynamicCadenceProbeInterval(
+            TimePoint now, std::chrono::seconds interval);
         void beginStabilization(TimePoint now, std::string_view reason);
         void restoreGenerationLimit(TimePoint now, size_t generationLimit,
             std::string_view reason,

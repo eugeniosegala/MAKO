@@ -45,6 +45,8 @@ TARGET_FPS_MAX = 240
 ADAPTIVE_MAX_MULTIPLIER_MIN = 2
 ADAPTIVE_MAX_MULTIPLIER_MAX = 4
 ADAPTIVE_MINIMUM_BASE_FPS = 10
+DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 1
+DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3
 FLOW_SCALE_MIN = 0.25
 FLOW_SCALE_MAX = 1.0
 FIXED_MULTIPLIER_MIN = 2
@@ -171,6 +173,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
         "description": "mode-independent compatibility recovery for native frame-rate switches; Fixed follows confirmed refresh, enabling clears both base FPS caps, and choosing an incompatible preset or cap disables recovery",
+        "location": "toml"
+    },
+
+    "dynamic_cadence_probe_interval_seconds": {
+        "fieldType": ConfigFieldType.INTEGER,
+        "default": 2,
+        "description": "seconds between Dynamic Cadence Recovery probes; shorter intervals react faster but can make brief pacing hitches more frequent",
         "location": "toml"
     },
 
