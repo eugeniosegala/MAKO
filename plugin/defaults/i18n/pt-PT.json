@@ -137,6 +137,8 @@
   "ADAPTIVE_SMOOTH_CADENCE_DESC": "Utiliza uma cadência de interpolação constante validada. Pode tornar o movimento apresentado mais suave, mas reduzir a cadência de fotogramas reais e aumentar a latência de entrada. Ativada por predefinição; desative-a se o jogo parecer mais reativo sem ela.",
   "DYNAMIC_CADENCE_RECOVERY": "Recuperação de cadência dinâmica",
   "DYNAMIC_CADENCE_RECOVERY_DESC": "Recupera quando um jogo ou emulador muda a taxa nativa. O Adaptativo recalibra; o Fixo segue a atualização confirmada do Gamescope até ao seu multiplicador. Ao ativar, verifica brevemente o ritmo, desliga ambos os limites base e seleciona o Adaptativo fracionário. Alterar o Fracionário ou qualquer limite desativa a recuperação.",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL": "Intervalo de verificação da cadência",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "Define a frequência com que a Recuperação testa a taxa nativa. 1 segundo reage mais depressa, mas pode causar breves falhas de ritmo com maior frequência; 3 segundos faz verificações com menor frequência. Teste em cada jogo. As alterações são aplicadas em tempo real.",
   "ADAPTIVE_VALUE": "Adaptativo",
   "CONFIG_DLL_PATH": "Caminho do Lossless.dll",
   "CONFIG_DLL_PATH_DESC": "Caminho completo opcional para Lossless.dll. Deixe em branco para utilizar a deteção automática do MAKO Renderer.",

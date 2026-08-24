@@ -169,6 +169,35 @@ class GameProfileTests(unittest.TestCase):
         self.assertFalse(fixed["adaptive_auto_base_fps_cap"])
         self.assertEqual(fixed["base_fps_cap"], 0)
 
+    def test_dynamic_cadence_probe_interval_is_validated_and_persisted(self):
+        defaults = ConfigurationManager.get_defaults()
+        self.assertEqual(defaults["dynamic_cadence_probe_interval_seconds"], 2)
+
+        configured = ConfigurationManager.validate_config({
+            **defaults,
+            "dynamic_cadence_probe_interval_seconds": 1,
+        })
+        content = ConfigurationManager.generate_toml_content(configured)
+        self.assertIn(
+            "dynamic_cadence_probe_interval_seconds = 1", content
+        )
+        self.assertEqual(
+            ConfigurationManager.parse_toml_content(content)[
+                "dynamic_cadence_probe_interval_seconds"
+            ],
+            1,
+        )
+
+        for invalid in (0, 4):
+            with self.subTest(invalid=invalid), self.assertRaisesRegex(
+                ValueError,
+                "dynamic_cadence_probe_interval_seconds must be between 1 and 3",
+            ):
+                ConfigurationManager.validate_config({
+                    **defaults,
+                    "dynamic_cadence_probe_interval_seconds": invalid,
+                })
+
     def test_frame_generation_refresh_threshold_is_validated(self):
         defaults = ConfigurationManager.get_defaults()
         configured = ConfigurationManager.validate_config({

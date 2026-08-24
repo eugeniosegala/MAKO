@@ -11,6 +11,8 @@ from shared_config import (
     BASE_FPS_CAP_MAX,
     BASE_FPS_CAP_MIN,
     CONFIG_SCHEMA_DEF,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
     FIXED_MULTIPLIER_UI_MIN,
     FLOW_SCALE_MAX,
     FLOW_SCALE_MIN,
@@ -118,6 +120,19 @@ class RendererConfigContractTests(unittest.TestCase):
                 renderer_constant("maximumAdaptiveMaxMultiplier"),
             ),
             (
+                DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
+                DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
+                CONFIG_SCHEMA_DEF[
+                    "dynamic_cadence_probe_interval_seconds"
+                ]["default"],
+                renderer_constant(
+                    "minimumDynamicCadenceProbeIntervalSeconds"
+                ),
+                renderer_constant(
+                    "maximumDynamicCadenceProbeIntervalSeconds"
+                ),
+            ),
+            (
                 FLOW_SCALE_MIN,
                 FLOW_SCALE_MAX,
                 CONFIG_SCHEMA_DEF["flow_scale"]["default"],
@@ -141,6 +156,12 @@ class RendererConfigContractTests(unittest.TestCase):
             FIXED_MULTIPLIER_UI_MIN,
             renderer_constant("minimumMultiplier"),
         )
+        self.assertEqual(
+            CONFIG_SCHEMA_DEF[
+                "dynamic_cadence_probe_interval_seconds"
+            ]["default"],
+            renderer_constant("dynamicCadenceProbeIntervalSeconds"),
+        )
 
     def test_config_format_version_matches_renderer(self):
         source = (
@@ -161,6 +182,57 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertEqual(pacing, "none")
         self.assertIn(f'if (str == "{pacing}")', source)
         self.assertIn(f'profile.insert("pacing", "{pacing}")', source)
+
+    def test_renderer_ui_exposes_live_compatibility_controls(self):
+        ui_source = (
+            REPOSITORY_ROOT / "engine/mako-ui/rsc/UI.qml"
+        ).read_text(encoding="utf-8")
+        backend_source = (
+            REPOSITORY_ROOT / "engine/mako-ui/src/backend.hpp"
+        ).read_text(encoding="utf-8")
+
+        for field, property_type in (
+            ("frame_generation_refresh_threshold", "uint"),
+            ("dynamic_cadence_recovery", "bool"),
+            ("dynamic_cadence_probe_interval_seconds", "uint"),
+        ):
+            with self.subTest(field=field):
+                self.assertIn(f"backend.{field}", ui_source)
+                self.assertIn(
+                    f"Q_PROPERTY({property_type} {field}", backend_source
+                )
+
+        self.assertNotIn("backend.pacing_mode", ui_source)
+        self.assertNotIn("Q_PROPERTY(int pacing_mode", backend_source)
+
+    def test_renderer_ui_exposes_only_safe_standalone_launch_controls(self):
+        ui_source = (
+            REPOSITORY_ROOT / "engine/mako-ui/rsc/UI.qml"
+        ).read_text(encoding="utf-8")
+        backend_source = (
+            REPOSITORY_ROOT / "engine/mako-ui/src/backend.hpp"
+        ).read_text(encoding="utf-8")
+
+        for field in (
+            "enable_zink",
+            "force_alsa_audio",
+        ):
+            with self.subTest(field=field):
+                self.assertIn(f"backend.{field}", ui_source)
+                self.assertIn(f"Q_PROPERTY(bool {field}", backend_source)
+
+        for unsupported_layer_control in (
+            "disable_steamdeck_mode",
+            "external_vulkan_layer",
+            "gamescope_wsi",
+            "mangohud",
+            "vkbasalt",
+        ):
+            with self.subTest(control=unsupported_layer_control):
+                self.assertNotIn(
+                    f"backend.{unsupported_layer_control}",
+                    ui_source.lower(),
+                )
 
     def test_adaptive_minimum_base_fps_matches_renderer_policy(self):
         source = (

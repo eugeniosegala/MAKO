@@ -22,6 +22,8 @@ from shared_config import (
     BASE_FPS_CAP_UI_MAX,
     CONFIG_SCHEMA_DEF,
     DEFAULT_PROFILE_NAME,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
     EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
     EXTERNAL_VULKAN_LAYER_MANGOHUD,
     EXTERNAL_VULKAN_LAYER_NONE,
@@ -120,6 +122,10 @@ def generate_typescript_schema():
         f"{ADAPTIVE_MAX_MULTIPLIER_MAX} as const;",
         "export const ADAPTIVE_MINIMUM_BASE_FPS = "
         f"{ADAPTIVE_MINIMUM_BASE_FPS} as const;",
+        "export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = "
+        f"{DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN} as const;",
+        "export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = "
+        f"{DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX} as const;",
         f"export const FLOW_SCALE_MIN = {FLOW_SCALE_MIN} as const;",
         f"export const FLOW_SCALE_MAX = {FLOW_SCALE_MAX} as const;",
         f"export const FIXED_MULTIPLIER_MIN = {FIXED_MULTIPLIER_MIN} as const;",

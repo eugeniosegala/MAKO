@@ -15,7 +15,12 @@ fi
 
 launcher_dir="$(cd -- "$(dirname -- "$launcher")" && pwd -P)"
 install_prefix="$(cd -- "$launcher_dir/.." && pwd -P)"
-test_data_home="/tmp/mako-launch-contract-data"
+test_root="$(mktemp -d /tmp/mako-launch-contract.XXXXXX)"
+trap 'rm -rf -- "$test_root"' EXIT
+test_data_home="$test_root/data"
+test_config_home="$test_root/config"
+mkdir -p "$test_data_home" "$test_config_home"
+export XDG_CONFIG_HOME="$test_config_home"
 expected_layer_path="$install_prefix/share/mako-render/vulkan/implicit_layer.d"
 if [[ ! -d "$expected_layer_path" && -d "$test_data_home/mako-render/vulkan/implicit_layer.d" ]]; then
     expected_layer_path="$test_data_home/mako-render/vulkan/implicit_layer.d"
@@ -88,6 +93,42 @@ disable_output="$({
 if [[ "$disable_output" != $'1\n1' ]]; then
     fail "DISABLE_MAKO was not preserved:\n$disable_output"
 fi
+
+launch_config="$test_config_home/mako-render/launcher.conf"
+mkdir -p "$(dirname -- "$launch_config")"
+printf '%s\n' \
+    'version=1' \
+    'enable_zink=1' \
+    'force_alsa_audio=1' > "$launch_config"
+compatibility_output="$({
+    WINEDLLOVERRIDES='d3d11=n' \
+        MAKO_LAUNCH_CONFIG="$launch_config" \
+        "$launcher" bash -c '
+            printf "%s\n" \
+                "${__GLX_VENDOR_LIBRARY_NAME:-unset}" \
+                "${MESA_LOADER_DRIVER_OVERRIDE:-unset}" \
+                "${GALLIUM_DRIVER:-unset}" \
+                "${SDL_AUDIODRIVER:-unset}" \
+                "${WINEDLLOVERRIDES:-unset}" \
+                "${MAKO_LAUNCH_CONFIG:-unset}"
+        '
+} 2>&1)" || fail "standalone compatibility launch failed: $compatibility_output"
+expected_compatibility=$'mesa\nzink\nzink\nalsa\nd3d11=n;winepulse.drv=d;winealsa.drv=b\nunset'
+if [[ "$compatibility_output" != "$expected_compatibility" ]]; then
+    fail "standalone compatibility settings were not applied safely:\n$compatibility_output"
+fi
+
+printf '%s\n' 'version=1' 'unknown_setting=1' > "$launch_config"
+invalid_config_output="$({
+    MAKO_LAUNCH_CONFIG="$launch_config" \
+        "$launcher" bash -c \
+        'printf "ZINK=%s ALSA=%s\n" "${GALLIUM_DRIVER:-unset}" "${SDL_AUDIODRIVER:-unset}"'
+} 2>&1)" || fail "invalid launcher configuration did not fail closed"
+if [[ "$invalid_config_output" != *"ignoring invalid launcher configuration"* ||
+        "$invalid_config_output" != *"ZINK=unset ALSA=unset"* ]]; then
+    fail "invalid launcher configuration was not rejected safely:\n$invalid_config_output"
+fi
+rm -f -- "$launch_config"
 
 set +e
 no_command_output="$({ "$launcher"; } 2>&1)"

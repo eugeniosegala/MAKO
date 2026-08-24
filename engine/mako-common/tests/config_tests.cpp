@@ -54,6 +54,8 @@ namespace {
             left.adaptive_max_multiplier == right.adaptive_max_multiplier &&
             left.adaptive_stable_cadence == right.adaptive_stable_cadence &&
             left.dynamic_cadence_recovery == right.dynamic_cadence_recovery &&
+            left.dynamic_cadence_probe_interval_seconds ==
+                right.dynamic_cadence_probe_interval_seconds &&
             left.flow_scale == right.flow_scale &&
             left.performance_mode == right.performance_mode &&
             left.pacing == right.pacing;
@@ -75,6 +77,7 @@ adaptive_auto_base_fps_cap = true
 target_fps = 144
 adaptive_max_multiplier = 4
 dynamic_cadence_recovery = true
+dynamic_cadence_probe_interval_seconds = 3
 )";
 }
 
@@ -96,6 +99,8 @@ int main() {
                 ls::GameConfDefaults::adaptiveStableCadence &&
             defaults.dynamic_cadence_recovery ==
                 ls::GameConfDefaults::dynamicCadenceRecovery &&
+            defaults.dynamic_cadence_probe_interval_seconds ==
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds &&
             defaults.flow_scale == ls::GameConfDefaults::flowScale &&
             defaults.performance_mode ==
                 ls::GameConfDefaults::performanceMode &&
@@ -163,6 +168,8 @@ int main() {
         "The accepted configuration must expose its new policy");
     expect(config.get().profiles().front().dynamic_cadence_recovery,
         "The accepted configuration must expose dynamic cadence recovery");
+    expect(config.get().profiles().front().dynamic_cadence_probe_interval_seconds == 3,
+        "The accepted configuration must expose the cadence probe interval");
     expect(config.get().profiles().front().frame_generation_refresh_threshold == 60,
         "The accepted configuration must expose the refresh-rate threshold");
     expect(config.get().profiles().front().base_fps_cap == 0 &&
@@ -186,6 +193,24 @@ multiplier = 5
     const ls::ConfigFile fixedMultiplierConfiguration(fixedMultiplierPath);
     expect(fixedMultiplierConfiguration.profiles().front().multiplier == 5,
         "The fixed multiplier must retain its established open upper range");
+
+    for (const uint32_t invalidInterval : {0U, 4U}) {
+        const auto invalidIntervalPath = directory /
+            ("invalid-probe-interval-" + std::to_string(invalidInterval) +
+             ".toml");
+        writeText(invalidIntervalPath,
+            "version = 2\n[[profile]]\n"
+            "dynamic_cadence_probe_interval_seconds = " +
+            std::to_string(invalidInterval) + "\n");
+        bool invalidIntervalRejected = false;
+        try {
+            static_cast<void>(ls::ConfigFile(invalidIntervalPath));
+        } catch (const std::exception&) {
+            invalidIntervalRejected = true;
+        }
+        expect(invalidIntervalRejected,
+            "Cadence probe intervals outside 1-3 seconds must be rejected");
+    }
 
     ls::ConfigFile detectionConfig;
     detectionConfig.profiles() = {
@@ -233,15 +258,19 @@ multiplier = 5
     setenv("MAKO_BASE_FPS_CAP", "30", 1);
     setenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);
+    setenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS", "1", 1);
     setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
     const ls::WatchedConfig environmentConfig;
     expect(environmentConfig.get().profiles().front().dynamic_cadence_recovery &&
+            environmentConfig.get().profiles().front()
+                .dynamic_cadence_probe_interval_seconds == 1 &&
             environmentConfig.get().profiles().front().frame_generation_refresh_threshold ==
                 130 &&
             environmentConfig.get().profiles().front().base_fps_cap == 0 &&
             !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap,
         "Environment dynamic cadence recovery must disable both base FPS caps");
     unsetenv("MAKO_DYNAMIC_CADENCE_RECOVERY");
+    unsetenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS");
     unsetenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
     unsetenv("MAKO_ADAPTIVE");
     unsetenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");

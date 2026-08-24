@@ -50,6 +50,7 @@ target_fps = 120
 adaptive_max_multiplier = 3
 adaptive_stable_cadence = false
 dynamic_cadence_recovery = false
+dynamic_cadence_probe_interval_seconds = 2
 flow_scale = 0.85
 performance_mode = true
 pacing = 'none' # see the wiki for more info
@@ -88,6 +89,8 @@ ConfigFile::ConfigFile() {
         .adaptive_max_multiplier = GameConfDefaults::adaptiveMaxMultiplier,
         .adaptive_stable_cadence = GameConfDefaults::adaptiveStableCadence,
         .dynamic_cadence_recovery = GameConfDefaults::dynamicCadenceRecovery,
+        .dynamic_cadence_probe_interval_seconds =
+            GameConfDefaults::dynamicCadenceProbeIntervalSeconds,
         .flow_scale = 0.85F,
         .performance_mode = true,
         .pacing = GameConfDefaults::pacing
@@ -189,6 +192,19 @@ namespace {
                 )
             );
         }
+        if (conf.dynamic_cadence_probe_interval_seconds <
+                GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds ||
+                conf.dynamic_cadence_probe_interval_seconds >
+                    GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds) {
+            throw ls::error(
+                "dynamic_cadence_probe_interval_seconds must be between " +
+                std::to_string(
+                    GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds
+                ) + " and " + std::to_string(
+                    GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
+                )
+            );
+        }
         if (conf.flow_scale < GameConfLimits::minimumFlowScale ||
                 conf.flow_scale > GameConfLimits::maximumFlowScale) {
             throw ls::error(
@@ -242,6 +258,10 @@ namespace {
             .dynamic_cadence_recovery = tbl["dynamic_cadence_recovery"].value_or(
                 GameConfDefaults::dynamicCadenceRecovery
             ),
+            .dynamic_cadence_probe_interval_seconds =
+                tbl["dynamic_cadence_probe_interval_seconds"].value_or(
+                    GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+                ),
             .flow_scale = tbl["flow_scale"].value_or(GameConfDefaults::flowScale),
             .performance_mode = tbl["performance_mode"].value_or(
                 GameConfDefaults::performanceMode
@@ -294,6 +314,8 @@ namespace {
             .adaptive_max_multiplier = GameConfDefaults::adaptiveMaxMultiplier,
             .adaptive_stable_cadence = GameConfDefaults::adaptiveStableCadence,
             .dynamic_cadence_recovery = GameConfDefaults::dynamicCadenceRecovery,
+            .dynamic_cadence_probe_interval_seconds =
+                GameConfDefaults::dynamicCadenceProbeIntervalSeconds,
             .flow_scale = GameConfDefaults::flowScale,
             .performance_mode = GameConfDefaults::performanceMode,
             .pacing = GameConfDefaults::pacing
@@ -337,6 +359,14 @@ namespace {
         if (dynamic_cadence_recovery) {
             conf.dynamic_cadence_recovery =
                 std::string(dynamic_cadence_recovery) != "0";
+        }
+        const char* dynamic_cadence_probe_interval_seconds =
+            std::getenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS");
+        if (dynamic_cadence_probe_interval_seconds) {
+            conf.dynamic_cadence_probe_interval_seconds =
+                static_cast<uint32_t>(std::stoul(
+                    dynamic_cadence_probe_interval_seconds
+                ));
         }
         const char* flow_scale = std::getenv("MAKO_FLOW_SCALE");
         if (flow_scale) conf.flow_scale = std::stof(flow_scale);
@@ -421,6 +451,10 @@ void ConfigFile::write(const std::filesystem::path& path) const {
         profile.insert("adaptive_max_multiplier", static_cast<int64_t>(conf.adaptive_max_multiplier));
         profile.insert("adaptive_stable_cadence", conf.adaptive_stable_cadence);
         profile.insert("dynamic_cadence_recovery", conf.dynamic_cadence_recovery);
+        profile.insert(
+            "dynamic_cadence_probe_interval_seconds",
+            static_cast<int64_t>(conf.dynamic_cadence_probe_interval_seconds)
+        );
         profile.insert("flow_scale", conf.flow_scale);
         profile.insert("performance_mode", conf.performance_mode);
         switch (conf.pacing) {

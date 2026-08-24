@@ -62,7 +62,7 @@ mako-diagnostics --lines 2000 all
 
 For the complete end-to-end workflow, including Steam, direct commands, Heroic or Flatpak setups, creating `MAKO-diagnostics.txt` on the Desktop, restoring normal settings, and using the shared submission form, see [Collect Standalone MAKO Renderer Diagnostics](COLLECT_DIAGNOSTICS.md).
 
-`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` bounds one ordered generated-image acquisition so transport recovery can return to native presentation instead of blocking indefinitely. MAKO Decky managed wrappers set the normal 50 ms ceiling. Standalone Renderer launches retain the legacy unbounded default when it is unset; for a focused presentation-stall reproduction, set a smaller value such as `25` and include the resulting log with the report.
+`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` requests one shared deadline for all ordered generated-image acquisitions in an application present so a multi-frame plan cannot multiply the wait and transport recovery can return to native presentation instead of blocking indefinitely. Every generated image receives only the remaining budget. MAKO also measures cumulative elapsed acquire time because a driver can return success after the requested remainder; exhaustion or overrun enters the same recovery path. MAKO Decky managed wrappers request the normal 50 ms application-present budget. Standalone Renderer launches retain the legacy unbounded default when it is unset; for a focused presentation-stall reproduction, set a smaller value such as `25` and include the resulting log with the report.
 
 ## Report an issue
 

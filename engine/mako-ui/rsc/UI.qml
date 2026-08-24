@@ -186,6 +186,35 @@ ApplicationWindow {
                 }
 
                 Group {
+                    name: t.profileMatching
+                    enabled: backend.available
+
+                    GroupEntry {
+                        title: t.activeIn
+                        description: t.activeInDesc
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                text: backend.matched_processes.length > 0
+                                    ? backend.matched_processes
+                                    : t.noMatchedProcesses
+                                elide: Text.ElideMiddle
+                            }
+
+                            Button {
+                                text: t.editEllipsis
+                                onClicked: active_in_dialog.open()
+                            }
+                        }
+                    }
+                }
+
+                Group {
                     name: t.profileSettings
                     enabled: backend.available
 
@@ -227,18 +256,6 @@ ApplicationWindow {
                                     );
                             }
                             onValueModified: backend.base_fps_cap = value
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.activeIn
-                        description: t.activeInDesc
-
-                        Button {
-                            Layout.alignment: Qt.AlignRight
-
-                            text: t.editEllipsis
-                            onClicked: active_in_dialog.open()
                         }
                     }
 
@@ -362,19 +379,6 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: t.pacingMode
-                        description: t.pacingModeDesc
-
-                        ComboBox {
-                            Layout.fillWidth: true
-
-                            model: [t.none]
-                            currentIndex: backend.pacing_mode
-                            onActivated: index => backend.pacing_mode = index
-                        }
-                    }
-
-                    GroupEntry {
                         title: t.gpu
                         description: t.gpuDesc
 
@@ -393,6 +397,49 @@ ApplicationWindow {
                     enabled: backend.available
 
                     GroupEntry {
+                        title: t.refreshRateGuard
+                        description: t.refreshRateGuardDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.frame_generation_refresh_threshold > 0
+                            onToggled: backend.frame_generation_refresh_threshold = checked
+                                ? backend.frame_generation_refresh_threshold_preset
+                                : 0
+                        }
+                    }
+
+                    GroupEntry {
+                        visible: backend.frame_generation_refresh_threshold > 0
+                        title: t.refreshRateThreshold
+                        description: t.refreshRateThresholdDesc
+
+                        SpinBox {
+                            Layout.alignment: Qt.AlignRight
+                            from: 1
+                            to: backend.maximum_frame_generation_refresh_threshold
+                            editable: true
+
+                            value: backend.frame_generation_refresh_threshold
+                            textFromValue: function (value) {
+                                return value + " Hz";
+                            }
+                            valueFromText: function (text) {
+                                var parsed = parseInt(text);
+                                return isNaN(parsed) ? 1 : Math.max(
+                                    1,
+                                    Math.min(
+                                        backend.maximum_frame_generation_refresh_threshold,
+                                        parsed
+                                    )
+                                );
+                            }
+                            onValueModified: backend.frame_generation_refresh_threshold = value
+                        }
+                    }
+
+                    GroupEntry {
                         title: t.dynamicCadence
                         description: t.dynamicCadenceDesc
 
@@ -401,6 +448,65 @@ ApplicationWindow {
 
                             checked: backend.dynamic_cadence_recovery
                             onToggled: backend.dynamic_cadence_recovery = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        visible: backend.dynamic_cadence_recovery
+                        title: t.dynamicCadenceProbeInterval
+                        description: t.dynamicCadenceProbeIntervalDesc
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Slider {
+                                id: dynamic_cadence_probe_interval
+                                Layout.fillWidth: true
+                                from: backend.minimum_dynamic_cadence_probe_interval_seconds
+                                to: backend.maximum_dynamic_cadence_probe_interval_seconds
+                                stepSize: 1
+                                snapMode: Slider.SnapAlways
+                                value: backend.dynamic_cadence_probe_interval_seconds
+                                onMoved: backend.dynamic_cadence_probe_interval_seconds = Math.round(value)
+                            }
+
+                            Label {
+                                text: Math.round(dynamic_cadence_probe_interval.value) + t.secondsSuffix
+                            }
+                        }
+                    }
+                }
+
+                Group {
+                    name: t.standaloneLaunchSettings
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        text: t.standaloneLaunchDesc
+                        color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                    }
+
+                    GroupEntry {
+                        title: t.enableZink
+                        description: t.enableZinkDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+                            checked: backend.enable_zink
+                            onToggled: backend.enable_zink = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.forceAlsaAudio
+                        description: t.forceAlsaAudioDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+                            checked: backend.force_alsa_audio
+                            onToggled: backend.force_alsa_audio = checked
                         }
                     }
                 }

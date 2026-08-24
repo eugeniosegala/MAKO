@@ -38,6 +38,7 @@ namespace ls {
         static constexpr size_t adaptiveMaxMultiplier = 3;
         static constexpr bool adaptiveStableCadence = false;
         static constexpr bool dynamicCadenceRecovery = false;
+        static constexpr uint32_t dynamicCadenceProbeIntervalSeconds = 2;
         static constexpr float flowScale = 1.0F;
         static constexpr bool performanceMode = false;
         static constexpr Pacing pacing = Pacing::None;
@@ -54,6 +55,8 @@ namespace ls {
         static constexpr uint32_t maximumTargetFps = 1000;
         static constexpr size_t minimumAdaptiveMaxMultiplier = 2;
         static constexpr size_t maximumAdaptiveMaxMultiplier = 4;
+        static constexpr uint32_t minimumDynamicCadenceProbeIntervalSeconds = 1;
+        static constexpr uint32_t maximumDynamicCadenceProbeIntervalSeconds = 3;
         static constexpr float minimumFlowScale = 0.25F;
         static constexpr float maximumFlowScale = 1.0F;
     };
@@ -88,6 +91,10 @@ namespace ls {
         bool adaptive_stable_cadence{GameConfDefaults::adaptiveStableCadence};
         /// periodically expose native cadence to detect upward rate changes
         bool dynamic_cadence_recovery{GameConfDefaults::dynamicCadenceRecovery};
+        /// seconds between optional native-cadence probes
+        uint32_t dynamic_cadence_probe_interval_seconds{
+            GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+        };
         /// non-inverted flow scale
         float flow_scale{GameConfDefaults::flowScale};
         /// use performance mode

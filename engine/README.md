@@ -115,7 +115,7 @@ On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from
 ```
 
 1. Choose the licensed Lossless Scaling DLL if MAKO did not find it automatically, then create a profile for the game.
-2. Set **Active In** to the game's Linux binary, Windows executable, or process name. Start with fixed **2x** frame generation and adjust one setting at a time.
+2. Under **Profile Matching**, add the game's Linux binary, Windows executable, or process name to **Matched Processes**. The selected profile's current matches remain visible in the main window. Start with fixed **2x** frame generation and adjust one setting at a time.
 3. Launch only the selected game through MAKO. For a Steam game, use this launch option:
 
     ```text
@@ -137,6 +137,8 @@ MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
 ```
 
 The configuration UI writes MAKO's normal configuration and does not launch games, so open `mako-ui` directly. Likewise, run `mako-cli` directly for validation, benchmarks, and quality tests; use `mako-launch` only for a Vulkan application that should load the frame-generation layer.
+
+The UI also exposes global standalone launch compatibility for Zink and ALSA. These off-by-default switches are stored separately in `~/.config/mako-render/launcher.conf`, apply only to the next game process started through `mako-launch`, and require a game restart. They do not alter the selected Renderer profile. Steam Deck mode and the guarded Gamescope WSI, MangoHud, and vkBasalt layer-chain controls remain MAKO Decky-only because they need per-game identity or validated manifest staging and ordering.
 
 The desktop UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, and Simplified Chinese, matching MAKO Decky's supported language inventory. It automatically selects a matching system language on first run and remembers later choices. CLI output remains available in English, Brazilian Portuguese, European Portuguese, and Spanish with a global option before the command, such as `mako-cli --lang pt-BR validate`; the language choice does not alter Renderer profiles.
 

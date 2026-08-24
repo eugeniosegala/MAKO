@@ -123,7 +123,19 @@ namespace mako::layer {
             size_t admittedGeneratedFrameCount{0};
             bool historyWarmupActive{false};
             bool generatedImagesPreacquired{false};
+            // Recovery probes are transport-owned synthetic delivery. Keep
+            // them out of Adaptive ramp and Smooth Cadence qualification even
+            // when an isolated guard clears before delivery is reported.
+            bool orderedAcquireRecoveryProbe{false};
+            bool boundedOrderedAcquireProbe{false};
             std::optional<uint64_t> configuredAcquireTimeout;
+            // Opt-in diagnostic phase accounting stays inline with the frame
+            // plan so a slow total can expose multiple sub-threshold waits
+            // without allocating or emitting one record per phase.
+            std::chrono::steady_clock::duration renderFenceWaitDuration{};
+            std::chrono::steady_clock::duration preacquireDuration{};
+            std::chrono::steady_clock::duration scheduleFramesDuration{};
+            std::chrono::steady_clock::duration submitSourceCopyDuration{};
             std::array<uint32_t, GeneratedFramePlan::capacity>
                 preacquiredGeneratedImages{};
         };
@@ -210,7 +222,8 @@ namespace mako::layer {
             const PresentInvocation& invocation);
         [[nodiscard]] VkResult presentOriginalImage(
             const PresentInvocation& invocation, VkSemaphore waitSemaphore,
-            const void* nextChain);
+            const void* nextChain,
+            std::chrono::steady_clock::duration* duration = nullptr);
         [[nodiscard]] bool recoverBackendIfReady(const vk::Vulkan& vk);
         void ensureHistoryWarmup();
         [[nodiscard]] PresentationFramePlan prepareFramePlan(
@@ -229,7 +242,8 @@ namespace mako::layer {
         void preacquireGeneratedImages(
             const PresentInvocation& invocation,
             PresentationFramePlan& plan,
-            bool trackGamescopeAdmission);
+            bool trackGamescopeAdmission,
+            uint64_t acquireTimeout);
         void submitSourceCopy(const PresentInvocation& invocation,
             VkImage swapchainImage, const vk::Image& sourceImage);
         [[nodiscard]] VkResult presentHistoryOnly(

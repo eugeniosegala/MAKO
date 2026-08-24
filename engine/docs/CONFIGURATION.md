@@ -36,6 +36,7 @@ frame_generation_refresh_threshold = 0
 - **`adaptive_max_multiplier`**: Adaptive ceiling of 2x, 3x, or 4x. Start at 2x for image quality; use a higher ceiling only when the game benefits. Default: `3`.
 - **`adaptive_stable_cadence`**: Prefers a constant interpolation cadence when it is sustainable. It can look smoother but may increase input lag. Default: `false`.
 - **`dynamic_cadence_recovery`**: Optional per-profile compatibility recovery for games and emulators that switch native frame rates. It periodically presents a short native-only cadence probe on ordered SDR so FIFO-generated work cannot hide a faster mode. Adaptive recalibrates against `target_fps`; Fixed uses a confirmed Gamescope refresh as its target and treats `multiplier` as a ceiling, falling back to exact Fixed behavior when that signal is unavailable or the multiplier is outside 2x-4x. Enabling it sets `base_fps_cap` to `0` and disables `adaptive_auto_base_fps_cap`; the MAKO UIs keep the controls available and turn Recovery off if either cap is enabled later. A true fixed-rate game can receive a brief pacing check. Default: `false`.
+- **`dynamic_cadence_probe_interval_seconds`**: Seconds between Dynamic Cadence Recovery checks, from `1` to `3`. A shorter interval detects native-rate changes sooner but can make the brief native-only probe hitch more frequent in a true fixed-rate game. It applies live without resetting Adaptive's validated cadence or multiplier. Default: `2`.
 - **`flow_scale`**: Motion-vector resolution from 0.25 to 1.0. Lower is faster; higher favours image quality. Default: `1.0`.
 - **`performance_mode`**: Uses a lighter model for lower GPU cost and more artifacts. Default: `false`.
 - **`pacing`**: Presentation policy. `none` is the only supported value.
@@ -53,7 +54,7 @@ When a setting is renamed or its value must be carried forward, add a one-time, 
 
 ## Applying changes
 
-Frame Generation, its refresh-rate threshold, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, Smooth Cadence, and Dynamic Cadence Recovery can usually apply while the game is running. The threshold guard and Fixed recovery also react live when Gamescope reports a refresh-rate change. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Performance Mode, HDR-related settings, or a setting that requires more private GPU resources.
+Frame Generation, its refresh-rate threshold, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, Smooth Cadence, Dynamic Cadence Recovery, and its probe interval can usually apply while the game is running. Interval-only changes reschedule the next probe without resetting the validated scheduling policy. The threshold guard and Fixed recovery also react live when Gamescope reports a refresh-rate change. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Performance Mode, HDR-related settings, or a setting that requires more private GPU resources.
 
 Test V-Sync both on and off for each game. It can steady the real-frame cadence, but can also add latency or conflict with an FPS cap, VRR, or the compositor.
 
@@ -73,6 +74,14 @@ MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" MAKO_PROFILE="My game" ~/.loca
 
 The profile value must exactly match a configured profile `name`. Quote names that contain spaces; shell backticks are not profile delimiters and must not be used. `DISABLE_MAKO=1` remains a one-launch troubleshooting gate and is honoured even when `mako-launch` is present. The launcher disables Gamescope WSI only inside the child process so MAKO owns a single presentation clock; Gamescope itself remains the active compositor. It also disables HDR exposure because an isolated WSI layer cannot be added back after Vulkan starts. Steam's Vulkan Fossilize/overlay hooks and system-wide implicit layers are deliberately excluded from MAKO-managed processes on the supported SDR path unless MAKO Decky selects one guarded External Tool. The design, tradeoffs, and future process-start HDR lane are documented in [WSI isolation](WSI-ISOLATION.md), [optional graphics integrations](LAYER-CHAINING.md), and [HDR pipeline architecture](HDR-PIPELINE.md).
 
+### Standalone launch compatibility
+
+`mako-ui` stores two off-by-default, process-start compatibility switches in `~/.config/mako-render/launcher.conf`. They are global to every game started through standalone `mako-launch`, are deliberately separate from the selected Renderer profile and `conf.toml`, and require a game restart: **Enable Zink for OpenGL** selects Mesa's Zink OpenGL-over-Vulkan path, allowing an OpenGL game to enter MAKO's Vulkan layer; and **Force ALSA Audio** selects native SDL ALSA while adding idempotent Wine/Proton overrides that disable `winepulse.drv` and prefer `winealsa.drv`. Use one compatibility change at a time and leave it off unless the game needs it.
+
+The launcher reads only a strict versioned key/value allowlist and never sources or evaluates the file. An invalid version, unknown key, duplicate key, or non-boolean value makes every stored compatibility option inert for that launch. `MAKO_LAUNCH_CONFIG=/path/to/launcher.conf` selects an alternate file for a controlled standalone test; the variable is removed before the child starts.
+
+Steam Deck mode, Gamescope WSI, MangoHud, and vkBasalt are intentionally absent from the standalone UI. `SteamDeck=0` changes a game's platform identity without enabling or improving MAKO Renderer and belongs in MAKO Decky's per-game launch compatibility. The other options change the Vulkan layer chain and require validated host manifests, architecture checks, deterministic ordering, and fail-closed staging that MAKO Decky currently owns. Standalone `mako-launch` continues to isolate Gamescope WSI and arbitrary host implicit layers; use MAKO Decky for its guarded per-profile compatibility lanes.
+
 If no profile matches the launched process, the Vulkan layer remains dormant and preserves the application's native presentation path. This makes launcher and helper processes safe while ensuring frame generation starts only for an explicitly matched profile.
 
 `MAKO_ALLOW_COMPETING_LAYERS=1` is an advanced, unsupported comparison escape hatch. It tells the launcher not to suppress an installed competing LSFG-VK frame-generation layer for that process. Never use it for ordinary gameplay: concurrent frame-generation layers may both intercept the same swapchain and cause startup, synchronization, presentation, or image-quality failures.
@@ -83,7 +92,7 @@ For a configuration that comes entirely from environment variables, set `MAKO_EN
 
 - `MAKO_DLL_PATH`, `MAKO_NO_FP16`, `MAKO_GPU`
 - `MAKO_MULTIPLIER`, `MAKO_FRAME_GENERATION_ENABLED`, `MAKO_FRAME_GENERATION_REFRESH_THRESHOLD`, `MAKO_BASE_FPS_CAP`
-- `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`
+- `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`, `MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS`
 - `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`
 
 `MAKO_DISABLE_HDR_EXPOSURE=1` keeps MAKO's unfinished HDR path disabled. It is part of the normal MAKO Decky and standalone `mako-launch` boundary. `DISABLE_GAMESCOPE_WSI=1` also closes that engine path defensively because the required HDR bridge is unavailable without the WSI layer. HDR and WSI settings are process-start policy and require a game restart; they are not live profile controls.

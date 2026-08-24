@@ -23,24 +23,29 @@ vi.mock("@decky/ui", () => ({
   ),
   SliderField: ({
     label,
+    description,
     value,
     max,
     disabled,
     onChange,
   }: {
     label: React.ReactNode;
+    description?: React.ReactNode;
     value: number;
     max?: number;
     disabled?: boolean;
     onChange: (value: number) => void;
   }) => (
-    <button
-      data-maximum={max}
-      disabled={disabled}
-      onClick={() => onChange(value === 0 ? 30 : value + 1)}
-    >
-      {label}
-    </button>
+    <div>
+      {description}
+      <button
+        data-maximum={max}
+        disabled={disabled}
+        onClick={() => onChange(value === 0 ? 30 : value + 1)}
+      >
+        {label}
+      </button>
+    </div>
   ),
   TextField: ({ label }: { label: React.ReactNode }) => <div>{label}</div>,
   ButtonItem: ({
@@ -154,6 +159,51 @@ describe("External Tools controls", () => {
       adaptive_auto_base_fps_cap: false,
       base_fps_cap: 0,
     });
+  });
+
+  test("reveals a live 1-3 second probe slider only while Recovery is enabled", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const { container, rerender } = render(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          dynamic_cadence_recovery: false,
+          dynamic_cadence_probe_interval_seconds: 2,
+        }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const collapseButton = container.querySelector<HTMLButtonElement>(
+      ".MAKO_WorkaroundsCollapseButton_Container button",
+    );
+    fireEvent.click(collapseButton!);
+    expect(screen.queryByText("Cadence Probe Interval (2s)")).toBeNull();
+
+    rerender(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          dynamic_cadence_recovery: true,
+          dynamic_cadence_probe_interval_seconds: 2,
+        }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const slider = screen.getByText("Cadence Probe Interval (2s)");
+    expect(slider.getAttribute("data-maximum")).toBe("3");
+    expect(
+      screen.getByText(/How often Recovery tests the native frame rate/).style
+        .paddingBottom,
+    ).toBe("6px");
+    fireEvent.click(slider);
+    expect(onConfigChange).toHaveBeenCalledWith(
+      "dynamic_cadence_probe_interval_seconds",
+      3,
+    );
   });
 
   test("enabling the Base FPS Cap turns cadence recovery off", () => {

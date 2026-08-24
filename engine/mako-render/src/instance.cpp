@@ -21,10 +21,12 @@
 #include <iostream>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
 #include <stdlib.h>
+#include <unistd.h>
 #include <vulkan/vulkan_core.h>
 
 using namespace mako;
@@ -33,12 +35,51 @@ using namespace mako::layer;
 #ifndef MAKO_BUILD_VERSION
 #define MAKO_BUILD_VERSION "unknown"
 #endif
+#ifndef MAKO_BUILD_FINGERPRINT
+#define MAKO_BUILD_FINGERPRINT MAKO_BUILD_VERSION
+#endif
 
 namespace {
     constexpr char makoBuildIdentity[] =
         "MAKO Renderer: render layer active; identity="
         "VK_LAYER_MAKO_render; build="
-        MAKO_BUILD_VERSION;
+        MAKO_BUILD_VERSION
+        "; fingerprint="
+        MAKO_BUILD_FINGERPRINT;
+
+    std::string diagnosticToken(const std::string_view raw) {
+        if (raw.empty())
+            return "(unset)";
+
+        const auto separator = raw.find_last_of("/\\");
+        std::string token(raw.substr(
+            separator == std::string_view::npos ? 0 : separator + 1
+        ));
+        for (char& character : token) {
+            if (character == ' ' || character == '\t' ||
+                    character == '\r' || character == '\n' ||
+                    character == '=') {
+                character = '_';
+            }
+        }
+        return token.empty() ? "(unset)" : token;
+    }
+
+    std::string_view identificationToken(const ls::IdentType type) {
+        switch (type) {
+            case ls::IdentType::OVERRIDE:
+                return "override";
+            case ls::IdentType::EXECUTABLE:
+                return "executable";
+            case ls::IdentType::WINE_EXECUTABLE:
+                return "wine-executable";
+            case ls::IdentType::PROCESS_NAME:
+                return "process-name";
+            case ls::IdentType::FALLBACK:
+                return "fallback";
+        }
+        return "unknown";
+    }
 
     std::string toHexId(const uint32_t id) {
         constexpr char digits[] = "0123456789ABCDEF";
@@ -278,7 +319,31 @@ Root::Root() :
     }
 
     // find active profile
-    const auto& profile = findProfile(this->config.get(), ls::identify());
+    const auto identification = ls::identify();
+    const auto& profile = findProfile(this->config.get(), identification);
+    if (present_diagnostics::enabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=process-identity"
+                  << " pid=" << ::getpid()
+                  << " executable="
+                  << diagnosticToken(identification.executable)
+                  << " wine_executable="
+                  << diagnosticToken(
+                         identification.wine_executable.value_or("")
+                     )
+                  << " process_name="
+                  << diagnosticToken(identification.process_name)
+                  << " profile="
+                  << diagnosticToken(
+                         profile ? profile->second.name : "(none)"
+                     )
+                  << " identification="
+                  << (profile
+                        ? identificationToken(profile->first) : "none")
+                  << " build=" << MAKO_BUILD_VERSION
+                  << " fingerprint=" << MAKO_BUILD_FINGERPRINT
+                  << '\n';
+    }
     if (!profile.has_value())
         return;
 
@@ -626,7 +691,16 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     if (present_diagnostics::enabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-create"
                   << " context=" << diagnosticsContextId
+                  << " pid=" << ::getpid()
                   << " swapchain=" << swapchain
+                  << " width=" << info.extent.width
+                  << " height=" << info.extent.height
+                  << " images=" << info.images.size()
+                  << " format=" << static_cast<int>(info.format)
+                  << " color_space=" << static_cast<int>(info.colorSpace)
+                  << " present_mode=" << static_cast<int>(info.presentMode)
+                  << " ordered_transport="
+                  << (info.privateOrderedTransport ? 1 : 0)
                   << " active_contexts=" << this->swapchains.size()
                   << " inserted=" << inserted
                   << " layer_forced_recreation=disabled"

@@ -8,43 +8,40 @@ RowLayout {
     default property alias content: inner.children
 
     id: root
+    Layout.fillWidth: true
     spacing: 12
 
     ColumnLayout {
-        clip: true
+        Layout.fillWidth: true
+        Layout.minimumWidth: 120
 
-        ColumnLayout {
+        Label {
             Layout.fillWidth: true
-            Layout.fillHeight: true
-            spacing: 0
+            text: root.title
+            font.bold: true
+            wrapMode: Text.Wrap
+        }
 
-            Label {
-                text: root.title
-                font.bold: true
-            }
-
-            Label {
-                text: root.description
-                color: Qt.rgba(
-                    palette.text.r,
-                    palette.text.g,
-                    palette.text.b,
-                    0.7
-                )
-            }
+        Label {
+            Layout.fillWidth: true
+            text: root.description
+            wrapMode: Text.Wrap
+            color: Qt.rgba(
+                palette.text.r,
+                palette.text.g,
+                palette.text.b,
+                0.7
+            )
         }
     }
 
-    RowLayout {
-        Item {
-            Layout.fillWidth: true
-        }
-
-        ColumnLayout {
-            spacing: 0
-            id: inner
-        }
+    ColumnLayout {
+        id: inner
+        Layout.fillWidth: true
+        Layout.minimumWidth: 160
+        Layout.preferredWidth: Math.max(160, Math.min(280, root.width * 0.4))
+        Layout.maximumWidth: Math.max(160, root.width * 0.5)
+        Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
+        spacing: 0
     }
-
-
 }

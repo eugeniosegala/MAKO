@@ -1,6 +1,7 @@
 set(COMMON_SOURCES
     "src/configuration/config.cpp"
     "src/configuration/detection.cpp"
+    "src/configuration/launch.cpp"
     "src/helpers/errors.cpp"
     "src/helpers/paths.cpp"
     "src/quality/image_quality.cpp"
@@ -31,6 +32,13 @@ if(BUILD_TESTING)
         PRIVATE mako-common)
     add_test(NAME watched-configuration
         COMMAND mako-config-tests)
+
+    add_executable(mako-launch-config-tests
+        "tests/launch_config_tests.cpp")
+    target_link_libraries(mako-launch-config-tests
+        PRIVATE mako-common)
+    add_test(NAME standalone-launch-configuration
+        COMMAND mako-launch-config-tests)
 
     add_executable(mako-device-feature-tests
         "tests/device_feature_tests.cpp")

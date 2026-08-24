@@ -375,11 +375,70 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
             );
         }
 
+        const auto configuredAcquireTimeout =
+            generatedImageAcquireTimeoutNs();
         if (presentDiagnosticsEnabled()) {
             std::cerr << "MAKO Renderer: present diagnostics enabled; context="
                       << this->diagnosticsState.contextId
                       << "; slow operation threshold is "
                       << presentDiagnosticsThresholdMs() << " ms\n";
+            if (this->privateOrderedTransport) {
+                const auto slowAcquireThreshold =
+                    OrderedAcquireRecovery::slowAcquireDuration(
+                        this->gamescopeRefreshHz
+                    );
+                const auto firstRecoveryAcquireTimeout =
+                    orderedRecoveryAcquireTimeout(
+                        this->gamescopeRefreshHz,
+                        configuredAcquireTimeout, 1
+                    );
+                const auto maximumRecoveryAcquireTimeout =
+                    orderedRecoveryAcquireTimeout(
+                        this->gamescopeRefreshHz,
+                        configuredAcquireTimeout, 3
+                    );
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=ordered-acquire-policy"
+                          << " context=" << this->diagnosticsState.contextId
+                          << " configured_timeout_ms=";
+                if (configuredAcquireTimeout) {
+                    std::cerr << static_cast<double>(
+                        *configuredAcquireTimeout
+                    ) / 1'000'000.0;
+                } else {
+                    std::cerr << "unbounded";
+                }
+                std::cerr << " slow_threshold_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 slowAcquireThreshold
+                             ).count()
+                          << " severe_threshold_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 OrderedAcquireRecovery::
+                                     severeAcquireDuration(
+                                         slowAcquireThreshold
+                                     )
+                             ).count()
+                          << " budget_scope=application-present"
+                          << " first_slow_action=zero-wait-protection"
+                          << " guard_miss_action=native-relief-history-warmup"
+                          << " recovery_probe_timeout_ms="
+                          << static_cast<double>(
+                                 firstRecoveryAcquireTimeout
+                             ) / 1'000'000.0
+                          << " recovery_probe_timeout_max_ms="
+                          << static_cast<double>(
+                                 maximumRecoveryAcquireTimeout
+                             ) / 1'000'000.0
+                          << " recovery_probe_failure=backoff"
+                          << " post_probe_policy=native-only"
+                          << " stabilization_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 OrderedAcquireRecovery::
+                                     stabilizationDuration()
+                             ).count()
+                          << '\n';
+            }
         }
         if (this->gamescopeDetected && !this->privateOrderedTransport) {
             std::cerr << "MAKO Renderer: Gamescope HDR generated-image admission is "
@@ -388,11 +447,13 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         } else if (this->gamescopeDetected) {
             std::cerr << "MAKO Renderer: Gamescope SDR uses the fork's ordered "
                          "presentation path\n";
-        } else if (const auto timeout = generatedImageAcquireTimeoutNs()) {
-            std::cerr << "MAKO Renderer: generated-image acquire timeout enabled at "
-                      << static_cast<double>(*timeout) / 1'000'000.0
-                      << " ms for the legacy non-Gamescope path; stalled "
-                         "generated frames will be skipped\n";
+        }
+        if (configuredAcquireTimeout) {
+            std::cerr << "MAKO Renderer: generated-image acquire timeout requested at "
+                      << static_cast<double>(*configuredAcquireTimeout) /
+                            1'000'000.0
+                      << " ms; timeout results and successful wall-time "
+                         "deadline overruns enter transport recovery\n";
         }
         const bool schedulerEnabled = this->resetGenerationScheduler(
             DiagnosticsClock::now(), "startup"
@@ -412,6 +473,9 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                       << ", dynamic cadence recovery="
                       << (policy.dynamicCadenceRecovery
                             ? "enabled" : "disabled")
+                      << ", cadence probe interval="
+                      << policy.dynamicCadenceProbeIntervalSeconds
+                      << " s"
                       << '\n';
         } else if (!this->profile.adaptive &&
                 this->profile.dynamic_cadence_recovery) {
@@ -458,6 +522,9 @@ bool Swapchain::resetGenerationScheduler(
             .generatedFrameCapacity = this->destinationImages.size(),
             .stableCadence = policy->stableCadence,
             .dynamicCadenceRecovery = policy->dynamicCadenceRecovery,
+            .dynamicCadenceProbeInterval = std::chrono::seconds(
+                policy->dynamicCadenceProbeIntervalSeconds
+            ),
             .recoveryPolicy = this->privateOrderedTransport
                 ? AdaptiveRecoveryPolicy::OrderedSdr
                 : AdaptiveRecoveryPolicy::ConservativeHdr,
@@ -766,18 +833,28 @@ ProfileUpdateAction Swapchain::updateProfile(
     ).has_value();
     const bool fixedSchedulerPolicyChanged = !this->profile.adaptive &&
         decision.fixedMultiplierChanged;
-    if (schedulerPolicyAvailable &&
+    const auto profileUpdateNow = DiagnosticsClock::now();
+    const bool resetSchedulerPolicy = schedulerPolicyAvailable &&
             (decision.generationPolicyChanged ||
              decision.generationModeChanged ||
              fixedSchedulerPolicyChanged ||
-             decision.baseFpsCapChanged || enabling)) {
+             decision.baseFpsCapChanged || enabling);
+    if (resetSchedulerPolicy) {
         static_cast<void>(this->resetGenerationScheduler(
-            DiagnosticsClock::now(), "configuration-update"
+            profileUpdateNow, "configuration-update"
         ));
     } else if (hadGenerationScheduler && !schedulerPolicyAvailable) {
         this->adaptiveScheduler.reset();
         this->recoveryState.historyWarmupRemaining =
             AdaptiveScheduler::historyWarmupFrameCount();
+    } else if (decision.dynamicCadenceProbeIntervalChanged &&
+            this->adaptiveScheduler) {
+        this->adaptiveScheduler->updateDynamicCadenceProbeInterval(
+            profileUpdateNow,
+            std::chrono::seconds(
+                this->profile.dynamic_cadence_probe_interval_seconds
+            )
+        );
     }
 
     const auto updatedGenerationPolicy = generationSchedulerPolicy(
@@ -813,6 +890,8 @@ ProfileUpdateAction Swapchain::updateProfile(
                   << this->profile.adaptive_stable_cadence
                   << " dynamic_cadence_recovery="
                   << this->profile.dynamic_cadence_recovery
+                  << " dynamic_cadence_probe_interval_seconds="
+                  << this->profile.dynamic_cadence_probe_interval_seconds
                   << " effective_dynamic_cadence_recovery="
                   << updatedDynamicCadenceRecoveryActive
                   << " hdr=" << this->colorPipeline.hdr

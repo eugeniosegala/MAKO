@@ -18,6 +18,46 @@ if(MAKO_VERSION STREQUAL "")
     message(FATAL_ERROR "VERSION must contain a build identity")
 endif()
 
+# Released source archives are identified by VERSION. Development checkouts
+# also include the component commit and a short digest of tracked changes and
+# untracked paths so two local binaries from the same release line cannot
+# produce indistinguishable diagnostics. Keep this configure-time only: the
+# Vulkan presentation path must never inspect Git or hash files at runtime.
+set(MAKO_BUILD_FINGERPRINT "${MAKO_VERSION}")
+find_program(MAKO_GIT_EXECUTABLE NAMES git)
+if(MAKO_GIT_EXECUTABLE)
+    execute_process(
+        COMMAND "${MAKO_GIT_EXECUTABLE}" log -1 --format=%H -- .
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE MAKO_GIT_COMMIT_RESULT
+        OUTPUT_VARIABLE MAKO_GIT_COMMIT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    if(MAKO_GIT_COMMIT_RESULT EQUAL 0 AND NOT MAKO_GIT_COMMIT STREQUAL "")
+        string(SUBSTRING "${MAKO_GIT_COMMIT}" 0 12 MAKO_GIT_SHORT_COMMIT)
+        execute_process(
+            COMMAND "${MAKO_GIT_EXECUTABLE}" diff --binary HEAD -- .
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            OUTPUT_VARIABLE MAKO_GIT_DIFF
+            ERROR_QUIET)
+        execute_process(
+            COMMAND "${MAKO_GIT_EXECUTABLE}" status --porcelain
+                --untracked-files=normal -- .
+            WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+            OUTPUT_VARIABLE MAKO_GIT_STATUS
+            ERROR_QUIET)
+        set(MAKO_BUILD_FINGERPRINT "${MAKO_GIT_SHORT_COMMIT}")
+        if(NOT MAKO_GIT_STATUS STREQUAL "")
+            string(SHA256 MAKO_GIT_DIRTY_DIGEST
+                "${MAKO_GIT_DIFF}\n${MAKO_GIT_STATUS}")
+            string(SUBSTRING "${MAKO_GIT_DIRTY_DIGEST}" 0 8
+                MAKO_GIT_DIRTY_SHORT_DIGEST)
+            string(APPEND MAKO_BUILD_FINGERPRINT
+                ".dirty.${MAKO_GIT_DIRTY_SHORT_DIGEST}")
+        endif()
+    endif()
+endif()
+
 # === READ HERE FOR BUILD OPTIONS ===
 option(MAKO_BUILD_VK_LAYER     "Build the Vulkan layer"            ON)
 option(MAKO_BUILD_UI           "Build the user interface"         OFF)

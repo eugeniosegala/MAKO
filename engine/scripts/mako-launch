@@ -14,6 +14,11 @@ directory for reliable swapchain ownership.
 Set environment variables before mako-launch to pass them to the game:
   MAKO_PROFILE=my-profile mako-launch COMMAND [ARG ...]
 
+Standalone launch compatibility settings are read from:
+  ~/.config/mako-render/launcher.conf
+
+MAKO_LAUNCH_CONFIG=/path/to/launcher.conf selects another settings file.
+
 Advanced troubleshooting only:
   MAKO_ALLOW_COMPETING_LAYERS=1 mako-launch COMMAND [ARG ...]
 
@@ -42,6 +47,113 @@ case "$1" in
         fi
         ;;
 esac
+
+# Launcher-only compatibility settings must be established before the child
+# starts, but they are not Renderer profile values and must never be placed in
+# conf.toml. Parse the UI-owned fixed key/value format without sourcing or
+# evaluating user-controlled text. An invalid file fails closed to defaults.
+mako_launch_config_path="${MAKO_LAUNCH_CONFIG:-}"
+if [[ -z "$mako_launch_config_path" ]]; then
+    if [[ -n "${XDG_CONFIG_HOME:-}" ]]; then
+        mako_launch_config_path="$XDG_CONFIG_HOME/mako-render/launcher.conf"
+    elif [[ -n "${HOME:-}" ]]; then
+        mako_launch_config_path="$HOME/.config/mako-render/launcher.conf"
+    else
+        mako_launch_config_path="/etc/mako-render/launcher.conf"
+    fi
+fi
+unset MAKO_LAUNCH_CONFIG
+
+mako_launch_version_seen=0
+mako_launch_enable_zink=0
+mako_launch_force_alsa_audio=0
+mako_launch_enable_zink_seen=0
+mako_launch_force_alsa_audio_seen=0
+mako_launch_config_valid=1
+if [[ -f "$mako_launch_config_path" ]]; then
+    while IFS= read -r mako_launch_line || [[ -n "$mako_launch_line" ]]; do
+        mako_launch_line="${mako_launch_line#"${mako_launch_line%%[!$' \t\r\n']*}"}"
+        mako_launch_line="${mako_launch_line%"${mako_launch_line##*[!$' \t\r\n']}"}"
+        if [[ -z "$mako_launch_line" || "$mako_launch_line" == \#* ]]; then
+            continue
+        fi
+        if [[ "$mako_launch_line" != *=* ]]; then
+            mako_launch_config_valid=0
+            break
+        fi
+        mako_launch_key="${mako_launch_line%%=*}"
+        mako_launch_value="${mako_launch_line#*=}"
+        if [[ "$mako_launch_value" == *=* ]]; then
+            mako_launch_config_valid=0
+            break
+        fi
+        mako_launch_key="${mako_launch_key#"${mako_launch_key%%[!$' \t\r\n']*}"}"
+        mako_launch_key="${mako_launch_key%"${mako_launch_key##*[!$' \t\r\n']}"}"
+        mako_launch_value="${mako_launch_value#"${mako_launch_value%%[!$' \t\r\n']*}"}"
+        mako_launch_value="${mako_launch_value%"${mako_launch_value##*[!$' \t\r\n']}"}"
+        case "$mako_launch_key" in
+            version)
+                if [[ "$mako_launch_version_seen" != 0 || "$mako_launch_value" != 1 ]]; then
+                    mako_launch_config_valid=0
+                    break
+                fi
+                mako_launch_version_seen=1
+                ;;
+            enable_zink)
+                if [[ "$mako_launch_enable_zink_seen" != 0 ||
+                        "$mako_launch_value" != 0 && "$mako_launch_value" != 1 ]]; then
+                    mako_launch_config_valid=0
+                    break
+                fi
+                mako_launch_enable_zink="$mako_launch_value"
+                mako_launch_enable_zink_seen=1
+                ;;
+            force_alsa_audio)
+                if [[ "$mako_launch_force_alsa_audio_seen" != 0 ||
+                        "$mako_launch_value" != 0 && "$mako_launch_value" != 1 ]]; then
+                    mako_launch_config_valid=0
+                    break
+                fi
+                mako_launch_force_alsa_audio="$mako_launch_value"
+                mako_launch_force_alsa_audio_seen=1
+                ;;
+            *)
+                mako_launch_config_valid=0
+                break
+                ;;
+        esac
+    done < "$mako_launch_config_path"
+
+    if [[ "$mako_launch_version_seen" != 1 ]]; then
+        mako_launch_config_valid=0
+    fi
+    if [[ "$mako_launch_config_valid" != 1 ]]; then
+        echo "mako-launch: ignoring invalid launcher configuration: $mako_launch_config_path" >&2
+        mako_launch_enable_zink=0
+        mako_launch_force_alsa_audio=0
+    fi
+fi
+unset mako_launch_config_path mako_launch_line mako_launch_key mako_launch_value
+unset mako_launch_version_seen mako_launch_config_valid
+unset mako_launch_enable_zink_seen mako_launch_force_alsa_audio_seen
+
+if [[ "$mako_launch_enable_zink" == 1 ]]; then
+    export __GLX_VENDOR_LIBRARY_NAME=mesa
+    export MESA_LOADER_DRIVER_OVERRIDE=zink
+    export GALLIUM_DRIVER=zink
+fi
+if [[ "$mako_launch_force_alsa_audio" == 1 ]]; then
+    export SDL_AUDIODRIVER=alsa
+    case ";${WINEDLLOVERRIDES:-};" in
+        *";winepulse.drv=d;"*) ;;
+        *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winepulse.drv=d" ;;
+    esac
+    case ";${WINEDLLOVERRIDES:-};" in
+        *";winealsa.drv=b;"*) ;;
+        *) export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:+$WINEDLLOVERRIDES;}winealsa.drv=b" ;;
+    esac
+fi
+unset mako_launch_enable_zink mako_launch_force_alsa_audio
 
 allow_competing_layers="${MAKO_ALLOW_COMPETING_LAYERS:-0}"
 case "$allow_competing_layers" in

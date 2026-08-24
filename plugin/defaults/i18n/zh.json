@@ -137,6 +137,8 @@
   "ADAPTIVE_SMOOTH_CADENCE_DESC": "使用经过验证的固定插帧节奏。它可以使显示运动更平滑，但可能降低真实帧节奏并增加输入延迟。默认启用；如果关闭后游戏响应更快，请将其禁用。",
   "DYNAMIC_CADENCE_RECOVERY": "动态节奏恢复",
   "DYNAMIC_CADENCE_RECOVERY_DESC": "当游戏或模拟器切换原生帧率时进行恢复。自适应模式会重新校准；固定模式按倍率上限跟随已确认的 Gamescope 刷新率。启用后会短暂检查节奏、关闭两个基础上限并选择分数自适应。更改分数自适应或任一上限会关闭恢复。",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL": "节奏探测间隔",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "设置恢复功能检查原生帧率的频率。1 秒响应最快，但可能更频繁地造成短暂节奏卡顿；3 秒会降低检查频率。请针对每个游戏测试。更改会实时生效。",
   "ADAPTIVE_VALUE": "自适应",
   "CONFIG_DLL_PATH": "Lossless.dll 路径",
   "CONFIG_DLL_PATH_DESC": "Lossless.dll 的可选完整路径。留空则使用 MAKO Renderer 自动查找。",

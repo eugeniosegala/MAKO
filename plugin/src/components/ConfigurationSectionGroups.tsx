@@ -14,6 +14,9 @@ import {
   DISABLE_MAKO,
   DISABLE_STEAMDECK_MODE,
   DLL,
+  DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS,
+  DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
+  DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
   ENABLE_ZINK,
   EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
   EXTERNAL_VULKAN_LAYER_MANGOHUD,
@@ -223,6 +226,8 @@ export function CompatibilityConfigurationGroup({
   collapsed,
   onToggle,
 }: ConfigurationUpdateGroupProps) {
+  const cadenceProbeInterval = config.dynamic_cadence_probe_interval_seconds;
+
   return (
     <>
       <MakoSectionHeader topMargin="26px">
@@ -250,6 +255,43 @@ export function CompatibilityConfigurationGroup({
               }
             />
           </PanelSectionRow>
+
+          {config.dynamic_cadence_recovery && (
+            <PanelSectionRow>
+              <SliderField
+                label={`${t(
+                  "DYNAMIC_CADENCE_PROBE_INTERVAL",
+                  "Cadence Probe Interval",
+                )} (${cadenceProbeInterval}s)`}
+                description={
+                  <span style={{ display: "block", paddingBottom: "6px" }}>
+                    {t(
+                      "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC",
+                      "How often Recovery tests the native frame rate. 1 second reacts fastest but may cause more frequent brief pacing hitches; 3 seconds checks less often. Test per game. Changes apply live.",
+                    )}
+                  </span>
+                }
+                value={cadenceProbeInterval}
+                min={DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN}
+                max={DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX}
+                step={1}
+                validValues="steps"
+                minimumDpadGranularity={1}
+                notchCount={
+                  DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX -
+                  DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN +
+                  1
+                }
+                notchTicksVisible
+                onChange={(value) =>
+                  onConfigChange(
+                    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS,
+                    value,
+                  )
+                }
+              />
+            </PanelSectionRow>
+          )}
 
           <PanelSectionRow>
             <ToggleField

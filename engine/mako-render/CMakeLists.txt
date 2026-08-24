@@ -42,7 +42,8 @@ if(MAKO_BUILD_VK_LAYER)
         -Wno-unsafe-buffer-usage) # Array indexing
 
     target_compile_definitions(mako-render PRIVATE
-        MAKO_BUILD_VERSION="${MAKO_VERSION}")
+        MAKO_BUILD_VERSION="${MAKO_VERSION}"
+        MAKO_BUILD_FINGERPRINT="${MAKO_BUILD_FINGERPRINT}")
 
     set_target_properties(mako-render PROPERTIES
         CXX_VISIBILITY_PRESET hidden)
