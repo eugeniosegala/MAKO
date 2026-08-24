@@ -78,6 +78,25 @@ int main() {
             remainingGeneratedImageAcquireBudget(
                 acquireBudget, acquireBudget + 1) == 0,
         "exhausted ordered acquire budget allowed another blocking wait");
+    expect(orderedRecoveryAcquireTimeout(120, acquireBudget, 1) ==
+            8'333'334,
+        "first 120 Hz recovery probe lost its one-period budget");
+    expect(orderedRecoveryAcquireTimeout(120, acquireBudget, 2) ==
+            16'666'668,
+        "second 120 Hz recovery probe did not expand conservatively");
+    expect(orderedRecoveryAcquireTimeout(120, acquireBudget, 3) ==
+            25'000'000 &&
+            orderedRecoveryAcquireTimeout(120, acquireBudget, 20) ==
+                25'000'000,
+        "repeated recovery probes exceeded the hard 25 ms ceiling");
+    expect(orderedRecoveryAcquireTimeout(60, acquireBudget, 1) ==
+            16'666'667 &&
+            orderedRecoveryAcquireTimeout(60, acquireBudget, 2) ==
+                25'000'000,
+        "60 Hz recovery probe lost display-relative escalation");
+    expect(orderedRecoveryAcquireTimeout(
+            std::nullopt, 10'000'000, 3) == 10'000'000,
+        "recovery probe exceeded the configured acquire ceiling");
 
     GeneratedImageAdmission admission;
     expect(!admission.underPressure(),
@@ -156,44 +175,34 @@ int main() {
     expect(!acquireDecision.bypassGeneration &&
             acquireDecision.beginHistoryWarmup &&
             acquireDecision.limitGeneratedFrames &&
-            acquireDecision.preacquireGeneratedFrame,
-        "ordered acquire recovery did not warm history before a one-frame probe");
+            acquireDecision.preacquireGeneratedFrame &&
+            acquireDecision.boundedAcquireProbe &&
+            acquireDecision.consecutiveFailures == 1,
+        "ordered acquire recovery did not warm history before a bounded probe");
     acquireDecision = acquireRecovery.beforePresent(acquireStart + 300ms);
     expect(acquireDecision.limitGeneratedFrames &&
-            acquireDecision.preacquireGeneratedFrame,
-        "ordered acquire recovery did not retain the one-frame probe limit");
-    const auto firstProbeMiss =
+            acquireDecision.preacquireGeneratedFrame &&
+            acquireDecision.boundedAcquireProbe,
+        "ordered acquire recovery did not retain its bounded probe");
+    const auto failedProbe =
         acquireRecovery.reportNonblockingProbeUnavailable(
             acquireStart + 301ms
         );
-    const auto secondProbeMiss =
-        acquireRecovery.reportNonblockingProbeUnavailable(
-            acquireStart + 302ms
-        );
-    const auto thirdProbeMiss =
-        acquireRecovery.reportNonblockingProbeUnavailable(
-            acquireStart + 303ms
-        );
-    expect(firstProbeMiss.diagnostic && secondProbeMiss.diagnostic &&
-            !thirdProbeMiss.diagnostic &&
-            !firstProbeMiss.quarantined,
-        "ordered probe availability misses lost power-of-two aggregation");
-
-    observation = acquireRecovery.observe(
-        acquireStart + 330ms, 30ms, 25ms, false
-    );
-    expect(observation.quarantined && !observation.timedOut &&
-            observation.consecutiveFailures == 2 &&
-            observation.retryDelay == 500ms,
-        "a slow ordered recovery probe did not increase backoff");
-    acquireDecision = acquireRecovery.beforePresent(acquireStart + 829ms);
+    expect(failedProbe.diagnostic && failedProbe.quarantined &&
+            failedProbe.boundedProbeFailed &&
+            failedProbe.consecutiveFailures == 2 &&
+            failedProbe.retryDelay == 500ms && acquireRecovery.active(),
+        "failed bounded recovery probe did not return to native backoff");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 800ms);
     expect(acquireDecision.bypassGeneration,
         "second ordered drain ended before its retry deadline");
-    acquireDecision = acquireRecovery.beforePresent(acquireStart + 830ms);
-    expect(acquireDecision.beginHistoryWarmup,
-        "second ordered drain did not request temporal warm-up");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 801ms);
+    expect(acquireDecision.beginHistoryWarmup &&
+            acquireDecision.boundedAcquireProbe &&
+            acquireDecision.consecutiveFailures == 2,
+        "second ordered drain did not request a bounded retry");
     observation = acquireRecovery.observe(
-        acquireStart + 900ms, 5ms, 25ms, false
+        acquireStart + 900ms, 25ms, 25ms, false, false, true
     );
     expect(observation.recovered && observation.stabilizing &&
             acquireRecovery.active() &&
@@ -279,10 +288,63 @@ int main() {
         );
     expect(observation.guardArmed &&
             acquireDecision.preacquireGeneratedFrame &&
-            guardMiss.quarantined && guardMiss.diagnostic &&
-            guardMiss.consecutiveFailures == 1 &&
-            guardMiss.retryDelay == 250ms,
-        "zero-wait guard miss did not enter native-drain recovery");
+            !guardMiss.quarantined && guardMiss.diagnostic &&
+            guardMiss.guardBypassed &&
+            guardMiss.consecutiveFailures == 0 &&
+            !acquireRecovery.active(),
+        "zero-wait guard miss did not release one native relief frame");
+    observation = acquireRecovery.observe(
+        acquireStart + 10ms, 5ms, 25ms, false
+    );
+    expect(!observation.quarantined &&
+            observation.bypassedFrames == 0 &&
+            !acquireRecovery.active(),
+        "healthy delivery after native relief retained stale recovery state");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 30ms, 25ms, false
+    );
+    static_cast<void>(acquireRecovery.beforePresent(acquireStart + 1ms));
+    static_cast<void>(acquireRecovery.reportNonblockingProbeUnavailable(
+        acquireStart + 2ms
+    ));
+    observation = acquireRecovery.observe(
+        acquireStart + 20ms, 30ms, 25ms, false
+    );
+    expect(observation.quarantined &&
+            observation.consecutiveSlowFrames == 2 &&
+            observation.consecutiveFailures == 1,
+        "slow delivery after native relief did not prove repeated pressure");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 50ms, 25ms, true
+    );
+    auto probeRetryAt = acquireStart + observation.retryDelay;
+    constexpr std::array boundedProbeRetryDelays{
+        500ms, 1000ms, 2000ms, 2000ms,
+    };
+    for (const auto expectedDelay : boundedProbeRetryDelays) {
+        acquireDecision = acquireRecovery.beforePresent(probeRetryAt);
+        expect(acquireDecision.beginHistoryWarmup &&
+                acquireDecision.boundedAcquireProbe,
+            "bounded recovery attempt did not leave native backoff");
+        const auto failedAt = probeRetryAt + 1ms;
+        const auto boundedMiss =
+            acquireRecovery.reportNonblockingProbeUnavailable(failedAt);
+        expect(boundedMiss.quarantined &&
+                boundedMiss.boundedProbeFailed &&
+                boundedMiss.retryDelay == expectedDelay,
+            "bounded recovery miss remained probe-pending");
+        const auto beforeRetry = acquireRecovery.beforePresent(
+            failedAt + expectedDelay - 1ms
+        );
+        expect(beforeRetry.bypassGeneration &&
+                !beforeRetry.preacquireGeneratedFrame,
+            "failed bounded probe retried before its native-drain deadline");
+        probeRetryAt = failedAt + expectedDelay;
+    }
 
     acquireRecovery.reset();
     auto repeatedFailureAt = acquireStart;

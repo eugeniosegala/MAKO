@@ -649,7 +649,8 @@ void Swapchain::handleRenderFenceBudgetMiss(
 
 void Swapchain::preacquireGeneratedImages(
         const PresentInvocation& invocation,
-        PresentationFramePlan& plan, const bool trackGamescopeAdmission) {
+        PresentationFramePlan& plan, const bool trackGamescopeAdmission,
+        const uint64_t acquireTimeout) {
     if (plan.requestedGeneratedFrames.empty() || plan.historyWarmupActive)
         return;
 
@@ -662,12 +663,11 @@ void Swapchain::preacquireGeneratedImages(
         const auto acquireStarted = startPresentDiagnostic();
         lastAcquireResult = invocation.vk.df().AcquireNextImageKHR(
             invocation.vk.dev(), invocation.swapchain,
-            generatedImageAcquireTimeout(
-                true, plan.configuredAcquireTimeout
-            ),
+            acquireTimeout,
             this->passes.at(i).acquireSemaphore.handle(), VK_NULL_HANDLE,
             &acquiredImage
         );
+        plan.preacquireDuration += finishPresentDiagnostic(acquireStarted);
         if (lastAcquireResult == VK_SUCCESS ||
                 lastAcquireResult == VK_SUBOPTIMAL_KHR) {
             plan.preacquiredGeneratedImages.at(
@@ -905,8 +905,8 @@ VkResult Swapchain::presentGeneratedFrames(
         const PresentInvocation& invocation,
         const PresentationFramePlan& plan,
         const bool gamescopeHdrTransport) {
-    auto maximumAcquireDuration = DiagnosticsClock::duration::zero();
-    auto totalAcquireDuration = DiagnosticsClock::duration::zero();
+    auto maximumAcquireDuration = plan.preacquireDuration;
+    auto totalAcquireDuration = plan.preacquireDuration;
     auto generatedSubmitDuration = DiagnosticsClock::duration::zero();
     auto generatedPresentDuration = DiagnosticsClock::duration::zero();
     auto originalPresentDuration = DiagnosticsClock::duration::zero();
@@ -925,7 +925,8 @@ VkResult Swapchain::presentGeneratedFrames(
         const auto observation =
             this->recoveryState.orderedAcquireRecovery.observe(
                 observedAt, totalAcquireDuration, slowThreshold, timedOut,
-                acquireDeadlineExceeded
+                acquireDeadlineExceeded,
+                plan.boundedOrderedAcquireProbe
             );
         if (observation.quarantined) {
             this->fixedRefreshBudget.reset();
@@ -1466,6 +1467,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         return this->presentNativeFrame(invocation);
 
     bool orderedAcquireRecoveryProbe = false;
+    bool boundedOrderedAcquireProbe = false;
+    size_t orderedAcquireConsecutiveFailures = 0;
     if (this->privateOrderedTransport) {
         const auto recovery =
             this->recoveryState.orderedAcquireRecovery.beforePresent(
@@ -1488,6 +1491,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             return this->presentNativeFrame(invocation);
         }
         orderedAcquireRecoveryProbe = recovery.limitGeneratedFrames;
+        boundedOrderedAcquireProbe = recovery.boundedAcquireProbe;
+        orderedAcquireConsecutiveFailures = recovery.consecutiveFailures;
         // Every constrained Adaptive present already kept lastRealFrame current,
         // while temporal warm-up cleared the stale smoothed estimate. Resetting
         // again with presentNow would make prepareFramePlan() observe a zero
@@ -1551,6 +1556,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     auto plan = this->prepareFramePlan(
         presentNow, gamescopeHdrTransport, orderedAcquireRecoveryProbe
     );
+    plan.boundedOrderedAcquireProbe = boundedOrderedAcquireProbe;
 
     // The Gamescope HDR bridge is native-first: never hold the application's
     // real frame behind unfinished private work. Ordered SDR retains the
@@ -1560,8 +1566,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         return this->presentNativeFrame(invocation);
     }
 
-    if (gamescopeHdrTransport)
-        this->preacquireGeneratedImages(invocation, plan, true);
+    if (gamescopeHdrTransport) {
+        this->preacquireGeneratedImages(
+            invocation, plan, true,
+            generatedImageAcquireTimeout(
+                true, plan.configuredAcquireTimeout
+            )
+        );
+    }
     size_t scheduledGeneratedFrameCount = gamescopeHdrTransport
         ? plan.admittedGeneratedFrameCount
         : plan.requestedGeneratedFrames.size();
@@ -1588,13 +1600,23 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     }
 
     if (orderedAcquireRecoveryProbe && !plan.historyWarmupActive) {
-        // Do not repeat the ordinary 50 ms acquire during recovery. A missing
-        // image proves that the ordered FIFO has not drained yet, so retain
-        // native presentation and retry a zero-wait one-frame probe later.
-        this->preacquireGeneratedImages(invocation, plan, false);
+        // The first-slow guard remains nonblocking. After a genuine native
+        // drain, one single-image probe may wait across a small number of
+        // display periods; failure is terminal for this attempt and returns
+        // to backoff instead of leaving recovery permanently probe-pending.
+        const uint64_t recoveryAcquireTimeout = boundedOrderedAcquireProbe
+            ? orderedRecoveryAcquireTimeout(
+                this->gamescopeRefreshHz, plan.configuredAcquireTimeout,
+                orderedAcquireConsecutiveFailures
+            )
+            : 0;
+        this->preacquireGeneratedImages(
+            invocation, plan, false, recoveryAcquireTimeout
+        );
         if (plan.admittedGeneratedFrameCount == 0) {
+            const auto probeFinishedAt = DiagnosticsClock::now();
             const auto miss = this->recoveryState.orderedAcquireRecovery
-                .reportNonblockingProbeUnavailable(presentNow);
+                .reportNonblockingProbeUnavailable(probeFinishedAt);
             if (miss.quarantined) {
                 this->fixedRefreshBudget.reset();
                 if (presentDiagnosticsEnabled()) {
@@ -1603,7 +1625,13 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                               << " context="
                               << this->diagnosticsState.contextId
                               << " phase=native-drain"
-                              << " reason=guard-probe-unavailable"
+                              << " reason=bounded-recovery-probe-timeout"
+                              << " acquire_timeout_ns="
+                              << recoveryAcquireTimeout
+                              << " acquire_ms="
+                              << std::chrono::duration<double, std::milli>(
+                                     plan.preacquireDuration
+                                 ).count()
                               << " consecutive_failures="
                               << miss.consecutiveFailures
                               << " retry_ms="
@@ -1626,24 +1654,29 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                               << this->frameState.sequenceIndex
                               << " action=native-drain\n";
                 }
-            } else if (miss.diagnostic && presentDiagnosticsEnabled()) {
-                std::cerr << "MAKO Renderer: present diagnostics: "
-                             "operation=ordered-acquire-probe-pending"
-                          << " context=" << this->diagnosticsState.contextId
-                          << " phase=recovery-probe"
-                          << " acquire_timeout_ns=0"
-                          << " bypassed_frames=" << miss.bypassedFrames
-                          << " recovery_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 miss.recoveryDuration
-                             ).count()
-                          << " requested_generated="
-                          << plan.requestedGeneratedFrames.size()
-                          << " admitted_generated=0"
-                          << " presented_generated=0"
-                          << " frame=" << this->frameState.realFrameIndex
-                          << " sequence=" << this->frameState.sequenceIndex
-                          << " action=native-present\n";
+            } else if (miss.guardBypassed) {
+                this->ensureHistoryWarmup();
+                this->fixedRefreshBudget.reset();
+                if (presentDiagnosticsEnabled()) {
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=ordered-acquire-guard-bypass"
+                              << " context="
+                              << this->diagnosticsState.contextId
+                              << " phase=native-relief"
+                              << " acquire_timeout_ns=0"
+                              << " bypassed_frames=" << miss.bypassedFrames
+                              << " requested_generated="
+                              << plan.requestedGeneratedFrames.size()
+                              << " admitted_generated=0"
+                              << " presented_generated=0"
+                              << " frame="
+                              << this->frameState.realFrameIndex
+                              << " sequence="
+                              << this->frameState.sequenceIndex
+                              << " history_warmup_frames="
+                              << AdaptiveScheduler::historyWarmupFrameCount()
+                              << " action=native-present-warm-history-then-normal-retry\n";
+                }
             }
             return this->presentNativeFrame(invocation);
         }

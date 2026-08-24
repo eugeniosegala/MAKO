@@ -108,6 +108,35 @@ namespace mako::layer {
         return *configuredBudget - consumedNanoseconds;
     }
 
+    /// A recovery probe owns one image and one small, display-relative wait.
+    /// Later failed attempts may span more refresh periods, but never exceed
+    /// 25 ms or the user's normal application-present acquire ceiling. This
+    /// gives ordered FIFO presentation a phase boundary to release an image
+    /// without reintroducing the ordinary 50 ms multi-image wait.
+    [[nodiscard]] inline uint64_t orderedRecoveryAcquireTimeout(
+            const std::optional<uint32_t> refreshHz,
+            const std::optional<uint64_t> configuredTimeout,
+            const size_t consecutiveFailures) {
+        constexpr uint64_t nanosecondsPerSecond = 1'000'000'000;
+        constexpr uint64_t minimumProbePeriod = 8'000'000;
+        constexpr uint64_t maximumProbeTimeout = 25'000'000;
+        const uint64_t refreshPeriod = refreshHz && *refreshHz > 0
+            ? (nanosecondsPerSecond + *refreshHz - 1) / *refreshHz
+            : 16'666'667;
+        const uint64_t probePeriod = std::max(
+            refreshPeriod, minimumProbePeriod
+        );
+        const uint64_t probePeriods = std::clamp<size_t>(
+            consecutiveFailures, 1, 3
+        );
+        const uint64_t recoveryTimeout = std::min(
+            probePeriod * probePeriods, maximumProbeTimeout
+        );
+        return configuredTimeout
+            ? std::min(recoveryTimeout, *configuredTimeout)
+            : recoveryTimeout;
+    }
+
     /// Once a lower-swapchain image has been acquired, transport ownership is
     /// independent of HDR classification. A caught backend failure must retire
     /// every owned image before the application's original image can be
@@ -179,10 +208,11 @@ namespace mako::layer {
     /// Classifies generated-image starvation on the ordered SDR transport.
     /// One isolated slow successful application-present acquire total arms a
     /// zero-wait guard for the next present so transport delay cannot
-    /// immediately recur or contaminate Adaptive cadence. A guard miss,
-    /// repeated pressure, an exhausted cumulative budget, or one severe total
-    /// requests a native-only drain before history is warmed and one frame
-    /// probes recovery.
+    /// immediately recur or contaminate Adaptive cadence. A guard miss gives
+    /// one native frame back to the FIFO before normal policy retries; only a
+    /// repeated slow total, an exhausted cumulative budget, or one severe
+    /// total requests a native-only drain. Recovery warms history and attempts
+    /// one bounded single-image probe, returning to backoff on failure.
     class OrderedAcquireRecovery {
     public:
         using Clock = std::chrono::steady_clock;
@@ -196,9 +226,10 @@ namespace mako::layer {
             // single-image transport probe, never the normal 3x/4x plan.
             bool limitGeneratedFrames{false};
             // A recovery probe must not spend the normal bounded acquire wait:
-            // when no lower-swapchain image is immediately ready, native
-            // presentation continues draining the ordered FIFO.
+            // the initial guard stays nonblocking, while a post-drain probe
+            // receives one small display-relative timeout.
             bool preacquireGeneratedFrame{false};
+            bool boundedAcquireProbe{false};
             // After one drain probe succeeds, native-only presentation remains
             // deterministic until one fixed deadline. No availability miss may
             // extend this interval or intermittently re-enable generation.
@@ -229,6 +260,8 @@ namespace mako::layer {
         struct NonblockingMissObservation {
             bool diagnostic{false};
             bool quarantined{false};
+            bool guardBypassed{false};
+            bool boundedProbeFailed{false};
             size_t consecutiveFailures{0};
             size_t bypassedFrames{0};
             Duration retryDelay{};
@@ -266,10 +299,18 @@ namespace mako::layer {
 
         [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
             if (!this->retryAt) {
-                if (this->guardPending || this->probePending) {
+                if (this->guardPending) {
                     return {
                         .limitGeneratedFrames = true,
                         .preacquireGeneratedFrame = true,
+                    };
+                }
+                if (this->probePending) {
+                    return {
+                        .limitGeneratedFrames = true,
+                        .preacquireGeneratedFrame = true,
+                        .boundedAcquireProbe = true,
+                        .consecutiveFailures = this->consecutiveFailures,
                     };
                 }
                 if (this->stabilizingUntil &&
@@ -332,6 +373,7 @@ namespace mako::layer {
                 .beginHistoryWarmup = true,
                 .limitGeneratedFrames = true,
                 .preacquireGeneratedFrame = true,
+                .boundedAcquireProbe = true,
                 .bypassedFrames = this->bypassedFrames,
                 .consecutiveFailures = this->consecutiveFailures,
                 .drainDuration = this->recoveryStartedAt
@@ -344,13 +386,17 @@ namespace mako::layer {
                 const Duration acquireDuration,
                 const Duration slowAcquireThreshold,
                 const bool timedOut,
-                const bool deadlineExceeded = false) {
+                const bool deadlineExceeded = false,
+                const bool boundedRecoveryProbe = false) {
             const bool severe = deadlineExceeded ||
                 acquireDuration >= severeAcquireDuration(
                     slowAcquireThreshold
                 );
-            const bool slow = timedOut || severe ||
-                acquireDuration >= slowAcquireThreshold;
+            const bool boundedProbeSucceeded = boundedRecoveryProbe &&
+                this->probePending && !timedOut;
+            const bool slow = !boundedProbeSucceeded &&
+                (timedOut || severe ||
+                 acquireDuration >= slowAcquireThreshold);
             if (slow) {
                 this->healthySince.reset();
                 this->stabilizingUntil.reset();
@@ -411,6 +457,11 @@ namespace mako::layer {
                     this->recoveryStartedAt.reset();
                     this->healthySince.reset();
                 }
+            } else if (!this->recoveryStartedAt) {
+                // A zero-wait guard miss owns one real-only relief frame. Once
+                // the following normal acquire is healthy, that isolated
+                // bypass must not leak into a later recovery's counters.
+                this->bypassedFrames = 0;
             }
 
             return {
@@ -431,24 +482,34 @@ namespace mako::layer {
                 this->stabilizingUntil.has_value();
         }
 
-        /// A nonblocking recovery admission miss intentionally retains the
-        /// constrained probe state. A first-slow guard miss escalates into the
-        /// native drain; later probe misses keep presenting the real image and
-        /// retrying without converting availability pressure into another
-        /// application-thread stall.
+        /// A zero-wait guard miss is only one native relief frame, not proof of
+        /// sustained starvation. A bounded post-drain probe miss is terminal
+        /// for that attempt and returns to native backoff; probePending can
+        /// therefore never become a permanent real-only state.
         [[nodiscard]] NonblockingMissObservation
         reportNonblockingProbeUnavailable(
                 const TimePoint now) {
             if (this->guardPending) {
                 this->guardPending = false;
                 this->bypassedFrames++;
+                return {
+                    .diagnostic = true,
+                    .guardBypassed = true,
+                    .consecutiveFailures = this->consecutiveFailures,
+                    .bypassedFrames = this->bypassedFrames,
+                };
+            }
+
+            if (this->probePending) {
+                this->bypassedFrames++;
                 const auto observation = this->beginNativeDrain(
-                    now, false, false, false,
+                    now, true, false, false,
                     this->consecutiveSlowFrames
                 );
                 return {
                     .diagnostic = true,
                     .quarantined = true,
+                    .boundedProbeFailed = true,
                     .consecutiveFailures =
                         observation.consecutiveFailures,
                     .bypassedFrames = observation.bypassedFrames,
@@ -457,10 +518,8 @@ namespace mako::layer {
                 };
             }
 
-            // Probe availability can be intermittent, but recovery liveness is
-            // absolute: a miss must never move the terminal deadline. Normal
-            // presentation does not call this during native-only stabilization;
-            // retaining this bounded behavior also makes accidental calls safe.
+            // Normal presentation does not call this without a guard or probe.
+            // Keep accidental calls observable without creating recovery state.
             this->bypassedFrames++;
             this->nonblockingProbeMisses++;
             return {

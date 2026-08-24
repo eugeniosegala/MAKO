@@ -387,6 +387,16 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                     OrderedAcquireRecovery::slowAcquireDuration(
                         this->gamescopeRefreshHz
                     );
+                const auto firstRecoveryAcquireTimeout =
+                    orderedRecoveryAcquireTimeout(
+                        this->gamescopeRefreshHz,
+                        configuredAcquireTimeout, 1
+                    );
+                const auto maximumRecoveryAcquireTimeout =
+                    orderedRecoveryAcquireTimeout(
+                        this->gamescopeRefreshHz,
+                        configuredAcquireTimeout, 3
+                    );
                 std::cerr << "MAKO Renderer: present diagnostics: "
                              "operation=ordered-acquire-policy"
                           << " context=" << this->diagnosticsState.contextId
@@ -411,6 +421,16 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                              ).count()
                           << " budget_scope=application-present"
                           << " first_slow_action=zero-wait-protection"
+                          << " guard_miss_action=native-relief-history-warmup"
+                          << " recovery_probe_timeout_ms="
+                          << static_cast<double>(
+                                 firstRecoveryAcquireTimeout
+                             ) / 1'000'000.0
+                          << " recovery_probe_timeout_max_ms="
+                          << static_cast<double>(
+                                 maximumRecoveryAcquireTimeout
+                             ) / 1'000'000.0
+                          << " recovery_probe_failure=backoff"
                           << " post_probe_policy=native-only"
                           << " stabilization_ms="
                           << std::chrono::duration<double, std::milli>(
