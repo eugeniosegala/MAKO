@@ -3,6 +3,7 @@
 #pragma once
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -148,6 +149,265 @@ namespace mako::layer {
         bool pressure{false};
         size_t missedAttempts{0};
         size_t bypassedFrames{0};
+    };
+
+    /// Classifies generated-image starvation on the ordered SDR transport.
+    /// One isolated slow acquire can be ordinary FIFO backpressure. Repeated
+    /// pressure, or one bounded acquire timeout, instead requests a native-only
+    /// drain before history is warmed and one generated frame probes recovery.
+    class OrderedAcquireRecovery {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+        using Duration = Clock::duration;
+
+        struct PresentDecision {
+            bool bypassGeneration{false};
+            bool beginHistoryWarmup{false};
+            // The first generated present after the drain is deliberately a
+            // single-image transport probe, never the normal 3x/4x plan.
+            bool limitGeneratedFrames{false};
+            // A recovery probe must not spend the normal bounded acquire wait:
+            // when no lower-swapchain image is immediately ready, native
+            // presentation continues draining the ordered FIFO.
+            bool preacquireGeneratedFrame{false};
+            bool resetCadenceClock{false};
+            bool recoveryStabilized{false};
+            size_t bypassedFrames{0};
+            size_t consecutiveFailures{0};
+            Duration drainDuration{};
+        };
+
+        struct Observation {
+            bool quarantined{false};
+            bool recovered{false};
+            bool stabilizing{false};
+            bool timedOut{false};
+            size_t consecutiveSlowFrames{0};
+            size_t consecutiveFailures{0};
+            size_t bypassedFrames{0};
+            Duration retryDelay{};
+            Duration recoveryDuration{};
+        };
+
+        [[nodiscard]] static constexpr auto minimumSlowAcquireDuration() {
+            return std::chrono::milliseconds{25};
+        }
+
+        [[nodiscard]] static Duration slowAcquireDuration(
+                const std::optional<uint32_t> refreshHz) {
+            if (!refreshHz || *refreshHz == 0)
+                return minimumSlowAcquireDuration();
+
+            const auto displayRelativeDuration =
+                std::chrono::duration_cast<Duration>(
+                    std::chrono::duration<double>(
+                        1.5 / static_cast<double>(*refreshHz)
+                    )
+                );
+            return std::max<Duration>(
+                minimumSlowAcquireDuration(), displayRelativeDuration
+            );
+        }
+
+        [[nodiscard]] static constexpr auto stabilizationDuration() {
+            return std::chrono::seconds{2};
+        }
+
+        [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
+            if (!this->retryAt) {
+                if (this->probePending ||
+                        (this->stabilizingUntil &&
+                         now < *this->stabilizingUntil)) {
+                    return {
+                        .limitGeneratedFrames = true,
+                        .preacquireGeneratedFrame = true,
+                    };
+                }
+                if (this->stabilizingUntil) {
+                    const size_t completedFailures =
+                        this->consecutiveFailures;
+                    const size_t completedBypassedFrames =
+                        this->bypassedFrames;
+                    const Duration completedRecoveryDuration =
+                        this->recoveryStartedAt
+                        ? now - *this->recoveryStartedAt
+                        : Duration{};
+                    this->stabilizingUntil.reset();
+                    this->recoveryStartedAt.reset();
+                    this->healthySince.reset();
+                    this->consecutiveFailures = 0;
+                    this->bypassedFrames = 0;
+                    this->nonblockingProbeMisses = 0;
+                    return {
+                        .resetCadenceClock = true,
+                        .recoveryStabilized = true,
+                        .bypassedFrames = completedBypassedFrames,
+                        .consecutiveFailures = completedFailures,
+                        .drainDuration = completedRecoveryDuration,
+                    };
+                }
+                return {
+                };
+            }
+
+            if (now < *this->retryAt) {
+                this->bypassedFrames++;
+                return {
+                    .bypassGeneration = true,
+                    .bypassedFrames = this->bypassedFrames,
+                    .consecutiveFailures = this->consecutiveFailures,
+                    .drainDuration = this->recoveryStartedAt
+                        ? now - *this->recoveryStartedAt
+                        : Duration{},
+                };
+            }
+
+            this->retryAt.reset();
+            this->probePending = true;
+            return {
+                .beginHistoryWarmup = true,
+                .limitGeneratedFrames = true,
+                .preacquireGeneratedFrame = true,
+                .bypassedFrames = this->bypassedFrames,
+                .consecutiveFailures = this->consecutiveFailures,
+                .drainDuration = this->recoveryStartedAt
+                    ? now - *this->recoveryStartedAt
+                    : Duration{},
+            };
+        }
+
+        [[nodiscard]] Observation observe(const TimePoint now,
+                const Duration acquireDuration,
+                const Duration slowAcquireThreshold,
+                const bool timedOut) {
+            const bool slow = timedOut ||
+                acquireDuration >= slowAcquireThreshold;
+            if (slow) {
+                this->healthySince.reset();
+                this->stabilizingUntil.reset();
+                this->nonblockingProbeMisses = 0;
+                this->consecutiveSlowFrames++;
+                const size_t observedSlowFrames =
+                    this->consecutiveSlowFrames;
+                if (!timedOut && !this->probePending &&
+                        observedSlowFrames < slowFrameThreshold) {
+                    return {
+                        .consecutiveSlowFrames = observedSlowFrames,
+                        .consecutiveFailures = this->consecutiveFailures,
+                        .bypassedFrames = this->bypassedFrames,
+                    };
+                }
+
+                if (!this->recoveryStartedAt)
+                    this->recoveryStartedAt = now;
+                this->consecutiveFailures++;
+                const auto delay = retryDelayForFailure(
+                    this->consecutiveFailures
+                );
+                this->retryAt = now + delay;
+                this->probePending = false;
+                this->consecutiveSlowFrames = 0;
+                return {
+                    .quarantined = true,
+                    .timedOut = timedOut,
+                    .consecutiveSlowFrames = observedSlowFrames,
+                    .consecutiveFailures = this->consecutiveFailures,
+                    .bypassedFrames = this->bypassedFrames,
+                    .retryDelay = delay,
+                    .recoveryDuration = now - *this->recoveryStartedAt,
+                };
+            }
+
+            this->consecutiveSlowFrames = 0;
+            const bool recovered = this->probePending;
+            if (recovered) {
+                this->probePending = false;
+                this->healthySince = now;
+                this->stabilizingUntil = now + stabilizationDuration();
+                this->nonblockingProbeMisses = 0;
+            } else if (this->consecutiveFailures > 0 &&
+                    !this->stabilizingUntil) {
+                if (!this->healthySince)
+                    this->healthySince = now;
+                if (now - *this->healthySince >= healthyResetDuration) {
+                    this->consecutiveFailures = 0;
+                    this->bypassedFrames = 0;
+                    this->recoveryStartedAt.reset();
+                    this->healthySince.reset();
+                }
+            }
+
+            return {
+                .recovered = recovered,
+                .stabilizing = recovered,
+                .consecutiveFailures = this->consecutiveFailures,
+                .bypassedFrames = this->bypassedFrames,
+                .recoveryDuration = this->recoveryStartedAt
+                    ? now - *this->recoveryStartedAt
+                    : Duration{},
+            };
+        }
+
+        [[nodiscard]] bool active() const {
+            return this->retryAt.has_value() || this->probePending ||
+                this->stabilizingUntil.has_value();
+        }
+
+        /// A nonblocking recovery admission miss intentionally retains the
+        /// constrained probe state. The caller presents the real image and
+        /// retries next frame without converting availability pressure into a
+        /// 50 ms application-thread stall.
+        [[nodiscard]] bool reportNonblockingProbeUnavailable(
+                const TimePoint now) {
+            // Recovery must earn a continuous healthy window. A zero-wait
+            // miss is harmless to the application thread, but it means the
+            // ordered FIFO is not ready to resume its full normal plan.
+            if (this->stabilizingUntil)
+                this->stabilizingUntil = now + stabilizationDuration();
+            this->bypassedFrames++;
+            this->nonblockingProbeMisses++;
+            return (this->nonblockingProbeMisses &
+                    (this->nonblockingProbeMisses - 1)) == 0;
+        }
+
+        void reset() {
+            this->retryAt.reset();
+            this->recoveryStartedAt.reset();
+            this->healthySince.reset();
+            this->stabilizingUntil.reset();
+            this->probePending = false;
+            this->consecutiveSlowFrames = 0;
+            this->consecutiveFailures = 0;
+            this->bypassedFrames = 0;
+            this->nonblockingProbeMisses = 0;
+        }
+
+    private:
+        [[nodiscard]] static Duration retryDelayForFailure(
+                const size_t failures) {
+            constexpr std::array delays{
+                std::chrono::milliseconds{250},
+                std::chrono::milliseconds{500},
+                std::chrono::milliseconds{1000},
+                std::chrono::milliseconds{2000},
+            };
+            return delays.at(std::min(failures, delays.size()) - 1);
+        }
+
+        static constexpr size_t slowFrameThreshold = 2;
+        static constexpr auto healthyResetDuration =
+            std::chrono::seconds{2};
+
+        std::optional<TimePoint> retryAt;
+        std::optional<TimePoint> recoveryStartedAt;
+        std::optional<TimePoint> healthySince;
+        std::optional<TimePoint> stabilizingUntil;
+        bool probePending{false};
+        size_t consecutiveSlowFrames{0};
+        size_t consecutiveFailures{0};
+        size_t bypassedFrames{0};
+        size_t nonblockingProbeMisses{0};
     };
 
     struct PipelineBusyDecision {

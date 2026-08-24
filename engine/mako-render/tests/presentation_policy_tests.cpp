@@ -2,6 +2,7 @@
 
 #include "presentation_policy.hpp"
 
+#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
@@ -79,6 +80,136 @@ int main() {
         "admission recovery lost its aggregated pressure counters");
     expect(!admission.underPressure(),
         "admission recovery did not reset pressure");
+
+    expect(OrderedAcquireRecovery::slowAcquireDuration(120) == 25ms,
+        "120 Hz ordered acquire pressure threshold changed");
+    expect(OrderedAcquireRecovery::slowAcquireDuration(60) == 25ms,
+        "60 Hz ordered acquire pressure threshold changed");
+    expect(OrderedAcquireRecovery::slowAcquireDuration(40) >= 37ms &&
+            OrderedAcquireRecovery::slowAcquireDuration(40) < 38ms,
+        "40 Hz ordered acquire pressure threshold lost display scaling");
+
+    OrderedAcquireRecovery acquireRecovery;
+    const auto acquireStart = OrderedAcquireRecovery::TimePoint{};
+    auto observation = acquireRecovery.observe(
+        acquireStart, 30ms, 25ms, false
+    );
+    expect(!observation.quarantined && !acquireRecovery.active(),
+        "one slow ordered acquire entered recovery");
+    observation = acquireRecovery.observe(
+        acquireStart + 16ms, 10ms, 25ms, false
+    );
+    expect(!observation.quarantined,
+        "a healthy ordered acquire entered recovery");
+
+    observation = acquireRecovery.observe(
+        acquireStart + 32ms, 50ms, 25ms, true
+    );
+    expect(observation.quarantined && observation.timedOut &&
+            observation.consecutiveFailures == 1 &&
+            observation.retryDelay == 250ms,
+        "one ordered acquire timeout did not start the native drain");
+    auto acquireDecision = acquireRecovery.beforePresent(
+        acquireStart + 100ms
+    );
+    expect(acquireDecision.bypassGeneration &&
+            acquireDecision.bypassedFrames == 1,
+        "ordered acquire recovery did not bypass generation while draining");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 282ms);
+    expect(!acquireDecision.bypassGeneration &&
+            acquireDecision.beginHistoryWarmup &&
+            acquireDecision.limitGeneratedFrames &&
+            acquireDecision.preacquireGeneratedFrame,
+        "ordered acquire recovery did not warm history before a one-frame probe");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 300ms);
+    expect(acquireDecision.limitGeneratedFrames &&
+            acquireDecision.preacquireGeneratedFrame,
+        "ordered acquire recovery did not retain the one-frame probe limit");
+    expect(acquireRecovery.reportNonblockingProbeUnavailable(
+                acquireStart + 301ms
+            ) &&
+            acquireRecovery.reportNonblockingProbeUnavailable(
+                acquireStart + 302ms
+            ) &&
+            !acquireRecovery.reportNonblockingProbeUnavailable(
+                acquireStart + 303ms
+            ),
+        "ordered probe availability misses lost power-of-two aggregation");
+
+    observation = acquireRecovery.observe(
+        acquireStart + 330ms, 30ms, 25ms, false
+    );
+    expect(observation.quarantined && !observation.timedOut &&
+            observation.consecutiveFailures == 2 &&
+            observation.retryDelay == 500ms,
+        "a slow ordered recovery probe did not increase backoff");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 829ms);
+    expect(acquireDecision.bypassGeneration,
+        "second ordered drain ended before its retry deadline");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 830ms);
+    expect(acquireDecision.beginHistoryWarmup,
+        "second ordered drain did not request temporal warm-up");
+    observation = acquireRecovery.observe(
+        acquireStart + 900ms, 5ms, 25ms, false
+    );
+    expect(observation.recovered && observation.stabilizing &&
+            acquireRecovery.active() &&
+            observation.consecutiveFailures == 2,
+        "healthy ordered acquire probe did not begin constrained stabilization");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 1800ms);
+    expect(acquireDecision.limitGeneratedFrames &&
+            acquireDecision.preacquireGeneratedFrame,
+        "ordered recovery released normal generation before stabilization");
+    static_cast<void>(acquireRecovery.reportNonblockingProbeUnavailable(
+        acquireStart + 1801ms
+    ));
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 2900ms);
+    expect(acquireDecision.limitGeneratedFrames &&
+            acquireDecision.preacquireGeneratedFrame,
+        "a recovery availability miss did not extend stabilization");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 3801ms);
+    expect(acquireDecision.recoveryStabilized &&
+            acquireDecision.resetCadenceClock && !acquireRecovery.active(),
+        "ordered recovery did not reset cadence after stabilization");
+
+    observation = acquireRecovery.observe(
+        acquireStart + 4100ms, 50ms, 25ms, true
+    );
+    expect(observation.quarantined &&
+            observation.consecutiveFailures == 1 &&
+            observation.retryDelay == 250ms,
+        "sustained healthy delivery did not reset ordered retry backoff");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 30ms, 25ms, false
+    );
+    expect(!observation.quarantined,
+        "first repeated-slow sample entered ordered recovery");
+    observation = acquireRecovery.observe(
+        acquireStart + 16ms, 30ms, 25ms, false
+    );
+    expect(observation.quarantined && !observation.timedOut,
+        "two repeated slow ordered acquires did not enter recovery");
+
+    acquireRecovery.reset();
+    auto repeatedFailureAt = acquireStart;
+    constexpr std::array expectedRetryDelays{
+        250ms, 500ms, 1000ms, 2000ms, 2000ms,
+    };
+    for (size_t failure = 0; failure < expectedRetryDelays.size(); ++failure) {
+        observation = acquireRecovery.observe(
+            repeatedFailureAt, 50ms, 25ms, true
+        );
+        expect(observation.quarantined &&
+                observation.retryDelay == expectedRetryDelays.at(failure),
+            "ordered acquire retry did not follow its bounded backoff");
+        repeatedFailureAt += expectedRetryDelays.at(failure);
+        acquireDecision = acquireRecovery.beforePresent(repeatedFailureAt);
+        expect(acquireDecision.beginHistoryWarmup,
+            "ordered acquire retry did not leave native drain at deadline");
+        repeatedFailureAt += 1ms;
+    }
 
     PipelineBusyRecovery pipelineBusy;
     auto now = PipelineBusyRecovery::TimePoint{};

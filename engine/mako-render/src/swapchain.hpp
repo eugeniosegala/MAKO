@@ -122,6 +122,7 @@ namespace mako::layer {
             GeneratedFramePlan scheduledGeneratedFrames;
             size_t admittedGeneratedFrameCount{0};
             bool historyWarmupActive{false};
+            bool generatedImagesPreacquired{false};
             std::optional<uint64_t> configuredAcquireTimeout;
             std::array<uint32_t, GeneratedFramePlan::capacity>
                 preacquiredGeneratedImages{};
@@ -140,6 +141,7 @@ namespace mako::layer {
 
         struct RecoveryState {
             GeneratedImageAdmission generatedImageAdmission;
+            OrderedAcquireRecovery orderedAcquireRecovery;
             PipelineBusyRecovery pipelineBusyRecovery;
             bool backendPending{false};
             size_t historyWarmupRemaining{0};
@@ -213,7 +215,8 @@ namespace mako::layer {
         void ensureHistoryWarmup();
         [[nodiscard]] PresentationFramePlan prepareFramePlan(
             std::chrono::steady_clock::time_point presentNow,
-            bool gamescopeHdrTransport);
+            bool gamescopeHdrTransport,
+            bool orderedAcquireRecoveryProbe);
         void reportAdaptiveDelivery(const PresentationFramePlan& plan,
             size_t acceptedForPresentation);
         [[nodiscard]] bool generationPipelineReady(
@@ -225,7 +228,8 @@ namespace mako::layer {
             const PresentationFramePlan& plan);
         void preacquireGeneratedImages(
             const PresentInvocation& invocation,
-            PresentationFramePlan& plan);
+            PresentationFramePlan& plan,
+            bool trackGamescopeAdmission);
         void submitSourceCopy(const PresentInvocation& invocation,
             VkImage swapchainImage, const vk::Image& sourceImage);
         [[nodiscard]] VkResult presentHistoryOnly(

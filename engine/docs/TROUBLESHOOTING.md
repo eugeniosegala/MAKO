@@ -62,7 +62,7 @@ mako-diagnostics --lines 2000 all
 
 For the complete end-to-end workflow, including Steam, direct commands, Heroic or Flatpak setups, creating `MAKO-diagnostics.txt` on the Desktop, restoring normal settings, and using the shared submission form, see [Collect Standalone MAKO Renderer Diagnostics](COLLECT_DIAGNOSTICS.md).
 
-`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` is a recovery diagnostic. Leave it unset for normal play. If you are reproducing a presentation stall, set a small value such as `25` and include the resulting log with the report.
+`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` bounds one ordered generated-image acquisition so transport recovery can return to native presentation instead of blocking indefinitely. MAKO Decky managed wrappers set the normal 50 ms ceiling. Standalone Renderer launches retain the legacy unbounded default when it is unset; for a focused presentation-stall reproduction, set a smaller value such as `25` and include the resulting log with the report.
 
 ## Report an issue
 

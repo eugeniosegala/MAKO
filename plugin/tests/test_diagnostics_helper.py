@@ -39,6 +39,11 @@ MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=6
 MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
 MAKO Renderer: present diagnostics: operation=acquire-generated-image context=1 duration_ms=50 result=VK_TIMEOUT
 MAKO Renderer: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
+MAKO Renderer: present diagnostics: operation=ordered-acquire-quarantine context=1 reason=timeout retry_ms=250 action=native-drain
+MAKO Renderer: present diagnostics: operation=ordered-acquire-retry context=1 bypassed_frames=12 action=warm-history-before-probe
+MAKO Renderer: present diagnostics: operation=ordered-acquire-probe-pending context=1 acquire_timeout_ns=0 action=native-present
+MAKO Renderer: present diagnostics: operation=ordered-acquire-recovered context=1 recovery_ms=400 action=one-frame-stabilization
+MAKO Renderer: present diagnostics: operation=ordered-acquire-stabilized context=1 recovery_ms=2400 action=resume-normal-policy
 MAKO Renderer: present diagnostics: operation=pipeline-busy-bypass context=1 consecutive_frames=1 total_bypassed_frames=16 duration_ms=0 planned=1 history_action=preserved action=native-present
 MAKO Renderer: present diagnostics: operation=pipeline-busy-recovered context=1 bypassed_frames=1 total_recoveries=16 duration_ms=8 history_warmup_requested=0
 MAKO Renderer: present diagnostics: operation=render-fence-budget-missed context=1 planned=1 action=native-present
@@ -85,6 +90,11 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("adaptive-ramp", result.stdout)
         self.assertIn("runtime-state-applied", result.stdout)
         self.assertIn("skip-generated-frames", result.stdout)
+        self.assertIn("ordered-acquire-quarantine", result.stdout)
+        self.assertIn("ordered-acquire-retry", result.stdout)
+        self.assertIn("ordered-acquire-probe-pending", result.stdout)
+        self.assertIn("ordered-acquire-recovered", result.stdout)
+        self.assertIn("ordered-acquire-stabilized", result.stdout)
         self.assertIn("pipeline-busy-bypass", result.stdout)
         self.assertIn("render-fence-budget-missed", result.stdout)
         self.assertIn("resume-generated-frames", result.stdout)
@@ -141,6 +151,11 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "generated-delivery-miss",
             "generated-admission-pressure",
             "generated-admission-recovered",
+            "ordered-acquire-quarantine",
+            "ordered-acquire-retry",
+            "ordered-acquire-probe-pending",
+            "ordered-acquire-recovered",
+            "ordered-acquire-stabilized",
             "pipeline-busy-bypass",
             "pipeline-busy-recovered",
             "render-fence-budget-missed",
@@ -182,6 +197,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("operation=fixed-plan", result.stdout)
         self.assertIn("generated_skipped=0", result.stdout)
+        self.assertIn("ordered-acquire-quarantine", result.stdout)
+        self.assertIn("ordered-acquire-recovered", result.stdout)
         self.assertIn("pipeline-busy-bypass", result.stdout)
         self.assertIn("pipeline-busy-recovered", result.stdout)
         self.assertNotIn("adaptive-ramp", result.stdout)

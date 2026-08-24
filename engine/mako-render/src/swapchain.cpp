@@ -491,6 +491,7 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
         this->adaptiveScheduler.reset();
         this->colorPipeline = std::move(pipeline);
         this->recoveryState.historyWarmupRemaining = 0;
+        this->recoveryState.orderedAcquireRecovery.reset();
         return;
     }
 
@@ -575,6 +576,7 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
     this->frameState.renderFenceInFlight = false;
     this->recoveryState.backendPending = false;
     this->recoveryState.generatedImageAdmission.reset();
+    this->recoveryState.orderedAcquireRecovery.reset();
     this->recoveryState.pipelineBusyRecovery.reset();
     this->fixedRefreshBudget.reset();
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
@@ -744,12 +746,14 @@ ProfileUpdateAction Swapchain::updateProfile(
 
     if (disabling) {
         this->recoveryState.historyWarmupRemaining = 0;
+        this->recoveryState.orderedAcquireRecovery.reset();
         if (this->adaptiveScheduler)
             this->adaptiveScheduler->cancelHistoryWarmup();
     }
 
     if (enabling) {
         this->recoveryState.generatedImageAdmission.reset();
+        this->recoveryState.orderedAcquireRecovery.reset();
         this->recoveryState.pipelineBusyRecovery.reset();
         this->recoveryState.historyWarmupRemaining =
             generationSchedulerPolicy(this->profile, this->gamescopeRefreshHz)
@@ -868,10 +872,12 @@ void Swapchain::updateGamescopeRefreshRate(
         this->diagnosticsState.fixedSkippedFrames = 0;
         if (!generationIsEnabled) {
             this->recoveryState.historyWarmupRemaining = 0;
+            this->recoveryState.orderedAcquireRecovery.reset();
             if (this->adaptiveScheduler)
                 this->adaptiveScheduler->cancelHistoryWarmup();
         } else {
             this->recoveryState.generatedImageAdmission.reset();
+            this->recoveryState.orderedAcquireRecovery.reset();
             this->recoveryState.pipelineBusyRecovery.reset();
             if (!this->resetGenerationScheduler(
                     DiagnosticsClock::now(), "refresh-rate-threshold")) {
@@ -905,6 +911,7 @@ void Swapchain::disableFrameGeneration() {
 
     this->profile.frame_generation_enabled = false;
     this->recoveryState.historyWarmupRemaining = 0;
+    this->recoveryState.orderedAcquireRecovery.reset();
     if (this->adaptiveScheduler)
         this->adaptiveScheduler->cancelHistoryWarmup();
 }
