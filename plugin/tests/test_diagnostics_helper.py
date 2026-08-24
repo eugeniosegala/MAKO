@@ -40,13 +40,14 @@ MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=6
 MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
 MAKO Renderer: present diagnostics: operation=acquire-generated-image context=1 duration_ms=50 result=VK_TIMEOUT
 MAKO Renderer: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
-MAKO Renderer: present diagnostics: operation=ordered-acquire-policy context=1 configured_timeout_ms=50 slow_threshold_ms=25 severe_threshold_ms=50 first_slow_action=zero-wait-protection
-MAKO Renderer: present diagnostics: operation=ordered-acquire-guard context=1 acquire_ms=31 slow_threshold_ms=25 consecutive_slow_frames=1 action=zero-wait-protection
-MAKO Renderer: present diagnostics: operation=ordered-acquire-quarantine context=1 reason=timeout retry_ms=250 action=native-drain
-MAKO Renderer: present diagnostics: operation=ordered-acquire-retry context=1 bypassed_frames=12 action=warm-history-before-probe
-MAKO Renderer: present diagnostics: operation=ordered-acquire-probe-pending context=1 acquire_timeout_ns=0 action=native-present
-MAKO Renderer: present diagnostics: operation=ordered-acquire-recovered context=1 recovery_ms=400 action=one-frame-stabilization
-MAKO Renderer: present diagnostics: operation=ordered-acquire-stabilized context=1 recovery_ms=2400 action=resume-normal-policy
+MAKO Renderer: present diagnostics: operation=ordered-acquire-policy context=1 configured_timeout_ms=50 slow_threshold_ms=25 severe_threshold_ms=50 budget_scope=application-present first_slow_action=zero-wait-protection post_probe_policy=native-only stabilization_ms=2000
+MAKO Renderer: present diagnostics: operation=ordered-acquire-budget-exhausted context=1 phase=acquire acquire_total_ms=50 acquire_max_ms=30 budget_ms=50 requested_generated=2 admitted_generated=2 presented_generated=1 action=stop-acquiring
+MAKO Renderer: present diagnostics: operation=ordered-acquire-guard context=1 phase=zero-wait-guard acquire_total_ms=31 acquire_max_ms=31 slow_threshold_ms=25 consecutive_slow_frames=1 action=zero-wait-protection
+MAKO Renderer: present diagnostics: operation=ordered-acquire-quarantine context=1 phase=native-drain reason=timeout retry_ms=250 action=native-drain
+MAKO Renderer: present diagnostics: operation=ordered-acquire-retry context=1 phase=history-warmup bypassed_frames=12 action=warm-history-before-probe
+MAKO Renderer: present diagnostics: operation=ordered-acquire-probe-pending context=1 phase=recovery-probe acquire_timeout_ns=0 action=native-present
+MAKO Renderer: present diagnostics: operation=ordered-acquire-recovered context=1 phase=native-stabilization recovery_ms=400 action=native-only
+MAKO Renderer: present diagnostics: operation=ordered-acquire-stabilized context=1 phase=history-warmup recovery_ms=2400 terminal_reason=stabilization-deadline-elapsed action=warm-history-before-normal-policy
 MAKO Renderer: present diagnostics: operation=pipeline-busy-bypass context=1 consecutive_frames=1 total_bypassed_frames=16 duration_ms=0 planned=1 history_action=preserved action=native-present
 MAKO Renderer: present diagnostics: operation=pipeline-busy-recovered context=1 bypassed_frames=1 total_recoveries=16 duration_ms=8 history_warmup_requested=0
 MAKO Renderer: present diagnostics: operation=render-fence-budget-missed context=1 planned=1 action=native-present
@@ -96,6 +97,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("skip-generated-frames", result.stdout)
         self.assertIn("ordered-acquire-quarantine", result.stdout)
         self.assertIn("ordered-acquire-policy", result.stdout)
+        self.assertIn("ordered-acquire-budget-exhausted", result.stdout)
         self.assertIn("ordered-acquire-guard", result.stdout)
         self.assertIn("ordered-acquire-retry", result.stdout)
         self.assertIn("ordered-acquire-probe-pending", result.stdout)
@@ -159,6 +161,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "generated-admission-recovered",
             "ordered-acquire-quarantine",
             "ordered-acquire-policy",
+            "ordered-acquire-budget-exhausted",
             "ordered-acquire-guard",
             "ordered-acquire-retry",
             "ordered-acquire-probe-pending",

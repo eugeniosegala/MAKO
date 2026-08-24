@@ -409,7 +409,15 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                                          slowAcquireThreshold
                                      )
                              ).count()
-                          << " first_slow_action=zero-wait-protection\n";
+                          << " budget_scope=application-present"
+                          << " first_slow_action=zero-wait-protection"
+                          << " post_probe_policy=native-only"
+                          << " stabilization_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 OrderedAcquireRecovery::
+                                     stabilizationDuration()
+                             ).count()
+                          << '\n';
             }
         }
         if (this->gamescopeDetected && !this->privateOrderedTransport) {

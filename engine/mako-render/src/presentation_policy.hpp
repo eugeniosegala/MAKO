@@ -93,6 +93,21 @@ namespace mako::layer {
         return configuredTimeout.value_or(std::numeric_limits<uint64_t>::max());
     }
 
+    /// Ordered SDR owns one configured acquire-wait budget per application
+    /// present, not one full wait for every generated image. Returning zero
+    /// means the caller must stop acquiring and retain the real frame; it must
+    /// not issue another zero-timeout acquire on the ordered path.
+    [[nodiscard]] inline std::optional<uint64_t>
+    remainingGeneratedImageAcquireBudget(
+            const std::optional<uint64_t> configuredBudget,
+            const uint64_t consumedNanoseconds) {
+        if (!configuredBudget)
+            return std::nullopt;
+        if (consumedNanoseconds >= *configuredBudget)
+            return 0;
+        return *configuredBudget - consumedNanoseconds;
+    }
+
     /// Once a lower-swapchain image has been acquired, transport ownership is
     /// independent of HDR classification. A caught backend failure must retire
     /// every owned image before the application's original image can be
@@ -162,11 +177,12 @@ namespace mako::layer {
     };
 
     /// Classifies generated-image starvation on the ordered SDR transport.
-    /// One isolated slow successful acquire arms a zero-wait guard for the
-    /// next present so transport delay cannot immediately recur or contaminate
-    /// Adaptive cadence. A guard miss, repeated pressure, a successful acquire
-    /// beyond its requested deadline, or one severe acquire requests a
-    /// native-only drain before history is warmed and one frame probes recovery.
+    /// One isolated slow successful application-present acquire total arms a
+    /// zero-wait guard for the next present so transport delay cannot
+    /// immediately recur or contaminate Adaptive cadence. A guard miss,
+    /// repeated pressure, an exhausted cumulative budget, or one severe total
+    /// requests a native-only drain before history is warmed and one frame
+    /// probes recovery.
     class OrderedAcquireRecovery {
     public:
         using Clock = std::chrono::steady_clock;
@@ -183,10 +199,15 @@ namespace mako::layer {
             // when no lower-swapchain image is immediately ready, native
             // presentation continues draining the ordered FIFO.
             bool preacquireGeneratedFrame{false};
+            // After one drain probe succeeds, native-only presentation remains
+            // deterministic until one fixed deadline. No availability miss may
+            // extend this interval or intermittently re-enable generation.
+            bool nativeOnlyStabilization{false};
             bool recoveryStabilized{false};
             size_t bypassedFrames{0};
             size_t consecutiveFailures{0};
             Duration drainDuration{};
+            Duration stabilizationRemaining{};
         };
 
         struct Observation {
@@ -211,6 +232,7 @@ namespace mako::layer {
             size_t consecutiveFailures{0};
             size_t bypassedFrames{0};
             Duration retryDelay{};
+            Duration recoveryDuration{};
         };
 
         [[nodiscard]] static constexpr auto minimumSlowAcquireDuration() {
@@ -244,12 +266,25 @@ namespace mako::layer {
 
         [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
             if (!this->retryAt) {
-                if (this->guardPending || this->probePending ||
-                        (this->stabilizingUntil &&
-                         now < *this->stabilizingUntil)) {
+                if (this->guardPending || this->probePending) {
                     return {
                         .limitGeneratedFrames = true,
                         .preacquireGeneratedFrame = true,
+                    };
+                }
+                if (this->stabilizingUntil &&
+                        now < *this->stabilizingUntil) {
+                    this->bypassedFrames++;
+                    return {
+                        .bypassGeneration = true,
+                        .nativeOnlyStabilization = true,
+                        .bypassedFrames = this->bypassedFrames,
+                        .consecutiveFailures = this->consecutiveFailures,
+                        .drainDuration = this->recoveryStartedAt
+                            ? now - *this->recoveryStartedAt
+                            : Duration{},
+                        .stabilizationRemaining =
+                            *this->stabilizingUntil - now,
                     };
                 }
                 if (this->stabilizingUntil) {
@@ -268,6 +303,7 @@ namespace mako::layer {
                     this->bypassedFrames = 0;
                     this->nonblockingProbeMisses = 0;
                     return {
+                        .beginHistoryWarmup = true,
                         .recoveryStabilized = true,
                         .bypassedFrames = completedBypassedFrames,
                         .consecutiveFailures = completedFailures,
@@ -417,14 +453,14 @@ namespace mako::layer {
                         observation.consecutiveFailures,
                     .bypassedFrames = observation.bypassedFrames,
                     .retryDelay = observation.retryDelay,
+                    .recoveryDuration = observation.recoveryDuration,
                 };
             }
 
-            // Recovery must earn a continuous healthy window. A zero-wait
-            // miss is harmless to the application thread, but it means the
-            // ordered FIFO is not ready to resume its full normal plan.
-            if (this->stabilizingUntil)
-                this->stabilizingUntil = now + stabilizationDuration();
+            // Probe availability can be intermittent, but recovery liveness is
+            // absolute: a miss must never move the terminal deadline. Normal
+            // presentation does not call this during native-only stabilization;
+            // retaining this bounded behavior also makes accidental calls safe.
             this->bypassedFrames++;
             this->nonblockingProbeMisses++;
             return {
@@ -432,6 +468,9 @@ namespace mako::layer {
                     (this->nonblockingProbeMisses - 1)) == 0,
                 .consecutiveFailures = this->consecutiveFailures,
                 .bypassedFrames = this->bypassedFrames,
+                .recoveryDuration = this->recoveryStartedAt
+                    ? now - *this->recoveryStartedAt
+                    : Duration{},
             };
         }
 

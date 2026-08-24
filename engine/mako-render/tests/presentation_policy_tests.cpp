@@ -60,6 +60,24 @@ int main() {
     expect(generatedImageAcquireTimeout(false, std::nullopt) ==
             std::numeric_limits<uint64_t>::max(),
         "legacy unconfigured acquire behaviour changed");
+    constexpr uint64_t acquireBudget = 50'000'000;
+    expect(remainingGeneratedImageAcquireBudget(
+            std::nullopt, 32'805'100) == std::nullopt,
+        "unconfigured ordered acquire unexpectedly gained a finite budget");
+    expect(remainingGeneratedImageAcquireBudget(
+            acquireBudget, 0) == acquireBudget,
+        "fresh ordered acquire budget did not retain its full deadline");
+    expect(remainingGeneratedImageAcquireBudget(
+            acquireBudget, 32'805'100) == 17'194'900,
+        "second generated image did not receive only the remaining present budget");
+    expect(remainingGeneratedImageAcquireBudget(
+            acquireBudget, 49'999'999) == 1,
+        "ordered acquire budget lost its final nanosecond");
+    expect(remainingGeneratedImageAcquireBudget(
+            acquireBudget, acquireBudget) == 0 &&
+            remainingGeneratedImageAcquireBudget(
+                acquireBudget, acquireBudget + 1) == 0,
+        "exhausted ordered acquire budget allowed another blocking wait");
 
     GeneratedImageAdmission admission;
     expect(!admission.underPressure(),
@@ -182,19 +200,28 @@ int main() {
             observation.consecutiveFailures == 2,
         "healthy ordered acquire probe did not begin constrained stabilization");
     acquireDecision = acquireRecovery.beforePresent(acquireStart + 1800ms);
-    expect(acquireDecision.limitGeneratedFrames &&
-            acquireDecision.preacquireGeneratedFrame,
-        "ordered recovery released normal generation before stabilization");
-    static_cast<void>(acquireRecovery.reportNonblockingProbeUnavailable(
-        acquireStart + 1801ms
-    ));
+    expect(acquireDecision.bypassGeneration &&
+            acquireDecision.nativeOnlyStabilization &&
+            !acquireDecision.limitGeneratedFrames &&
+            !acquireDecision.preacquireGeneratedFrame &&
+            acquireDecision.stabilizationRemaining == 1100ms,
+        "ordered recovery did not use deterministic native-only stabilization");
+    for (const auto missAt : {1801ms, 2000ms, 2400ms, 2899ms}) {
+        static_cast<void>(
+            acquireRecovery.reportNonblockingProbeUnavailable(
+                acquireStart + missAt
+            )
+        );
+    }
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 2899ms);
+    expect(acquireDecision.bypassGeneration &&
+            acquireDecision.nativeOnlyStabilization,
+        "ordered recovery left native-only stabilization before its deadline");
     acquireDecision = acquireRecovery.beforePresent(acquireStart + 2900ms);
-    expect(acquireDecision.limitGeneratedFrames &&
-            acquireDecision.preacquireGeneratedFrame,
-        "a recovery availability miss did not extend stabilization");
-    acquireDecision = acquireRecovery.beforePresent(acquireStart + 3801ms);
-    expect(acquireDecision.recoveryStabilized && !acquireRecovery.active(),
-        "ordered recovery did not release policy after stabilization");
+    expect(acquireDecision.recoveryStabilized &&
+            acquireDecision.beginHistoryWarmup &&
+            !acquireRecovery.active(),
+        "ordered recovery misses extended the hard stabilization deadline");
 
     observation = acquireRecovery.observe(
         acquireStart + 4100ms, 50ms, 25ms, true
@@ -232,6 +259,14 @@ int main() {
     expect(observation.quarantined && !observation.deadlineExceeded &&
             observation.severe,
         "severe unbounded acquire did not enter recovery");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 81ms, 25ms, false
+    );
+    expect(observation.quarantined && observation.severe &&
+            !observation.timedOut && !observation.deadlineExceeded,
+        "cumulative multi-image acquire time was not classified as severe");
 
     acquireRecovery.reset();
     observation = acquireRecovery.observe(
