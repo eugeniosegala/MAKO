@@ -1826,6 +1826,9 @@ namespace {
             60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true
         );
         harness.start();
+        constexpr auto recoveryLatencyBound = std::chrono::seconds(
+            ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+        ) + 100ms;
 
         while (!harness.diagnostics.contains(
                 "dynamic-cadence-probe-rejected")) {
@@ -1842,11 +1845,11 @@ namespace {
                 .requested = previousPlan.size(),
                 .acceptedForPresentation = previousPlan.size(),
             });
-            require(harness.now - transitionAt <= 2100ms,
+            require(harness.now - transitionAt <= recoveryLatencyBound,
                 "self-hidden native cadence recovery exceeded its latency bound");
         }
 
-        require(harness.now - transitionAt <= 2100ms,
+        require(harness.now - transitionAt <= recoveryLatencyBound,
             "self-hidden native cadence recovery did not complete promptly");
     }
 

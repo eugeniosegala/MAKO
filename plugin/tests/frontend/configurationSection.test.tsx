@@ -161,7 +161,7 @@ describe("External Tools controls", () => {
     });
   });
 
-  test("reveals a live 1-3 second probe slider only while Recovery is enabled", () => {
+  test("reveals a live 1-5 second probe slider only while Recovery is enabled", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const { container, rerender } = render(
       <ConfigurationSection
@@ -194,7 +194,7 @@ describe("External Tools controls", () => {
     );
 
     const slider = screen.getByText("Cadence Probe Interval (2s)");
-    expect(slider.getAttribute("data-maximum")).toBe("3");
+    expect(slider.getAttribute("data-maximum")).toBe("5");
     expect(
       screen.getByText(/How often Recovery tests the native frame rate/).style
         .paddingBottom,

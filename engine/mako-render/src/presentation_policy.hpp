@@ -93,6 +93,16 @@ namespace mako::layer {
         return configuredTimeout.value_or(std::numeric_limits<uint64_t>::max());
     }
 
+    /// Once a lower-swapchain image has been acquired, transport ownership is
+    /// independent of HDR classification. A caught backend failure must retire
+    /// every owned image before the application's original image can be
+    /// presented natively.
+    [[nodiscard]] inline bool preacquiredImagesRequireRetirement(
+            const bool generatedImagesPreacquired,
+            const size_t admittedGeneratedFrameCount) {
+        return generatedImagesPreacquired && admittedGeneratedFrameCount > 0;
+    }
+
     struct GeneratedImageAdmissionRecovery {
         bool resumed{false};
         size_t missedAttempts{0};
@@ -173,7 +183,6 @@ namespace mako::layer {
             // when no lower-swapchain image is immediately ready, native
             // presentation continues draining the ordered FIFO.
             bool preacquireGeneratedFrame{false};
-            bool resetCadenceClock{false};
             bool recoveryStabilized{false};
             size_t bypassedFrames{0};
             size_t consecutiveFailures{0};
@@ -259,7 +268,6 @@ namespace mako::layer {
                     this->bypassedFrames = 0;
                     this->nonblockingProbeMisses = 0;
                     return {
-                        .resetCadenceClock = true,
                         .recoveryStabilized = true,
                         .bypassedFrames = completedBypassedFrames,
                         .consecutiveFailures = completedFailures,

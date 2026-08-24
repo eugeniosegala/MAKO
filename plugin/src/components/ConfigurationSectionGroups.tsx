@@ -267,7 +267,7 @@ export function CompatibilityConfigurationGroup({
                   <span style={{ display: "block", paddingBottom: "6px" }}>
                     {t(
                       "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC",
-                      "How often Recovery tests the native frame rate. 1 second reacts fastest but may cause more frequent brief pacing hitches; 3 seconds checks less often. Test per game. Changes apply live.",
+                      "How often Recovery tests the native frame rate. 1 second reacts fastest but may cause more frequent brief pacing hitches; 5 seconds preserves the previous retry frequency. Test per game. Changes apply live.",
                     )}
                   </span>
                 }

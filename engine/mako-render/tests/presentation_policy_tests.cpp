@@ -88,6 +88,10 @@ int main() {
     expect(OrderedAcquireRecovery::slowAcquireDuration(40) >= 37ms &&
             OrderedAcquireRecovery::slowAcquireDuration(40) < 38ms,
         "40 Hz ordered acquire pressure threshold lost display scaling");
+    expect(!preacquiredImagesRequireRetirement(false, 1) &&
+            !preacquiredImagesRequireRetirement(true, 0) &&
+            preacquiredImagesRequireRetirement(true, 1),
+        "pre-acquired image retirement lost its ownership contract");
 
     OrderedAcquireRecovery acquireRecovery;
     const auto acquireStart = OrderedAcquireRecovery::TimePoint{};
@@ -113,8 +117,7 @@ int main() {
         "a successful zero-wait guard did not resume normal policy");
     acquireDecision = acquireRecovery.beforePresent(acquireStart + 3ms);
     expect(!acquireDecision.bypassGeneration &&
-            !acquireDecision.limitGeneratedFrames &&
-            !acquireDecision.resetCadenceClock,
+            !acquireDecision.limitGeneratedFrames,
         "successful slow-acquire protection retained recovery constraints");
 
     acquireRecovery.reset();
@@ -190,9 +193,8 @@ int main() {
             acquireDecision.preacquireGeneratedFrame,
         "a recovery availability miss did not extend stabilization");
     acquireDecision = acquireRecovery.beforePresent(acquireStart + 3801ms);
-    expect(acquireDecision.recoveryStabilized &&
-            acquireDecision.resetCadenceClock && !acquireRecovery.active(),
-        "ordered recovery did not reset cadence after stabilization");
+    expect(acquireDecision.recoveryStabilized && !acquireRecovery.active(),
+        "ordered recovery did not release policy after stabilization");
 
     observation = acquireRecovery.observe(
         acquireStart + 4100ms, 50ms, 25ms, true

@@ -156,6 +156,12 @@ class RendererConfigContractTests(unittest.TestCase):
             FIXED_MULTIPLIER_UI_MIN,
             renderer_constant("minimumMultiplier"),
         )
+        self.assertEqual(
+            CONFIG_SCHEMA_DEF[
+                "dynamic_cadence_probe_interval_seconds"
+            ]["default"],
+            renderer_constant("dynamicCadenceProbeIntervalSeconds"),
+        )
 
     def test_config_format_version_matches_renderer(self):
         source = (

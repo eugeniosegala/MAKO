@@ -386,13 +386,13 @@ VkResult Swapchain::presentNativeFrame(const PresentInvocation& invocation) {
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
 
-    logSlowPresentBreakdown(
-        this->diagnosticsState.contextId, this->frameState.realFrameIndex,
-        this->frameState.sequenceIndex, presentWorkDuration, phases
-    );
     logSlowPresentOperation(
         "present-total", this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, invocation.started, result
+    );
+    logSlowPresentBreakdown(
+        this->diagnosticsState.contextId, this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, presentWorkDuration, phases
     );
     this->frameState.realFrameIndex++;
     return result;
@@ -831,14 +831,14 @@ VkResult Swapchain::presentHistoryOnly(
         const auto presentWorkDuration = finishPresentDiagnostic(
             invocation.started
         );
+        logSlowPresentOperation(
+            "present-total", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
+            invocation.started, fallbackResult
+        );
         logSlowPresentBreakdown(
             this->diagnosticsState.contextId,
             this->frameState.realFrameIndex,
             this->frameState.sequenceIndex, presentWorkDuration, phases
-        );
-        logSlowPresentOperation(
-            "present-total", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
-            invocation.started, fallbackResult
         );
         this->frameState.realFrameIndex++;
         return fallbackResult;
@@ -889,13 +889,13 @@ VkResult Swapchain::presentHistoryOnly(
     const auto presentWorkDuration = finishPresentDiagnostic(
         invocation.started
     );
-    logSlowPresentBreakdown(
-        this->diagnosticsState.contextId, this->frameState.realFrameIndex,
-        this->frameState.sequenceIndex, presentWorkDuration, phases
-    );
     logSlowPresentOperation(
         "present-total", this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, invocation.started, result
+    );
+    logSlowPresentBreakdown(
+        this->diagnosticsState.contextId, this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, presentWorkDuration, phases
     );
     this->frameState.realFrameIndex++;
     return result;
@@ -1102,6 +1102,10 @@ VkResult Swapchain::presentGeneratedFrames(
             const auto presentWorkDuration = finishPresentDiagnostic(
                 invocation.started
             );
+            logSlowPresentOperation(
+                "present-total", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
+                invocation.started, result
+            );
             logSlowPresentBreakdown(
                 this->diagnosticsState.contextId,
                 this->frameState.realFrameIndex,
@@ -1115,10 +1119,6 @@ VkResult Swapchain::presentGeneratedFrames(
                     .generatedPresent = generatedPresentDuration,
                     .originalPresent = originalPresentDuration,
                 }
-            );
-            logSlowPresentOperation(
-                "present-total", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
-                invocation.started, result
             );
             if (presentDiagnosticsEnabled()) {
                 std::cerr << "MAKO Renderer: present diagnostics: "
@@ -1255,6 +1255,10 @@ VkResult Swapchain::presentGeneratedFrames(
     const auto presentWorkDuration = finishPresentDiagnostic(
         invocation.started
     );
+    logSlowPresentOperation(
+        "present-total", this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, invocation.started, result
+    );
     reportOrderedAcquire(false);
     this->reportAdaptiveDelivery(
         plan, plan.scheduledGeneratedFrames.size()
@@ -1271,10 +1275,6 @@ VkResult Swapchain::presentGeneratedFrames(
             .generatedPresent = generatedPresentDuration,
             .originalPresent = originalPresentDuration,
         }
-    );
-    logSlowPresentOperation(
-        "present-total", this->frameState.realFrameIndex,
-        this->frameState.sequenceIndex, invocation.started, result
     );
     this->frameState.realFrameIndex++;
     return result;
@@ -1353,8 +1353,10 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             return this->presentNativeFrame(invocation);
         }
         orderedAcquireRecoveryProbe = recovery.limitGeneratedFrames;
-        if (recovery.resetCadenceClock && this->adaptiveScheduler)
-            this->adaptiveScheduler->resetTiming(presentNow);
+        // Every constrained Adaptive present already kept lastRealFrame current,
+        // while temporal warm-up cleared the stale smoothed estimate. Resetting
+        // again with presentNow would make prepareFramePlan() observe a zero
+        // interval below and manufacture another cadence-stall refresh.
         if (recovery.recoveryStabilized && presentDiagnosticsEnabled()) {
             std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=ordered-acquire-stabilized"
@@ -1498,8 +1500,9 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                 this->diagnosticsState.fixedSkippedFrames +=
                     plan.admittedGeneratedFrameCount;
             }
-            if (!gamescopeHdrTransport ||
-                    plan.admittedGeneratedFrameCount == 0) {
+            if (!preacquiredImagesRequireRetirement(
+                    plan.generatedImagesPreacquired,
+                    plan.admittedGeneratedFrameCount)) {
                 return this->presentNativeFrame(invocation);
             }
             return this->retireAcquiredImagesAndPresent(

@@ -138,7 +138,7 @@
   "DYNAMIC_CADENCE_RECOVERY": "Dynamic Cadence Recovery",
   "DYNAMIC_CADENCE_RECOVERY_DESC": "Recovers when a game or emulator changes native frame rate. Adaptive recalibrates; Fixed follows confirmed Gamescope refresh up to its multiplier. Enabling it briefly checks pacing, disables both base caps, and selects Fractional Adaptive. Changing Fractional or either cap turns Recovery off.",
   "DYNAMIC_CADENCE_PROBE_INTERVAL": "Cadence Probe Interval",
-  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "How often Recovery tests the native frame rate. 1 second reacts fastest but may cause more frequent brief pacing hitches; 3 seconds checks less often. Test per game. Changes apply live.",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "How often Recovery tests the native frame rate. 1 second reacts fastest but may cause more frequent brief pacing hitches; 5 seconds preserves the previous retry frequency. Test per game. Changes apply live.",
   "ADAPTIVE_VALUE": "Adaptive",
   "CONFIG_DLL_PATH": "Lossless.dll Path",
   "CONFIG_DLL_PATH_DESC": "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.",

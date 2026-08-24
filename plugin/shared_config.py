@@ -46,7 +46,7 @@ ADAPTIVE_MAX_MULTIPLIER_MIN = 2
 ADAPTIVE_MAX_MULTIPLIER_MAX = 4
 ADAPTIVE_MINIMUM_BASE_FPS = 10
 DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 1
-DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3
+DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 5
 FLOW_SCALE_MIN = 0.25
 FLOW_SCALE_MAX = 1.0
 FIXED_MULTIPLIER_MIN = 2
@@ -178,7 +178,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
 
     "dynamic_cadence_probe_interval_seconds": {
         "fieldType": ConfigFieldType.INTEGER,
-        "default": 2,
+        "default": 5,
         "description": "seconds between Dynamic Cadence Recovery probes; shorter intervals react faster but can make brief pacing hitches more frequent",
         "location": "toml"
     },

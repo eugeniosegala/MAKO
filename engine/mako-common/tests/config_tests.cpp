@@ -194,7 +194,7 @@ multiplier = 5
     expect(fixedMultiplierConfiguration.profiles().front().multiplier == 5,
         "The fixed multiplier must retain its established open upper range");
 
-    for (const uint32_t invalidInterval : {0U, 4U}) {
+    for (const uint32_t invalidInterval : {0U, 6U}) {
         const auto invalidIntervalPath = directory /
             ("invalid-probe-interval-" + std::to_string(invalidInterval) +
              ".toml");
@@ -209,7 +209,7 @@ multiplier = 5
             invalidIntervalRejected = true;
         }
         expect(invalidIntervalRejected,
-            "Cadence probe intervals outside 1-3 seconds must be rejected");
+            "Cadence probe intervals outside 1-5 seconds must be rejected");
     }
 
     ls::ConfigFile detectionConfig;
