@@ -8,6 +8,7 @@ import {
   PanelSectionRow,
   Toggle,
   Focusable,
+  Router,
   showModal,
   ConfirmModal,
 } from "@decky/ui";
@@ -43,6 +44,9 @@ import {
 interface FlatpaksModalProps {
   closeModal?: () => void;
 }
+
+const MAKO_FLATPAK_GUIDE_URL =
+  "https://github.com/eugeniosegala/MAKO#heroic-and-other-flatpak-applications";
 
 function translateFlatpakRuntime(version: FlatpakRuntimeVersion): string {
   return t("FLATPAK_RUNTIME_VERSION", "Runtime {version}", { version });
@@ -233,13 +237,19 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
   const instructionSteps = [
     {
       id: "try-first",
-      title: t("FLATPAK_STEP_WRAPPER_PATH", "Wrapper path for this device:"),
+      title: t(
+        "FLATPAK_STEP_WRAPPER_PATH",
+        "Wrapper installed on this device:",
+      ),
       command: wrapperPath,
     },
     {
       id: "final-result",
-      title: t("FLATPAK_STEP_FINAL", "Final result should look like:"),
-      command: `${wrapperPath} "usr/bin/flatpak"`,
+      title: t(
+        "FLATPAK_STEP_FINAL",
+        'Target for a shortcut that originally used "/usr/bin/flatpak":',
+      ),
+      command: `"${wrapperPath}" "/usr/bin/flatpak"`,
     },
   ];
 
@@ -306,7 +316,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                       )}
                       <div style={{ minWidth: 0 }}>
                         <div style={{ color: "#edf8fb", fontWeight: 600 }}>
-                            {translateFlatpakRuntime(runtime.version)}
+                          {translateFlatpakRuntime(runtime.version)}
                         </div>
                         <div
                           style={{
@@ -461,7 +471,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               </div>
               {t(
                 "FLATPAK_PREPARE_APPLICATION_DESC",
-                "Install its matching runtime extension, then prepare only that app here. For Heroic, use the full Wrapper command path shown below in each game you want to enable. Preparing Heroic does not enable frame generation globally.",
+                "Install its matching runtime extension, then prepare the app here. Heroic preparation only grants access; enable MAKO per game in Heroic. Direct apps and emulators are prepared app-wide. Use the MAKO README for Heroic, EmuDeck, and Steam shortcut steps.",
               )}
             </div>
 
@@ -493,20 +503,26 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                   }
 
                   const appError = appErrors[app.app_id];
-                  const description =
-                    PER_GAME_WRAPPER_FLATPAK_APP_IDS.some(
-                      (appId) => appId === app.app_id,
-                    )
-                      ? t(
-                          "FLATPAK_HEROIC_APP_DESC",
-                          "{app_id} - {status}. Per game: Settings > Advanced > enter this in Heroic's first Wrapper field: {wrapper_path}; leave Arguments empty.",
-                          {
-                            app_id: app.app_id,
-                            status: statusText,
-                            wrapper_path: app.wrapper_path,
-                          },
-                        )
-                      : `${app.app_id} - ${statusText}`;
+                  const description = PER_GAME_WRAPPER_FLATPAK_APP_IDS.some(
+                    (appId) => appId === app.app_id,
+                  )
+                    ? t(
+                        "FLATPAK_HEROIC_APP_DESC",
+                        "{app_id} - {status}. Heroic remains per game: set {wrapper_path} in each chosen game's first Wrapper field, leave Arguments empty, and follow the MAKO README.",
+                        {
+                          app_id: app.app_id,
+                          status: statusText,
+                          wrapper_path: app.wrapper_path,
+                        },
+                      )
+                    : t(
+                        "FLATPAK_DIRECT_APP_DESC",
+                        "{app_id} - {status}. Preparation applies to this entire Flatpak app. Follow the MAKO README for EmuDeck and Steam shortcut per-game steps.",
+                        {
+                          app_id: app.app_id,
+                          status: statusText,
+                        },
+                      );
 
                   return (
                     <div
@@ -641,7 +657,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
             >
               {t(
                 "FLATPAK_STEAM_CONFIG_TITLE",
-                "Optional Steam Flatpak shortcuts",
+                "Manual Steam shortcut reference",
               )}
             </div>
             <div
@@ -660,7 +676,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               >
                 {t(
                   "FLATPAK_STEAM_CONFIG_HEADER",
-                  "Configure Steam Flatpak Shortcuts",
+                  "Target example (does not configure Steam)",
                 )}
               </div>
               <div
@@ -672,7 +688,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               >
                 {t(
                   "FLATPAK_STEAM_CONFIG_DESC",
-                  "Only use these target instructions for a Flatpak shortcut inside Steam. Heroic users should prepare Heroic above, then set the MAKO wrapper in the chosen game's Advanced settings.",
+                  "Use this only for a manually added Steam shortcut whose original Target is /usr/bin/flatpak. Prepare that Flatpak application above first, then leave Start In and Launch Options unchanged. Heroic and EmuDeck use different per-game steps in the MAKO README.",
                 )}
               </div>
               <div
@@ -686,7 +702,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                 <strong>{t("FLATPAK_IMPORTANT_LABEL", "IMPORTANT:")}</strong>{" "}
                 {t(
                   "FLATPAK_STEAM_CONFIG_IMPORTANT",
-                  "Set this in TARGET (NOT LAUNCH OPTIONS)",
+                  "Replace TARGET only. Do not paste this into Launch Options.",
                 )}
               </div>
 
@@ -701,6 +717,17 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                   <div style={commandStyle}>{step.command}</div>
                 </Focusable>
               ))}
+
+              <div className="Mako_BrandButton">
+                <ButtonItem
+                  layout="below"
+                  onClick={() =>
+                    Router.NavigateToExternalWeb(MAKO_FLATPAK_GUIDE_URL)
+                  }
+                >
+                  {t("FLATPAK_OPEN_README", "Open Heroic and EmuDeck guide")}
+                </ButtonItem>
+              </div>
             </div>
           </div>
 

@@ -43,7 +43,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 | 🛡️ | **Gamescope recovery** | Bounded presentation recovery preserves native presentation and resumes generation only after the game cadence becomes stable again. |
 | ⏯️ | **Live frame-generation switch** | Turns frame generation on or off without discarding the selected Fixed or Adaptive settings. |
 | 🗂️ | **Dedicated game/process profiles** | Capture a running game once and keep its renderer and compatibility settings. MAKO automatically selects it by Steam app ID or process, with isolated per-profile controls including ALSA audio. |
-| 🎮 | **Per-game Heroic and EmuDeck support** | Enables MAKO only for the Heroic games and EmuDeck titles you choose, using the same private configuration and engine as native Steam games. |
+| 🎮 | **Heroic and EmuDeck integration** | Gives Heroic games a per-game wrapper and prepares Flatpak emulators for Steam-shortcut profile selection, using the same private configuration and engine as native Steam games. |
 
 ## What MAKO is
 
@@ -114,7 +114,7 @@ The wrapper applies only to the selected Heroic games and enables the private MA
 
 For any EmuDeck emulator installed as a Flatpak:
 
-1. In MAKO Decky, select **Flatpak Setup** and prepare the emulator you use. Install its matching runtime extension when prompted.
+1. In MAKO Decky, select **Flatpak Setup** and prepare the emulator you use. Install its matching runtime extension when prompted. Preparation applies to the entire emulator Flatpak rather than one ROM because Flatpak must receive MAKO's layer and configuration inside its sandbox.
 2. Select **Vulkan** as that emulator's graphics backend when it offers one.
 3. In Desktop Mode, open the Steam shortcut for each EmuDeck game you want to configure, then set these fields under **Properties > Shortcut**:
 
@@ -134,11 +134,30 @@ For any EmuDeck emulator installed as a Flatpak:
 
     - **Launch Options:** leave the EmuDeck-generated value unchanged. It already contains the correct emulator ID, ROM path, and flags for that shortcut.
 
+The edited Steam shortcut supplies the per-game launch and profile identity, but the Flatpak preparation itself remains app-wide. A prepared emulator can therefore load the MAKO layer when launched outside an edited game shortcut; turn off that application's preparation in **Flatpak Setup** when you do not want MAKO available to the emulator.
+
 If EmuDeck installed an emulator as a native application or AppImage instead, it is not a Flatpak workflow: use the normal Steam launch option `/home/deck/.local/bin/mako-run %command%` for that shortcut.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
 > After updating MAKO, return to **Flatpak Setup** and select **Update** for every prepared emulator's matching runtime extension.
+
+### Manually added Flatpak shortcuts
+
+Use this workflow only when a non-Steam shortcut's original **Target** is `/usr/bin/flatpak`. It is not the Heroic workflow, and EmuDeck-generated shortcuts should use the dedicated instructions above.
+
+1. In **Flatpak Setup**, install the matching runtime extension and prepare the Flatpak application.
+2. In the shortcut's **Properties > Shortcut**, replace **Target** with:
+
+    ```text
+    "/home/deck/.local/bin/mako-run" "/usr/bin/flatpak"
+    ```
+
+    Use MAKO's displayed **Wrapper path for this device** when it differs from `/home/deck/.local/bin/mako-run`.
+
+3. Leave **Start In** and **Launch Options** unchanged so the original Flatpak application ID, command, and flags are preserved.
+
+The reference shown in **Flatpak Setup** does not modify Steam automatically; it only builds the correct Target from this device's installed wrapper path.
 
 For a step-by-step guide that creates a shareable report on the Desktop, see [Collect MAKO Decky Diagnostics](plugin/docs/COLLECT_DIAGNOSTICS.md).
 

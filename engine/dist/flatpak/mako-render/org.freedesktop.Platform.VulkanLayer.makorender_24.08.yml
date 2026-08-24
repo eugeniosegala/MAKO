@@ -34,6 +34,8 @@ modules:
     sources:
       - type: dir
         path: ../../../..
+        skip:
+          - engine/build
 
   - name: mako-32bit
     buildsystem: cmake-ninja
@@ -56,3 +58,5 @@ modules:
     sources:
       - type: dir
         path: ../../../..
+        skip:
+          - engine/build

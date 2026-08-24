@@ -150,6 +150,14 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
                 self.assertIn(f"runtime-version: '{version}'", manifest)
                 self.assertIn(f"branch: '{version}'", manifest)
                 self.assertIn(f"prefix: {FLATPAK_EXTENSION_PREFIX}", manifest)
+                self.assertEqual(
+                    manifest.count(
+                        "path: ../../../..\n"
+                        "        skip:\n"
+                        "          - engine/build"
+                    ),
+                    2,
+                )
                 self.assertIn(
                     f"MAKO_LAYER_LIBRARY_PATH={FLATPAK_EXTENSION_PREFIX}"
                     f"/lib64/{LIB_FILENAME}",

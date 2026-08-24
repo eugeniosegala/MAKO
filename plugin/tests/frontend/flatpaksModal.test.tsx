@@ -11,6 +11,9 @@ const api = vi.hoisted(() => ({
   setFlatpakAppOverride: vi.fn(),
   removeFlatpakAppOverride: vi.fn(),
 }));
+const navigation = vi.hoisted(() => ({
+  NavigateToExternalWeb: vi.fn(),
+}));
 
 vi.mock("@decky/ui", () => ({
   ModalRoot: ({ children }: { children: React.ReactNode }) => (
@@ -52,6 +55,7 @@ vi.mock("@decky/ui", () => ({
   Focusable: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
+  Router: navigation,
   showModal: vi.fn(),
   ConfirmModal: () => <div />,
 }));
@@ -142,5 +146,59 @@ describe("Flatpak application preparation", () => {
     expect(document.activeElement).toBe(toggle);
 
     resolveUpdate!({ success: false, message: "", error: "Unavailable" });
+  });
+
+  test("separates manual shortcuts from app-wide preparation and links the README", async () => {
+    window.SP_REACT = React;
+    api.checkFlatpakExtensionStatus.mockResolvedValue({
+      success: true,
+      message: "",
+      error: null,
+      installed_23_08: false,
+      installed_24_08: false,
+      installed_25_08: true,
+    });
+    api.getFlatpakApps.mockResolvedValue({
+      success: true,
+      message: "",
+      error: null,
+      apps: [
+        {
+          app_id: "org.DolphinEmu.dolphin-emu",
+          app_name: "Dolphin Emulator",
+          wrapper_path: "/var/home/test/.local/bin/mako-run",
+          has_filesystem_override: true,
+          has_wrapper_override: true,
+          has_env_override: true,
+          has_required_env_override: true,
+        },
+      ],
+      total_apps: 1,
+    });
+    api.getLaunchOption.mockResolvedValue({
+      launch_option: "'/var/home/test user/.local/bin/mako-run' %command%",
+      wrapper_path: "/var/home/test user/.local/bin/mako-run",
+      instructions: "",
+      explanation: "",
+    });
+
+    render(<FlatpaksModal />);
+
+    expect(
+      await screen.findByText("Manual Steam shortcut reference"),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        '"/var/home/test user/.local/bin/mako-run" "/usr/bin/flatpak"',
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Preparation applies to this entire Flatpak app/),
+    ).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Open Heroic and EmuDeck guide"));
+    expect(navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
+      "https://github.com/eugeniosegala/MAKO#heroic-and-other-flatpak-applications",
+    );
   });
 });
