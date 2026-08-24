@@ -375,11 +375,42 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
             );
         }
 
+        const auto configuredAcquireTimeout =
+            generatedImageAcquireTimeoutNs();
         if (presentDiagnosticsEnabled()) {
             std::cerr << "MAKO Renderer: present diagnostics enabled; context="
                       << this->diagnosticsState.contextId
                       << "; slow operation threshold is "
                       << presentDiagnosticsThresholdMs() << " ms\n";
+            if (this->privateOrderedTransport) {
+                const auto slowAcquireThreshold =
+                    OrderedAcquireRecovery::slowAcquireDuration(
+                        this->gamescopeRefreshHz
+                    );
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=ordered-acquire-policy"
+                          << " context=" << this->diagnosticsState.contextId
+                          << " configured_timeout_ms=";
+                if (configuredAcquireTimeout) {
+                    std::cerr << static_cast<double>(
+                        *configuredAcquireTimeout
+                    ) / 1'000'000.0;
+                } else {
+                    std::cerr << "unbounded";
+                }
+                std::cerr << " slow_threshold_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 slowAcquireThreshold
+                             ).count()
+                          << " severe_threshold_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 OrderedAcquireRecovery::
+                                     severeAcquireDuration(
+                                         slowAcquireThreshold
+                                     )
+                             ).count()
+                          << " first_slow_action=zero-wait-protection\n";
+            }
         }
         if (this->gamescopeDetected && !this->privateOrderedTransport) {
             std::cerr << "MAKO Renderer: Gamescope HDR generated-image admission is "
@@ -388,11 +419,13 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
         } else if (this->gamescopeDetected) {
             std::cerr << "MAKO Renderer: Gamescope SDR uses the fork's ordered "
                          "presentation path\n";
-        } else if (const auto timeout = generatedImageAcquireTimeoutNs()) {
-            std::cerr << "MAKO Renderer: generated-image acquire timeout enabled at "
-                      << static_cast<double>(*timeout) / 1'000'000.0
-                      << " ms for the legacy non-Gamescope path; stalled "
-                         "generated frames will be skipped\n";
+        }
+        if (configuredAcquireTimeout) {
+            std::cerr << "MAKO Renderer: generated-image acquire timeout requested at "
+                      << static_cast<double>(*configuredAcquireTimeout) /
+                            1'000'000.0
+                      << " ms; timeout results and successful wall-time "
+                         "deadline overruns enter transport recovery\n";
         }
         const bool schedulerEnabled = this->resetGenerationScheduler(
             DiagnosticsClock::now(), "startup"

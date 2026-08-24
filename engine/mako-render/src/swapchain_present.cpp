@@ -10,6 +10,7 @@
 #include "present_diagnostics.hpp"
 #include "pnext_chain.hpp"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstddef>
@@ -48,6 +49,67 @@ namespace {
 
     DiagnosticsClock::time_point startPresentDiagnostic() {
         return present_diagnostics::start();
+    }
+
+    DiagnosticsClock::duration finishPresentDiagnostic(
+            const DiagnosticsClock::time_point started) {
+        if (!presentDiagnosticsEnabled())
+            return {};
+        return DiagnosticsClock::now() - started;
+    }
+
+    struct PresentPhaseDurations {
+        DiagnosticsClock::duration renderFence{};
+        DiagnosticsClock::duration schedule{};
+        DiagnosticsClock::duration sourceCopy{};
+        DiagnosticsClock::duration acquire{};
+        DiagnosticsClock::duration generatedSubmit{};
+        DiagnosticsClock::duration generatedPresent{};
+        DiagnosticsClock::duration originalPresent{};
+    };
+
+    void logSlowPresentBreakdown(const uint64_t contextId,
+            const size_t frameIndex, const size_t sequenceIndex,
+            const DiagnosticsClock::duration totalDuration,
+            const PresentPhaseDurations& phases) {
+        if (!presentDiagnosticsEnabled())
+            return;
+
+        const auto milliseconds = [](const auto duration) {
+            return std::chrono::duration<double, std::milli>(
+                duration
+            ).count();
+        };
+        const double totalMs = milliseconds(totalDuration);
+        if (totalMs < present_diagnostics::thresholdMilliseconds())
+            return;
+
+        const auto attributedDuration =
+            phases.renderFence + phases.schedule + phases.sourceCopy +
+            phases.acquire + phases.generatedSubmit +
+            phases.generatedPresent + phases.originalPresent;
+        const double unattributedMs = std::max(
+            0.0, totalMs - milliseconds(attributedDuration)
+        );
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=present-breakdown"
+                  << " context=" << contextId
+                  << " total_ms=" << totalMs
+                  << " render_fence_ms="
+                  << milliseconds(phases.renderFence)
+                  << " schedule_ms=" << milliseconds(phases.schedule)
+                  << " source_copy_ms=" << milliseconds(phases.sourceCopy)
+                  << " acquire_ms=" << milliseconds(phases.acquire)
+                  << " generated_submit_ms="
+                  << milliseconds(phases.generatedSubmit)
+                  << " generated_present_ms="
+                  << milliseconds(phases.generatedPresent)
+                  << " original_present_ms="
+                  << milliseconds(phases.originalPresent)
+                  << " unattributed_ms=" << unattributedMs
+                  << " frame=" << frameIndex
+                  << " sequence=" << sequenceIndex
+                  << '\n';
     }
 
     void logSlowPresentOperation(const std::string_view operation,
@@ -311,12 +373,23 @@ VkResult Swapchain::presentNativeFrame(const PresentInvocation& invocation) {
         .pSwapchains = &invocation.swapchain,
         .pImageIndices = &invocation.imageIndex,
     };
+    const auto originalPresentStarted = startPresentDiagnostic();
     const auto result = invocation.vk.df().QueuePresentKHR(
         invocation.queue, &presentInfo
+    );
+    const PresentPhaseDurations phases{
+        .originalPresent = finishPresentDiagnostic(originalPresentStarted),
+    };
+    const auto presentWorkDuration = finishPresentDiagnostic(
+        invocation.started
     );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
 
+    logSlowPresentBreakdown(
+        this->diagnosticsState.contextId, this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, presentWorkDuration, phases
+    );
     logSlowPresentOperation(
         "present-total", this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, invocation.started, result
@@ -327,7 +400,8 @@ VkResult Swapchain::presentNativeFrame(const PresentInvocation& invocation) {
 
 VkResult Swapchain::presentOriginalImage(
         const PresentInvocation& invocation,
-        const VkSemaphore waitSemaphore, const void* nextChain) {
+        const VkSemaphore waitSemaphore, const void* nextChain,
+        DiagnosticsClock::duration* const duration) {
     const VkPresentInfoKHR presentInfo{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext = nextChain,
@@ -341,6 +415,8 @@ VkResult Swapchain::presentOriginalImage(
     const auto result = invocation.vk.df().QueuePresentKHR(
         invocation.queue, &presentInfo
     );
+    if (duration)
+        *duration = finishPresentDiagnostic(originalPresentStarted);
     logSlowPresentOperation(
         "present-original-image", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
         originalPresentStarted, result, std::nullopt, invocation.imageIndex
@@ -699,6 +775,10 @@ void Swapchain::submitSourceCopy(const PresentInvocation& invocation,
 VkResult Swapchain::presentHistoryOnly(
         const PresentInvocation& invocation,
         const PresentationFramePlan& plan) {
+    PresentPhaseDurations phases{
+        .renderFence = plan.renderFenceWaitDuration,
+        .sourceCopy = plan.submitSourceCopyDuration,
+    };
     const uint64_t sourceTimelineValue = this->frameState.sequenceIndex - 1;
     auto& fallbackPass = this->passes.front();
     auto& fallbackSemaphores = this->postCopySemaphores.at(
@@ -707,6 +787,7 @@ VkResult Swapchain::presentHistoryOnly(
     auto& fallbackSemaphore = fallbackSemaphores.second;
 
     auto& fallbackCommandBuffer = fallbackPass.commandBuffer;
+    const auto fallbackSubmitStarted = startPresentDiagnostic();
     fallbackCommandBuffer.begin(invocation.vk);
     fallbackCommandBuffer.end(invocation.vk);
     fallbackCommandBuffer.submit(invocation.vk,
@@ -714,11 +795,16 @@ VkResult Swapchain::presentHistoryOnly(
         std::array{fallbackSemaphore.handle()}, VK_NULL_HANDLE, 0,
         this->renderFence->handle()
     );
+    phases.generatedSubmit = finishPresentDiagnostic(
+        fallbackSubmitStarted
+    );
     this->frameState.renderFenceInFlight = true;
 
+    const auto historyScheduleStarted = startPresentDiagnostic();
     try {
         this->instance.get().scheduleFrameHistory(this->ctx.get());
     } catch (const std::exception& error) {
+        phases.schedule = finishPresentDiagnostic(historyScheduleStarted);
         // The fallback copy is already queued and signals fallbackSemaphore.
         // Present the real image through it and quarantine generation instead
         // of returning an error to the application.
@@ -731,7 +817,8 @@ VkResult Swapchain::presentHistoryOnly(
             this->adaptiveScheduler->cancelHistoryWarmup();
 
         const auto fallbackResult = this->presentOriginalImage(
-            invocation, fallbackSemaphore.handle(), invocation.nextChain
+            invocation, fallbackSemaphore.handle(), invocation.nextChain,
+            &phases.originalPresent
         );
         if (fallbackResult != VK_SUCCESS &&
                 fallbackResult != VK_SUBOPTIMAL_KHR) {
@@ -739,6 +826,14 @@ VkResult Swapchain::presentHistoryOnly(
                 fallbackResult, "vkQueuePresentKHR() failed"
             );
         }
+        const auto presentWorkDuration = finishPresentDiagnostic(
+            invocation.started
+        );
+        logSlowPresentBreakdown(
+            this->diagnosticsState.contextId,
+            this->frameState.realFrameIndex,
+            this->frameState.sequenceIndex, presentWorkDuration, phases
+        );
         logSlowPresentOperation(
             "present-total", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
             invocation.started, fallbackResult
@@ -746,6 +841,7 @@ VkResult Swapchain::presentHistoryOnly(
         this->frameState.realFrameIndex++;
         return fallbackResult;
     }
+    phases.schedule = finishPresentDiagnostic(historyScheduleStarted);
 
     this->frameState.backendFrameIndex++;
     if (plan.requestedGeneratedFrames.size() >
@@ -782,11 +878,19 @@ VkResult Swapchain::presentHistoryOnly(
     }
 
     const auto result = this->presentOriginalImage(
-        invocation, fallbackSemaphore.handle(), invocation.nextChain
+        invocation, fallbackSemaphore.handle(), invocation.nextChain,
+        &phases.originalPresent
     );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
 
+    const auto presentWorkDuration = finishPresentDiagnostic(
+        invocation.started
+    );
+    logSlowPresentBreakdown(
+        this->diagnosticsState.contextId, this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, presentWorkDuration, phases
+    );
     logSlowPresentOperation(
         "present-total", this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, invocation.started, result
@@ -800,6 +904,11 @@ VkResult Swapchain::presentGeneratedFrames(
         const PresentationFramePlan& plan,
         const bool gamescopeHdrTransport) {
     auto maximumAcquireDuration = DiagnosticsClock::duration::zero();
+    auto totalAcquireDuration = DiagnosticsClock::duration::zero();
+    auto generatedSubmitDuration = DiagnosticsClock::duration::zero();
+    auto generatedPresentDuration = DiagnosticsClock::duration::zero();
+    auto originalPresentDuration = DiagnosticsClock::duration::zero();
+    bool acquireDeadlineExceeded = false;
     const auto reportOrderedAcquire = [&](const bool timedOut) {
         if (!this->privateOrderedTransport)
             return;
@@ -811,7 +920,8 @@ VkResult Swapchain::presentGeneratedFrames(
             );
         const auto observation =
             this->recoveryState.orderedAcquireRecovery.observe(
-                observedAt, maximumAcquireDuration, slowThreshold, timedOut
+                observedAt, maximumAcquireDuration, slowThreshold, timedOut,
+                acquireDeadlineExceeded
             );
         if (observation.quarantined) {
             this->fixedRefreshBudget.reset();
@@ -821,7 +931,12 @@ VkResult Swapchain::presentGeneratedFrames(
                           << " context=" << this->diagnosticsState.contextId
                           << " reason="
                           << (observation.timedOut
-                                ? "timeout" : "repeated-slow-acquire")
+                                ? "timeout"
+                                : observation.deadlineExceeded
+                                    ? "deadline-overrun"
+                                    : observation.severe
+                                        ? "severe-slow-acquire"
+                                        : "repeated-slow-acquire")
                           << " acquire_ms="
                           << std::chrono::duration<double, std::milli>(
                                  maximumAcquireDuration
@@ -842,6 +957,22 @@ VkResult Swapchain::presentGeneratedFrames(
                           << observation.bypassedFrames
                           << " action=native-drain\n";
             }
+        } else if (observation.guardArmed &&
+                presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=ordered-acquire-guard"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " acquire_ms="
+                      << std::chrono::duration<double, std::milli>(
+                             maximumAcquireDuration
+                         ).count()
+                      << " slow_threshold_ms="
+                      << std::chrono::duration<double, std::milli>(
+                             slowThreshold
+                         ).count()
+                      << " consecutive_slow_frames="
+                      << observation.consecutiveSlowFrames
+                      << " action=zero-wait-protection\n";
         } else if (observation.recovered &&
                 presentDiagnosticsEnabled()) {
             std::cerr << "MAKO Renderer: present diagnostics: "
@@ -859,6 +990,9 @@ VkResult Swapchain::presentGeneratedFrames(
                       << std::chrono::duration<double, std::milli>(
                              observation.recoveryDuration
                          ).count()
+                      << " source="
+                      << (observation.guardCleared
+                            ? "slow-acquire-guard" : "native-drain-probe")
                       << " action="
                       << (observation.stabilizing
                             ? "one-frame-stabilization"
@@ -891,10 +1025,22 @@ VkResult Swapchain::presentGeneratedFrames(
                 acquireTimeout, pass.acquireSemaphore.handle(),
                 VK_NULL_HANDLE, &acquiredImageIndex
             );
+            const auto acquireDuration =
+                DiagnosticsClock::now() - acquireStarted;
             maximumAcquireDuration = std::max(
-                maximumAcquireDuration,
-                DiagnosticsClock::now() - acquireStarted
+                maximumAcquireDuration, acquireDuration
             );
+            totalAcquireDuration += acquireDuration;
+            if (plan.configuredAcquireTimeout &&
+                    acquireDuration >=
+                        std::chrono::duration_cast<
+                            DiagnosticsClock::duration>(
+                                std::chrono::nanoseconds(
+                                    *plan.configuredAcquireTimeout
+                                )
+                            )) {
+                acquireDeadlineExceeded = true;
+            }
             logSlowPresentOperation(
                 "acquire-generated-image", this->frameState.realFrameIndex,
                 this->frameState.sequenceIndex,
@@ -921,6 +1067,7 @@ VkResult Swapchain::presentGeneratedFrames(
                 this->reportAdaptiveDelivery(plan, i);
             }
 
+            const auto fallbackSubmitStarted = startPresentDiagnostic();
             auto& fallbackCommandBuffer = pass.commandBuffer;
             fallbackCommandBuffer.begin(invocation.vk);
             fallbackCommandBuffer.end(invocation.vk);
@@ -929,6 +1076,9 @@ VkResult Swapchain::presentGeneratedFrames(
                 finalGeneratedTimelineValue,
                 std::array{fallbackSemaphore.handle()}, VK_NULL_HANDLE, 0,
                 this->renderFence->handle()
+            );
+            generatedSubmitDuration += finishPresentDiagnostic(
+                fallbackSubmitStarted
             );
             this->frameState.renderFenceInFlight = true;
 
@@ -941,11 +1091,29 @@ VkResult Swapchain::presentGeneratedFrames(
             result = this->presentOriginalImage(
                 invocation, fallbackSemaphore.handle(),
                 this->gamescopeDetected || i == 0
-                    ? invocation.nextChain : nullptr
+                    ? invocation.nextChain : nullptr,
+                &originalPresentDuration
             );
             if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
                 throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
 
+            const auto presentWorkDuration = finishPresentDiagnostic(
+                invocation.started
+            );
+            logSlowPresentBreakdown(
+                this->diagnosticsState.contextId,
+                this->frameState.realFrameIndex,
+                this->frameState.sequenceIndex, presentWorkDuration,
+                {
+                    .renderFence = plan.renderFenceWaitDuration,
+                    .schedule = plan.scheduleFramesDuration,
+                    .sourceCopy = plan.submitSourceCopyDuration,
+                    .acquire = totalAcquireDuration,
+                    .generatedSubmit = generatedSubmitDuration,
+                    .generatedPresent = generatedPresentDuration,
+                    .originalPresent = originalPresentDuration,
+                }
+            );
             logSlowPresentOperation(
                 "present-total", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
                 invocation.started, result
@@ -1032,6 +1200,9 @@ VkResult Swapchain::presentGeneratedFrames(
         );
         if (i == plan.scheduledGeneratedFrames.size() - 1)
             this->frameState.renderFenceInFlight = true;
+        generatedSubmitDuration += finishPresentDiagnostic(
+            generatedSubmitStarted
+        );
         logSlowPresentOperation(
             "submit-generated-copy", this->frameState.realFrameIndex,
             this->frameState.sequenceIndex,
@@ -1052,6 +1223,9 @@ VkResult Swapchain::presentGeneratedFrames(
         result = invocation.vk.df().QueuePresentKHR(
             invocation.queue, &presentInfo
         );
+        generatedPresentDuration += finishPresentDiagnostic(
+            generatedPresentStarted
+        );
         logSlowPresentOperation(
             "present-generated-image", this->frameState.realFrameIndex,
             this->frameState.sequenceIndex,
@@ -1070,14 +1244,31 @@ VkResult Swapchain::presentGeneratedFrames(
     );
     const auto result = this->presentOriginalImage(
         invocation, lastPostCopy.second.handle(),
-        this->gamescopeDetected ? invocation.nextChain : nullptr
+        this->gamescopeDetected ? invocation.nextChain : nullptr,
+        &originalPresentDuration
     );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
 
+    const auto presentWorkDuration = finishPresentDiagnostic(
+        invocation.started
+    );
     reportOrderedAcquire(false);
     this->reportAdaptiveDelivery(
         plan, plan.scheduledGeneratedFrames.size()
+    );
+    logSlowPresentBreakdown(
+        this->diagnosticsState.contextId, this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, presentWorkDuration,
+        {
+            .renderFence = plan.renderFenceWaitDuration,
+            .schedule = plan.scheduleFramesDuration,
+            .sourceCopy = plan.submitSourceCopyDuration,
+            .acquire = totalAcquireDuration,
+            .generatedSubmit = generatedSubmitDuration,
+            .generatedPresent = generatedPresentDuration,
+            .originalPresent = originalPresentDuration,
+        }
     );
     logSlowPresentOperation(
         "present-total", this->frameState.realFrameIndex,
@@ -1233,7 +1424,12 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     // Resolve previous application-device work before scheduling another
     // backend frame. If the fence budget is missed, no new backend work has
     // been created and the current game image can be presented natively.
-    if (!this->prepareRenderFence(vk)) {
+    const auto renderFenceStarted = startPresentDiagnostic();
+    const bool renderFenceReady = this->prepareRenderFence(vk);
+    plan.renderFenceWaitDuration = finishPresentDiagnostic(
+        renderFenceStarted
+    );
+    if (!renderFenceReady) {
         this->handleRenderFenceBudgetMiss(plan);
         return this->presentNativeFrame(invocation);
     }
@@ -1244,13 +1440,32 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         // native presentation and retry a zero-wait one-frame probe later.
         this->preacquireGeneratedImages(invocation, plan, false);
         if (plan.admittedGeneratedFrameCount == 0) {
-            if (presentDiagnosticsEnabled() &&
-                    this->recoveryState.orderedAcquireRecovery
-                        .reportNonblockingProbeUnavailable(presentNow)) {
+            const auto miss = this->recoveryState.orderedAcquireRecovery
+                .reportNonblockingProbeUnavailable(presentNow);
+            if (miss.quarantined) {
+                this->fixedRefreshBudget.reset();
+                if (presentDiagnosticsEnabled()) {
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=ordered-acquire-quarantine"
+                              << " context="
+                              << this->diagnosticsState.contextId
+                              << " reason=guard-probe-unavailable"
+                              << " consecutive_failures="
+                              << miss.consecutiveFailures
+                              << " retry_ms="
+                              << std::chrono::duration<double, std::milli>(
+                                     miss.retryDelay
+                                 ).count()
+                              << " bypassed_frames="
+                              << miss.bypassedFrames
+                              << " action=native-drain\n";
+                }
+            } else if (miss.diagnostic && presentDiagnosticsEnabled()) {
                 std::cerr << "MAKO Renderer: present diagnostics: "
                              "operation=ordered-acquire-probe-pending"
                           << " context=" << this->diagnosticsState.contextId
                           << " acquire_timeout_ns=0"
+                          << " bypassed_frames=" << miss.bypassedFrames
                           << " action=native-present\n";
             }
             return this->presentNativeFrame(invocation);
@@ -1296,13 +1511,20 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             );
         }
         this->frameState.backendFrameIndex++;
+        plan.scheduleFramesDuration = finishPresentDiagnostic(
+            scheduleStarted
+        );
         logSlowPresentOperation(
             "schedule-frames", this->frameState.realFrameIndex,
             this->frameState.sequenceIndex, scheduleStarted
         );
     }
 
+    const auto sourceCopyStarted = startPresentDiagnostic();
     this->submitSourceCopy(invocation, swapchainImage, sourceImage);
+    plan.submitSourceCopyDuration = finishPresentDiagnostic(
+        sourceCopyStarted
+    );
     if (bypassGeneratedFrames)
         return this->presentHistoryOnly(invocation, plan);
     return this->presentGeneratedFrames(

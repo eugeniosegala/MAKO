@@ -27,11 +27,12 @@ FIXTURE = """\
 [Vulkan Loader] Loading VK_LAYER_MAKO_frame_generation
 [Vulkan Loader] Loading VK_LAYER_MAKO_render
 [Gamescope WSI] HDR output available
-MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0
+MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0; fingerprint=abc123.dirty.12345678
+MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executable=game.exe wine_executable=game.exe process_name=GameThread profile=mako identification=fallback build=1.0.0 fingerprint=abc123.dirty.12345678
 MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
 MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
 MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
-MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1
+MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 layer_forced_recreation=disabled
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources action=wait-for-natural-swapchain-recreation
 MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 hdr=1
 MAKO Renderer: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
@@ -39,6 +40,8 @@ MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=6
 MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
 MAKO Renderer: present diagnostics: operation=acquire-generated-image context=1 duration_ms=50 result=VK_TIMEOUT
 MAKO Renderer: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
+MAKO Renderer: present diagnostics: operation=ordered-acquire-policy context=1 configured_timeout_ms=50 slow_threshold_ms=25 severe_threshold_ms=50 first_slow_action=zero-wait-protection
+MAKO Renderer: present diagnostics: operation=ordered-acquire-guard context=1 acquire_ms=31 slow_threshold_ms=25 consecutive_slow_frames=1 action=zero-wait-protection
 MAKO Renderer: present diagnostics: operation=ordered-acquire-quarantine context=1 reason=timeout retry_ms=250 action=native-drain
 MAKO Renderer: present diagnostics: operation=ordered-acquire-retry context=1 bypassed_frames=12 action=warm-history-before-probe
 MAKO Renderer: present diagnostics: operation=ordered-acquire-probe-pending context=1 acquire_timeout_ns=0 action=native-present
@@ -47,6 +50,7 @@ MAKO Renderer: present diagnostics: operation=ordered-acquire-stabilized context
 MAKO Renderer: present diagnostics: operation=pipeline-busy-bypass context=1 consecutive_frames=1 total_bypassed_frames=16 duration_ms=0 planned=1 history_action=preserved action=native-present
 MAKO Renderer: present diagnostics: operation=pipeline-busy-recovered context=1 bypassed_frames=1 total_recoveries=16 duration_ms=8 history_warmup_requested=0
 MAKO Renderer: present diagnostics: operation=render-fence-budget-missed context=1 planned=1 action=native-present
+MAKO Renderer: present diagnostics: operation=present-breakdown context=1 total_ms=44.4 render_fence_ms=0.1 schedule_ms=1.0 source_copy_ms=1.2 acquire_ms=40 generated_submit_ms=0.4 generated_present_ms=0.5 original_present_ms=0.6 unattributed_ms=0.6 frame=42 sequence=84
 mako: present diagnostics: operation=resume-generated-frames context=1
 mako: present diagnostics: operation=generated-image-recovered context=1
 mako: present diagnostics: operation=swapchain-recreation-suppressed context=1
@@ -91,6 +95,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("runtime-state-applied", result.stdout)
         self.assertIn("skip-generated-frames", result.stdout)
         self.assertIn("ordered-acquire-quarantine", result.stdout)
+        self.assertIn("ordered-acquire-policy", result.stdout)
+        self.assertIn("ordered-acquire-guard", result.stdout)
         self.assertIn("ordered-acquire-retry", result.stdout)
         self.assertIn("ordered-acquire-probe-pending", result.stdout)
         self.assertIn("ordered-acquire-recovered", result.stdout)
@@ -152,6 +158,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "generated-admission-pressure",
             "generated-admission-recovered",
             "ordered-acquire-quarantine",
+            "ordered-acquire-policy",
+            "ordered-acquire-guard",
             "ordered-acquire-retry",
             "ordered-acquire-probe-pending",
             "ordered-acquire-recovered",
@@ -178,6 +186,9 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     result = self._run("--log", str(path), preset)
                     self.assertEqual(result.returncode, 0, result.stderr)
                     self.assertIn("render layer active", result.stdout)
+                    self.assertIn("fingerprint=abc123.dirty.12345678", result.stdout)
+                    self.assertIn("operation=process-identity", result.stdout)
+                    self.assertIn("operation=swapchain-context-create", result.stdout)
 
     def test_config_preset_correlates_requested_and_applied_state(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -201,6 +212,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("ordered-acquire-recovered", result.stdout)
         self.assertIn("pipeline-busy-bypass", result.stdout)
         self.assertIn("pipeline-busy-recovered", result.stdout)
+        self.assertIn("operation=present-breakdown", result.stdout)
         self.assertNotIn("adaptive-ramp", result.stdout)
 
     def test_startup_includes_loader_gamescope_context_and_hdr(self):

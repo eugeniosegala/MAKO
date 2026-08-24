@@ -152,9 +152,11 @@ namespace mako::layer {
     };
 
     /// Classifies generated-image starvation on the ordered SDR transport.
-    /// One isolated slow acquire can be ordinary FIFO backpressure. Repeated
-    /// pressure, or one bounded acquire timeout, instead requests a native-only
-    /// drain before history is warmed and one generated frame probes recovery.
+    /// One isolated slow successful acquire arms a zero-wait guard for the
+    /// next present so transport delay cannot immediately recur or contaminate
+    /// Adaptive cadence. A guard miss, repeated pressure, a successful acquire
+    /// beyond its requested deadline, or one severe acquire requests a
+    /// native-only drain before history is warmed and one frame probes recovery.
     class OrderedAcquireRecovery {
     public:
         using Clock = std::chrono::steady_clock;
@@ -183,11 +185,23 @@ namespace mako::layer {
             bool recovered{false};
             bool stabilizing{false};
             bool timedOut{false};
+            bool deadlineExceeded{false};
+            bool severe{false};
+            bool guardArmed{false};
+            bool guardCleared{false};
             size_t consecutiveSlowFrames{0};
             size_t consecutiveFailures{0};
             size_t bypassedFrames{0};
             Duration retryDelay{};
             Duration recoveryDuration{};
+        };
+
+        struct NonblockingMissObservation {
+            bool diagnostic{false};
+            bool quarantined{false};
+            size_t consecutiveFailures{0};
+            size_t bypassedFrames{0};
+            Duration retryDelay{};
         };
 
         [[nodiscard]] static constexpr auto minimumSlowAcquireDuration() {
@@ -214,9 +228,14 @@ namespace mako::layer {
             return std::chrono::seconds{2};
         }
 
+        [[nodiscard]] static constexpr Duration severeAcquireDuration(
+                const Duration slowAcquireThreshold) {
+            return slowAcquireThreshold * 2;
+        }
+
         [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
             if (!this->retryAt) {
-                if (this->probePending ||
+                if (this->guardPending || this->probePending ||
                         (this->stabilizingUntil &&
                          now < *this->stabilizingUntil)) {
                     return {
@@ -280,8 +299,13 @@ namespace mako::layer {
         [[nodiscard]] Observation observe(const TimePoint now,
                 const Duration acquireDuration,
                 const Duration slowAcquireThreshold,
-                const bool timedOut) {
-            const bool slow = timedOut ||
+                const bool timedOut,
+                const bool deadlineExceeded = false) {
+            const bool severe = deadlineExceeded ||
+                acquireDuration >= severeAcquireDuration(
+                    slowAcquireThreshold
+                );
+            const bool slow = timedOut || severe ||
                 acquireDuration >= slowAcquireThreshold;
             if (slow) {
                 this->healthySince.reset();
@@ -290,38 +314,35 @@ namespace mako::layer {
                 this->consecutiveSlowFrames++;
                 const size_t observedSlowFrames =
                     this->consecutiveSlowFrames;
-                if (!timedOut && !this->probePending &&
+                if (!timedOut && !severe && !this->guardPending &&
+                        !this->probePending &&
                         observedSlowFrames < slowFrameThreshold) {
+                    // One slow successful acquire can still be ordinary FIFO
+                    // pressure, but the next application present must not
+                    // repeat a blocking acquire or feed that transport delay
+                    // back into Adaptive's source-cadence clock. Constrain a
+                    // short zero-wait guard first; a miss escalates through
+                    // the existing native-drain recovery below.
+                    this->guardPending = true;
                     return {
+                        .guardArmed = true,
                         .consecutiveSlowFrames = observedSlowFrames,
                         .consecutiveFailures = this->consecutiveFailures,
                         .bypassedFrames = this->bypassedFrames,
                     };
                 }
 
-                if (!this->recoveryStartedAt)
-                    this->recoveryStartedAt = now;
-                this->consecutiveFailures++;
-                const auto delay = retryDelayForFailure(
-                    this->consecutiveFailures
+                return this->beginNativeDrain(
+                    now, timedOut, deadlineExceeded, severe,
+                    observedSlowFrames
                 );
-                this->retryAt = now + delay;
-                this->probePending = false;
-                this->consecutiveSlowFrames = 0;
-                return {
-                    .quarantined = true,
-                    .timedOut = timedOut,
-                    .consecutiveSlowFrames = observedSlowFrames,
-                    .consecutiveFailures = this->consecutiveFailures,
-                    .bypassedFrames = this->bypassedFrames,
-                    .retryDelay = delay,
-                    .recoveryDuration = now - *this->recoveryStartedAt,
-                };
             }
 
             this->consecutiveSlowFrames = 0;
-            const bool recovered = this->probePending;
+            const bool guardCleared = this->guardPending;
+            const bool recovered = guardCleared || this->probePending;
             if (recovered) {
+                this->guardPending = false;
                 this->probePending = false;
                 this->healthySince = now;
                 this->stabilizingUntil = now + stabilizationDuration();
@@ -341,6 +362,7 @@ namespace mako::layer {
             return {
                 .recovered = recovered,
                 .stabilizing = recovered,
+                .guardCleared = guardCleared,
                 .consecutiveFailures = this->consecutiveFailures,
                 .bypassedFrames = this->bypassedFrames,
                 .recoveryDuration = this->recoveryStartedAt
@@ -350,16 +372,36 @@ namespace mako::layer {
         }
 
         [[nodiscard]] bool active() const {
-            return this->retryAt.has_value() || this->probePending ||
+            return this->retryAt.has_value() || this->guardPending ||
+                this->probePending ||
                 this->stabilizingUntil.has_value();
         }
 
         /// A nonblocking recovery admission miss intentionally retains the
-        /// constrained probe state. The caller presents the real image and
-        /// retries next frame without converting availability pressure into a
-        /// 50 ms application-thread stall.
-        [[nodiscard]] bool reportNonblockingProbeUnavailable(
+        /// constrained probe state. A first-slow guard miss escalates into the
+        /// native drain; later probe misses keep presenting the real image and
+        /// retrying without converting availability pressure into another
+        /// application-thread stall.
+        [[nodiscard]] NonblockingMissObservation
+        reportNonblockingProbeUnavailable(
                 const TimePoint now) {
+            if (this->guardPending) {
+                this->guardPending = false;
+                this->bypassedFrames++;
+                const auto observation = this->beginNativeDrain(
+                    now, false, false, false,
+                    this->consecutiveSlowFrames
+                );
+                return {
+                    .diagnostic = true,
+                    .quarantined = true,
+                    .consecutiveFailures =
+                        observation.consecutiveFailures,
+                    .bypassedFrames = observation.bypassedFrames,
+                    .retryDelay = observation.retryDelay,
+                };
+            }
+
             // Recovery must earn a continuous healthy window. A zero-wait
             // miss is harmless to the application thread, but it means the
             // ordered FIFO is not ready to resume its full normal plan.
@@ -367,8 +409,12 @@ namespace mako::layer {
                 this->stabilizingUntil = now + stabilizationDuration();
             this->bypassedFrames++;
             this->nonblockingProbeMisses++;
-            return (this->nonblockingProbeMisses &
-                    (this->nonblockingProbeMisses - 1)) == 0;
+            return {
+                .diagnostic = (this->nonblockingProbeMisses &
+                    (this->nonblockingProbeMisses - 1)) == 0,
+                .consecutiveFailures = this->consecutiveFailures,
+                .bypassedFrames = this->bypassedFrames,
+            };
         }
 
         void reset() {
@@ -376,6 +422,7 @@ namespace mako::layer {
             this->recoveryStartedAt.reset();
             this->healthySince.reset();
             this->stabilizingUntil.reset();
+            this->guardPending = false;
             this->probePending = false;
             this->consecutiveSlowFrames = 0;
             this->consecutiveFailures = 0;
@@ -384,6 +431,33 @@ namespace mako::layer {
         }
 
     private:
+        [[nodiscard]] Observation beginNativeDrain(const TimePoint now,
+                const bool timedOut, const bool deadlineExceeded,
+                const bool severe,
+                const size_t observedSlowFrames) {
+            if (!this->recoveryStartedAt)
+                this->recoveryStartedAt = now;
+            this->consecutiveFailures++;
+            const auto delay = retryDelayForFailure(
+                this->consecutiveFailures
+            );
+            this->retryAt = now + delay;
+            this->guardPending = false;
+            this->probePending = false;
+            this->consecutiveSlowFrames = 0;
+            return {
+                .quarantined = true,
+                .timedOut = timedOut,
+                .deadlineExceeded = deadlineExceeded,
+                .severe = severe,
+                .consecutiveSlowFrames = observedSlowFrames,
+                .consecutiveFailures = this->consecutiveFailures,
+                .bypassedFrames = this->bypassedFrames,
+                .retryDelay = delay,
+                .recoveryDuration = now - *this->recoveryStartedAt,
+            };
+        }
+
         [[nodiscard]] static Duration retryDelayForFailure(
                 const size_t failures) {
             constexpr std::array delays{
@@ -403,6 +477,7 @@ namespace mako::layer {
         std::optional<TimePoint> recoveryStartedAt;
         std::optional<TimePoint> healthySince;
         std::optional<TimePoint> stabilizingUntil;
+        bool guardPending{false};
         bool probePending{false};
         size_t consecutiveSlowFrames{0};
         size_t consecutiveFailures{0};

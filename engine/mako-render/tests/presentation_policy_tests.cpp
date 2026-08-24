@@ -94,14 +94,29 @@ int main() {
     auto observation = acquireRecovery.observe(
         acquireStart, 30ms, 25ms, false
     );
-    expect(!observation.quarantined && !acquireRecovery.active(),
-        "one slow ordered acquire entered recovery");
-    observation = acquireRecovery.observe(
-        acquireStart + 16ms, 10ms, 25ms, false
+    expect(!observation.quarantined && observation.guardArmed &&
+            acquireRecovery.active(),
+        "one slow ordered acquire did not arm zero-wait protection");
+    auto acquireDecision = acquireRecovery.beforePresent(
+        acquireStart + 1ms
     );
-    expect(!observation.quarantined,
-        "a healthy ordered acquire entered recovery");
+    expect(!acquireDecision.bypassGeneration &&
+            !acquireDecision.beginHistoryWarmup &&
+            acquireDecision.limitGeneratedFrames &&
+            acquireDecision.preacquireGeneratedFrame,
+        "slow-acquire protection did not request a zero-wait frame");
+    observation = acquireRecovery.observe(
+        acquireStart + 2ms, 0ms, 25ms, false
+    );
+    expect(observation.recovered && observation.guardCleared &&
+            observation.stabilizing && acquireRecovery.active(),
+        "a successful zero-wait guard did not begin stabilization");
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 2003ms);
+    expect(acquireDecision.recoveryStabilized &&
+            acquireDecision.resetCadenceClock && !acquireRecovery.active(),
+        "successful slow-acquire protection did not resume normal policy");
 
+    acquireRecovery.reset();
     observation = acquireRecovery.observe(
         acquireStart + 32ms, 50ms, 25ms, true
     );
@@ -109,7 +124,7 @@ int main() {
             observation.consecutiveFailures == 1 &&
             observation.retryDelay == 250ms,
         "one ordered acquire timeout did not start the native drain");
-    auto acquireDecision = acquireRecovery.beforePresent(
+    acquireDecision = acquireRecovery.beforePresent(
         acquireStart + 100ms
     );
     expect(acquireDecision.bypassGeneration &&
@@ -125,15 +140,21 @@ int main() {
     expect(acquireDecision.limitGeneratedFrames &&
             acquireDecision.preacquireGeneratedFrame,
         "ordered acquire recovery did not retain the one-frame probe limit");
-    expect(acquireRecovery.reportNonblockingProbeUnavailable(
-                acquireStart + 301ms
-            ) &&
-            acquireRecovery.reportNonblockingProbeUnavailable(
-                acquireStart + 302ms
-            ) &&
-            !acquireRecovery.reportNonblockingProbeUnavailable(
-                acquireStart + 303ms
-            ),
+    const auto firstProbeMiss =
+        acquireRecovery.reportNonblockingProbeUnavailable(
+            acquireStart + 301ms
+        );
+    const auto secondProbeMiss =
+        acquireRecovery.reportNonblockingProbeUnavailable(
+            acquireStart + 302ms
+        );
+    const auto thirdProbeMiss =
+        acquireRecovery.reportNonblockingProbeUnavailable(
+            acquireStart + 303ms
+        );
+    expect(firstProbeMiss.diagnostic && secondProbeMiss.diagnostic &&
+            !thirdProbeMiss.diagnostic &&
+            !firstProbeMiss.quarantined,
         "ordered probe availability misses lost power-of-two aggregation");
 
     observation = acquireRecovery.observe(
@@ -184,13 +205,46 @@ int main() {
     observation = acquireRecovery.observe(
         acquireStart, 30ms, 25ms, false
     );
-    expect(!observation.quarantined,
-        "first repeated-slow sample entered ordered recovery");
+    expect(!observation.quarantined && observation.guardArmed,
+        "first repeated-slow sample did not arm protection");
     observation = acquireRecovery.observe(
         acquireStart + 16ms, 30ms, 25ms, false
     );
     expect(observation.quarantined && !observation.timedOut,
         "two repeated slow ordered acquires did not enter recovery");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 60ms, 25ms, false, true
+    );
+    expect(observation.quarantined &&
+            observation.deadlineExceeded && observation.severe &&
+            observation.retryDelay == 250ms,
+        "successful acquire deadline overrun did not enter recovery");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 50ms, 25ms, false
+    );
+    expect(observation.quarantined && !observation.deadlineExceeded &&
+            observation.severe,
+        "severe unbounded acquire did not enter recovery");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 30ms, 25ms, false
+    );
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 1ms);
+    const auto guardMiss =
+        acquireRecovery.reportNonblockingProbeUnavailable(
+            acquireStart + 2ms
+        );
+    expect(observation.guardArmed &&
+            acquireDecision.preacquireGeneratedFrame &&
+            guardMiss.quarantined && guardMiss.diagnostic &&
+            guardMiss.consecutiveFailures == 1 &&
+            guardMiss.retryDelay == 250ms,
+        "zero-wait guard miss did not enter native-drain recovery");
 
     acquireRecovery.reset();
     auto repeatedFailureAt = acquireStart;
