@@ -34,7 +34,7 @@ The extractor defaults to that sibling path. Use `--trace-repo <path>` when the 
 
 ## Capture a completed session
 
-Close the game first so buffered diagnostics are complete, then capture before starting another game because the development wrapper begins the next session with a fresh presentation log.
+Close the game first so buffered diagnostics are complete. The managed development wrapper keeps the latest session at `~/.config/mako-render/present-diagnostics.log` and retains the previous two sessions as `.1` and `.2`; a fourth diagnostics-enabled launch replaces the oldest. The extractor defaults to the latest session. To archive an earlier retained run, pass its exact rotated path through `--diagnostics`; do not pass a combined `mako-diagnostics --session all` report because one trace must contain one raw game session.
 
 ```bash
 ./scripts/capture-trace.sh \

@@ -578,6 +578,82 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "# development presentation diagnostics default: disabled",
         )
 
+    def test_enabled_diagnostics_retains_exactly_three_launch_sessions(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            log_path = Path(temporary_directory) / "present-diagnostics.log"
+            script = "\n".join([
+                *self.service._generate_layer_environment_lines(),
+                'printf "%s\\n" "$MAKO_TEST_SESSION" >&2',
+            ])
+
+            for session in ("run-one", "run-two", "run-three", "run-four"):
+                result = subprocess.run(
+                    ["bash", "-c", script],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    env={
+                        **os.environ,
+                        "MAKO_PRESENT_DIAGNOSTICS": "1",
+                        "MAKO_PRESENT_DIAGNOSTICS_LOG": str(log_path),
+                        "MAKO_TEST_SESSION": session,
+                    },
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+            self.assertEqual(log_path.read_text(encoding="utf-8"), "run-four\n")
+            self.assertEqual(
+                Path(f"{log_path}.1").read_text(encoding="utf-8"),
+                "run-three\n",
+            )
+            self.assertEqual(
+                Path(f"{log_path}.2").read_text(encoding="utf-8"),
+                "run-two\n",
+            )
+            self.assertEqual(
+                sorted(path.name for path in log_path.parent.iterdir()),
+                [
+                    "present-diagnostics.log",
+                    "present-diagnostics.log.1",
+                    "present-diagnostics.log.2",
+                ],
+            )
+
+    def test_disabled_diagnostics_preserves_existing_session_history(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            log_path = Path(temporary_directory) / "present-diagnostics.log"
+            previous_path = Path(f"{log_path}.1")
+            oldest_path = Path(f"{log_path}.2")
+            log_path.write_text("latest\n", encoding="utf-8")
+            previous_path.write_text("previous\n", encoding="utf-8")
+            oldest_path.write_text("oldest\n", encoding="utf-8")
+            script = "\n".join(
+                self.service._generate_layer_environment_lines()
+            )
+
+            result = subprocess.run(
+                ["bash", "-c", script],
+                check=False,
+                capture_output=True,
+                text=True,
+                env={
+                    **os.environ,
+                    "MAKO_PRESENT_DIAGNOSTICS": "0",
+                    "MAKO_PRESENT_DIAGNOSTICS_LOG": str(log_path),
+                },
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(log_path.read_text(encoding="utf-8"), "latest\n")
+            self.assertEqual(
+                previous_path.read_text(encoding="utf-8"),
+                "previous\n",
+            )
+            self.assertEqual(
+                oldest_path.read_text(encoding="utf-8"),
+                "oldest\n",
+            )
+
     def test_development_wrapper_keeps_diagnostics_opt_in(self):
         service = ConfigurationService(
             logger=_Logger(),

@@ -3,6 +3,7 @@
 set -euo pipefail
 
 project_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+repository_root="$(cd "$project_dir/.." && pwd)"
 flatpak_runtime_version_output="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" versions
 )"
@@ -389,12 +390,14 @@ if [[ "$deploy_backend" == true ]]; then
   echo "Deploying Python backend..."
   copy_file "$project_dir/main.py" "$plugin_dir/main.py"
   copy_file "$project_dir/shared_config.py" "$plugin_dir/shared_config.py"
+  copy_file "$repository_root/scripts/mako-diagnostics" \
+    "$plugin_dir/bin/mako-diagnostics"
   cp -a "$project_dir/py_modules/." "$plugin_dir/py_modules/"
   copy_file "$project_dir/defaults/build_flavor.dev.py" \
     "$plugin_dir/py_modules/mako_plugin/build_flavor.py"
   find "$plugin_dir/py_modules" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
   find "$plugin_dir/py_modules" -type d -name '__pycache__' -prune -exec rm -rf {} +
-  echo "Deployed Decky Python backend."
+  echo "Deployed Decky Python backend and diagnostics helper."
 fi
 
 if [[ -n "$built_layer_64" ]]; then

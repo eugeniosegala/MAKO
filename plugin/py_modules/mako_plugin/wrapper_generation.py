@@ -38,6 +38,7 @@ from .constants import (
     PRESENT_DIAGNOSTICS_ENV,
     PRESENT_DIAGNOSTICS_LOG_ENV,
     PRESENT_DIAGNOSTICS_LOG_FILENAME,
+    PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT,
     VK_ADD_IMPLICIT_LAYER_PATH_ENV,
     VK_IMPLICIT_LAYER_PATH_ENV,
 )
@@ -49,7 +50,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 44
+WRAPPER_FORMAT_VERSION = 45
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -222,6 +223,8 @@ def host_compatibility_guard_lines(
 
 def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
     """Activate MAKO through its deterministic Vulkan discovery boundary."""
+    if PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT != 3:
+        raise ValueError("the managed diagnostics rotation requires three sessions")
     diagnostics_log_path = context.config_dir / PRESENT_DIAGNOSTICS_LOG_FILENAME
     system_layer_dir = shlex.quote(str(context.host_system_implicit_layer_dir))
     gamescope_wsi_manifest = shlex.quote(str(
@@ -286,7 +289,29 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"mako_diagnostics_default={shlex.quote(str(diagnostics_log_path))}",
         f'if [ "${{{PRESENT_DIAGNOSTICS_ENV}:-0}}" != "0" ]; then',
         f'    mako_diagnostics_log="${{{PRESENT_DIAGNOSTICS_LOG_ENV}:-$mako_diagnostics_default}}"',
-        '    if : > "$mako_diagnostics_log" 2>/dev/null; then',
+        '    mako_diagnostics_previous="${mako_diagnostics_log}.1"',
+        '    mako_diagnostics_oldest="${mako_diagnostics_log}.2"',
+        "    mako_diagnostics_rotation_ready=1",
+        '    if [ -f "$mako_diagnostics_log" ]; then',
+        (
+            '        if [ -f "$mako_diagnostics_previous" ] && ! mv -f -- '
+            '"$mako_diagnostics_previous" "$mako_diagnostics_oldest" '
+            "2>/dev/null; then"
+        ),
+        "            mako_diagnostics_rotation_ready=0",
+        "        fi",
+        (
+            '        if [ "$mako_diagnostics_rotation_ready" = 1 ] && '
+            '! mv -f -- "$mako_diagnostics_log" '
+            '"$mako_diagnostics_previous" 2>/dev/null; then'
+        ),
+        "            mako_diagnostics_rotation_ready=0",
+        "        fi",
+        "    fi",
+        (
+            '    if [ "$mako_diagnostics_rotation_ready" = 1 ] && '
+            ': > "$mako_diagnostics_log" 2>/dev/null; then'
+        ),
         '        exec 2>> "$mako_diagnostics_log"',
         "    fi",
         "fi",

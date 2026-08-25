@@ -40,6 +40,7 @@ from py_modules.mako_plugin.constants import (
     PRESENT_DIAGNOSTICS_ENV,
     PRESENT_DIAGNOSTICS_LOG_ENV,
     PRESENT_DIAGNOSTICS_LOG_FILENAME,
+    PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT,
     VK_ADD_IMPLICIT_LAYER_PATH_ENV,
     VK_IMPLICIT_LAYER_PATH_ENV,
 )
@@ -294,6 +295,10 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertIn(diagnostic_relative_path, collector)
         self.assertIn(diagnostic_relative_path, trace_capture)
         self.assertIn(config_relative_path, trace_capture)
+        self.assertIn(
+            f"retained_session_count={PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT}",
+            collector,
+        )
 
         renderer_config = RENDERER_CONFIG_SOURCE.read_text(encoding="utf-8")
         config_directory = Path(CONFIG_DIR)

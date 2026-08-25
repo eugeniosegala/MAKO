@@ -59,7 +59,7 @@ Do not add the Decky `mako-run` wrapper to a standalone Renderer installation.
 3. Fully exit the game. Do not merely suspend it.
 4. Wait a few seconds for the game, Wine, Proton, or emulator processes to close.
 
-Do not start another diagnostics-enabled MAKO game before creating the report. The next run can replace or add unrelated lines to the current log.
+Create the report before starting another diagnostics-enabled standalone game. Standalone Steam console logs are shared logs and are not split into MAKO Decky's three-session private history, so another run can add unrelated lines.
 
 ## 3. Create the Desktop report
 
@@ -85,7 +85,7 @@ mako-diagnostics --log "$HOME/Desktop/MAKO-renderer-session.log" --lines 2000 al
 
 Use the full `$HOME/.local/bin/mako-diagnostics` path in that command when it is not on `PATH`.
 
-The helper prefers a MAKO Decky private log when one exists. Otherwise, it selects the newest native or Flatpak Steam console log. The `all` preset keeps the most recent 2,000 relevant MAKO, Vulkan-loader, and compositor lines rather than copying the complete source log.
+The helper prefers a MAKO Decky private log when one exists. Otherwise, it selects the newest native or Flatpak Steam console log. The `all` preset keeps the most recent 2,000 relevant MAKO, Vulkan-loader, and compositor lines rather than copying the complete source log. The default session is always the latest. When `--log PATH` names the base of a three-session MAKO Decky history, `--session previous`, `--session oldest`, `--session previous-two`, or `--session all` selects `PATH.1`, `PATH.2`, both earlier sessions, or every available retained session respectively; standalone Steam console logs do not create those rotated files.
 
 Open the **Desktop** folder and confirm that `MAKO-diagnostics.txt` exists. Focused presets such as `startup`, `errors`, `adaptive`, `recovery`, `performance`, `layers`, or `hdr` are for follow-up reports requested by the maintainer. Every preset retains process identity and swapchain context so interleaved helper, launcher, game, and overlay processes can be distinguished. The `adaptive` preset includes contiguous requested-policy pacing aggregates and target-clock state; these are scheduler measurements rather than compositor scanout timestamps. The `recovery` preset includes the effective application-present acquire budget, budget exhaustion, first-slow guards and native relief, quarantine, bounded single-image drain probes, retry backoff, native-only stabilization, terminal history warmup, generated-image pressure, pipeline bypasses, and render-fence budget misses. Recovery events identify their phase, elapsed recovery time, and generated-frame request, admission, and delivery counts where those values exist. The `performance` preset includes a phase breakdown when total presentation work crosses the configured slow-operation threshold.
 

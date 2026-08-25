@@ -8,6 +8,8 @@ default_steam_logs=(
   "${HOME}/.var/app/com.valvesoftware.Steam/.steam/steam/logs/console-linux.txt"
 )
 log_path="${MAKO_PRESENT_DIAGNOSTICS_LOG:-}"
+retained_session_count=3
+session=latest
 line_count=800
 presets=()
 
@@ -15,7 +17,7 @@ usage() {
   cat <<'EOF'
 Usage: mako-diagnostics [options] [PRESET ...]
 
-Filters the current MAKO Renderer diagnostics log. Multiple presets may be combined.
+Filters retained MAKO Renderer diagnostics sessions. Multiple presets may be combined.
 The MAKO Decky private log is preferred. Otherwise, the newest native or
 Flatpak Steam console log is used.
 
@@ -33,15 +35,20 @@ Presets:
                (alias: everything)
 
 Options:
-  --log PATH   Read PATH instead of automatically selecting a log
-  --lines N    Return at most the last N matching lines (default: 800)
-  --list       List presets
-  -h, --help   Show this help
+  --log PATH       Use PATH as the latest-session log instead of auto-selection
+  --session NAME   Select latest, previous, oldest, previous-two, or all
+                   (default: latest)
+  --lines N        Return at most the last N matching lines per session (default: 800)
+  --list           List presets
+  -h, --help       Show this help
 
 Examples:
   mako-diagnostics hdr
   mako-diagnostics adaptive recovery
   mako-diagnostics --lines 2000 all > mako-report.txt
+  mako-diagnostics --session previous --lines 2000 all > previous-report.txt
+  mako-diagnostics --session previous-two --lines 2000 all > earlier-report.txt
+  mako-diagnostics --session all --lines 2000 all > three-session-report.txt
 EOF
 }
 
@@ -65,6 +72,14 @@ while (($#)); do
         exit 2
       fi
       line_count="$2"
+      shift 2
+      ;;
+    --session)
+      if (($# < 2)); then
+        echo "--session requires latest, previous, oldest, previous-two, or all" >&2
+        exit 2
+      fi
+      session="$2"
       shift 2
       ;;
     --list)
@@ -92,6 +107,14 @@ if [[ ! "$line_count" =~ ^[1-9][0-9]*$ ]]; then
   exit 2
 fi
 
+case "$session" in
+  latest|previous|oldest|previous-two|all) ;;
+  *)
+    echo "--session must be latest, previous, oldest, previous-two, or all" >&2
+    exit 2
+    ;;
+esac
+
 if ((${#presets[@]} == 0)); then
   presets=(all)
 fi
@@ -112,11 +135,59 @@ if [[ -z "$log_path" ]]; then
   fi
 fi
 
-if [[ ! -f "$log_path" ]]; then
-  echo "Diagnostics log not found: $log_path" >&2
+base_log_path="$log_path"
+log_paths=()
+session_labels=()
+
+add_session_log() {
+  log_paths+=("$1")
+  session_labels+=("$2")
+}
+
+case "$session" in
+  latest)
+    add_session_log "$base_log_path" latest
+    ;;
+  previous)
+    add_session_log "${base_log_path}.1" previous
+    ;;
+  oldest)
+    add_session_log "${base_log_path}.2" oldest
+    ;;
+  previous-two)
+    if [[ -f "${base_log_path}.2" ]]; then
+      add_session_log "${base_log_path}.2" oldest
+    fi
+    if [[ -f "${base_log_path}.1" ]]; then
+      add_session_log "${base_log_path}.1" previous
+    fi
+    ;;
+  all)
+    if [[ -f "${base_log_path}.2" ]]; then
+      add_session_log "${base_log_path}.2" oldest
+    fi
+    if [[ -f "${base_log_path}.1" ]]; then
+      add_session_log "${base_log_path}.1" previous
+    fi
+    if [[ -f "$base_log_path" ]]; then
+      add_session_log "$base_log_path" latest
+    fi
+    ;;
+esac
+
+if ((${#log_paths[@]} == 0)); then
+  echo "Diagnostics log not found: $base_log_path" >&2
   echo "Enable MAKO_PRESENT_DIAGNOSTICS=1, reproduce the issue, and quit the game first." >&2
   exit 1
 fi
+
+for selected_log_path in "${log_paths[@]}"; do
+  if [[ ! -f "$selected_log_path" ]]; then
+    echo "Diagnostics log not found for session '$session': $selected_log_path" >&2
+    echo "Only the latest three diagnostics-enabled MAKO Decky launches are retained." >&2
+    exit 1
+  fi
+done
 
 pattern=""
 add_pattern() {
@@ -189,7 +260,10 @@ for preset in "${presets[@]}"; do
   esac
 done
 
-echo "MAKO Renderer diagnostics source: $log_path" >&2
-echo "presets: ${presets[*]}; last matching lines: $line_count" >&2
-
-{ grep -aE "$pattern" "$log_path" || true; } | tail -n "$line_count"
+for index in "${!log_paths[@]}"; do
+  selected_log_path="${log_paths[$index]}"
+  selected_session="${session_labels[$index]}"
+  echo "MAKO Renderer diagnostics source: $selected_log_path" >&2
+  echo "session: $selected_session; retained sessions: $retained_session_count; presets: ${presets[*]}; last matching lines: $line_count" >&2
+  { grep -aE "$pattern" "$selected_log_path" || true; } | tail -n "$line_count"
+done

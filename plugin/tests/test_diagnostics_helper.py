@@ -242,6 +242,83 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("VK_TIMEOUT", result.stdout)
         self.assertIn("initialization failed", result.stdout)
         self.assertIn(str(path), result.stderr)
+        self.assertIn("session: latest", result.stderr)
+
+    def test_retained_sessions_can_be_selected_or_combined(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            base_path = Path(temporary_directory) / "present-diagnostics.log"
+            previous_path = Path(f"{base_path}.1")
+            oldest_path = Path(f"{base_path}.2")
+            for path, label in (
+                (base_path, "latest"),
+                (previous_path, "previous"),
+                (oldest_path, "oldest"),
+            ):
+                path.write_text(
+                    f"MAKO Renderer: session-marker={label}\n",
+                    encoding="utf-8",
+                )
+
+            latest = self._run("--log", str(base_path), "all")
+            previous = self._run(
+                "--log", str(base_path), "--session", "previous", "all"
+            )
+            oldest = self._run(
+                "--log", str(base_path), "--session", "oldest", "all"
+            )
+            previous_two = self._run(
+                "--log",
+                str(base_path),
+                "--session",
+                "previous-two",
+                "--lines",
+                "1",
+                "all",
+            )
+            combined = self._run(
+                "--log",
+                str(base_path),
+                "--session",
+                "all",
+                "--lines",
+                "1",
+                "all",
+            )
+
+        self.assertEqual(latest.returncode, 0, latest.stderr)
+        self.assertIn("session-marker=latest", latest.stdout)
+        self.assertNotIn("session-marker=previous", latest.stdout)
+        self.assertEqual(previous.returncode, 0, previous.stderr)
+        self.assertIn("session-marker=previous", previous.stdout)
+        self.assertEqual(oldest.returncode, 0, oldest.stderr)
+        self.assertIn("session-marker=oldest", oldest.stdout)
+        self.assertEqual(previous_two.returncode, 0, previous_two.stderr)
+        self.assertLess(
+            previous_two.stdout.index("session-marker=oldest"),
+            previous_two.stdout.index("session-marker=previous"),
+        )
+        self.assertNotIn("session-marker=latest", previous_two.stdout)
+        self.assertEqual(combined.returncode, 0, combined.stderr)
+        self.assertLess(
+            combined.stdout.index("session-marker=oldest"),
+            combined.stdout.index("session-marker=previous"),
+        )
+        self.assertLess(
+            combined.stdout.index("session-marker=previous"),
+            combined.stdout.index("session-marker=latest"),
+        )
+        self.assertEqual(combined.stderr.count("retained sessions: 3"), 3)
+
+    def test_missing_retained_session_fails_clearly(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = self._fixture_path(Path(temporary_directory))
+            result = self._run(
+                "--log", str(path), "--session", "previous", "all"
+            )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("not found for session 'previous'", result.stderr)
+        self.assertIn(f"{path}.1", result.stderr)
 
     def test_newest_native_or_flatpak_steam_log_is_selected(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -270,10 +347,18 @@ class DiagnosticsHelperTests(unittest.TestCase):
             invalid_lines = self._run(
                 "--log", str(path), "--lines", "0", "all"
             )
+            invalid_session = self._run(
+                "--log", str(path), "--session", "fourth", "all"
+            )
         self.assertEqual(invalid_preset.returncode, 2)
         self.assertIn("Unknown preset", invalid_preset.stderr)
         self.assertEqual(invalid_lines.returncode, 2)
         self.assertIn("positive integer", invalid_lines.stderr)
+        self.assertEqual(invalid_session.returncode, 2)
+        self.assertIn(
+            "latest, previous, oldest, previous-two, or all",
+            invalid_session.stderr,
+        )
 
     def test_plugin_migration_installs_and_refreshes_executable_helper(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -289,6 +374,20 @@ class DiagnosticsHelperTests(unittest.TestCase):
             destination.write_text("outdated\n", encoding="utf-8")
             self.assertTrue(service.migrate_diagnostics_helper_if_needed())
             self.assertEqual(destination.read_bytes(), HELPER.read_bytes())
+
+    def test_backend_development_deployment_refreshes_helper(self):
+        deployment_script = (
+            PROJECT_DIR / "scripts" / "deploy-dev.sh"
+        ).read_text(encoding="utf-8")
+
+        self.assertIn(
+            'copy_file "$repository_root/scripts/mako-diagnostics"',
+            deployment_script,
+        )
+        self.assertIn(
+            '"$plugin_dir/bin/mako-diagnostics"',
+            deployment_script,
+        )
 
 
 if __name__ == "__main__":

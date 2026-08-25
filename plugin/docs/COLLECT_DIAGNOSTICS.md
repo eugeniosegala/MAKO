@@ -4,7 +4,7 @@ This guide is for troubleshooting **MAKO Decky**, installed through Decky Loader
 
 Use this guide when **MAKO Decky** appears in Decky Loader and you normally launch games through `/home/deck/.local/bin/mako-run`. If you installed MAKO Renderer directly or built it from source and activate games with `mako-launch`, use the [standalone guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md) instead.
 
-You will temporarily enable diagnostics for the affected game, reproduce the problem once, create `MAKO-diagnostics.txt` on the Desktop, restore the game's normal launch settings, and upload the report through the [MAKO diagnostic report form][diagnostic-form]. The form contains the short questions needed to understand the report, so you do not need to copy a separate template into the GitHub issue.
+You will temporarily enable diagnostics for one or more affected games, reproduce the problem, create `MAKO-diagnostics.txt` on the Desktop, restore the games' normal launch settings, and upload the report through the [MAKO diagnostic report form][diagnostic-form]. MAKO Decky retains the latest three diagnostics-enabled game launches, so you can finish as many as three sessions before creating their reports. The form contains the short questions needed to understand the report, so you do not need to copy a separate template into the GitHub issue.
 
 Please do not attach `MAKO-diagnostics.txt` directly to a public GitHub issue. Review it before uploading because it can contain usernames, game names, application IDs, ROM filenames, and filesystem paths. Remove personal path components you do not want to share, and never send passwords, account credentials, device serial numbers, licence keys, or `Lossless.dll`. Google sign-in is required to upload the file through the form.
 
@@ -60,11 +60,11 @@ If the emulator is a native application or AppImage instead of a Flatpak, use th
 ## 2. Reproduce the problem
 
 1. Start the affected game using the same Steam or Heroic entry that normally shows the problem.
-2. Reproduce the problem once. Note what you did and, if possible, the approximate time it happened.
+2. Reproduce the problem. Note what you did and, if possible, the approximate time it happened.
 3. Fully exit the game. Do not merely suspend it.
 4. Wait a few seconds for the game and emulator processes to close.
 
-Do not start another diagnostics-enabled MAKO game before creating the report. The next diagnostic launch can replace the current private log.
+Each diagnostics-enabled MAKO Decky launch starts a fresh private session log. The latest session remains `present-diagnostics.log`, the previous session becomes `present-diagnostics.log.1`, and the oldest retained session becomes `present-diagnostics.log.2`. Starting a fourth diagnostics-enabled game replaces the oldest retained session. Fully exit one game before starting the next so each log represents one completed run.
 
 ## 3. Create the Desktop report
 
@@ -85,6 +85,24 @@ Do not start another diagnostics-enabled MAKO game before creating the report. T
     ```
 
 The `all` preset is the best first report when the cause is unknown. It does not copy the entire Steam log: it filters for relevant MAKO, Vulkan-loader, and Gamescope lines. `--lines 2000` keeps the most recent 2,000 matching lines, which normally provides enough startup and failure context without creating an unnecessarily large attachment.
+
+The standard command deliberately omits `--session`, so it always reports the latest session. When the maintainer asks for an earlier retained run, use one of these commands:
+
+```bash
+# Immediately previous session
+/home/deck/.local/bin/mako-diagnostics --session previous --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-previous.txt 2>&1
+
+# Oldest of the three retained sessions
+/home/deck/.local/bin/mako-diagnostics --session oldest --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-oldest.txt 2>&1
+
+# Both earlier sessions, ordered from oldest to previous
+/home/deck/.local/bin/mako-diagnostics --session previous-two --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-previous-two.txt 2>&1
+
+# Every available retained session, ordered from oldest to latest
+/home/deck/.local/bin/mako-diagnostics --session all --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-all.txt 2>&1
+```
+
+In these commands, `--session all` selects the retained sessions while the final `all` selects the diagnostic preset. A combined report applies `--lines 2000` separately to every available session, includes a source and session label for each one, and preserves chronological session order. If only one or two sessions have been recorded, `--session all` includes only those available sessions.
 
 Focused presets such as `startup`, `errors`, `adaptive`, `recovery`, `performance`, `layers`, or `hdr` are useful when the maintainer requests a follow-up report. Every preset retains process identity and swapchain context so interleaved helper, launcher, game, and overlay processes can be distinguished. The `adaptive` preset includes contiguous requested-policy pacing aggregates and target-clock state; these are scheduler measurements rather than compositor scanout timestamps. The `recovery` preset includes the effective application-present acquire budget, budget exhaustion, first-slow guards and native relief, quarantine, bounded single-image drain probes, retry backoff, native-only stabilization, terminal history warmup, generated-image pressure, pipeline bypasses, and render-fence budget misses. Recovery events identify their phase, elapsed recovery time, and generated-frame request, admission, and delivery counts where those values exist. The `performance` preset includes a phase breakdown when total presentation work crosses the configured slow-operation threshold. Do not substitute a focused preset for the first `all` report unless specifically asked.
 
@@ -112,7 +130,7 @@ Keep screenshots, videos, and discussion in the original GitHub issue, but use t
 ## If the report command fails
 
 - **`mako-diagnostics: No such file or directory`:** open MAKO Decky and select **Install MAKO Renderer**, then try again.
-- **`Diagnostics log not found`:** diagnostics did not reach the tested game. Recheck the setup for its launch type, reproduce the issue again, fully quit the game, and immediately rerun the report command.
+- **`Diagnostics log not found`:** diagnostics did not reach the tested game, or the requested earlier session has already rotated out. Recheck the setup for its launch type and the requested `--session`, reproduce the issue again if necessary, and fully quit the game before rerunning the report command.
 - **The report contains no `render layer active` line:** send the report anyway. That absence is useful evidence that the Vulkan layer did not load.
 - **An EmuDeck shortcut no longer starts:** restore its saved Target and Launch Options, confirm it starts normally, then repeat the temporary diagnostic setup without removing or reordering any original EmuDeck arguments.
 
