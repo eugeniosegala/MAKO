@@ -4,9 +4,9 @@
 
 ### Release codename: Abyss Ascending
 
-> _“A moment's pause, and then the abyss stretched, beckoned. We all do.”_
+> _“Measure the tide before you command it; then even the abyss will carry you.”_
 >
-> **Nylah, _Hour of Eternity_**
+> **Aurelius, _Cardinal of the Ninth Tide_**
 
 ---
 

@@ -4,9 +4,9 @@
 
 ### Release codename: Abyss Ascending
 
-> _“A moment's pause, and then the abyss stretched, beckoned. We all do.”_
+> _“When every wheel remembers its hour, the deepest engine sings without strain.”_
 >
-> **Nylah, _Hour of Eternity_**
+> **Cassian, _Hierophant of the Abyssal Forge_**
 
 ---
 

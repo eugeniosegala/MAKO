@@ -125,7 +125,7 @@ describe("Frame Generation Mode controls", () => {
       .closest<HTMLElement>('[data-focusable="true"]');
     expect(fixedMultiplierControls?.style.marginTop).toBe("6px");
     const fixedMultiplierDescription = screen.getByText(
-      /Fixed may perform better than Adaptive when a game has uneven or unstable frame pacing/,
+      /Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. Test both per game/,
     );
     expect(fixedMultiplierDescription.style.paddingTop).toBe("8px");
     expect(fixedMultiplierDescription.style.marginBottom).toBe("");
