@@ -50,6 +50,7 @@ namespace mako::layer {
                 ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
             )
         };
+        std::optional<uint32_t> displayRefreshFps;
         AdaptiveRecoveryPolicy recoveryPolicy{
             AdaptiveRecoveryPolicy::ConservativeHdr
         };
@@ -75,6 +76,7 @@ namespace mako::layer {
         size_t generationLimit{0};
         size_t validatedGenerationLimit{0};
         std::optional<size_t> stableCadenceLimit;
+        bool stableCadenceEvaluationActive{false};
         size_t historyWarmupRemaining{0};
         double smoothedBaseFps{0.0};
         bool rampEvaluationActive{false};
@@ -587,12 +589,14 @@ namespace mako::layer {
                     std::optional<TimePoint> since;
                     double minimumBaseFps{0.0};
                     double maximumBaseFps{0.0};
+                    bool convergenceProbe{false};
 
                     void reset() {
                         this->limit.reset();
                         this->since.reset();
                         this->minimumBaseFps = 0.0;
                         this->maximumBaseFps = 0.0;
+                        this->convergenceProbe = false;
                     }
                 } candidate;
 
@@ -602,6 +606,8 @@ namespace mako::layer {
                 std::optional<TimePoint> retryAt;
                 double baselineBaseFps{0.0};
                 GeneratedDeliveryWindow delivery;
+                bool convergenceProbe{false};
+                bool convergedTwoX{false};
             } stableCadence;
 
             struct EfficiencyProbe {

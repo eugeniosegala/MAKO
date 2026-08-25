@@ -464,6 +464,29 @@ int main() {
             fractionalDeadline < pacingStart + 13ms,
         "82.5 FPS pacing did not retain its fractional interval");
 
+    SmoothCadencePacerHandoff pacerHandoff;
+    auto handoff = pacerHandoff.update(pacingStart, true);
+    expect(handoff.active && handoff.changed,
+        "qualified Smooth Cadence did not hand pacing to ordered FIFO");
+    handoff = pacerHandoff.update(pacingStart + 1s, true);
+    expect(handoff.active && !handoff.changed,
+        "retained ordered-FIFO handoff reported a false transition");
+    handoff = pacerHandoff.update(pacingStart + 2s, false);
+    expect(!handoff.active && handoff.changed,
+        "lost Smooth Cadence qualification did not restore the base cap");
+    handoff = pacerHandoff.update(pacingStart + 30s, true);
+    expect(!handoff.active && !handoff.changed,
+        "failed pacing handoff retried before its long cooldown");
+    handoff = pacerHandoff.update(
+        pacingStart + 2s + SmoothCadencePacerHandoff::retryDelay(), true
+    );
+    expect(handoff.active && handoff.changed,
+        "eligible pacing handoff did not retry after its cooldown");
+    pacerHandoff.reset();
+    handoff = pacerHandoff.update(pacingStart + 3s, true);
+    expect(handoff.active && handoff.changed,
+        "explicit pacing-handoff reset retained stale cooldown state");
+
     FixedRefreshBudget budget;
     const auto start = FixedRefreshBudget::TimePoint{};
     size_t generated = 0;

@@ -72,6 +72,45 @@ int main() {
                 current.adaptive_max_multiplier,
         "Adaptive must retain its configured target when refresh is available");
 
+    auto steadyPacing = current;
+    steadyPacing.target_fps = 120;
+    steadyPacing.adaptive_auto_base_fps_cap = true;
+    steadyPacing.adaptive_stable_cadence = true;
+    AdaptiveSchedulerSnapshot acceptedTwoX{
+        .phase = AdaptiveSchedulerPhase::StableCadence,
+        .generationLimit = 1,
+        .validatedGenerationLimit = 1,
+        .stableCadenceLimit = 1,
+        .stableCadenceEvaluationActive = false,
+        .smoothedBaseFps = 60.0,
+    };
+    expect(smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX),
+        "accepted target-matched Steady 2x did not hand pacing to ordered FIFO");
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 90, acceptedTwoX),
+        "target-mismatched refresh incorrectly bypassed the Steady base cap");
+    acceptedTwoX.stableCadenceEvaluationActive = true;
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX),
+        "unproven Smooth Cadence evaluation bypassed the Steady base cap");
+    acceptedTwoX.stableCadenceEvaluationActive = false;
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, true, 120, acceptedTwoX),
+        "ordered-acquire recovery did not restore the Steady base cap");
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, false, false, 120, acceptedTwoX),
+        "non-ordered transport received an ordered-FIFO pacing handoff");
+    acceptedTwoX.smoothedBaseFps = 62.0;
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX),
+        "Steady pacing handoff remained active outside its target window");
+    acceptedTwoX.smoothedBaseFps = 60.0;
+    steadyPacing.adaptive_auto_base_fps_cap = false;
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX),
+        "Fractional Adaptive incorrectly bypassed a nonexistent Steady cap");
+
     auto next = current;
     next.target_fps = 120;
     decision = classifyProfileUpdate(current, next, 3, true);

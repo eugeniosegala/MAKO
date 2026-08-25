@@ -203,6 +203,7 @@ namespace mako::layer {
         std::optional<uint32_t> gamescopeRefreshHz;
         FixedRefreshBudget fixedRefreshBudget;
         RealFramePacer realFramePacer;
+        SmoothCadencePacerHandoff smoothCadencePacerHandoff;
 
         SwapchainColorPipeline colorPipeline;
         ls::GameConf profile;

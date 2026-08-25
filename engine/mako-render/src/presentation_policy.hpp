@@ -751,6 +751,50 @@ namespace mako::layer {
         std::optional<TimePoint> nextFrameAt;
     };
 
+    /// Guards the Steady Adaptive handoff from the explicit real-frame pacer
+    /// to ordered FIFO. A lost qualification restores the cap immediately and
+    /// applies a long retry delay so an unsuitable game cannot receive a
+    /// periodic pacing disturbance.
+    class SmoothCadencePacerHandoff {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        struct Decision {
+            bool active{false};
+            bool changed{false};
+        };
+
+        [[nodiscard]] Decision update(const TimePoint now,
+                const bool eligible) {
+            if (this->handoffActive && !eligible) {
+                this->handoffActive = false;
+                this->retryAt = now + retryDelay();
+                return {.active = false, .changed = true};
+            }
+            if (!this->handoffActive && eligible &&
+                    (!this->retryAt || now >= *this->retryAt)) {
+                this->handoffActive = true;
+                this->retryAt.reset();
+                return {.active = true, .changed = true};
+            }
+            return {.active = this->handoffActive};
+        }
+
+        void reset() {
+            this->handoffActive = false;
+            this->retryAt.reset();
+        }
+
+        [[nodiscard]] static constexpr std::chrono::seconds retryDelay() {
+            return std::chrono::seconds{60};
+        }
+
+    private:
+        bool handoffActive{false};
+        std::optional<TimePoint> retryAt;
+    };
+
     /// Deterministically suppress synthetic frames which cannot be scanned out
     /// at the confirmed Gamescope refresh rate. Fixed mode remains at its full
     /// multiplier whenever that output fits the display budget.

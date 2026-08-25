@@ -3,6 +3,7 @@
 #pragma once
 
 #include "adaptive_policy_limits.hpp"
+#include "adaptive_scheduler.hpp"
 #include "mako-common/configuration/config.hpp"
 
 #include <algorithm>
@@ -60,6 +61,35 @@ namespace mako::layer {
         return profile.frame_generation_refresh_threshold == 0 ||
             !gamescopeRefreshHz ||
             *gamescopeRefreshHz > profile.frame_generation_refresh_threshold;
+    }
+
+    /// Once Smooth Cadence has validated a constant 2x policy, ordered FIFO can
+    /// own the same pacing boundary as Fixed 2x. Handoff is deliberately
+    /// restricted to Steady Adaptive with confirmed target-matching refresh;
+    /// losing qualification or entering transport recovery restores the
+    /// explicit real-frame cap on the next present.
+    [[nodiscard]] inline bool smoothCadencePacerHandoffActive(
+            const ls::GameConf& profile,
+            const bool privateOrderedTransport,
+            const bool orderedAcquireRecoveryActive,
+            const std::optional<uint32_t> gamescopeRefreshHz,
+            const AdaptiveSchedulerSnapshot& scheduler) {
+        return profile.adaptive &&
+            profile.adaptive_auto_base_fps_cap &&
+            profile.adaptive_stable_cadence &&
+            effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
+            privateOrderedTransport &&
+            !orderedAcquireRecoveryActive &&
+            adaptiveTargetMatchesRefresh(
+                profile.target_fps, gamescopeRefreshHz
+            ) &&
+            scheduler.phase == AdaptiveSchedulerPhase::StableCadence &&
+            scheduler.stableCadenceLimit == 1 &&
+            !scheduler.stableCadenceEvaluationActive &&
+            scheduler.smoothedBaseFps * 2.0 >=
+                static_cast<double>(profile.target_fps) * 0.98 &&
+            scheduler.smoothedBaseFps * 2.0 <=
+                static_cast<double>(profile.target_fps) * 1.02;
     }
 
     struct GenerationSchedulerPolicy {

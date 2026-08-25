@@ -198,7 +198,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   flow_scale: {
     name: "flow_scale",
     fieldType: ConfigFieldType.FLOAT,
-    default: 0.9,
+    default: 0.85,
     description: "change the flow scale"
   },
   performance_mode: {
@@ -316,7 +316,7 @@ export function getDefaults(): ConfigurationData {
     dynamic_cadence_recovery: false,
     dynamic_cadence_probe_interval_seconds: 2.0,
     ultra_performance: false,
-    flow_scale: 0.9,
+    flow_scale: 0.85,
     performance_mode: false,
     pacing: "none",
     active_in: "",

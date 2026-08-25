@@ -1434,8 +1434,40 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         this->gamescopeDetected && !this->privateOrderedTransport;
 
     const auto limiterArrival = DiagnosticsClock::now();
+    AdaptiveSchedulerSnapshot schedulerSnapshot;
+    bool handoffEligible = false;
+    if (this->adaptiveScheduler) {
+        schedulerSnapshot = this->adaptiveScheduler->snapshot();
+        handoffEligible = smoothCadencePacerHandoffActive(
+            this->profile,
+            this->privateOrderedTransport,
+            this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz,
+            schedulerSnapshot
+        );
+    }
+    const auto handoff = this->smoothCadencePacerHandoff.update(
+        limiterArrival, handoffEligible
+    );
+    if (handoff.changed) {
+        this->realFramePacer.reset();
+        present_diagnostics::adaptiveScheduler().stableCadence(
+            handoff.active
+                ? "adaptive-smooth-cadence-pacer-handoff"
+                : "adaptive-smooth-cadence-pacer-restored",
+            schedulerSnapshot.stableCadenceLimit.value_or(0),
+            schedulerSnapshot.smoothedBaseFps,
+            schedulerSnapshot.smoothedBaseFps,
+            handoff.active
+                ? "ordered-fifo-target-match"
+                : "guard-restored-long-retry"
+        );
+    }
+    const double baseFpsCap = handoff.active
+        ? 0.0
+        : effectiveBaseFpsCap(this->profile);
     const auto limiterDeadline = this->realFramePacer.schedule(
-        limiterArrival, effectiveBaseFpsCap(this->profile)
+        limiterArrival, baseFpsCap
     );
     if (limiterDeadline > limiterArrival)
         std::this_thread::sleep_until(limiterDeadline);

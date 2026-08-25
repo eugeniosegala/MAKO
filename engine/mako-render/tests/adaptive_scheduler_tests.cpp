@@ -292,7 +292,9 @@ namespace {
                     ls::dynamicCadenceProbeIntervalDuration(
                         ls::GameConfDefaults::
                             dynamicCadenceProbeIntervalSeconds
-                    )) :
+                    ),
+                const std::optional<uint32_t> displayRefreshFps =
+                    std::nullopt) :
             scheduler(
                 AdaptiveSchedulerConfig{
                     .targetFps = targetFps,
@@ -302,6 +304,7 @@ namespace {
                     .dynamicCadenceRecovery = dynamicCadenceRecovery,
                     .dynamicCadenceProbeInterval =
                         dynamicCadenceProbeInterval,
+                    .displayRefreshFps = displayRefreshFps,
                     .recoveryPolicy = recoveryPolicy,
                 },
                 &this->diagnostics
@@ -1695,6 +1698,140 @@ namespace {
             "Smooth Cadence acceptance was not observable");
     }
 
+    void testSmoothCadenceConvergesFractionalTwoXOnMatchingRefresh() {
+        Harness harness(
+            120, 2, true, AdaptiveRecoveryPolicy::OrderedSdr, false,
+            ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+            ),
+            120
+        );
+        harness.start();
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0; frame < 1200; ++frame) {
+            plan = harness.frameAtFps(68.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+            const auto* probe = harness.diagnostics.last(
+                "adaptive-stable-cadence-probe"
+            );
+            if (probe && probe->reason == "ordered-2x-convergence")
+                break;
+        }
+        const auto* probe = harness.diagnostics.last(
+            "adaptive-stable-cadence-probe"
+        );
+        require(probe && probe->reason == "ordered-2x-convergence" &&
+                harness.scheduler.snapshot().stableCadenceEvaluationActive &&
+                plan.size() == 1,
+            "target-matched Fractional cadence did not test constant 2x");
+
+        for (size_t frame = 0; frame < 180; ++frame) {
+            plan = harness.frameAtFps(60.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+            if (harness.diagnostics.contains(
+                    "adaptive-stable-cadence-accepted")) {
+                break;
+            }
+        }
+        const auto* accepted = harness.diagnostics.last(
+            "adaptive-stable-cadence-accepted"
+        );
+        const auto snapshot = harness.scheduler.snapshot();
+        require(accepted && accepted->reason == "ordered-2x-convergence" &&
+                snapshot.phase == AdaptiveSchedulerPhase::StableCadence &&
+                snapshot.stableCadenceLimit == 1 &&
+                !snapshot.stableCadenceEvaluationActive &&
+                plan.size() == 1,
+            "target-preserving 2x convergence did not become Smooth Cadence");
+    }
+
+    void testSmoothCadenceRejectsTwoXThatDoesNotConverge() {
+        Harness harness(
+            120, 2, true, AdaptiveRecoveryPolicy::OrderedSdr, false,
+            ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+            ),
+            120
+        );
+        harness.start();
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0; frame < 1200; ++frame) {
+            plan = harness.frameAtFps(68.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+            const auto* probe = harness.diagnostics.last(
+                "adaptive-stable-cadence-probe"
+            );
+            if (probe && probe->reason == "ordered-2x-convergence")
+                break;
+        }
+        require(harness.scheduler.snapshot().stableCadenceEvaluationActive,
+            "precondition failed: 2x convergence probe did not begin");
+
+        for (size_t frame = 0; frame < 180; ++frame) {
+            plan = harness.frameAtFps(68.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+            if (harness.diagnostics.contains(
+                    "adaptive-stable-cadence-rejected")) {
+                break;
+            }
+        }
+        const auto* rejected = harness.diagnostics.last(
+            "adaptive-stable-cadence-rejected"
+        );
+        require(rejected && rejected->reason == "ordered-2x-convergence" &&
+                !harness.scheduler.snapshot().stableCadenceLimit,
+            "2x cadence that remained above target was not rolled back");
+
+        const size_t probes = harness.diagnostics.count(
+            "adaptive-stable-cadence-probe"
+        );
+        harness.runAtFps(68.0, 10s);
+        require(harness.diagnostics.count(
+                    "adaptive-stable-cadence-probe") == probes,
+            "failed 2x convergence retried before its bounded cooldown");
+    }
+
+    void testSmoothCadenceConvergenceRequiresTargetMatchedOrderedFifo() {
+        Harness mismatchedRefresh(
+            120, 2, true, AdaptiveRecoveryPolicy::OrderedSdr, false,
+            ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+            ),
+            90
+        );
+        mismatchedRefresh.start();
+        mismatchedRefresh.runAtFps(68.0, 12s);
+        require(!mismatchedRefresh.diagnostics.contains(
+                "adaptive-stable-cadence-probe"),
+            "mismatched display refresh allowed a 2x convergence probe");
+
+        Harness hdr(
+            120, 2, true, AdaptiveRecoveryPolicy::ConservativeHdr, false,
+            ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+            ),
+            120
+        );
+        hdr.start();
+        hdr.runAtFps(68.0, 12s);
+        require(!hdr.diagnostics.contains("adaptive-stable-cadence-probe"),
+            "nonblocking HDR transport allowed a 2x convergence probe");
+    }
+
     void testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget() {
         Harness harness(
             120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
@@ -2552,6 +2689,9 @@ int main() {
         {"bridge probe handles misleading first step", testBridgeProbeCanRecoverMisleadingFirstStep},
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
         {"Smooth Cadence settles near integer demand", testSmoothCadenceSettlesNearIntegerDemand},
+        {"Smooth Cadence converges Fractional 2x on matching refresh", testSmoothCadenceConvergesFractionalTwoXOnMatchingRefresh},
+        {"Smooth Cadence rejects unproven 2x convergence", testSmoothCadenceRejectsTwoXThatDoesNotConverge},
+        {"Smooth Cadence convergence requires matching ordered FIFO", testSmoothCadenceConvergenceRequiresTargetMatchedOrderedFifo},
         {"Smooth Cadence accepts target-preserving downshift", testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget},
         {"Smooth Cadence lets promising downshift recovery settle", testSmoothCadenceDownshiftAllowsPromisingRecoveryToSettle},
         {"Smooth Cadence rejects insufficient downshift", testSmoothCadenceRejectsInsufficientDownshiftAndBacksOff},

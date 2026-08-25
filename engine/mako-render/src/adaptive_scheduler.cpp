@@ -52,6 +52,10 @@ namespace {
     constexpr double adaptiveStableCadenceMinimumRetentionTargetRatio = 0.95;
     constexpr double adaptiveStableCadenceMinimumBaseRetention = 0.74;
     constexpr double adaptiveStableCadenceMinimumDemandRatio = 0.95;
+    constexpr double adaptiveStableCadenceMinimumConvergenceDemandRatio =
+        0.875;
+    constexpr double adaptiveStableCadenceMaximumConvergenceOutputRatio =
+        1.02;
     constexpr double adaptiveNativeCadenceMinimumRiseRatio = 1.25;
     constexpr size_t adaptiveNativeCadenceConfirmationFrames = 3;
     constexpr auto adaptiveStabilizationDuration = std::chrono::seconds(1);
@@ -68,6 +72,8 @@ namespace {
     constexpr auto adaptiveStableCadenceEvaluationDuration = std::chrono::seconds(1);
     constexpr auto adaptiveStableCadenceExitGraceDuration = std::chrono::milliseconds(500);
     constexpr auto adaptiveStableCadenceRetryDelay = std::chrono::seconds(15);
+    constexpr auto adaptiveStableCadenceConvergenceRetryDelay =
+        std::chrono::seconds(60);
     constexpr auto adaptiveStableCadenceStrictSettlingDuration = std::chrono::seconds(2);
     constexpr auto adaptiveStableCadenceCandidateDuration = std::chrono::seconds(2);
     constexpr double adaptiveStableCadenceMaximumCandidateSpreadRatio = 1.15;
@@ -254,6 +260,8 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
         .generationLimit = this->state.outputPlanner.generationLimit,
         .validatedGenerationLimit = this->validatedGenerationLimit(),
         .stableCadenceLimit = this->state.stableCadence.limit,
+        .stableCadenceEvaluationActive =
+            this->state.stableCadence.evaluationAt.has_value(),
         .historyWarmupRemaining = this->state.historyWarmup.remaining,
         .smoothedBaseFps = this->state.cadence.smoothedIntervalSeconds > 0.0
             ? 1.0 / this->state.cadence.smoothedIntervalSeconds
@@ -779,7 +787,12 @@ AdaptiveScheduler::advanceStableCadence(
     if (this->state.efficiencyProbe.evaluationAt)
         return {.planningReady = true};
 
-    const auto stableCadenceCandidate = [&]() -> std::optional<size_t> {
+    struct StableCadenceCandidate {
+        size_t generatedFrames{0};
+        bool convergenceProbe{false};
+    };
+    const auto stableCadenceCandidate =
+            [&]() -> std::optional<StableCadenceCandidate> {
         if (!this->config.stableCadence)
             return std::nullopt;
         if (desiredOutputsPerRealFrame <= 1.0)
@@ -793,13 +806,26 @@ AdaptiveScheduler::advanceStableCadence(
         ));
         if (candidateOutputs <= 1)
             return std::nullopt;
-        if (desiredOutputsPerRealFrame /
-                static_cast<double>(candidateOutputs) <
-                    adaptiveStableCadenceMinimumDemandRatio)
-            return std::nullopt;
 
         const size_t candidateGenerated = candidateOutputs - 1;
         if (candidateGenerated > maximumGeneratedFrameCount)
+            return std::nullopt;
+
+        const double cadenceDemandRatio =
+            desiredOutputsPerRealFrame /
+                static_cast<double>(candidateOutputs);
+        const bool normalCandidate = cadenceDemandRatio >=
+            adaptiveStableCadenceMinimumDemandRatio;
+        const bool twoXConvergenceCandidate = !normalCandidate &&
+            candidateGenerated == 1 &&
+            cadenceDemandRatio >=
+                adaptiveStableCadenceMinimumConvergenceDemandRatio &&
+            this->config.recoveryPolicy ==
+                AdaptiveRecoveryPolicy::OrderedSdr &&
+            adaptiveTargetMatchesRefresh(
+                this->config.targetFps, this->config.displayRefreshFps
+            );
+        if (!normalCandidate && !twoXConvergenceCandidate)
             return std::nullopt;
 
         const double projectedOutputFps = baseFps *
@@ -809,7 +835,10 @@ AdaptiveScheduler::advanceStableCadence(
                     adaptiveStableCadenceMaximumProbeOvershootRatio)
             return std::nullopt;
 
-        return candidateGenerated;
+        return StableCadenceCandidate{
+            .generatedFrames = candidateGenerated,
+            .convergenceProbe = twoXConvergenceCandidate,
+        };
     }();
 
     if (this->state.stableCadence.limit) {
@@ -822,6 +851,9 @@ AdaptiveScheduler::advanceStableCadence(
             static_cast<double>(generatedLimit + 1);
         const bool capacityAvailable =
             generatedLimit <= maximumGeneratedFrameCount;
+        const bool convergenceEvaluation =
+            this->state.stableCadence.convergenceProbe &&
+            this->state.stableCadence.evaluationAt.has_value();
         const bool cadenceStillUseful =
             desiredOutputsPerRealFrame > 1.0 &&
             cadenceDemandRatio >= adaptiveStableCadenceMinimumDemandRatio &&
@@ -840,11 +872,13 @@ AdaptiveScheduler::advanceStableCadence(
             );
             this->state.stableCadence.limit.reset();
             this->state.stableCadence.evaluationAt.reset();
+            this->state.stableCadence.convergenceProbe = false;
+            this->state.stableCadence.convergedTwoX = false;
             this->state.stableCadence.delivery.reset();
             this->state.stableCadence.outsideRangeSince.reset();
             this->state.stableCadence.retryAt =
                 now + adaptiveStableCadenceRetryDelay;
-        } else if (!cadenceStillUseful) {
+        } else if (!cadenceStillUseful && !convergenceEvaluation) {
             if (!this->state.stableCadence.outsideRangeSince)
                 this->state.stableCadence.outsideRangeSince = now;
             if (now - *this->state.stableCadence.outsideRangeSince >=
@@ -868,12 +902,18 @@ AdaptiveScheduler::advanceStableCadence(
                 );
                 const double rescueBaselineBaseFps =
                     this->state.stableCadence.baselineBaseFps;
+                const bool convergedTwoX =
+                    this->state.stableCadence.convergedTwoX;
                 this->state.stableCadence.limit.reset();
                 this->state.stableCadence.evaluationAt.reset();
+                this->state.stableCadence.convergenceProbe = false;
+                this->state.stableCadence.convergedTwoX = false;
                 this->state.stableCadence.delivery.reset();
                 this->state.stableCadence.outsideRangeSince.reset();
                 this->state.stableCadence.retryAt =
-                    now + adaptiveStableCadenceRetryDelay;
+                    now + (convergedTwoX
+                        ? adaptiveStableCadenceConvergenceRetryDelay
+                        : adaptiveStableCadenceRetryDelay);
                 if (severeCollapse) {
                     this->state.rescue.previousLimit = generatedLimit;
                     this->state.rescue.baselineBaseFps = rescueBaselineBaseFps;
@@ -908,6 +948,11 @@ AdaptiveScheduler::advanceStableCadence(
                 static_cast<double>(evaluatedGeneratedLimit + 1);
             const bool deliveryHealthy =
                 this->state.stableCadence.delivery.healthy();
+            const bool convergenceProbe =
+                this->state.stableCadence.convergenceProbe;
+            const double maximumOutputRatio = convergenceProbe
+                ? adaptiveStableCadenceMaximumConvergenceOutputRatio
+                : adaptiveStableCadenceMaximumRetainedOvershootRatio;
             const bool accepted = deliveryHealthy &&
                 evaluatedDemandRatio >=
                     adaptiveStableCadenceMinimumDemandRatio &&
@@ -915,8 +960,7 @@ AdaptiveScheduler::advanceStableCadence(
                     targetFps *
                         adaptiveStableCadenceMinimumQualificationTargetRatio &&
                 evaluatedProjectedOutputFps <=
-                    targetFps *
-                        adaptiveStableCadenceMaximumRetainedOvershootRatio &&
+                    targetFps * maximumOutputRatio &&
                 baseFps >= this->state.stableCadence.baselineBaseFps *
                     adaptiveStableCadenceMinimumBaseRetention;
             this->diagnostics->stableCadence(
@@ -924,15 +968,22 @@ AdaptiveScheduler::advanceStableCadence(
                          : "adaptive-stable-cadence-rejected",
                 evaluatedGeneratedLimit,
                 this->state.stableCadence.baselineBaseFps,
-                baseFps
+                baseFps,
+                convergenceProbe ? "ordered-2x-convergence" : ""
             );
             this->state.stableCadence.evaluationAt.reset();
+            this->state.stableCadence.convergenceProbe = false;
+            this->state.stableCadence.convergedTwoX =
+                accepted && convergenceProbe;
             this->state.stableCadence.delivery.reset();
             if (!accepted) {
                 this->state.stableCadence.limit.reset();
                 this->state.stableCadence.outsideRangeSince.reset();
-                this->state.stableCadence.retryAt =
-                    now + adaptiveStableCadenceRetryDelay;
+                this->state.stableCadence.retryAt = now + (
+                    convergenceProbe
+                        ? adaptiveStableCadenceConvergenceRetryDelay
+                        : adaptiveStableCadenceRetryDelay
+                );
             }
         }
     }
@@ -949,8 +1000,13 @@ AdaptiveScheduler::advanceStableCadence(
     if (!stableCadenceProbePermitted) {
         this->state.stableCadence.candidate.reset();
     } else if (this->state.stableCadence.candidate.limit !=
-            stableCadenceCandidate) {
-        this->state.stableCadence.candidate.limit = stableCadenceCandidate;
+                stableCadenceCandidate->generatedFrames ||
+            this->state.stableCadence.candidate.convergenceProbe !=
+                stableCadenceCandidate->convergenceProbe) {
+        this->state.stableCadence.candidate.limit =
+            stableCadenceCandidate->generatedFrames;
+        this->state.stableCadence.candidate.convergenceProbe =
+            stableCadenceCandidate->convergenceProbe;
         this->state.stableCadence.candidate.since = now;
         this->state.stableCadence.candidate.minimumBaseFps = baseFps;
         this->state.stableCadence.candidate.maximumBaseFps = baseFps;
@@ -983,6 +1039,9 @@ AdaptiveScheduler::advanceStableCadence(
     if (stableCadenceCandidateQualified) {
         this->state.stableCadence.limit =
             this->state.stableCadence.candidate.limit;
+        this->state.stableCadence.convergenceProbe =
+            this->state.stableCadence.candidate.convergenceProbe;
+        this->state.stableCadence.convergedTwoX = false;
         this->state.stableCadence.baselineBaseFps = baseFps;
         this->state.stableCadence.evaluationAt =
             now + adaptiveStableCadenceEvaluationDuration;
@@ -995,7 +1054,9 @@ AdaptiveScheduler::advanceStableCadence(
             "adaptive-stable-cadence-probe",
             *this->state.stableCadence.limit,
             baseFps,
-            baseFps
+            baseFps,
+            this->state.stableCadence.convergenceProbe
+                ? "ordered-2x-convergence" : ""
         );
     }
 
@@ -1065,6 +1126,8 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
             this->state.stableCadence.limit = testedLimit;
             this->state.stableCadence.baselineBaseFps = baseFps;
             this->state.stableCadence.evaluationAt.reset();
+            this->state.stableCadence.convergenceProbe = false;
+            this->state.stableCadence.convergedTwoX = false;
             this->state.stableCadence.delivery.reset();
             this->state.stableCadence.outsideRangeSince.reset();
             this->state.stableCadence.retryAt.reset();
@@ -1359,6 +1422,8 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
         this->state.ramp.targetDeficitSince.reset();
         this->state.stableCadence.limit.reset();
         this->state.stableCadence.evaluationAt.reset();
+        this->state.stableCadence.convergenceProbe = false;
+        this->state.stableCadence.convergedTwoX = false;
         this->state.stableCadence.delivery.reset();
         this->state.stableCadence.outsideRangeSince.reset();
         this->state.stableCadence.retryAt.reset();
@@ -2050,6 +2115,8 @@ void AdaptiveScheduler::beginStabilization(
     this->state.ramp.bridgeBaselineBaseFps = 0.0;
     this->state.stableCadence.limit.reset();
     this->state.stableCadence.evaluationAt.reset();
+    this->state.stableCadence.convergenceProbe = false;
+    this->state.stableCadence.convergedTwoX = false;
     this->state.stableCadence.delivery.reset();
     this->state.stableCadence.outsideRangeSince.reset();
     this->state.stableCadence.retryAt.reset();

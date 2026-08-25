@@ -527,6 +527,7 @@ bool Swapchain::resetGenerationScheduler(
                 ls::dynamicCadenceProbeIntervalDuration(
                     policy->dynamicCadenceProbeIntervalSeconds
                 ),
+            .displayRefreshFps = this->gamescopeRefreshHz,
             .recoveryPolicy = this->privateOrderedTransport
                 ? AdaptiveRecoveryPolicy::OrderedSdr
                 : AdaptiveRecoveryPolicy::ConservativeHdr,
@@ -811,8 +812,11 @@ ProfileUpdateAction Swapchain::updateProfile(
         this->diagnosticsState.fixedGeneratedFrames = 0;
         this->diagnosticsState.fixedSkippedFrames = 0;
     }
-    if (decision.baseFpsCapChanged)
+    if (decision.baseFpsCapChanged || decision.generationPolicyChanged ||
+            decision.generationModeChanged || enabling || disabling) {
         this->realFramePacer.reset();
+        this->smoothCadencePacerHandoff.reset();
+    }
 
     if (disabling) {
         this->recoveryState.historyWarmupRemaining = 0;
@@ -941,6 +945,8 @@ void Swapchain::updateGamescopeRefreshRate(
         this->profile, this->gamescopeRefreshHz
     );
     this->gamescopeRefreshHz = refreshHz;
+    this->realFramePacer.reset();
+    this->smoothCadencePacerHandoff.reset();
     const bool generationIsEnabled = effectiveFrameGenerationEnabled(
         this->profile, this->gamescopeRefreshHz
     );
@@ -967,8 +973,11 @@ void Swapchain::updateGamescopeRefreshRate(
                     AdaptiveScheduler::historyWarmupFrameCount();
             }
         }
-    } else if (!this->profile.adaptive &&
-            this->profile.dynamic_cadence_recovery) {
+    } else if (generationIsEnabled &&
+            ((this->profile.adaptive &&
+              this->profile.adaptive_stable_cadence) ||
+             (!this->profile.adaptive &&
+              this->profile.dynamic_cadence_recovery))) {
         if (!this->resetGenerationScheduler(
                 DiagnosticsClock::now(), "gamescope-refresh-change")) {
             this->recoveryState.historyWarmupRemaining =
@@ -992,6 +1001,8 @@ void Swapchain::disableFrameGeneration() {
         return;
 
     this->profile.frame_generation_enabled = false;
+    this->realFramePacer.reset();
+    this->smoothCadencePacerHandoff.reset();
     this->recoveryState.historyWarmupRemaining = 0;
     this->recoveryState.orderedAcquireRecovery.reset();
     if (this->adaptiveScheduler)

@@ -106,7 +106,7 @@ describe("Performance Settings", () => {
     expect(onConfigChange).not.toHaveBeenCalled();
     expect(onConfigUpdate).toHaveBeenCalledWith({
       ultra_performance: false,
-      flow_scale: 0.9,
+      flow_scale: 0.85,
       performance_mode: false,
       allow_fp16: true,
     });
