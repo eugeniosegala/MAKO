@@ -44,7 +44,7 @@ namespace mako::ui {
         Q_PROPERTY(size_t adaptive_max_multiplier READ getAdaptiveMaxMultiplier WRITE adaptiveMaxMultiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive_stable_cadence READ getAdaptiveStableCadence WRITE adaptiveStableCadenceUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool dynamic_cadence_recovery READ getDynamicCadenceRecovery WRITE dynamicCadenceRecoveryUpdated NOTIFY refreshUI)
-        Q_PROPERTY(uint dynamic_cadence_probe_interval_seconds READ getDynamicCadenceProbeIntervalSeconds WRITE dynamicCadenceProbeIntervalSecondsUpdated NOTIFY refreshUI)
+        Q_PROPERTY(double dynamic_cadence_probe_interval_seconds READ getDynamicCadenceProbeIntervalSeconds WRITE dynamicCadenceProbeIntervalSecondsUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool ultra_performance READ getUltraPerformance WRITE ultraPerformanceUpdated NOTIFY refreshUI)
         Q_PROPERTY(float flow_scale READ getFlowScale WRITE flowScaleUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool performance_mode READ getPerformanceMode WRITE performanceModeUpdated NOTIFY refreshUI)
@@ -60,8 +60,8 @@ namespace mako::ui {
         Q_PROPERTY(uint maximum_target_fps READ getMaximumTargetFPS CONSTANT)
         Q_PROPERTY(uint minimum_adaptive_max_multiplier READ getMinimumAdaptiveMaxMultiplier CONSTANT)
         Q_PROPERTY(uint maximum_adaptive_max_multiplier READ getMaximumAdaptiveMaxMultiplier CONSTANT)
-        Q_PROPERTY(uint minimum_dynamic_cadence_probe_interval_seconds READ getMinimumDynamicCadenceProbeIntervalSeconds CONSTANT)
-        Q_PROPERTY(uint maximum_dynamic_cadence_probe_interval_seconds READ getMaximumDynamicCadenceProbeIntervalSeconds CONSTANT)
+        Q_PROPERTY(double minimum_dynamic_cadence_probe_interval_seconds READ getMinimumDynamicCadenceProbeIntervalSeconds CONSTANT)
+        Q_PROPERTY(double maximum_dynamic_cadence_probe_interval_seconds READ getMaximumDynamicCadenceProbeIntervalSeconds CONSTANT)
         Q_PROPERTY(float minimum_flow_scale READ getMinimumFlowScale CONSTANT)
         Q_PROPERTY(float maximum_flow_scale READ getMaximumFlowScale CONSTANT)
 
@@ -156,7 +156,7 @@ namespace mako::ui {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::dynamicCadenceRecovery)
             return conf.dynamic_cadence_recovery;
         }
-        [[nodiscard]] uint getDynamicCadenceProbeIntervalSeconds() const {
+        [[nodiscard]] double getDynamicCadenceProbeIntervalSeconds() const {
             VALIDATE_AND_GET_PROFILE(
                 ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
             )
@@ -216,12 +216,12 @@ namespace mako::ui {
                 ls::GameConfLimits::maximumAdaptiveMaxMultiplier
             );
         }
-        [[nodiscard]] uint getMinimumDynamicCadenceProbeIntervalSeconds()
+        [[nodiscard]] double getMinimumDynamicCadenceProbeIntervalSeconds()
                 const noexcept {
             return ls::GameConfLimits::
                 minimumDynamicCadenceProbeIntervalSeconds;
         }
-        [[nodiscard]] uint getMaximumDynamicCadenceProbeIntervalSeconds()
+        [[nodiscard]] double getMaximumDynamicCadenceProbeIntervalSeconds()
                 const noexcept {
             return ls::GameConfLimits::
                 maximumDynamicCadenceProbeIntervalSeconds;
@@ -355,14 +355,16 @@ namespace mako::ui {
             MARK_DIRTY()
         }
         void dynamicCadenceProbeIntervalSecondsUpdated(
-                uint dynamic_cadence_probe_interval_seconds) {
+                double dynamic_cadence_probe_interval_seconds) {
             VALIDATE_AND_GET_PROFILE()
-            conf.dynamic_cadence_probe_interval_seconds = std::clamp(
-                dynamic_cadence_probe_interval_seconds,
-                ls::GameConfLimits::
-                    minimumDynamicCadenceProbeIntervalSeconds,
-                ls::GameConfLimits::
-                    maximumDynamicCadenceProbeIntervalSeconds
+            conf.dynamic_cadence_probe_interval_seconds = static_cast<float>(
+                std::clamp(
+                    dynamic_cadence_probe_interval_seconds,
+                    static_cast<double>(ls::GameConfLimits::
+                        minimumDynamicCadenceProbeIntervalSeconds),
+                    static_cast<double>(ls::GameConfLimits::
+                        maximumDynamicCadenceProbeIntervalSeconds)
+                )
             );
             MARK_DIRTY()
         }

@@ -132,18 +132,16 @@ AdaptiveScheduler::AdaptiveScheduler(AdaptiveSchedulerConfig config,
             )
         );
     }
-    if (this->config.dynamicCadenceProbeInterval < std::chrono::seconds(
-            ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds) ||
-            this->config.dynamicCadenceProbeInterval > std::chrono::seconds(
-                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
-            )) {
+    if (this->config.dynamicCadenceProbeInterval <
+                ls::dynamicCadenceProbeIntervalDuration(
+                    ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds
+                ) ||
+            this->config.dynamicCadenceProbeInterval >
+                ls::dynamicCadenceProbeIntervalDuration(
+                    ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
+                )) {
         throw std::invalid_argument(
-            "Dynamic cadence probe interval must be between " +
-            std::to_string(
-                ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds
-            ) + " and " + std::to_string(
-                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
-            ) + " seconds"
+            "Dynamic cadence probe interval is outside the accepted range"
         );
     }
     if (this->config.maximumMultiplier <
@@ -166,19 +164,13 @@ AdaptiveScheduler::AdaptiveScheduler(AdaptiveSchedulerConfig config,
 }
 
 void AdaptiveScheduler::updateDynamicCadenceProbeInterval(
-        const TimePoint now, const std::chrono::seconds interval) {
-    if (interval < std::chrono::seconds(
-            ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds) ||
-            interval > std::chrono::seconds(
-                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
-            )) {
+        const TimePoint now, const std::chrono::milliseconds interval) {
+    if (interval < ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds) ||
+            interval > ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds)) {
         throw std::invalid_argument(
-            "Dynamic cadence probe interval must be between " +
-            std::to_string(
-                ls::GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds
-            ) + " and " + std::to_string(
-                ls::GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
-            ) + " seconds"
+            "Dynamic cadence probe interval is outside the accepted range"
         );
     }
 

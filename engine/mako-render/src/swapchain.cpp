@@ -523,9 +523,10 @@ bool Swapchain::resetGenerationScheduler(
             .generatedFrameCapacity = this->destinationImages.size(),
             .stableCadence = policy->stableCadence,
             .dynamicCadenceRecovery = policy->dynamicCadenceRecovery,
-            .dynamicCadenceProbeInterval = std::chrono::seconds(
-                policy->dynamicCadenceProbeIntervalSeconds
-            ),
+            .dynamicCadenceProbeInterval =
+                ls::dynamicCadenceProbeIntervalDuration(
+                    policy->dynamicCadenceProbeIntervalSeconds
+                ),
             .recoveryPolicy = this->privateOrderedTransport
                 ? AdaptiveRecoveryPolicy::OrderedSdr
                 : AdaptiveRecoveryPolicy::ConservativeHdr,
@@ -853,7 +854,7 @@ ProfileUpdateAction Swapchain::updateProfile(
             this->adaptiveScheduler) {
         this->adaptiveScheduler->updateDynamicCadenceProbeInterval(
             profileUpdateNow,
-            std::chrono::seconds(
+            ls::dynamicCadenceProbeIntervalDuration(
                 this->profile.dynamic_cadence_probe_interval_seconds
             )
         );

@@ -194,15 +194,15 @@ namespace {
                 )
             );
         }
-        if (conf.dynamic_cadence_probe_interval_seconds <
-                GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds ||
-                conf.dynamic_cadence_probe_interval_seconds >
-                    GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds) {
+        if (!(conf.dynamic_cadence_probe_interval_seconds >=
+                    GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds &&
+                conf.dynamic_cadence_probe_interval_seconds <=
+                    GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds)) {
             throw ls::error(
                 "dynamic_cadence_probe_interval_seconds must be between " +
-                std::to_string(
+                formatFloatingLimit(
                     GameConfLimits::minimumDynamicCadenceProbeIntervalSeconds
-                ) + " and " + std::to_string(
+                ) + " and " + formatFloatingLimit(
                     GameConfLimits::maximumDynamicCadenceProbeIntervalSeconds
                 )
             );
@@ -370,9 +370,7 @@ namespace {
             std::getenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS");
         if (dynamic_cadence_probe_interval_seconds) {
             conf.dynamic_cadence_probe_interval_seconds =
-                static_cast<uint32_t>(std::stoul(
-                    dynamic_cadence_probe_interval_seconds
-                ));
+                std::stof(dynamic_cadence_probe_interval_seconds);
         }
         const char* flow_scale = std::getenv("MAKO_FLOW_SCALE");
         if (flow_scale) conf.flow_scale = std::stof(flow_scale);
@@ -462,7 +460,7 @@ void ConfigFile::write(const std::filesystem::path& path) const {
         profile.insert("dynamic_cadence_recovery", conf.dynamic_cadence_recovery);
         profile.insert(
             "dynamic_cadence_probe_interval_seconds",
-            static_cast<int64_t>(conf.dynamic_cadence_probe_interval_seconds)
+            conf.dynamic_cadence_probe_interval_seconds
         );
         profile.insert("ultra_performance", conf.ultra_performance);
         profile.insert("flow_scale", conf.flow_scale);

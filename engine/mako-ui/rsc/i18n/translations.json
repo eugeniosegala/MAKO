@@ -98,7 +98,7 @@
       "dynamicCadence": "Dynamic Cadence Recovery",
       "dynamicCadenceDesc": "Compatibility recovery for changing native frame rates; Adaptive recalibrates its target, while Fixed follows confirmed Gamescope refresh with its multiplier as a ceiling; enabling turns off both FPS caps, and turning either cap back on turns Recovery off",
       "dynamicCadenceProbeInterval": "Cadence Probe Interval",
-      "dynamicCadenceProbeIntervalDesc": "Choose a 1-3 second check interval; shorter reacts faster but can make brief pacing hitches more frequent; 3 seconds checks less often; test per game; changes apply live",
+      "dynamicCadenceProbeIntervalDesc": "Choose a 0.25-3 second check interval; shorter reacts faster but can make brief pacing hitches more frequent; 3 seconds checks less often; test per game; changes apply live",
       "secondsSuffix": "s",
       "targetFps": "Target FPS",
       "targetFpsDesc": "Desired output rate; for example, 60 to 90 FPS uses an average 1.5x cadence"
@@ -171,7 +171,7 @@
       "dynamicCadence": "Recuperação de cadência dinâmica",
       "dynamicCadenceDesc": "Recuperação para taxas nativas variáveis; o modo Adaptativo recalibra o alvo e o modo Fixo segue a atualização confirmada do Gamescope com o multiplicador como limite; ao ativar, desliga ambos os limites de FPS, e reativar qualquer limite desliga a recuperação",
       "dynamicCadenceProbeInterval": "Intervalo de verificação da cadência",
-      "dynamicCadenceProbeIntervalDesc": "Escolha um intervalo de 1 a 3 segundos; um intervalo menor reage mais rápido, mas pode tornar breves engasgos de ritmo mais frequentes; 3 segundos faz verificações com menor frequência; teste em cada jogo; as alterações são aplicadas em tempo real",
+      "dynamicCadenceProbeIntervalDesc": "Escolha um intervalo de 0,25 a 3 segundos; um intervalo menor reage mais rápido, mas pode tornar breves engasgos de ritmo mais frequentes; 3 segundos faz verificações com menor frequência; teste em cada jogo; as alterações são aplicadas em tempo real",
       "secondsSuffix": "s",
       "targetFps": "FPS alvo",
       "targetFpsDesc": "Taxa de saída desejada; por exemplo, 60 para 90 FPS usa uma cadência média de 1,5x"
@@ -244,7 +244,7 @@
       "dynamicCadence": "Recuperação de cadência dinâmica",
       "dynamicCadenceDesc": "Recuperação para taxas nativas variáveis; o modo Adaptativo recalibra o alvo e o modo Fixo segue a atualização confirmada do Gamescope com o multiplicador como limite; ao ativar, desliga ambos os limites de FPS, e reativar qualquer limite desliga a recuperação",
       "dynamicCadenceProbeInterval": "Intervalo de verificação da cadência",
-      "dynamicCadenceProbeIntervalDesc": "Escolha um intervalo de 1 a 3 segundos; um intervalo menor reage mais depressa, mas pode tornar breves falhas de ritmo mais frequentes; 3 segundos faz verificações com menor frequência; teste em cada jogo; as alterações são aplicadas em tempo real",
+      "dynamicCadenceProbeIntervalDesc": "Escolha um intervalo de 0,25 a 3 segundos; um intervalo menor reage mais depressa, mas pode tornar breves falhas de ritmo mais frequentes; 3 segundos faz verificações com menor frequência; teste em cada jogo; as alterações são aplicadas em tempo real",
       "secondsSuffix": "s",
       "targetFps": "FPS alvo",
       "targetFpsDesc": "Taxa de saída pretendida; por exemplo, 60 para 90 FPS utiliza uma cadência média de 1,5x"
@@ -317,7 +317,7 @@
       "dynamicCadence": "Recuperación de cadencia dinámica",
       "dynamicCadenceDesc": "Recuperación para frecuencias nativas variables; Adaptativo recalibra el objetivo y Fijo sigue la frecuencia confirmada de Gamescope con el multiplicador como límite; al activarla, se desactivan ambos límites de FPS, y reactivar cualquiera de ellos desactiva la recuperación",
       "dynamicCadenceProbeInterval": "Intervalo de sondeo de cadencia",
-      "dynamicCadenceProbeIntervalDesc": "Elija un intervalo de 1 a 3 segundos; uno más corto reacciona antes, pero puede hacer más frecuentes los tirones breves; 3 segundos comprueba con menor frecuencia; pruébelo en cada juego; los cambios se aplican en tiempo real",
+      "dynamicCadenceProbeIntervalDesc": "Elija un intervalo de 0,25 a 3 segundos; uno más corto reacciona antes, pero puede hacer más frecuentes los tirones breves; 3 segundos comprueba con menor frecuencia; pruébelo en cada juego; los cambios se aplican en tiempo real",
       "secondsSuffix": "s",
       "targetFps": "FPS objetivo",
       "targetFpsDesc": "Frecuencia de salida deseada; por ejemplo, de 60 a 90 FPS usa una cadencia media de 1,5x"
@@ -390,7 +390,7 @@
       "dynamicCadence": "동적 케이던스 복구",
       "dynamicCadenceDesc": "변하는 기본 프레임 속도를 위한 호환성 복구입니다. 적응형은 목표를 재조정하고 고정 모드는 배율을 상한으로 확인된 Gamescope 주사율을 따릅니다. 활성화하면 두 FPS 제한이 모두 꺼지며, 제한을 다시 켜면 복구가 꺼집니다",
       "dynamicCadenceProbeInterval": "케이던스 검사 간격",
-      "dynamicCadenceProbeIntervalDesc": "1~3초 검사 간격을 선택하세요. 짧을수록 빠르게 반응하지만 짧은 페이싱 끊김이 더 자주 발생할 수 있습니다. 3초는 확인 빈도를 낮춥니다. 게임별로 테스트하세요. 변경 사항은 실시간으로 적용됩니다",
+      "dynamicCadenceProbeIntervalDesc": "0.25~3초 검사 간격을 선택하세요. 짧을수록 빠르게 반응하지만 짧은 페이싱 끊김이 더 자주 발생할 수 있습니다. 3초는 확인 빈도를 낮춥니다. 게임별로 테스트하세요. 변경 사항은 실시간으로 적용됩니다",
       "secondsSuffix": "초",
       "targetFps": "목표 FPS",
       "targetFpsDesc": "원하는 출력 속도입니다. 예를 들어 60에서 90 FPS는 평균 1.5x 케이던스를 사용합니다"
@@ -463,7 +463,7 @@
       "dynamicCadence": "動的ケイデンス回復",
       "dynamicCadenceDesc": "変化するネイティブフレームレート向けの互換性回復です。Adaptive は目標を再調整し、固定モードは倍率を上限として確認済み Gamescope リフレッシュレートに追従します。有効にすると両方の FPS 上限がオフになり、どちらかの上限を再度有効にすると回復がオフになります",
       "dynamicCadenceProbeInterval": "ケイデンスプローブ間隔",
-      "dynamicCadenceProbeIntervalDesc": "1～3秒の確認間隔を選択します。短いほど速く反応しますが、短いペーシングの引っかかりが増える可能性があります。3秒は確認頻度を下げます。ゲームごとにテストしてください。変更はリアルタイムで適用されます",
+      "dynamicCadenceProbeIntervalDesc": "0.25～3秒の確認間隔を選択します。短いほど速く反応しますが、短いペーシングの引っかかりが増える可能性があります。3秒は確認頻度を下げます。ゲームごとにテストしてください。変更はリアルタイムで適用されます",
       "secondsSuffix": "秒",
       "targetFps": "目標 FPS",
       "targetFpsDesc": "目標出力レートです。たとえば 60 から 90 FPS では平均 1.5x のケイデンスを使用します"
@@ -536,7 +536,7 @@
       "dynamicCadence": "动态节奏恢复",
       "dynamicCadenceDesc": "适用于变化原生帧率的兼容性恢复；自适应模式会重新校准目标，固定模式以倍率为上限跟随已确认的 Gamescope 刷新率；启用后会关闭两个 FPS 上限，重新启用任一上限会关闭恢复",
       "dynamicCadenceProbeInterval": "节奏探测间隔",
-      "dynamicCadenceProbeIntervalDesc": "选择 1 至 3 秒的检查间隔；间隔越短响应越快，但短暂节奏卡顿可能更频繁；3 秒会降低检查频率；请针对每个游戏测试；更改会实时生效",
+      "dynamicCadenceProbeIntervalDesc": "选择 0.25 至 3 秒的检查间隔；间隔越短响应越快，但短暂节奏卡顿可能更频繁；3 秒会降低检查频率；请针对每个游戏测试；更改会实时生效",
       "secondsSuffix": "秒",
       "targetFps": "目标 FPS",
       "targetFpsDesc": "期望的输出帧率；例如，从 60 到 90 FPS 使用平均 1.5x 帧节奏"

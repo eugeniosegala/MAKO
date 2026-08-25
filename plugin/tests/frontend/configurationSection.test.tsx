@@ -29,21 +29,27 @@ vi.mock("@decky/ui", () => ({
     label,
     description,
     value,
+    min,
     max,
+    step,
     disabled,
     onChange,
   }: {
     label: React.ReactNode;
     description?: React.ReactNode;
     value: number;
+    min?: number;
     max?: number;
+    step?: number;
     disabled?: boolean;
     onChange: (value: number) => void;
   }) => (
     <div>
       {description}
       <button
+        data-minimum={min}
         data-maximum={max}
+        data-step={step}
         disabled={disabled}
         onClick={() => onChange(value === 0 ? 30 : value + 1)}
       >
@@ -186,7 +192,7 @@ describe("External Tools controls", () => {
     });
   });
 
-  test("reveals a live 1-3 second probe slider only while Recovery is enabled", () => {
+  test("reveals a live quarter-second probe slider only while Recovery is enabled", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const { container, rerender } = render(
       <ConfigurationSection
@@ -219,7 +225,9 @@ describe("External Tools controls", () => {
     );
 
     const slider = screen.getByText("Cadence Probe Interval (2s)");
+    expect(slider.getAttribute("data-minimum")).toBe("0.25");
     expect(slider.getAttribute("data-maximum")).toBe("3");
+    expect(slider.getAttribute("data-step")).toBe("0.25");
     expect(
       screen.getByText(/How often Recovery tests the native frame rate/).style
         .paddingBottom,
@@ -229,6 +237,19 @@ describe("External Tools controls", () => {
       "dynamic_cadence_probe_interval_seconds",
       3,
     );
+
+    rerender(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          dynamic_cadence_recovery: true,
+          dynamic_cadence_probe_interval_seconds: 0.25,
+        }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+    expect(screen.getByText("Cadence Probe Interval (0.25s)")).toBeTruthy();
   });
 
   test("enabling the Base FPS Cap turns cadence recovery off", () => {

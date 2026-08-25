@@ -141,7 +141,7 @@
   "DYNAMIC_CADENCE_RECOVERY": "動的ケイデンス回復",
   "DYNAMIC_CADENCE_RECOVERY_DESC": "ゲームやエミュレーターのネイティブフレームレート変更後に回復します。Adaptive は再調整され、固定モードは倍率を上限に確認済みの Gamescope リフレッシュレートへ追従します。有効にすると短いペーシング確認を行い、両方のベース上限を無効化して Fractional Adaptive を選択します。Fractional またはいずれかの上限を変更すると回復は無効になります。",
   "DYNAMIC_CADENCE_PROBE_INTERVAL": "ケイデンスプローブ間隔",
-  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "回復機能がネイティブフレームレートを確認する間隔です。1秒は最速で反応しますが、短いペーシングの引っかかりが増える可能性があります。3秒は確認頻度を下げます。ゲームごとにテストしてください。変更はリアルタイムで適用されます。",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "回復機能がネイティブフレームレートを確認する間隔です。0.25秒は最速で反応しますが、短いペーシングの引っかかりが増える可能性があります。3秒は確認頻度を下げます。ゲームごとにテストしてください。変更はリアルタイムで適用されます。",
   "ADAPTIVE_VALUE": "アダプティブ",
   "CONFIG_DLL_PATH": "Lossless.dll のパス",
   "CONFIG_DLL_PATH_DESC": "Lossless.dll の完全パス（任意）。空欄にすると MAKO Renderer の自動検出を使用します。",

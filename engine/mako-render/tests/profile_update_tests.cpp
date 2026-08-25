@@ -29,7 +29,7 @@ namespace {
             .adaptive_max_multiplier = 3,
             .adaptive_stable_cadence = false,
             .dynamic_cadence_recovery = false,
-            .dynamic_cadence_probe_interval_seconds = 2,
+            .dynamic_cadence_probe_interval_seconds = 2.0F,
             .flow_scale = 1.0F,
             .performance_mode = false,
             .pacing = ls::Pacing::None,
@@ -117,7 +117,7 @@ int main() {
     expect(generationSchedulerPolicy(next, 90)->targetFps == 90,
         "Fixed recovery must recalibrate when confirmed refresh changes");
     expect(generationSchedulerPolicy(next, 90)
-                ->dynamicCadenceProbeIntervalSeconds == 2,
+                ->dynamicCadenceProbeIntervalSeconds == 2.0F,
         "Fixed recovery must retain its configured probe interval");
     expect(!generationSchedulerPolicy(next, 0),
         "Fixed recovery must reject an unsupported refresh target");
@@ -138,7 +138,7 @@ int main() {
 
     auto fasterRecovery = next;
     fasterRecovery.multiplier = 2;
-    fasterRecovery.dynamic_cadence_probe_interval_seconds = 1;
+    fasterRecovery.dynamic_cadence_probe_interval_seconds = 0.25F;
     next.multiplier = 2;
     decision = classifyProfileUpdate(next, fasterRecovery, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive &&

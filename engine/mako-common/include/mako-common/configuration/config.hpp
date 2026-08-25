@@ -38,7 +38,7 @@ namespace ls {
         static constexpr size_t adaptiveMaxMultiplier = 3;
         static constexpr bool adaptiveStableCadence = false;
         static constexpr bool dynamicCadenceRecovery = false;
-        static constexpr uint32_t dynamicCadenceProbeIntervalSeconds = 2;
+        static constexpr float dynamicCadenceProbeIntervalSeconds = 2.0F;
         static constexpr bool ultraPerformance = false;
         static constexpr float ultraPerformanceFlowScale = 0.8F;
         static constexpr float flowScale = 1.0F;
@@ -57,8 +57,8 @@ namespace ls {
         static constexpr uint32_t maximumTargetFps = 1000;
         static constexpr size_t minimumAdaptiveMaxMultiplier = 2;
         static constexpr size_t maximumAdaptiveMaxMultiplier = 4;
-        static constexpr uint32_t minimumDynamicCadenceProbeIntervalSeconds = 1;
-        static constexpr uint32_t maximumDynamicCadenceProbeIntervalSeconds = 3;
+        static constexpr float minimumDynamicCadenceProbeIntervalSeconds = 0.25F;
+        static constexpr float maximumDynamicCadenceProbeIntervalSeconds = 3.0F;
         static constexpr float minimumFlowScale = 0.25F;
         static constexpr float maximumFlowScale = 1.0F;
     };
@@ -94,7 +94,7 @@ namespace ls {
         /// periodically expose native cadence to detect upward rate changes
         bool dynamic_cadence_recovery{GameConfDefaults::dynamicCadenceRecovery};
         /// seconds between optional native-cadence probes
-        uint32_t dynamic_cadence_probe_interval_seconds{
+        float dynamic_cadence_probe_interval_seconds{
             GameConfDefaults::dynamicCadenceProbeIntervalSeconds
         };
         /// trade live profile reloads for the lowest supported resource cost
@@ -125,6 +125,14 @@ namespace ls {
     [[nodiscard]] constexpr bool effectiveAllowFp16(
             const GlobalConf& global, const GameConf& profile) noexcept {
         return profile.ultra_performance || global.allow_fp16;
+    }
+
+    /// Scheduler duration represented by the public fractional-seconds value.
+    [[nodiscard]] constexpr std::chrono::milliseconds
+    dynamicCadenceProbeIntervalDuration(const float seconds) noexcept {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::duration<float>(seconds)
+        );
     }
 
     /// parsed configuration file

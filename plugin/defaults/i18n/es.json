@@ -141,7 +141,7 @@
   "DYNAMIC_CADENCE_RECOVERY": "Recuperación de cadencia dinámica",
   "DYNAMIC_CADENCE_RECOVERY_DESC": "Se recupera cuando un juego o emulador cambia su frecuencia nativa. Adaptativo se recalibra; Fijo sigue la frecuencia confirmada de Gamescope hasta su multiplicador. Al activarlo, comprueba brevemente el ritmo, desactiva ambos límites base y selecciona Adaptativo fraccional. Cambiar Adaptativo fraccional o cualquier límite desactiva la recuperación.",
   "DYNAMIC_CADENCE_PROBE_INTERVAL": "Intervalo de sondeo de cadencia",
-  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "Frecuencia con la que Recuperación comprueba la tasa nativa. 1 segundo reacciona más rápido, pero puede provocar tirones breves más frecuentes; 3 segundos realiza comprobaciones con menor frecuencia. Pruébelo en cada juego. Los cambios se aplican en tiempo real.",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "Frecuencia con la que Recuperación comprueba la tasa nativa. 0,25 segundos reacciona más rápido, pero puede provocar tirones breves más frecuentes; 3 segundos realiza comprobaciones con menor frecuencia. Pruébelo en cada juego. Los cambios se aplican en tiempo real.",
   "ADAPTIVE_VALUE": "Adaptativo",
   "CONFIG_DLL_PATH": "Ruta de Lossless.dll",
   "CONFIG_DLL_PATH_DESC": "Ruta completa opcional a Lossless.dll. Déjela vacía para usar la detección automática de MAKO Renderer.",

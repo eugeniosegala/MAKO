@@ -39,7 +39,7 @@ export const TARGET_FPS_MAX = 240 as const;
 export const ADAPTIVE_MAX_MULTIPLIER_MIN = 2 as const;
 export const ADAPTIVE_MAX_MULTIPLIER_MAX = 4 as const;
 export const ADAPTIVE_MINIMUM_BASE_FPS = 10 as const;
-export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 1 as const;
+export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.25 as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3 as const;
 export const FLOW_SCALE_MIN = 0.25 as const;
 export const FLOW_SCALE_MAX = 1.0 as const;
@@ -185,8 +185,8 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   },
   dynamic_cadence_probe_interval_seconds: {
     name: "dynamic_cadence_probe_interval_seconds",
-    fieldType: ConfigFieldType.INTEGER,
-    default: 2,
+    fieldType: ConfigFieldType.FLOAT,
+    default: 2.0,
     description: "seconds between Dynamic Cadence Recovery probes; shorter intervals react faster but can make brief pacing hitches more frequent"
   },
   ultra_performance: {
@@ -314,7 +314,7 @@ export function getDefaults(): ConfigurationData {
     adaptive_max_multiplier: 3,
     adaptive_stable_cadence: true,
     dynamic_cadence_recovery: false,
-    dynamic_cadence_probe_interval_seconds: 2,
+    dynamic_cadence_probe_interval_seconds: 2.0,
     ultra_performance: false,
     flow_scale: 0.9,
     performance_mode: false,
@@ -344,7 +344,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     adaptive_max_multiplier: ConfigFieldType.INTEGER,
     adaptive_stable_cadence: ConfigFieldType.BOOLEAN,
     dynamic_cadence_recovery: ConfigFieldType.BOOLEAN,
-    dynamic_cadence_probe_interval_seconds: ConfigFieldType.INTEGER,
+    dynamic_cadence_probe_interval_seconds: ConfigFieldType.FLOAT,
     ultra_performance: ConfigFieldType.BOOLEAN,
     flow_scale: ConfigFieldType.FLOAT,
     performance_mode: ConfigFieldType.BOOLEAN,

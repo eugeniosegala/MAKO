@@ -274,19 +274,20 @@ export function CompatibilityConfigurationGroup({
                   <span style={{ display: "block", paddingBottom: "6px" }}>
                     {t(
                       "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC",
-                      "How often Recovery tests the native frame rate. 1 second reacts fastest but may cause more frequent brief pacing hitches; 3 seconds checks less often. Test per game. Changes apply live.",
+                      "How often Recovery tests the native frame rate. 0.25 seconds reacts fastest but may cause more frequent brief pacing hitches; 3 seconds checks less often. Test per game. Changes apply live.",
                     )}
                   </span>
                 }
                 value={cadenceProbeInterval}
                 min={DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN}
                 max={DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX}
-                step={1}
+                step={0.25}
                 validValues="steps"
-                minimumDpadGranularity={1}
+                minimumDpadGranularity={0.25}
                 notchCount={
-                  DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX -
-                  DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN +
+                  (DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX -
+                    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN) /
+                    0.25 +
                   1
                 }
                 notchTicksVisible

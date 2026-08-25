@@ -480,14 +480,14 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 from: backend.minimum_dynamic_cadence_probe_interval_seconds
                                 to: backend.maximum_dynamic_cadence_probe_interval_seconds
-                                stepSize: 1
+                                stepSize: 0.25
                                 snapMode: Slider.SnapAlways
                                 value: backend.dynamic_cadence_probe_interval_seconds
-                                onMoved: backend.dynamic_cadence_probe_interval_seconds = Math.round(value)
+                                onMoved: backend.dynamic_cadence_probe_interval_seconds = Math.round(value * 4) / 4
                             }
 
                             Label {
-                                text: Math.round(dynamic_cadence_probe_interval.value) + t.secondsSuffix
+                                text: Number(dynamic_cadence_probe_interval.value.toFixed(2)) + t.secondsSuffix
                             }
                         }
                     }

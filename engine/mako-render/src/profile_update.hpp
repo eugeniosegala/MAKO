@@ -67,7 +67,7 @@ namespace mako::layer {
         size_t maximumMultiplier{0};
         bool stableCadence{false};
         bool dynamicCadenceRecovery{false};
-        uint32_t dynamicCadenceProbeIntervalSeconds{
+        float dynamicCadenceProbeIntervalSeconds{
             ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
         };
     };

@@ -194,7 +194,7 @@ class RendererConfigContractTests(unittest.TestCase):
         for field, property_type in (
             ("frame_generation_refresh_threshold", "uint"),
             ("dynamic_cadence_recovery", "bool"),
-            ("dynamic_cadence_probe_interval_seconds", "uint"),
+            ("dynamic_cadence_probe_interval_seconds", "double"),
             ("ultra_performance", "bool"),
         ):
             with self.subTest(field=field):

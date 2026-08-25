@@ -50,7 +50,7 @@ class ConfigurationData(TypedDict):
     adaptive_max_multiplier: int
     adaptive_stable_cadence: bool
     dynamic_cadence_recovery: bool
-    dynamic_cadence_probe_interval_seconds: int
+    dynamic_cadence_probe_interval_seconds: float
     ultra_performance: bool
     flow_scale: float
     performance_mode: bool
@@ -79,7 +79,7 @@ class ConfigurationPatch(TypedDict, total=False):
     adaptive_max_multiplier: int
     adaptive_stable_cadence: bool
     dynamic_cadence_recovery: bool
-    dynamic_cadence_probe_interval_seconds: int
+    dynamic_cadence_probe_interval_seconds: float
     ultra_performance: bool
     flow_scale: float
     performance_mode: bool

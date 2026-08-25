@@ -288,8 +288,8 @@ namespace {
                 const AdaptiveRecoveryPolicy recoveryPolicy =
                     AdaptiveRecoveryPolicy::ConservativeHdr,
                 const bool dynamicCadenceRecovery = false,
-                const std::chrono::seconds dynamicCadenceProbeInterval =
-                    std::chrono::seconds(
+                const std::chrono::milliseconds dynamicCadenceProbeInterval =
+                    ls::dynamicCadenceProbeIntervalDuration(
                         ls::GameConfDefaults::
                             dynamicCadenceProbeIntervalSeconds
                     )) :
@@ -1987,9 +1987,10 @@ namespace {
             60, 2, false, AdaptiveRecoveryPolicy::OrderedSdr, true
         );
         harness.start();
-        constexpr auto recoveryLatencyBound = std::chrono::seconds(
-            ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
-        ) + 100ms;
+        constexpr auto recoveryLatencyBound =
+            ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+            ) + 100ms;
 
         while (!harness.diagnostics.contains(
                 "dynamic-cadence-probe-rejected")) {
@@ -2029,7 +2030,7 @@ namespace {
             harness.scheduler.snapshot().generationLimit;
         const size_t stabilizationEvents =
             harness.diagnostics.count("stabilization");
-        harness.scheduler.updateDynamicCadenceProbeInterval(harness.now, 1s);
+        harness.scheduler.updateDynamicCadenceProbeInterval(harness.now, 250ms);
         require(harness.scheduler.snapshot().generationLimit == generationLimit,
             "live probe interval update reset the validated generation limit");
         require(harness.diagnostics.count("stabilization") ==
@@ -2046,7 +2047,7 @@ namespace {
                 .requested = previousPlan.size(),
                 .acceptedForPresentation = previousPlan.size(),
             });
-            require(harness.now - transitionAt <= 1100ms,
+            require(harness.now - transitionAt <= 350ms,
                 "live probe interval update did not reschedule the next probe");
         }
     }
