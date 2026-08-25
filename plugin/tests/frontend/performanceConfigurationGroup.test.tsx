@@ -96,6 +96,9 @@ describe("Performance Settings", () => {
     expect(
       screen.getByText(/less aggressive performance option than Ultra Performance/),
     ).toBeTruthy();
+    expect(
+      screen.getByText(/Primarily intended for low-power devices such as Steam Deck/),
+    ).toBeTruthy();
     const warning = screen.getByRole("note");
     expect(warning.getAttribute("data-tone")).toBe("warning");
     expect(warning.textContent).toContain(

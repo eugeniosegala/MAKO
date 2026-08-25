@@ -135,7 +135,7 @@ export function PerformanceConfigurationGroup({
               <div>
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "May improve frame-generation performance by up to 30% in favourable GPU-limited scenarios. Uses 75% Flow Scale, the Lighter FG Model, and FP16 when supported to reduce GPU work. Increases visual artifacts.",
+                  "May improve frame-generation performance by up to 30% in favourable GPU-limited scenarios. Uses 75% Flow Scale, the Lighter FG Model, and FP16 when supported to reduce GPU work. Increases visual artifacts. Primarily intended for low-power devices such as Steam Deck.",
                 )}
               </div>
               <MakoInlineWarning tone="warning">

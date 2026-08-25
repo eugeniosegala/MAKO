@@ -17,7 +17,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "Limite da taxa de atualização",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "Escolha a maior taxa de atualização em que a geração de quadros deve permanecer pausada. As alterações são aplicadas em tempo real.",
   "CONFIG_ULTRA_PERFORMANCE": "Desempenho ultra (reinício)",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "Pode melhorar o desempenho da geração de quadros em até 30% em cenários favoráveis limitados pela GPU. Usa escala de fluxo de 75%, o modelo de FG mais leve e FP16 quando houver suporte para reduzir o trabalho da GPU. Aumenta os artefatos visuais.",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "Pode melhorar o desempenho da geração de quadros em até 30% em cenários favoráveis limitados pela GPU. Usa escala de fluxo de 75%, o modelo de FG mais leve e FP16 quando houver suporte para reduzir o trabalho da GPU. Aumenta os artefatos visuais. Destina-se principalmente a dispositivos de baixo consumo, como o Steam Deck.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "As alterações de perfil não são aplicadas enquanto este modo estiver ativado. Reinicie o jogo após alterar as configurações.",
   "CONFIG_PERFORMANCE_MODE": "Modelo de FG mais leve (reinício)",
   "CONFIG_PERFORMANCE_MODE_DESC": "Reduz o trabalho da GPU usando um modelo de geração de quadros mais leve ao custo de mais imagens fantasma. É uma opção de desempenho menos agressiva que o Desempenho ultra. Reinicie o jogo após a alteração. O Desempenho ultra mantém esta opção ativada.",

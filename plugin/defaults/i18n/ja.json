@@ -17,7 +17,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "リフレッシュレートしきい値",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "フレーム生成を一時停止する最大リフレッシュレートを選択します。変更は即時適用されます。",
   "CONFIG_ULTRA_PERFORMANCE": "ウルトラパフォーマンス（再起動）",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "GPU がボトルネックとなる好条件では、フレーム生成の性能を最大 30% 向上させることがあります。GPU 負荷を抑えるため、フロースケール 75%、軽量 FG モデル、対応環境では FP16 を使用します。視覚的なアーティファクトは増加します。",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "GPU がボトルネックとなる好条件では、フレーム生成の性能を最大 30% 向上させることがあります。GPU 負荷を抑えるため、フロースケール 75%、軽量 FG モデル、対応環境では FP16 を使用します。視覚的なアーティファクトは増加します。主に Steam Deck のような低消費電力デバイス向けです。",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "このモードが有効な間はプロファイルの変更は適用されません。設定変更後はゲームを再起動してください。",
   "CONFIG_PERFORMANCE_MODE": "軽量 FG モデル（再起動）",
   "CONFIG_PERFORMANCE_MODE_DESC": "軽量なフレーム生成モデルで GPU 負荷を下げますが、ゴーストが増えます。ウルトラパフォーマンスより控えめなパフォーマンス設定です。変更後はゲームを再起動してください。ウルトラパフォーマンスでは常に有効です。",

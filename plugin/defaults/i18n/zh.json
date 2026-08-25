@@ -17,7 +17,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "刷新率阈值",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "选择帧生成应保持暂停的最高刷新率。更改会实时生效。",
   "CONFIG_ULTRA_PERFORMANCE": "极致性能（重启）",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "在 GPU 受限的有利场景中，帧生成性能最高可提升 30%。它使用 75% 光流缩放、轻量帧生成模型以及受支持时的 FP16 来降低 GPU 负载。这会增加视觉伪影。",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "在 GPU 受限的有利场景中，帧生成性能最高可提升 30%。它使用 75% 光流缩放、轻量帧生成模型以及受支持时的 FP16 来降低 GPU 负载。这会增加视觉伪影。主要面向 Steam Deck 等低功耗设备。",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "启用此模式时，配置文件更改不会生效。更改设置后请重启游戏。",
   "CONFIG_PERFORMANCE_MODE": "轻量帧生成模型（重启）",
   "CONFIG_PERFORMANCE_MODE_DESC": "使用更轻量的帧生成模型来减少 GPU 工作，但会增加重影。与极致性能相比，这是一个更温和的性能选项。更改后请重启游戏。极致性能会强制启用此选项。",
