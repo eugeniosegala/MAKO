@@ -16,7 +16,7 @@ MAKO is an independent community project bringing Lossless Scaling frame generat
 
 Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download the ZIP under **Assets**. Previous Decky releases are available on the [MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
 
-For direct Vulkan-layer installation without Decky, open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.1.0) and download the Linux archive under **Assets**.
+For direct Vulkan-layer installation without Decky, open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0) and download the Linux archive under **Assets**.
 
 Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bit and 32-bit x86 game-process layers. MAKO Decky detects native AArch64/Armada hosts, refuses incompatible installation, and converts older activation state to a safe game-launch passthrough. See [Armada and native AArch64 support](docs/ARMADA.md) for the exact boundary and the hardware gates required before enabling it.
 
