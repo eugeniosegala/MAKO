@@ -4,7 +4,7 @@
 
 ### Release codename: Abyss Ascending
 
-> _“Measure the tide before you command it; then even the abyss will carry you.”_
+> _“Follow the blue roads across the bay; even the abyss knows how to ascend.”_
 >
 > **Aurelius, _Cardinal of the Ninth Tide_**
 

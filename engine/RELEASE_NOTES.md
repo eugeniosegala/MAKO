@@ -4,7 +4,7 @@
 
 ### Release codename: Abyss Ascending
 
-> _“When every wheel remembers its hour, the deepest engine sings without strain.”_
+> _“Where the hidden currents meet in light, the great Mako rises without a wake.”_
 >
 > **Cassian, _Hierophant of the Abyssal Forge_**
 
