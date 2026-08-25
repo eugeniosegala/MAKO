@@ -193,7 +193,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "ultra_performance",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "restart-only preset that may provide up to a 30% performance boost with 75% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and skipped live profile checks"
+    description: "restart-only preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and skipped live profile checks"
   },
   flow_scale: {
     name: "flow_scale",

@@ -135,13 +135,13 @@ export function PerformanceConfigurationGroup({
               <div>
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "May provide up to a 30% performance boost. Uses 75% Flow Scale, the Lighter FG Model, and FP16 when supported, and skips live profile checks to reduce GPU work. It increases visual artifacts.",
+                  "May improve frame-generation performance by up to 30% in favourable GPU-limited scenarios. Uses 75% Flow Scale, the Lighter FG Model, and FP16 when supported to reduce GPU work. Increases visual artifacts.",
                 )}
               </div>
               <MakoInlineWarning tone="warning">
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_WARNING",
-                  "No live updates will take place when this mode is enabled. Restart the game after changing settings for them to apply.",
+                  "Profile changes do not apply while this mode is enabled. Restart the game after changing settings.",
                 )}
               </MakoInlineWarning>
             </>

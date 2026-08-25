@@ -187,7 +187,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "ultra_performance": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-only preset that may provide up to a 30% performance boost with 75% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and skipped live profile checks",
+        "description": "restart-only preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and skipped live profile checks",
         "location": "toml"
     },
 

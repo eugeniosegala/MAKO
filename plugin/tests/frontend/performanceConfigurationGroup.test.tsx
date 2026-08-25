@@ -99,7 +99,7 @@ describe("Performance Settings", () => {
     const warning = screen.getByRole("note");
     expect(warning.getAttribute("data-tone")).toBe("warning");
     expect(warning.textContent).toContain(
-      "No live updates will take place when this mode is enabled. Restart the game after changing settings for them to apply.",
+      "Profile changes do not apply while this mode is enabled. Restart the game after changing settings.",
     );
 
     fireEvent.click(screen.getByText("Ultra Performance (Restart)"));
