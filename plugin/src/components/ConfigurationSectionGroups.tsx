@@ -6,6 +6,7 @@ import {
   ToggleField,
 } from "@decky/ui";
 import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
+import { MdBolt } from "react-icons/md";
 import {
   ACTIVE_IN,
   ALLOW_FP16,
@@ -110,7 +111,20 @@ export function PerformanceConfigurationGroup({
 
       <PanelSectionRow>
         <ToggleField
-          label={t("CONFIG_ULTRA_PERFORMANCE", "Ultra Performance (Restart)")}
+          label={
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <MdBolt aria-hidden="true" size={16} color="#f4a259" />
+              <span>
+                {t("CONFIG_ULTRA_PERFORMANCE", "Ultra Performance (Restart)")}
+              </span>
+            </span>
+          }
           description={
             <>
               <div>
@@ -343,13 +357,6 @@ export function CompatibilityConfigurationGroup({
                 step={0.25}
                 validValues="steps"
                 minimumDpadGranularity={0.25}
-                notchCount={
-                  (DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX -
-                    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN) /
-                    0.25 +
-                  1
-                }
-                notchTicksVisible
                 onChange={(value) =>
                   onConfigChange(DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS, value)
                 }

@@ -75,6 +75,12 @@ describe("Performance Settings", () => {
     );
 
     expect(screen.getByText("Performance Settings")).toBeTruthy();
+    expect(
+      screen
+        .getByText("Ultra Performance (Restart)")
+        .closest("button")
+        ?.querySelector('svg[aria-hidden="true"]'),
+    ).toBeTruthy();
     const lighterModel = screen.getByText("Lighter FG Model (Restart)");
     expect(lighterModel.getAttribute("data-checked")).toBe("true");
     expect((lighterModel as HTMLButtonElement).disabled).toBe(true);

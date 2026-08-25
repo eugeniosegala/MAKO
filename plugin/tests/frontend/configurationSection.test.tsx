@@ -37,6 +37,8 @@ vi.mock("@decky/ui", () => ({
     min,
     max,
     step,
+    notchCount,
+    notchTicksVisible,
     disabled,
     onChange,
   }: {
@@ -46,6 +48,8 @@ vi.mock("@decky/ui", () => ({
     min?: number;
     max?: number;
     step?: number;
+    notchCount?: number;
+    notchTicksVisible?: boolean;
     disabled?: boolean;
     onChange: (value: number) => void;
   }) => (
@@ -55,6 +59,8 @@ vi.mock("@decky/ui", () => ({
         data-minimum={min}
         data-maximum={max}
         data-step={step}
+        data-notch-count={notchCount ?? "none"}
+        data-notch-ticks-visible={String(notchTicksVisible ?? false)}
         disabled={disabled}
         onClick={() => onChange(value === 0 ? 30 : value + 1)}
       >
@@ -257,6 +263,8 @@ describe("External Tools controls", () => {
     expect(slider.getAttribute("data-minimum")).toBe("0.25");
     expect(slider.getAttribute("data-maximum")).toBe("3");
     expect(slider.getAttribute("data-step")).toBe("0.25");
+    expect(slider.getAttribute("data-notch-count")).toBe("none");
+    expect(slider.getAttribute("data-notch-ticks-visible")).toBe("false");
     expect(
       screen.getByText(/How often Recovery tests the native frame rate/).style
         .paddingBottom,
