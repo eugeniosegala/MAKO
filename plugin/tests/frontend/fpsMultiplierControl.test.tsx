@@ -103,11 +103,13 @@ describe("Frame Generation Mode controls", () => {
         .getByText("Adaptive Frame Generation")
         .getAttribute("data-bottom-separator"),
     ).toBe("default");
-    expect(
-      screen
-        .getByText("Fixed FPS Multiplier")
-        .closest('[data-field-kind="standard"]'),
-    ).toBeTruthy();
+    const fixedMultiplierField = screen
+      .getByText("Fixed FPS Multiplier")
+      .closest<HTMLElement>('[data-field-kind="standard"]');
+    expect(fixedMultiplierField).toBeTruthy();
+    expect(fixedMultiplierField?.getAttribute("data-bottom-separator")).toBe(
+      "none",
+    );
     const fixedMultiplierControls = screen
       .getByText("−")
       .closest<HTMLElement>('[data-focusable="true"]');

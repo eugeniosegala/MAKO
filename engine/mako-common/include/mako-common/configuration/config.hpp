@@ -40,7 +40,7 @@ namespace ls {
         static constexpr bool dynamicCadenceRecovery = false;
         static constexpr float dynamicCadenceProbeIntervalSeconds = 2.0F;
         static constexpr bool ultraPerformance = false;
-        static constexpr float ultraPerformanceFlowScale = 0.8F;
+        static constexpr float ultraPerformanceFlowScale = 0.7F;
         static constexpr float flowScale = 1.0F;
         static constexpr bool performanceMode = false;
         static constexpr Pacing pacing = Pacing::None;

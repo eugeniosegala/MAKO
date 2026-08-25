@@ -49,7 +49,7 @@ DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.25
 DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3
 FLOW_SCALE_MIN = 0.25
 FLOW_SCALE_MAX = 1.0
-ULTRA_PERFORMANCE_FLOW_SCALE = 0.8
+ULTRA_PERFORMANCE_FLOW_SCALE = 0.7
 FIXED_MULTIPLIER_MIN = 2
 FIXED_MULTIPLIER_UI_MIN = FIXED_MULTIPLIER_MIN
 FIXED_MULTIPLIER_UI_MAX = 4
@@ -187,7 +187,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "ultra_performance": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-only preset that uses 80% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and frozen live profile settings",
+        "description": "restart-only preset that uses 70% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and skipped live profile checks",
         "location": "toml"
     },
 

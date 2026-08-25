@@ -133,7 +133,7 @@ export function FpsMultiplierControl({
               label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive")}
               description={t(
                 "FRACTIONAL_ADAPTIVE_PRESET_DESC",
-                "Mixes generation ratios to reach your target FPS. It keeps more real frames, but can feel less smooth in some games.",
+                "Mixes generation ratios to reach targets such as 60 real FPS → 90 displayed FPS. It keeps more real frames and may reduce input lag, but can feel less smooth in some games. Turning it off restores Steady Base Cap.",
               )}
               checked={isFractionalAdaptivePresetEnabled(config)}
               onChange={(value) =>
@@ -214,6 +214,7 @@ export function FpsMultiplierControl({
       <PanelSectionRow>
         <Field
           label={t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
+          bottomSeparator="none"
           description={
             <span style={{ display: "block", paddingTop: "8px" }}>
               {t(

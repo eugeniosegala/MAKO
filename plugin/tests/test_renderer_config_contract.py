@@ -20,6 +20,7 @@ from shared_config import (
     FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
+    ULTRA_PERFORMANCE_FLOW_SCALE,
 )
 from py_modules.mako_plugin.config_schema import CONFIG_FORMAT_VERSION
 from py_modules.mako_plugin.constants import (
@@ -161,6 +162,10 @@ class RendererConfigContractTests(unittest.TestCase):
                 "dynamic_cadence_probe_interval_seconds"
             ]["default"],
             renderer_constant("dynamicCadenceProbeIntervalSeconds"),
+        )
+        self.assertEqual(
+            ULTRA_PERFORMANCE_FLOW_SCALE,
+            renderer_constant("ultraPerformanceFlowScale"),
         )
 
     def test_config_format_version_matches_renderer(self):

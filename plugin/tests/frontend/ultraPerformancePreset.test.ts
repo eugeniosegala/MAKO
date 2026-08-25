@@ -6,7 +6,7 @@ describe("Ultra Performance preset", () => {
   test("applies its forced restart-only values atomically", () => {
     expect(ultraPerformanceChanges(true)).toEqual({
       ultra_performance: true,
-      flow_scale: 0.8,
+      flow_scale: 0.7,
       performance_mode: true,
       allow_fp16: true,
     });

@@ -11,17 +11,20 @@ vi.mock("@decky/ui", () => ({
     checked,
     disabled,
     description,
+    bottomSeparator,
     onChange,
   }: {
     label: React.ReactNode;
     checked: boolean;
     disabled?: boolean;
     description?: React.ReactNode;
+    bottomSeparator?: string;
     onChange: (value: boolean) => void;
   }) => (
     <div>
       <button
         data-checked={String(checked)}
+        data-bottom-separator={bottomSeparator ?? "default"}
         disabled={disabled}
         onClick={() => onChange(!checked)}
       >
@@ -83,6 +86,7 @@ describe("Performance Settings", () => {
     ).toBeTruthy();
     const lighterModel = screen.getByText("Lighter FG Model (Restart)");
     expect(lighterModel.getAttribute("data-checked")).toBe("true");
+    expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
     expect((lighterModel as HTMLButtonElement).disabled).toBe(true);
     const warning = screen.getByRole("note");
     expect(warning.getAttribute("data-tone")).toBe("warning");

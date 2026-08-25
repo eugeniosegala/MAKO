@@ -43,7 +43,7 @@ export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.25 as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3 as const;
 export const FLOW_SCALE_MIN = 0.25 as const;
 export const FLOW_SCALE_MAX = 1.0 as const;
-export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.8 as const;
+export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.7 as const;
 export const FIXED_MULTIPLIER_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MAX = 4 as const;
@@ -193,7 +193,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "ultra_performance",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "restart-only preset that uses 80% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and frozen live profile settings"
+    description: "restart-only preset that uses 70% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and skipped live profile checks"
   },
   flow_scale: {
     name: "flow_scale",

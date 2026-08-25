@@ -130,7 +130,7 @@ export function PerformanceConfigurationGroup({
               <div>
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "Will use 80% Flow Scale, the Lighter FG Model, and FP16 when supported to reduce GPU work. It increases visual artifacts.",
+                  "Will use 70% Flow Scale, the Lighter FG Model, and FP16 when supported, and skips live profile checks to reduce GPU work. It increases visual artifacts.",
                 )}
               </div>
               <MakoInlineWarning tone="warning">
@@ -156,6 +156,7 @@ export function PerformanceConfigurationGroup({
           checked={config.ultra_performance || config.performance_mode}
           disabled={config.ultra_performance}
           onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
+          bottomSeparator="none"
         />
       </PanelSectionRow>
     </>
@@ -327,7 +328,7 @@ export function CompatibilityConfigurationGroup({
               label={t("DYNAMIC_CADENCE_RECOVERY", "Dynamic Cadence Recovery")}
               description={t(
                 "DYNAMIC_CADENCE_RECOVERY_DESC",
-                  "Helps games and emulators that change their native FPS. It periodically checks pacing and turns off both base FPS caps.",
+                  "Helps games and emulators that switch native rates, such as 30 FPS gameplay and 60 FPS menus. It periodically checks for a rate change and recovers the correct cadence, but each check can briefly affect pacing. It disables both base FPS caps, so enable it only for affected games.",
               )}
               checked={config.dynamic_cadence_recovery}
               onChange={(value) =>
