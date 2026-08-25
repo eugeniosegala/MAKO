@@ -28,7 +28,7 @@ QByteArray catalog_data() {
 void test_locale_selection(const QByteArray& catalog, const QString& temporary_path) {
     mako::ui::Localization brazil(catalog, temporary_path + "/brazil.ini", QLocale("pt_BR"));
     require(brazil.language() == QStringLiteral("pt-BR"), "Brazilian Portuguese was not detected");
-    require(brazil.language_names().size() == 7, "expected seven selectable languages");
+    require(brazil.language_names().size() == 8, "expected eight selectable languages");
     require(brazil.strings().value(QStringLiteral("language")).toString() == QStringLiteral("Idioma"),
             "Brazilian Portuguese catalog was not selected");
 
@@ -43,6 +43,11 @@ void test_locale_selection(const QByteArray& catalog, const QString& temporary_p
 
     mako::ui::Localization japanese(catalog, temporary_path + "/japanese.ini", QLocale("ja_JP"));
     require(japanese.language() == QStringLiteral("ja"), "Japanese was not detected");
+
+    mako::ui::Localization ukrainian(catalog, temporary_path + "/ukrainian.ini", QLocale("uk_UA"));
+    require(ukrainian.language() == QStringLiteral("uk"), "Ukrainian was not detected");
+    require(ukrainian.strings().value(QStringLiteral("language")).toString() == QStringLiteral("Мова"),
+            "Ukrainian catalog was not selected");
 
     mako::ui::Localization chinese(catalog, temporary_path + "/chinese.ini", QLocale("zh_CN"));
     require(chinese.language() == QStringLiteral("zh"), "Simplified Chinese was not detected");

@@ -140,7 +140,7 @@ The configuration UI writes MAKO's normal configuration and does not launch game
 
 The UI also exposes global standalone launch compatibility for Zink and ALSA. These off-by-default switches are stored separately in `~/.config/mako-render/launcher.conf`, apply only to the next game process started through `mako-launch`, and require a game restart. They do not alter the selected Renderer profile. Steam Deck mode and the guarded Gamescope WSI, MangoHud, and vkBasalt layer-chain controls remain MAKO Decky-only because they need per-game identity or validated manifest staging and ordering.
 
-The desktop UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, and Simplified Chinese, matching MAKO Decky's supported language inventory. It automatically selects a matching system language on first run and remembers later choices. CLI output remains available in English, Brazilian Portuguese, European Portuguese, and Spanish with a global option before the command, such as `mako-cli --lang pt-BR validate`; the language choice does not alter Renderer profiles.
+The desktop UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, Ukrainian, and Simplified Chinese, matching MAKO Decky's supported language inventory. It automatically selects a matching system language on first run and remembers later choices. CLI output remains available in English, Brazilian Portuguese, European Portuguese, and Spanish with a global option before the command, such as `mako-cli --lang pt-BR validate`; the language choice does not alter Renderer profiles.
 
 ### Manual configuration
 

@@ -2,7 +2,7 @@
 
 Configure MAKO Renderer with `mako-ui` or by editing `~/.config/mako-render/conf.toml`. The UI writes the same TOML file. MAKO creates profiles so different games can use different settings.
 
-The optional desktop UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, and Simplified Chinese, matching MAKO Decky's supported language inventory. It selects a matching system language on first run and stores later language choices as an interface preference, separately from Renderer profiles and `conf.toml`. CLI output currently supports English, Brazilian Portuguese, European Portuguese, and Spanish; place `--lang en`, `--lang pt-BR`, `--lang pt-PT`, or `--lang es` before the command, such as `mako-cli --lang es validate`.
+The optional desktop UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, Ukrainian, and Simplified Chinese, matching MAKO Decky's supported language inventory. It selects a matching system language on first run and stores later language choices as an interface preference, separately from Renderer profiles and `conf.toml`. CLI output currently supports English, Brazilian Portuguese, European Portuguese, and Spanish; place `--lang en`, `--lang pt-BR`, `--lang pt-PT`, or `--lang es` before the command, such as `mako-cli --lang es validate`.
 
 ## Profiles
 

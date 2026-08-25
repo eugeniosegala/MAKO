@@ -99,6 +99,9 @@ QString Localization::language_for_locale(const QLocale& locale) {
     if (locale.language() == QLocale::Japanese) {
         return QStringLiteral("ja");
     }
+    if (locale.language() == QLocale::Ukrainian) {
+        return QStringLiteral("uk");
+    }
     if (locale.language() == QLocale::Chinese) {
         return QStringLiteral("zh");
     }

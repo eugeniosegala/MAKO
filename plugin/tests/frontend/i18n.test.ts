@@ -30,12 +30,15 @@ describe("i18n runtime", () => {
     expect(normalizeLanguage("pt_BR")).toBe("pt-BR");
     expect(normalizeLanguage("portuguese")).toBe("pt-PT");
     expect(normalizeLanguage("pt-PT")).toBe("pt-PT");
+    expect(normalizeLanguage("ukrainian")).toBe("uk");
+    expect(normalizeLanguage("uk-UA")).toBe("uk");
   });
 
   it("reports localized language names with a normalized fallback", () => {
     expect(getLanguageName("koreana")).toBe("한국어");
     expect(getLanguageName("spanish")).toBe("Español");
     expect(getLanguageName("brazilian")).toBe("Português (Brasil)");
+    expect(getLanguageName("ukrainian")).toBe("Українська");
   });
 
   it("uses the selected dictionary and replaces named placeholders", () => {
@@ -65,6 +68,11 @@ describe("i18n runtime", () => {
     setSteamLanguage("spanish");
     expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
       "Modo de generación de cuadros",
+    );
+
+    setSteamLanguage("ukrainian");
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
+      "Режим генерації кадрів",
     );
   });
 
