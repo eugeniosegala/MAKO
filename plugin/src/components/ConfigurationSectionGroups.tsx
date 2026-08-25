@@ -32,6 +32,7 @@ import {
   FRAME_GENERATION_REFRESH_THRESHOLD_PRESET,
   FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
   GPU,
+  PERFORMANCE_MODE,
   ULTRA_PERFORMANCE_FLOW_SCALE,
   type ConfigurationData,
 } from "../config/configSchema";
@@ -39,6 +40,7 @@ import {
   baseFpsCapChanges,
   dynamicCadenceRecoveryChanges,
 } from "../config/fractionalAdaptivePreset";
+import { ultraPerformanceChanges } from "../config/ultraPerformancePreset";
 import t from "../i18n/i18n";
 import { MakoInlineWarning, MakoSectionHeader } from "./MakoUi";
 
@@ -55,6 +57,12 @@ interface ConfigurationGroupProps {
 }
 
 interface ConfigurationUpdateGroupProps extends ConfigurationGroupProps {
+  onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
+}
+
+interface PerformanceConfigurationGroupProps {
+  config: ConfigurationData;
+  onConfigChange: SaveConfigurationField;
   onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
 }
 
@@ -86,6 +94,57 @@ function CollapseControl({
         </ButtonItem>
       </div>
     </PanelSectionRow>
+  );
+}
+
+export function PerformanceConfigurationGroup({
+  config,
+  onConfigChange,
+  onConfigUpdate,
+}: PerformanceConfigurationGroupProps) {
+  return (
+    <>
+      <MakoSectionHeader topMargin="26px">
+        {t("CONTENT_PERFORMANCE_SETTINGS", "Performance Settings")}
+      </MakoSectionHeader>
+
+      <PanelSectionRow>
+        <ToggleField
+          label={t("CONFIG_ULTRA_PERFORMANCE", "Ultra Performance (Restart)")}
+          description={
+            <>
+              <div>
+                {t(
+                  "CONFIG_ULTRA_PERFORMANCE_DESC",
+                  "Will use 80% Flow Scale, the Lighter FG Model, and FP16 when supported to reduce GPU work. It increases visual artifacts.",
+                )}
+              </div>
+              <MakoInlineWarning tone="warning">
+                {t(
+                  "CONFIG_ULTRA_PERFORMANCE_WARNING",
+                  "No live updates will take place while Ultra Performance is enabled. Restart the game after changing settings for them to apply.",
+                )}
+              </MakoInlineWarning>
+            </>
+          }
+          checked={config.ultra_performance}
+          onChange={(value) => onConfigUpdate(ultraPerformanceChanges(value))}
+        />
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ToggleField
+          label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model (Restart)")}
+          description={t(
+            "CONFIG_PERFORMANCE_MODE_DESC",
+            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. Restart the game after changing it. Ultra Performance locks this on.",
+          )}
+          checked={config.ultra_performance || config.performance_mode}
+          disabled={config.ultra_performance}
+          onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
+        />
+      </PanelSectionRow>
+    </>
   );
 }
 
@@ -254,7 +313,7 @@ export function CompatibilityConfigurationGroup({
               label={t("DYNAMIC_CADENCE_RECOVERY", "Dynamic Cadence Recovery")}
               description={t(
                 "DYNAMIC_CADENCE_RECOVERY_DESC",
-                "Recovers when a game or emulator changes native frame rate. Adaptive recalibrates; Fixed follows confirmed Gamescope refresh up to its multiplier. Enabling it briefly checks pacing, disables both base caps, and selects Fractional Adaptive. Changing Fractional or either cap turns Recovery off.",
+                  "Helps games and emulators that change their native FPS. It periodically checks pacing and turns off both base FPS caps.",
               )}
               checked={config.dynamic_cadence_recovery}
               onChange={(value) =>
@@ -292,10 +351,7 @@ export function CompatibilityConfigurationGroup({
                 }
                 notchTicksVisible
                 onChange={(value) =>
-                  onConfigChange(
-                    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS,
-                    value,
-                  )
+                  onConfigChange(DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS, value)
                 }
               />
             </PanelSectionRow>
@@ -328,7 +384,7 @@ export function CompatibilityConfigurationGroup({
                       "May reduce coloured or pixelated motion artifacts in affected games. Tested only with 64-bit native Vulkan or Proton games launched through Steam.",
                     )}
                   </div>
-                  <MakoInlineWarning>
+                  <MakoInlineWarning tone="warning">
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
                       "Keep it off if not needed. It may reduce performance or interfere with frame generation.",

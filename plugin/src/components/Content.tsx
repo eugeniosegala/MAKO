@@ -1,6 +1,15 @@
 import type { FocusEvent } from "react";
-import { ButtonItem, PanelSection, PanelSectionRow, showModal } from "@decky/ui";
-import { useInstallationStatus, useDllDetection, useMakoConfig } from "../hooks/useMakoHooks";
+import {
+  ButtonItem,
+  PanelSection,
+  PanelSectionRow,
+  showModal,
+} from "@decky/ui";
+import {
+  useInstallationStatus,
+  useDllDetection,
+  useMakoConfig,
+} from "../hooks/useMakoHooks";
 import { useProfileManagement } from "../hooks/useProfileManagement";
 import { useInstallationActions } from "../hooks/useInstallationActions";
 import { useProfileSession } from "../hooks/useProfileSession";
@@ -13,12 +22,17 @@ import { UsageInstructions } from "./UsageInstructions";
 import { SmartClipboardButton } from "./SmartClipboardButton";
 import { FgmodClipboardButton } from "./FgmodClipboardButton";
 import { FpsMultiplierControl } from "./FpsMultiplierControl";
+import { PerformanceConfigurationGroup } from "./ConfigurationSectionGroups";
 import { ContentNotices } from "./ContentNotices";
 import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
 import { currentRelease } from "virtual:mako-release-info";
-import { MakoButtonTheme, MakoReleaseIdentity, MakoSectionHeader } from "./MakoUi";
+import {
+  MakoButtonTheme,
+  MakoReleaseIdentity,
+  MakoSectionHeader,
+} from "./MakoUi";
 import t from "../i18n/i18n";
 
 export function Content() {
@@ -31,48 +45,43 @@ export function Content() {
     expectedEngineVersion,
     setIsInstalled,
     setInstallationStatus,
-    checkInstallation
+    checkInstallation,
   } = useInstallationStatus();
 
   const { dllDetected, dllDetectionStatus } = useDllDetection();
 
-  const {
-    config,
-    loadMakoConfig
-  } = useMakoConfig();
+  const { config, loadMakoConfig } = useMakoConfig();
 
-  const {
-    updateProfileConfigFields,
-    syncCurrentProfile
-  } = useProfileManagement();
+  const { updateProfileConfigFields, syncCurrentProfile } =
+    useProfileManagement();
 
   const {
     isInstalling,
     isUninstalling,
     isInstallCompletionVisible,
     handleInstall,
-    handleUninstall
+    handleUninstall,
   } = useInstallationActions();
 
   const {
     mainRunningApp,
     editingProfile,
     selectEditingProfile,
-    getEditingProfile
+    getEditingProfile,
   } = useProfileSession({
     isInstalled,
     loadProfileConfig: loadMakoConfig,
-    syncCurrentProfile
+    syncCurrentProfile,
   });
 
   const {
     saveConfigChanges: handleConfigChanges,
-    saveConfigField: handleConfigChange
+    saveConfigField: handleConfigChange,
   } = useProfileConfigWriter({
     editingProfile,
     getEditingProfile,
     updateProfileConfigFields,
-    loadProfileConfig: loadMakoConfig
+    loadProfileConfig: loadMakoConfig,
   });
 
   const onInstall = async () => {
@@ -80,7 +89,7 @@ export function Content() {
       setIsInstalled,
       setInstallationStatus,
       loadMakoConfig,
-      engineUpdateRequired ? "update" : "install"
+      engineUpdateRequired ? "update" : "install",
     );
     await checkInstallation();
   };
@@ -108,7 +117,7 @@ export function Content() {
       target.scrollIntoView({
         block: "center",
         inline: "nearest",
-        behavior: "auto"
+        behavior: "auto",
       });
     });
   };
@@ -116,148 +125,155 @@ export function Content() {
   const hasDevelopmentNotice = Boolean(localDevelopmentBuildInfo);
   const hasRunningAppNotice = Boolean(isInstalled && mainRunningApp);
   const hasEngineUpdateNotice = Boolean(isInstalled && engineUpdateRequired);
-  const hasTopNotice = hasDevelopmentNotice || hasRunningAppNotice || hasEngineUpdateNotice;
+  const hasTopNotice =
+    hasDevelopmentNotice || hasRunningAppNotice || hasEngineUpdateNotice;
 
   return (
     <div onFocusCapture={keepFocusedControlVisible}>
       <MakoButtonTheme />
       <PanelSection>
-      <MakoReleaseIdentity
-        version={currentRelease.version}
-        codename={currentRelease.codename}
-        bottomMargin={hasTopNotice ? "8px" : "2px"}
-      />
-      <ContentNotices
-        developmentBuildInfo={localDevelopmentBuildInfo}
-        mainRunningApp={isInstalled ? mainRunningApp : undefined}
-        engineUpdateRequired={isInstalled && engineUpdateRequired}
-        installedEngineVersion={installedEngineVersion}
-        expectedEngineVersion={expectedEngineVersion}
-        isInstalling={isInstalling}
-        isInstallCompletionVisible={isInstallCompletionVisible}
-        isUninstalling={isUninstalling}
-        onInstall={onInstall}
-      />
-      {!isInstalled && (
-        <>
-          <InstallationButton
-            isInstalled={isInstalled}
-            isInstalling={isInstalling}
-            isInstallCompletionVisible={isInstallCompletionVisible}
-            isUninstalling={isUninstalling}
-            hostArchitectureSupported={hostArchitectureSupported}
-            onInstall={onInstall}
-            onUninstall={onUninstall}
-          />
-
-          <StatusDisplay
-            dllDetected={dllDetected}
-            dllDetectionStatus={dllDetectionStatus}
-            isInstalled={isInstalled}
-            installationStatus={installationStatus}
-            topMargin="16px"
-          />
-        </>
-      )}
-
-      {isInstalled && (
-        <ProfileManagement
-          editingProfile={editingProfile}
-          mainRunningApp={mainRunningApp}
-          topMargin="18px"
-          onProfileChange={async (profileName) => {
-            selectEditingProfile(profileName);
-            await loadMakoConfig(profileName);
-          }}
+        <MakoReleaseIdentity
+          version={currentRelease.version}
+          codename={currentRelease.codename}
+          bottomMargin={hasTopNotice ? "8px" : "2px"}
         />
-      )}
+        <ContentNotices
+          developmentBuildInfo={localDevelopmentBuildInfo}
+          mainRunningApp={isInstalled ? mainRunningApp : undefined}
+          engineUpdateRequired={isInstalled && engineUpdateRequired}
+          installedEngineVersion={installedEngineVersion}
+          expectedEngineVersion={expectedEngineVersion}
+          isInstalling={isInstalling}
+          isInstallCompletionVisible={isInstallCompletionVisible}
+          isUninstalling={isUninstalling}
+          onInstall={onInstall}
+        />
+        {!isInstalled && (
+          <>
+            <InstallationButton
+              isInstalled={isInstalled}
+              isInstalling={isInstalling}
+              isInstallCompletionVisible={isInstallCompletionVisible}
+              isUninstalling={isUninstalling}
+              hostArchitectureSupported={hostArchitectureSupported}
+              onInstall={onInstall}
+              onUninstall={onUninstall}
+            />
 
-      {isInstalled && (
-        <>
-          <MakoSectionHeader>
-            {t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")}
-          </MakoSectionHeader>
+            <StatusDisplay
+              dllDetected={dllDetected}
+              dllDetectionStatus={dllDetectionStatus}
+              isInstalled={isInstalled}
+              installationStatus={installationStatus}
+              topMargin="16px"
+            />
+          </>
+        )}
 
-          <FpsMultiplierControl
+        {isInstalled && (
+          <ProfileManagement
+            editingProfile={editingProfile}
+            mainRunningApp={mainRunningApp}
+            topMargin="18px"
+            onProfileChange={async (profileName) => {
+              selectEditingProfile(profileName);
+              await loadMakoConfig(profileName);
+            }}
+          />
+        )}
+
+        {isInstalled && (
+          <>
+            <MakoSectionHeader>
+              {t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")}
+            </MakoSectionHeader>
+
+            <FpsMultiplierControl
+              config={config}
+              onConfigChange={handleConfigChange}
+              onConfigUpdate={handleConfigChanges}
+            />
+
+            <PerformanceConfigurationGroup
+              config={config}
+              onConfigChange={handleConfigChange}
+              onConfigUpdate={handleConfigChanges}
+            />
+          </>
+        )}
+
+        {isInstalled && (
+          <ConfigurationSection
             config={config}
             onConfigChange={handleConfigChange}
             onConfigUpdate={handleConfigChanges}
           />
-        </>
-      )}
+        )}
 
-      {isInstalled && (
-        <ConfigurationSection
-          config={config}
-          onConfigChange={handleConfigChange}
-          onConfigUpdate={handleConfigChanges}
-        />
-      )}
+        <UsageInstructions />
 
-      <UsageInstructions />
+        {isInstalled && (
+          <>
+            <SmartClipboardButton />
+            <FgmodClipboardButton />
+          </>
+        )}
 
-      {isInstalled && (
-        <>
-          <SmartClipboardButton />
-          <FgmodClipboardButton />
-        </>
-      )}
-
-      <PanelSectionRow>
-        <div
-          className="Mako_BrandButton"
-          style={{
-            width: "100%",
-            boxSizing: "border-box",
-            marginTop: "16px",
-            paddingTop: "16px",
-            borderTop: "1px solid rgba(77, 170, 190, 0.28)"
-          }}
-        >
-          <ButtonItem
-            layout="below"
-            bottomSeparator="none"
-            onClick={handleShowFlatpaks}
+        <PanelSectionRow>
+          <div
+            className="Mako_BrandButton"
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              marginTop: "16px",
+              paddingTop: "16px",
+              borderTop: "1px solid rgba(77, 170, 190, 0.28)",
+            }}
           >
-            {t("CONTENT_FLATPAK_SETUP", "Flatpak Setup")}
-          </ButtonItem>
-        </div>
-      </PanelSectionRow>
+            <ButtonItem
+              layout="below"
+              bottomSeparator="none"
+              onClick={handleShowFlatpaks}
+            >
+              {t("CONTENT_FLATPAK_SETUP", "Flatpak Setup")}
+            </ButtonItem>
+          </div>
+        </PanelSectionRow>
 
-      <PanelSectionRow>
-        <div className="Mako_BrandButton">
-          <ButtonItem
-            layout="below"
-            bottomSeparator="none"
-            onClick={handleShowAdvancedDetails}
-          >
-            {t("CONTENT_ADVANCED_DETAILS", "Advanced Details")}
-          </ButtonItem>
-        </div>
-      </PanelSectionRow>
+        <PanelSectionRow>
+          <div className="Mako_BrandButton">
+            <ButtonItem
+              layout="below"
+              bottomSeparator="none"
+              onClick={handleShowAdvancedDetails}
+            >
+              {t("CONTENT_ADVANCED_DETAILS", "Advanced Details")}
+            </ButtonItem>
+          </div>
+        </PanelSectionRow>
 
-      {isInstalled && (
-        <>
-          <StatusDisplay
-            dllDetected={dllDetected}
-            dllDetectionStatus={dllDetectionStatus}
-            isInstalled={isInstalled}
-            installationStatus={installationStatus}
-            topMargin="16px"
-          />
+        {isInstalled && (
+          <>
+            <StatusDisplay
+              dllDetected={dllDetected}
+              dllDetectionStatus={dllDetectionStatus}
+              isInstalled={isInstalled}
+              installationStatus={installationStatus}
+              topMargin="16px"
+            />
 
-          <InstallationButton
-            isInstalled={isInstalled}
-            isInstalling={isInstalling}
-            isInstallCompletionVisible={isInstallCompletionVisible}
-            isUninstalling={isUninstalling}
-            hostArchitectureSupported={hostArchitectureSupported}
-            onInstall={onInstall}
-            onUninstall={onUninstall}
-            topMargin="16px"
-          />
-        </>
-      )}
+            <InstallationButton
+              isInstalled={isInstalled}
+              isInstalling={isInstalling}
+              isInstallCompletionVisible={isInstallCompletionVisible}
+              isUninstalling={isUninstalling}
+              hostArchitectureSupported={hostArchitectureSupported}
+              onInstall={onInstall}
+              onUninstall={onUninstall}
+              topMargin="16px"
+            />
+          </>
+        )}
       </PanelSection>
     </div>
   );

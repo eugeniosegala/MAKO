@@ -62,7 +62,7 @@ export function UsageInstructions() {
             marginTop: "8px"
           }}
         >
-          {t('USAGE_MAKO_CONFIG_NOTE', 'MAKO uses its own Vulkan layer and configuration at ~/.config/mako-render/conf.toml. It is selected only for games launched through this command.')}
+          {t('USAGE_MAKO_CONFIG_NOTE', 'This command applies MAKO only to the game you launch with it.')}
         </div>
       </PanelSectionRow>
 
@@ -75,7 +75,7 @@ export function UsageInstructions() {
             marginTop: "4px"
           }}
         >
-          {t('USAGE_ISOLATION_NOTE', 'MAKO Renderer uses its proven private Vulkan layer boundary and disables Gamescope WSI by default. The experimental per-profile compatibility setting can admit WSI after a game restart; Gamescope and Game Mode remain active either way. Use only one frame-generation implementation per game.')}
+          {t('USAGE_ISOLATION_NOTE', 'Use only one frame-generation tool per game.')}
         </div>
       </PanelSectionRow>
     </>

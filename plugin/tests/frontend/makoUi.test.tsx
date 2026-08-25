@@ -11,6 +11,7 @@ vi.mock("@decky/ui", () => ({
 
 import {
   MakoButtonTheme,
+  MakoInlineWarning,
   MakoReleaseIdentity,
   makoDialogButtonStyle,
 } from "../../src/components/MakoUi";
@@ -44,5 +45,17 @@ describe("MAKO button theme", () => {
     expect(theme).toContain("#913852");
     expect(theme).toContain("outline: 2px solid #52d5e8");
     expect(makoDialogButtonStyle(true).outline).toBe("2px solid #52d5e8");
+  });
+});
+
+describe("MAKO inline warnings", () => {
+  test("uses the orange warning treatment when requested", () => {
+    render(
+      <MakoInlineWarning tone="warning">Restart required</MakoInlineWarning>,
+    );
+
+    const warning = screen.getByRole("note");
+    expect(warning.style.borderLeft).toContain("244, 162, 89");
+    expect(warning.style.background).toContain("104, 59, 19");
   });
 });

@@ -1,0 +1,96 @@
+import React from "react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
+
+vi.mock("@decky/ui", () => ({
+  PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  ToggleField: ({
+    label,
+    checked,
+    disabled,
+    description,
+    onChange,
+  }: {
+    label: React.ReactNode;
+    checked: boolean;
+    disabled?: boolean;
+    description?: React.ReactNode;
+    onChange: (value: boolean) => void;
+  }) => (
+    <div>
+      <button
+        data-checked={String(checked)}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+      >
+        {label}
+      </button>
+      {description}
+    </div>
+  ),
+}));
+vi.mock("../../src/components/MakoUi", () => ({
+  MakoInlineWarning: ({
+    children,
+    tone,
+  }: {
+    children: React.ReactNode;
+    tone?: string;
+  }) => (
+    <div role="note" data-tone={tone}>
+      {children}
+    </div>
+  ),
+  MakoSectionHeader: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+}));
+vi.mock("../../src/i18n/i18n", () => ({
+  default: (_key: string, fallback: string) => fallback,
+}));
+
+import { PerformanceConfigurationGroup } from "../../src/components/ConfigurationSectionGroups";
+import { getDefaults } from "../../src/config/configSchema";
+
+afterEach(cleanup);
+
+describe("Performance Settings", () => {
+  test("keeps Ultra Performance and the lighter model together with a restart warning", () => {
+    window.SP_REACT = React;
+    const onConfigChange = vi.fn(async () => undefined);
+    const onConfigUpdate = vi.fn(async () => undefined);
+
+    render(
+      <PerformanceConfigurationGroup
+        config={{
+          ...getDefaults(),
+          ultra_performance: true,
+          performance_mode: false,
+        }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+
+    expect(screen.getByText("Performance Settings")).toBeTruthy();
+    const lighterModel = screen.getByText("Lighter FG Model (Restart)");
+    expect(lighterModel.getAttribute("data-checked")).toBe("true");
+    expect((lighterModel as HTMLButtonElement).disabled).toBe(true);
+    const warning = screen.getByRole("note");
+    expect(warning.getAttribute("data-tone")).toBe("warning");
+    expect(warning.textContent).toContain(
+      "No live updates will take place while Ultra Performance is enabled. Restart the game after changing settings for them to apply.",
+    );
+
+    fireEvent.click(screen.getByText("Ultra Performance (Restart)"));
+    expect(onConfigChange).not.toHaveBeenCalled();
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      ultra_performance: false,
+      flow_scale: 0.9,
+      performance_mode: false,
+      allow_fp16: true,
+    });
+  });
+});

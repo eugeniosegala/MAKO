@@ -10,20 +10,25 @@ vi.mock("@decky/ui", () => ({
     label,
     checked,
     disabled,
+    description,
     onChange,
   }: {
     label: React.ReactNode;
     checked: boolean;
     disabled?: boolean;
+    description?: React.ReactNode;
     onChange: (value: boolean) => void;
   }) => (
-    <button
-      data-checked={String(checked)}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-    >
-      {label}
-    </button>
+    <div>
+      <button
+        data-checked={String(checked)}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+      >
+        {label}
+      </button>
+      {description}
+    </div>
   ),
   SliderField: ({
     label,
@@ -67,9 +72,13 @@ vi.mock("@decky/ui", () => ({
   }) => <button onClick={onClick}>{children}</button>,
 }));
 vi.mock("../../src/components/MakoUi", () => ({
-  MakoInlineWarning: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
+  MakoInlineWarning: ({
+    children,
+    tone,
+  }: {
+    children: React.ReactNode;
+    tone?: string;
+  }) => <div data-tone={tone}>{children}</div>,
   MakoSectionHeader: ({
     children,
     topMargin,
@@ -133,6 +142,26 @@ describe("External Tools controls", () => {
     expect((flowScale as HTMLButtonElement).disabled).toBe(true);
     expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
     expect(allowFp16.getAttribute("data-checked")).toBe("true");
+  });
+
+  test("uses the orange warning treatment for Experimental Gamescope WSI", () => {
+    const { container } = render(
+      <ConfigurationSection
+        config={getDefaults()}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const collapseButton = container.querySelector<HTMLButtonElement>(
+      ".MAKO_WorkaroundsCollapseButton_Container button",
+    );
+    fireEvent.click(collapseButton!);
+
+    const warning = container.querySelector('[data-tone="warning"]');
+    expect(warning?.textContent).toContain(
+      "Keep it off if not needed. It may reduce performance or interfere with frame generation.",
+    );
   });
 
   test("starts collapsed and remembers when it is expanded", () => {

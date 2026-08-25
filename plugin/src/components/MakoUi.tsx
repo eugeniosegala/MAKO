@@ -1,6 +1,6 @@
 import { PanelSectionRow, Spinner } from "@decky/ui";
 import type { CSSProperties, ReactNode } from "react";
-import { FiAlertTriangle } from "react-icons/fi";
+import { FiAlertTriangle, FiInfo } from "react-icons/fi";
 
 interface MakoSectionHeaderProps {
   children: ReactNode;
@@ -21,8 +21,10 @@ export const makoPanelStyle: CSSProperties = {
   overflow: "hidden",
   border: "1px solid rgba(77, 170, 190, 0.28)",
   borderRadius: "8px",
-  background: "linear-gradient(135deg, rgba(7, 31, 49, 0.68), rgba(8, 55, 68, 0.38))",
-  boxShadow: "inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 2px 6px rgba(0, 0, 0, 0.18)"
+  background:
+    "linear-gradient(135deg, rgba(7, 31, 49, 0.68), rgba(8, 55, 68, 0.38))",
+  boxShadow:
+    "inset 0 1px 0 rgba(255, 255, 255, 0.035), 0 2px 6px rgba(0, 0, 0, 0.18)",
 };
 
 export const makoPanelSectionHeaderStyle: CSSProperties = {
@@ -31,15 +33,24 @@ export const makoPanelSectionHeaderStyle: CSSProperties = {
   fontSize: "14px",
   fontWeight: 600,
   lineHeight: 1.25,
-  letterSpacing: "0.15px"
+  letterSpacing: "0.15px",
 };
 
 export const makoPanelItemStyle: CSSProperties = {
   padding: "12px 14px",
-  borderTop: makoPanelDivider
+  borderTop: makoPanelDivider,
 };
 
-export function MakoInlineWarning({ children }: { children: ReactNode }) {
+export function MakoInlineWarning({
+  children,
+  tone = "info",
+}: {
+  children: ReactNode;
+  tone?: "info" | "warning";
+}) {
+  const isWarning = tone === "warning";
+  const accentColor = isWarning ? "#f4a259" : makoAccentColor;
+  const Icon = isWarning ? FiAlertTriangle : FiInfo;
   return (
     <div
       role="note"
@@ -49,24 +60,30 @@ export function MakoInlineWarning({ children }: { children: ReactNode }) {
         gap: "6px",
         marginTop: "7px",
         padding: "6px 8px",
-        border: "1px solid rgba(91, 163, 209, 0.24)",
-        borderLeft: "2px solid rgba(131, 191, 240, 0.78)",
+        border: isWarning
+          ? "1px solid rgba(244, 162, 89, 0.34)"
+          : "1px solid rgba(91, 163, 209, 0.24)",
+        borderLeft: isWarning
+          ? "2px solid rgba(244, 162, 89, 0.86)"
+          : "2px solid rgba(131, 191, 240, 0.78)",
         borderRadius: "5px",
-        background: "linear-gradient(90deg, rgba(24, 67, 94, 0.42), rgba(8, 39, 56, 0.18))",
-        color: "#c8dce8",
+        background: isWarning
+          ? "linear-gradient(90deg, rgba(104, 59, 19, 0.5), rgba(69, 37, 12, 0.2))"
+          : "linear-gradient(90deg, rgba(24, 67, 94, 0.42), rgba(8, 39, 56, 0.18))",
+        color: isWarning ? "#f7d9b4" : "#c8dce8",
         fontSize: "10px",
         fontWeight: 450,
         lineHeight: 1.35,
-        letterSpacing: "0.05px"
+        letterSpacing: "0.05px",
       }}
     >
-      <FiAlertTriangle
+      <Icon
         aria-hidden="true"
         size={11}
         style={{
           flex: "0 0 11px",
           marginTop: "1px",
-          color: makoAccentColor
+          color: accentColor,
         }}
       />
       <span style={{ minWidth: 0 }}>{children}</span>
@@ -74,7 +91,11 @@ export function MakoInlineWarning({ children }: { children: ReactNode }) {
   );
 }
 
-export function MakoReleaseIdentity({ version, codename, bottomMargin = "2px" }: MakoReleaseIdentityProps) {
+export function MakoReleaseIdentity({
+  version,
+  codename,
+  bottomMargin = "2px",
+}: MakoReleaseIdentityProps) {
   const codenameSlug = codename
     .trim()
     .toLowerCase()
@@ -100,11 +121,13 @@ export function MakoReleaseIdentity({ version, codename, bottomMargin = "2px" }:
           fontWeight: 600,
           lineHeight: 1.2,
           letterSpacing: "0.55px",
-          whiteSpace: "nowrap"
+          whiteSpace: "nowrap",
         }}
       >
         <span>v{version}</span>
-        <span aria-hidden="true" style={{ padding: "0 6px", color: "#557f88" }}>-</span>
+        <span aria-hidden="true" style={{ padding: "0 6px", color: "#557f88" }}>
+          -
+        </span>
         <span style={{ color: makoAccentColor }}>{codenameSlug}</span>
       </div>
     </PanelSectionRow>
@@ -114,7 +137,7 @@ export function MakoReleaseIdentity({ version, codename, bottomMargin = "2px" }:
 export function MakoSectionHeader({
   children,
   description,
-  topMargin = "32px"
+  topMargin = "32px",
 }: MakoSectionHeaderProps) {
   return (
     <PanelSectionRow>
@@ -128,13 +151,13 @@ export function MakoSectionHeader({
           fontSize: "14px",
           fontWeight: "600",
           lineHeight: "1.25",
-          letterSpacing: "0.15px"
+          letterSpacing: "0.15px",
         }}
       >
         <div
           style={{
             paddingBottom: "8px",
-            borderBottom: "1px solid rgba(77, 170, 190, 0.28)"
+            borderBottom: "1px solid rgba(77, 170, 190, 0.28)",
           }}
         >
           {children}
@@ -147,7 +170,7 @@ export function MakoSectionHeader({
               fontSize: "11px",
               fontWeight: "400",
               lineHeight: "1.35",
-              letterSpacing: "normal"
+              letterSpacing: "normal",
             }}
           >
             {description}
@@ -169,7 +192,7 @@ export function MakoCompactSpinner({ size = 18 }: { size?: number }) {
         alignItems: "center",
         justifyContent: "center",
         flex: `0 0 ${size}px`,
-        overflow: "hidden"
+        overflow: "hidden",
       }}
     >
       <Spinner
@@ -181,7 +204,7 @@ export function MakoCompactSpinner({ size = 18 }: { size?: number }) {
           maxWidth: `${size}px`,
           maxHeight: `${size}px`,
           display: "block",
-          flex: `0 0 ${size}px`
+          flex: `0 0 ${size}px`,
         }}
       />
     </span>
@@ -190,7 +213,7 @@ export function MakoCompactSpinner({ size = 18 }: { size?: number }) {
 
 export function makoDialogButtonStyle(
   isFocused: boolean,
-  variant: "normal" | "danger" = "normal"
+  variant: "normal" | "danger" = "normal",
 ): CSSProperties {
   const danger = variant === "danger";
   return {
@@ -207,7 +230,7 @@ export function makoDialogButtonStyle(
     boxShadow: isFocused
       ? "0 0 0 3px rgba(82, 213, 232, 0.2), 0 0 10px rgba(43, 142, 163, 0.32)"
       : "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 5px rgba(0, 0, 0, 0.22)",
-    transition: "background 120ms ease, box-shadow 120ms ease"
+    transition: "background 120ms ease, box-shadow 120ms ease",
   };
 }
 

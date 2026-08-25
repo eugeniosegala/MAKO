@@ -18,7 +18,6 @@ import {
   FRAME_GENERATION_ENABLED,
   getDefaults,
   MULTIPLIER,
-  PERFORMANCE_MODE,
   TARGET_FPS_MAX,
   TARGET_FPS_MIN,
   type ConfigurationData,
@@ -29,7 +28,6 @@ import {
   isFractionalAdaptivePresetEnabled,
   steadyBaseCapChanges,
 } from "../config/fractionalAdaptivePreset";
-import { ultraPerformanceChanges } from "../config/ultraPerformancePreset";
 import t from "../i18n/i18n";
 import { useDeferredTargetFps } from "../hooks/useDeferredTargetFps";
 import { MakoInlineWarning, makoDialogButtonStyle } from "./MakoUi";
@@ -118,43 +116,6 @@ export function FpsMultiplierControl({
 
       <PanelSectionRow>
         <ToggleField
-          label={t("CONFIG_ULTRA_PERFORMANCE", "Ultra Performance (Restart)")}
-          description={
-            <>
-              <div>
-                {t(
-                  "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "May reduce frame-generation GPU time by an estimated 20–30% in suitable workloads by using 80% Flow Scale, the Lighter FG Model, FP16 when supported, and active-mode-only resources. It increases visual artifacts, locks those controls, and disables live profile updates; actual game FPS varies, so test per game.",
-                )}
-              </div>
-              <MakoInlineWarning>
-                {t(
-                  "CONFIG_ULTRA_PERFORMANCE_WARNING",
-                  "Restart the game after changing this option. While enabled, profile changes do not apply to the running game.",
-                )}
-              </MakoInlineWarning>
-            </>
-          }
-          checked={config.ultra_performance}
-          onChange={(value) => onConfigUpdate(ultraPerformanceChanges(value))}
-        />
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <ToggleField
-          label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model (Restart)")}
-          description={t(
-            "CONFIG_PERFORMANCE_MODE_DESC",
-            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. Restart the game after changing it. Ultra Performance locks this on.",
-          )}
-          checked={config.ultra_performance || config.performance_mode}
-          disabled={config.ultra_performance}
-          onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
-        />
-      </PanelSectionRow>
-
-      <PanelSectionRow>
-        <ToggleField
           label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
           description={t(
             "ADAPTIVE_DESC",
@@ -169,13 +130,10 @@ export function FpsMultiplierControl({
         <>
           <PanelSectionRow>
             <ToggleField
-              label={t(
-                "FRACTIONAL_ADAPTIVE_PRESET",
-                "Fractional Adaptive",
-              )}
+              label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive")}
               description={t(
                 "FRACTIONAL_ADAPTIVE_PRESET_DESC",
-                "Mixes generation ratios to reach targets such as 60 real FPS > 90 displayed FPS. Pros: keeps more real frames and may reduce input lag. It can feel choppy in some games, but especially smooth and responsive in others. Off uses the steady base cap. Dynamic Cadence Recovery also uses this uncapped Adaptive setup; changing Fractional Adaptive or Steady Base Cap directly turns Recovery off.",
+                "Mixes generation ratios to reach your target FPS. It keeps more real frames, but can feel less smooth in some games.",
               )}
               checked={isFractionalAdaptivePresetEnabled(config)}
               onChange={(value) =>
