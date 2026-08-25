@@ -30,7 +30,11 @@ import {
 } from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
 import { useDeferredTargetFps } from "../hooks/useDeferredTargetFps";
-import { MakoInlineWarning, makoDialogButtonStyle } from "./MakoUi";
+import {
+  MakoInlineWarning,
+  MakoSettingRelationship,
+  makoDialogButtonStyle,
+} from "./MakoUi";
 
 const DEFAULT_CONFIGURATION = getDefaults();
 
@@ -131,10 +135,22 @@ export function FpsMultiplierControl({
           <PanelSectionRow>
             <ToggleField
               label={t("FRACTIONAL_ADAPTIVE_PRESET", "Fractional Adaptive")}
-              description={t(
-                "FRACTIONAL_ADAPTIVE_PRESET_DESC",
-                "Mixes generation ratios to reach targets such as 60 real FPS → 90 displayed FPS. It keeps more real frames and may reduce input lag, but can feel less smooth in some games. Turning it off restores Steady Base Cap.",
-              )}
+              description={
+                <>
+                  <div>
+                    {t(
+                      "FRACTIONAL_ADAPTIVE_PRESET_DESC",
+                      "Mixes generation ratios to reach targets such as 60 real FPS → 90 displayed FPS. It keeps more real frames and may reduce input lag, but can feel less smooth in some games.",
+                    )}
+                  </div>
+                  <MakoSettingRelationship>
+                    {t(
+                      "FRACTIONAL_ADAPTIVE_PRESET_RELATION",
+                      "Cannot be combined with Steady Base Cap. Changing it also turns Dynamic Cadence Recovery off.",
+                    )}
+                  </MakoSettingRelationship>
+                </>
+              }
               checked={isFractionalAdaptivePresetEnabled(config)}
               onChange={(value) =>
                 onConfigUpdate(fractionalAdaptivePresetChanges(value))
@@ -158,10 +174,22 @@ export function FpsMultiplierControl({
           <PanelSectionRow>
             <ToggleField
               label={`${t("ADAPTIVE_AUTO_BASE_FPS_CAP", "Steady Base Cap")} (${automaticBaseFpsCapLabel} FPS)`}
-              description={t(
-                "ADAPTIVE_AUTO_BASE_FPS_CAP_DESC",
-                "The default Adaptive mode. Caps real FPS at half the target for an even cadence. Pros: usually smoother pacing. Cons: fewer real frames and potentially more input lag.",
-              )}
+              description={
+                <>
+                  <div>
+                    {t(
+                      "ADAPTIVE_AUTO_BASE_FPS_CAP_DESC",
+                      "The default Adaptive mode. Caps real FPS at half the target for an even cadence. Pros: usually smoother pacing. Cons: fewer real frames and potentially more input lag.",
+                    )}
+                  </div>
+                  <MakoSettingRelationship>
+                    {t(
+                      "ADAPTIVE_AUTO_BASE_FPS_CAP_RELATION",
+                      "Overrides Base FPS Cap. Cannot be combined with Fractional Adaptive or Dynamic Cadence Recovery.",
+                    )}
+                  </MakoSettingRelationship>
+                </>
+              }
               checked={
                 config.adaptive_auto_base_fps_cap ??
                 DEFAULT_CONFIGURATION.adaptive_auto_base_fps_cap
@@ -216,12 +244,22 @@ export function FpsMultiplierControl({
           label={t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
           bottomSeparator="none"
           description={
-            <span style={{ display: "block", paddingTop: "8px" }}>
-              {t(
-                "MULTIPLIER_DESC",
-                "Sets Fixed mode to 2x–4x. Fixed may perform better than Adaptive when a game has uneven or unstable frame pacing. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh. Increasing it may require a restart; Adaptive manages its own multiplier.",
+            <>
+              <span style={{ display: "block", paddingTop: "8px" }}>
+                {t(
+                  "MULTIPLIER_DESC",
+                  "Sets Fixed mode to 2x–4x. Fixed may perform better than Adaptive when a game has uneven or unstable frame pacing. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh. Increasing it may require a restart; Adaptive manages its own multiplier.",
+                )}
+              </span>
+              {config.adaptive && (
+                <MakoSettingRelationship>
+                  {t(
+                    "MULTIPLIER_ADAPTIVE_RELATION",
+                    "Unavailable while Adaptive Frame Generation is enabled.",
+                  )}
+                </MakoSettingRelationship>
               )}
-            </span>
+            </>
           }
           childrenLayout="below"
         >

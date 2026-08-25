@@ -9,6 +9,7 @@ import { RiArrowDownSFill, RiArrowUpSFill } from "react-icons/ri";
 import { MdBolt } from "react-icons/md";
 import {
   ACTIVE_IN,
+  ADAPTIVE_MINIMUM_BASE_FPS,
   ALLOW_FP16,
   BASE_FPS_CAP_MIN,
   BASE_FPS_CAP_UI_MAX,
@@ -43,7 +44,11 @@ import {
 } from "../config/fractionalAdaptivePreset";
 import { ultraPerformanceChanges } from "../config/ultraPerformancePreset";
 import t from "../i18n/i18n";
-import { MakoInlineWarning, MakoSectionHeader } from "./MakoUi";
+import {
+  MakoInlineWarning,
+  MakoSectionHeader,
+  MakoSettingRelationship,
+} from "./MakoUi";
 
 type SaveConfigurationField = (
   fieldName: keyof ConfigurationData,
@@ -136,7 +141,7 @@ export function PerformanceConfigurationGroup({
               <MakoInlineWarning tone="warning">
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_WARNING",
-                  "No live updates will take place while Ultra Performance is enabled. Restart the game after changing settings for them to apply.",
+                  "No live updates will take place when this mode is enabled. Restart the game after changing settings for them to apply.",
                 )}
               </MakoInlineWarning>
             </>
@@ -151,7 +156,7 @@ export function PerformanceConfigurationGroup({
           label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model (Restart)")}
           description={t(
             "CONFIG_PERFORMANCE_MODE_DESC",
-            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. Restart the game after changing it. Ultra Performance locks this on.",
+            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. It is a less aggressive performance option than Ultra Performance. Restart the game after changing it. Ultra Performance locks this on.",
           )}
           checked={config.ultra_performance || config.performance_mode}
           disabled={config.ultra_performance}
@@ -170,6 +175,14 @@ export function AdvancedRenderingConfigurationGroup({
   collapsed,
   onToggle,
 }: ConfigurationUpdateGroupProps) {
+  const steadyBaseFpsCap = Math.max(
+    ADAPTIVE_MINIMUM_BASE_FPS,
+    config.target_fps / 2,
+  );
+  const steadyBaseFpsCapLabel = Number.isInteger(steadyBaseFpsCap)
+    ? steadyBaseFpsCap.toFixed(0)
+    : steadyBaseFpsCap.toFixed(1);
+
   return (
     <>
       <MakoSectionHeader topMargin="26px">
@@ -207,10 +220,32 @@ export function AdvancedRenderingConfigurationGroup({
           <PanelSectionRow>
             <SliderField
               label={`${t("CONFIG_BASE_FPS_CAP", "Base FPS Cap")}${config.base_fps_cap > 0 ? ` (${config.base_fps_cap} FPS)` : ` (${t("CONFIG_BASE_FPS_CAP_OFF", "Off")})`}`}
-              description={t(
-                "CONFIG_BASE_FPS_CAP_DESC",
-                "Caps real application frames before frame generation. Works with DirectX, OpenGL through Zink, and Vulkan; changes apply live.",
-              )}
+              description={
+                <>
+                  <div>
+                    {t(
+                      "CONFIG_BASE_FPS_CAP_DESC",
+                      "Caps real application frames before frame generation. Works with DirectX, OpenGL through Zink, and Vulkan; changes apply live.",
+                    )}
+                  </div>
+                  {config.adaptive && config.adaptive_auto_base_fps_cap ? (
+                    <MakoSettingRelationship>
+                      {t(
+                        "CONFIG_BASE_FPS_CAP_STEADY_RELATION",
+                        "Controlled by Steady Base Cap ({fps} FPS). Your manual value remains saved.",
+                        { fps: steadyBaseFpsCapLabel },
+                      )}
+                    </MakoSettingRelationship>
+                  ) : config.dynamic_cadence_recovery ? (
+                    <MakoSettingRelationship>
+                      {t(
+                        "CONFIG_BASE_FPS_CAP_RECOVERY_RELATION",
+                        "Changing this cap turns Dynamic Cadence Recovery off.",
+                      )}
+                    </MakoSettingRelationship>
+                  ) : null}
+                </>
+              }
               value={config.base_fps_cap}
               min={BASE_FPS_CAP_MIN}
               max={BASE_FPS_CAP_UI_MAX}
@@ -326,10 +361,22 @@ export function CompatibilityConfigurationGroup({
           <PanelSectionRow>
             <ToggleField
               label={t("DYNAMIC_CADENCE_RECOVERY", "Dynamic Cadence Recovery")}
-              description={t(
-                "DYNAMIC_CADENCE_RECOVERY_DESC",
-                  "Helps games and emulators that switch native rates, such as 30 FPS gameplay and 60 FPS menus. It periodically checks for a rate change and recovers the correct cadence, but each check can briefly affect pacing. It disables both base FPS caps, so enable it only for affected games.",
-              )}
+              description={
+                <>
+                  <div>
+                    {t(
+                      "DYNAMIC_CADENCE_RECOVERY_DESC",
+                      "Helps games and emulators that switch native rates, such as 30 FPS gameplay and 60 FPS menus. It periodically checks for a rate change and recovers the correct cadence, but each check can briefly affect pacing. Enable it only for affected games.",
+                    )}
+                  </div>
+                  <MakoSettingRelationship>
+                    {t(
+                      "DYNAMIC_CADENCE_RECOVERY_RELATION",
+                      "Turning this on disables Steady Base Cap and Base FPS Cap. Changing either cap later turns Recovery off.",
+                    )}
+                  </MakoSettingRelationship>
+                </>
+              }
               checked={config.dynamic_cadence_recovery}
               onChange={(value) =>
                 onConfigUpdate(dynamicCadenceRecoveryChanges(value))

@@ -85,6 +85,11 @@ vi.mock("../../src/components/MakoUi", () => ({
     children: React.ReactNode;
     tone?: string;
   }) => <div data-tone={tone}>{children}</div>,
+  MakoSettingRelationship: ({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) => <div data-mako-setting-relationship="true">{children}</div>,
   MakoSectionHeader: ({
     children,
     topMargin,
@@ -94,7 +99,16 @@ vi.mock("../../src/components/MakoUi", () => ({
   }) => <div data-top-margin={topMargin}>{children}</div>,
 }));
 vi.mock("../../src/i18n/i18n", () => ({
-  default: (_key: string, fallback: string) => fallback,
+  default: (
+    _key: string,
+    fallback: string,
+    replacements: Record<string, string | number> = {},
+  ) =>
+    Object.entries(replacements).reduce(
+      (text, [name, value]) =>
+        text.split(`{${name}}`).join(String(value)),
+      fallback,
+    ),
 }));
 
 import { ConfigurationSection } from "../../src/components/ConfigurationSection";
@@ -148,6 +162,43 @@ describe("External Tools controls", () => {
     expect((flowScale as HTMLButtonElement).disabled).toBe(true);
     expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
     expect(allowFp16.getAttribute("data-checked")).toBe("true");
+  });
+
+  test("explains setting ownership with quiet relationship hints", () => {
+    const { container } = render(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          adaptive: true,
+          adaptive_auto_base_fps_cap: true,
+          base_fps_cap: 35,
+          target_fps: 120,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Controlled by Steady Base Cap (60 FPS). Your manual value remains saved.",
+      ),
+    ).toBeTruthy();
+
+    const collapseButton = container.querySelector<HTMLButtonElement>(
+      ".MAKO_WorkaroundsCollapseButton_Container button",
+    );
+    fireEvent.click(collapseButton!);
+
+    expect(
+      screen.getByText(
+        "Turning this on disables Steady Base Cap and Base FPS Cap. Changing either cap later turns Recovery off.",
+      ),
+    ).toBeTruthy();
+    expect(
+      container.querySelectorAll('[data-mako-setting-relationship="true"]')
+        .length,
+    ).toBe(2);
   });
 
   test("uses the orange warning treatment for Experimental Gamescope WSI", () => {

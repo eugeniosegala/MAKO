@@ -46,6 +46,11 @@ vi.mock("../../src/components/MakoUi", () => ({
       {children}
     </div>
   ),
+  MakoSettingRelationship: ({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) => <div data-mako-setting-relationship="true">{children}</div>,
   MakoSectionHeader: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -88,10 +93,13 @@ describe("Performance Settings", () => {
     expect(lighterModel.getAttribute("data-checked")).toBe("true");
     expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
     expect((lighterModel as HTMLButtonElement).disabled).toBe(true);
+    expect(
+      screen.getByText(/less aggressive performance option than Ultra Performance/),
+    ).toBeTruthy();
     const warning = screen.getByRole("note");
     expect(warning.getAttribute("data-tone")).toBe("warning");
     expect(warning.textContent).toContain(
-      "No live updates will take place while Ultra Performance is enabled. Restart the game after changing settings for them to apply.",
+      "No live updates will take place when this mode is enabled. Restart the game after changing settings for them to apply.",
     );
 
     fireEvent.click(screen.getByText("Ultra Performance (Restart)"));

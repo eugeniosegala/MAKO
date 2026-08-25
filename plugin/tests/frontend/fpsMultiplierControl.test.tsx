@@ -30,23 +30,28 @@ vi.mock("@decky/ui", () => ({
     label,
     checked,
     disabled,
+    description,
     bottomSeparator,
     onChange,
   }: {
     label: React.ReactNode;
     checked: boolean;
     disabled?: boolean;
+    description?: React.ReactNode;
     bottomSeparator?: string;
     onChange: (value: boolean) => void;
   }) => (
-    <button
-      data-checked={String(checked)}
-      data-bottom-separator={bottomSeparator ?? "default"}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-    >
-      {label}
-    </button>
+    <div>
+      <button
+        data-checked={String(checked)}
+        data-bottom-separator={bottomSeparator ?? "default"}
+        disabled={disabled}
+        onClick={() => onChange(!checked)}
+      >
+        {label}
+      </button>
+      {description}
+    </div>
   ),
   SliderField: ({ label }: { label: React.ReactNode }) => <div>{label}</div>,
   Focusable: ({
@@ -72,6 +77,11 @@ vi.mock("../../src/components/MakoUi", () => ({
   MakoInlineWarning: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
+  MakoSettingRelationship: ({
+    children,
+  }: {
+    children: React.ReactNode;
+  }) => <div data-mako-setting-relationship="true">{children}</div>,
   makoDialogButtonStyle: () => ({}),
 }));
 vi.mock("../../src/i18n/i18n", () => ({
@@ -140,6 +150,21 @@ describe("Frame Generation Mode controls", () => {
       screen
         .getByText("Fixed FPS Multiplier")
         .closest('[data-field-kind="standard"]'),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Cannot be combined with Steady Base Cap. Changing it also turns Dynamic Cadence Recovery off.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Overrides Base FPS Cap. Cannot be combined with Fractional Adaptive or Dynamic Cadence Recovery.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Unavailable while Adaptive Frame Generation is enabled.",
+      ),
     ).toBeTruthy();
   });
 

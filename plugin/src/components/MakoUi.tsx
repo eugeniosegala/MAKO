@@ -1,6 +1,6 @@
 import { PanelSectionRow, Spinner } from "@decky/ui";
 import type { CSSProperties, ReactNode } from "react";
-import { FiAlertTriangle, FiInfo } from "react-icons/fi";
+import { FiAlertTriangle, FiInfo, FiLink } from "react-icons/fi";
 
 interface MakoSectionHeaderProps {
   children: ReactNode;
@@ -84,6 +84,40 @@ export function MakoInlineWarning({
           flex: "0 0 11px",
           marginTop: "1px",
           color: accentColor,
+        }}
+      />
+      <span style={{ minWidth: 0 }}>{children}</span>
+    </div>
+  );
+}
+
+export function MakoSettingRelationship({
+  children,
+}: {
+  children: ReactNode;
+}) {
+  return (
+    <div
+      data-mako-setting-relationship="true"
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: "5px",
+        marginTop: "5px",
+        color: "#93adb7",
+        fontSize: "9.5px",
+        fontWeight: 450,
+        lineHeight: 1.35,
+        letterSpacing: "0.03px",
+      }}
+    >
+      <FiLink
+        aria-hidden="true"
+        size={10}
+        style={{
+          flex: "0 0 10px",
+          marginTop: "1px",
+          color: "rgba(131, 191, 240, 0.78)",
         }}
       />
       <span style={{ minWidth: 0 }}>{children}</span>
