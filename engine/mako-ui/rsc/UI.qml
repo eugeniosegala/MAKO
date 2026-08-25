@@ -353,18 +353,6 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: t.ultraPerformance
-                        description: t.ultraPerformanceDesc
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.ultra_performance
-                            onToggled: backend.ultra_performance = checked
-                        }
-                    }
-
-                    GroupEntry {
                         title: t.flowScale
                         description: t.flowScaleDesc
                         enabled: !backend.ultra_performance
@@ -381,19 +369,6 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: t.performanceMode
-                        description: t.performanceModeDesc
-                        enabled: !backend.ultra_performance
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.performance_mode
-                            onToggled: backend.performance_mode = checked
-                        }
-                    }
-
-                    GroupEntry {
                         title: t.gpu
                         description: t.gpuDesc
 
@@ -403,6 +378,36 @@ ApplicationWindow {
                             model: backend.gpus
                             currentIndex: backend.gpu
                             onActivated: index => backend.gpu = index
+                        }
+                    }
+                }
+
+                Group {
+                    name: t.performanceSettings
+                    enabled: backend.available
+
+                    GroupEntry {
+                        title: t.ultraPerformance
+                        description: t.ultraPerformanceDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.ultra_performance
+                            onToggled: backend.ultra_performance = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.performanceMode
+                        description: t.performanceModeDesc
+                        enabled: !backend.ultra_performance
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.performance_mode
+                            onToggled: backend.performance_mode = checked
                         }
                     }
                 }
