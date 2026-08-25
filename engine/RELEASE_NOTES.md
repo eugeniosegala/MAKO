@@ -1,4 +1,4 @@
-## What's new in MAKO Renderer v2.1.0
+## What's new in MAKO Renderer v2.2.0
 
 <img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/abyss-ascending.png" alt="Abyss Ascending: a Renaissance vision of the dormant MAKO beneath a Tuscan bay" width="100%">
 
