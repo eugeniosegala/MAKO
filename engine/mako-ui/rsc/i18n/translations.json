@@ -103,7 +103,7 @@
       "dynamicCadence": "Dynamic Cadence Recovery",
       "dynamicCadenceDesc": "Helps games and emulators that change their native FPS; periodically checks pacing and turns off both base FPS caps",
       "dynamicCadenceProbeInterval": "Cadence Probe Interval",
-      "dynamicCadenceProbeIntervalDesc": "Choose a 0.25-3 second check interval; shorter reacts faster but can make brief pacing hitches more frequent; 3 seconds checks less often; test per game; changes apply live",
+      "dynamicCadenceProbeIntervalDesc": "Choose a 0.1-3 second check interval; 0.1 seconds is aggressive and may cause frequent brief pacing hitches; 2 seconds is the default; 3 seconds checks least often; test per game; changes apply live",
       "secondsSuffix": "s",
       "targetFps": "Target FPS",
       "targetFpsDesc": "Desired output rate; for example, 60 to 90 FPS uses an average 1.5x cadence"
@@ -177,7 +177,7 @@
       "dynamicCadence": "Recuperação de cadência dinâmica",
       "dynamicCadenceDesc": "Ajuda jogos e emuladores que mudam o FPS nativo; verifica o ritmo periodicamente e desativa ambos os limites de FPS base",
       "dynamicCadenceProbeInterval": "Intervalo de verificação da cadência",
-      "dynamicCadenceProbeIntervalDesc": "Escolha um intervalo de 0,25 a 3 segundos; um intervalo menor reage mais rápido, mas pode tornar breves engasgos de ritmo mais frequentes; 3 segundos faz verificações com menor frequência; teste em cada jogo; as alterações são aplicadas em tempo real",
+      "dynamicCadenceProbeIntervalDesc": "Escolha um intervalo de 0,1 a 3 segundos; 0,1 segundo é uma opção agressiva e pode causar breves engasgos de ritmo frequentes; 2 segundos é o padrão; 3 segundos faz verificações com a menor frequência; teste em cada jogo; as alterações são aplicadas em tempo real",
       "secondsSuffix": "s",
       "targetFps": "FPS alvo",
       "targetFpsDesc": "Taxa de saída desejada; por exemplo, 60 para 90 FPS usa uma cadência média de 1,5x"
@@ -251,7 +251,7 @@
       "dynamicCadence": "Recuperação de cadência dinâmica",
       "dynamicCadenceDesc": "Ajuda jogos e emuladores que mudam os FPS nativos; verifica o ritmo periodicamente e desativa ambos os limites de FPS base",
       "dynamicCadenceProbeInterval": "Intervalo de verificação da cadência",
-      "dynamicCadenceProbeIntervalDesc": "Escolha um intervalo de 0,25 a 3 segundos; um intervalo menor reage mais depressa, mas pode tornar breves falhas de ritmo mais frequentes; 3 segundos faz verificações com menor frequência; teste em cada jogo; as alterações são aplicadas em tempo real",
+      "dynamicCadenceProbeIntervalDesc": "Escolha um intervalo de 0,1 a 3 segundos; 0,1 segundo é uma opção agressiva e pode causar breves falhas de ritmo frequentes; 2 segundos é o valor predefinido; 3 segundos faz verificações com a menor frequência; teste em cada jogo; as alterações são aplicadas em tempo real",
       "secondsSuffix": "s",
       "targetFps": "FPS alvo",
       "targetFpsDesc": "Taxa de saída pretendida; por exemplo, 60 para 90 FPS utiliza uma cadência média de 1,5x"
@@ -325,7 +325,7 @@
       "dynamicCadence": "Recuperación de cadencia dinámica",
       "dynamicCadenceDesc": "Ayuda a juegos y emuladores que cambian sus FPS nativos; comprueba el ritmo periódicamente y desactiva ambos límites de FPS base",
       "dynamicCadenceProbeInterval": "Intervalo de sondeo de cadencia",
-      "dynamicCadenceProbeIntervalDesc": "Elija un intervalo de 0,25 a 3 segundos; uno más corto reacciona antes, pero puede hacer más frecuentes los tirones breves; 3 segundos comprueba con menor frecuencia; pruébelo en cada juego; los cambios se aplican en tiempo real",
+      "dynamicCadenceProbeIntervalDesc": "Elija un intervalo de 0,1 a 3 segundos; 0,1 segundos es una opción agresiva y puede provocar tirones breves frecuentes; 2 segundos es el valor predeterminado; 3 segundos comprueba con la menor frecuencia; pruébelo en cada juego; los cambios se aplican en tiempo real",
       "secondsSuffix": "s",
       "targetFps": "FPS objetivo",
       "targetFpsDesc": "Frecuencia de salida deseada; por ejemplo, de 60 a 90 FPS usa una cadencia media de 1,5x"
@@ -399,7 +399,7 @@
       "dynamicCadence": "동적 케이던스 복구",
       "dynamicCadenceDesc": "기본 FPS가 바뀌는 게임과 에뮬레이터를 지원합니다. 주기적으로 페이싱을 확인하고 두 기본 FPS 제한을 모두 끕니다",
       "dynamicCadenceProbeInterval": "케이던스 검사 간격",
-      "dynamicCadenceProbeIntervalDesc": "0.25~3초 검사 간격을 선택하세요. 짧을수록 빠르게 반응하지만 짧은 페이싱 끊김이 더 자주 발생할 수 있습니다. 3초는 확인 빈도를 낮춥니다. 게임별로 테스트하세요. 변경 사항은 실시간으로 적용됩니다",
+      "dynamicCadenceProbeIntervalDesc": "0.1~3초 검사 간격을 선택하세요. 0.1초는 공격적인 옵션으로 짧은 페이싱 끊김이 자주 발생할 수 있습니다. 2초가 기본값이며 3초는 가장 드물게 확인합니다. 게임별로 테스트하세요. 변경 사항은 실시간으로 적용됩니다",
       "secondsSuffix": "초",
       "targetFps": "목표 FPS",
       "targetFpsDesc": "원하는 출력 속도입니다. 예를 들어 60에서 90 FPS는 평균 1.5x 케이던스를 사용합니다"
@@ -473,7 +473,7 @@
       "dynamicCadence": "動的ケイデンス回復",
       "dynamicCadenceDesc": "ネイティブ FPS が変わるゲームやエミュレーターを支援します。定期的にペーシングを確認し、両方のベース FPS 上限を無効にします",
       "dynamicCadenceProbeInterval": "ケイデンスプローブ間隔",
-      "dynamicCadenceProbeIntervalDesc": "0.25～3秒の確認間隔を選択します。短いほど速く反応しますが、短いペーシングの引っかかりが増える可能性があります。3秒は確認頻度を下げます。ゲームごとにテストしてください。変更はリアルタイムで適用されます",
+      "dynamicCadenceProbeIntervalDesc": "0.1～3秒の確認間隔を選択します。0.1秒は積極的な設定で、短いペーシングの引っかかりが頻発する可能性があります。2秒が既定値で、3秒は確認頻度が最も低くなります。ゲームごとにテストしてください。変更はリアルタイムで適用されます",
       "secondsSuffix": "秒",
       "targetFps": "目標 FPS",
       "targetFpsDesc": "目標出力レートです。たとえば 60 から 90 FPS では平均 1.5x のケイデンスを使用します"
@@ -547,7 +547,7 @@
       "dynamicCadence": "Відновлення динамічного ритму кадрів",
       "dynamicCadenceDesc": "Допомагає іграм та емуляторам, у яких змінюється власний FPS. Періодично перевіряє ритм кадрів і вимикає обидва базові ліміти FPS",
       "dynamicCadenceProbeInterval": "Інтервал перевірки ритму кадрів",
-      "dynamicCadenceProbeIntervalDesc": "Виберіть інтервал перевірки від 0,25 до 3 секунд; коротший реагує швидше, але може частіше спричиняти короткі збої ритму; 3 секунди перевіряють рідше; перевіряйте в кожній грі; зміни застосовуються одразу",
+      "dynamicCadenceProbeIntervalDesc": "Виберіть інтервал перевірки від 0,1 до 3 секунд; 0,1 секунди — агресивний варіант, який може спричиняти часті короткі збої ритму; 2 секунди — типове значення; 3 секунди перевіряють найрідше; перевіряйте в кожній грі; зміни застосовуються одразу",
       "secondsSuffix": "с",
       "targetFps": "Цільовий FPS",
       "targetFpsDesc": "Бажана вихідна частота; наприклад, від 60 до 90 FPS використовує середній ритм 1,5x"
@@ -621,7 +621,7 @@
       "dynamicCadence": "动态节奏恢复",
       "dynamicCadenceDesc": "帮助原生 FPS 会变化的游戏和模拟器。会定期检查帧节奏并关闭两个基础 FPS 上限",
       "dynamicCadenceProbeInterval": "节奏探测间隔",
-      "dynamicCadenceProbeIntervalDesc": "选择 0.25 至 3 秒的检查间隔；间隔越短响应越快，但短暂节奏卡顿可能更频繁；3 秒会降低检查频率；请针对每个游戏测试；更改会实时生效",
+      "dynamicCadenceProbeIntervalDesc": "选择 0.1 至 3 秒的检查间隔；0.1 秒是激进选项，可能频繁造成短暂节奏卡顿；2 秒是默认值；3 秒的检查频率最低；请针对每个游戏测试；更改会实时生效",
       "secondsSuffix": "秒",
       "targetFps": "目标 FPS",
       "targetFpsDesc": "期望的输出帧率；例如，从 60 到 90 FPS 使用平均 1.5x 帧节奏"

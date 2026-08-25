@@ -5,6 +5,7 @@
 #include <QObject>
 #include <QStringListModel>
 #include <QString>
+#include <QVariantList>
 
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/launch.hpp"
@@ -62,6 +63,7 @@ namespace mako::ui {
         Q_PROPERTY(uint maximum_adaptive_max_multiplier READ getMaximumAdaptiveMaxMultiplier CONSTANT)
         Q_PROPERTY(double minimum_dynamic_cadence_probe_interval_seconds READ getMinimumDynamicCadenceProbeIntervalSeconds CONSTANT)
         Q_PROPERTY(double maximum_dynamic_cadence_probe_interval_seconds READ getMaximumDynamicCadenceProbeIntervalSeconds CONSTANT)
+        Q_PROPERTY(QVariantList dynamic_cadence_probe_interval_presets_seconds READ getDynamicCadenceProbeIntervalPresetsSeconds CONSTANT)
         Q_PROPERTY(float minimum_flow_scale READ getMinimumFlowScale CONSTANT)
         Q_PROPERTY(float maximum_flow_scale READ getMaximumFlowScale CONSTANT)
 
@@ -225,6 +227,17 @@ namespace mako::ui {
                 const noexcept {
             return ls::GameConfLimits::
                 maximumDynamicCadenceProbeIntervalSeconds;
+        }
+        [[nodiscard]] QVariantList
+                getDynamicCadenceProbeIntervalPresetsSeconds() const {
+            QVariantList presets;
+            presets.reserve(static_cast<qsizetype>(ls::GameConfLimits::
+                dynamicCadenceProbeIntervalPresetsSeconds.size()));
+            for (const float seconds : ls::GameConfLimits::
+                    dynamicCadenceProbeIntervalPresetsSeconds) {
+                presets.append(static_cast<double>(seconds));
+            }
+            return presets;
         }
         [[nodiscard]] float getMinimumFlowScale() const noexcept {
             return ls::GameConfLimits::minimumFlowScale;

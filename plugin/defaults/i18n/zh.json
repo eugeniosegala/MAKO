@@ -148,7 +148,7 @@
   "DYNAMIC_CADENCE_RECOVERY_DESC": "帮助原生帧率会切换的游戏和模拟器，例如游戏中 30 FPS、菜单中 60 FPS。它会定期检查变化并恢复正确的帧节奏，但每次检查都可能短暂影响帧节奏。只应在受影响的游戏中启用。",
   "DYNAMIC_CADENCE_RECOVERY_RELATION": "启用此选项会关闭稳定基础 FPS 上限和基础 FPS 上限。之后更改任一上限都会关闭恢复功能。",
   "DYNAMIC_CADENCE_PROBE_INTERVAL": "节奏探测间隔",
-  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "设置恢复功能检查原生帧率的频率。0.25 秒响应最快，但可能更频繁地造成短暂节奏卡顿；3 秒会降低检查频率。请针对每个游戏测试。更改会实时生效。",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "设置恢复功能检查原生帧率的频率。0.1 秒是激进选项，可能频繁造成短暂节奏卡顿；2 秒是默认值，3 秒的检查频率最低。请针对每个游戏测试。更改会实时生效。",
   "ADAPTIVE_VALUE": "自适应",
   "CONFIG_DLL_PATH": "Lossless.dll 路径",
   "CONFIG_DLL_PATH_DESC": "Lossless.dll 的可选完整路径。留空则使用 MAKO Renderer 自动查找。",

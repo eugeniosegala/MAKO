@@ -2225,7 +2225,7 @@ namespace {
             harness.scheduler.snapshot().generationLimit;
         const size_t stabilizationEvents =
             harness.diagnostics.count("stabilization");
-        harness.scheduler.updateDynamicCadenceProbeInterval(harness.now, 250ms);
+        harness.scheduler.updateDynamicCadenceProbeInterval(harness.now, 100ms);
         require(harness.scheduler.snapshot().generationLimit == generationLimit,
             "live probe interval update reset the validated generation limit");
         require(harness.diagnostics.count("stabilization") ==
@@ -2242,7 +2242,7 @@ namespace {
                 .requested = previousPlan.size(),
                 .acceptedForPresentation = previousPlan.size(),
             });
-            require(harness.now - transitionAt <= 350ms,
+            require(harness.now - transitionAt <= 200ms,
                 "live probe interval update did not reschedule the next probe");
         }
     }

@@ -78,7 +78,7 @@ adaptive_auto_base_fps_cap = true
 target_fps = 144
 adaptive_max_multiplier = 4
 dynamic_cadence_recovery = true
-dynamic_cadence_probe_interval_seconds = 0.25
+dynamic_cadence_probe_interval_seconds = 0.1
 ultra_performance = true
 flow_scale = 0.95
 performance_mode = false
@@ -174,7 +174,7 @@ int main() {
         "The accepted configuration must expose its new policy");
     expect(config.get().profiles().front().dynamic_cadence_recovery,
         "The accepted configuration must expose dynamic cadence recovery");
-    expect(config.get().profiles().front().dynamic_cadence_probe_interval_seconds == 0.25F,
+    expect(config.get().profiles().front().dynamic_cadence_probe_interval_seconds == 0.1F,
         "The accepted configuration must expose the cadence probe interval");
     expect(config.get().profiles().front().frame_generation_refresh_threshold == 60,
         "The accepted configuration must expose the refresh-rate threshold");
@@ -207,7 +207,7 @@ multiplier = 5
     expect(fixedMultiplierConfiguration.profiles().front().multiplier == 5,
         "The fixed multiplier must retain its established open upper range");
 
-    for (const std::string_view invalidInterval : {"0.2", "4"}) {
+    for (const std::string_view invalidInterval : {"0.09", "4"}) {
         const auto invalidIntervalPath = directory /
             ("invalid-probe-interval-" + std::string(invalidInterval) +
              ".toml");
@@ -222,7 +222,7 @@ multiplier = 5
             invalidIntervalRejected = true;
         }
         expect(invalidIntervalRejected,
-            "Cadence probe intervals outside 0.25-3 seconds must be rejected");
+            "Cadence probe intervals outside 0.1-3 seconds must be rejected");
     }
 
     ls::ConfigFile detectionConfig;

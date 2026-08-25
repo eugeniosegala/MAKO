@@ -68,6 +68,38 @@ vi.mock("@decky/ui", () => ({
       </button>
     </div>
   ),
+  Field: ({
+    label,
+    description,
+    children,
+  }: {
+    label: React.ReactNode;
+    description?: React.ReactNode;
+    children?: React.ReactNode;
+  }) => (
+    <div>
+      {label}
+      {description}
+      {children}
+    </div>
+  ),
+  Dropdown: ({
+    rgOptions,
+    selectedOption,
+    onChange,
+  }: {
+    rgOptions: Array<{ data: number; label: React.ReactNode }>;
+    selectedOption: number;
+    onChange: (option: { data: number; label: React.ReactNode }) => void;
+  }) => (
+    <button
+      data-testid="cadence-probe-interval-dropdown"
+      data-options={JSON.stringify(rgOptions.map((option) => option.data))}
+      onClick={() => onChange(rgOptions[0])}
+    >
+      {selectedOption}s
+    </button>
+  ),
   TextField: ({ label }: { label: React.ReactNode }) => <div>{label}</div>,
   ButtonItem: ({
     children,
@@ -278,7 +310,7 @@ describe("External Tools controls", () => {
     });
   });
 
-  test("reveals a live quarter-second probe slider only while Recovery is enabled", () => {
+  test("reveals discrete live probe intervals only while Recovery is enabled", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const { container, rerender } = render(
       <ConfigurationSection
@@ -296,7 +328,7 @@ describe("External Tools controls", () => {
       ".MAKO_WorkaroundsCollapseButton_Container button",
     );
     fireEvent.click(collapseButton!);
-    expect(screen.queryByText("Cadence Probe Interval (2s)")).toBeNull();
+    expect(screen.queryByText("Cadence Probe Interval")).toBeNull();
 
     rerender(
       <ConfigurationSection
@@ -310,20 +342,28 @@ describe("External Tools controls", () => {
       />,
     );
 
-    const slider = screen.getByText("Cadence Probe Interval (2s)");
-    expect(slider.getAttribute("data-minimum")).toBe("0.25");
-    expect(slider.getAttribute("data-maximum")).toBe("3");
-    expect(slider.getAttribute("data-step")).toBe("0.25");
-    expect(slider.getAttribute("data-notch-count")).toBe("none");
-    expect(slider.getAttribute("data-notch-ticks-visible")).toBe("false");
+    expect(screen.getByText("Cadence Probe Interval")).toBeTruthy();
+    const dropdown = screen.getByTestId("cadence-probe-interval-dropdown");
+    expect(JSON.parse(dropdown.getAttribute("data-options") || "[]")).toEqual([
+      0.1,
+      0.2,
+      0.25,
+      0.5,
+      0.75,
+      1,
+      1.5,
+      2,
+      3,
+    ]);
+    expect(dropdown.textContent).toBe("2s");
     expect(
       screen.getByText(/How often Recovery tests the native frame rate/).style
         .paddingBottom,
     ).toBe("6px");
-    fireEvent.click(slider);
+    fireEvent.click(dropdown);
     expect(onConfigChange).toHaveBeenCalledWith(
       "dynamic_cadence_probe_interval_seconds",
-      3,
+      0.1,
     );
 
     rerender(
@@ -337,7 +377,34 @@ describe("External Tools controls", () => {
         onConfigUpdate={vi.fn(async () => undefined)}
       />,
     );
-    expect(screen.getByText("Cadence Probe Interval (0.25s)")).toBeTruthy();
+    expect(
+      screen.getByTestId("cadence-probe-interval-dropdown").textContent,
+    ).toBe("0.25s");
+  });
+
+  test("preserves a valid non-preset cadence interval in the selector", () => {
+    const { container } = render(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          dynamic_cadence_recovery: true,
+          dynamic_cadence_probe_interval_seconds: 1.25,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const collapseButton = container.querySelector<HTMLButtonElement>(
+      ".MAKO_WorkaroundsCollapseButton_Container button",
+    );
+    fireEvent.click(collapseButton!);
+
+    const dropdown = screen.getByTestId("cadence-probe-interval-dropdown");
+    expect(dropdown.textContent).toBe("1.25s");
+    expect(JSON.parse(dropdown.getAttribute("data-options") || "[]")).toContain(
+      1.25,
+    );
   });
 
   test("enabling the Base FPS Cap turns cadence recovery off", () => {

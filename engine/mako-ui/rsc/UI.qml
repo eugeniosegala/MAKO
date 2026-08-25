@@ -476,24 +476,19 @@ ApplicationWindow {
                         title: t.dynamicCadenceProbeInterval
                         description: t.dynamicCadenceProbeIntervalDesc
 
-                        RowLayout {
+                        ComboBox {
+                            id: dynamic_cadence_probe_interval
                             Layout.fillWidth: true
-                            spacing: 8
-
-                            Slider {
-                                id: dynamic_cadence_probe_interval
-                                Layout.fillWidth: true
-                                from: backend.minimum_dynamic_cadence_probe_interval_seconds
-                                to: backend.maximum_dynamic_cadence_probe_interval_seconds
-                                stepSize: 0.25
-                                snapMode: Slider.SnapAlways
-                                value: backend.dynamic_cadence_probe_interval_seconds
-                                onMoved: backend.dynamic_cadence_probe_interval_seconds = Math.round(value * 4) / 4
+                            model: backend.dynamic_cadence_probe_interval_presets_seconds
+                            currentIndex: {
+                                for (let index = 0; index < model.length; ++index) {
+                                    if (Math.abs(Number(model[index]) - backend.dynamic_cadence_probe_interval_seconds) < 0.001)
+                                        return index
+                                }
+                                return -1
                             }
-
-                            Label {
-                                text: Number(dynamic_cadence_probe_interval.value.toFixed(2)) + t.secondsSuffix
-                            }
+                            displayText: currentIndex >= 0 ? Number(Number(model[currentIndex]).toFixed(2)) + t.secondsSuffix : Number(backend.dynamic_cadence_probe_interval_seconds.toFixed(2)) + t.secondsSuffix
+                            onActivated: backend.dynamic_cadence_probe_interval_seconds = Number(model[index])
                         }
                     }
                 }

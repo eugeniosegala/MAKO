@@ -148,7 +148,7 @@
   "DYNAMIC_CADENCE_RECOVERY_DESC": "Ayuda a juegos y emuladores que cambian entre frecuencias nativas, como 30 FPS durante el juego y 60 FPS en los menús. Comprueba periódicamente los cambios y recupera la cadencia correcta, pero cada comprobación puede afectar brevemente al ritmo. Actívela solo en los juegos afectados.",
   "DYNAMIC_CADENCE_RECOVERY_RELATION": "Al activar esta opción se desactivan el Límite base estable y el Límite de FPS base. Cambiar cualquiera de ellos más adelante desactiva la Recuperación.",
   "DYNAMIC_CADENCE_PROBE_INTERVAL": "Intervalo de sondeo de cadencia",
-  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "Frecuencia con la que Recuperación comprueba la tasa nativa. 0,25 segundos reacciona más rápido, pero puede provocar tirones breves más frecuentes; 3 segundos realiza comprobaciones con menor frecuencia. Pruébelo en cada juego. Los cambios se aplican en tiempo real.",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "Frecuencia con la que Recuperación comprueba la tasa nativa. 0,1 segundos es una opción agresiva y puede provocar tirones breves frecuentes; 2 segundos es el valor predeterminado y 3 segundos comprueba con la menor frecuencia. Pruébelo en cada juego. Los cambios se aplican en tiempo real.",
   "ADAPTIVE_VALUE": "Adaptativo",
   "CONFIG_DLL_PATH": "Ruta de Lossless.dll",
   "CONFIG_DLL_PATH_DESC": "Ruta completa opcional a Lossless.dll. Déjela vacía para usar la detección automática de MAKO Renderer.",

@@ -13,6 +13,7 @@ from shared_config import (
     CONFIG_SCHEMA_DEF,
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
     FIXED_MULTIPLIER_UI_MIN,
     FLOW_SCALE_MAX,
     FLOW_SCALE_MIN,
@@ -167,6 +168,24 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertEqual(
             ULTRA_PERFORMANCE_FLOW_SCALE,
             renderer_constant("ultraPerformanceFlowScale"),
+        )
+
+        preset_match = re.search(
+            r"dynamicCadenceProbeIntervalPresetsSeconds\s*\{([^}]*)\}",
+            source,
+            re.DOTALL,
+        )
+        self.assertIsNotNone(
+            preset_match,
+            "missing Renderer cadence probe interval presets",
+        )
+        renderer_presets = tuple(
+            float(value)
+            for value in re.findall(r"([0-9.]+)F", preset_match.group(1))
+        )
+        self.assertEqual(
+            DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
+            renderer_presets,
         )
 
     def test_config_format_version_matches_renderer(self):

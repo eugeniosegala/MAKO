@@ -39,8 +39,19 @@ export const TARGET_FPS_MAX = 240 as const;
 export const ADAPTIVE_MAX_MULTIPLIER_MIN = 2 as const;
 export const ADAPTIVE_MAX_MULTIPLIER_MAX = 4 as const;
 export const ADAPTIVE_MINIMUM_BASE_FPS = 10 as const;
-export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.25 as const;
+export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.1 as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3 as const;
+export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES = [
+  0.1,
+  0.2,
+  0.25,
+  0.5,
+  0.75,
+  1.0,
+  1.5,
+  2.0,
+  3.0,
+] as const;
 export const FLOW_SCALE_MIN = 0.25 as const;
 export const FLOW_SCALE_MAX = 1.0 as const;
 export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.75 as const;

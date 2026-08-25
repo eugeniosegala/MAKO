@@ -148,7 +148,7 @@
   "DYNAMIC_CADENCE_RECOVERY_DESC": "Helps games and emulators that switch native rates, such as 30 FPS gameplay and 60 FPS menus. It periodically checks for a rate change and recovers the correct cadence, but each check can briefly affect pacing. Enable it only for affected games.",
   "DYNAMIC_CADENCE_RECOVERY_RELATION": "Turning this on disables Steady Base Cap and Base FPS Cap. Changing either cap later turns Recovery off.",
   "DYNAMIC_CADENCE_PROBE_INTERVAL": "Cadence Probe Interval",
-  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "How often Recovery tests the native frame rate. 0.25 seconds reacts fastest but may cause more frequent brief pacing hitches; 3 seconds checks less often. Test per game. Changes apply live.",
+  "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "How often Recovery tests the native frame rate. 0.1 seconds is aggressive and may cause frequent brief pacing hitches; 2 seconds is the default, while 3 seconds checks least often. Test per game. Changes apply live.",
   "ADAPTIVE_VALUE": "Adaptive",
   "CONFIG_DLL_PATH": "Lossless.dll Path",
   "CONFIG_DLL_PATH_DESC": "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.",

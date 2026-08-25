@@ -24,6 +24,7 @@ from shared_config import (
     DEFAULT_PROFILE_NAME,
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
     EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
     EXTERNAL_VULKAN_LAYER_MANGOHUD,
     EXTERNAL_VULKAN_LAYER_NONE,
@@ -127,6 +128,12 @@ def generate_typescript_schema():
         f"{DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN} as const;",
         "export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = "
         f"{DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX} as const;",
+        "export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES = [",
+        *(
+            f"  {value},"
+            for value in DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES
+        ),
+        "] as const;",
         f"export const FLOW_SCALE_MIN = {FLOW_SCALE_MIN} as const;",
         f"export const FLOW_SCALE_MAX = {FLOW_SCALE_MAX} as const;",
         "export const ULTRA_PERFORMANCE_FLOW_SCALE = "

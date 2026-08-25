@@ -173,7 +173,7 @@ class GameProfileTests(unittest.TestCase):
         defaults = ConfigurationManager.get_defaults()
         self.assertEqual(defaults["dynamic_cadence_probe_interval_seconds"], 2.0)
 
-        for interval in (0.25, 0.5):
+        for interval in (0.1, 0.2, 0.25, 0.5):
             with self.subTest(interval=interval):
                 configured = ConfigurationManager.validate_config({
                     **defaults,
@@ -191,10 +191,10 @@ class GameProfileTests(unittest.TestCase):
                     interval,
                 )
 
-        for invalid in (0.2, 4):
+        for invalid in (0.09, 4):
             with self.subTest(invalid=invalid), self.assertRaisesRegex(
                 ValueError,
-                "dynamic_cadence_probe_interval_seconds must be between 0.25 and 3",
+                "dynamic_cadence_probe_interval_seconds must be between 0.1 and 3",
             ):
                 ConfigurationManager.validate_config({
                     **defaults,

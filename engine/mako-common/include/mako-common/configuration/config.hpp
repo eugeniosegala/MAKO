@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <array>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -57,8 +58,13 @@ namespace ls {
         static constexpr uint32_t maximumTargetFps = 1000;
         static constexpr size_t minimumAdaptiveMaxMultiplier = 2;
         static constexpr size_t maximumAdaptiveMaxMultiplier = 4;
-        static constexpr float minimumDynamicCadenceProbeIntervalSeconds = 0.25F;
+        static constexpr float minimumDynamicCadenceProbeIntervalSeconds = 0.1F;
         static constexpr float maximumDynamicCadenceProbeIntervalSeconds = 3.0F;
+        static constexpr std::array<float, 9>
+            dynamicCadenceProbeIntervalPresetsSeconds{
+                0.1F, 0.2F, 0.25F, 0.5F, 0.75F,
+                1.0F, 1.5F, 2.0F, 3.0F,
+            };
         static constexpr float minimumFlowScale = 0.25F;
         static constexpr float maximumFlowScale = 1.0F;
     };
