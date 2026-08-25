@@ -611,6 +611,7 @@ namespace mako::layer {
                 GeneratedDeliveryWindow delivery;
                 size_t testedLimit{0};
                 double baselineBaseFps{0.0};
+                bool settlingGraceUsed{false};
 
                 void reset() {
                     this->eligibleSince.reset();
@@ -619,6 +620,7 @@ namespace mako::layer {
                     this->delivery.reset();
                     this->testedLimit = 0;
                     this->baselineBaseFps = 0.0;
+                    this->settlingGraceUsed = false;
                 }
             } efficiencyProbe;
 

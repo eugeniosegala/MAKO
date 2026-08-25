@@ -1734,6 +1734,64 @@ namespace {
             "accepted 2x efficiency probe resumed the previous 3x workload");
     }
 
+    void testSmoothCadenceDownshiftAllowsPromisingRecoveryToSettle() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+
+        for (size_t frame = 0; frame < 2400; ++frame) {
+            harness.frameAtFps(40.0);
+            if (harness.diagnostics.contains("adaptive-efficiency-probe"))
+                break;
+        }
+        require(harness.diagnostics.contains("adaptive-efficiency-probe"),
+            "precondition failed: 3x efficiency probe did not begin");
+
+        AdaptiveFramePlan plan;
+        for (size_t frame = 0; frame < 120; ++frame) {
+            plan = harness.frameAtFps(56.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+            if (harness.diagnostics.contains(
+                    "adaptive-efficiency-probe-extended")) {
+                break;
+            }
+        }
+        const auto* extended = harness.diagnostics.last(
+            "adaptive-efficiency-probe-extended"
+        );
+        require(extended && extended->reason == "base-recovering",
+            "strong near-target base recovery did not receive settling grace");
+        require(!harness.diagnostics.contains(
+                "adaptive-efficiency-probe-rejected"),
+            "promising lower-load recovery rolled back at the first deadline");
+        require(plan.size() == 1,
+            "settling grace did not retain the cheaper 2x workload");
+
+        for (size_t frame = 0; frame < 120; ++frame) {
+            plan = harness.frameAtFps(60.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+            if (harness.diagnostics.contains(
+                    "adaptive-efficiency-probe-accepted")) {
+                break;
+            }
+        }
+        const auto snapshot = harness.scheduler.snapshot();
+        require(harness.diagnostics.contains(
+                "adaptive-efficiency-probe-accepted"),
+            "settled target-preserving 2x recovery was not accepted");
+        require(snapshot.stableCadenceLimit == 1 &&
+                snapshot.validatedGenerationLimit == 1 &&
+                snapshot.generationLimit == 1 && plan.size() == 1,
+            "accepted settling grace did not retain the qualified 2x policy");
+    }
+
     void testSmoothCadenceRejectsInsufficientDownshiftAndBacksOff() {
         Harness harness(
             120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
@@ -2495,6 +2553,7 @@ int main() {
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
         {"Smooth Cadence settles near integer demand", testSmoothCadenceSettlesNearIntegerDemand},
         {"Smooth Cadence accepts target-preserving downshift", testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget},
+        {"Smooth Cadence lets promising downshift recovery settle", testSmoothCadenceDownshiftAllowsPromisingRecoveryToSettle},
         {"Smooth Cadence rejects insufficient downshift", testSmoothCadenceRejectsInsufficientDownshiftAndBacksOff},
         {"Smooth Cadence downshift rejects delivery pressure", testSmoothCadenceDownshiftRejectsDeliveryPressure},
         {"Smooth Cadence downshift pauses during acquire backoff", testSmoothCadenceDownshiftPausesDuringAcquireBackoff},

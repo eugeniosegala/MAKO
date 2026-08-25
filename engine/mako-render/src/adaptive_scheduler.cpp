@@ -73,8 +73,12 @@ namespace {
     constexpr double adaptiveStableCadenceMaximumCandidateSpreadRatio = 1.15;
     constexpr auto adaptiveEfficiencyProbeHoldDuration = std::chrono::seconds(5);
     constexpr auto adaptiveEfficiencyProbeEvaluationDuration = std::chrono::milliseconds(250);
+    constexpr auto adaptiveEfficiencyProbeSettlingGraceDuration =
+        std::chrono::milliseconds(250);
     constexpr auto adaptiveEfficiencyProbeRetryDelay = std::chrono::seconds(60);
     constexpr double adaptiveEfficiencyProbeMinimumTargetRatio = 0.98;
+    constexpr double adaptiveEfficiencyProbeSettlingMinimumTargetRatio = 0.90;
+    constexpr double adaptiveEfficiencyProbeSettlingMinimumBaseRiseRatio = 1.20;
     constexpr double adaptiveRescueBaseCollapseRatio = 0.78;
     constexpr double adaptiveRescueOutputCollapseRatio = 0.80;
     constexpr double adaptiveRescueRecoveredBaseRatio = 0.90;
@@ -1015,6 +1019,30 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
             baseFps >= adaptiveMinimumBaseFps &&
             projectedOutputFps >=
                 targetFps * adaptiveEfficiencyProbeMinimumTargetRatio;
+        const bool stillSettling = !accepted && deliveryHealthy &&
+            !probe.settlingGraceUsed && probe.baselineBaseFps > 0.0 &&
+            baseFps >= probe.baselineBaseFps *
+                adaptiveEfficiencyProbeSettlingMinimumBaseRiseRatio &&
+            projectedOutputFps >= targetFps *
+                adaptiveEfficiencyProbeSettlingMinimumTargetRatio;
+        if (stillSettling) {
+            // Ordered FIFO backpressure can take longer than the first 250 ms
+            // to release after reducing generated work. Extend only a probe
+            // that is already close to target and recovering strongly, then
+            // retain the original 98% acceptance requirement at the new
+            // deadline. A true fixed-rate deficit still rolls back promptly.
+            probe.settlingGraceUsed = true;
+            probe.evaluationAt =
+                now + adaptiveEfficiencyProbeSettlingGraceDuration;
+            this->diagnostics->stableCadence(
+                "adaptive-efficiency-probe-extended",
+                testedLimit,
+                probe.baselineBaseFps,
+                baseFps,
+                "base-recovering"
+            );
+            return;
+        }
         this->diagnostics->stableCadence(
             accepted
                 ? "adaptive-efficiency-probe-accepted"
@@ -1058,6 +1086,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
         }
         probe.testedLimit = 0;
         probe.baselineBaseFps = 0.0;
+        probe.settlingGraceUsed = false;
         this->state.outputPlanner.resetTargetClock();
         return;
     }
@@ -1106,6 +1135,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
     probe.eligibleSince.reset();
     probe.retryAt.reset();
     probe.delivery.reset();
+    probe.settlingGraceUsed = false;
     this->state.nativeCadenceProbe.reset();
     this->state.outputPlanner.resetTargetClock();
     this->diagnostics->stableCadence(
