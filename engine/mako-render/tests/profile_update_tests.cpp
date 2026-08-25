@@ -235,6 +235,26 @@ int main() {
         "Performance-mode changes alter backend model construction");
 
     next = current;
+    next.ultra_performance = true;
+    expect(ls::effectiveFlowScale(next) ==
+            ls::GameConfDefaults::ultraPerformanceFlowScale &&
+            ls::effectivePerformanceMode(next),
+        "Ultra Performance must force 80% flow and the lighter model");
+    expect(classifyProfileUpdate(current, next, 3, true).action ==
+            ProfileUpdateAction::DeferUntilSwapchainRecreation,
+        "Ultra Performance changes must never apply to a live context");
+
+    auto equivalentUltra = current;
+    equivalentUltra.flow_scale = ls::GameConfDefaults::ultraPerformanceFlowScale;
+    equivalentUltra.performance_mode = true;
+    auto equivalentUltraEnabled = equivalentUltra;
+    equivalentUltraEnabled.ultra_performance = true;
+    expect(classifyProfileUpdate(
+            equivalentUltra, equivalentUltraEnabled, 3, true).action ==
+            ProfileUpdateAction::DeferUntilSwapchainRecreation,
+        "Ultra Performance must require restart even when model settings already match");
+
+    next = current;
     next.name = "Renamed";
     next.active_in = {"renamed-game"};
     expect(classifyProfileUpdate(current, next, 3, true).action ==
@@ -286,6 +306,13 @@ int main() {
 
     expect(generatedFrameCapacityForProfile(fixed) == 2,
         "Fixed 2x should reserve the configured Adaptive 3x capacity");
+    auto fixedUltra = fixed;
+    fixedUltra.ultra_performance = true;
+    expect(generatedFrameCapacityForProfile(fixedUltra) == 1,
+        "Fixed 2x Ultra Performance must allocate only its active output");
+    fixedUltra.adaptive = true;
+    expect(generatedFrameCapacityForProfile(fixedUltra) == 2,
+        "Adaptive 3x Ultra Performance must allocate only its active ceiling");
     expect(fixedGeneratedFrameCount(2, 2) == 1,
         "Fixed 2x must schedule one frame even with two reserved outputs");
     expect(fixedGeneratedFrameCount(3, 2) == 2,

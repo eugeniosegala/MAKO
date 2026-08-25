@@ -37,8 +37,9 @@ frame_generation_refresh_threshold = 0
 - **`adaptive_stable_cadence`**: Prefers a constant interpolation cadence when it is sustainable. It can look smoother but may increase input lag. Default: `false`.
 - **`dynamic_cadence_recovery`**: Optional per-profile compatibility recovery for games and emulators that switch native frame rates. It periodically presents a short native-only cadence probe on ordered SDR so FIFO-generated work cannot hide a faster mode. Adaptive recalibrates against `target_fps`; Fixed uses a confirmed Gamescope refresh as its target and treats `multiplier` as a ceiling, falling back to exact Fixed behavior when that signal is unavailable or the multiplier is outside 2x-4x. Enabling it sets `base_fps_cap` to `0` and disables `adaptive_auto_base_fps_cap`; the MAKO UIs keep the controls available and turn Recovery off if either cap is enabled later. A true fixed-rate game can receive a brief pacing check. Default: `false`.
 - **`dynamic_cadence_probe_interval_seconds`**: Seconds between Dynamic Cadence Recovery checks, from `1` to `3`. A shorter interval detects native-rate changes sooner but can make the brief native-only probe hitch more frequent in a true fixed-rate game. It applies live without resetting Adaptive's validated cadence or multiplier. Default: `2`.
+- **`ultra_performance`**: Restart-only per-profile preset that forces an effective Flow Scale of 0.80, the lighter frame-generation model, and FP16 permission when supported. It allocates generated-output resources only for the active Fixed or Adaptive policy and freezes user-configuration reloads for the running process. Suitable frame-generation-bound workloads may see an estimated 20–30% reduction in frame-generation GPU time, not a guaranteed game-FPS increase; test image quality and performance per game. MAKO Decky stores 0.80/true/true when enabling it and restores its 0.90/false/true defaults when disabling it; `mako-ui` restores the direct Renderer defaults of 1.00/false/true. The Renderer applies the forced effective values defensively even to a manually inconsistent profile. Default: `false`.
 - **`flow_scale`**: Motion-vector resolution from 0.25 to 1.0. Lower is faster; higher favours image quality. Default: `1.0`.
-- **`performance_mode`**: Uses a lighter model for lower GPU cost and more artifacts. Default: `false`.
+- **`performance_mode`**: Stable compatibility property presented as **Lighter FG Model**. It uses a lighter model for lower GPU cost and more artifacts. Default: `false`.
 - **`pacing`**: Presentation policy. `none` is the only supported value.
 - **`gpu`**: Optional GPU name, vendor/device ID, or PCI bus ID. It must name the GPU used by the game; multi-GPU frame generation is not supported.
 
@@ -54,7 +55,7 @@ When a setting is renamed or its value must be carried forward, add a one-time, 
 
 ## Applying changes
 
-Frame Generation, its refresh-rate threshold, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, Smooth Cadence, Dynamic Cadence Recovery, and its probe interval can usually apply while the game is running. Interval-only changes reschedule the next probe without resetting the validated scheduling policy. The threshold guard and Fixed recovery also react live when Gamescope reports a refresh-rate change. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Performance Mode, HDR-related settings, or a setting that requires more private GPU resources.
+Frame Generation, its refresh-rate threshold, Fixed/Adaptive mode, multiplier within existing capacity, Adaptive target/ceiling, Smooth Cadence, Dynamic Cadence Recovery, and its probe interval can usually apply while the game is running. Interval-only changes reschedule the next probe without resetting the validated scheduling policy. The threshold guard and Fixed recovery also react live when Gamescope reports a refresh-rate change. Restart the game after changing the DLL path, FP16 policy, GPU, Flow Scale, Lighter FG Model, HDR-related settings, or a setting that requires more private GPU resources. Ultra Performance freezes every user-profile change for the running process; Gamescope refresh and HDR feedback continue updating because they are runtime safety inputs rather than user toggles.
 
 Test V-Sync both on and off for each game. It can steady the real-frame cadence, but can also add latency or conflict with an FPS cap, VRR, or the compositor.
 
@@ -93,6 +94,6 @@ For a configuration that comes entirely from environment variables, set `MAKO_EN
 - `MAKO_DLL_PATH`, `MAKO_NO_FP16`, `MAKO_GPU`
 - `MAKO_MULTIPLIER`, `MAKO_FRAME_GENERATION_ENABLED`, `MAKO_FRAME_GENERATION_REFRESH_THRESHOLD`, `MAKO_BASE_FPS_CAP`
 - `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`, `MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS`
-- `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`
+- `MAKO_ULTRA_PERFORMANCE`, `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`
 
 `MAKO_DISABLE_HDR_EXPOSURE=1` keeps MAKO's unfinished HDR path disabled. It is part of the normal MAKO Decky and standalone `mako-launch` boundary. `DISABLE_GAMESCOPE_WSI=1` also closes that engine path defensively because the required HDR bridge is unavailable without the WSI layer. HDR and WSI settings are process-start policy and require a game restart; they are not live profile controls.

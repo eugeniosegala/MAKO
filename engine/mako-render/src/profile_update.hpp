@@ -111,10 +111,16 @@ namespace mako::layer {
     }
 
     /// Reserve one private output set that can serve both Fixed and Adaptive.
-    /// Keeping the game-owned swapchain shape independent from the selected
-    /// policy is what makes ordinary Decky mode changes safe to apply live.
+    /// Ultra Performance deliberately keeps only the active policy because
+    /// its profile is frozen for the lifetime of the game process.
     [[nodiscard]] inline size_t generatedFrameCapacityForProfile(
             const ls::GameConf& profile) {
+        if (profile.ultra_performance) {
+            const size_t activeMultiplier = profile.adaptive
+                ? profile.adaptive_max_multiplier
+                : profile.multiplier;
+            return activeMultiplier - 1;
+        }
         return std::max(profile.multiplier, profile.adaptive_max_multiplier) - 1;
     }
 
@@ -171,8 +177,10 @@ namespace mako::layer {
 
         const bool backendConstructionChanged =
             current.gpu != next.gpu ||
-            current.flow_scale != next.flow_scale ||
-            current.performance_mode != next.performance_mode;
+            current.ultra_performance != next.ultra_performance ||
+            ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||
+            ls::effectivePerformanceMode(current) !=
+                ls::effectivePerformanceMode(next);
         const bool presentationShapeChanged = current.pacing != next.pacing;
         const bool generatedCapacityExceeded =
             generatedFrameCapacityForActivePolicy(next) >

@@ -175,6 +175,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.allowFp16
                         description: t.allowFp16Desc
+                        enabled: !backend.ultra_performance
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -352,8 +353,21 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
+                        title: t.ultraPerformance
+                        description: t.ultraPerformanceDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.ultra_performance
+                            onToggled: backend.ultra_performance = checked
+                        }
+                    }
+
+                    GroupEntry {
                         title: t.flowScale
                         description: t.flowScaleDesc
+                        enabled: !backend.ultra_performance
 
                         FlowSlider {
                             Layout.fillWidth: true
@@ -369,6 +383,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.performanceMode
                         description: t.performanceModeDesc
+                        enabled: !backend.ultra_performance
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight

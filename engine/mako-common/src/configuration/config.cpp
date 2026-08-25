@@ -51,6 +51,7 @@ adaptive_max_multiplier = 3
 adaptive_stable_cadence = false
 dynamic_cadence_recovery = false
 dynamic_cadence_probe_interval_seconds = 2
+ultra_performance = false
 flow_scale = 0.85
 performance_mode = true
 pacing = 'none' # see the wiki for more info
@@ -91,6 +92,7 @@ ConfigFile::ConfigFile() {
         .dynamic_cadence_recovery = GameConfDefaults::dynamicCadenceRecovery,
         .dynamic_cadence_probe_interval_seconds =
             GameConfDefaults::dynamicCadenceProbeIntervalSeconds,
+        .ultra_performance = GameConfDefaults::ultraPerformance,
         .flow_scale = 0.85F,
         .performance_mode = true,
         .pacing = GameConfDefaults::pacing
@@ -262,6 +264,9 @@ namespace {
                 tbl["dynamic_cadence_probe_interval_seconds"].value_or(
                     GameConfDefaults::dynamicCadenceProbeIntervalSeconds
                 ),
+            .ultra_performance = tbl["ultra_performance"].value_or(
+                GameConfDefaults::ultraPerformance
+            ),
             .flow_scale = tbl["flow_scale"].value_or(GameConfDefaults::flowScale),
             .performance_mode = tbl["performance_mode"].value_or(
                 GameConfDefaults::performanceMode
@@ -316,6 +321,7 @@ namespace {
             .dynamic_cadence_recovery = GameConfDefaults::dynamicCadenceRecovery,
             .dynamic_cadence_probe_interval_seconds =
                 GameConfDefaults::dynamicCadenceProbeIntervalSeconds,
+            .ultra_performance = GameConfDefaults::ultraPerformance,
             .flow_scale = GameConfDefaults::flowScale,
             .performance_mode = GameConfDefaults::performanceMode,
             .pacing = GameConfDefaults::pacing
@@ -370,6 +376,9 @@ namespace {
         }
         const char* flow_scale = std::getenv("MAKO_FLOW_SCALE");
         if (flow_scale) conf.flow_scale = std::stof(flow_scale);
+        const char* ultra_performance = std::getenv("MAKO_ULTRA_PERFORMANCE");
+        if (ultra_performance)
+            conf.ultra_performance = std::string(ultra_performance) == "1";
         const char* performance = std::getenv("MAKO_PERFORMANCE_MODE");
         if (performance) conf.performance_mode = std::string(performance) == "1";
         const char* pacing = std::getenv("MAKO_PACING");
@@ -455,6 +464,7 @@ void ConfigFile::write(const std::filesystem::path& path) const {
             "dynamic_cadence_probe_interval_seconds",
             static_cast<int64_t>(conf.dynamic_cadence_probe_interval_seconds)
         );
+        profile.insert("ultra_performance", conf.ultra_performance);
         profile.insert("flow_scale", conf.flow_scale);
         profile.insert("performance_mode", conf.performance_mode);
         switch (conf.pacing) {

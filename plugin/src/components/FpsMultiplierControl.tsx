@@ -29,6 +29,7 @@ import {
   isFractionalAdaptivePresetEnabled,
   steadyBaseCapChanges,
 } from "../config/fractionalAdaptivePreset";
+import { ultraPerformanceChanges } from "../config/ultraPerformancePreset";
 import t from "../i18n/i18n";
 import { useDeferredTargetFps } from "../hooks/useDeferredTargetFps";
 import { MakoInlineWarning, makoDialogButtonStyle } from "./MakoUi";
@@ -117,12 +118,37 @@ export function FpsMultiplierControl({
 
       <PanelSectionRow>
         <ToggleField
-          label={t("CONFIG_PERFORMANCE_MODE", "Performance Mode (Restart)")}
+          label={t("CONFIG_ULTRA_PERFORMANCE", "Ultra Performance (Restart)")}
+          description={
+            <>
+              <div>
+                {t(
+                  "CONFIG_ULTRA_PERFORMANCE_DESC",
+                  "May reduce frame-generation GPU time by an estimated 20–30% in suitable workloads by using 80% Flow Scale, the Lighter FG Model, FP16 when supported, and active-mode-only resources. It increases visual artifacts, locks those controls, and disables live profile updates; actual game FPS varies, so test per game.",
+                )}
+              </div>
+              <MakoInlineWarning>
+                {t(
+                  "CONFIG_ULTRA_PERFORMANCE_WARNING",
+                  "Restart the game after changing this option. While enabled, profile changes do not apply to the running game.",
+                )}
+              </MakoInlineWarning>
+            </>
+          }
+          checked={config.ultra_performance}
+          onChange={(value) => onConfigUpdate(ultraPerformanceChanges(value))}
+        />
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ToggleField
+          label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model (Restart)")}
           description={t(
             "CONFIG_PERFORMANCE_MODE_DESC",
-            "Uses a lighter model that may improve performance at the cost of more ghosting. Restart the game after changing it. Start disabled and test per game.",
+            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. Restart the game after changing it. Ultra Performance locks this on.",
           )}
-          checked={config.performance_mode}
+          checked={config.ultra_performance || config.performance_mode}
+          disabled={config.ultra_performance}
           onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
         />
       </PanelSectionRow>
@@ -145,7 +171,7 @@ export function FpsMultiplierControl({
             <ToggleField
               label={t(
                 "FRACTIONAL_ADAPTIVE_PRESET",
-                "Fractional Adaptive (Preset)",
+                "Fractional Adaptive",
               )}
               description={t(
                 "FRACTIONAL_ADAPTIVE_PRESET_DESC",

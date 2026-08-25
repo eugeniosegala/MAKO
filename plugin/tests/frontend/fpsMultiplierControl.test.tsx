@@ -86,6 +86,36 @@ import { getDefaults } from "../../src/config/configSchema";
 afterEach(cleanup);
 
 describe("Frame Generation Mode controls", () => {
+  test("locks the lighter model on while Ultra Performance is enabled", () => {
+    window.SP_REACT = React;
+    const onConfigChange = vi.fn(async () => undefined);
+    const onConfigUpdate = vi.fn(async () => undefined);
+
+    render(
+      <FpsMultiplierControl
+        config={{
+          ...getDefaults(),
+          ultra_performance: true,
+          performance_mode: false,
+        }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+
+    const lighterModel = screen.getByText("Lighter FG Model (Restart)");
+    expect(lighterModel.getAttribute("data-checked")).toBe("true");
+    expect((lighterModel as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(screen.getByText("Ultra Performance (Restart)"));
+    expect(onConfigChange).not.toHaveBeenCalled();
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      ultra_performance: false,
+      flow_scale: 0.9,
+      performance_mode: false,
+      allow_fp16: true,
+    });
+  });
+
   test("keeps Adaptive and Fixed Multiplier as standard rows", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
@@ -99,7 +129,7 @@ describe("Frame Generation Mode controls", () => {
       />,
     );
 
-    expect(screen.queryByText("Fractional Adaptive (Preset)")).toBeNull();
+    expect(screen.queryByText("Fractional Adaptive")).toBeNull();
     expect(
       screen
         .getByText("Adaptive Frame Generation")
@@ -130,7 +160,7 @@ describe("Frame Generation Mode controls", () => {
       />,
     );
 
-    expect(screen.getByText("Fractional Adaptive (Preset)")).toBeTruthy();
+    expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
     expect(
       screen
         .getByText("Adaptive Frame Generation")
@@ -161,7 +191,7 @@ describe("Frame Generation Mode controls", () => {
 
     expect(
       screen
-        .getByText("Fractional Adaptive (Preset)")
+        .getByText("Fractional Adaptive")
         .getAttribute("data-checked"),
     ).toBe("true");
   });
@@ -231,7 +261,7 @@ describe("Frame Generation Mode controls", () => {
     );
 
     expect(screen.queryByText("Dynamic Cadence Recovery")).toBeNull();
-    const fractional = screen.getByText("Fractional Adaptive (Preset)");
+    const fractional = screen.getByText("Fractional Adaptive");
     const steady = screen.getByText("Steady Base Cap (45 FPS)");
     expect((fractional as HTMLButtonElement).disabled).toBe(false);
     expect(fractional.getAttribute("data-checked")).toBe("true");

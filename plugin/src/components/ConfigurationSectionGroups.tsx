@@ -32,6 +32,7 @@ import {
   FRAME_GENERATION_REFRESH_THRESHOLD_PRESET,
   FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
   GPU,
+  ULTRA_PERFORMANCE_FLOW_SCALE,
   type ConfigurationData,
 } from "../config/configSchema";
 import {
@@ -111,15 +112,20 @@ export function AdvancedRenderingConfigurationGroup({
         <>
           <PanelSectionRow>
             <SliderField
-              label={`${t("CONFIG_FLOW_SCALE", "Flow Scale (Restart)")} (${Math.round(config.flow_scale * 100)}%)`}
+              label={`${t("CONFIG_FLOW_SCALE", "Flow Scale (Restart)")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
               description={t(
                 "CONFIG_FLOW_SCALE_DESC",
                 "Controls internal motion-estimation resolution. Lower values reduce GPU work; higher values favour quality. Restart the game after changing it.",
               )}
-              value={config.flow_scale}
+              value={
+                config.ultra_performance
+                  ? ULTRA_PERFORMANCE_FLOW_SCALE
+                  : config.flow_scale
+              }
               min={FLOW_SCALE_MIN}
               max={FLOW_SCALE_MAX}
               step={0.01}
+              disabled={config.ultra_performance}
               onChange={(value) => onConfigChange(FLOW_SCALE, value)}
             />
           </PanelSectionRow>
@@ -147,7 +153,8 @@ export function AdvancedRenderingConfigurationGroup({
                 "CONFIG_ALLOW_FP16_DESC",
                 "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs.",
               )}
-              checked={config.allow_fp16}
+              checked={config.ultra_performance || config.allow_fp16}
+              disabled={config.ultra_performance}
               onChange={(value) => onConfigChange(ALLOW_FP16, value)}
             />
           </PanelSectionRow>

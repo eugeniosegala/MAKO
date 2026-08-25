@@ -269,6 +269,7 @@ class ConfigurationManager:
                 f"dynamic_cadence_recovery = {str(config['dynamic_cadence_recovery']).lower()}",
                 "dynamic_cadence_probe_interval_seconds = "
                 f"{config['dynamic_cadence_probe_interval_seconds']}",
+                f"ultra_performance = {str(config['ultra_performance']).lower()}",
                 f"flow_scale = {config['flow_scale']}",
                 f"performance_mode = {str(config['performance_mode']).lower()}",
                 "pacing = 'none'",

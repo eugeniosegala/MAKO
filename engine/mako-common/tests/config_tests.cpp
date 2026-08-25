@@ -56,6 +56,7 @@ namespace {
             left.dynamic_cadence_recovery == right.dynamic_cadence_recovery &&
             left.dynamic_cadence_probe_interval_seconds ==
                 right.dynamic_cadence_probe_interval_seconds &&
+            left.ultra_performance == right.ultra_performance &&
             left.flow_scale == right.flow_scale &&
             left.performance_mode == right.performance_mode &&
             left.pacing == right.pacing;
@@ -78,6 +79,9 @@ target_fps = 144
 adaptive_max_multiplier = 4
 dynamic_cadence_recovery = true
 dynamic_cadence_probe_interval_seconds = 3
+ultra_performance = true
+flow_scale = 0.95
+performance_mode = false
 )";
 }
 
@@ -101,6 +105,8 @@ int main() {
                 ls::GameConfDefaults::dynamicCadenceRecovery &&
             defaults.dynamic_cadence_probe_interval_seconds ==
                 ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds &&
+            defaults.ultra_performance ==
+                ls::GameConfDefaults::ultraPerformance &&
             defaults.flow_scale == ls::GameConfDefaults::flowScale &&
             defaults.performance_mode ==
                 ls::GameConfDefaults::performanceMode &&
@@ -172,6 +178,13 @@ int main() {
         "The accepted configuration must expose the cadence probe interval");
     expect(config.get().profiles().front().frame_generation_refresh_threshold == 60,
         "The accepted configuration must expose the refresh-rate threshold");
+    expect(config.get().profiles().front().ultra_performance &&
+            config.get().profiles().front().flow_scale == 0.95F &&
+            !config.get().profiles().front().performance_mode &&
+            ls::effectiveFlowScale(config.get().profiles().front()) ==
+                ls::GameConfDefaults::ultraPerformanceFlowScale &&
+            ls::effectivePerformanceMode(config.get().profiles().front()),
+        "Ultra Performance must preserve saved settings while overriding backend construction");
     expect(config.get().profiles().front().base_fps_cap == 0 &&
             !config.get().profiles().front().adaptive_auto_base_fps_cap,
         "Dynamic cadence recovery must disable both base FPS caps");
@@ -260,6 +273,7 @@ multiplier = 5
     setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS", "1", 1);
     setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
+    setenv("MAKO_ULTRA_PERFORMANCE", "1", 1);
     const ls::WatchedConfig environmentConfig;
     expect(environmentConfig.get().profiles().front().dynamic_cadence_recovery &&
             environmentConfig.get().profiles().front()
@@ -267,11 +281,13 @@ multiplier = 5
             environmentConfig.get().profiles().front().frame_generation_refresh_threshold ==
                 130 &&
             environmentConfig.get().profiles().front().base_fps_cap == 0 &&
-            !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap,
+            !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap &&
+            environmentConfig.get().profiles().front().ultra_performance,
         "Environment dynamic cadence recovery must disable both base FPS caps");
     unsetenv("MAKO_DYNAMIC_CADENCE_RECOVERY");
     unsetenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS");
     unsetenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
+    unsetenv("MAKO_ULTRA_PERFORMANCE");
     unsetenv("MAKO_ADAPTIVE");
     unsetenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");
     unsetenv("MAKO_BASE_FPS_CAP");

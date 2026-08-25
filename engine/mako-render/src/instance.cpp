@@ -367,6 +367,14 @@ Root::Root() :
             std::cerr << "(identified via fallback)\n";
             break;
     }
+    if (this->active_profile->ultra_performance) {
+        std::cerr << "MAKO Renderer: Ultra Performance active: flow_scale="
+                  << ls::effectiveFlowScale(*this->active_profile)
+                  << "; lighter_model="
+                  << ls::effectivePerformanceMode(*this->active_profile)
+                  << "; resources=active-policy"
+                  << "; live_profile_reload=disabled\n";
+    }
 }
 
 ConfigurationUpdateResult Root::update() {
@@ -420,6 +428,12 @@ ConfigurationUpdateResult Root::update() {
                   << result.hdrContextsDeferred << '\n';
     }
 
+    // Ultra Performance freezes the startup profile. Continue sampling the
+    // compositor-owned state above because HDR and refresh changes are safety
+    // inputs rather than user configuration toggles.
+    if (this->active_profile && this->active_profile->ultra_performance)
+        return result;
+
     // Configuration hot reload does not need a filesystem metadata query for
     // every presented frame. Keep the UI responsive while bounding the check
     // to four times per second, matching the feedback sampling cadence.
@@ -434,7 +448,6 @@ ConfigurationUpdateResult Root::update() {
         return result;
 
     result.reloaded = true;
-    this->runtimeStateRevision++;
     const auto& currentGlobal = this->config.get().global();
     result.globalChangeDeferred =
         previousGlobal.dll != currentGlobal.dll ||
@@ -444,6 +457,14 @@ ConfigurationUpdateResult Root::update() {
         ? std::optional<std::string>{this->active_profile->name}
         : std::nullopt;
     const auto& profile = findProfile(this->config.get(), ls::identify());
+    if (profile && profile->second.ultra_performance) {
+        std::cerr << "MAKO Renderer: Ultra Performance profile change deferred; "
+                     "restart the game to apply its static resource policy\n";
+        result.deferredContexts = this->swapchains.size();
+        return result;
+    }
+
+    this->runtimeStateRevision++;
     if (profile.has_value())
         this->active_profile = profile->second;
     else
@@ -668,7 +689,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                         applicationDevice
                     );
                 },
-                dll, global.allow_fp16
+                dll, ls::effectiveAllowFp16(global, profile)
             );
         } catch (const std::exception& e) {
             throw ls::error("failed to create backend instance", e);

@@ -39,6 +39,8 @@ namespace ls {
         static constexpr bool adaptiveStableCadence = false;
         static constexpr bool dynamicCadenceRecovery = false;
         static constexpr uint32_t dynamicCadenceProbeIntervalSeconds = 2;
+        static constexpr bool ultraPerformance = false;
+        static constexpr float ultraPerformanceFlowScale = 0.8F;
         static constexpr float flowScale = 1.0F;
         static constexpr bool performanceMode = false;
         static constexpr Pacing pacing = Pacing::None;
@@ -95,6 +97,8 @@ namespace ls {
         uint32_t dynamic_cadence_probe_interval_seconds{
             GameConfDefaults::dynamicCadenceProbeIntervalSeconds
         };
+        /// trade live profile reloads for the lowest supported resource cost
+        bool ultra_performance{GameConfDefaults::ultraPerformance};
         /// non-inverted flow scale
         float flow_scale{GameConfDefaults::flowScale};
         /// use performance mode
@@ -102,6 +106,26 @@ namespace ls {
         /// pacing method
         Pacing pacing{GameConfDefaults::pacing};
     };
+
+    /// Flow scale selected for backend construction after applying presets.
+    [[nodiscard]] constexpr float effectiveFlowScale(
+            const GameConf& profile) noexcept {
+        return profile.ultra_performance
+            ? GameConfDefaults::ultraPerformanceFlowScale
+            : profile.flow_scale;
+    }
+
+    /// Model selected for backend construction after applying presets.
+    [[nodiscard]] constexpr bool effectivePerformanceMode(
+            const GameConf& profile) noexcept {
+        return profile.ultra_performance || profile.performance_mode;
+    }
+
+    /// FP16 permission selected for a process after applying its profile preset.
+    [[nodiscard]] constexpr bool effectiveAllowFp16(
+            const GlobalConf& global, const GameConf& profile) noexcept {
+        return profile.ultra_performance || global.allow_fp16;
+    }
 
     /// parsed configuration file
     class ConfigFile {

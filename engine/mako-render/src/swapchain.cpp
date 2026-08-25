@@ -332,7 +332,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                     { sourceFds.at(0), sourceFds.at(1) }, destinationFds, syncFd,
                     extent.width, extent.height,
                     this->colorPipeline.encoding,
-                    1.0F / this->profile.flow_scale, this->profile.performance_mode
+                    1.0F / ls::effectiveFlowScale(this->profile),
+                    ls::effectivePerformanceMode(this->profile)
                 )),
                 [backend = &backend](ls::R<backend::Context>& ctx) {
                     backend->closeContext(ctx);
@@ -615,7 +616,8 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
         new ls::R<backend::Context>(backendInstance.openContext(
             {sourceFds.at(0), sourceFds.at(1)}, destinationFds, syncFd,
             extent.width, extent.height, pipeline.encoding,
-            1.0F / this->profile.flow_scale, this->profile.performance_mode
+            1.0F / ls::effectiveFlowScale(this->profile),
+            ls::effectivePerformanceMode(this->profile)
         )),
         [backend = &backendInstance](ls::R<backend::Context>& context) {
             backend->closeContext(context);

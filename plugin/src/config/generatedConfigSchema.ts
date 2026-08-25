@@ -43,6 +43,7 @@ export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 1 as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3 as const;
 export const FLOW_SCALE_MIN = 0.25 as const;
 export const FLOW_SCALE_MAX = 1.0 as const;
+export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.8 as const;
 export const FIXED_MULTIPLIER_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MAX = 4 as const;
@@ -87,6 +88,7 @@ export const ADAPTIVE_MAX_MULTIPLIER = "adaptive_max_multiplier" as const;
 export const ADAPTIVE_STABLE_CADENCE = "adaptive_stable_cadence" as const;
 export const DYNAMIC_CADENCE_RECOVERY = "dynamic_cadence_recovery" as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS = "dynamic_cadence_probe_interval_seconds" as const;
+export const ULTRA_PERFORMANCE = "ultra_performance" as const;
 export const FLOW_SCALE = "flow_scale" as const;
 export const PERFORMANCE_MODE = "performance_mode" as const;
 export const PACING = "pacing" as const;
@@ -187,6 +189,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: 2,
     description: "seconds between Dynamic Cadence Recovery probes; shorter intervals react faster but can make brief pacing hitches more frequent"
   },
+  ultra_performance: {
+    name: "ultra_performance",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "restart-only preset that uses 80% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and frozen live profile settings"
+  },
   flow_scale: {
     name: "flow_scale",
     fieldType: ConfigFieldType.FLOAT,
@@ -270,6 +278,7 @@ export interface ConfigurationData {
   adaptive_stable_cadence: boolean;
   dynamic_cadence_recovery: boolean;
   dynamic_cadence_probe_interval_seconds: number;
+  ultra_performance: boolean;
   flow_scale: number;
   performance_mode: boolean;
   pacing: string;
@@ -306,6 +315,7 @@ export function getDefaults(): ConfigurationData {
     adaptive_stable_cadence: true,
     dynamic_cadence_recovery: false,
     dynamic_cadence_probe_interval_seconds: 2,
+    ultra_performance: false,
     flow_scale: 0.9,
     performance_mode: false,
     pacing: "none",
@@ -335,6 +345,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     adaptive_stable_cadence: ConfigFieldType.BOOLEAN,
     dynamic_cadence_recovery: ConfigFieldType.BOOLEAN,
     dynamic_cadence_probe_interval_seconds: ConfigFieldType.INTEGER,
+    ultra_performance: ConfigFieldType.BOOLEAN,
     flow_scale: ConfigFieldType.FLOAT,
     performance_mode: ConfigFieldType.BOOLEAN,
     pacing: ConfigFieldType.STRING,

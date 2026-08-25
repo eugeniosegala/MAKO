@@ -49,6 +49,7 @@ DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 1
 DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3
 FLOW_SCALE_MIN = 0.25
 FLOW_SCALE_MAX = 1.0
+ULTRA_PERFORMANCE_FLOW_SCALE = 0.8
 FIXED_MULTIPLIER_MIN = 2
 FIXED_MULTIPLIER_UI_MIN = FIXED_MULTIPLIER_MIN
 FIXED_MULTIPLIER_UI_MAX = 4
@@ -180,6 +181,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "fieldType": ConfigFieldType.INTEGER,
         "default": 2,
         "description": "seconds between Dynamic Cadence Recovery probes; shorter intervals react faster but can make brief pacing hitches more frequent",
+        "location": "toml"
+    },
+
+    "ultra_performance": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "restart-only preset that uses 80% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and frozen live profile settings",
         "location": "toml"
     },
 

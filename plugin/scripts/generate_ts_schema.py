@@ -43,6 +43,7 @@ from shared_config import (
     SUPPORTED_FLATPAK_RUNTIME_VERSIONS,
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
+    ULTRA_PERFORMANCE_FLOW_SCALE,
     ConfigFieldType,
 )
 
@@ -128,6 +129,8 @@ def generate_typescript_schema():
         f"{DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX} as const;",
         f"export const FLOW_SCALE_MIN = {FLOW_SCALE_MIN} as const;",
         f"export const FLOW_SCALE_MAX = {FLOW_SCALE_MAX} as const;",
+        "export const ULTRA_PERFORMANCE_FLOW_SCALE = "
+        f"{ULTRA_PERFORMANCE_FLOW_SCALE} as const;",
         f"export const FIXED_MULTIPLIER_MIN = {FIXED_MULTIPLIER_MIN} as const;",
         "export const FIXED_MULTIPLIER_UI_MIN = "
         f"{FIXED_MULTIPLIER_UI_MIN} as const;",

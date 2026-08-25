@@ -195,6 +195,7 @@ class RendererConfigContractTests(unittest.TestCase):
             ("frame_generation_refresh_threshold", "uint"),
             ("dynamic_cadence_recovery", "bool"),
             ("dynamic_cadence_probe_interval_seconds", "uint"),
+            ("ultra_performance", "bool"),
         ):
             with self.subTest(field=field):
                 self.assertIn(f"backend.{field}", ui_source)

@@ -17,7 +17,11 @@ vi.mock("@decky/ui", () => ({
     disabled?: boolean;
     onChange: (value: boolean) => void;
   }) => (
-    <button disabled={disabled} onClick={() => onChange(!checked)}>
+    <button
+      data-checked={String(checked)}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    >
       {label}
     </button>
   ),
@@ -102,6 +106,27 @@ describe("External Tools controls", () => {
         .getByText("Compatibility Settings")
         .getAttribute("data-top-margin"),
     ).toBe("26px");
+  });
+
+  test("shows Ultra Performance's effective flow and FP16 values as locked", () => {
+    render(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          ultra_performance: true,
+          flow_scale: 0.9,
+          allow_fp16: false,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const flowScale = screen.getByText("Flow Scale (Restart) (80%)");
+    const allowFp16 = screen.getByText("Allow FP16");
+    expect((flowScale as HTMLButtonElement).disabled).toBe(true);
+    expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
+    expect(allowFp16.getAttribute("data-checked")).toBe("true");
   });
 
   test("starts collapsed and remembers when it is expanded", () => {

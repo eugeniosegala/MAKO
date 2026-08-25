@@ -45,6 +45,7 @@ namespace mako::ui {
         Q_PROPERTY(bool adaptive_stable_cadence READ getAdaptiveStableCadence WRITE adaptiveStableCadenceUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool dynamic_cadence_recovery READ getDynamicCadenceRecovery WRITE dynamicCadenceRecoveryUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint dynamic_cadence_probe_interval_seconds READ getDynamicCadenceProbeIntervalSeconds WRITE dynamicCadenceProbeIntervalSecondsUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool ultra_performance READ getUltraPerformance WRITE ultraPerformanceUpdated NOTIFY refreshUI)
         Q_PROPERTY(float flow_scale READ getFlowScale WRITE flowScaleUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool performance_mode READ getPerformanceMode WRITE performanceModeUpdated NOTIFY refreshUI)
         Q_PROPERTY(QStringList gpus READ calculateGPUList NOTIFY refreshUI)
@@ -161,13 +162,17 @@ namespace mako::ui {
             )
             return conf.dynamic_cadence_probe_interval_seconds;
         }
+        [[nodiscard]] bool getUltraPerformance() const {
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::ultraPerformance)
+            return conf.ultra_performance;
+        }
         [[nodiscard]] float getFlowScale() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::flowScale)
-            return conf.flow_scale;
+            return ls::effectiveFlowScale(conf);
         }
         [[nodiscard]] bool getPerformanceMode() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::performanceMode)
-            return conf.performance_mode;
+            return ls::effectivePerformanceMode(conf);
         }
         [[nodiscard]] QStringList calculateGPUList() const {
             return this->m_gpu_list;
@@ -258,6 +263,7 @@ namespace mako::ui {
             MARK_DIRTY()
         }
         void allowFP16Updated(bool allow_fp16) {
+            if (getUltraPerformance()) return;
             auto& conf = this->m_global;
             conf.allow_fp16 = allow_fp16;
             MARK_DIRTY()
@@ -360,13 +366,25 @@ namespace mako::ui {
             );
             MARK_DIRTY()
         }
+        void ultraPerformanceUpdated(bool ultra_performance) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.ultra_performance = ultra_performance;
+            conf.flow_scale = ultra_performance
+                ? ls::GameConfDefaults::ultraPerformanceFlowScale
+                : ls::GameConfDefaults::flowScale;
+            conf.performance_mode = ultra_performance;
+            this->m_global.allow_fp16 = true;
+            MARK_DIRTY()
+        }
         void flowScaleUpdated(float flow_scale) {
             VALIDATE_AND_GET_PROFILE()
+            if (conf.ultra_performance) return;
             conf.flow_scale = flow_scale;
             MARK_DIRTY()
         }
         void performanceModeUpdated(bool performance_mode) {
             VALIDATE_AND_GET_PROFILE()
+            if (conf.ultra_performance) return;
             conf.performance_mode = performance_mode;
             MARK_DIRTY()
         }
