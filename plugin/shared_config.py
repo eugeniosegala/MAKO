@@ -193,7 +193,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
 
     "flow_scale": {
         "fieldType": ConfigFieldType.FLOAT,
-        "default": 0.85,
+        "default": 0.9,
         "description": "change the flow scale",
         "location": "toml"
     },

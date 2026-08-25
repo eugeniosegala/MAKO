@@ -15,7 +15,7 @@ describe("Ultra Performance preset", () => {
   test("restores Decky's canonical defaults when disabled", () => {
     expect(ultraPerformanceChanges(false)).toEqual({
       ultra_performance: false,
-      flow_scale: 0.85,
+      flow_scale: 0.9,
       performance_mode: false,
       allow_fp16: true,
     });

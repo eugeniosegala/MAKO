@@ -140,7 +140,7 @@ export function FpsMultiplierControl({
                   <div>
                     {t(
                       "FRACTIONAL_ADAPTIVE_PRESET_DESC",
-                      "Mixes generation ratios to reach targets such as 60 real FPS → 90 displayed FPS. It keeps more real frames and may reduce input lag, but can feel less smooth in some games.",
+                      "Mixes generation ratios to reach targets such as 60 real FPS → 90 displayed FPS. It keeps more real frames and may reduce input lag and ghosting, but can feel less smooth in some games.",
                     )}
                   </div>
                   <MakoSettingRelationship>
@@ -179,7 +179,7 @@ export function FpsMultiplierControl({
                   <div>
                     {t(
                       "ADAPTIVE_AUTO_BASE_FPS_CAP_DESC",
-                      "The default Adaptive mode. Caps real FPS at half the target for an even cadence. Pros: usually smoother pacing. Cons: fewer real frames and potentially more input lag.",
+                      "The default Adaptive mode. Caps real FPS at half the target for an even cadence. Pros: usually smoother pacing. Cons: fewer real frames and potentially more input lag and ghosting.",
                     )}
                   </div>
                   <MakoSettingRelationship>
