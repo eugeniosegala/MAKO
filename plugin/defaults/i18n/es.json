@@ -17,7 +17,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "Umbral de frecuencia de actualización",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "Elija la frecuencia más alta a la que la generación de cuadros debe permanecer pausada. Los cambios se aplican en directo.",
   "CONFIG_ULTRA_PERFORMANCE": "Rendimiento ultra (reinicio)",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "Usará una escala de flujo del 70 %, el modelo de FG ligero y FP16 cuando sea compatible, y omitirá las comprobaciones de perfil en tiempo real para reducir la carga de la GPU. Aumenta los artefactos visuales.",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "Puede proporcionar hasta un 30 % más de rendimiento. Usa una escala de flujo del 75 %, el modelo de FG ligero y FP16 cuando sea compatible, y omite las comprobaciones de perfil en tiempo real para reducir la carga de la GPU. Aumenta los artefactos visuales.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "No se aplicarán actualizaciones en tiempo real cuando este modo esté activado. Reinicie el juego después de cambiar la configuración para que se aplique.",
   "CONFIG_PERFORMANCE_MODE": "Modelo de FG ligero (reinicio)",
   "CONFIG_PERFORMANCE_MODE_DESC": "Reduce la carga de la GPU usando un modelo de generación de fotogramas más ligero a costa de más imágenes fantasma. Es una opción de rendimiento menos agresiva que Rendimiento ultra. Reinicie el juego después de cambiarlo. Rendimiento ultra lo mantiene activado.",

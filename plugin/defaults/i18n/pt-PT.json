@@ -17,7 +17,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "Limite da taxa de atualização",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "Escolha a taxa de atualização mais alta em que a geração de fotogramas deve permanecer pausada. As alterações são aplicadas em tempo real.",
   "CONFIG_ULTRA_PERFORMANCE": "Desempenho ultra (reinício)",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "Usará a escala de fluxo de 70%, o modelo de FG mais leve e FP16 quando suportado, e ignorará verificações de perfil em direto para reduzir o trabalho da GPU. Isto aumenta os artefactos visuais.",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "Pode proporcionar até 30% de melhoria de desempenho. Usará a escala de fluxo de 75%, o modelo de FG mais leve e FP16 quando suportado, e ignorará verificações de perfil em direto para reduzir o trabalho da GPU. Isto aumenta os artefactos visuais.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Não serão aplicadas atualizações em tempo real quando este modo estiver ativo. Reinicie o jogo depois de alterar as definições para que sejam aplicadas.",
   "CONFIG_PERFORMANCE_MODE": "Modelo de FG mais leve (reinício)",
   "CONFIG_PERFORMANCE_MODE_DESC": "Reduz o trabalho da GPU ao utilizar um modelo de geração de fotogramas mais leve à custa de mais imagens fantasma. É uma opção de desempenho menos agressiva do que o Desempenho ultra. Reinicie o jogo após a alteração. O Desempenho ultra mantém esta opção ativada.",

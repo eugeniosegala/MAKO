@@ -135,7 +135,7 @@ export function PerformanceConfigurationGroup({
               <div>
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "Will use 70% Flow Scale, the Lighter FG Model, and FP16 when supported, and skips live profile checks to reduce GPU work. It increases visual artifacts.",
+                  "May provide up to a 30% performance boost. Uses 75% Flow Scale, the Lighter FG Model, and FP16 when supported, and skips live profile checks to reduce GPU work. It increases visual artifacts.",
                 )}
               </div>
               <MakoInlineWarning tone="warning">

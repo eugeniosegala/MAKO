@@ -157,7 +157,7 @@ describe("External Tools controls", () => {
       />,
     );
 
-    const flowScale = screen.getByText("Flow Scale (Restart) (70%)");
+    const flowScale = screen.getByText("Flow Scale (Restart) (75%)");
     const allowFp16 = screen.getByText("Allow FP16");
     expect((flowScale as HTMLButtonElement).disabled).toBe(true);
     expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);

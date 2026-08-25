@@ -17,7 +17,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "リフレッシュレートしきい値",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "フレーム生成を一時停止する最大リフレッシュレートを選択します。変更は即時適用されます。",
   "CONFIG_ULTRA_PERFORMANCE": "ウルトラパフォーマンス（再起動）",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "GPU 負荷を減らすため、フロースケール 70%、軽量 FG モデル、対応環境では FP16 を使用し、ライブプロファイルチェックを省略します。視覚的なアーティファクトは増加します。",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "最大 30% の性能向上が見込めます。フロースケール 75%、軽量 FG モデル、対応環境では FP16 を使用し、GPU 負荷を減らすためライブプロファイルチェックを省略します。視覚的なアーティファクトは増加します。",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "このモードが有効な間はライブ更新は適用されません。設定の変更を反映するにはゲームを再起動してください。",
   "CONFIG_PERFORMANCE_MODE": "軽量 FG モデル（再起動）",
   "CONFIG_PERFORMANCE_MODE_DESC": "軽量なフレーム生成モデルで GPU 負荷を下げますが、ゴーストが増えます。ウルトラパフォーマンスより控えめなパフォーマンス設定です。変更後はゲームを再起動してください。ウルトラパフォーマンスでは常に有効です。",
