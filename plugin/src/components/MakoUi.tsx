@@ -250,6 +250,7 @@ export function makoDialogButtonStyle(
   variant: "normal" | "danger" = "normal",
 ): CSSProperties {
   const danger = variant === "danger";
+  const focusColor = danger ? "#e36a79" : "#52d5e8";
   return {
     color: danger ? "#fff0f5" : "#eefbfe",
     background: danger
@@ -259,10 +260,12 @@ export function makoDialogButtonStyle(
       ? "1px solid rgba(183, 82, 118, 0.62)"
       : "1px solid rgba(65, 158, 178, 0.62)",
     borderRadius: "4px",
-    outline: isFocused ? "2px solid #52d5e8" : "none",
+    outline: isFocused ? `2px solid ${focusColor}` : "none",
     outlineOffset: "2px",
     boxShadow: isFocused
-      ? "0 0 0 3px rgba(82, 213, 232, 0.2), 0 0 10px rgba(43, 142, 163, 0.32)"
+      ? danger
+        ? "0 0 0 3px rgba(227, 106, 121, 0.2), 0 0 10px rgba(166, 48, 72, 0.34)"
+        : "0 0 0 3px rgba(82, 213, 232, 0.2), 0 0 10px rgba(43, 142, 163, 0.32)"
       : "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 5px rgba(0, 0, 0, 0.22)",
     transition: "background 120ms ease, box-shadow 120ms ease",
   };
@@ -319,6 +322,12 @@ export function MakoButtonTheme() {
       .Mako_BrandButton--danger button:hover:not(:disabled) {
         background: linear-gradient(135deg, #481b2c 0%, #732a43 58%, #913852 100%) !important;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 9px rgba(170, 57, 98, 0.24) !important;
+      }
+
+      .Mako_BrandButton--danger button:focus,
+      .Mako_BrandButton--danger button:focus-visible {
+        outline: 2px solid #e36a79 !important;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 0 3px rgba(227, 106, 121, 0.2), 0 0 10px rgba(166, 48, 72, 0.34) !important;
       }
     `}</style>
   );

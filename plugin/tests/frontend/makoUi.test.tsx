@@ -33,7 +33,7 @@ describe("MAKO release identity", () => {
 });
 
 describe("MAKO button theme", () => {
-  test("keeps dialog-button hover and focus within the MAKO palette", () => {
+  test("matches dialog-button hover and focus to each button palette", () => {
     window.SP_REACT = React;
 
     const { container } = render(<MakoButtonTheme />);
@@ -44,7 +44,12 @@ describe("MAKO button theme", () => {
     expect(theme).toContain("#0d6875");
     expect(theme).toContain("#913852");
     expect(theme).toContain("outline: 2px solid #52d5e8");
+    expect(theme).toContain(".Mako_BrandButton--danger button:focus");
+    expect(theme).toContain("outline: 2px solid #e36a79");
     expect(makoDialogButtonStyle(true).outline).toBe("2px solid #52d5e8");
+    expect(makoDialogButtonStyle(true, "danger").outline).toBe(
+      "2px solid #e36a79",
+    );
   });
 });
 
