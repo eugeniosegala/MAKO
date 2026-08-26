@@ -1068,24 +1068,29 @@ namespace {
         if (configurationUpdate.reloaded) {
             std::cerr << "MAKO Renderer: updated configuration in place; contexts="
                       << configurationUpdate.liveContextsUpdated << '\n';
-            if (configurationUpdate.deferredContexts > 0)
+            if (configurationUpdate.swapchainRecreationDeferredContexts > 0)
                 std::cerr << "MAKO Renderer: configuration changes requiring GPU resource "
                              "reconstruction remain pending until a game-owned "
                              "swapchain recreation; contexts="
-                          << configurationUpdate.deferredContexts << '\n';
-            if (configurationUpdate.processRestartContexts > 0)
-                std::cerr << "MAKO Renderer: process-static configuration changes "
-                             "remain pending until game restart; contexts="
-                          << configurationUpdate.processRestartContexts << '\n';
+                          << configurationUpdate.swapchainRecreationDeferredContexts
+                          << '\n';
             if (configurationUpdate.recreationRequestedContexts > 0)
                 std::cerr << "MAKO Renderer: live profile-resource changes will request "
                              "game-owned swapchain recreation after the current lower "
                              "present consumes its wait semaphores; contexts="
                           << configurationUpdate.recreationRequestedContexts
                           << '\n';
-            if (configurationUpdate.globalChangeDeferred)
-                std::cerr << "MAKO Renderer: global backend construction changed; "
-                             "the new DLL or FP16 setting applies on process restart\n";
+            if (configurationUpdate.processRestartDeferredContexts > 0 ||
+                    configurationUpdate.processProfileChangeDeferred ||
+                    configurationUpdate.globalChangeDeferred) {
+                std::cerr << "MAKO Renderer: process-static backend configuration remains "
+                             "pending until the game restarts; contexts="
+                          << configurationUpdate.processRestartDeferredContexts
+                          << "; profile="
+                          << configurationUpdate.processProfileChangeDeferred
+                          << "; global="
+                          << configurationUpdate.globalChangeDeferred << '\n';
+            }
         }
 
         // present each swapchain

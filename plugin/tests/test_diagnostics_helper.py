@@ -238,6 +238,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn(
             "signal-out-of-date-after-successful-present", result.stdout
         )
+        self.assertIn("wait-for-process-restart", result.stdout)
         self.assertIn("runtime-state-applied", result.stdout)
         self.assertIn("generated_capacity_pending=1", result.stdout)
         self.assertIn("available_generated_capacity=1", result.stdout)

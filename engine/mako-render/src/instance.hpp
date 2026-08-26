@@ -28,9 +28,10 @@ namespace mako::layer {
     struct ConfigurationUpdateResult {
         bool reloaded{false};
         size_t liveContextsUpdated{0};
-        size_t deferredContexts{0};
-        size_t processRestartContexts{0};
+        size_t swapchainRecreationDeferredContexts{0};
+        size_t processRestartDeferredContexts{0};
         size_t recreationRequestedContexts{0};
+        bool processProfileChangeDeferred{false};
         bool globalChangeDeferred{false};
         bool hdrFeedbackChanged{false};
         size_t hdrContextsDeferred{0};
@@ -134,6 +135,8 @@ namespace mako::layer {
         bool frameGenerationConfiguredAtStartup{false};
 
         ls::lazy<backend::Instance> backend;
+        std::optional<ls::GlobalConf> backendGlobal;
+        std::optional<ls::GameConf> backendProfile;
         std::unordered_map<VkSwapchainKHR, Swapchain> swapchains;
         PresentationEnvironmentPolicy presentationEnvironment;
         bool gamescopeEnvironmentDetected{false};

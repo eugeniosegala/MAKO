@@ -199,22 +199,12 @@ Profiles and Steam launch options are retained. The private native engine and la
 Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
 
 1. To use LS1 scaling or frame generation, purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. The open MAKO scaling method does not use `Lossless.dll`.
-2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0) and download `MAKO-Renderer-v<version>-linux.tar.xz` under **Assets**.
-3. Extract it into your user-local prefix:
+2. **Recommended: automated installation.** Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then double-click **Install MAKO Renderer** and choose **Execute** if your file manager asks. It verifies the archive, installs or updates the standalone MAKO Renderer, and opens its configuration UI.
+3. To update, extract a newer Renderer archive and run **Install MAKO Renderer** again. If you prefer a manual installation, follow the full [MAKO Renderer installation and usage guide](engine/README.md#direct-linux-installation).
 
-```bash
-mkdir -p ~/.local
-tar -xJf MAKO-Renderer-v<version>-linux.tar.xz -C ~/.local
-```
-
-4. Open **MAKO Renderer Configuration** from the application launcher or run `~/.local/bin/mako-ui`.
-5. Add a game profile, then activate MAKO only for that game. In Steam launch options, use:
-
-```text
-~/.local/bin/mako-launch %command%
-```
-
-`mako-launch` activates MAKO for that game through its private Vulkan layer boundary. It prevents Steam's Vulkan Fossilize/overlay hooks, competing frame-generation layers, and system-wide presentation hooks from bypassing MAKO's swapchain interception. Gamescope and the Steam/Game Mode interface remain active outside the application layer chain. Game-local integrations such as OptiScaler are not removed, but use only one frame-generation implementation per game. The archive includes both 64-bit and 32-bit Vulkan layers. Flatpak applications need the separate runtime extension. See the dedicated [MAKO Renderer installation and usage guide](engine/README.md) for Qt requirements, manual configuration, validation, benchmarking, Flatpak setup, source builds, and troubleshooting.
+<!-- prettier-ignore -->
+> [!IMPORTANT]
+> This installer is for the standalone MAKO Renderer only. It warns and asks for confirmation when MAKO Decky is installed because the current Decky and standalone flows share Renderer, Vulkan-manifest, and configuration paths. Continuing may leave MAKO Decky incompatible until you reinstall its matching Renderer.
 
 ## Documentation
 

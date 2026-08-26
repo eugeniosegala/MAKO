@@ -11,6 +11,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 namespace mako::layer {
 
@@ -34,18 +35,24 @@ namespace mako::layer {
         bool spatialScalingChanged{false};
         bool frameGenerationBackendChanged{false};
         bool generatedFrameCapacityExceeded{false};
-        bool processRestartRequired{false};
+        bool swapchainRecreationDeferred{false};
+        bool processRestartDeferred{false};
+        bool swapchainRecreationRequested{false};
+    };
+
+    struct ProfileUpdatePlan {
+        ls::GameConf appliedProfile;
+        ProfileUpdateDecision decision;
     };
 
     struct ProcessStaticProfileProjection {
         ls::GameConf runtimeProfile;
         bool gpuSelectionPending{false};
-        bool pacingPending{false};
         bool frameGenerationInteropPending{false};
         bool ultraPerformancePending{false};
 
         [[nodiscard]] bool restartRequired() const {
-            return this->gpuSelectionPending || this->pacingPending ||
+            return this->gpuSelectionPending ||
                 this->frameGenerationInteropPending ||
                 this->ultraPerformancePending;
         }
@@ -62,7 +69,6 @@ namespace mako::layer {
         ProcessStaticProfileProjection projection{
             .runtimeProfile = requested,
             .gpuSelectionPending = requested.gpu != current.gpu,
-            .pacingPending = requested.pacing != current.pacing,
             .frameGenerationInteropPending =
                 requested.frame_generation_enabled &&
                 !frameGenerationConfiguredAtStartup,
@@ -71,8 +77,6 @@ namespace mako::layer {
         };
         if (projection.gpuSelectionPending)
             projection.runtimeProfile.gpu = current.gpu;
-        if (projection.pacingPending)
-            projection.runtimeProfile.pacing = current.pacing;
         if (projection.frameGenerationInteropPending)
             projection.runtimeProfile.frame_generation_enabled = false;
         if (projection.ultraPerformancePending) {
@@ -210,12 +214,52 @@ namespace mako::layer {
     [[nodiscard]] inline bool liveProfileResourceRecreationAvailable(
             const ProfileUpdateDecision& decision,
             const bool frameGenerationResourcesAvailable) {
-        if (decision.processRestartRequired)
+        if (decision.processRestartDeferred)
             return false;
         return decision.spatialScalingChanged ||
             ((decision.frameGenerationBackendChanged ||
               decision.generatedFrameCapacityExceeded) &&
              frameGenerationResourcesAvailable);
+    }
+
+    /// Normal mode retains idle private resources after a live disable. An
+    /// Ultra Performance process that starts disabled omits them because the
+    /// application device was created without frame-generation interop.
+    [[nodiscard]] inline bool privateGenerationResourcesRequired(
+            const ls::GameConf& profile) {
+        return !profile.ultra_performance ||
+            profile.frame_generation_enabled;
+    }
+
+    /// A natural swapchain recreation reuses Root's process-wide backend. Keep
+    /// its actual GPU identity in the context profile so a requested GPU change
+    /// remains visibly pending until the process restarts.
+    [[nodiscard]] inline ls::GameConf profileForExistingBackend(
+            const ls::GameConf& requested,
+            const ls::GameConf& backendProfile) {
+        auto applied = requested;
+        applied.gpu = backendProfile.gpu;
+        applied.ultra_performance = backendProfile.ultra_performance;
+        return applied;
+    }
+
+    [[nodiscard]] inline bool backendGlobalChangePending(
+            const std::optional<ls::GlobalConf>& backendGlobal,
+            const ls::GlobalConf& requestedGlobal) {
+        return backendGlobal && (
+            backendGlobal->dll != requestedGlobal.dll ||
+            backendGlobal->allow_fp16 != requestedGlobal.allow_fp16
+        );
+    }
+
+    [[nodiscard]] inline bool backendProfileChangePending(
+            const std::optional<ls::GameConf>& backendProfile,
+            const ls::GameConf& requestedProfile) {
+        return backendProfile && (
+            backendProfile->gpu != requestedProfile.gpu ||
+            backendProfile->ultra_performance !=
+                requestedProfile.ultra_performance
+        );
     }
 
     /// Auto-cap aligns the common healthy path with an exact 2x cadence.
@@ -348,39 +392,107 @@ namespace mako::layer {
         return std::min(multiplier - 1, generatedFrameCapacity);
     }
 
-    /// Classify a profile change without touching Vulkan state.
-    ///
-    /// Only switches that alter CPU-side policy or select the already-created
-    /// frame-generation resources are safe during vkQueuePresentKHR. Changes
-    /// that alter resource shape or backend model construction are retained by
-    /// Root for the next game-owned swapchain creation.
-    [[nodiscard]] inline ProfileUpdateDecision classifyProfileUpdate(
+    /// Build the profile that can be applied to an existing context while
+    /// retaining requested resource-shape and process-static fields for their
+    /// documented boundary. A pending restart-only edit must not prevent an
+    /// unrelated cap, mode, target, or live generation switch from applying.
+    [[nodiscard]] inline ProfileUpdatePlan planProfileUpdate(
             const ls::GameConf& current, const ls::GameConf& next,
             const size_t generatedFrameCapacity,
             const bool frameGenerationResourcesAvailable) {
+        ls::GameConf applied = next;
+        bool swapchainRecreationDeferred = false;
+        bool processRestartDeferred = false;
+
+        // GPU and Ultra Performance participate in process-wide backend
+        // construction. A natural application swapchain recreation reuses that
+        // backend and therefore cannot satisfy either change.
+        if (current.gpu != next.gpu) {
+            applied.gpu = current.gpu;
+            processRestartDeferred = true;
+        }
+        if (current.ultra_performance != next.ultra_performance) {
+            applied.ultra_performance = current.ultra_performance;
+            applied.flow_scale = current.flow_scale;
+            applied.performance_mode = current.performance_mode;
+            processRestartDeferred = true;
+        }
+
+        // Scaling, Flow Scale, and model selection shape private resources,
+        // while pacing shapes the game-owned swapchain. They remain at their
+        // actually applied values until recreation completes.
+        if (current.scaling_enabled != next.scaling_enabled ||
+                current.scaling_method != next.scaling_method ||
+                current.scaling_factor != next.scaling_factor ||
+                current.scaling_sharpness != next.scaling_sharpness) {
+            applied.scaling_enabled = current.scaling_enabled;
+            applied.scaling_method = current.scaling_method;
+            applied.scaling_factor = current.scaling_factor;
+            applied.scaling_sharpness = current.scaling_sharpness;
+            swapchainRecreationDeferred = true;
+        }
+        if (ls::effectiveFlowScale(current) !=
+                ls::effectiveFlowScale(applied)) {
+            applied.flow_scale = current.flow_scale;
+            swapchainRecreationDeferred = true;
+        }
+        if (ls::effectivePerformanceMode(current) !=
+                ls::effectivePerformanceMode(applied)) {
+            applied.performance_mode = current.performance_mode;
+            swapchainRecreationDeferred = true;
+        }
+        if (current.pacing != next.pacing) {
+            applied.pacing = current.pacing;
+            swapchainRecreationDeferred = true;
+        }
+
+        // Keep the currently active policy when the requested Fixed/Adaptive
+        // selection needs more generated images. Dormant settings can still be
+        // retained in the applied profile and become active after recreation.
+        if (generatedFrameCapacityForActivePolicy(applied) >
+                generatedFrameCapacity) {
+            applied.adaptive = current.adaptive;
+            if (current.adaptive)
+                applied.adaptive_max_multiplier =
+                    current.adaptive_max_multiplier;
+            else
+                applied.multiplier = current.multiplier;
+            swapchainRecreationDeferred = true;
+        }
+
+        if (!current.frame_generation_enabled &&
+                next.frame_generation_enabled &&
+                !frameGenerationResourcesAvailable) {
+            applied.frame_generation_enabled = false;
+            processRestartDeferred = true;
+        }
+
         const bool frameGenerationChanged =
-            current.frame_generation_enabled != next.frame_generation_enabled;
+            current.frame_generation_enabled !=
+                applied.frame_generation_enabled;
         const bool refreshRateThresholdChanged =
             current.frame_generation_refresh_threshold !=
-                next.frame_generation_refresh_threshold;
-        const bool generationModeChanged = current.adaptive != next.adaptive;
-        const bool fixedMultiplierChanged = current.multiplier != next.multiplier;
+                applied.frame_generation_refresh_threshold;
+        const bool generationModeChanged = current.adaptive != applied.adaptive;
+        const bool fixedMultiplierChanged =
+            current.multiplier != applied.multiplier &&
+            (!current.adaptive || !applied.adaptive);
         const bool baseFpsCapChanged =
-            effectiveBaseFpsCap(current) != effectiveBaseFpsCap(next);
+            effectiveBaseFpsCap(current) != effectiveBaseFpsCap(applied);
         const bool dynamicCadenceProbeIntervalChanged =
             current.dynamic_cadence_probe_interval_seconds !=
-                next.dynamic_cadence_probe_interval_seconds &&
+                applied.dynamic_cadence_probe_interval_seconds &&
             (current.dynamic_cadence_recovery ||
-             next.dynamic_cadence_recovery);
+             applied.dynamic_cadence_recovery);
         const bool generationPolicyChanged =
             current.dynamic_cadence_recovery !=
-                next.dynamic_cadence_recovery ||
-            (current.adaptive && next.adaptive && (
-                current.target_fps != next.target_fps ||
+                applied.dynamic_cadence_recovery ||
+            (current.adaptive && applied.adaptive && (
+                current.target_fps != applied.target_fps ||
                 current.adaptive_max_multiplier !=
-                    next.adaptive_max_multiplier ||
+                    applied.adaptive_max_multiplier ||
                 current.adaptive_stable_cadence !=
-                    next.adaptive_stable_cadence
+                    applied.adaptive_stable_cadence
             ));
         const bool spatialScalingChanged =
             current.scaling_enabled != next.scaling_enabled ||
@@ -388,35 +500,33 @@ namespace mako::layer {
             current.scaling_factor != next.scaling_factor ||
             current.scaling_sharpness != next.scaling_sharpness;
         const bool frameGenerationBackendChanged =
+            current.ultra_performance == next.ultra_performance && (
             ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||
             ls::effectivePerformanceMode(current) !=
-                ls::effectivePerformanceMode(next);
-
-        const bool backendConstructionChanged =
-            current.gpu != next.gpu ||
-            current.ultra_performance != next.ultra_performance ||
-            frameGenerationBackendChanged;
-        const bool presentationShapeChanged = current.pacing != next.pacing;
+                ls::effectivePerformanceMode(next));
         const bool generatedCapacityExceeded =
             generatedFrameCapacityForActivePolicy(next) >
                 generatedFrameCapacity;
-        const bool resourcesNeeded = !current.frame_generation_enabled &&
-            next.frame_generation_enabled &&
-            !frameGenerationResourcesAvailable;
-        const bool processRestartRequired =
-            current.gpu != next.gpu ||
-            current.ultra_performance != next.ultra_performance ||
-            presentationShapeChanged || resourcesNeeded;
+        const bool liveChange = frameGenerationChanged ||
+            refreshRateThresholdChanged ||
+                generationPolicyChanged ||
+                generationModeChanged || fixedMultiplierChanged ||
+                baseFpsCapChanged || dynamicCadenceProbeIntervalChanged;
 
-        if (backendConstructionChanged || presentationShapeChanged ||
-                spatialScalingChanged ||
-                generatedCapacityExceeded || resourcesNeeded) {
-            return {
-                .action = processRestartRequired
-                    ? ProfileUpdateAction::DeferUntilProcessRestart
-                    : ProfileUpdateAction::DeferUntilSwapchainRecreation,
+        ProfileUpdateAction action = ProfileUpdateAction::NoRuntimeChange;
+        if (liveChange)
+            action = ProfileUpdateAction::ApplyLive;
+        else if (processRestartDeferred)
+            action = ProfileUpdateAction::DeferUntilProcessRestart;
+        else if (swapchainRecreationDeferred)
+            action = ProfileUpdateAction::DeferUntilSwapchainRecreation;
+        return {
+            .appliedProfile = std::move(applied),
+            .decision = {
+                .action = action,
                 .frameGenerationChanged = frameGenerationChanged,
-                .refreshRateThresholdChanged = refreshRateThresholdChanged,
+                .refreshRateThresholdChanged =
+                    refreshRateThresholdChanged,
                 .generationPolicyChanged = generationPolicyChanged,
                 .generationModeChanged = generationModeChanged,
                 .fixedMultiplierChanged = fixedMultiplierChanged,
@@ -428,34 +538,23 @@ namespace mako::layer {
                     frameGenerationBackendChanged,
                 .generatedFrameCapacityExceeded =
                     generatedCapacityExceeded,
-                .processRestartRequired = processRestartRequired,
-            };
-        }
+                .swapchainRecreationDeferred =
+                    swapchainRecreationDeferred,
+                .processRestartDeferred = processRestartDeferred,
+            },
+        };
+    }
 
-        if (frameGenerationChanged || refreshRateThresholdChanged ||
-                generationPolicyChanged ||
-                generationModeChanged || fixedMultiplierChanged ||
-                baseFpsCapChanged || dynamicCadenceProbeIntervalChanged) {
-            return {
-                .action = ProfileUpdateAction::ApplyLive,
-                .frameGenerationChanged = frameGenerationChanged,
-                .refreshRateThresholdChanged = refreshRateThresholdChanged,
-                .generationPolicyChanged = generationPolicyChanged,
-                .generationModeChanged = generationModeChanged,
-                .fixedMultiplierChanged = fixedMultiplierChanged,
-                .baseFpsCapChanged = baseFpsCapChanged,
-                .dynamicCadenceProbeIntervalChanged =
-                dynamicCadenceProbeIntervalChanged,
-                .spatialScalingChanged = spatialScalingChanged,
-                .frameGenerationBackendChanged =
-                    frameGenerationBackendChanged,
-                .generatedFrameCapacityExceeded =
-                    generatedCapacityExceeded,
-                .processRestartRequired = processRestartRequired,
-            };
-        }
-
-        return {};
+    /// Classify a requested change without exposing the merged applied profile.
+    /// Tests and callers that only need transition metadata can use this helper.
+    [[nodiscard]] inline ProfileUpdateDecision classifyProfileUpdate(
+            const ls::GameConf& current, const ls::GameConf& next,
+            const size_t generatedFrameCapacity,
+            const bool frameGenerationResourcesAvailable) {
+        return planProfileUpdate(
+            current, next, generatedFrameCapacity,
+            frameGenerationResourcesAvailable
+        ).decision;
     }
 
 }

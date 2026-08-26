@@ -34,6 +34,19 @@ See the [main MAKO installation guide](../README.md#install-and-use) for the com
 
 ### Direct Linux installation
 
+#### Graphical installation and update
+
+1. To use LS1 scaling or frame generation, purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` for LS1 and LSFG but does not bundle, copy, persist, or modify it. The open MAKO scaling method remains available without the DLL.
+2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), download `MAKO-Renderer-v<version>-linux.tar.xz`, and extract it in your file manager.
+3. Double-click **Install MAKO Renderer** in the extracted folder. Choose **Execute** if your file manager asks. The installer verifies the archive, installs or updates only the standalone MAKO Renderer files below `~/.local`, preserves profiles, and opens **MAKO Renderer Configuration**.
+4. To update, extract a newer Renderer archive and repeat step 3. To uninstall, open **Uninstall MAKO Renderer** from the desktop application menu. It keeps profiles by default and asks separately before removing them.
+
+<!-- prettier-ignore -->
+> [!IMPORTANT]
+> The graphical installer owns only a direct standalone MAKO Renderer installation. It warns and asks for confirmation when MAKO Decky is installed because the current Decky and standalone flows share Renderer, Vulkan-manifest, and configuration paths. Continuing may leave MAKO Decky incompatible until you reinstall its matching Renderer.
+
+#### Manual installation
+
 1. To use LS1 scaling or frame generation, purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` for LS1 and LSFG but does not bundle, copy, persist, or modify it. The open MAKO scaling method remains available without the DLL.
 2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0) and download `MAKO-Renderer-v<version>-linux.tar.xz` under **Assets**.
 3. Optionally save the archive's file list so you know exactly what was installed, then extract it into your user-local prefix:
@@ -236,6 +249,7 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 
 - [Configuration](docs/CONFIGURATION.md): profiles, scaling and frame-generation controls, Adaptive mode, and environment variables.
 - [Spatial scaling architecture](docs/SCALING.md): pipeline order, fixed and variable surfaces, formats, resource cost, live recreation semantics, and validation.
+- [Runtime configuration transitions](docs/RUNTIME-TRANSITIONS.md): live-safe updates, natural-recreation and process-restart boundaries, Frame Generation Off resource behavior, Ultra Performance isolation, diagnostics, and extension rules.
 - [Adaptive validation](docs/ADAPTIVE-VALIDATION.md): deterministic scheduler stages, generated-frame-plan ownership, characterization tests, benchmarking, and the real-game matrix.
 - [WSI isolation](docs/WSI-ISOLATION.md): private Vulkan discovery, Gamescope presentation ownership, tradeoffs, diagnostics, and future HDR constraints.
 - [Optional graphics integrations](docs/LAYER-CHAINING.md): MAKO Decky's per-profile MangoHud and experimental vkBasalt controls, manual layer chaining, capture and DLL-injector test lanes, verification, evidence, and limits.

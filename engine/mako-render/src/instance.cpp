@@ -482,15 +482,14 @@ ConfigurationUpdateResult Root::update() {
         return result;
     this->lastConfigurationPoll = now;
 
-    const auto previousGlobal = this->config.get().global();
     if (!this->config.update())
         return result;
 
     result.reloaded = true;
     const auto& currentGlobal = this->config.get().global();
-    result.globalChangeDeferred =
-        previousGlobal.dll != currentGlobal.dll ||
-        previousGlobal.allow_fp16 != currentGlobal.allow_fp16;
+    result.globalChangeDeferred = backendGlobalChangePending(
+        this->backendGlobal, currentGlobal
+    );
 
     const auto previousProfileName = this->active_profile
         ? std::optional<std::string>{this->active_profile->name}
@@ -506,7 +505,6 @@ ConfigurationUpdateResult Root::update() {
         : std::nullopt;
     bool profileProcessRestartRequired = false;
     bool gpuSelectionPending = false;
-    bool pacingPending = false;
     bool frameGenerationInteropPending = false;
     bool ultraPerformancePending =
         activeUltraPerformance != requestedUltraPerformance;
@@ -517,7 +515,6 @@ ConfigurationUpdateResult Root::update() {
         );
         *runtimeProfile = std::move(projection.runtimeProfile);
         gpuSelectionPending = projection.gpuSelectionPending;
-        pacingPending = projection.pacingPending;
         frameGenerationInteropPending =
             projection.frameGenerationInteropPending;
         ultraPerformancePending = projection.ultraPerformancePending;
@@ -534,8 +531,10 @@ ConfigurationUpdateResult Root::update() {
                      "restart the game to apply its process-static FP16 and "
                      "resource policy; compatible profile changes remain live\n";
     }
-    if (profileProcessRestartRequired)
-        result.processRestartContexts += this->swapchains.size();
+    if (profileProcessRestartRequired) {
+        result.processRestartDeferredContexts += this->swapchains.size();
+        result.processProfileChangeDeferred = true;
+    }
 
     this->runtimeStateRevision++;
     if (profileProcessRestartRequired && present_diagnostics::enabled()) {
@@ -547,7 +546,6 @@ ConfigurationUpdateResult Root::update() {
                       << " state_revision=" << this->runtimeStateRevision
                       << " reason=process-static-profile"
                       << " gpu_selection_pending=" << gpuSelectionPending
-                      << " pacing_pending=" << pacingPending
                       << " frame_generation_interop_pending="
                       << frameGenerationInteropPending
                       << " ultra_performance_pending="
@@ -594,23 +592,28 @@ ConfigurationUpdateResult Root::update() {
     if (this->active_profile) {
         for (auto& [swapchain, context] : this->swapchains) {
             static_cast<void>(swapchain);
-            switch (context.updateProfile(
-                    *this->active_profile, this->runtimeStateRevision)) {
-                case ProfileUpdateAction::NoRuntimeChange:
-                    break;
-                case ProfileUpdateAction::ApplyLive:
-                    result.liveContextsUpdated++;
-                    break;
-                case ProfileUpdateAction::DeferUntilSwapchainRecreation:
-                    result.deferredContexts++;
-                    break;
-                case ProfileUpdateAction::DeferUntilProcessRestart:
-                    result.processRestartContexts++;
-                    break;
-                case ProfileUpdateAction::RequestSwapchainRecreation:
-                    result.recreationRequestedContexts++;
-                    break;
-            }
+            const auto update = context.updateProfile(
+                *this->active_profile, this->runtimeStateRevision
+            );
+            if (update.action == ProfileUpdateAction::ApplyLive)
+                result.liveContextsUpdated++;
+            if (update.swapchainRecreationDeferred)
+                result.swapchainRecreationDeferredContexts++;
+            if (update.processRestartDeferred)
+                result.processRestartDeferredContexts++;
+            if (update.swapchainRecreationRequested)
+                result.recreationRequestedContexts++;
+        }
+        result.processProfileChangeDeferred =
+            result.processProfileChangeDeferred ||
+            (profile && backendProfileChangePending(
+                this->backendProfile, profile->second
+            ));
+        if (result.processProfileChangeDeferred) {
+            result.processRestartDeferredContexts = std::max(
+                result.processRestartDeferredContexts,
+                this->swapchains.size()
+            );
         }
     } else {
         // Losing the active profile must stop generation immediately, but it
@@ -992,6 +995,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                 },
                 dll, ls::effectiveAllowFp16(global, profile)
             );
+            this->backendGlobal = global;
+            this->backendProfile = profile;
         } catch (const std::exception& e) {
             backendInitializationError = e.what();
             if (!info.spatialScalingActive)
@@ -1021,8 +1026,13 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                      "created\n";
     }
 
+    auto contextProfile = this->backendProfile
+        ? profileForExistingBackend(profile, *this->backendProfile)
+        : profile;
+    if (!frameGenerationAvailableOnDevice)
+        contextProfile.frame_generation_enabled = false;
     const bool inserted = this->swapchains.emplace(swapchain,
-        Swapchain(vk, frameGenerationBackend, profile, info,
+        Swapchain(vk, frameGenerationBackend, std::move(contextProfile), info,
             std::move(scalingShaderDll),
             this->gamescopeHdrActive,
             this->gamescopeDetected,

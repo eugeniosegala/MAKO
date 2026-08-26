@@ -101,9 +101,10 @@ namespace mako::layer {
         /// Scaling and frame-generation model changes arm one
         /// application-visible out-of-date result after a successful lower
         /// present so the game can rebuild its owned swapchain. Other
-        /// resource-construction changes remain pending for a natural
-        /// recreation.
-        [[nodiscard]] ProfileUpdateAction updateProfile(
+        /// resource-shape changes remain pending for a natural recreation,
+        /// and process-wide backend changes wait for restart. The decision
+        /// reports live application and every still-pending boundary.
+        [[nodiscard]] ProfileUpdateDecision updateProfile(
             const ls::GameConf& profile, uint64_t runtimeStateRevision);
 
         /// After the lower WSI has consumed this present's wait semaphores,

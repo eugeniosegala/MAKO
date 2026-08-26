@@ -13,6 +13,12 @@ flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.fla
 
 The extension ID is `org.freedesktop.Platform.VulkanLayer.makorender` and uses its own dedicated installation path.
 
+### Graphical extension installation
+
+After extracting `MAKO-Renderer-v<version>-flatpaks.tar.xz`, double-click **Install MAKO Flatpak Extensions** and choose the Freedesktop runtime used by the game or emulator. Choose **Execute** if your file manager asks. The installer performs the same user-scoped Flatpak installation without requiring a terminal; run it again to install a different supported runtime.
+
+Installing the extension does not prepare an application to use MAKO. Configure the target application's filesystem access and MAKO environment as described below, or use MAKO Decky's **Flatpak Setup** when Decky owns the installation.
+
 ## Building extensions
 
 From the MAKO monorepo:

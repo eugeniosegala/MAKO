@@ -10,6 +10,7 @@ import tempfile
 import time
 from types import SimpleNamespace
 import unittest
+from unittest.mock import patch
 
 
 class _Logger:
@@ -20,6 +21,7 @@ class _Logger:
 sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 
 from py_modules.mako_plugin import configuration as configuration_module  # noqa: E402
+from py_modules.mako_plugin import managed_files as managed_files_module  # noqa: E402
 from py_modules.mako_plugin.config_schema import (  # noqa: E402
     ConfigurationManager,
     ProfileData,
@@ -63,6 +65,36 @@ class GameProfileTests(unittest.TestCase):
             },
         )
         self.service._save_profile_data(self.profile_data)
+
+    def test_profile_save_failure_preserves_existing_renderer_config(self):
+        original = self.service.config_file_path.read_text(encoding="utf-8")
+        updated = ProfileData(
+            current_profile="mako",
+            profiles={
+                "mako": {
+                    **self.profile_data["profiles"]["mako"],
+                    "multiplier": 3,
+                },
+            },
+            global_config=dict(self.profile_data["global_config"]),
+        )
+
+        with patch.object(
+                managed_files_module.os,
+                "fsync",
+                side_effect=OSError("simulated write failure"),
+        ):
+            with self.assertRaisesRegex(OSError, "atomically replace"):
+                self.service._save_profile_data(updated)
+
+        self.assertEqual(
+            self.service.config_file_path.read_text(encoding="utf-8"),
+            original,
+        )
+        self.assertEqual(
+            list(self.service.config_dir.glob(".conf.toml.*")),
+            [],
+        )
 
     def test_initial_metadata_migration_is_idempotent_and_keeps_renderer_config(self):
         original = self.service.config_file_path.read_text(encoding="utf-8")

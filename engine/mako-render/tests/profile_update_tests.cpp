@@ -69,6 +69,46 @@ int main() {
     expect(interopProjection.frameGenerationInteropPending &&
             !interopProjection.runtimeProfile.frame_generation_enabled,
         "Process-static projection must retain scaling-only device interop");
+    auto ultraReloadProfile = current;
+    ultraReloadProfile.ultra_performance = true;
+    expect(privateGenerationResourcesRequired(current),
+        "Normal mode must retain resources for live generation enable");
+    auto normalDisabled = current;
+    normalDisabled.frame_generation_enabled = false;
+    expect(privateGenerationResourcesRequired(normalDisabled),
+        "Normal live switching lost its retained generation resources");
+    ultraReloadProfile.frame_generation_enabled = false;
+    expect(!privateGenerationResourcesRequired(ultraReloadProfile),
+        "Ultra Performance retained private resources with generation frozen off");
+
+    auto backendProfile = current;
+    backendProfile.gpu = "1002:164e";
+    auto requestedBackendProfile = current;
+    requestedBackendProfile.gpu = "1002:15bf";
+    const auto existingBackendProfile = profileForExistingBackend(
+        requestedBackendProfile, backendProfile
+    );
+    expect(existingBackendProfile.gpu == backendProfile.gpu,
+        "A swapchain recreation lost the process-wide backend GPU identity");
+
+    const ls::GlobalConf backendGlobal{
+        .dll = "/first/Lossless.dll",
+        .allow_fp16 = true,
+    };
+    auto requestedGlobal = backendGlobal;
+    requestedGlobal.allow_fp16 = false;
+    expect(backendGlobalChangePending(backendGlobal, requestedGlobal),
+        "A process-static global change was not retained as pending");
+    expect(!backendGlobalChangePending(backendGlobal, backendGlobal) &&
+            !backendGlobalChangePending(std::nullopt, requestedGlobal),
+        "An applied or not-yet-constructed backend was marked pending");
+    expect(backendProfileChangePending(
+            backendProfile, requestedBackendProfile),
+        "A process-static profile change was not retained as pending");
+    expect(!backendProfileChangePending(backendProfile, backendProfile) &&
+            !backendProfileChangePending(
+                std::nullopt, requestedBackendProfile),
+        "An applied or not-yet-constructed profile was marked pending");
 
     expect(effectiveFrameGenerationEnabled(current, std::nullopt) &&
             effectiveFrameGenerationEnabled(current, 60),
@@ -294,16 +334,28 @@ int main() {
         "Turning generation back on must reuse retained resources");
     decision = classifyProfileUpdate(disabled, current, 0, false);
     expect(decision.action == ProfileUpdateAction::DeferUntilProcessRestart &&
-            decision.processRestartRequired &&
+            decision.processRestartDeferred &&
             !liveProfileResourceRecreationAvailable(decision, false),
         "Turning generation on without resources must wait for process restart");
+    auto unavailableEnableWithCap = current;
+    unavailableEnableWithCap.base_fps_cap = 48;
+    auto unavailableEnablePlan = planProfileUpdate(
+        disabled, unavailableEnableWithCap, 0, false
+    );
+    expect(unavailableEnablePlan.decision.action ==
+                ProfileUpdateAction::ApplyLive &&
+            unavailableEnablePlan.decision.processRestartDeferred &&
+            !unavailableEnablePlan.appliedProfile.frame_generation_enabled &&
+            unavailableEnablePlan.appliedProfile.base_fps_cap == 48,
+        "An unavailable generation enable blocked an unrelated live cap");
 
     next = current;
     next.flow_scale = 0.75F;
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action ==
             ProfileUpdateAction::DeferUntilSwapchainRecreation &&
-            decision.frameGenerationBackendChanged,
+            decision.frameGenerationBackendChanged &&
+            decision.swapchainRecreationDeferred,
         "Flow-scale changes alter backend model construction");
     expect(liveProfileResourceRecreationAvailable(decision, true) &&
             !liveProfileResourceRecreationAvailable(decision, false),
@@ -314,8 +366,74 @@ int main() {
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action ==
             ProfileUpdateAction::DeferUntilSwapchainRecreation &&
-            decision.frameGenerationBackendChanged,
+            decision.frameGenerationBackendChanged &&
+            decision.swapchainRecreationDeferred,
         "Performance-mode changes alter backend model construction");
+
+    auto mixedDeferred = current;
+    mixedDeferred.flow_scale = 0.75F;
+    mixedDeferred.base_fps_cap = 47;
+    auto mixedPlan = planProfileUpdate(current, mixedDeferred, 3, true);
+    expect(mixedPlan.decision.action == ProfileUpdateAction::ApplyLive &&
+            mixedPlan.decision.swapchainRecreationDeferred &&
+            mixedPlan.appliedProfile.flow_scale == current.flow_scale &&
+            mixedPlan.appliedProfile.base_fps_cap == 47,
+        "A pending flow-scale change blocked an unrelated live cap");
+
+    auto laterLiveChange = mixedDeferred;
+    laterLiveChange.target_fps = 144;
+    mixedPlan = planProfileUpdate(
+        mixedPlan.appliedProfile, laterLiveChange, 3, true
+    );
+    expect(mixedPlan.decision.action == ProfileUpdateAction::ApplyLive &&
+            mixedPlan.decision.swapchainRecreationDeferred &&
+            mixedPlan.appliedProfile.flow_scale == current.flow_scale &&
+            mixedPlan.appliedProfile.target_fps == 144,
+        "A retained recreation change blocked a later live target update");
+
+    auto mixedDisabled = mixedDeferred;
+    mixedDisabled.frame_generation_enabled = false;
+    mixedPlan = planProfileUpdate(current, mixedDisabled, 3, true);
+    expect(mixedPlan.decision.action == ProfileUpdateAction::ApplyLive &&
+            !mixedPlan.appliedProfile.frame_generation_enabled &&
+            mixedPlan.decision.swapchainRecreationDeferred,
+        "A pending recreation change blocked the live generation-off switch");
+    mixedPlan = planProfileUpdate(
+        mixedPlan.appliedProfile, mixedDeferred, 3, true
+    );
+    expect(mixedPlan.decision.action == ProfileUpdateAction::ApplyLive &&
+            mixedPlan.appliedProfile.frame_generation_enabled &&
+            mixedPlan.decision.swapchainRecreationDeferred,
+        "A pending recreation change blocked live generation re-enable");
+
+    auto revertedDeferred = mixedDeferred;
+    revertedDeferred.flow_scale = current.flow_scale;
+    mixedPlan = planProfileUpdate(current, revertedDeferred, 3, true);
+    expect(mixedPlan.decision.action == ProfileUpdateAction::ApplyLive &&
+            !mixedPlan.decision.swapchainRecreationDeferred &&
+            !mixedPlan.decision.processRestartDeferred,
+        "Reverting a pending recreation field did not clear its deferral");
+
+    auto gpuAndCap = current;
+    gpuAndCap.gpu = "1002:164e";
+    gpuAndCap.base_fps_cap = 55;
+    mixedPlan = planProfileUpdate(current, gpuAndCap, 3, true);
+    expect(mixedPlan.decision.action == ProfileUpdateAction::ApplyLive &&
+            mixedPlan.decision.processRestartDeferred &&
+            mixedPlan.appliedProfile.gpu == current.gpu &&
+            mixedPlan.appliedProfile.base_fps_cap == 55,
+        "A process-static GPU change blocked an unrelated live cap");
+
+    auto gpuFlowAndCap = gpuAndCap;
+    gpuFlowAndCap.flow_scale = 0.75F;
+    mixedPlan = planProfileUpdate(current, gpuFlowAndCap, 3, true);
+    expect(mixedPlan.decision.action == ProfileUpdateAction::ApplyLive &&
+            mixedPlan.decision.swapchainRecreationDeferred &&
+            mixedPlan.decision.processRestartDeferred &&
+            mixedPlan.appliedProfile.gpu == current.gpu &&
+            mixedPlan.appliedProfile.flow_scale == current.flow_scale &&
+            mixedPlan.appliedProfile.base_fps_cap == 55,
+        "Independent recreation and process deferrals were not both retained");
 
     next = current;
     next.ultra_performance = true;
@@ -326,13 +444,14 @@ int main() {
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action ==
             ProfileUpdateAction::DeferUntilProcessRestart &&
-            decision.processRestartRequired &&
+            decision.processRestartDeferred &&
+            !decision.swapchainRecreationDeferred &&
             !liveProfileResourceRecreationAvailable(decision, true),
         "Ultra Performance changes must never apply to a live context");
     next.scaling_enabled = true;
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.spatialScalingChanged &&
-            decision.processRestartRequired &&
+            decision.processRestartDeferred &&
             !liveProfileResourceRecreationAvailable(decision, true),
         "A process-static edit must suppress combined forced recreation");
 
@@ -345,15 +464,15 @@ int main() {
     decision = classifyProfileUpdate(runningUltra, updatedRunningUltra, 2, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive &&
             decision.generationPolicyChanged &&
-            !decision.processRestartRequired,
+            !decision.processRestartDeferred,
         "Compatible scheduler changes must remain live inside Ultra Performance");
     updatedRunningUltra.adaptive_max_multiplier = 4;
     decision = classifyProfileUpdate(runningUltra, updatedRunningUltra, 2, true);
-    expect(decision.action ==
-            ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.swapchainRecreationDeferred &&
             decision.generatedFrameCapacityExceeded &&
             liveProfileResourceRecreationAvailable(decision, true),
-        "Ultra Performance capacity growth must use live recreation");
+        "Ultra Performance capacity growth must preserve live policy while requesting recreation");
 
     next = current;
     next.scaling_enabled = true;
@@ -454,12 +573,12 @@ int main() {
     next.flow_scale = 0.75F;
     next.performance_mode = true;
     decision = classifyProfileUpdate(current, next, 3, true);
-    expect(decision.action ==
-            ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.swapchainRecreationDeferred &&
             decision.spatialScalingChanged &&
             decision.frameGenerationBackendChanged &&
             decision.frameGenerationChanged,
-        "A combined resource and frame-generation update must retain every decision");
+        "A combined resource and frame-generation update must apply the safe subset and retain every deferral");
 
     auto liveProfile = maskRecreatedProfileResourcesForLiveUpdate(current, next);
     expect(!liveProfile.scaling_enabled &&
@@ -481,10 +600,12 @@ int main() {
     laterRequested.frame_generation_enabled = true;
     laterRequested.target_fps = 120;
     laterRequested.adaptive_stable_cadence = true;
-    expect(classifyProfileUpdate(
-            liveCurrent, laterRequested, 3, true).action ==
-            ProfileUpdateAction::DeferUntilSwapchainRecreation,
-        "The requested scaling change must remain pending after a live update");
+    decision = classifyProfileUpdate(
+        liveCurrent, laterRequested, 3, true
+    );
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.swapchainRecreationDeferred,
+        "The requested scaling change must remain pending while later live changes apply");
     liveProfile = maskRecreatedProfileResourcesForLiveUpdate(
         liveCurrent, laterRequested
     );
@@ -508,9 +629,12 @@ int main() {
     equivalentUltra.performance_mode = true;
     auto equivalentUltraEnabled = equivalentUltra;
     equivalentUltraEnabled.ultra_performance = true;
-    expect(classifyProfileUpdate(
-            equivalentUltra, equivalentUltraEnabled, 3, true).action ==
-            ProfileUpdateAction::DeferUntilProcessRestart,
+    decision = classifyProfileUpdate(
+        equivalentUltra, equivalentUltraEnabled, 3, true
+    );
+    expect(decision.action == ProfileUpdateAction::DeferUntilProcessRestart &&
+            decision.processRestartDeferred &&
+            !decision.swapchainRecreationDeferred,
         "Ultra Performance must require restart even when model settings already match");
 
     next = current;
@@ -546,6 +670,30 @@ int main() {
     expect(generatedFrameCapacityForActivePolicy(adaptiveFourX) == 3,
         "Adaptive 4x active capacity was not selected");
 
+    auto adaptiveFourXWithLiveTarget = adaptiveFourX;
+    adaptiveFourXWithLiveTarget.target_fps = 120;
+    adaptiveFourXWithLiveTarget.base_fps_cap = 49;
+    mixedPlan = planProfileUpdate(
+        fixedWithDormantFourX, adaptiveFourXWithLiveTarget, 2, true
+    );
+    expect(mixedPlan.decision.action == ProfileUpdateAction::ApplyLive &&
+            mixedPlan.decision.swapchainRecreationDeferred &&
+            !mixedPlan.appliedProfile.adaptive &&
+            mixedPlan.appliedProfile.target_fps == 120 &&
+            mixedPlan.appliedProfile.base_fps_cap == 49,
+        "Unavailable Adaptive capacity blocked an unrelated live cap");
+
+    auto unavailableFixedFourX = current;
+    unavailableFixedFourX.adaptive = false;
+    unavailableFixedFourX.multiplier = 4;
+    mixedPlan = planProfileUpdate(current, unavailableFixedFourX, 2, true);
+    expect(mixedPlan.decision.action ==
+                ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+            mixedPlan.decision.swapchainRecreationDeferred &&
+            mixedPlan.appliedProfile.adaptive &&
+            mixedPlan.appliedProfile.multiplier == 4,
+        "A dormant Fixed multiplier was misclassified as active while its mode switch waited");
+
     next = current;
     expect(classifyProfileUpdate(fixed, next, 1, true).action ==
             ProfileUpdateAction::DeferUntilSwapchainRecreation,
@@ -562,6 +710,17 @@ int main() {
     expect(classifyProfileUpdate(fixed, next, 2, true).action ==
             ProfileUpdateAction::ApplyLive,
         "Fixed multiplier changes must apply live within shared capacity");
+
+    auto fixedThreeX = fixed;
+    fixedThreeX.multiplier = 3;
+    const auto fixedThreeToTwo = planProfileUpdate(
+        fixedThreeX, fixed, 2, true
+    );
+    expect(fixedThreeToTwo.decision.action == ProfileUpdateAction::ApplyLive &&
+            fixedThreeToTwo.decision.fixedMultiplierChanged &&
+            !fixedThreeToTwo.decision.swapchainRecreationDeferred &&
+            fixedThreeToTwo.appliedProfile.multiplier == 2,
+        "Fixed 3x-to-2x must apply live without recreating the swapchain");
 
     expect(generatedFrameCapacityForProfile(fixed) == 2,
         "Fixed 2x should reserve the configured Adaptive 3x capacity");

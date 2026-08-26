@@ -279,6 +279,17 @@ if ((runtime_count == 0)); then
     exit 1
 fi
 
+# Keep the Flatpak bundles self-contained for users who prefer a graphical
+# installation. The script selects one matching runtime and performs the
+# normal user-scoped Flatpak installation; per-application access remains a
+# separate explicit configuration step.
+cp "$repo_root/scripts/mako-install-flatpaks" "$bundle_dir/Install MAKO Flatpak Extensions"
+chmod 0755 "$bundle_dir/Install MAKO Flatpak Extensions"
+if ! bash -n "$bundle_dir/Install MAKO Flatpak Extensions"; then
+    echo "Flatpak packaging failed: graphical installer has invalid shell syntax" >&2
+    exit 1
+fi
+
 # The source directory is mounted into Flatpak-builder as a local source. Some
 # builder versions remove ignored output directories while cleaning the source
 # staging area, so recreate the destination immediately before writing it.
