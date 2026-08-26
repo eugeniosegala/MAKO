@@ -58,7 +58,7 @@ The diagnostics helper deliberately recognizes historical lowercase renderer pre
 | Cross-component contracts | Static agreement for configuration, RPCs, package layout, paths, runtime versions, and stable identities | `plugin/tests/test_*_contract.py`, `plugin/tests/test_decky_loader_import.py`, `plugin/tests/test_flatpak_runtime_detection.py`, `plugin/tests/frontend/*Contract*.test.ts` |
 | Automation | Portable CI and dedicated SteamOS/AMD hardware validation | `.github/workflows/` |
 
-Start architecture work with the root `README.md`, then use `engine/README.md` or `plugin/README.md` for the selected component. Renderer configuration behavior is owned by `engine/docs/CONFIGURATION.md`; Adaptive scheduler, frame-plan, and validation ownership is documented in `engine/docs/ADAPTIVE-VALIDATION.md`; Decky's profile and compatibility UX is documented in `plugin/docs/CONFIGURATION.md`. Renderer HDR architecture is owned by `engine/docs/HDR-PIPELINE.md`; implicit layer and Gamescope presentation ownership is owned by `engine/docs/WSI-ISOLATION.md`; guarded exceptions and their evidence are owned by `engine/docs/LAYER-CHAINING.md`. Read the applicable guides before changing either boundary.
+Start architecture work with the root `README.md`, then use `engine/README.md` or `plugin/README.md` for the selected component. Renderer configuration behavior is owned by `engine/docs/CONFIGURATION.md`; runtime live/deferred application and lifetime boundaries are owned by `engine/docs/RUNTIME-TRANSITIONS.md`; Adaptive scheduler, frame-plan, and validation ownership is documented in `engine/docs/ADAPTIVE-VALIDATION.md`; Decky's profile and compatibility UX is documented in `plugin/docs/CONFIGURATION.md`. Renderer HDR architecture is owned by `engine/docs/HDR-PIPELINE.md`; implicit layer and Gamescope presentation ownership is owned by `engine/docs/WSI-ISOLATION.md`; guarded exceptions and their evidence are owned by `engine/docs/LAYER-CHAINING.md`. Read the applicable guides before changing either boundary.
 
 ## Directory and module placement
 
@@ -86,6 +86,7 @@ Start architecture work with the root `README.md`, then use `engine/README.md` o
 | Format Markdown or enable the commit hook | `AGENTS.md` | `just format-markdown`, `just check-markdown-format`, `just install-hooks` |
 | Build Renderer from source | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/CMakeLists.txt`, `engine/scripts/build-steamos-dev.sh` |
 | Run portable Renderer tests | `TESTING.md` | `engine/scripts/test-adaptive-scheduler.sh` |
+| Change runtime configuration transitions or setting lifetimes | `engine/docs/RUNTIME-TRANSITIONS.md`, `engine/docs/CONFIGURATION.md` | `engine/mako-render/src/profile_update.hpp`, `engine/mako-render/src/instance.cpp`, `engine/mako-render/src/swapchain.cpp` |
 | Change Adaptive scheduling or generated-frame plans | `engine/docs/ADAPTIVE-VALIDATION.md` | `engine/mako-render/src/adaptive_scheduler.*`, `engine/mako-render/src/generated_frame_plan.hpp`, `engine/mako-render/src/generated_frame_delivery.hpp` |
 | Build host Renderer archives | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/scripts/package-local.sh` |
 | Build Flatpak runtime extensions | `engine/docs/FLATPAK-GUIDE.md` | `engine/scripts/package-flatpaks.sh` |

@@ -431,7 +431,7 @@ ConfigurationUpdateResult Root::update() {
     // Ultra Performance freezes the startup profile. Continue sampling the
     // compositor-owned state above because HDR and refresh changes are safety
     // inputs rather than user configuration toggles.
-    if (this->active_profile && this->active_profile->ultra_performance)
+    if (!liveProfileReloadEnabled(this->active_profile))
         return result;
 
     // Configuration hot reload does not need a filesystem metadata query for
@@ -443,15 +443,14 @@ ConfigurationUpdateResult Root::update() {
         return result;
     this->lastConfigurationPoll = now;
 
-    const auto previousGlobal = this->config.get().global();
     if (!this->config.update())
         return result;
 
     result.reloaded = true;
     const auto& currentGlobal = this->config.get().global();
-    result.globalChangeDeferred =
-        previousGlobal.dll != currentGlobal.dll ||
-        previousGlobal.allow_fp16 != currentGlobal.allow_fp16;
+    result.globalChangeDeferred = backendGlobalChangePending(
+        this->backendGlobal, currentGlobal
+    );
 
     const auto previousProfileName = this->active_profile
         ? std::optional<std::string>{this->active_profile->name}
@@ -460,7 +459,8 @@ ConfigurationUpdateResult Root::update() {
     if (profile && profile->second.ultra_performance) {
         std::cerr << "MAKO Renderer: Ultra Performance profile change deferred; "
                      "restart the game to apply its static resource policy\n";
-        result.deferredContexts = this->swapchains.size();
+        result.processRestartDeferredContexts = this->swapchains.size();
+        result.processProfileChangeDeferred = true;
         return result;
     }
 
@@ -503,17 +503,23 @@ ConfigurationUpdateResult Root::update() {
     if (this->active_profile) {
         for (auto& [swapchain, context] : this->swapchains) {
             static_cast<void>(swapchain);
-            switch (context.updateProfile(
-                    *this->active_profile, this->runtimeStateRevision)) {
-                case ProfileUpdateAction::NoRuntimeChange:
-                    break;
-                case ProfileUpdateAction::ApplyLive:
-                    result.liveContextsUpdated++;
-                    break;
-                case ProfileUpdateAction::DeferUntilSwapchainRecreation:
-                    result.deferredContexts++;
-                    break;
+            const auto update = context.updateProfile(
+                *this->active_profile, this->runtimeStateRevision
+            );
+            if (update.action == ProfileUpdateAction::ApplyLive)
+                result.liveContextsUpdated++;
+            if (update.swapchainRecreationDeferred) {
+                result.swapchainRecreationDeferredContexts++;
             }
+            if (update.processRestartDeferred) {
+                result.processRestartDeferredContexts++;
+            }
+        }
+        result.processProfileChangeDeferred = backendProfileChangePending(
+            this->backendProfile, *this->active_profile
+        );
+        if (result.processProfileChangeDeferred) {
+            result.processRestartDeferredContexts = this->swapchains.size();
         }
     } else {
         // Losing the active profile must stop generation immediately, but it
@@ -530,7 +536,8 @@ ConfigurationUpdateResult Root::update() {
 
 void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
         const std::function<void(void)>& finish) const {
-    if (!this->active_profile.has_value()) {
+    if (!this->active_profile.has_value() ||
+            !privateGenerationResourcesRequired(*this->active_profile)) {
         finish();
         return;
     }
@@ -552,7 +559,8 @@ void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
 
 void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
         const std::function<void(void)>& finish) const {
-    if (!this->active_profile.has_value()) {
+    if (!this->active_profile.has_value() ||
+            !privateGenerationResourcesRequired(*this->active_profile)) {
         finish();
         return;
     }
@@ -601,7 +609,8 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
 bool Root::modifySwapchainCreateInfo(const vk::Vulkan& vk,
         VkSwapchainCreateInfoKHR& createInfo,
         const std::function<void(void)>& finish) const {
-    if (!this->active_profile.has_value()) {
+    if (!this->active_profile.has_value() ||
+            !privateGenerationResourcesRequired(*this->active_profile)) {
         finish();
         return false;
     }
@@ -691,13 +700,18 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                 },
                 dll, ls::effectiveAllowFp16(global, profile)
             );
+            this->backendGlobal = global;
+            this->backendProfile = profile;
         } catch (const std::exception& e) {
             throw ls::error("failed to create backend instance", e);
         }
     }
 
+    auto contextProfile = this->backendProfile
+        ? profileForExistingBackend(profile, *this->backendProfile)
+        : profile;
     const bool inserted = this->swapchains.emplace(swapchain,
-        Swapchain(vk, this->backend.mut(), profile, info,
+        Swapchain(vk, this->backend.mut(), std::move(contextProfile), info,
             this->gamescopeHdrActive,
             this->gamescopeDetected,
             this->presentationEnvironment.hdrExposureDisabled,

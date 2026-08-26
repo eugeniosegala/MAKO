@@ -231,6 +231,7 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 ## More documentation
 
 - [Configuration](docs/CONFIGURATION.md): profiles, frame-generation controls, Adaptive mode, and environment variables.
+- [Runtime configuration transitions](docs/RUNTIME-TRANSITIONS.md): live-safe updates, natural-recreation and process-restart boundaries, Frame Generation Off resource behavior, Ultra Performance isolation, diagnostics, and extension rules.
 - [Adaptive validation](docs/ADAPTIVE-VALIDATION.md): deterministic scheduler stages, generated-frame-plan ownership, characterization tests, benchmarking, and the real-game matrix.
 - [WSI isolation](docs/WSI-ISOLATION.md): private Vulkan discovery, Gamescope presentation ownership, tradeoffs, diagnostics, and future HDR constraints.
 - [Optional graphics integrations](docs/LAYER-CHAINING.md): MAKO Decky's per-profile MangoHud and experimental vkBasalt controls, manual layer chaining, capture and DLL-injector test lanes, verification, evidence, and limits.

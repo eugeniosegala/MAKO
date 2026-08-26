@@ -1,6 +1,6 @@
 # Gamescope WSI isolation
 
-This document is the architectural source of truth for MAKO Renderer's Vulkan layer isolation and presentation ownership. Read [HDR pipeline architecture](HDR-PIPELINE.md) alongside it: the supported SDR boundary and the future HDR transport are deliberately interconnected.
+This document is the architectural source of truth for MAKO Renderer's Vulkan layer isolation and presentation ownership. Read [HDR pipeline architecture](HDR-PIPELINE.md) alongside it: the supported SDR boundary and the future HDR transport are deliberately interconnected. [Runtime configuration transitions](RUNTIME-TRANSITIONS.md) separately owns why this process-start policy cannot become a live profile switch and how it coexists with live-safe settings.
 
 ## What is being isolated
 

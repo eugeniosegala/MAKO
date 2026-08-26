@@ -274,6 +274,12 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                      "mode=fifo-ordered; source=fork-develop; "
                      "dynamic-mode-switch=filtered\n";
     }
+    if (this->colorPipeline.generationSupported &&
+            !privateGenerationResourcesRequired(this->profile)) {
+        std::cerr << "MAKO Renderer: frame generation is off in Ultra Performance; "
+                     "private generation resources omitted\n";
+        return;
+    }
 
     if (this->colorPipeline.encoding == backend::FrameEncoding::Hdr10Pq ||
             this->colorPipeline.encoding ==
@@ -304,7 +310,6 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                   << this->colorPipeline.reason << '\n';
         return;
     }
-
     try {
         std::vector<int> sourceFds(2);
         std::vector<int> destinationFds(generatedFrameCapacity(this->profile));
@@ -541,15 +546,7 @@ bool Swapchain::resetGenerationScheduler(
 
 void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
         SwapchainColorPipeline pipeline) {
-    auto& backendInstance = this->instance.get();
-    bool applicationPackedHdr10Supported = false;
-    bool backendPackedHdr10Supported = false;
-    selectPackedHdr10Transport(
-        vk, backendInstance, pipeline,
-        applicationPackedHdr10Supported, backendPackedHdr10Supported
-    );
-
-    if (!pipeline.generationSupported) {
+    const auto retainPassthrough = [&]() {
         this->ctx = {};
         this->sourceImages.clear();
         this->destinationImages.clear();
@@ -562,6 +559,22 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
         this->colorPipeline = std::move(pipeline);
         this->recoveryState.historyWarmupRemaining = 0;
         this->recoveryState.orderedAcquireRecovery.reset();
+    };
+    if (!privateGenerationResourcesRequired(this->profile)) {
+        retainPassthrough();
+        return;
+    }
+
+    auto& backendInstance = this->instance.get();
+    bool applicationPackedHdr10Supported = false;
+    bool backendPackedHdr10Supported = false;
+    selectPackedHdr10Transport(
+        vk, backendInstance, pipeline,
+        applicationPackedHdr10Supported, backendPackedHdr10Supported
+    );
+
+    if (!pipeline.generationSupported) {
+        retainPassthrough();
         return;
     }
 
@@ -755,40 +768,56 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
     return true;
 }
 
-ProfileUpdateAction Swapchain::updateProfile(
+ProfileUpdateDecision Swapchain::updateProfile(
         const ls::GameConf& nextProfile,
         const uint64_t runtimeStateRevision) {
+    // A colour-policy passthrough context has no generation state to mutate.
+    // Preserve the full requested profile so a later supported HDR transition
+    // builds its private resources from the latest settings, matching the
+    // established passthrough contract. Root independently retains and reports
+    // any process-static backend difference.
     if (!this->colorPipeline.generationSupported) {
         this->profile = nextProfile;
-        return ProfileUpdateAction::NoRuntimeChange;
+        return {};
     }
 
     const bool resourcesAvailable = this->sourceImages.size() == 2 &&
         !this->destinationImages.empty() && this->syncSemaphore.has_value();
-    const auto decision = classifyProfileUpdate(
+    auto plan = planProfileUpdate(
         this->profile, nextProfile, this->destinationImages.size(), resourcesAvailable
     );
+    const auto decision = plan.decision;
 
-    if (decision.action == ProfileUpdateAction::DeferUntilSwapchainRecreation) {
-        // Turning generation off is always safe and should not be delayed just
-        // because the same write also changed a resource-shape setting.
-        if (this->profile.frame_generation_enabled &&
-                !nextProfile.frame_generation_enabled)
-            this->disableFrameGeneration();
-        if (presentDiagnosticsEnabled()) {
-            std::cerr << "MAKO Renderer: present diagnostics: "
-                         "operation=runtime-transition-pending"
-                      << " context=" << this->diagnosticsState.contextId
-                      << " state_revision=" << runtimeStateRevision
-                      << " reason=profile-resources"
-                      << " action=wait-for-natural-swapchain-recreation\n";
-        }
-        return decision.action;
+    const auto logPendingProfileTransition = [&](const bool processRestart) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=runtime-transition-pending"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " state_revision=" << runtimeStateRevision
+                  << " reason="
+                  << (processRestart
+                        ? "profile-process-resources"
+                        : "profile-swapchain-resources")
+                  << " action="
+                  << (processRestart
+                        ? "wait-for-process-restart"
+                        : "wait-for-natural-swapchain-recreation")
+                  << '\n';
+    };
+    if (presentDiagnosticsEnabled()) {
+        if (decision.swapchainRecreationDeferred)
+            logPendingProfileTransition(false);
+        if (decision.processRestartDeferred)
+            logPendingProfileTransition(true);
     }
 
-    if (decision.action == ProfileUpdateAction::NoRuntimeChange) {
-        this->profile = nextProfile;
-        return decision.action;
+    if (decision.action == ProfileUpdateAction::NoRuntimeChange ||
+            decision.action ==
+                ProfileUpdateAction::DeferUntilSwapchainRecreation ||
+            decision.action == ProfileUpdateAction::DeferUntilProcessRestart) {
+        // Keep harmless metadata and dormant-policy values current even when
+        // the active policy itself must wait for a documented boundary.
+        this->profile = std::move(plan.appliedProfile);
+        return decision;
     }
 
     const bool hadGenerationScheduler = this->adaptiveScheduler.has_value();
@@ -796,11 +825,11 @@ ProfileUpdateAction Swapchain::updateProfile(
         this->profile, this->gamescopeRefreshHz
     );
     const bool generationWillBeEnabled = effectiveFrameGenerationEnabled(
-        nextProfile, this->gamescopeRefreshHz
+        plan.appliedProfile, this->gamescopeRefreshHz
     );
     const bool enabling = !generationWasEnabled && generationWillBeEnabled;
     const bool disabling = generationWasEnabled && !generationWillBeEnabled;
-    this->profile = nextProfile;
+    this->profile = std::move(plan.appliedProfile);
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
     );
@@ -905,7 +934,7 @@ ProfileUpdateAction Swapchain::updateProfile(
                   << '\n';
     }
 
-    return decision.action;
+    return decision;
 }
 
 bool Swapchain::updateGamescopeHdrState(

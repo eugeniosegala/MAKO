@@ -33,7 +33,8 @@ MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mod
 MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
 MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
 MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 layer_forced_recreation=disabled
-MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources action=wait-for-natural-swapchain-recreation
+MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-swapchain-resources action=wait-for-natural-swapchain-recreation
+MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=2 state_revision=2 reason=profile-process-resources action=wait-for-process-restart
 MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 hdr=1
 MAKO Renderer: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
 MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=60 target_fps=90 generated=1 max_generated=1 stable_cadence=0 target_clock=1 target_budget_credit_outputs=0.25 target_deferred_budget_output=1 target_phase_error_ms=-2.1 source_interval_samples=60 source_interval_mean_ms=16.6 source_interval_stddev_ms=1.2 source_interval_p95_ms=18.5 source_interval_p99_ms=20.5 generated_count_changes=29 requested_interval_samples=90 requested_interval_mean_ms=11.1 requested_interval_stddev_ms=1.3 requested_interval_p95_ms=13.5 requested_interval_p99_ms=13.5 target_phase_error_samples=60 target_phase_error_rms_ms=2.2 target_phase_error_max_ms=5.5
@@ -200,6 +201,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("runtime-transition-pending", result.stdout)
         self.assertIn("wait-for-natural-swapchain-recreation", result.stdout)
+        self.assertIn("wait-for-process-restart", result.stdout)
         self.assertIn("runtime-state-applied", result.stdout)
         self.assertNotIn("runtime-transition-recreation-requested", result.stdout)
         self.assertNotIn("adaptive-ramp", result.stdout)

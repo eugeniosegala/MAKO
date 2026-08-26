@@ -88,7 +88,7 @@ namespace mako::layer {
         /// Resource-shape and backend-construction changes remain pending for
         /// a natural game-owned recreation; this layer never forces one for a
         /// Decky setting change.
-        [[nodiscard]] ProfileUpdateAction updateProfile(
+        [[nodiscard]] ProfileUpdateDecision updateProfile(
             const ls::GameConf& profile, uint64_t runtimeStateRevision);
 
         /// Record a confirmed Gamescope application-HDR state change. Existing

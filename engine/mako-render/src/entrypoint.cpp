@@ -582,14 +582,23 @@ namespace {
         if (configurationUpdate.reloaded) {
             std::cerr << "MAKO Renderer: updated configuration in place; contexts="
                       << configurationUpdate.liveContextsUpdated << '\n';
-            if (configurationUpdate.deferredContexts > 0)
+            if (configurationUpdate.swapchainRecreationDeferredContexts > 0)
                 std::cerr << "MAKO Renderer: configuration changes requiring GPU resource "
                              "reconstruction remain pending until a natural game-owned "
                              "swapchain recreation; no recreation was forced; contexts="
-                          << configurationUpdate.deferredContexts << '\n';
-            if (configurationUpdate.globalChangeDeferred)
-                std::cerr << "MAKO Renderer: global backend construction changed; "
-                             "the new DLL or FP16 setting applies on process restart\n";
+                          << configurationUpdate.swapchainRecreationDeferredContexts
+                          << '\n';
+            if (configurationUpdate.processRestartDeferredContexts > 0 ||
+                    configurationUpdate.processProfileChangeDeferred ||
+                    configurationUpdate.globalChangeDeferred) {
+                std::cerr << "MAKO Renderer: process-static backend configuration remains "
+                             "pending until the game restarts; contexts="
+                          << configurationUpdate.processRestartDeferredContexts
+                          << "; profile="
+                          << configurationUpdate.processProfileChangeDeferred
+                          << "; global="
+                          << configurationUpdate.globalChangeDeferred << '\n';
+            }
         }
 
         // present each swapchain
