@@ -20,6 +20,12 @@ Thumbs.db
 # Local environment and secrets
 .env
 
+# User-supplied licensed inputs and binary/model payloads
+*.[Dd][Ll][Ll]
+*.[Ee][Xx][Ee]
+*.[Oo][Nn][Nn][Xx]
+*.[Ss][Aa][Ff][Ee][Tt][Ee][Nn][Ss][Oo][Rr][Ss]
+
 # Python artifacts
 **/__pycache__/
 *.py[cod]

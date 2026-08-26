@@ -1,7 +1,7 @@
 {
   "name": "mako-plugin",
   "version": "2.2.0",
-  "description": "MAKO Decky controls for Steam Deck and compatible Linux systems",
+  "description": "MAKO Decky controls for spatial scaling and frame generation on Steam Deck and compatible Linux systems",
   "type": "module",
   "packageManager": "pnpm@11.17.0",
   "scripts": {
@@ -48,6 +48,7 @@
     "steam-machine",
     "deck",
     "lossless-scaling",
+    "spatial-scaling",
     "frame-generation",
     "framegen"
   ],

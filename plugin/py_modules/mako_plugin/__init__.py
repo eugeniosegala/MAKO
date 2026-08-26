@@ -2,7 +2,7 @@
 MAKO Decky package for Decky Loader.
 
 This package provides services for installing and managing the MAKO Renderer
-Vulkan layer for Lossless Scaling frame generation.
+Vulkan layer for spatial scaling and Lossless Scaling frame generation.
 """
 
 import sys

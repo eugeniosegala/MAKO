@@ -352,8 +352,8 @@ export default function Home() {
               <p>No. MAKO is an independent project. LS1 scaling and frame generation need your own licensed Lossless Scaling installation from Steam, then MAKO discovers or lets you select its <code>Lossless.dll</code>. The open MAKO scaling method does not need the DLL.</p>
             </details>
             <details>
-              <summary><span>03</span> Is scaling available too?<i>+</i></summary>
-              <p>Yes. The current development line offers LS1 Quality, LS1 Performance, and the open MAKO method. Each can run alone or before Fixed or Adaptive frame generation. The downloads above remain v2.2.0 until the next approved release.</p>
+              <summary><span>03</span> Can scaling and frame generation run together?<i>+</i></summary>
+              <p>Yes. Choose LS1 Quality, LS1 Performance, or the open MAKO method, then run scaling alone or feed each reconstructed real frame into Fixed or Adaptive frame generation. The published downloads above remain v2.2.0 until the next approved release.</p>
             </details>
             <details>
               <summary><span>04</span> What hardware is published today?<i>+</i></summary>

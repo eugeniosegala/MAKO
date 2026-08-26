@@ -4,6 +4,8 @@ set -euo pipefail
 repository_root=$(git rev-parse --show-toplevel)
 cd "$repository_root"
 
+./scripts/check-protected-inputs.sh
+
 if ! command -v pnpm >/dev/null 2>&1; then
   printf '%s\n' 'MAKO pre-commit: pnpm is required to format staged Markdown.' >&2
   exit 1

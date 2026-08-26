@@ -23,8 +23,12 @@ check-markdown-format:
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 
-# Run the engine, plugin, and trace-producer test suites.
-test: test-engine test-plugin test-trace-producer
+# Run the protected-input, engine, plugin, and trace-producer test suites.
+test: test-protected-inputs test-engine test-plugin test-trace-producer
+
+# Reject licensed inputs and disguised binary/model/archive payloads from Git.
+test-protected-inputs:
+    ./scripts/test-protected-inputs.sh
 
 # Exercise the private-archive producer without requiring private evidence.
 test-trace-producer:

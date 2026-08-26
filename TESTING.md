@@ -24,7 +24,7 @@ The `Tests` GitHub Actions workflow runs on every pull request and push to `main
 - **MAKO Decky:** the Python backend suite, focused frontend behavior tests with coverage thresholds, and the production Decky bundle build;
 - **MAKO Renderer:** the complete non-hardware CTest suite, including the optional Qt UI and its localization contract, with both GCC and Clang on Linux;
 - **Renderer sanitizers:** the portable scheduling, generated-frame-plan, presentation-policy, spatial-scaling policy, profile, transition, and colour-math boundaries under AddressSanitizer and UndefinedBehaviorSanitizer; and
-- **Trace producer:** safe capture staging, sanitization, metadata, checksum, containment, rollback, and concurrent no-clobber behavior on Linux and macOS.
+- **Trace producer and protected inputs:** safe capture staging, sanitization, metadata, checksum, containment, rollback, and concurrent no-clobber behavior, plus an index-level rejection gate for licensed DLL/model content and disguised binary, shader, dump, or archive payloads, on Linux and macOS.
 
 The Renderer suite also exercises the standalone `mako-launch` contract: deterministic implicit-layer selection, loader activation, LSFG-VK conflict guards, the Gamescope WSI/HDR process-start boundary, strict fail-closed launcher settings, Zink/ALSA environment application, advanced environment forwarding, argument quoting, input validation, and child exit-status propagation. The portable `run-mako-gym.sh` contract separately proves optional absence, required fail-closed behavior, exact argument forwarding, version mismatch rejection, and runner validation without needing the private checkout. The packaged hardware smoke test proves instance/device insertion with `vulkaninfo` and, when a graphical compositor and `vkcube` are available, covers finite swapchain creation and presentation too. Presentation changes must preserve the invariants and expanded matrices in [WSI isolation](engine/docs/WSI-ISOLATION.md), [HDR pipeline architecture](engine/docs/HDR-PIPELINE.md), and [spatial scaling architecture](engine/docs/SCALING.md).
 
@@ -46,6 +46,7 @@ Run the same gates locally with:
 
 ```bash
 just check-markdown-format
+./scripts/test-protected-inputs.sh
 ./scripts/test-capture-trace.sh
 npm --prefix plugin run check:generated-config
 npm --prefix plugin run check:i18n
