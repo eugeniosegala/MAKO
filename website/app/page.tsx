@@ -107,6 +107,7 @@ export default function Home() {
         <div className="nav-links">
           <a href="#system">System</a>
           <a href="#features">Features</a>
+          <a href={links.docs} {...newTabProps}>Installation Guide</a>
           <a href="#downloads">Downloads</a>
           <a href={links.repository} {...newTabProps}>GitHub</a>
         </div>
@@ -122,10 +123,11 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow"><span /> Lossless Scaling frame generation / Linux</p>
             <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
-            <p className="hero-intro">MAKO brings Lossless Scaling frame generation to Steam Deck, SteamOS, and Linux through a focused Decky control layer and a purpose-built Vulkan renderer.</p>
+            <p className="hero-intro">MAKO brings Lossless Scaling frame generation to Steam Deck, Steam Machine, SteamOS, and Linux through a focused Decky control layer and a purpose-built Vulkan renderer.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Decky</span></a>
               <a className="button button-primary button-renderer" href={links.rendererDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Renderer</span></a>
+              <a className="button button-secondary" href={links.docs} {...newTabProps}>Installation Guide <span aria-hidden="true">→</span></a>
               <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
             <div className="hero-meta">
@@ -153,6 +155,7 @@ export default function Home() {
 
         <div className="signal-strip" aria-hidden="true">
           <div>STEAM DECK</div><span />
+          <div>STEAM MACHINE</div><span />
           <div>STEAMOS</div><span />
           <div>LINUX</div><span />
           <div>VULKAN</div><span />
@@ -380,10 +383,10 @@ export default function Home() {
       <footer className="site-footer">
         <div className="footer-brand">
           <a className="brand" href="#top"><img src="assets/mako-logo.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
-          <p>Lossless Scaling frame generation for SteamOS and Linux.</p>
+          <p>Lossless Scaling frame generation for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
         </div>
         <div className="footer-links">
-          <div><span>PROJECT</span><a href={links.repository} {...newTabProps}>GitHub</a><a href={links.docs} {...newTabProps}>Documentation</a><a href="https://github.com/eugeniosegala/MAKO/issues" {...newTabProps}>Issues</a></div>
+          <div><span>PROJECT</span><a href={links.repository} {...newTabProps}>GitHub</a><a href={links.docs} {...newTabProps}>Installation Guide</a><a href="https://github.com/eugeniosegala/MAKO/issues" {...newTabProps}>Issues</a></div>
           <div><span>DOWNLOAD</span><a href={links.deckyRelease} {...newTabProps}>MAKO Decky</a><a href={links.rendererRelease} {...newTabProps}>MAKO Renderer</a><a href="https://github.com/eugeniosegala/MAKO/releases" {...newTabProps}>All releases</a></div>
         </div>
         <div className="footer-bottom"><span>GPL-3.0-OR-LATER</span><span>INDEPENDENT COMMUNITY PROJECT</span><span>© 2026 MAKO</span></div>
