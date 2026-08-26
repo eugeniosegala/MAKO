@@ -3,7 +3,6 @@ set(LAYER_SOURCES
     "src/gamescope_hdr_feedback.cpp"
     "src/instance.cpp"
     "src/present_diagnostics.cpp"
-    "src/spatial_scaler.cpp"
     "src/swapchain.cpp"
     "src/swapchain_present.cpp")
 
@@ -15,6 +14,19 @@ target_include_directories(mako-adaptive
 set_target_properties(mako-adaptive PROPERTIES
     CXX_VISIBILITY_PRESET hidden
     VISIBILITY_INLINES_HIDDEN ON)
+
+if(MAKO_BUILD_VK_LAYER OR MAKO_BUILD_CLI)
+    add_library(mako-spatial-scaler STATIC
+        "src/spatial_scaler.cpp")
+    target_include_directories(mako-spatial-scaler
+        PUBLIC "src")
+    target_link_libraries(mako-spatial-scaler
+        PUBLIC mako-common
+        PUBLIC mako-backend)
+    set_target_properties(mako-spatial-scaler PROPERTIES
+        CXX_VISIBILITY_PRESET hidden
+        VISIBILITY_INLINES_HIDDEN ON)
+endif()
 
 if(MAKO_BUILD_VK_LAYER)
     find_package(Threads REQUIRED)
@@ -34,6 +46,7 @@ if(MAKO_BUILD_VK_LAYER)
     target_link_libraries(mako-render
         PRIVATE mako-adaptive
         PRIVATE mako-color
+        PRIVATE mako-spatial-scaler
         PRIVATE Threads::Threads
         PUBLIC mako-common
         PUBLIC mako-backend)

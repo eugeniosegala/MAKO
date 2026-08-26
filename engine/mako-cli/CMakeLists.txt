@@ -15,6 +15,7 @@ add_executable(mako-cli ${CLI_SOURCES})
 
 target_link_libraries(mako-cli
     PRIVATE mako-cli-support
+    PRIVATE mako-spatial-scaler
     PUBLIC mako-common
     PUBLIC mako-backend)
 

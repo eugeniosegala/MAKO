@@ -603,12 +603,13 @@ std::string_view SpatialScaler::ls1Translator() const {
 void SpatialScaler::record(const vk::Vulkan& vk,
         const vk::CommandBuffer& commandBuffer,
         const VkImage applicationImage,
-        const VkImage frameGenerationSource) const {
+        const VkImage frameGenerationSource,
+        const VkImageLayout applicationLayout) const {
     const auto handle = commandBuffer.handle();
     const std::array inputBarriers{
         imageBarrier(
             applicationImage, VK_ACCESS_MEMORY_WRITE_BIT,
-            VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+            VK_ACCESS_TRANSFER_READ_BIT, applicationLayout,
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
         ),
         imageBarrier(
@@ -675,14 +676,14 @@ void SpatialScaler::record(const vk::Vulkan& vk,
         1, &presentationCopy, VK_FILTER_NEAREST
     );
 
-    const auto presentBarrier = imageBarrier(
+    const auto applicationBarrier = imageBarrier(
         applicationImage, VK_ACCESS_TRANSFER_WRITE_BIT,
         VK_ACCESS_MEMORY_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+        applicationLayout
     );
     vk.df().CmdPipelineBarrier(
         handle, VK_PIPELINE_STAGE_TRANSFER_BIT,
         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
-        0, nullptr, 0, nullptr, 1, &presentBarrier
+        0, nullptr, 0, nullptr, 1, &applicationBarrier
     );
 }

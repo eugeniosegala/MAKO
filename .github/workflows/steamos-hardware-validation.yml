@@ -66,7 +66,7 @@ jobs:
           test "$(uname -s)" = Linux
           grep -qi '^ID=steamos' /etc/os-release
           grep -qi '0x1002' /sys/class/drm/renderD*/device/vendor
-          for command in cmake ninja clang++ vulkaninfo vkcube gamescope python3 flatpak flatpak-builder; do
+          for command in cmake ninja clang++ g++ vulkaninfo vkcube gamescope python3 flatpak flatpak-builder; do
             command -v "$command" >/dev/null || {
               echo "Required hardware-runner command is missing: $command" >&2
               exit 1
@@ -79,6 +79,8 @@ jobs:
           gym_repo="${MAKO_GYM_REPO:-$GITHUB_WORKSPACE/../MAKO-Gym}"
           ./engine/scripts/run-mako-gym.sh \
             --gym-repo "$gym_repo" --require --validate
+          ./engine/scripts/run-mako-gym.sh \
+            --gym-repo "$gym_repo" --require --suite recovery --validate
           if [[ -n "$(git -C "$gym_repo" status --porcelain)" ]]; then
             echo "MAKO-Gym must be clean for hardware validation: $gym_repo" >&2
             exit 1
@@ -103,7 +105,7 @@ jobs:
           MAKO_BUILD_DIR=build/hardware-validation
           ./scripts/build-steamos-dev.sh
 
-      - name: Run MAKO-Gym AMD image-quality validation
+      - name: Run MAKO-Gym procedural render-quality matrix
         working-directory: engine
         run: |
           ./scripts/run-mako-gym.sh --require --suite quality \
@@ -159,6 +161,17 @@ jobs:
             echo "Expected exactly one sanitized MAKO-Gym result." >&2
             exit 1
           fi
+          ./scripts/run-mako-gym.sh --require --suite recovery \
+            --launcher "$matrix_prefix/bin/mako-launch" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-recovery"
+          mapfile -t recovery_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-recovery" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#recovery_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO-Gym recovery result." >&2
+            exit 1
+          fi
 
       - name: Deploy to the dedicated Decky test installation
         if: inputs.deploy_to_decky
@@ -177,6 +190,7 @@ jobs:
             engine/out/hardware-validation.txt
             engine/out/mako-gym-quality
             engine/out/mako-gym
+            engine/out/mako-gym-recovery
             plugin/out/*.zip
           if-no-files-found: warn
           retention-days: 14

@@ -34,12 +34,16 @@ namespace mako::layer {
         SpatialScaler& operator=(SpatialScaler&&) noexcept;
 
         /// Reconstruct the application's low-resolution rectangle, write the
-        /// native-resolution result back into its real WSI image, and
-        /// optionally copy the same result to MAKO's exported FG source.
+        /// native-resolution result back into its image, and optionally copy
+        /// the same result to MAKO's exported FG source. Production WSI uses
+        /// the default presentation layout; offscreen validation supplies its
+        /// actual application-image layout explicitly.
         void record(const vk::Vulkan& vk,
             const vk::CommandBuffer& commandBuffer,
             VkImage applicationImage,
-            VkImage frameGenerationSource = VK_NULL_HANDLE) const;
+            VkImage frameGenerationSource = VK_NULL_HANDLE,
+            VkImageLayout applicationLayout =
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR) const;
 
         [[nodiscard]] VkExtent2D sourceExtent() const;
         [[nodiscard]] VkExtent2D presentationExtent() const;

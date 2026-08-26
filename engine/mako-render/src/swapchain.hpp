@@ -47,6 +47,10 @@ namespace mako::layer {
         // reinterpreted without replacing the game-owned swapchain.
         bool privateOrderedTransport{false};
         bool spatialScalingActive{false};
+        // The application supplied a live oldSwapchain handle while creating
+        // this context. This is a known game-owned replacement rather than a
+        // cold process start, so Adaptive may use its bounded recovery guard.
+        bool replacement{false};
     };
 
     /// modify the swapchain create info based on the profile pre-swapchain creation

@@ -234,7 +234,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-CTest remains portable and validates the deterministic image-quality scene and scoring policy without a licensed DLL. Real AMD FP32/FP16 execution is owned by the private sibling MAKO-Gym checkout and is mandatory in the SteamOS release gate; use `./scripts/run-mako-gym.sh --suite quality --cli <built-mako-cli>` from the MAKO root for the same local bridge.
+CTest remains portable and validates the five-scene procedural image-quality catalog, spatial/combined references, masks, scoring policy, and corruption detection without a licensed DLL. Real AMD execution is owned by the private sibling MAKO-Gym checkout: its 66-case visual matrix covers LSFG FP32/FP16, every spatial method, and production scaling-to-LSFG handoffs, while its 12-case native-Vulkan recovery matrix controls cadence rises, false probes, hitches, stalls, drops, and old-swapchain replacement. Both are mandatory in the SteamOS release gate. Use `./scripts/run-mako-gym.sh --suite quality --cli <built-mako-cli>` or `./scripts/run-mako-gym.sh --suite recovery` from the MAKO root for the same local bridges.
 
 Local Linux archives and Flatpak runtime extensions can be built with:
 
@@ -257,5 +257,5 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 - [Flatpak guide](docs/FLATPAK-GUIDE.md): runtime extensions and direct Flatpak application overrides.
 - [Building from Source](docs/BUILDING-FROM-SOURCE.md): prerequisites, SteamOS builds, and packaging.
 - [Troubleshooting](docs/TROUBLESHOOTING.md): activation, configuration, and presentation diagnostics.
-- [AMD image-quality regression](docs/IMAGE-QUALITY-REGRESSION.md): deterministic Flow Scale 1.0 GPU validation and comparison artifacts.
+- [Procedural image-quality regression](docs/IMAGE-QUALITY-REGRESSION.md): five game-like scenes across real LSFG, spatial scaling, combined handoffs, and comparison artifacts.
 - [Collect standalone MAKO Renderer diagnostics](docs/COLLECT_DIAGNOSTICS.md): create a focused Desktop report and submit it through the shared form.

@@ -523,7 +523,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                          "deadline overruns enter transport recovery\n";
         }
         const bool schedulerEnabled = this->resetGenerationScheduler(
-            DiagnosticsClock::now(), "startup"
+            DiagnosticsClock::now(),
+            this->info.replacement ? "swapchain-recreation" : "startup"
         );
         if (schedulerEnabled) {
             const auto policy = generationSchedulerPolicy(

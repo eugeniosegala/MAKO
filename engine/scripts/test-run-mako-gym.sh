@@ -18,13 +18,16 @@ fi
 
 fake_gym="$temporary_root/MAKO-Gym"
 mkdir -p "$fake_gym/scripts"
-printf '1\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '3\n' > "$fake_gym/GYM_CONTRACT_VERSION"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$@"' \
     > "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 chmod +x "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "quality:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-amd-quality-regression.sh"
 chmod +x "$fake_gym/scripts/run-amd-quality-regression.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "recovery:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-runtime-recovery-matrix.sh"
+chmod +x "$fake_gym/scripts/run-runtime-recovery-matrix.sh"
 
 forwarded="$($bridge --gym-repo "$fake_gym" --list --filter '^fixed-')"
 expected=$'--list\n--filter\n^fixed-'
@@ -39,18 +42,24 @@ if [[ "$quality_forwarded" != "$quality_expected" ]]; then
     echo "Gym quality-suite arguments were not forwarded exactly." >&2
     exit 1
 fi
+recovery_forwarded="$($bridge --gym-repo "$fake_gym" --suite recovery --filter '^adaptive-')"
+recovery_expected=$'recovery:--filter\nrecovery:^adaptive-'
+if [[ "$recovery_forwarded" != "$recovery_expected" ]]; then
+    echo "Gym recovery-suite arguments were not forwarded exactly." >&2
+    exit 1
+fi
 if "$bridge" --gym-repo "$fake_gym" --suite unknown >/dev/null 2>&1; then
     echo "Unknown Gym suite unexpectedly succeeded." >&2
     exit 1
 fi
 
-printf '2\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '1\n' > "$fake_gym/GYM_CONTRACT_VERSION"
 if "$bridge" --gym-repo "$fake_gym" --list >/dev/null 2>&1; then
     echo "Incompatible Gym contract unexpectedly succeeded." >&2
     exit 1
 fi
 
-printf '1\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '3\n' > "$fake_gym/GYM_CONTRACT_VERSION"
 chmod -x "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 if "$bridge" --gym-repo "$fake_gym" --list >/dev/null 2>&1; then
     echo "Non-executable Gym runner unexpectedly succeeded." >&2

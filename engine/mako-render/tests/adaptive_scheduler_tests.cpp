@@ -50,6 +50,7 @@ namespace {
             bool accepted{false};
             size_t previousLimit{0};
             size_t testedLimit{0};
+            std::chrono::milliseconds duration{0};
         };
 
         std::vector<Event> events;
@@ -64,10 +65,12 @@ namespace {
         }
 
         void stabilization(const std::string_view reason,
-                std::chrono::steady_clock::duration) override {
+                const std::chrono::steady_clock::duration duration) override {
             this->events.push_back({
                 .operation = "stabilization",
                 .reason = std::string(reason),
+                .duration = std::chrono::duration_cast<
+                    std::chrono::milliseconds>(duration),
             });
         }
 
@@ -486,6 +489,23 @@ namespace {
         require(harness.scheduler.snapshot().phase ==
                 AdaptiveSchedulerPhase::Stabilizing,
             "scheduler left startup stabilization too early");
+    }
+
+    void testSwapchainRecreationUsesBoundedSettlingGuard() {
+        Harness harness(60, 2);
+        harness.scheduler.beginStabilization(
+            harness.now, "swapchain-recreation"
+        );
+        const auto* recreation = harness.diagnostics.last("stabilization");
+        require(recreation && recreation->reason == "swapchain-recreation" &&
+                recreation->duration == 1s,
+            "known swapchain replacement did not use the one-second recovery guard");
+
+        Harness startup(60, 2);
+        startup.scheduler.beginStabilization(startup.now, "startup");
+        const auto* coldStart = startup.diagnostics.last("stabilization");
+        require(coldStart && coldStart->duration == 3s,
+            "cold startup lost its three-second splash-screen guard");
     }
 
     void testBusyWarmupNotificationIsIdempotent() {
@@ -2654,6 +2674,7 @@ namespace {
 int main() {
     const std::vector<TestCase> tests{
         {"startup warm-up is explicit", testStartupWarmupIsExplicit},
+        {"swapchain recreation settles promptly", testSwapchainRecreationUsesBoundedSettlingGuard},
         {"busy warm-up notification is idempotent", testBusyWarmupNotificationIsIdempotent},
         {"transient busy frame does not rearm warm-up", testTransientBusyFrameDoesNotRearmCompletedWarmup},
         {"invalid configuration is rejected", testInvalidConfigurationIsRejectedAtBoundary},

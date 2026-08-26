@@ -2092,11 +2092,13 @@ void AdaptiveScheduler::beginStabilization(
         this->state.rearm.stableSince.reset();
         this->state.rearm.improvementSince.reset();
     }
-    // Startup can include an uncapped splash screen or launcher followed by
-    // normal gameplay. Do not let those first samples start a probe that the
-    // gameplay transition immediately interrupts and unnecessarily penalizes.
-    const auto stabilizationDuration =
-        reason == "swapchain-recreation" || reason == "startup"
+    // Cold startup can include an uncapped splash screen or launcher followed
+    // by normal gameplay. Do not let those first samples start a probe that
+    // the gameplay transition immediately interrupts and penalizes. A Vulkan
+    // oldSwapchain replacement is already inside a running game: its new
+    // backend still receives the normal temporal-history warm-up, while one
+    // second of fresh source cadence is enough before the measured ramp.
+    const auto stabilizationDuration = reason == "startup"
         ? adaptiveRecoveryStabilizationDuration
         : adaptiveStabilizationDuration;
     this->state.stabilization.until = now + stabilizationDuration;

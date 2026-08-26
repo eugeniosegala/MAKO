@@ -938,6 +938,7 @@ namespace {
                     modification.privateOrderedTransport,
                 .spatialScalingActive =
                     modification.spatialScalingActive,
+                .replacement = info->oldSwapchain != VK_NULL_HANDLE,
             }).first->second;
 
             // An enabled implicit layer can run in a process that does not

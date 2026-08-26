@@ -58,7 +58,7 @@ if(BUILD_TESTING)
         "tests/image_quality_tests.cpp")
     target_link_libraries(mako-image-quality-tests
         PRIVATE mako-common)
-    add_test(NAME amd-image-quality-scene
+    add_test(NAME procedural-image-quality-scene
         COMMAND mako-image-quality-tests)
 endif()
 

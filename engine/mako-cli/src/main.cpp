@@ -40,7 +40,11 @@ COMMANDS:
     benchmark   Run a benchmark
     debug       Run mako on a set of images
     quality-regression
-                Run the deterministic AMD image-quality regression
+                Run a procedural LSFG image-quality regression
+    spatial-quality-regression
+                Run a procedural MAKO/LS1 spatial-quality regression
+    combined-quality-regression
+                Run spatial scaling into LSFG on one procedural scene
 
 SUBCOMMAND OPTIONS:
 
@@ -68,6 +72,33 @@ SUBCOMMAND OPTIONS:
         -a, --allow-fp16                Include FP16 acceleration in the test
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
+        -s, --scene <NAME>              Procedural scene name
+        -t, --interpolation <FLOAT>     Generated timestamp between 0 and 1
+        -f, --flow <FLOAT>              Flow scale from 0.25 to 1.0
+        -p, --performance-mode          Use the lighter LSFG model
+
+    spatial-quality-regression
+        -d, --dll <PATH>                Path to Lossless.dll for LS1 methods
+        -g, --gpu <STRING>              GPU to use
+        -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
+        -c, --scene <NAME>              Procedural scene name
+        -m, --method <NAME>             mako, ls1, or ls1-performance
+        -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
+        -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
+        -t, --scene-time <FLOAT>        Scene time from 0.0 through 1.0
+
+    combined-quality-regression
+        -d, --dll <PATH>                Path to Lossless.dll
+        -a, --allow-fp16                Include FP16 LSFG acceleration
+        -g, --gpu <STRING>              GPU to use
+        -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
+        -c, --scene <NAME>              Procedural scene name
+        -m, --method <NAME>             mako, ls1, or ls1-performance
+        -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
+        -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
+        -t, --interpolation <FLOAT>     Generated timestamp between 0 and 1
+        -w, --flow <FLOAT>              Flow scale from 0.25 to 1.0
+        -p, --performance-mode          Use the lighter LSFG model
 )" << '\n';
     }
 
@@ -230,16 +261,21 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::Options opts{};
-        const std::array<option, 5> GETOPT {{
-            { "dll",        required_argument, nullptr, 'd' },
-            { "allow-fp16", no_argument,       nullptr, 'a' },
-            { "gpu",        required_argument, nullptr, 'g' },
-            { "output",     required_argument, nullptr, 'o' },
-            { nullptr,       no_argument,       nullptr,  0  }
+        const std::array<option, 9> GETOPT {{
+            { "dll",              required_argument, nullptr, 'd' },
+            { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "gpu",              required_argument, nullptr, 'g' },
+            { "output",           required_argument, nullptr, 'o' },
+            { "scene",            required_argument, nullptr, 's' },
+            { "interpolation",    required_argument, nullptr, 't' },
+            { "flow",             required_argument, nullptr, 'f' },
+            { "performance-mode", no_argument,       nullptr, 'p' },
+            { nullptr,             no_argument,       nullptr,  0  }
         }};
 
         int c{0};
-        while ((c = getopt_long(argc, argv, "d:ag:o:", GETOPT.data(), nullptr)) != -1) {
+        while ((c = getopt_long(
+                argc, argv, "d:ag:o:s:t:f:p", GETOPT.data(), nullptr)) != -1) {
             switch (c) {
                 case 'd':
                     opts.dll.emplace(optarg);
@@ -253,6 +289,18 @@ SUBCOMMAND OPTIONS:
                 case 'o':
                     opts.output.emplace(optarg);
                     break;
+                case 's':
+                    opts.scene = optarg;
+                    break;
+                case 't':
+                    opts.interpolation = std::stof(optarg);
+                    break;
+                case 'f':
+                    opts.flow_scale = std::stof(optarg);
+                    break;
+                case 'p':
+                    opts.performance_mode = true;
+                    break;
                 case '?':
                 default:
                     usage(program);
@@ -264,6 +312,132 @@ SUBCOMMAND OPTIONS:
             std::exit(EXIT_FAILURE);
         }
         std::exit(quality::run(opts));
+    }
+
+    /// parse the spatial-quality-regression command options
+    [[noreturn]] void on_spatial_quality_regression(int argc, char** argv,
+            const std::string& program) {
+        quality::SpatialOptions opts{};
+        const std::array<option, 9> GETOPT {{
+            { "dll",        required_argument, nullptr, 'd' },
+            { "gpu",        required_argument, nullptr, 'g' },
+            { "output",     required_argument, nullptr, 'o' },
+            { "scene",      required_argument, nullptr, 'c' },
+            { "method",     required_argument, nullptr, 'm' },
+            { "factor",     required_argument, nullptr, 'f' },
+            { "sharpness",  required_argument, nullptr, 's' },
+            { "scene-time", required_argument, nullptr, 't' },
+            { nullptr,       no_argument,       nullptr,  0  }
+        }};
+
+        int c{0};
+        while ((c = getopt_long(
+                argc, argv, "d:g:o:c:m:f:s:t:", GETOPT.data(), nullptr)) != -1) {
+            switch (c) {
+                case 'd':
+                    opts.dll.emplace(optarg);
+                    break;
+                case 'g':
+                    opts.gpu.emplace(optarg);
+                    break;
+                case 'o':
+                    opts.output.emplace(optarg);
+                    break;
+                case 'c':
+                    opts.scene = optarg;
+                    break;
+                case 'm':
+                    opts.method = optarg;
+                    break;
+                case 'f':
+                    opts.scaling_factor = std::stof(optarg);
+                    break;
+                case 's':
+                    opts.sharpness = std::stof(optarg);
+                    break;
+                case 't':
+                    opts.scene_time = std::stof(optarg);
+                    break;
+                case '?':
+                default:
+                    usage(program);
+                    std::exit(EXIT_FAILURE);
+            }
+        }
+        if (optind < argc) {
+            usage(program);
+            std::exit(EXIT_FAILURE);
+        }
+        std::exit(quality::runSpatial(opts));
+    }
+
+    /// parse the combined-quality-regression command options
+    [[noreturn]] void on_combined_quality_regression(int argc, char** argv,
+            const std::string& program) {
+        quality::CombinedOptions opts{};
+        const std::array<option, 12> GETOPT {{
+            { "dll",              required_argument, nullptr, 'd' },
+            { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "gpu",              required_argument, nullptr, 'g' },
+            { "output",           required_argument, nullptr, 'o' },
+            { "scene",            required_argument, nullptr, 'c' },
+            { "method",           required_argument, nullptr, 'm' },
+            { "factor",           required_argument, nullptr, 'f' },
+            { "sharpness",        required_argument, nullptr, 's' },
+            { "interpolation",    required_argument, nullptr, 't' },
+            { "flow",             required_argument, nullptr, 'w' },
+            { "performance-mode", no_argument,       nullptr, 'p' },
+            { nullptr,             no_argument,       nullptr,  0  }
+        }};
+
+        int c{0};
+        while ((c = getopt_long(
+                argc, argv, "d:ag:o:c:m:f:s:t:w:p", GETOPT.data(), nullptr)) != -1) {
+            switch (c) {
+                case 'd':
+                    opts.dll.emplace(optarg);
+                    break;
+                case 'a':
+                    opts.allow_fp16 = true;
+                    break;
+                case 'g':
+                    opts.gpu.emplace(optarg);
+                    break;
+                case 'o':
+                    opts.output.emplace(optarg);
+                    break;
+                case 'c':
+                    opts.scene = optarg;
+                    break;
+                case 'm':
+                    opts.method = optarg;
+                    break;
+                case 'f':
+                    opts.scaling_factor = std::stof(optarg);
+                    break;
+                case 's':
+                    opts.sharpness = std::stof(optarg);
+                    break;
+                case 't':
+                    opts.interpolation = std::stof(optarg);
+                    break;
+                case 'w':
+                    opts.flow_scale = std::stof(optarg);
+                    break;
+                case 'p':
+                    opts.performance_mode = true;
+                    break;
+                case '?':
+                default:
+                    usage(program);
+                    std::exit(EXIT_FAILURE);
+            }
+        }
+        if (optind < argc) {
+            usage(program);
+            std::exit(EXIT_FAILURE);
+        }
+        std::exit(quality::runCombined(opts));
     }
 }
 
@@ -302,6 +476,10 @@ int main(int argc, char** argv) {
         on_debug(command_argc, command_argv, global.language, program);
     else if (command == "quality-regression")
         on_quality_regression(command_argc, command_argv, program);
+    else if (command == "spatial-quality-regression")
+        on_spatial_quality_regression(command_argc, command_argv, program);
+    else if (command == "combined-quality-regression")
+        on_combined_quality_regression(command_argc, command_argv, program);
 
     usage(program);
     return EXIT_FAILURE;

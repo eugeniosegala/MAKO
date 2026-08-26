@@ -1058,6 +1058,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << " present_mode=" << static_cast<int>(info.presentMode)
                   << " ordered_transport="
                   << (info.privateOrderedTransport ? 1 : 0)
+                  << " replacement=" << (info.replacement ? 1 : 0)
                   << " active_contexts=" << this->swapchains.size()
                   << " inserted=" << inserted
                   << " layer_forced_recreation=live-profile-resources-one-shot"

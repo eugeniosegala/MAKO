@@ -51,17 +51,25 @@ test-engine-portable:
 test-engine-sanitized:
     cd engine && MAKO_ENABLE_SANITIZERS=ON ./scripts/test-adaptive-scheduler.sh
 
-# Run MAKO-Gym when its sibling checkout is available.
+# Run MAKO-Gym's feature suite when its sibling checkout is available; pass --filter for focused development.
 test-engine-gym *args:
     ./engine/scripts/run-mako-gym.sh {{args}}
 
-# Run MAKO-Gym and fail when its sibling checkout is unavailable.
+# Explicit feature-suite alias for focused development commands.
+test-engine-gym-feature *args:
+    ./engine/scripts/run-mako-gym.sh --suite vulkan {{args}}
+
+# Run a selected MAKO-Gym suite and fail when its sibling checkout is unavailable; vulkan remains the default.
 test-engine-gym-required *args:
     ./engine/scripts/run-mako-gym.sh --require {{args}}
 
-# Run MAKO-Gym's mandatory AMD FP32/FP16 image-quality suite.
+# Run selected procedural render-quality rows; no --filter runs all 66 cases.
 test-engine-gym-quality *args:
     ./engine/scripts/run-mako-gym.sh --suite quality {{args}}
+
+# Run selected scripted runtime-recovery rows; no --filter runs all 12 cases.
+test-engine-gym-recovery *args:
+    ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
 
 # Build the Decky frontend.
 build-plugin:

@@ -73,6 +73,8 @@ MAKO_INSTALLER_ASSUME_YES=1 \
 [[ -f "$config_home/mako-render/conf.toml" ]] || fail "uninstaller removed configuration by default"
 
 printf 'n\n' | HOME="$test_root" \
+        DISPLAY= \
+        WAYLAND_DISPLAY= \
         MAKO_INSTALL_PREFIX="$install_prefix" \
         XDG_CONFIG_HOME="$config_home" \
         MAKO_INSTALLER_ASSUME_YES=0 \

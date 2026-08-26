@@ -44,6 +44,22 @@ run_failure "$cli" --lang
 
 help_output="$("$cli" --help 2>&1)" || fail "--help failed: $help_output"
 [[ $help_output == *'quality-regression'* ]] ||
-    fail "Leviathan quality-regression command disappeared from help"
+    fail "MAKO quality-regression command disappeared from help"
+[[ $help_output == *'spatial-quality-regression'* ]] ||
+    fail "MAKO spatial-quality-regression command disappeared from help"
+[[ $help_output == *'combined-quality-regression'* ]] ||
+    fail "MAKO combined-quality-regression command disappeared from help"
+
+run_failure "$cli" quality-regression --scene unknown-scene
+[[ $command_output == 'error: unknown quality scene: unknown-scene' ]] ||
+    fail "unknown procedural scene did not fail closed: $command_output"
+
+run_failure "$cli" spatial-quality-regression --method unknown-method
+[[ $command_output == 'error: unknown spatial quality method: unknown-method' ]] ||
+    fail "unknown spatial method did not fail closed: $command_output"
+
+run_failure "$cli" combined-quality-regression --method unknown-method
+[[ $command_output == 'error: unknown combined quality spatial method: unknown-method' ]] ||
+    fail "unknown combined spatial method did not fail closed: $command_output"
 
 printf 'mako-cli i18n contract: PASS\n'
