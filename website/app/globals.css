@@ -116,7 +116,8 @@ h2 { margin: 0; font-size: clamp(52px, 5.3vw, 82px); font-weight: 800; line-heig
 .system-panel:hover { transform: translateY(-6px); border-color: rgba(0, 217, 255, .33); box-shadow: 0 30px 80px rgba(0, 0, 0, .3); }
 .system-panel::before { content: ''; position: absolute; inset: 0; background: linear-gradient(transparent 60%, rgba(0, 217, 255, .04)), repeating-linear-gradient(0deg, transparent 0 6px, rgba(0, 217, 255, .018) 6px 7px); pointer-events: none; }
 .renderer-panel::before { background: linear-gradient(transparent 60%, rgba(255, 106, 0, .045)), repeating-linear-gradient(0deg, transparent 0 6px, rgba(255, 106, 0, .015) 6px 7px); }
-.panel-number { position: absolute; right: 22px; top: 3px; color: rgba(196, 232, 255, .035); font-size: 180px; font-weight: 900; line-height: 1; letter-spacing: -.1em; }
+.panel-number { position: absolute; right: 18px; top: 18px; color: rgba(103, 205, 244, .07); font-size: 200px; font-weight: 900; line-height: .84; letter-spacing: -.12em; pointer-events: none; }
+.renderer-panel .panel-number { color: rgba(255, 132, 56, .065); }
 .panel-topline { position: relative; z-index: 2; display: flex; justify-content: space-between; color: #7d94a4; font: 600 9px var(--font-mono), ui-monospace, monospace; letter-spacing: .12em; }
 .panel-topline span { color: var(--cyan); }
 .renderer-panel .panel-topline span { color: var(--orange); }
