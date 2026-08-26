@@ -24,6 +24,7 @@ export const releaseData = {
     docs: `${repository}#install-and-use`,
     issues: `${repository}/issues`,
     allReleases: `${repository}/releases`,
+    discord: 'https://discord.gg/NAVkyCq7Rc',
     losslessScaling: 'https://store.steampowered.com/app/993090/Lossless_Scaling/',
   },
 } as const;

@@ -2,6 +2,7 @@
 
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { releaseData } from './release-data';
+import { DiscordIcon, GitHubIcon } from './social-icons';
 
 const { deckyVersion, rendererVersion, links } = releaseData;
 
@@ -101,7 +102,8 @@ export default function Home() {
           <a href="#features">Features</a>
           <a href={links.docs} {...newTabProps}>Installation Guide</a>
           <a href="#downloads">Downloads</a>
-          <a href={links.repository} {...newTabProps}>GitHub</a>
+          <a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a>
+          <a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a>
         </div>
         <a className="nav-download" href={links.deckyDownload} {...newTabProps}>
           Download <span>v{deckyVersion}</span>
@@ -113,7 +115,8 @@ export default function Home() {
             <a href="#features">Features</a>
             <a href={links.docs} {...newTabProps}>Installation Guide</a>
             <a href="#downloads">Downloads</a>
-            <a href={links.repository} {...newTabProps}>GitHub</a>
+            <a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a>
+            <a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a>
           </div>
         </details>
       </nav>
@@ -376,7 +379,8 @@ export default function Home() {
             <p>Choose MAKO Decky for the managed SteamOS workflow or MAKO Renderer for a direct Linux installation.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>Download MAKO <span>→</span></a>
-              <a className="button button-secondary" href={links.repository} {...newTabProps}>View on GitHub <span>→</span></a>
+              <a className="button button-secondary social-button" href={links.repository} {...newTabProps}><span className="social-button-label"><GitHubIcon />View on GitHub</span><span aria-hidden="true">→</span></a>
+              <a className="button button-secondary social-button" href={links.discord} {...newTabProps}><span className="social-button-label"><DiscordIcon />Join Discord</span><span aria-hidden="true">→</span></a>
             </div>
           </div>
         </section>
@@ -388,7 +392,7 @@ export default function Home() {
           <p>Lossless Scaling frame generation for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
         </div>
         <div className="footer-links">
-          <div><span>PROJECT</span><a href={links.repository} {...newTabProps}>GitHub</a><a href={links.docs} {...newTabProps}>Installation Guide</a><a href={links.issues} {...newTabProps}>Issues</a></div>
+          <div><span>PROJECT</span><a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a><a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a><a href={links.docs} {...newTabProps}>Installation Guide</a><a href={links.issues} {...newTabProps}>Issues</a></div>
           <div><span>DOWNLOAD</span><a href={links.deckyRelease} {...newTabProps}>MAKO Decky</a><a href={links.rendererRelease} {...newTabProps}>MAKO Renderer</a><a href={links.allReleases} {...newTabProps}>All releases</a></div>
         </div>
         <div className="footer-bottom"><span>GPL-3.0-OR-LATER</span><span>INDEPENDENT COMMUNITY PROJECT</span><span>© 2026 MAKO</span></div>
