@@ -94,7 +94,7 @@ export default function Home() {
 
       <nav className="site-nav" aria-label="Main navigation">
         <a className="brand" href="#top" aria-label="MAKO home">
-          <img src="assets/mako-logo.webp" alt="" width="44" height="44" draggable={false} />
+          <img src="assets/mako-discord-icon.webp" alt="" width="44" height="44" draggable={false} />
           <span>MAKO</span>
         </a>
         <div className="nav-links">
@@ -388,7 +388,7 @@ export default function Home() {
 
       <footer className="site-footer">
         <div className="footer-brand">
-          <a className="brand" href="#top"><img src="assets/mako-logo.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
+          <a className="brand" href="#top"><img src="assets/mako-discord-icon.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
           <p>Lossless Scaling frame generation for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
         </div>
         <div className="footer-links">

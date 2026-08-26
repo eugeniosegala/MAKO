@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   description: 'MAKO brings Vulkan-powered Lossless Scaling frame generation to Steam Deck, Steam Machine, SteamOS, and Linux.',
   metadataBase: new URL('https://eugeniosegala.github.io/MAKO/'),
   icons: {
-    icon: 'assets/mako-logo.webp',
+    icon: 'assets/mako-discord-icon.webp',
   },
   openGraph: {
     title: 'MAKO - Frame Generation on SteamOS/Linux',
