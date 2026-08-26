@@ -6,6 +6,7 @@ on:
       - main
     paths:
       - "website/**"
+      - "plugin/package.json"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
