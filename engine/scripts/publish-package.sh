@@ -155,13 +155,14 @@ $manual_release_notes
 > [!TIP]
 > **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.
 
-Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart after major display, DLL, GPU, Flow Scale, Performance Mode, or model changes.
+Every game, renderer, and display setup behaves differently. Compare scaling-only, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time. For scaling, select the intended lower rendering resolution in the game. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling controls, Flow Scale, and Lighter FG Model use one game-owned swapchain recreation when needed. Fullscreen is usually the best starting point for performance and frame pacing. Restart if a title ignores that signal, after major display, DLL, GPU, or process/device-policy changes, and before enabling Frame Generation in a process that started scaling-only.
 
+- **Scaling quality and cost:** Higher scaling factors render fewer source pixels but require more reconstruction. Compare text, UI edges, thin geometry, motion, GPU time, and frame pacing against native resolution, then tune sharpening conservatively.
 - **Adaptive target behaviour:** Adaptive varies the generated-frame count toward an average target. It cannot reduce a native frame rate already above that target, and the result still depends on the selected multiplier plus available GPU and compositor capacity.
 - **Quality and latency tuning:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness, so compare the available choices per game.
 
 > [!IMPORTANT]
-> MAKO Renderer requires \`Lossless.dll\` from a licensed Lossless Scaling installation. Neither release archive bundles, copies, or modifies that proprietary library.
+> LS1 scaling and Fixed or Adaptive Frame Generation require \`Lossless.dll\` from a licensed Lossless Scaling installation. The open MAKO scaling method does not use it. Neither release archive bundles, copies, or modifies that proprietary library.
 
 ## Installation
 
@@ -181,7 +182,7 @@ Start the configuration UI after extraction:
 - **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode and open **MAKO Renderer Configuration**.
 - **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
 
-Configure the licensed DLL path in the UI or \`~/.config/mako-render/conf.toml\`, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO through its private Vulkan layer directory, prevents Steam's Vulkan Fossilize/overlay hooks and competing presentation layers from bypassing its swapchain interception, and keeps Gamescope and the Steam/Game Mode interface active outside that application chain.
+Configure the profile in the UI or \`~/.config/mako-render/conf.toml\`. Select the licensed DLL path when using LS1 scaling or Frame Generation, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO through its private Vulkan layer directory, prevents Steam's Vulkan Fossilize/overlay hooks and competing presentation layers from bypassing its swapchain interception, and keeps Gamescope and the Steam/Game Mode interface active outside that application chain.
 
 ### Flatpak runtime extensions
 
@@ -204,12 +205,12 @@ Keep the previous archives until the new version has been tested with your games
 
 ## Known limitation
 
-- **HDR frame generation is not currently supported:** HDR pipeline groundwork remains in the renderer, but MAKO does not present it as an enabled release path yet.
+- **HDR scaling and frame generation are not currently supported:** HDR pipeline groundwork remains in the renderer, but MAKO does not present either feature as an enabled HDR release path yet.
 
 ## Before you play
 
-- Confirm the detected \`Lossless.dll\` path. Leaving it blank permits normal discovery in common Steam locations.
-- Do not combine MAKO with another Lossless Scaling Vulkan wrapper for the same game.
+- If you use LS1 scaling or Frame Generation, confirm that MAKO can discover \`Lossless.dll\` or select its path explicitly. The open MAKO scaling method does not need it.
+- Do not combine MAKO with another frame-generation or swapchain-scaling Vulkan wrapper for the same game.
 
 ## MAKO Renderer release assets \`$version\`
 

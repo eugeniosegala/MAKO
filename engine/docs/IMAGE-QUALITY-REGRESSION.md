@@ -16,31 +16,18 @@ mako-cli quality-regression --output ./mako-quality-result
 
 Use `--dll /path/to/Lossless.dll` when automatic discovery is not available, and `--gpu "GPU name"` on a multi-GPU system. Add `--allow-fp16` for a second pass that matches MAKO Decky's normal AMD acceleration setting.
 
-## Automatic Steam Machine validation
+## MAKO-Gym hardware validation
 
-CTest registers `amd-image-quality-gpu` automatically. On a detected SteamOS or Steam Machine host, the default `AUTO` policy becomes mandatory: both FP32 and FP16 passes must run, and a missing AMD Vulkan GPU, `Lossless.dll`, or other prerequisite fails the build. Macs and other unsupported development hosts report the hardware test as skipped, so the portable test suite still runs there.
+Portable CTest owns the deterministic scene and scoring policy without a GPU or licensed input. The private sibling MAKO-Gym repository owns real AMD orchestration, DLL discovery, mandatory FP32/FP16 execution, sanitized logs, and comparison-image retention. This keeps normal CMake builds and packaging independent from licensed local inputs while preserving fail-closed hardware evidence in the SteamOS release gate.
 
-Comparison artifacts are retained under the build's `quality-regression/fp32` and `quality-regression/fp16` directories. Local package builds keep them in `build/cache/quality-regression` so a failed packaging workspace cannot discard the evidence.
-
-The fast SteamOS development builder also runs both passes after every successful 64-bit layer build:
+After building `mako-cli`, run the MAKO-side bridge from the repository root:
 
 ```bash
-./scripts/build-steamos-dev.sh
+./engine/scripts/run-mako-gym.sh --suite quality \
+  --cli "$PWD/engine/build/mako-cli/mako-cli"
 ```
 
-Use `--skip-quality-regression` only for an intentional short iteration. Set `MAKO_QUALITY_DLL=/custom/path/Lossless.dll` when Lossless Scaling is installed outside a standard Steam library, and set `MAKO_QUALITY_GPU="exact device name"` to choose a particular AMD GPU. If the development hardware uses a non-SteamOS distribution whose identity cannot be detected automatically, set `MAKO_STEAM_MACHINE=1` once in its development environment to apply the same mandatory policy.
-
-Recognized Steam Machine hosts already enforce the regression without extra configuration. Release CI can still set `REQUIRED` explicitly to document that hardware contract; the environment form also applies to `build-steamos-dev.sh` and `package-local.sh`:
-
-```bash
-cmake -S . -B build -DMAKO_GPU_QUALITY_TEST=REQUIRED
-cmake --build build
-ctest --test-dir build --output-on-failure
-```
-
-```bash
-MAKO_GPU_QUALITY_TEST=REQUIRED ./scripts/package-local.sh
-```
+Use `--require` in automation that must not skip when Gym is absent. Forward `--dll /custom/path/Lossless.dll`, `--gpu "exact device name"`, or `--output-root <path>` to Gym as needed. The authoritative orchestration, evidence layout, and limitations are documented in `MAKO-Gym/docs/AMD-QUALITY-REGRESSION.md`.
 
 The command exits successfully only when all broad corruption guardrails pass. It reports normalized whole-frame, motion/disocclusion, severe-error, and thin-detail metrics. The output directory contains `previous.ppm`, `current.ppm`, `reference.ppm`, and `generated.ppm` for visual comparison. These guardrails detect regressions; they are intentionally not a claim that a particular metric predicts subjective quality in every game.
 
@@ -54,4 +41,4 @@ cmake --build build/quality-policy --target mako-device-feature-tests mako-image
 ctest --test-dir build/quality-policy --output-on-failure -R '^(optional-device-features|amd-image-quality-scene)$'
 ```
 
-The synthetic tests do not require a GPU or the proprietary shader DLL. The hardware integration test is mandatory by default on recognized Steam Machine development and packaging builds, while `REQUIRED` records the same policy explicitly for release CI.
+The synthetic tests do not require a GPU or the proprietary shader DLL. MAKO-Gym's hardware suite is separately mandatory in release CI and always fails rather than skips when invoked without its AMD GPU, DLL, CLI, or successful FP32/FP16 results.

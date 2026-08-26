@@ -21,9 +21,14 @@ import {
   MAKO_WRAPPER_RELATIVE_PATH,
   PER_GAME_WRAPPER_FLATPAK_APP_IDS,
   PROFILE_KIND_VALUES,
+  SCALING_FACTOR_MAX,
+  SCALING_FACTOR_MIN,
+  SCALING_SHARPNESS_MAX,
+  SCALING_SHARPNESS_MIN,
   SUPPORTED_FLATPAK_RUNTIMES,
   TARGET_FPS_MAX,
   TARGET_FPS_MIN,
+  getDefaults,
 } from "../../src/config/generatedConfigSchema";
 import {
   DEFAULT_PROFILE_NAME,
@@ -94,6 +99,8 @@ describe("generated cross-language contracts", () => {
         ...DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
       ],
       flowScale: [FLOW_SCALE_MIN, FLOW_SCALE_MAX],
+      scalingFactor: [SCALING_FACTOR_MIN, SCALING_FACTOR_MAX],
+      scalingSharpness: [SCALING_SHARPNESS_MIN, SCALING_SHARPNESS_MAX],
       refreshThreshold: [
         FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
         FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
@@ -121,12 +128,28 @@ describe("generated cross-language contracts", () => {
         3,
       ],
       flowScale: [0.25, 1],
+      scalingFactor: [1, 2],
+      scalingSharpness: [0, 1],
       refreshThreshold: [0, 240],
       refreshThresholdUiMin: 30,
       refreshThresholdPreset: 60,
       fixedMultiplierMin: 2,
       fixedMultiplierUi: [2, 4],
       externalVulkanLayers: ["", "gamescope-wsi", "mangohud", "vkbasalt"],
+    });
+  });
+
+  test("keeps spatial scaling inert by default while retaining its tuning values", () => {
+    const defaults = getDefaults();
+
+    expect({
+      enabled: defaults.scaling_enabled,
+      factor: defaults.scaling_factor,
+      sharpness: defaults.scaling_sharpness,
+    }).toEqual({
+      enabled: false,
+      factor: 1.5,
+      sharpness: 0.5,
     });
   });
 });

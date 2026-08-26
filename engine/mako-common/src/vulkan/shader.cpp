@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -32,6 +33,31 @@ namespace {
         return ls::owned_ptr<VkShaderModule>(
             new VkShaderModule(handle),
             [dev = vk.dev(), defunc = vk.df().DestroyShaderModule](VkShaderModule& shaderModule) {
+                defunc(dev, shaderModule, VK_NULL_HANDLE);
+            }
+        );
+    }
+
+    ls::owned_ptr<VkShaderModule> createShaderModule(
+            const vk::Vulkan& vk,
+            const std::span<const uint32_t> code) {
+        VkShaderModule handle{};
+
+        const VkShaderModuleCreateInfo shaderModuleInfo{
+            .sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO,
+            .codeSize = code.size_bytes(),
+            .pCode = code.data(),
+        };
+        const auto res = vk.df().CreateShaderModule(
+            vk.dev(), &shaderModuleInfo, VK_NULL_HANDLE, &handle
+        );
+        if (res != VK_SUCCESS)
+            throw ls::vulkan_error(res, "vkCreateShaderModule() failed");
+
+        return ls::owned_ptr<VkShaderModule>(
+            new VkShaderModule(handle),
+            [dev = vk.dev(), defunc = vk.df().DestroyShaderModule](
+                    VkShaderModule& shaderModule) {
                 defunc(dev, shaderModule, VK_NULL_HANDLE);
             }
         );
@@ -153,6 +179,24 @@ Shader::Shader(const vk::Vulkan& vk, const std::vector<uint8_t>& code,
     shaderModule(createShaderModule(vk,
         code.data(), code.size()
     )),
+    descriptorLayout(createDescriptorSetLayout(vk,
+        sampledImages, storageImages,
+        buffers, samplers
+    )),
+    pipelineLayout(createPipelineLayout(vk,
+        *this->descriptorLayout
+    )),
+    pipeline_(createComputePipeline(vk,
+        *this->shaderModule,
+        *this->pipelineLayout
+    )) {
+
+}
+
+Shader::Shader(const vk::Vulkan& vk, const std::span<const uint32_t> code,
+        const size_t sampledImages, const size_t storageImages,
+        const size_t buffers, const size_t samplers) :
+    shaderModule(createShaderModule(vk, code)),
     descriptorLayout(createDescriptorSetLayout(vk,
         sampledImages, storageImages,
         buffers, samplers

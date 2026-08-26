@@ -30,7 +30,7 @@ export function UsageInstructions() {
             whiteSpace: "pre-wrap"
           }}
         >
-          {t("USAGE_DESC", "Click \"Copy Launch Option\" button, then paste it into your Steam game's launch options to enable frame generation.")}
+          {t("USAGE_DESC", "Copy the launch option into your Steam game's launch options to enable MAKO Renderer for frame generation, scaling, or both.")}
         </div>
       </PanelSectionRow>
 
@@ -75,7 +75,7 @@ export function UsageInstructions() {
             marginTop: "4px"
           }}
         >
-          {t('USAGE_ISOLATION_NOTE', 'Use only one frame-generation tool per game.')}
+          {t('USAGE_ISOLATION_NOTE', 'Do not combine MAKO with another frame-generation or scaling tool for the same game.')}
         </div>
       </PanelSectionRow>
     </>

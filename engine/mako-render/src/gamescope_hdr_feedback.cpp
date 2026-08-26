@@ -40,13 +40,14 @@ namespace {
     constexpr char gamescopeRefreshProperty[] =
         "GAMESCOPE_DISPLAY_REFRESH_RATE_FEEDBACK";
 
-    bool runningUnderGamescope() {
-        const char* gamescopeDisplay = std::getenv("GAMESCOPE_WAYLAND_DISPLAY");
-        if (gamescopeDisplay && *gamescopeDisplay)
-            return true;
-        return environmentFlagEnabled(std::getenv("ENABLE_GAMESCOPE_WSI")) ||
-            environmentFlagEnabled(std::getenv("STEAM_GAMESCOPE_HDR_SUPPORTED"));
-    }
+}
+
+bool mako::layer::gamescopeProcessEnvironmentHint() {
+    const char* gamescopeDisplay = std::getenv("GAMESCOPE_WAYLAND_DISPLAY");
+    if (gamescopeDisplay && *gamescopeDisplay)
+        return true;
+    return environmentFlagEnabled(std::getenv("ENABLE_GAMESCOPE_WSI")) ||
+        environmentFlagEnabled(std::getenv("STEAM_GAMESCOPE_HDR_SUPPORTED"));
 }
 
 struct GamescopeHdrFeedbackReader::Impl {
@@ -283,7 +284,7 @@ struct GamescopeHdrFeedbackReader::Impl {
         const bool currentNeedsRoot = currentIsGamescope &&
             *currentIdentity.serverId != 0;
         const bool needsCandidateProbe = currentNeedsRoot ||
-            (!currentIsGamescope && runningUnderGamescope());
+            (!currentIsGamescope && gamescopeProcessEnvironmentHint());
 
         std::vector<GamescopeXwaylandDisplay> candidateIdentities;
         std::vector<std::pair<std::string, Display*>> candidateConnections;
@@ -325,7 +326,8 @@ struct GamescopeHdrFeedbackReader::Impl {
         }
 
         if (!this->display && (currentNeedsRoot ||
-                (!currentIsGamescope && runningUnderGamescope()))) {
+                (!currentIsGamescope &&
+                    gamescopeProcessEnvironmentHint()))) {
             this->resolverStatus = currentNeedsRoot
                 ? "gamescope-root-display-unresolved"
                 : "gamescope-current-identity-unavailable";
@@ -520,7 +522,8 @@ struct GamescopeHdrFeedbackReader::Impl {
     std::chrono::milliseconds pollInterval() {
         std::scoped_lock lock(this->sampleMutex);
         return gamescopeFeedbackPollInterval(
-            runningUnderGamescope(), this->latestSample.gamescopeDetected
+            gamescopeProcessEnvironmentHint(),
+            this->latestSample.gamescopeDetected
         );
     }
 

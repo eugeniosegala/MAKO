@@ -65,7 +65,7 @@ import { getDefaults } from "../../src/config/configSchema";
 afterEach(cleanup);
 
 describe("Performance Settings", () => {
-  test("keeps Ultra Performance and the lighter model together with a restart warning", () => {
+  test("keeps Ultra Performance restart-bound while exposing the lighter model live", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
     const onConfigUpdate = vi.fn(async () => undefined);
@@ -89,7 +89,7 @@ describe("Performance Settings", () => {
         .closest("button")
         ?.querySelector('svg[aria-hidden="true"]'),
     ).toBeTruthy();
-    const lighterModel = screen.getByText("Lighter FG Model (Restart)");
+    const lighterModel = screen.getByText("Lighter FG Model");
     expect(lighterModel.getAttribute("data-checked")).toBe("true");
     expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
     expect((lighterModel as HTMLButtonElement).disabled).toBe(true);
@@ -97,12 +97,15 @@ describe("Performance Settings", () => {
       screen.getByText(/less aggressive performance option than Ultra Performance/),
     ).toBeTruthy();
     expect(
+      screen.getByText(/Changes apply live through one brief game-owned swapchain recreation/),
+    ).toBeTruthy();
+    expect(
       screen.getByText(/Primarily intended for low-power devices such as Steam Deck/),
     ).toBeTruthy();
     const warning = screen.getByRole("note");
     expect(warning.getAttribute("data-tone")).toBe("warning");
     expect(warning.textContent).toContain(
-      "Profile changes do not apply while this mode is enabled. Restart the game after changing settings.",
+      "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls continue to apply live after startup.",
     );
 
     fireEvent.click(screen.getByText("Ultra Performance (Restart)"));

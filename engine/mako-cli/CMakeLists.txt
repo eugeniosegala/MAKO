@@ -35,18 +35,6 @@ if(BUILD_TESTING)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/test-i18n-cli.sh"
             "$<TARGET_FILE:mako-cli>")
 
-    add_test(NAME amd-image-quality-gpu
-        COMMAND bash
-            "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/run-gpu-quality-regression.sh"
-            "$<TARGET_FILE:mako-cli>"
-            "${MAKO_GPU_QUALITY_OUTPUT}"
-            "${MAKO_GPU_QUALITY_TEST}"
-            77)
-    set_tests_properties(amd-image-quality-gpu PROPERTIES
-        LABELS "amd;gpu;image-quality"
-        RUN_SERIAL TRUE
-        SKIP_RETURN_CODE 77
-        TIMEOUT 300)
 endif()
 
 install(TARGETS mako-cli

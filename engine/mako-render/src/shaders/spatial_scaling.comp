@@ -1,0 +1,184 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+#version 450
+
+// MAKO's spatial reconstruction pass is deliberately independent from the
+// proprietary LS1 resources. It combines a clamped Catmull-Rom reconstruction
+// with contrast-aware anti-ringing and a bounded local sharpening term in one
+// output-resolution pass.
+
+layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
+
+layout(set = 0, binding = 0, std140) uniform SpatialScalingParameters {
+    vec4 sizes;  // source width/height, output width/height
+    vec4 tuning; // normalized sharpness, reserved
+} parameters;
+
+layout(set = 0, binding = 16) uniform sampler sourceSampler;
+layout(set = 0, binding = 32) uniform texture2D sourceTexture;
+#ifdef MAKO_SCALING_RGBA16F
+layout(set = 0, binding = 48, rgba16f) uniform writeonly image2D outputImage;
+#else
+layout(set = 0, binding = 48, rgba8) uniform writeonly image2D outputImage;
+#endif
+
+float luma(vec3 color) {
+    return dot(color, vec3(0.2126, 0.7152, 0.0722));
+}
+
+vec4 sourceTexel(ivec2 coordinate) {
+    return texelFetch(
+        sampler2D(sourceTexture, sourceSampler), coordinate, 0
+    );
+}
+
+vec4 filteredSource(vec2 coordinate) {
+    return textureLod(
+        sampler2D(sourceTexture, sourceSampler), coordinate, 0.0
+    );
+}
+
+vec4 catmullRomWeights(float fraction) {
+    float f2 = fraction * fraction;
+    float f3 = f2 * fraction;
+    return vec4(
+        -0.5 * fraction + f2 - 0.5 * f3,
+        1.0 - 2.5 * f2 + 1.5 * f3,
+        0.5 * fraction + 2.0 * f2 - 1.5 * f3,
+        -0.5 * f2 + 0.5 * f3
+    );
+}
+
+void main() {
+    ivec2 outputCoordinate = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 outputSize = ivec2(parameters.sizes.zw);
+    if (any(greaterThanEqual(outputCoordinate, outputSize)))
+        return;
+
+    vec2 sourcePosition =
+        (vec2(outputCoordinate) + vec2(0.5)) *
+        parameters.sizes.xy / parameters.sizes.zw - vec2(0.5);
+    ivec2 sourceBase = ivec2(floor(sourcePosition));
+    vec2 fraction = fract(sourcePosition);
+    vec4 horizontalWeights = catmullRomWeights(fraction.x);
+    vec4 verticalWeights = catmullRomWeights(fraction.y);
+
+    // The two positive inner Catmull-Rom lobes can be folded into one linear
+    // sample. The three resulting positions per axis produce the same
+    // separable 4x4 reconstruction with nine filtered samples, without a
+    // private vec4[16], dynamic indexing, or shader loops.
+    vec3 horizontalSampleWeights = vec3(
+        horizontalWeights.x,
+        horizontalWeights.y + horizontalWeights.z,
+        horizontalWeights.w
+    );
+    vec3 verticalSampleWeights = vec3(
+        verticalWeights.x,
+        verticalWeights.y + verticalWeights.z,
+        verticalWeights.w
+    );
+    vec2 inverseSourceSize = vec2(1.0) / parameters.sizes.xy;
+    vec3 horizontalSampleCoordinates = (
+        vec3(
+            float(sourceBase.x - 1),
+            float(sourceBase.x) + horizontalWeights.z /
+                horizontalSampleWeights.y,
+            float(sourceBase.x + 2)
+        ) + vec3(0.5)
+    ) * inverseSourceSize.x;
+    vec3 verticalSampleCoordinates = (
+        vec3(
+            float(sourceBase.y - 1),
+            float(sourceBase.y) + verticalWeights.z /
+                verticalSampleWeights.y,
+            float(sourceBase.y + 2)
+        ) + vec3(0.5)
+    ) * inverseSourceSize.y;
+
+    vec4 reconstructed = filteredSource(vec2(
+        horizontalSampleCoordinates.x, verticalSampleCoordinates.x
+    )) * (horizontalSampleWeights.x * verticalSampleWeights.x);
+    reconstructed += filteredSource(vec2(
+        horizontalSampleCoordinates.y, verticalSampleCoordinates.x
+    )) * (horizontalSampleWeights.y * verticalSampleWeights.x);
+    reconstructed += filteredSource(vec2(
+        horizontalSampleCoordinates.z, verticalSampleCoordinates.x
+    )) * (horizontalSampleWeights.z * verticalSampleWeights.x);
+    reconstructed += filteredSource(vec2(
+        horizontalSampleCoordinates.x, verticalSampleCoordinates.y
+    )) * (horizontalSampleWeights.x * verticalSampleWeights.y);
+    reconstructed += filteredSource(vec2(
+        horizontalSampleCoordinates.y, verticalSampleCoordinates.y
+    )) * (horizontalSampleWeights.y * verticalSampleWeights.y);
+    reconstructed += filteredSource(vec2(
+        horizontalSampleCoordinates.z, verticalSampleCoordinates.y
+    )) * (horizontalSampleWeights.z * verticalSampleWeights.y);
+    reconstructed += filteredSource(vec2(
+        horizontalSampleCoordinates.x, verticalSampleCoordinates.z
+    )) * (horizontalSampleWeights.x * verticalSampleWeights.z);
+    reconstructed += filteredSource(vec2(
+        horizontalSampleCoordinates.y, verticalSampleCoordinates.z
+    )) * (horizontalSampleWeights.y * verticalSampleWeights.z);
+    reconstructed += filteredSource(vec2(
+        horizontalSampleCoordinates.z, verticalSampleCoordinates.z
+    )) * (horizontalSampleWeights.z * verticalSampleWeights.z);
+
+    ivec2 maximumSourceCoordinate = ivec2(parameters.sizes.xy) - ivec2(1);
+    int centerX0 = clamp(sourceBase.x, 0, maximumSourceCoordinate.x);
+    int centerX1 = clamp(sourceBase.x + 1, 0, maximumSourceCoordinate.x);
+    int centerY0 = clamp(sourceBase.y, 0, maximumSourceCoordinate.y);
+    int centerY1 = clamp(sourceBase.y + 1, 0, maximumSourceCoordinate.y);
+    vec4 center00 = sourceTexel(ivec2(centerX0, centerY0));
+    vec4 center10 = sourceTexel(ivec2(centerX1, centerY0));
+    vec4 center01 = sourceTexel(ivec2(centerX0, centerY1));
+    vec4 center11 = sourceTexel(ivec2(centerX1, centerY1));
+    vec4 bilinear = mix(
+        mix(center00, center10, fraction.x),
+        mix(center01, center11, fraction.x),
+        fraction.y
+    );
+    vec4 localMinimum = min(min(center00, center10), min(center01, center11));
+    vec4 localMaximum = max(max(center00, center10), max(center01, center11));
+    reconstructed = clamp(reconstructed, localMinimum, localMaximum);
+
+    float minimumLuma = min(
+        min(luma(center00.rgb), luma(center10.rgb)),
+        min(luma(center01.rgb), luma(center11.rgb))
+    );
+    float maximumLuma = max(
+        max(luma(center00.rgb), luma(center10.rgb)),
+        max(luma(center01.rgb), luma(center11.rgb))
+    );
+    float contrast = maximumLuma - minimumLuma;
+    float ringingRisk = smoothstep(0.06, 0.30, contrast);
+    vec3 baseColor = mix(
+        reconstructed.rgb, bilinear.rgb, ringingRisk * 0.22
+    );
+
+    vec3 localAverage = 0.25 * (
+        center00.rgb + center10.rgb + center01.rgb + center11.rgb
+    );
+    float horizontalEdge =
+        abs(luma(center10.rgb) - luma(center00.rgb)) +
+        abs(luma(center11.rgb) - luma(center01.rgb));
+    float verticalEdge =
+        abs(luma(center01.rgb) - luma(center00.rgb)) +
+        abs(luma(center11.rgb) - luma(center10.rgb));
+    float edgeDirectionConfidence = abs(horizontalEdge - verticalEdge) /
+        (horizontalEdge + verticalEdge + 0.0001);
+    float sharpeningGain = parameters.tuning.x *
+        mix(0.18, 0.32, edgeDirectionConfidence) *
+        mix(1.0, 0.55, ringingRisk);
+    vec3 sharpened = baseColor + (baseColor - localAverage) * sharpeningGain;
+
+    // Permit a small contrast-relative sharpening envelope, but never the
+    // unbounded overshoot that produces bright halos around UI and text.
+    vec3 envelope = vec3(0.02 + contrast * 0.08);
+    sharpened = clamp(
+        sharpened, localMinimum.rgb - envelope, localMaximum.rgb + envelope
+    );
+    imageStore(
+        outputImage, outputCoordinate,
+        vec4(sharpened, clamp(reconstructed.a, 0.0, 1.0))
+    );
+}

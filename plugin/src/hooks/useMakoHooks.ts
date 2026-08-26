@@ -94,12 +94,18 @@ export function useDllDetection() {
         );
       } else {
         setDllDetectionStatus(
-          t("STATUS_LOSSLESS_NOT_INSTALLED", "Lossless Scaling not installed"),
+          t(
+            "STATUS_LOSSLESS_NOT_INSTALLED",
+            "Lossless Scaling not installed — required for LS1 and Frame Generation; MAKO scaling remains available",
+          ),
         );
       }
     } catch (error) {
       setDllDetectionStatus(
-        t("STATUS_LOSSLESS_NOT_INSTALLED", "Lossless Scaling not installed"),
+        t(
+          "STATUS_LOSSLESS_NOT_INSTALLED",
+          "Lossless Scaling not installed — required for LS1 and Frame Generation; MAKO scaling remains available",
+        ),
       );
     }
   };

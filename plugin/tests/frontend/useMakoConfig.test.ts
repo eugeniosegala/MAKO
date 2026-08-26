@@ -130,4 +130,22 @@ describe("MAKO configuration persistence", () => {
     await waitFor(() => expect(result.current.config.multiplier).toBe(3));
     expect(result.current.config.external_vulkan_layer).toBe("");
   });
+
+  test("keeps scaling inert when an older backend omits its fields", async () => {
+    mocks.getMakoConfig.mockResolvedValue({
+      success: true,
+      config: {
+        multiplier: 3,
+        frame_generation_enabled: true,
+      } as ConfigurationData
+    });
+
+    const { result } = renderHook(() => useMakoConfig());
+
+    await waitFor(() => expect(result.current.config.multiplier).toBe(3));
+    expect(result.current.config.scaling_enabled).toBe(false);
+    expect(result.current.config.scaling_factor).toBe(1.5);
+    expect(result.current.config.scaling_sharpness).toBe(0.5);
+    expect(result.current.config.frame_generation_enabled).toBe(true);
+  });
 });

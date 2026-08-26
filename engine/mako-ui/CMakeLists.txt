@@ -48,6 +48,21 @@ target_link_libraries(mako-ui
     PRIVATE Qt6::Quick)
 
 if(BUILD_TESTING)
+    add_executable(mako-ui-backend-contract-tests
+        "tests/backend_contract_tests.cpp"
+        "src/backend.cpp"
+        "src/utils.cpp"
+        "src/backend.hpp")
+    set_target_properties(mako-ui-backend-contract-tests PROPERTIES AUTOMOC ON)
+    target_include_directories(mako-ui-backend-contract-tests PRIVATE "src")
+    target_link_libraries(mako-ui-backend-contract-tests
+        PRIVATE mako-common
+        PRIVATE mako-backend
+        PRIVATE Qt6::Core)
+    target_compile_definitions(mako-ui-backend-contract-tests PRIVATE
+        MAKO_UI_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/UI.qml")
+    add_test(NAME ui-backend-contract COMMAND mako-ui-backend-contract-tests)
+
     add_executable(mako-ui-localization-tests
         "tests/localization_tests.cpp")
     target_link_libraries(mako-ui-localization-tests

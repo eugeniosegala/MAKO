@@ -54,6 +54,19 @@ export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES = [
 ] as const;
 export const FLOW_SCALE_MIN = 0.25 as const;
 export const FLOW_SCALE_MAX = 1.0 as const;
+export const SCALING_FACTOR_MIN = 1.0 as const;
+export const SCALING_FACTOR_MAX = 2.0 as const;
+export const SCALING_METHOD_MAKO = "mako" as const;
+export const SCALING_METHOD_LS1 = "ls1" as const;
+export const SCALING_METHOD_LS1_PERFORMANCE = "ls1-performance" as const;
+export const SCALING_METHOD_VALUES = [
+  SCALING_METHOD_MAKO,
+  SCALING_METHOD_LS1,
+  SCALING_METHOD_LS1_PERFORMANCE,
+] as const;
+export type ScalingMethod = (typeof SCALING_METHOD_VALUES)[number];
+export const SCALING_SHARPNESS_MIN = 0.0 as const;
+export const SCALING_SHARPNESS_MAX = 1.0 as const;
 export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.75 as const;
 export const FIXED_MULTIPLIER_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MIN = 2 as const;
@@ -88,6 +101,10 @@ export enum ConfigFieldType {
 // Field name constants for type-safe access
 export const DLL = "dll" as const;
 export const ALLOW_FP16 = "allow_fp16" as const;
+export const SCALING_ENABLED = "scaling_enabled" as const;
+export const SCALING_METHOD = "scaling_method" as const;
+export const SCALING_FACTOR = "scaling_factor" as const;
+export const SCALING_SHARPNESS = "scaling_sharpness" as const;
 export const FRAME_GENERATION_ENABLED = "frame_generation_enabled" as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD = "frame_generation_refresh_threshold" as const;
 export const BASE_FPS_CAP = "base_fps_cap" as const;
@@ -133,6 +150,30 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
     description: "allow FP16 acceleration (disable on older NVIDIA GPUs)"
+  },
+  scaling_enabled: {
+    name: "scaling_enabled",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "live switch for independent spatial scaling through game-owned swapchain recreation"
+  },
+  scaling_method: {
+    name: "scaling_method",
+    fieldType: ConfigFieldType.STRING,
+    default: "mako",
+    description: "live spatial scaler selection: MAKO, LS1 Quality, or LS1 Performance"
+  },
+  scaling_factor: {
+    name: "scaling_factor",
+    fieldType: ConfigFieldType.FLOAT,
+    default: 1.5,
+    description: "live output scaling factor from 1.0x to 2.0x"
+  },
+  scaling_sharpness: {
+    name: "scaling_sharpness",
+    fieldType: ConfigFieldType.FLOAT,
+    default: 0.5,
+    description: "live scaling sharpness from zero to one"
   },
   frame_generation_enabled: {
     name: "frame_generation_enabled",
@@ -204,19 +245,19 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "ultra_performance",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "restart-only preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and skipped live profile checks"
+    description: "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain live after startup"
   },
   flow_scale: {
     name: "flow_scale",
     fieldType: ConfigFieldType.FLOAT,
     default: 0.9,
-    description: "change the flow scale"
+    description: "change the flow scale live through game-owned swapchain recreation"
   },
   performance_mode: {
     name: "performance_mode",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "use a lighter FG model to reduce GPU overhead, at the cost of more visual artifacts"
+    description: "select a lighter FG model live through game-owned swapchain recreation, reducing GPU overhead at the cost of more visual artifacts"
   },
   pacing: {
     name: "pacing",
@@ -240,7 +281,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "disable_mako",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "troubleshooting: prevent MAKO Renderer loading after restart"
+    description: "troubleshooting: prevent MAKO Renderer loading on the next game launch"
   },
   disable_hdr_exposure: {
     name: "disable_hdr_exposure",
@@ -278,6 +319,10 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
 export interface ConfigurationData {
   dll: string;
   allow_fp16: boolean;
+  scaling_enabled: boolean;
+  scaling_method: string;
+  scaling_factor: number;
+  scaling_sharpness: number;
   frame_generation_enabled: boolean;
   frame_generation_refresh_threshold: number;
   base_fps_cap: number;
@@ -315,6 +360,10 @@ export function getDefaults(): ConfigurationData {
   return {
     dll: "",
     allow_fp16: true,
+    scaling_enabled: false,
+    scaling_method: "mako",
+    scaling_factor: 1.5,
+    scaling_sharpness: 0.5,
     frame_generation_enabled: true,
     frame_generation_refresh_threshold: 0,
     base_fps_cap: 0,
@@ -345,6 +394,10 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
   return {
     dll: ConfigFieldType.STRING,
     allow_fp16: ConfigFieldType.BOOLEAN,
+    scaling_enabled: ConfigFieldType.BOOLEAN,
+    scaling_method: ConfigFieldType.STRING,
+    scaling_factor: ConfigFieldType.FLOAT,
+    scaling_sharpness: ConfigFieldType.FLOAT,
     frame_generation_enabled: ConfigFieldType.BOOLEAN,
     frame_generation_refresh_threshold: ConfigFieldType.INTEGER,
     base_fps_cap: ConfigFieldType.INTEGER,

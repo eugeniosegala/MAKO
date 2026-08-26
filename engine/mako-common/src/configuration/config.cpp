@@ -42,6 +42,10 @@ active_in = [ # see the wiki for more info
 # gpu = 'NVIDIA GeForce RTX 5080' # see the wiki for more info
 multiplier = 4
 frame_generation_enabled = true
+scaling_enabled = false
+scaling_method = 'mako'
+scaling_factor = 1.5
+scaling_sharpness = 0.5
 frame_generation_refresh_threshold = 0
 base_fps_cap = 0
 adaptive = false
@@ -80,6 +84,10 @@ ConfigFile::ConfigFile() {
         },
         .multiplier = 4,
         .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
+        .scaling_enabled = GameConfDefaults::scalingEnabled,
+        .scaling_method = GameConfDefaults::scalingMethod,
+        .scaling_factor = GameConfDefaults::scalingFactor,
+        .scaling_sharpness = GameConfDefaults::scalingSharpness,
         .frame_generation_refresh_threshold =
             GameConfDefaults::frameGenerationRefreshThreshold,
         .base_fps_cap = GameConfDefaults::baseFpsCap,
@@ -142,6 +150,11 @@ namespace {
             return Pacing::None;
         throw ls::error("unknown pacing method: " + str);
     }
+    ScalingMethod scalingMethodFromString(const std::string& value) {
+        if (const auto method = scalingMethodFromName(value))
+            return *method;
+        throw ls::error("unknown scaling method: " + value);
+    }
     /// validate the shared file/environment game-profile contract
     void validateGameConf(const GameConf& conf) {
         if (conf.multiplier < GameConfLimits::minimumMultiplier)
@@ -150,6 +163,28 @@ namespace {
                     GameConfLimits::minimumMultiplier - 1
                 )
             );
+        if (!(conf.scaling_factor >= GameConfLimits::minimumScalingFactor &&
+                conf.scaling_factor <= GameConfLimits::maximumScalingFactor)) {
+            throw ls::error(
+                "scaling_factor must be between " + formatFloatingLimit(
+                    GameConfLimits::minimumScalingFactor
+                ) + " and " + formatFloatingLimit(
+                    GameConfLimits::maximumScalingFactor
+                )
+            );
+        }
+        if (!(conf.scaling_sharpness >=
+                    GameConfLimits::minimumScalingSharpness &&
+                conf.scaling_sharpness <=
+                    GameConfLimits::maximumScalingSharpness)) {
+            throw ls::error(
+                "scaling_sharpness must be between " + formatFloatingLimit(
+                    GameConfLimits::minimumScalingSharpness
+                ) + " and " + formatFloatingLimit(
+                    GameConfLimits::maximumScalingSharpness
+                )
+            );
+        }
         if (conf.base_fps_cap > GameConfLimits::maximumBaseFpsCap)
             throw ls::error(
                 "base_fps_cap must be " + std::to_string(
@@ -240,6 +275,20 @@ namespace {
             .frame_generation_enabled = tbl["frame_generation_enabled"].value_or(
                 GameConfDefaults::frameGenerationEnabled
             ),
+            .scaling_enabled = tbl["scaling_enabled"].value_or(
+                GameConfDefaults::scalingEnabled
+            ),
+            .scaling_method = scalingMethodFromString(
+                tbl["scaling_method"].value_or<std::string>(
+                    scalingMethodName(GameConfDefaults::scalingMethod)
+                )
+            ),
+            .scaling_factor = tbl["scaling_factor"].value_or(
+                GameConfDefaults::scalingFactor
+            ),
+            .scaling_sharpness = tbl["scaling_sharpness"].value_or(
+                GameConfDefaults::scalingSharpness
+            ),
             .frame_generation_refresh_threshold =
                 tbl["frame_generation_refresh_threshold"].value_or(
                     GameConfDefaults::frameGenerationRefreshThreshold
@@ -309,6 +358,10 @@ namespace {
 
             .multiplier = GameConfDefaults::multiplier,
             .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
+            .scaling_enabled = GameConfDefaults::scalingEnabled,
+            .scaling_method = GameConfDefaults::scalingMethod,
+            .scaling_factor = GameConfDefaults::scalingFactor,
+            .scaling_sharpness = GameConfDefaults::scalingSharpness,
             .frame_generation_refresh_threshold =
                 GameConfDefaults::frameGenerationRefreshThreshold,
             .base_fps_cap = GameConfDefaults::baseFpsCap,
@@ -334,6 +387,17 @@ namespace {
         const char* frame_generation_enabled = std::getenv("MAKO_FRAME_GENERATION_ENABLED");
         if (frame_generation_enabled)
             conf.frame_generation_enabled = std::string(frame_generation_enabled) != "0";
+        const char* scaling_enabled = std::getenv("MAKO_SCALING_ENABLED");
+        if (scaling_enabled)
+            conf.scaling_enabled = std::string(scaling_enabled) != "0";
+        const char* scaling_method = std::getenv("MAKO_SCALING_METHOD");
+        if (scaling_method)
+            conf.scaling_method = scalingMethodFromString(scaling_method);
+        const char* scaling_factor = std::getenv("MAKO_SCALING_FACTOR");
+        if (scaling_factor) conf.scaling_factor = std::stof(scaling_factor);
+        const char* scaling_sharpness = std::getenv("MAKO_SCALING_SHARPNESS");
+        if (scaling_sharpness)
+            conf.scaling_sharpness = std::stof(scaling_sharpness);
         const char* frame_generation_refresh_threshold =
             std::getenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
         if (frame_generation_refresh_threshold) {
@@ -445,6 +509,10 @@ void ConfigFile::write(const std::filesystem::path& path) const {
             profile.insert("gpu", conf.gpu.value_or(""));
         profile.insert("multiplier", static_cast<int64_t>(conf.multiplier));
         profile.insert("frame_generation_enabled", conf.frame_generation_enabled);
+        profile.insert("scaling_enabled", conf.scaling_enabled);
+        profile.insert("scaling_method", scalingMethodName(conf.scaling_method));
+        profile.insert("scaling_factor", conf.scaling_factor);
+        profile.insert("scaling_sharpness", conf.scaling_sharpness);
         profile.insert(
             "frame_generation_refresh_threshold",
             static_cast<int64_t>(conf.frame_generation_refresh_threshold)

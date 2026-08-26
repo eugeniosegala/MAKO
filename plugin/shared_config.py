@@ -61,6 +61,18 @@ DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES = (
 FLOW_SCALE_MIN = 0.25
 FLOW_SCALE_MAX = 1.0
 ULTRA_PERFORMANCE_FLOW_SCALE = 0.75
+SCALING_FACTOR_MIN = 1.0
+SCALING_FACTOR_MAX = 2.0
+SCALING_SHARPNESS_MIN = 0.0
+SCALING_SHARPNESS_MAX = 1.0
+SCALING_METHOD_MAKO = "mako"
+SCALING_METHOD_LS1 = "ls1"
+SCALING_METHOD_LS1_PERFORMANCE = "ls1-performance"
+SCALING_METHOD_VALUES = (
+    SCALING_METHOD_MAKO,
+    SCALING_METHOD_LS1,
+    SCALING_METHOD_LS1_PERFORMANCE,
+)
 FIXED_MULTIPLIER_MIN = 2
 FIXED_MULTIPLIER_UI_MIN = FIXED_MULTIPLIER_MIN
 FIXED_MULTIPLIER_UI_MAX = 4
@@ -116,6 +128,34 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "default": True,
         "description": "allow FP16 acceleration (disable on older NVIDIA GPUs)",
         "location": "global"
+    },
+
+    "scaling_enabled": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "live switch for independent spatial scaling through game-owned swapchain recreation",
+        "location": "toml"
+    },
+
+    "scaling_method": {
+        "fieldType": ConfigFieldType.STRING,
+        "default": SCALING_METHOD_MAKO,
+        "description": "live spatial scaler selection: MAKO, LS1 Quality, or LS1 Performance",
+        "location": "toml"
+    },
+
+    "scaling_factor": {
+        "fieldType": ConfigFieldType.FLOAT,
+        "default": 1.5,
+        "description": "live output scaling factor from 1.0x to 2.0x",
+        "location": "toml"
+    },
+
+    "scaling_sharpness": {
+        "fieldType": ConfigFieldType.FLOAT,
+        "default": 0.5,
+        "description": "live scaling sharpness from zero to one",
+        "location": "toml"
     },
 
     "frame_generation_enabled": {
@@ -198,21 +238,21 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "ultra_performance": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-only preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, active-policy resource allocation, and skipped live profile checks",
+        "description": "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain live after startup",
         "location": "toml"
     },
 
     "flow_scale": {
         "fieldType": ConfigFieldType.FLOAT,
         "default": 0.9,
-        "description": "change the flow scale",
+        "description": "change the flow scale live through game-owned swapchain recreation",
         "location": "toml"
     },
 
     "performance_mode": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "use a lighter FG model to reduce GPU overhead, at the cost of more visual artifacts",
+        "description": "select a lighter FG model live through game-owned swapchain recreation, reducing GPU overhead at the cost of more visual artifacts",
         "location": "toml"
     },
 
@@ -240,7 +280,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "disable_mako": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "troubleshooting: prevent MAKO Renderer loading after restart",
+        "description": "troubleshooting: prevent MAKO Renderer loading on the next game launch",
         "location": "script"
     },
 

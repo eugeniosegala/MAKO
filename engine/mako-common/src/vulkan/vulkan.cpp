@@ -62,6 +62,15 @@ namespace {
         return func;
     }
 
+    template<typename T>
+    T optionalIpa(PFN_vkGetInstanceProcAddr mpa, VkInstance instance,
+            const char* name, const char* alias = nullptr) {
+        auto func = reinterpret_cast<T>(mpa(instance, name));
+        if (!func && alias)
+            func = reinterpret_cast<T>(mpa(instance, alias));
+        return func;
+    }
+
     /// create a vulkan instance
     ls::owned_ptr<VkInstance> createInstance(
             const std::string& appName, version appVersion,
@@ -137,6 +146,21 @@ namespace {
         }
 
         throw ls::vulkan_error("no queue family with requested flags found");
+    }
+
+    VkQueueFlags queryQueueFamilyFlags(const VulkanInstanceFuncs& fi,
+            const VkPhysicalDevice physdev, const uint32_t familyIndex) {
+        uint32_t queueCount{};
+        fi.GetPhysicalDeviceQueueFamilyProperties(
+            physdev, &queueCount, VK_NULL_HANDLE
+        );
+        if (familyIndex >= queueCount)
+            throw ls::vulkan_error("queue family index is out of range");
+        std::vector<VkQueueFamilyProperties> queues(queueCount);
+        fi.GetPhysicalDeviceQueueFamilyProperties(
+            physdev, &queueCount, queues.data()
+        );
+        return queues.at(familyIndex).queueFlags;
     }
 
     /// check for fp16 support
@@ -367,8 +391,15 @@ VulkanInstanceFuncs vk::initVulkanInstanceFuncs(VkInstance i, PFN_vkGetInstanceP
             "vkEnumeratePhysicalDevices"),
         .EnumerateDeviceExtensionProperties = ipa<PFN_vkEnumerateDeviceExtensionProperties>(mpa, i,
             "vkEnumerateDeviceExtensionProperties"),
-        .GetPhysicalDeviceProperties2 = ipa<PFN_vkGetPhysicalDeviceProperties2>(mpa, i,
-            "vkGetPhysicalDeviceProperties2"),
+        .GetPhysicalDeviceProperties = ipa<PFN_vkGetPhysicalDeviceProperties>(
+            mpa, i, "vkGetPhysicalDeviceProperties"),
+        .GetPhysicalDeviceProperties2 = graphical ?
+            optionalIpa<PFN_vkGetPhysicalDeviceProperties2>(
+                mpa, i, "vkGetPhysicalDeviceProperties2",
+                "vkGetPhysicalDeviceProperties2KHR"
+            ) : ipa<PFN_vkGetPhysicalDeviceProperties2>(
+                mpa, i, "vkGetPhysicalDeviceProperties2"
+            ),
         .GetPhysicalDeviceQueueFamilyProperties =
             ipa<PFN_vkGetPhysicalDeviceQueueFamilyProperties>(mpa, i,
                 "vkGetPhysicalDeviceQueueFamilyProperties"),
@@ -377,9 +408,13 @@ VulkanInstanceFuncs vk::initVulkanInstanceFuncs(VkInstance i, PFN_vkGetInstanceP
         .GetPhysicalDeviceFormatProperties =
             ipa<PFN_vkGetPhysicalDeviceFormatProperties>(mpa, i,
                 "vkGetPhysicalDeviceFormatProperties"),
-        .GetPhysicalDeviceImageFormatProperties2 =
-            ipa<PFN_vkGetPhysicalDeviceImageFormatProperties2>(mpa, i,
-                "vkGetPhysicalDeviceImageFormatProperties2"),
+        .GetPhysicalDeviceImageFormatProperties2 = graphical ?
+            optionalIpa<PFN_vkGetPhysicalDeviceImageFormatProperties2>(
+                mpa, i, "vkGetPhysicalDeviceImageFormatProperties2",
+                "vkGetPhysicalDeviceImageFormatProperties2KHR"
+            ) : ipa<PFN_vkGetPhysicalDeviceImageFormatProperties2>(
+                mpa, i, "vkGetPhysicalDeviceImageFormatProperties2"
+            ),
         .GetPhysicalDeviceMemoryProperties = ipa<PFN_vkGetPhysicalDeviceMemoryProperties>(mpa, i,
             "vkGetPhysicalDeviceMemoryProperties"),
         .CreateDevice = ipa<PFN_vkCreateDevice>(mpa, i, "vkCreateDevice"),
@@ -387,13 +422,22 @@ VulkanInstanceFuncs vk::initVulkanInstanceFuncs(VkInstance i, PFN_vkGetInstanceP
 
         .GetPhysicalDeviceSurfaceCapabilitiesKHR = graphical ?
             ipa<PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR>(mpa, i,
-                "vkGetPhysicalDeviceSurfaceCapabilitiesKHR") : nullptr
+                "vkGetPhysicalDeviceSurfaceCapabilitiesKHR") : nullptr,
+        .GetPhysicalDeviceSurfaceFormatsKHR = graphical ?
+            ipa<PFN_vkGetPhysicalDeviceSurfaceFormatsKHR>(mpa, i,
+                "vkGetPhysicalDeviceSurfaceFormatsKHR") : nullptr,
+        .GetPhysicalDeviceSurfaceSupportKHR = graphical ?
+            ipa<PFN_vkGetPhysicalDeviceSurfaceSupportKHR>(mpa, i,
+                "vkGetPhysicalDeviceSurfaceSupportKHR") : nullptr
     };
 }
 
 /// initialize vulkan device function pointers
 VulkanDeviceFuncs vk::initVulkanDeviceFuncs(const VulkanInstanceFuncs& f, VkDevice d,
-        bool graphical) {
+        bool graphical, const bool frameGenerationInteropEnabled) {
+    const auto optionalDeviceProc = [&f, d](const char* name) {
+        return f.GetDeviceProcAddr(d, name);
+    };
     return {
         .GetDeviceQueue = dpa<PFN_vkGetDeviceQueue>(f, d, "vkGetDeviceQueue"),
         .DeviceWaitIdle = dpa<PFN_vkDeviceWaitIdle>(f, d, "vkDeviceWaitIdle"),
@@ -457,11 +501,26 @@ VulkanDeviceFuncs vk::initVulkanDeviceFuncs(const VulkanInstanceFuncs& f, VkDevi
         .CreateComputePipelines = dpa<PFN_vkCreateComputePipelines>(f, d, "vkCreateComputePipelines"),
         .DestroyPipeline = dpa<PFN_vkDestroyPipeline>(f, d, "vkDestroyPipeline"),
 
-        .SignalSemaphoreKHR = dpa<PFN_vkSignalSemaphoreKHR>(f, d, "vkSignalSemaphoreKHR"),
-        .WaitSemaphoresKHR = dpa<PFN_vkWaitSemaphoresKHR>(f, d, "vkWaitSemaphoresKHR"),
-        .GetMemoryFdKHR = dpa<PFN_vkGetMemoryFdKHR>(f, d, "vkGetMemoryFdKHR"),
-        .ImportSemaphoreFdKHR = dpa<PFN_vkImportSemaphoreFdKHR>(f, d, "vkImportSemaphoreFdKHR"),
-        .GetSemaphoreFdKHR = dpa<PFN_vkGetSemaphoreFdKHR>(f, d, "vkGetSemaphoreFdKHR"),
+        .SignalSemaphoreKHR = frameGenerationInteropEnabled
+            ? dpa<PFN_vkSignalSemaphoreKHR>(f, d, "vkSignalSemaphoreKHR")
+            : reinterpret_cast<PFN_vkSignalSemaphoreKHR>(
+                optionalDeviceProc("vkSignalSemaphoreKHR")),
+        .WaitSemaphoresKHR = frameGenerationInteropEnabled
+            ? dpa<PFN_vkWaitSemaphoresKHR>(f, d, "vkWaitSemaphoresKHR")
+            : reinterpret_cast<PFN_vkWaitSemaphoresKHR>(
+                optionalDeviceProc("vkWaitSemaphoresKHR")),
+        .GetMemoryFdKHR = frameGenerationInteropEnabled
+            ? dpa<PFN_vkGetMemoryFdKHR>(f, d, "vkGetMemoryFdKHR")
+            : reinterpret_cast<PFN_vkGetMemoryFdKHR>(
+                optionalDeviceProc("vkGetMemoryFdKHR")),
+        .ImportSemaphoreFdKHR = frameGenerationInteropEnabled
+            ? dpa<PFN_vkImportSemaphoreFdKHR>(f, d, "vkImportSemaphoreFdKHR")
+            : reinterpret_cast<PFN_vkImportSemaphoreFdKHR>(
+                optionalDeviceProc("vkImportSemaphoreFdKHR")),
+        .GetSemaphoreFdKHR = frameGenerationInteropEnabled
+            ? dpa<PFN_vkGetSemaphoreFdKHR>(f, d, "vkGetSemaphoreFdKHR")
+            : reinterpret_cast<PFN_vkGetSemaphoreFdKHR>(
+                optionalDeviceProc("vkGetSemaphoreFdKHR")),
 
         .CreateSwapchainKHR = graphical ?
             dpa<PFN_vkCreateSwapchainKHR>(f, d, "vkCreateSwapchainKHR") : nullptr,
@@ -493,6 +552,9 @@ Vulkan::Vulkan(const std::string& appName, version appVersion,
     )),
     queueFamilyIdx(findQFI(this->instance_funcs, this->phys_dev,
         isGraphical ? VK_QUEUE_GRAPHICS_BIT : VK_QUEUE_COMPUTE_BIT)),
+    queueFamilyFlags(queryQueueFamilyFlags(
+        this->instance_funcs, this->phys_dev, this->queueFamilyIdx
+    )),
     fp16(checkFP16(this->instance_funcs, this->phys_dev)),
     robustImageAccess2(checkOptionalDeviceFeatures(
         this->instance_funcs, this->phys_dev
@@ -527,14 +589,19 @@ Vulkan::Vulkan(VkInstance instance, VkDevice device,
         VkPhysicalDevice physdev,
         VulkanInstanceFuncs instanceFuncs,
         VulkanDeviceFuncs deviceFuncs,
+        const uint32_t queueFamilyIndex,
+        const bool frameGenerationInteropEnabled,
         bool isGraphical,
         std::optional<PFN_vkSetDeviceLoaderData> setLoaderData,
         const std::optional<std::filesystem::path>& cachefile) :
     instance(new VkInstance(instance)),
     instance_funcs(instanceFuncs),
     phys_dev(physdev),
-    queueFamilyIdx(findQFI(this->instance_funcs, this->phys_dev,
-        isGraphical ? VK_QUEUE_GRAPHICS_BIT : VK_QUEUE_COMPUTE_BIT)),
+    queueFamilyIdx(queueFamilyIndex),
+    queueFamilyFlags(queryQueueFamilyFlags(
+        this->instance_funcs, this->phys_dev, this->queueFamilyIdx
+    )),
+    frameGenerationInterop(frameGenerationInteropEnabled),
     fp16(false),
     robustImageAccess2(false),
     device(new VkDevice(device)),
@@ -574,6 +641,9 @@ bool Vulkan::supportsExternalImageFormat(
         const VkFormat format,
         const VkImageUsageFlags usage,
         const VkExternalMemoryFeatureFlags requiredExternalFeatures) const {
+    if (!this->instance_funcs.GetPhysicalDeviceImageFormatProperties2)
+        return false;
+
     const VkPhysicalDeviceExternalImageFormatInfo externalInfo{
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_EXTERNAL_IMAGE_FORMAT_INFO,
         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR,

@@ -27,6 +27,17 @@ namespace mako::layer {
         std::string_view reason{};
     };
 
+    /// Spatial reconstruction is currently restricted to validated, non-HDR
+    /// SDR pipelines. Unsupported colour pairs retain the default enum value,
+    /// so callers must test the complete classification rather than encoding
+    /// alone.
+    [[nodiscard]] constexpr bool spatialScalingColorSupported(
+            const SwapchainColorPipeline& pipeline) noexcept {
+        return pipeline.generationSupported && !pipeline.hdr &&
+            (pipeline.encoding == backend::FrameEncoding::Sdr8 ||
+             pipeline.encoding == backend::FrameEncoding::SdrHighPrecision);
+    }
+
     /// Classify a swapchain without relying on VkFormat enum ordering.
     /// Gamescope may consume the application's HDR colour space before lower
     /// layers see VkSwapchainCreateInfoKHR, so confirmed application feedback

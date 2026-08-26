@@ -12,6 +12,7 @@ runner_root=""
 runner_pid=""
 runner_name=""
 repository=""
+gym_repo="${MAKO_GYM_REPO:-$repo_root/../MAKO-Gym}"
 
 usage() {
   cat <<'EOF'
@@ -147,6 +148,17 @@ if [[ -n "$(git status --porcelain)" ]]; then
   echo "Hardware validation requires a clean worktree." >&2
   exit 1
 fi
+if ! git -C "$gym_repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  echo "Hardware validation requires an initialized MAKO-Gym checkout: $gym_repo" >&2
+  exit 1
+fi
+if [[ -n "$(git -C "$gym_repo" status --porcelain)" ]]; then
+  echo "Hardware validation requires a clean MAKO-Gym worktree: $gym_repo" >&2
+  exit 1
+fi
+./engine/scripts/run-mako-gym.sh \
+  --gym-repo "$gym_repo" --require --validate
+export MAKO_GYM_REPO="$gym_repo"
 branch="${branch:-$(git branch --show-current)}"
 if [[ -z "$branch" ]]; then
   echo "Select a branch with --branch; detached HEADs are not dispatched." >&2

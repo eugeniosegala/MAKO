@@ -15,6 +15,10 @@
 
 namespace mako::layer {
 
+    /// Conservative process-start hint used only for safety gates that must
+    /// fail closed before X11 feedback can confirm compositor identity.
+    [[nodiscard]] bool gamescopeProcessEnvironmentHint();
+
     struct GamescopeHdrFeedbackSample {
         std::optional<bool> active;
         std::optional<uint32_t> refreshHz;

@@ -1,4 +1,4 @@
-# MAKO - Frame Generation on SteamOS/Linux
+# MAKO - Scaling and Frame Generation on SteamOS/Linux
 
 <p align="center">
   <img src="plugin/assets/mako-logo.webp" width="256" alt="MAKO logo" />
@@ -20,7 +20,7 @@
 > [!IMPORTANT]
 > **[Decky LSFG-VK Experimental](https://github.com/eugeniosegala/decky-lsfg-vk-experimental) and [LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) are now MAKO.** This repository is their new home and continuation. Future development, releases, documentation, and issue tracking happen here.
 
-> **Independent project:** MAKO is independently developed and maintained for Steam Deck and Steam Machine. **MAKO Decky** provides per-game controls and integration, while **MAKO Renderer** supplies the Vulkan frame-generation layer. The project builds on work by **[PancakeTAS and the lsfg-vk contributors](https://github.com/PancakeTAS/lsfg-vk)** and **[xXJSONDeruloXx, the original Decky LSFG-VK developer](https://github.com/xXJSONDeruloXx/decky-lsfg-vk)**, whom MAKO gratefully thanks. Frame generation is available today, with scaling planned. MAKO requires `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation but does not bundle, copy, or modify it. Test it per game; MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
+> **Independent project:** MAKO is independently developed and maintained for Steam Deck and Steam Machine. **MAKO Decky** provides per-game controls and integration, while **MAKO Renderer** supplies Vulkan spatial scaling and frame generation. The project builds on work by **[PancakeTAS and the lsfg-vk contributors](https://github.com/PancakeTAS/lsfg-vk)** and **[xXJSONDeruloXx, the original Decky LSFG-VK developer](https://github.com/xXJSONDeruloXx/decky-lsfg-vk)**, whom MAKO gratefully thanks. LS1 scaling and LSFG frame generation require `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation, but MAKO does not bundle, copy, persist, or modify it; MAKO's built-in open spatial scaler does not require it. A process that starts scaling-only omits all frame-generation interop even when LS1 reads the DLL; enabling Frame Generation later requires a game restart. Test both features per game; MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
 
 ## Downloads
 
@@ -40,6 +40,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 |  | Highlight | What it brings |
 | :-: | --- | --- |
 | 🖼️ | **Full-quality frame generation** | Uses the Lossless Scaling frame-generation models from the user's licensed installation, with quality and performance controls per profile. |
+| 🔍 | **LS1 + open spatial scaling** | Reconstructs a lower-resolution game frame with LS1 Quality, LS1 Performance, or the open single-pass MAKO method, independently or before Fixed or Adaptive generation. |
 | 👻 | **Significantly reduced ghosting** | The full-quality v2 model with Performance Mode disabled can show noticeably less ghosting than the older layer. Supported AMD GPUs also gain extra protection against ghosting and corrupted moving edges. Results remain game-dependent. |
 | 🎯 | **Adaptive Frame Generation** | Optionally targets 30–240 FPS while MAKO Renderer varies generated frames up to a selected 2x–4x ceiling. |
 | 🌈 | **HDR foundation** | MAKO Renderer includes HDR10/PQ and linear-scRGB groundwork. MAKO Decky keeps HDR exposure disabled while activation, presentation, colour, and performance are validated across games. |
@@ -51,14 +52,24 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 
 ## What MAKO is
 
-MAKO (**Motion-Adaptive Kernel Orchestration**) is a next-generation, Vulkan-powered graphics project for Linux gaming, built to bring Lossless Scaling frame generation and scaling (**scaling coming soon**) to Steam Deck, Steam Machine, SteamOS, and Linux more broadly. Frame generation is available today, with scaling as the next planned capability.
+MAKO (**Motion-Adaptive Kernel Orchestration**) is a next-generation, Vulkan-powered graphics project for Linux gaming, built to bring Lossless Scaling's LS1 spatial scaling and LSFG frame generation plus MAKO's built-in open spatial scaler to Steam Deck, Steam Machine, SteamOS, and Linux more broadly. Scaling can run independently or reconstruct each real frame once before Fixed or Adaptive Frame Generation.
 
 The project consists of two closely integrated components:
 
 - **MAKO Decky** is the Decky Loader component, providing per-game controls, installation, updates, Flatpak preparation, and game launch integration.
-- **MAKO Renderer** is the Vulkan layer that provides the graphics pipeline for frame generation and future scaling capabilities.
+- **MAKO Renderer** is the Vulkan layer that provides the graphics pipeline for LS1/MAKO spatial scaling and frame generation.
 
 Choose one launch workflow for each installation: MAKO Decky uses `mako-run`, while a directly installed MAKO Renderer uses `mako-launch`. Do not stack the two launchers or combine MAKO with another frame-generation wrapper for the same game.
+
+## Choose a spatial scaler
+
+| Choice | Implementation | Licensed requirement | Practical distinction |
+| --- | --- | --- | --- |
+| **MAKO (Open)** | Repository-owned single-pass Catmull-Rom reconstruction, anti-ringing, and sharpening | None | Lowest-complexity path and automatic fallback when LS1 cannot initialize. |
+| **LS1 Quality** | Lossless Scaling's proprietary full multi-pass neural graph | Licensed `Lossless.dll` plus an architecture-matched `libvkd3d-shader.so.1` | Runs the complete LS1 graph; compare its reconstruction and GPU cost per game. |
+| **LS1 Performance** | Lossless Scaling's proprietary lower-cost neural graph | Licensed `Lossless.dll` plus an architecture-matched `libvkd3d-shader.so.1` | Reduces LS1's pass count for devices or games with less GPU headroom. |
+
+To activate one in MAKO Decky, open the per-game **Spatial Scaling** section, choose an in-game resolution below the display resolution, turn on **Enable Scaling**, and select the method and factor. A running game receives one Vulkan-standard swapchain-recreation request after the edits settle, so a brief flicker is normal and no process restart is normally needed. Leave **Frame Generation** off for scaling-only, or enable Fixed/Adaptive Frame Generation to run it after the selected scaler. Direct Renderer users can set the equivalent `scaling_*` fields documented in the [spatial scaling architecture](engine/docs/SCALING.md#configuration).
 
 ## 🎮 In-game considerations
 
@@ -66,16 +77,18 @@ Choose one launch workflow for each installation: MAKO Decky uses `mako-run`, wh
 > [!TIP]
 > **Try the game's V-Sync setting both on and off.** It can make frame delivery feel steadier, but it may also add input lag or clash with the game's FPS cap, VRR, or compositor. Compare both options and keep the one that feels smoother and more responsive.
 
-Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. For most games, fullscreen is the best starting point for performance and frame pacing. Restart after major display or model changes, and keep the configuration that works best for that game.
+Every game, renderer, and display setup behaves differently. Compare scaling-only, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time. For scaling, select the intended lower rendering resolution in the game. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling controls, Flow Scale, and Lighter FG Model use a game-owned swapchain recreation when needed. If a title ignores the one-shot recreation request, restart it as the compatibility fallback. If the game process started scaling-only, enabling Frame Generation still requires a full game restart because its Vulkan device did not negotiate LSFG interop. For most games, fullscreen is the best starting point for performance and frame pacing.
+
+Spatial scaling currently requires an ordinary opaque, single-image-array-layer, unprotected, non-shared-present swapchain and presentation on queue 0 of an application-created graphics-and-compute family that supports the surface. Gamescope scaling additionally requires HDR exposure to remain disabled. A variable Wayland compositor that echoes the enlarged presentation extent causes scaling to fail closed for that recreation rather than recursively enlarge the surface, so fixed-extent Gamescope/X11 is the stable fullscreen path. See the [spatial scaling architecture](engine/docs/SCALING.md) for the exact contract and validation status.
 
 ## Install and use
 
 1. **Install Decky Loader** if needed. Switch to Desktop Mode and follow the [official Decky Loader installation guide](https://github.com/SteamDeckHomebrew/decky-loader#-installation), then return to Game Mode.
-2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam.** MAKO needs the licensed installation's `Lossless.dll`.
+2. **Install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) from Steam if you will use LS1 scaling or frame generation.** MAKO reads the licensed installation's `Lossless.dll` for LS1 and LSFG. The open MAKO scaling method remains available without it.
 3. Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download its ZIP under **Assets**.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
 5. Open **MAKO Decky** and select **Install MAKO Renderer**. This required step installs the bundled renderer into the plugin's private location.
-6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal starting point; Adaptive Frame Generation is optional.
+6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal frame-generation starting point; native Scaling and Adaptive Frame Generation are independent options.
 7. For a native Steam or Proton game, add this under **Steam Properties > Launch Options**:
 
     ```text
@@ -185,7 +198,7 @@ Profiles and Steam launch options are retained. The private native engine and la
 
 Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
 
-1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam.
+1. To use LS1 scaling or frame generation, purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. The open MAKO scaling method does not use `Lossless.dll`.
 2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0) and download `MAKO-Renderer-v<version>-linux.tar.xz` under **Assets**.
 3. Extract it into your user-local prefix:
 
@@ -205,12 +218,14 @@ tar -xJf MAKO-Renderer-v<version>-linux.tar.xz -C ~/.local
 
 ## Documentation
 
-- [Configuration guide](plugin/docs/CONFIGURATION.md): Fixed and Adaptive modes, quality and performance settings, profiles, and compatibility options.
+- [Configuration guide](plugin/docs/CONFIGURATION.md): Scaling, Fixed and Adaptive modes, quality and performance settings, profiles, and compatibility options.
+- [Spatial scaling architecture](engine/docs/SCALING.md): pipeline order, surface ownership, formats, performance model, controls, and validation matrix.
 - [Troubleshooting](plugin/docs/TROUBLESHOOTING.md): Gamescope recovery, HDR compatibility, and diagnostic logs.
 - [Collect MAKO Diagnostics](COLLECT_DIAGNOSTICS.md): choose the MAKO Decky or standalone renderer collection workflow and submit one shared report.
 - [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
 - [Release process](HOW_TO_RELEASE.md): publish both components end to end with one versioned command.
 - [Testing](TESTING.md): pull-request gates, sanitizer coverage, SteamOS hardware validation, and the runtime compatibility boundary.
+- [MAKO-Gym](https://github.com/eugeniosegala/MAKO-Gym): private real-hardware Vulkan, Gamescope, scaling, and frame-generation QA scenarios used by the SteamOS release gate.
 - [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.
 
 ## Featured in
@@ -224,7 +239,7 @@ MAKO is built on the work of two open-source projects and their communities:
 - **[Kurt Himebauch / xXJSONDeruloXx](https://github.com/xXJSONDeruloXx/decky-lsfg-vk)** created the original Decky LSFG-VK plugin that formed the foundation of MAKO's Decky interface, installation workflow, and per-game controls.
 - **[PancakeTAS](https://github.com/PancakeTAS/lsfg-vk)** and the **lsfg-vk contributors** created the Vulkan layer and Linux integration on which MAKO Renderer is based.
 
-MAKO also thanks the **Lossless Scaling developers** for the frame-generation and scaling technology accessed through each user's licensed installation, and the **Decky Loader team**, community contributors, testers, guide authors, and creators who helped make the project possible.
+MAKO also thanks the **Lossless Scaling developers** for the LS1 and LSFG models accessed through each user's licensed installation, the **Wine/vkd3d developers** whose shader translator enables the Vulkan LS1 path, and the **Decky Loader team**, community contributors, testers, guide authors, and creators who helped make the project possible. MAKO's open spatial scaler is independently implemented in this repository.
 
 The original copyright and license notices are preserved in [LICENSE.md](LICENSE.md). MAKO is an independent community project and is not affiliated with or endorsed by Lossless Scaling, Decky Loader, or either upstream project.
 

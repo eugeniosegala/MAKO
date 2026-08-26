@@ -10,7 +10,7 @@
 
 MAKO Decky is the Decky Loader component of MAKO. It provides per-game controls, installation, updates, Flatpak preparation, and game launch integration for MAKO Renderer on Steam Deck, Steam Machine, SteamOS, and Linux more broadly.
 
-MAKO is an independent community project bringing Lossless Scaling frame generation and scaling (**scaling coming soon**) to Linux. It requires a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Decky does not bundle, copy, or modify that proprietary library.
+MAKO is an independent community project bringing Lossless Scaling LS1 scaling and LSFG frame generation plus MAKO's built-in open spatial scaler to Linux. LS1 and LSFG require a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation; the open MAKO scaling method does not use it. MAKO Decky does not bundle, copy, persist, or modify that proprietary library.
 
 ## Download
 
@@ -25,12 +25,10 @@ Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bi
 - Installs the private MAKO Renderer Vulkan layer for the current user.
 - Generates the `/home/deck/.local/bin/mako-run` per-game launcher.
 - Stores renderer settings in `~/.config/mako-render/conf.toml` and versioned game/process identity separately for automatic per-game selection.
-- Supports fixed and adaptive frame generation with live per-game controls.
+- Supports independent spatial scaling plus fixed and adaptive frame generation with per-game controls. Scaling and frame generation can be used separately or together.
 - Provides a per-profile experimental Gamescope WSI compatibility toggle plus **External Tools** controls for host-installed MangoHud and experimental vkBasalt; only one optional Vulkan layer can be selected.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Launches selected games through MAKO's private renderer and configuration.
-
-Scaling controls are part of MAKO's product direction; frame-generation support is the currently integrated path.
 
 ## Development
 
@@ -59,7 +57,7 @@ The resulting Decky ZIP is written under `plugin/out/`. Nothing is published by 
 | Pure generated-wrapper text, compatibility guards, profile selection, and launch environment | `py_modules/mako_plugin/wrapper_generation.py` |
 | Running-game/editor session synchronisation and profile transactions | `src/hooks/useProfileSession.ts`, `src/hooks/useProfileEditorModel.ts` |
 | Reusable UI state for deferred Target FPS writes and collapsed sections | `src/hooks/useDeferredTargetFps.ts`, `src/hooks/usePersistentCollapseState.ts` |
-| View composition | `src/components/Content.tsx`, `ContentNotices.tsx`, `ConfigurationSection.tsx`, `ConfigurationSectionGroups.tsx`, `ProfileManagement.tsx`, `FpsMultiplierControl.tsx` |
+| View composition | `src/components/Content.tsx`, `ContentNotices.tsx`, `ConfigurationSection.tsx`, `ConfigurationSectionGroups.tsx`, `ProfileManagement.tsx`, `ScalingControl.tsx`, `FpsMultiplierControl.tsx` |
 | English translation keys, fallbacks, and dictionary order | `defaults/i18n/template.json` |
 | Advertised languages, Steam aliases, translated dictionaries, static call-site validation, and generated frontend bundle | `defaults/i18n/language_metadata.json`, `steam_language_map.json`, language JSON files, `scripts/i18n-contract.mjs`, and generated `src/i18n/languages.json` |
 

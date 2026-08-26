@@ -22,7 +22,6 @@ jobs:
     runs-on: [self-hosted, linux, x64, steamos, amd-gpu]
     timeout-minutes: 120
     env:
-      MAKO_GPU_QUALITY_TEST: REQUIRED
       MAKO_STEAM_MACHINE: 1
     steps:
       - name: Check out source
@@ -67,7 +66,7 @@ jobs:
           test "$(uname -s)" = Linux
           grep -qi '^ID=steamos' /etc/os-release
           grep -qi '0x1002' /sys/class/drm/renderD*/device/vendor
-          for command in cmake ninja clang++ vulkaninfo flatpak flatpak-builder; do
+          for command in cmake ninja clang++ vulkaninfo vkcube gamescope python3 flatpak flatpak-builder; do
             command -v "$command" >/dev/null || {
               echo "Required hardware-runner command is missing: $command" >&2
               exit 1
@@ -77,6 +76,17 @@ jobs:
             echo "Portable Qt 6.2 packaging requires Podman or Docker." >&2
             exit 1
           }
+          gym_repo="${MAKO_GYM_REPO:-$GITHUB_WORKSPACE/../MAKO-Gym}"
+          ./engine/scripts/run-mako-gym.sh \
+            --gym-repo "$gym_repo" --require --validate
+          if [[ -n "$(git -C "$gym_repo" status --porcelain)" ]]; then
+            echo "MAKO-Gym must be clean for hardware validation: $gym_repo" >&2
+            exit 1
+          fi
+          {
+            echo "MAKO_GYM_REPO=$gym_repo"
+            echo "MAKO_GYM_COMMIT=$(git -C "$gym_repo" rev-parse HEAD)"
+          } >> "$GITHUB_ENV"
 
       - name: Install locked Decky dependencies
         working-directory: plugin
@@ -87,11 +97,26 @@ jobs:
       - name: Record hardware and driver evidence
         run: ./scripts/collect-steamos-hardware-evidence.sh engine/out/hardware-validation.txt
 
-      - name: Run native AMD image-quality validation
+      - name: Build the native Renderer and quality tool
         working-directory: engine
         run: >-
           MAKO_BUILD_DIR=build/hardware-validation
           ./scripts/build-steamos-dev.sh
+
+      - name: Run MAKO-Gym AMD image-quality validation
+        working-directory: engine
+        run: |
+          ./scripts/run-mako-gym.sh --require --suite quality \
+            --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-quality"
+          mapfile -t quality_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-quality" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#quality_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO-Gym quality result." >&2
+            exit 1
+          fi
 
       - name: Build and verify Renderer, Flatpaks, and the complete Decky ZIP
         id: package
@@ -99,13 +124,13 @@ jobs:
         run: |
           version="$(tr -d '[:space:]' < ../engine/VERSION)"
           decky_archive="$PWD/out/MAKO-Decky-hardware-validated-v${version}.zip"
-          MAKO_PORTABLE_PACKAGE=1 MAKO_GPU_QUALITY_TEST=OFF \
+          MAKO_PORTABLE_PACKAGE=1 \
             ./scripts/package-local.sh \
             --local-engine-repo ../engine \
             "$decky_archive"
           echo "decky_archive=$decky_archive" >> "$GITHUB_OUTPUT"
 
-      - name: Activate Decky's packaged Vulkan layer on the AMD GPU
+      - name: Activate and exercise Decky's packaged Vulkan layer on the AMD GPU
         working-directory: engine
         run: |
           smoke_root="$(mktemp -d "${TMPDIR:-/tmp}/mako-decky-payload.XXXXXX")"
@@ -120,6 +145,20 @@ jobs:
             exit 1
           fi
           ./scripts/smoke-test-vulkan-layer.sh "${renderer_archives[0]}"
+          matrix_prefix="$smoke_root/matrix-prefix"
+          mkdir -p "$matrix_prefix"
+          tar -xJf "${renderer_archives[0]}" -C "$matrix_prefix"
+          ./scripts/run-mako-gym.sh --require \
+            --launcher "$matrix_prefix/bin/mako-launch" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym"
+          mapfile -t gym_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#gym_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO-Gym result." >&2
+            exit 1
+          fi
 
       - name: Deploy to the dedicated Decky test installation
         if: inputs.deploy_to_decky
@@ -136,7 +175,8 @@ jobs:
           name: steamos-hardware-validation-${{ github.sha }}
           path: |
             engine/out/hardware-validation.txt
-            engine/build/hardware-validation/quality-regression
+            engine/out/mako-gym-quality
+            engine/out/mako-gym
             plugin/out/*.zip
           if-no-files-found: warn
           retention-days: 14

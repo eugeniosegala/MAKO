@@ -9,6 +9,8 @@
 #include "mako-common/vulkan/image.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 #include "present_diagnostics.hpp"
+#include "spatial_scaling_policy.hpp"
+#include "swapchain_create_policy.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -138,56 +140,39 @@ bool layer::context_ModifySwapchainCreateInfo(const ls::GameConf& profile,
         uint32_t maxImages,
         VkSwapchainCreateInfoKHR& createInfo, const bool gamescopeHdrActive,
         const bool gamescopeDetected,
-        const PresentationEnvironmentPolicy& presentationEnvironment) {
+        const PresentationEnvironmentPolicy& presentationEnvironment,
+        const bool frameGenerationInteropEnabled,
+        const bool spatialScalingActive) {
     const auto colorPipeline = classifySwapchainColor(
         createInfo.imageFormat, createInfo.imageColorSpace,
         gamescopeHdrActive
     );
-    if (!colorPipeline.generationSupported ||
-            (presentationEnvironment.hdrExposureDisabled && colorPipeline.hdr))
-        return false;
+    const bool frameGenerationSupported =
+        colorPipeline.generationSupported &&
+        !(presentationEnvironment.hdrExposureDisabled && colorPipeline.hdr);
+    const bool frameGenerationProvisioned =
+        frameGenerationInteropEnabled && frameGenerationSupported;
+    const bool hdrCapableSwapchain =
+        !presentationEnvironment.hdrExposureDisabled &&
+        (colorPipeline.hdr ||
+            colorPipeline.encoding == backend::FrameEncoding::SdrHighPrecision);
+    const bool orderedFrameGenerationTransport =
+        frameGenerationProvisioned &&
+        selectPresentationTransport(
+            gamescopeDetected, hdrCapableSwapchain,
+            presentationEnvironment
+        ) == PresentationTransport::OrderedSdr;
 
-    createInfo.imageUsage |=
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-
-    switch (profile.pacing) {
-        case ls::Pacing::None:
-            // Reserve the selected Fixed or Adaptive capacity even while live
-            // generation is off. The game owns this swapchain, so retaining
-            // its capacity is what lets configuration reload turn generation
-            // back on without forcing a game restart or swapchain rebuild.
-            createInfo.minImageCount += generatedFrameCapacity(profile) + 1;
-            if (maxImages && createInfo.minImageCount > maxImages)
-                createInfo.minImageCount = maxImages;
-
-            const bool hdrCapableSwapchain =
-                !presentationEnvironment.hdrExposureDisabled &&
-                (colorPipeline.hdr ||
-                    colorPipeline.encoding == backend::FrameEncoding::SdrHighPrecision);
-            const auto transport = selectPresentationTransport(
-                gamescopeDetected, hdrCapableSwapchain,
-                presentationEnvironment
-            );
-
-            // This is a create-time transport choice, not the current HDR on/off
-            // state. Plain SDR keeps the fork's known-good FIFO ordering. An
-            // HDR-capable Gamescope swapchain preserves Gamescope's lower WSI
-            // contract even while live HDR feedback says inactive, because
-            // that feedback may turn on later without a swapchain replacement.
-            // Forcing this HDR bridge to FIFO caused every generated/original
-            // lower present to block for 30-40 ms.
-            if (transport == PresentationTransport::OrderedSdr) {
-                createInfo.presentMode = VK_PRESENT_MODE_FIFO_KHR;
-                return true;
-            }
-            return false;
-    }
-
-    return false;
+    return applySwapchainCreateProvisioning(
+        profile, maxImages, createInfo,
+        frameGenerationProvisioned, spatialScalingActive,
+        orderedFrameGenerationTransport
+    );
 }
 
-Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
+Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             ls::GameConf profile, SwapchainInfo info,
+            const std::optional<std::filesystem::path> scalingShaderDll,
             const std::optional<bool> gamescopeHdrActive,
             const bool gamescopeDetected,
             const bool hdrExposureDisabled,
@@ -208,12 +193,71 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
     );
     const VkExtent2D extent = this->info.extent;
 
+    if (this->info.spatialScalingActive) {
+        if (!spatialScalingColorSupported(this->colorPipeline))
+            throw ls::error(
+                "spatial scaling requires a validated SDR colour pipeline"
+            );
+        if (sameExtent(this->info.applicationExtent, this->info.extent))
+            throw ls::error(
+                "spatial scaling source and presentation extents are identical"
+            );
+
+        this->spatialScaler.emplace(
+            vk, this->info.applicationExtent, this->info.extent,
+            this->colorPipeline.exchangeFormat,
+            this->profile.scaling_method,
+            this->profile.scaling_sharpness,
+            scalingShaderDll
+        );
+        this->spatialScalingPasses.reserve(this->info.images.size());
+        for (size_t i = 0; i < this->info.images.size(); ++i) {
+            static_cast<void>(i);
+            this->spatialScalingPasses.emplace_back(SpatialScalingPass{
+                .commandBuffer = vk::CommandBuffer(vk),
+                .readySemaphore = vk::Semaphore(vk),
+            });
+        }
+        const auto activeScalingMethod = this->spatialScaler->activeMethod();
+        std::cerr << "MAKO Renderer: spatial scaling active: source="
+                  << this->info.applicationExtent.width << 'x'
+                  << this->info.applicationExtent.height
+                  << "; presentation=" << this->info.extent.width << 'x'
+                  << this->info.extent.height
+                  << "; factor=" << this->profile.scaling_factor
+                  << "; requested_method="
+                  << ls::scalingMethodName(
+                      this->spatialScaler->requestedMethod()
+                  )
+                  << "; active_method="
+                  << ls::scalingMethodName(activeScalingMethod)
+                  << "; sharpness=" << this->profile.scaling_sharpness
+                  << "; ls1_model_variant=";
+        if (activeScalingMethod == ls::ScalingMethod::Mako)
+            std::cerr << "none";
+        else
+            std::cerr << this->spatialScaler->ls1ModelVariant();
+        std::cerr << "; ls1_translator="
+                  << (this->spatialScaler->ls1Translator().empty()
+                      ? "none" : this->spatialScaler->ls1Translator())
+                  << "; working_format="
+                  << static_cast<int>(this->colorPipeline.exchangeFormat)
+                  << "; pipeline=pre-frame-generation\n";
+        if (!this->spatialScaler->fallbackReason().empty()) {
+            std::cerr << "MAKO Renderer: LS1 scaling unavailable; using MAKO "
+                         "fallback: "
+                      << this->spatialScaler->fallbackReason() << '\n';
+        }
+    }
+
     bool applicationPackedHdr10Supported = false;
     bool backendPackedHdr10Supported = false;
-    selectPackedHdr10Transport(
-        vk, backend, this->colorPipeline,
-        applicationPackedHdr10Supported, backendPackedHdr10Supported
-    );
+    if (backend) {
+        selectPackedHdr10Transport(
+            vk, *backend, this->colorPipeline,
+            applicationPackedHdr10Supported, backendPackedHdr10Supported
+        );
+    }
 
     const auto initialGenerationPolicy = generationSchedulerPolicy(
         this->profile, this->gamescopeRefreshHz
@@ -224,6 +268,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
     const bool initialDynamicCadenceRecoveryActive =
         this->privateOrderedTransport && initialGenerationPolicy &&
         initialGenerationPolicy->dynamicCadenceRecovery;
+    const bool initialFrameGenerationResourcesAvailable =
+        backend != nullptr && this->colorPipeline.generationSupported;
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-state-applied"
                   << " context=" << this->diagnosticsState.contextId
@@ -250,8 +296,23 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
                   << this->profile.dynamic_cadence_recovery
                   << " effective_dynamic_cadence_recovery="
                   << initialDynamicCadenceRecoveryActive
+                  << " effective_flow_scale="
+                  << ls::effectiveFlowScale(this->profile)
+                  << " lighter_model="
+                  << ls::effectivePerformanceMode(this->profile)
+                  << " frame_generation_resources_available="
+                  << initialFrameGenerationResourcesAvailable
+                  << " generated_frame_capacity="
+                  << (initialFrameGenerationResourcesAvailable
+                        ? generatedFrameCapacity(this->profile) : 0)
                   << " hdr=" << this->colorPipeline.hdr
                   << '\n';
+    }
+
+    if (!backend) {
+        this->colorPipeline.generationSupported = false;
+        this->colorPipeline.reason =
+            "the frame-generation backend is unavailable";
     }
 
     std::cerr << "MAKO Renderer: swapchain colour pipeline: format="
@@ -328,14 +389,14 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
 
         try {
             this->ctx = ls::owned_ptr<ls::R<backend::Context>>(
-                new ls::R<backend::Context>(backend.openContext(
+                new ls::R<backend::Context>(backend->openContext(
                     { sourceFds.at(0), sourceFds.at(1) }, destinationFds, syncFd,
                     extent.width, extent.height,
                     this->colorPipeline.encoding,
                     1.0F / ls::effectiveFlowScale(this->profile),
                     ls::effectivePerformanceMode(this->profile)
                 )),
-                [backend = &backend](ls::R<backend::Context>& ctx) {
+                [backend](ls::R<backend::Context>& ctx) {
                     backend->closeContext(ctx);
                 }
             );
@@ -541,7 +602,9 @@ bool Swapchain::resetGenerationScheduler(
 
 void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
         SwapchainColorPipeline pipeline) {
-    auto& backendInstance = this->instance.get();
+    if (!this->instance)
+        throw ls::error("frame-generation backend is unavailable");
+    auto& backendInstance = *this->instance;
     bool applicationPackedHdr10Supported = false;
     bool backendPackedHdr10Supported = false;
     selectPackedHdr10Transport(
@@ -701,6 +764,13 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
 }
 
 bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
+    if (!liveGamescopeHdrReclassificationAllowed(
+            this->spatialScaler.has_value())) {
+        this->colorTransitionState.pendingGamescopeHdrActive.reset();
+        this->colorTransitionState.pendingHdrStateRevision = 0;
+        this->colorTransitionState.retryAt.reset();
+        return true;
+    }
     if (!this->colorTransitionState.pendingGamescopeHdrActive)
         return true;
 
@@ -712,7 +782,8 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
         !this->destinationImages.empty() && this->syncSemaphore.has_value();
     if (resourcesAvailable) {
         try {
-            if (!this->instance.get().contextReady(this->ctx.get()))
+            if (!this->instance ||
+                    !this->instance->contextReady(this->ctx.get()))
                 return false;
             if (this->frameState.renderFenceInFlight &&
                     !this->renderFence->wait(vk, 0))
@@ -758,37 +829,115 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
 ProfileUpdateAction Swapchain::updateProfile(
         const ls::GameConf& nextProfile,
         const uint64_t runtimeStateRevision) {
-    if (!this->colorPipeline.generationSupported) {
-        this->profile = nextProfile;
-        return ProfileUpdateAction::NoRuntimeChange;
-    }
-
     const bool resourcesAvailable = this->sourceImages.size() == 2 &&
         !this->destinationImages.empty() && this->syncSemaphore.has_value();
-    const auto decision = classifyProfileUpdate(
+    const auto requestedDecision = classifyProfileUpdate(
         this->profile, nextProfile, this->destinationImages.size(), resourcesAvailable
     );
+    const bool spatialScalingPending = requestedDecision.spatialScalingChanged;
+    const bool frameGenerationBackendPending =
+        requestedDecision.frameGenerationBackendChanged;
+    const bool generatedFrameCapacityPending =
+        requestedDecision.generatedFrameCapacityExceeded;
+    const bool recreatedResourcesPending =
+        spatialScalingPending || frameGenerationBackendPending ||
+        generatedFrameCapacityPending;
+    const bool liveRecreationAvailable =
+        liveProfileResourceRecreationAvailable(
+            requestedDecision,
+            this->instance && resourcesAvailable &&
+                this->colorPipeline.generationSupported
+        );
+    this->liveProfileResourceRecreation.update(
+        this->profile,
+        liveRecreationAvailable ? nextProfile : this->profile,
+        runtimeStateRevision
+    );
+    const auto liveProfile = recreatedResourcesPending
+        ? maskRecreatedProfileResourcesForLiveUpdate(
+            this->profile, nextProfile, generatedFrameCapacityPending
+        )
+        : nextProfile;
+    const auto decision = recreatedResourcesPending
+        ? classifyProfileUpdate(
+            this->profile, liveProfile,
+            this->destinationImages.size(), resourcesAvailable
+        )
+        : requestedDecision;
+    const auto resultAction = requestedDecision.processRestartRequired
+        ? ProfileUpdateAction::DeferUntilProcessRestart
+        : recreatedResourcesPending
+        ? (liveRecreationAvailable &&
+                this->liveProfileResourceRecreation.armed()
+            ? ProfileUpdateAction::RequestSwapchainRecreation
+            : ProfileUpdateAction::DeferUntilSwapchainRecreation)
+        : decision.action;
+    const auto logPendingRecreation = [&]() {
+        if ((resultAction !=
+                ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+             resultAction !=
+                ProfileUpdateAction::DeferUntilProcessRestart &&
+             resultAction !=
+                ProfileUpdateAction::RequestSwapchainRecreation) ||
+                !presentDiagnosticsEnabled())
+            return;
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=runtime-transition-pending"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " state_revision=" << runtimeStateRevision
+                  << " reason=profile-resources"
+                  << " spatial_scaling_pending=" << spatialScalingPending
+                  << " frame_generation_backend_pending="
+                  << frameGenerationBackendPending
+                  << " flow_scale_pending="
+                  << (ls::effectiveFlowScale(this->profile) !=
+                        ls::effectiveFlowScale(nextProfile))
+                  << " lighter_model_pending="
+                  << (ls::effectivePerformanceMode(this->profile) !=
+                        ls::effectivePerformanceMode(nextProfile))
+                  << " generated_capacity_pending="
+                  << generatedFrameCapacityPending
+                  << " available_generated_capacity="
+                  << this->destinationImages.size()
+                  << " requested_generated_capacity="
+                  << generatedFrameCapacityForActivePolicy(nextProfile)
+                  << " process_restart_required="
+                  << requestedDecision.processRestartRequired
+                  << " action="
+                  << (resultAction ==
+                            ProfileUpdateAction::RequestSwapchainRecreation
+                        ? "signal-out-of-date-after-successful-present"
+                        : resultAction ==
+                                ProfileUpdateAction::DeferUntilProcessRestart
+                        ? "wait-for-process-restart"
+                        : "wait-for-swapchain-recreation")
+                  << '\n';
+    };
 
-    if (decision.action == ProfileUpdateAction::DeferUntilSwapchainRecreation) {
+    if (decision.action == ProfileUpdateAction::DeferUntilSwapchainRecreation ||
+            decision.action == ProfileUpdateAction::DeferUntilProcessRestart) {
         // Turning generation off is always safe and should not be delayed just
         // because the same write also changed a resource-shape setting.
         if (this->profile.frame_generation_enabled &&
-                !nextProfile.frame_generation_enabled)
+                !liveProfile.frame_generation_enabled)
             this->disableFrameGeneration();
-        if (presentDiagnosticsEnabled()) {
-            std::cerr << "MAKO Renderer: present diagnostics: "
-                         "operation=runtime-transition-pending"
-                      << " context=" << this->diagnosticsState.contextId
-                      << " state_revision=" << runtimeStateRevision
-                      << " reason=profile-resources"
-                      << " action=wait-for-natural-swapchain-recreation\n";
-        }
-        return decision.action;
+        logPendingRecreation();
+        return resultAction;
+    }
+
+    if (!this->colorPipeline.generationSupported || !this->instance ||
+            !resourcesAvailable) {
+        this->profile = liveProfile;
+        logPendingRecreation();
+        return recreatedResourcesPending
+            ? resultAction
+            : ProfileUpdateAction::NoRuntimeChange;
     }
 
     if (decision.action == ProfileUpdateAction::NoRuntimeChange) {
-        this->profile = nextProfile;
-        return decision.action;
+        this->profile = liveProfile;
+        logPendingRecreation();
+        return resultAction;
     }
 
     const bool hadGenerationScheduler = this->adaptiveScheduler.has_value();
@@ -796,11 +945,11 @@ ProfileUpdateAction Swapchain::updateProfile(
         this->profile, this->gamescopeRefreshHz
     );
     const bool generationWillBeEnabled = effectiveFrameGenerationEnabled(
-        nextProfile, this->gamescopeRefreshHz
+        liveProfile, this->gamescopeRefreshHz
     );
     const bool enabling = !generationWasEnabled && generationWillBeEnabled;
     const bool disabling = generationWasEnabled && !generationWillBeEnabled;
-    this->profile = nextProfile;
+    this->profile = liveProfile;
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
     );
@@ -901,15 +1050,57 @@ ProfileUpdateAction Swapchain::updateProfile(
                   << this->profile.dynamic_cadence_probe_interval_seconds
                   << " effective_dynamic_cadence_recovery="
                   << updatedDynamicCadenceRecoveryActive
+                  << " effective_flow_scale="
+                  << ls::effectiveFlowScale(this->profile)
+                  << " lighter_model="
+                  << ls::effectivePerformanceMode(this->profile)
+                  << " frame_generation_resources_available="
+                  << (this->sourceImages.size() == 2 &&
+                        !this->destinationImages.empty() &&
+                        this->syncSemaphore.has_value())
+                  << " generated_frame_capacity="
+                  << this->destinationImages.size()
                   << " hdr=" << this->colorPipeline.hdr
                   << '\n';
     }
 
-    return decision.action;
+    logPendingRecreation();
+    return resultAction;
+}
+
+bool Swapchain::requestLiveProfileResourceRecreationAfterPresent(
+        const VkResult lowerPresentResult) {
+    if (lowerPresentResult != VK_SUCCESS &&
+            lowerPresentResult != VK_SUBOPTIMAL_KHR) {
+        return false;
+    }
+    const auto runtimeStateRevision =
+        this->liveProfileResourceRecreation.signalAfterSuccessfulPresent();
+    if (!runtimeStateRevision)
+        return false;
+
+    std::cerr << "MAKO Renderer: live profile resource change requested a "
+                 "game-owned swapchain recreation after one successful "
+                 "lower present\n";
+    if (presentDiagnosticsEnabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=runtime-transition-recreation-requested"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " state_revision=" << *runtimeStateRevision
+                  << " reason=profile-resources"
+                  << " lower_present_result=" << lowerPresentResult
+                  << " signal=VK_ERROR_OUT_OF_DATE_KHR"
+                  << " delivery=one-shot-after-semaphore-consumption\n";
+    }
+    return true;
 }
 
 bool Swapchain::updateGamescopeHdrState(
         const bool active, const uint64_t runtimeStateRevision) {
+    if (!liveGamescopeHdrReclassificationAllowed(
+            this->spatialScaler.has_value())) {
+        return false;
+    }
     const auto desiredPipeline = classifySwapchainColor(
         this->info.format, this->info.colorSpace, active
     );

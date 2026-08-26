@@ -10,7 +10,7 @@ MAKO deliberately separates development, tester packaging, release-candidate val
 | --- | --- | --- | --- |
 | Local iteration | Exercise a focused frontend, backend, native Renderer, host, or Flatpak change on the development machine | The `dev:*` commands in [MAKO Decky packaging](plugin/docs/PACKAGING.md) | Directly updates the installed development plugin; creates no release |
 | Tester package | Validate installation and upgrades with a self-contained package | `pnpm --dir plugin run package:local-engine` | Produces a complete local ZIP that can be sent to trusted testers; creates no tag or release |
-| Release candidate | Rebuild the committed, pushed source in a clean checkout on the dedicated SteamOS/AMD host | `./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Retains the verified ZIP and evidence for 14 days and optionally installs that exact ZIP; publishes nothing |
+| Release candidate | Rebuild the committed, pushed source in a clean checkout on the dedicated SteamOS/AMD host and exercise it through MAKO-Gym | `./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Retains the verified ZIP and evidence for 14 days and optionally installs that exact ZIP; publishes nothing |
 | Published release | Publish immutable matched artifacts after the release candidate and manual game matrix pass | `./scripts/publish-release.sh X.Y.Z` | Publishes MAKO Renderer, pins it by checksum, then publishes MAKO Decky |
 | Published-package check | Prove the public asset installs through the user-facing path | Download the new MAKO Decky ZIP and use **Install MAKO Renderer** | Confirms the released asset, not a local or CI copy |
 
@@ -32,6 +32,7 @@ Treat **Renderer → pin → Decky** as the strongly recommended release strateg
 - Install and authenticate GitHub CLI with `gh auth login -h github.com`.
 - Confirm `git status` is clean and the `origin` remote points to this repository.
 - Prepare the dedicated SteamOS/AMD test machine described in [Testing](TESTING.md). The release gate launcher creates and removes its `steamos` + `amd-gpu` runner for each job; do not leave a persistent repository runner online.
+- Keep a clean, initialized private `MAKO-Gym` checkout beside MAKO, run its `./scripts/check.sh`, and ensure its contract version matches MAKO before registering the hardware runner. The release launcher enforces these boundaries.
 
 The renderer packager rejects a `mako-ui` binary that requires a Qt ABI newer than 6.4. A Linux host with Qt 6.2–6.4 needs no container. Non-Linux packaging requires Docker or Podman. When a rolling Linux distribution only provides a newer Qt, either runtime is an optional compatibility fallback: prefix the release command with `MAKO_PORTABLE_PACKAGE=1` to build the UI against Ubuntu 22.04's Qt 6.2 baseline.
 
@@ -52,7 +53,7 @@ Run the **SteamOS hardware validation** workflow for that commit and require it 
 ./scripts/run-steamos-hardware-validation.sh --deploy-to-decky
 ```
 
-Omit `--deploy-to-decky` when the machine is not the dedicated MAKO Decky test installation. Review the retained GPU comparisons and sanitized environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate. The launcher preserves only scoped reusable caches and removes its runner, checkout, credentials, staging, and generated outputs when the job ends.
+Omit `--deploy-to-decky` when the machine is not the dedicated MAKO Decky test installation. Review the retained GPU comparisons, MAKO-Gym 44-case summary and logs, recorded Gym commit, and sanitized environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate. The launcher preserves only scoped reusable caches and removes its runner, checkout, credentials, staging, and generated outputs when the job ends.
 
 Then, from the repository root, replace `1.2.0` with the new version:
 

@@ -189,7 +189,7 @@ describe("External Tools controls", () => {
       />,
     );
 
-    const flowScale = screen.getByText("Flow Scale (Restart) (75%)");
+    const flowScale = screen.getByText("Flow Scale (75%)");
     const allowFp16 = screen.getByText("Allow FP16");
     expect((flowScale as HTMLButtonElement).disabled).toBe(true);
     expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
@@ -247,6 +247,9 @@ describe("External Tools controls", () => {
     );
     fireEvent.click(collapseButton!);
 
+    expect(screen.getByText("Disable HDR")).toBeTruthy();
+    expect(screen.queryByText("Disable HDR (Restart)")).toBeNull();
+
     const warning = container.querySelector('[data-tone="warning"]');
     expect(warning?.textContent).toContain(
       "Keep it off if not needed. It may reduce performance or interfere with frame generation.",
@@ -264,9 +267,7 @@ describe("External Tools controls", () => {
 
     expect(screen.getByText("External Tools")).toBeTruthy();
     expect(screen.queryByText("Enable MangoHud (Restart)")).toBeNull();
-    expect(
-      screen.queryByText("Enable vkBasalt (Experimental, Restart)"),
-    ).toBeNull();
+    expect(screen.queryByText("Enable vkBasalt (Restart)")).toBeNull();
 
     const collapseButton = container.querySelector<HTMLButtonElement>(
       ".MAKO_ExternalToolsCollapseButton_Container button",
@@ -275,9 +276,12 @@ describe("External Tools controls", () => {
     fireEvent.click(collapseButton!);
 
     expect(screen.getByText("Enable MangoHud (Restart)")).toBeTruthy();
-    expect(
-      screen.getByText("Enable vkBasalt (Experimental, Restart)"),
-    ).toBeTruthy();
+    expect(screen.getByText("Enable vkBasalt (Restart)")).toBeTruthy();
+    const vkBasaltDescription = screen.getByText(
+      "Experimental. Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
+    );
+    expect(vkBasaltDescription).toBeTruthy();
+    expect(vkBasaltDescription.getAttribute("data-tone")).toBeNull();
     expect(localStorage.getItem("mako-external-tools-collapsed")).toBe("false");
   });
 

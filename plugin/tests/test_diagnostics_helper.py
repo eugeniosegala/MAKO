@@ -32,9 +32,20 @@ MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executab
 MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
 MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
 MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
-MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 layer_forced_recreation=disabled
-MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources action=wait-for-natural-swapchain-recreation
-MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 hdr=1
+MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 layer_forced_recreation=live-profile-resources-one-shot
+MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources spatial_scaling_pending=1 frame_generation_backend_pending=1 flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 available_generated_capacity=1 requested_generated_capacity=3 process_restart_required=0 action=signal-out-of-date-after-successful-present
+MAKO Renderer: process-static configuration changes remain pending until game restart; contexts=1
+MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=3 reason=process-static-profile gpu_selection_pending=1 pacing_pending=0 frame_generation_interop_pending=0 ultra_performance_pending=0 action=wait-for-process-restart
+MAKO Renderer: live profile resource change requested a game-owned swapchain recreation after one successful lower present
+MAKO Renderer: present diagnostics: operation=runtime-transition-recreation-requested context=1 state_revision=2 reason=profile-resources lower_present_result=0 signal=VK_ERROR_OUT_OF_DATE_KHR delivery=one-shot-after-semaphore-consumption
+MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 effective_flow_scale=0.75 lighter_model=1 generated_frame_capacity=3 hdr=1
+MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800
+MAKO Renderer: spatial scaling swapchain policy: requested=854x532; surface_current=1280x800; selected_source=854x532; selected_presentation=1280x800; format=44; format_supported=1; shape_supported=1; queue_presentation_support=supported; queue_commands_supported=1; variable_feedback_suppressed=0; active=1
+MAKO Renderer: spatial scaling active: source=854x532; presentation=1280x800; factor=1.5; requested_method=ls1; active_method=ls1; sharpness=0.5; ls1_model_variant=2; ls1_translator=/runtime/libvkd3d-shader.so.1; working_format=37; pipeline=pre-frame-generation
+MAKO Renderer: LS1 scaling unavailable; using MAKO fallback: test translator unavailable
+MAKO Renderer: spatial scaling variable-surface feedback guard: surface=5678; previous_source=500x500; previous_presentation=750x750; requested=750x750; action=native-feedback-guard
+MAKO Renderer: standalone spatial scaling: frame-generation backend and interop resources were not created
+MAKO Renderer: multi-swapchain spatial-scaling present rejected before semaphore consumption; batch scaling is not supported
 MAKO Renderer: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
 MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=60 target_fps=90 generated=1 max_generated=1 stable_cadence=0 target_clock=1 target_budget_credit_outputs=0.25 target_deferred_budget_output=1 target_phase_error_ms=-2.1 source_interval_samples=60 source_interval_mean_ms=16.6 source_interval_stddev_ms=1.2 source_interval_p95_ms=18.5 source_interval_p99_ms=20.5 generated_count_changes=29 requested_interval_samples=90 requested_interval_mean_ms=11.1 requested_interval_stddev_ms=1.3 requested_interval_p95_ms=13.5 requested_interval_p99_ms=13.5 target_phase_error_samples=60 target_phase_error_rms_ms=2.2 target_phase_error_max_ms=5.5
 MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
@@ -112,6 +123,29 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertNotIn("mode=hdr10-pq", result.stdout)
         self.assertNotIn("HDR10 transport", result.stdout)
 
+    def test_scaling_preset_keeps_extent_activation_and_lifecycle_policy(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = self._fixture_path(Path(temporary_directory))
+            result = self._run("--log", str(path), "scaling")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("spatial scaling surface virtualized", result.stdout)
+        self.assertIn("selected_source=854x532", result.stdout)
+        self.assertIn("selected_presentation=1280x800", result.stdout)
+        self.assertIn("queue_presentation_support=supported", result.stdout)
+        self.assertIn("queue_commands_supported=1", result.stdout)
+        self.assertIn("spatial scaling active", result.stdout)
+        self.assertIn("requested_method=ls1", result.stdout)
+        self.assertIn("active_method=ls1", result.stdout)
+        self.assertIn("ls1_model_variant=2", result.stdout)
+        self.assertIn("pipeline=pre-frame-generation", result.stdout)
+        self.assertIn("LS1 scaling unavailable; using MAKO fallback", result.stdout)
+        self.assertIn("action=native-feedback-guard", result.stdout)
+        self.assertIn("standalone spatial scaling", result.stdout)
+        self.assertIn("multi-swapchain spatial-scaling present rejected", result.stdout)
+        self.assertIn("runtime-transition-pending", result.stdout)
+        self.assertIn("swapchain colour pipeline", result.stdout)
+        self.assertNotIn("adaptive-ramp", result.stdout)
+
     def test_adaptive_preset_keeps_fractional_pacing_contract(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = self._fixture_path(Path(temporary_directory))
@@ -182,8 +216,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = self._fixture_path(Path(temporary_directory))
             for preset in (
-                "hdr", "config", "adaptive", "recovery", "performance", "lifecycle",
-                "startup", "layers", "errors", "all",
+                "hdr", "config", "scaling", "adaptive", "recovery", "performance",
+                "lifecycle", "startup", "layers", "errors", "all",
             ):
                 with self.subTest(preset=preset):
                     result = self._run("--log", str(path), preset)
@@ -192,6 +226,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("fingerprint=abc123.dirty.12345678", result.stdout)
                     self.assertIn("operation=process-identity", result.stdout)
                     self.assertIn("operation=swapchain-context-create", result.stdout)
+                    self.assertIn("spatial scaling active", result.stdout)
+                    self.assertIn("action=native-feedback-guard", result.stdout)
 
     def test_config_preset_correlates_requested_and_applied_state(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -199,9 +235,20 @@ class DiagnosticsHelperTests(unittest.TestCase):
             result = self._run("--log", str(path), "config")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("runtime-transition-pending", result.stdout)
-        self.assertIn("wait-for-natural-swapchain-recreation", result.stdout)
+        self.assertIn(
+            "signal-out-of-date-after-successful-present", result.stdout
+        )
         self.assertIn("runtime-state-applied", result.stdout)
-        self.assertNotIn("runtime-transition-recreation-requested", result.stdout)
+        self.assertIn("generated_capacity_pending=1", result.stdout)
+        self.assertIn("available_generated_capacity=1", result.stdout)
+        self.assertIn("requested_generated_capacity=3", result.stdout)
+        self.assertIn("generated_frame_capacity=3", result.stdout)
+        self.assertIn("process-static configuration changes", result.stdout)
+        self.assertIn("gpu_selection_pending=1", result.stdout)
+        self.assertIn("frame_generation_interop_pending=0", result.stdout)
+        self.assertIn("action=wait-for-process-restart", result.stdout)
+        self.assertIn("runtime-transition-recreation-requested", result.stdout)
+        self.assertIn("one-shot-after-semaphore-consumption", result.stdout)
         self.assertNotIn("adaptive-ramp", result.stdout)
 
     def test_performance_preset_includes_fixed_multiplier_telemetry(self):

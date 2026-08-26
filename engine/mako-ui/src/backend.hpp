@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <cmath>
 #include <utility>
 
 #define getters public
@@ -37,6 +38,10 @@ namespace mako::ui {
         Q_PROPERTY(QString matched_processes READ getMatchedProcesses NOTIFY refreshUI)
         Q_PROPERTY(size_t multiplier READ getMultiplier WRITE multiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool frame_generation_enabled READ getFrameGenerationEnabled WRITE frameGenerationEnabledUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool scaling_enabled READ getScalingEnabled WRITE scalingEnabledUpdated NOTIFY refreshUI)
+        Q_PROPERTY(QString scaling_method READ getScalingMethod WRITE scalingMethodUpdated NOTIFY refreshUI)
+        Q_PROPERTY(float scaling_factor READ getScalingFactor WRITE scalingFactorUpdated NOTIFY refreshUI)
+        Q_PROPERTY(float scaling_sharpness READ getScalingSharpness WRITE scalingSharpnessUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint frame_generation_refresh_threshold READ getFrameGenerationRefreshThreshold WRITE frameGenerationRefreshThresholdUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint base_fps_cap READ getBaseFPSCap WRITE baseFPSCapUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive READ getAdaptive WRITE adaptiveUpdated NOTIFY refreshUI)
@@ -53,6 +58,10 @@ namespace mako::ui {
         Q_PROPERTY(int gpu READ getGPU WRITE gpuUpdated NOTIFY refreshUI)
 
         Q_PROPERTY(uint minimum_multiplier READ getMinimumMultiplier CONSTANT)
+        Q_PROPERTY(float minimum_scaling_factor READ getMinimumScalingFactor CONSTANT)
+        Q_PROPERTY(float maximum_scaling_factor READ getMaximumScalingFactor CONSTANT)
+        Q_PROPERTY(float minimum_scaling_sharpness READ getMinimumScalingSharpness CONSTANT)
+        Q_PROPERTY(float maximum_scaling_sharpness READ getMaximumScalingSharpness CONSTANT)
         Q_PROPERTY(uint maximum_frame_generation_refresh_threshold READ getMaximumFrameGenerationRefreshThreshold CONSTANT)
         Q_PROPERTY(uint frame_generation_refresh_threshold_preset READ getFrameGenerationRefreshThresholdPreset CONSTANT)
         Q_PROPERTY(uint minimum_base_fps_cap READ getMinimumBaseFPSCap CONSTANT)
@@ -124,6 +133,26 @@ namespace mako::ui {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::frameGenerationEnabled)
             return conf.frame_generation_enabled;
         }
+        [[nodiscard]] bool getScalingEnabled() const {
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingEnabled)
+            return conf.scaling_enabled;
+        }
+        [[nodiscard]] QString getScalingMethod() const {
+            VALIDATE_AND_GET_PROFILE(
+                QString::fromUtf8(
+                    ls::scalingMethodName(ls::GameConfDefaults::scalingMethod)
+                )
+            )
+            return QString::fromUtf8(ls::scalingMethodName(conf.scaling_method));
+        }
+        [[nodiscard]] float getScalingFactor() const {
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingFactor)
+            return conf.scaling_factor;
+        }
+        [[nodiscard]] float getScalingSharpness() const {
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingSharpness)
+            return conf.scaling_sharpness;
+        }
         [[nodiscard]] uint getFrameGenerationRefreshThreshold() const {
             VALIDATE_AND_GET_PROFILE(
                 ls::GameConfDefaults::frameGenerationRefreshThreshold
@@ -187,6 +216,18 @@ namespace mako::ui {
 
         [[nodiscard]] uint getMinimumMultiplier() const noexcept {
             return static_cast<uint>(ls::GameConfLimits::minimumMultiplier);
+        }
+        [[nodiscard]] float getMinimumScalingFactor() const noexcept {
+            return ls::GameConfLimits::minimumScalingFactor;
+        }
+        [[nodiscard]] float getMaximumScalingFactor() const noexcept {
+            return ls::GameConfLimits::maximumScalingFactor;
+        }
+        [[nodiscard]] float getMinimumScalingSharpness() const noexcept {
+            return ls::GameConfLimits::minimumScalingSharpness;
+        }
+        [[nodiscard]] float getMaximumScalingSharpness() const noexcept {
+            return ls::GameConfLimits::maximumScalingSharpness;
         }
         [[nodiscard]] uint getMaximumFrameGenerationRefreshThreshold()
                 const noexcept {
@@ -302,6 +343,40 @@ namespace mako::ui {
         void frameGenerationEnabledUpdated(bool frame_generation_enabled) {
             VALIDATE_AND_GET_PROFILE()
             conf.frame_generation_enabled = frame_generation_enabled;
+            MARK_DIRTY()
+        }
+        void scalingEnabledUpdated(bool scaling_enabled) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.scaling_enabled = scaling_enabled;
+            MARK_DIRTY()
+        }
+        void scalingMethodUpdated(const QString& scaling_method) {
+            VALIDATE_AND_GET_PROFILE()
+            const auto parsed = ls::scalingMethodFromName(
+                scaling_method.toStdString()
+            );
+            if (!parsed) return;
+            conf.scaling_method = *parsed;
+            MARK_DIRTY()
+        }
+        void scalingFactorUpdated(float scaling_factor) {
+            VALIDATE_AND_GET_PROFILE()
+            if (!std::isfinite(scaling_factor)) return;
+            conf.scaling_factor = std::clamp(
+                scaling_factor,
+                ls::GameConfLimits::minimumScalingFactor,
+                ls::GameConfLimits::maximumScalingFactor
+            );
+            MARK_DIRTY()
+        }
+        void scalingSharpnessUpdated(float scaling_sharpness) {
+            VALIDATE_AND_GET_PROFILE()
+            if (!std::isfinite(scaling_sharpness)) return;
+            conf.scaling_sharpness = std::clamp(
+                scaling_sharpness,
+                ls::GameConfLimits::minimumScalingSharpness,
+                ls::GameConfLimits::maximumScalingSharpness
+            );
             MARK_DIRTY()
         }
         void frameGenerationRefreshThresholdUpdated(

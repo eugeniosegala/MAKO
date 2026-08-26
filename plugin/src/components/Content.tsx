@@ -22,6 +22,7 @@ import { UsageInstructions } from "./UsageInstructions";
 import { SmartClipboardButton } from "./SmartClipboardButton";
 import { FgmodClipboardButton } from "./FgmodClipboardButton";
 import { FpsMultiplierControl } from "./FpsMultiplierControl";
+import { ScalingControl } from "./ScalingControl";
 import { PerformanceConfigurationGroup } from "./ConfigurationSectionGroups";
 import { ContentNotices } from "./ContentNotices";
 import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
@@ -184,6 +185,16 @@ export function Content() {
 
         {isInstalled && (
           <>
+            <MakoSectionHeader>
+              {t("CONTENT_SCALING", "Spatial Scaling")}
+            </MakoSectionHeader>
+
+            <ScalingControl
+              config={config}
+              disabled={engineUpdateRequired}
+              onConfigChange={handleConfigChange}
+            />
+
             <MakoSectionHeader>
               {t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")}
             </MakoSectionHeader>

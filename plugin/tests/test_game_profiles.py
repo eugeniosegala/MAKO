@@ -122,6 +122,26 @@ class GameProfileTests(unittest.TestCase):
             profile_data["profiles"]["mako"]["adaptive_auto_base_fps_cap"]
         )
 
+    def test_missing_scaling_fields_are_inert_for_existing_profiles(self):
+        content = "\n".join([
+            "version = 2",
+            "[global]",
+            "allow_fp16 = true",
+            "[[profile]]",
+            'name = "mako"',
+            "frame_generation_enabled = false",
+            "",
+        ])
+
+        profile = ConfigurationManager.parse_toml_content_multi_profile(
+            content
+        )["profiles"]["mako"]
+
+        self.assertFalse(profile["scaling_enabled"])
+        self.assertEqual(profile["scaling_factor"], 1.5)
+        self.assertEqual(profile["scaling_sharpness"], 0.5)
+        self.assertFalse(profile["frame_generation_enabled"])
+
     def test_explicit_fractional_choice_is_preserved_for_existing_profiles(self):
         content = "\n".join([
             "version = 2",
@@ -224,6 +244,89 @@ class GameProfileTests(unittest.TestCase):
                 **defaults,
                 "frame_generation_refresh_threshold": 29,
             })
+
+    def test_scaling_values_are_validated_and_persisted(self):
+        defaults = ConfigurationManager.get_defaults()
+        configured = ConfigurationManager.validate_config({
+            **defaults,
+            "scaling_enabled": True,
+            "scaling_factor": 1.7,
+            "scaling_sharpness": 0.75,
+        })
+
+        content = ConfigurationManager.generate_toml_content(configured)
+        self.assertIn("scaling_enabled = true", content)
+        self.assertIn("scaling_factor = 1.7", content)
+        self.assertIn("scaling_sharpness = 0.75", content)
+        parsed = ConfigurationManager.parse_toml_content(content)
+        self.assertTrue(parsed["scaling_enabled"])
+        self.assertEqual(parsed["scaling_factor"], 1.7)
+        self.assertEqual(parsed["scaling_sharpness"], 0.75)
+
+        for field, invalid, message in (
+            (
+                "scaling_factor",
+                0.9,
+                "scaling_factor must be between 1.0 and 2.0",
+            ),
+            (
+                "scaling_factor",
+                2.1,
+                "scaling_factor must be between 1.0 and 2.0",
+            ),
+            (
+                "scaling_sharpness",
+                -0.01,
+                "scaling_sharpness must be between 0.0 and 1.0",
+            ),
+            (
+                "scaling_sharpness",
+                1.01,
+                "scaling_sharpness must be between 0.0 and 1.0",
+            ),
+        ):
+            with (
+                self.subTest(field=field, invalid=invalid),
+                self.assertRaisesRegex(ValueError, message),
+            ):
+                ConfigurationManager.validate_config({
+                    **defaults,
+                    field: invalid,
+                })
+
+    def test_scaling_and_frame_generation_patches_are_independent(self):
+        existing = {
+            **ConfigurationManager.get_defaults(),
+            "frame_generation_enabled": False,
+            "adaptive": True,
+            "target_fps": 120,
+        }
+        self.assertTrue(
+            self.service.update_profile_config("mako", existing)["success"]
+        )
+
+        scaling_result = self.service.update_profile_config_fields(
+            "mako",
+            {
+                "scaling_enabled": True,
+                "scaling_factor": 1.8,
+                "scaling_sharpness": 0.7,
+            },
+        )
+        self.assertTrue(scaling_result["success"])
+        scaled = self.service.get_profile_config("mako")["config"]
+        self.assertFalse(scaled["frame_generation_enabled"])
+        self.assertTrue(scaled["adaptive"])
+        self.assertEqual(scaled["target_fps"], 120)
+
+        frame_generation_result = self.service.update_profile_config_fields(
+            "mako", {"frame_generation_enabled": True, "adaptive": False}
+        )
+        self.assertTrue(frame_generation_result["success"])
+        saved = self.service.get_profile_config("mako")["config"]
+        self.assertTrue(saved["scaling_enabled"])
+        self.assertEqual(saved["scaling_factor"], 1.8)
+        self.assertEqual(saved["scaling_sharpness"], 0.7)
 
     def test_field_update_merges_with_latest_canonical_profile(self):
         existing = dict(ConfigurationManager.get_defaults())

@@ -22,6 +22,7 @@ namespace vk {
         PFN_vkDestroyInstance DestroyInstance;
         PFN_vkEnumeratePhysicalDevices EnumeratePhysicalDevices;
         PFN_vkEnumerateDeviceExtensionProperties EnumerateDeviceExtensionProperties;
+        PFN_vkGetPhysicalDeviceProperties GetPhysicalDeviceProperties;
         PFN_vkGetPhysicalDeviceProperties2 GetPhysicalDeviceProperties2;
         PFN_vkGetPhysicalDeviceQueueFamilyProperties GetPhysicalDeviceQueueFamilyProperties;
         PFN_vkGetPhysicalDeviceFeatures2 GetPhysicalDeviceFeatures2;
@@ -33,6 +34,8 @@ namespace vk {
 
         // extension functions
         PFN_vkGetPhysicalDeviceSurfaceCapabilitiesKHR GetPhysicalDeviceSurfaceCapabilitiesKHR;
+        PFN_vkGetPhysicalDeviceSurfaceFormatsKHR GetPhysicalDeviceSurfaceFormatsKHR;
+        PFN_vkGetPhysicalDeviceSurfaceSupportKHR GetPhysicalDeviceSurfaceSupportKHR;
     };
 
     /// initialize vulkan instance function pointers
@@ -127,7 +130,7 @@ namespace vk {
     /// @param graphical whether the device is graphical (rather than compute)
     /// @return initialized function pointers
     VulkanDeviceFuncs initVulkanDeviceFuncs(const VulkanInstanceFuncs& fi, VkDevice device,
-        bool graphical);
+        bool graphical, bool frameGenerationInteropEnabled = true);
 
     /// vulkan version wrapper
     class version {
@@ -180,6 +183,8 @@ namespace vk {
             VkPhysicalDevice physdev,
             VulkanInstanceFuncs instanceFuncs,
             VulkanDeviceFuncs deviceFuncs,
+            uint32_t queueFamilyIndex,
+            bool frameGenerationInteropEnabled,
             bool isGraphical = true,
             std::optional<PFN_vkSetDeviceLoaderData> setLoaderData = std::nullopt,
             const std::optional<std::filesystem::path>& cachefile = std::nullopt);
@@ -231,6 +236,19 @@ namespace vk {
         /// get the compute queue
         /// @return the compute queue handle
         [[nodiscard]] const auto& queue() const { return this->computeQueue; }
+        /// get the queue family used by layer-owned command buffers
+        [[nodiscard]] uint32_t queueFamilyIndex() const {
+            return this->queueFamilyIdx;
+        }
+        [[nodiscard]] bool queueFamilySupports(
+                const VkQueueFlags flags) const {
+            return (this->queueFamilyFlags & flags) == flags;
+        }
+        /// whether the application device negotiated MAKO's external
+        /// memory/semaphore interop required by frame generation
+        [[nodiscard]] bool frameGenerationInteropEnabled() const {
+            return this->frameGenerationInterop;
+        }
 
         /// check if fp16 is supported
         /// @return true if fp16 is supported
@@ -257,6 +275,8 @@ namespace vk {
 
         VkPhysicalDevice phys_dev;
         uint32_t queueFamilyIdx;
+        VkQueueFlags queueFamilyFlags{0};
+        bool frameGenerationInterop{true};
         bool fp16;
         bool robustImageAccess2;
 

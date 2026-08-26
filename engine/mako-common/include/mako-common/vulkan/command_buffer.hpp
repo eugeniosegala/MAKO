@@ -97,12 +97,19 @@ namespace vk {
             VkSemaphore waitTimelineSemaphore, uint64_t waitValue,
             std::span<const VkSemaphore> signalSemaphores,
             VkSemaphore signalTimelineSemaphore, uint64_t signalValue,
-            VkFence fence = VK_NULL_HANDLE) const;
+            VkFence fence = VK_NULL_HANDLE,
+            VkQueue queue = VK_NULL_HANDLE) const;
 
         /// submit the command buffer instantly
         /// @param vk the vulkan instance
         /// @throws ls::vulkan_error on failure
         void submit(const vk::Vulkan& vk) const;
+
+        /// get the underlying command buffer for component-owned recording
+        /// sequences that need precise multi-stage synchronization
+        [[nodiscard]] VkCommandBuffer handle() const {
+            return *this->commandBuffer;
+        }
     private:
         ls::owned_ptr<VkCommandBuffer> commandBuffer;
     };

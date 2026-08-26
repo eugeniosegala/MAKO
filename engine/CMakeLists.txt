@@ -68,17 +68,6 @@ option(MAKO_ENABLE_SANITIZERS  "Enable AddressSanitizer and UndefinedBehaviorSan
 set(MAKO_LAYER_LIBRARY_PATH libmako-render.so CACHE STRING "Change where Vulkan searches for the layer library")
 set(MAKO_LAYER_MANIFEST_SUFFIX "" CACHE STRING "Suffix for the installed Vulkan layer manifest filename")
 option(MAKO_TESTING_RENDERDOC  "Enable RenderDoc integration for testing purposes" OFF)
-set(MAKO_GPU_QUALITY_TEST AUTO CACHE STRING
-    "Run the AMD hardware image-quality regression during CTest: AUTO (required on Steam Machine), REQUIRED, or OFF")
-set_property(CACHE MAKO_GPU_QUALITY_TEST PROPERTY STRINGS AUTO REQUIRED OFF)
-set(MAKO_GPU_QUALITY_OUTPUT "${CMAKE_BINARY_DIR}/quality-regression" CACHE PATH
-    "Directory for AMD hardware image-quality comparison artifacts")
-string(TOUPPER "${MAKO_GPU_QUALITY_TEST}" MAKO_GPU_QUALITY_TEST)
-if(NOT MAKO_GPU_QUALITY_TEST STREQUAL "AUTO" AND
-        NOT MAKO_GPU_QUALITY_TEST STREQUAL "REQUIRED" AND
-        NOT MAKO_GPU_QUALITY_TEST STREQUAL "OFF")
-    message(FATAL_ERROR "MAKO_GPU_QUALITY_TEST must be AUTO, REQUIRED, or OFF")
-endif()
 # === READ HERE FOR BUILD OPTIONS ===
 
 if(MAKO_BUILD_VK_LAYER)
@@ -99,11 +88,25 @@ if(BUILD_TESTING AND UNIX)
     set_tests_properties(standalone-launcher PROPERTIES
         LABELS "portable-policy")
 
+    add_test(NAME mako-gym-bridge-contract
+        COMMAND bash
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-run-mako-gym.sh"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/run-mako-gym.sh")
+    set_tests_properties(mako-gym-bridge-contract PROPERTIES
+        LABELS "portable-policy")
+
     add_test(NAME embedded-color-conversion-spirv-freshness
         COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate-color-conversion-spirv.py"
             --check)
     set_tests_properties(embedded-color-conversion-spirv-freshness PROPERTIES
+        LABELS "portable-policy")
+
+    add_test(NAME embedded-spatial-scaling-spirv-freshness
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate-spatial-scaling-spirv.py"
+            --check)
+    set_tests_properties(embedded-spatial-scaling-spirv-freshness PROPERTIES
         LABELS "portable-policy")
 endif()
 

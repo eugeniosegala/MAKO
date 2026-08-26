@@ -49,11 +49,11 @@ const features = [
   },
   {
     index: '02',
-    code: 'IQ',
-    title: 'Full-quality synthesis',
-    text: 'Run the full-quality v2 model with fine-grained performance controls and significantly reduced ghosting.',
-    stat: 'V2',
-    label: 'quality model',
+    code: 'SR',
+    title: 'LS1 + MAKO spatial scaling',
+    text: 'Choose proprietary LS1 Quality or Performance, or the built-in open MAKO scaler, before Fixed or Adaptive generation.',
+    stat: '1—2×',
+    label: 'scale factor',
     tone: 'violet',
   },
   {
@@ -120,18 +120,18 @@ export default function Home() {
           <div className="hero-glow hero-glow-cyan" />
           <div className="hero-glow hero-glow-orange" />
           <div className="hero-copy">
-            <p className="eyebrow"><span /> Lossless Scaling frame generation / Linux</p>
-            <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
-            <p className="hero-intro">MAKO brings Lossless Scaling frame generation to Steam Deck, SteamOS, and Linux through a focused Decky control layer and a purpose-built Vulkan renderer.</p>
+            <p className="eyebrow"><span /> Spatial scaling + frame generation / Linux</p>
+            <h1>Scale. Generate.<br /><em>On Linux.</em></h1>
+            <p className="hero-intro">MAKO brings proprietary Lossless Scaling LS1, a built-in open Vulkan spatial scaler, and LSFG frame generation to Steam Deck, SteamOS, and Linux through a focused Decky control layer and a purpose-built renderer.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Decky</span></a>
               <a className="button button-primary button-renderer" href={links.rendererDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Renderer</span></a>
               <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
             <div className="hero-meta">
-              <span><b>2—4×</b> generation ceiling</span>
+              <span><b>1—2×</b> LS1 or MAKO scaling</span>
               <span><b>30—240</b> adaptive FPS target</span>
-              <span><b>32 + 64</b> bit Vulkan layers</span>
+              <span><b>2—4×</b> generation ceiling</span>
             </div>
           </div>
 
@@ -146,7 +146,7 @@ export default function Home() {
             <div className="visual-card visual-card-renderer" onPointerMove={tiltCard} onPointerLeave={resetCardTilt}>
               <span className="card-index">02 / PIPELINE</span>
               <img src="assets/mako-render-logo.webp" alt="MAKO Renderer shark logo" width="154" height="154" draggable={false} />
-              <div><strong>MAKO Renderer</strong><span>Vulkan frame synthesis</span></div>
+              <div><strong>MAKO Renderer</strong><span>Vulkan scaling + synthesis</span></div>
             </div>
           </div>
         </section>
@@ -165,7 +165,7 @@ export default function Home() {
             <p className="section-kicker"><span>01</span> One system. Two precision layers.</p>
             <div>
               <h2>Controls above.<br /><em>Vulkan below.</em></h2>
-              <p>MAKO Decky manages the game. MAKO Renderer runs the frame pipeline. Together, they bring Lossless Scaling frame generation into Linux gaming.</p>
+              <p>MAKO Decky manages the game. MAKO Renderer runs the frame pipeline. Together, they bring LS1 and open MAKO spatial scaling plus Lossless Scaling frame generation into Linux gaming.</p>
             </div>
           </header>
 
@@ -177,7 +177,7 @@ export default function Home() {
               <h3>MAKO Decky</h3>
               <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration—from one focused interface.</p>
               <ul>
-                <li><span /> Per-game frame-generation switch</li>
+                <li><span /> Independent scaling &amp; generation controls</li>
                 <li><span /> Steam, Heroic &amp; EmuDeck profiles</li>
                 <li><span /> Fixed &amp; Adaptive modes</li>
               </ul>
@@ -197,11 +197,11 @@ export default function Home() {
               <div className="panel-topline"><span>RENDER LAYER</span><i>VULKAN / LINUX</i></div>
               <img src="assets/mako-render-logo.webp" alt="MAKO Renderer" width="230" height="230" draggable={false} />
               <h3>MAKO Renderer</h3>
-              <p>A private Vulkan pipeline for frame synthesis, deterministic scheduling, presentation recovery, and future scaling.</p>
+              <p>A private Vulkan pipeline for selectable spatial reconstruction, frame synthesis, deterministic scheduling, and presentation recovery.</p>
               <ul>
+                <li><span /> Proprietary LS1 or built-in open MAKO scaling</li>
                 <li><span /> Lossless Scaling frame-generation models</li>
                 <li><span /> Adaptive generated-frame planning</li>
-                <li><span /> 32-bit &amp; 64-bit layers</li>
               </ul>
               <a href={links.rendererDownload} {...newTabProps}>Download Linux archive <span>→</span></a>
             </article>
@@ -214,7 +214,7 @@ export default function Home() {
               <p className="section-kicker"><span>02</span> Engineered for play</p>
               <div>
                 <h2>Every frame.<br /><em>Under control.</em></h2>
-                <p>MAKO’s scheduler, profiles, and launch boundaries are designed to stay fast, predictable, and out of your way.</p>
+                <p>MAKO’s scaler, scheduler, profiles, and launch boundaries are designed to stay fast, predictable, and out of your way.</p>
               </div>
             </header>
 
@@ -274,7 +274,7 @@ export default function Home() {
             <ol className="steps">
               <li>
                 <span>01</span>
-                <div><strong>Bring the model</strong><p>Install Lossless Scaling through Steam. MAKO reads your licensed <code>Lossless.dll</code>; it never bundles or copies it.</p></div>
+                <div><strong>Choose your pipeline</strong><p>The open MAKO scaler runs independently. For LS1 scaling or frame generation, install Lossless Scaling through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
               </li>
               <li>
                 <span>02</span>
@@ -333,7 +333,7 @@ export default function Home() {
 
           <div className="requirement-note">
             <span>IMPORTANT / LICENSED INPUT</span>
-            <p>MAKO is an independent project, not an official Lossless Scaling release. It requires <code>Lossless.dll</code> from a licensed <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation and does not bundle, copy, or modify that proprietary library.</p>
+            <p>MAKO is an independent project, not an official Lossless Scaling release. LS1 scaling and frame generation require <code>Lossless.dll</code> from a licensed <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO scaler does not. MAKO never bundles, copies, or modifies that library.</p>
           </div>
         </section>
 
@@ -349,11 +349,11 @@ export default function Home() {
             </details>
             <details>
               <summary><span>02</span> Does MAKO include Lossless Scaling?<i>+</i></summary>
-              <p>No. MAKO is an independent project. You need your own licensed Lossless Scaling installation from Steam, then MAKO discovers or lets you select its <code>Lossless.dll</code>.</p>
+              <p>No. MAKO is an independent project. LS1 scaling and frame generation need your own licensed Lossless Scaling installation from Steam, then MAKO discovers or lets you select its <code>Lossless.dll</code>. The open MAKO scaling method does not need the DLL.</p>
             </details>
             <details>
               <summary><span>03</span> Is scaling available too?<i>+</i></summary>
-              <p>Frame generation is available today. Scaling is the next planned capability and is not presented as a finished feature in the current release.</p>
+              <p>Yes. The current development line offers LS1 Quality, LS1 Performance, and the open MAKO method. Each can run alone or before Fixed or Adaptive frame generation. The downloads above remain v2.2.0 until the next approved release.</p>
             </details>
             <details>
               <summary><span>04</span> What hardware is published today?<i>+</i></summary>
@@ -367,7 +367,7 @@ export default function Home() {
           <img src="assets/mako-logo.webp" alt="MAKO shark" width="260" height="260" draggable={false} />
           <div>
             <p className="eyebrow"><span /> Motion-Adaptive Kernel Orchestration</p>
-            <h2>Bring Lossless Scaling<br /><em>to Linux.</em></h2>
+            <h2>Bring scaling and synthesis<br /><em>to Linux.</em></h2>
             <p>Choose MAKO Decky for the managed SteamOS workflow or MAKO Renderer for a direct Linux installation.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>Download MAKO <span>→</span></a>
@@ -380,7 +380,7 @@ export default function Home() {
       <footer className="site-footer">
         <div className="footer-brand">
           <a className="brand" href="#top"><img src="assets/mako-logo.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
-          <p>Lossless Scaling frame generation for SteamOS and Linux.</p>
+          <p>LS1 and open MAKO spatial scaling plus Lossless Scaling frame generation for SteamOS and Linux.</p>
         </div>
         <div className="footer-links">
           <div><span>PROJECT</span><a href={links.repository} {...newTabProps}>GitHub</a><a href={links.docs} {...newTabProps}>Documentation</a><a href="https://github.com/eugeniosegala/MAKO/issues" {...newTabProps}>Issues</a></div>

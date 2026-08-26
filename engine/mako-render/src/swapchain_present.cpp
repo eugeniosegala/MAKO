@@ -158,6 +158,24 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
     if (acquiredImageIndices.empty())
         throw ls::error("attempted to retire an empty acquired-image batch");
 
+    VkSemaphore spatialScalingReady = VK_NULL_HANDLE;
+    if (this->spatialScaler) {
+        auto& scalingPass = this->spatialScalingPasses.at(
+            originalImageIndex
+        );
+        scalingPass.commandBuffer.begin(vk);
+        this->spatialScaler->record(
+            vk, scalingPass.commandBuffer, originalImage
+        );
+        scalingPass.commandBuffer.end(vk);
+        scalingPass.commandBuffer.submit(
+            vk, applicationWaitSemaphores, VK_NULL_HANDLE, 0,
+            std::array{scalingPass.readySemaphore.handle()},
+            VK_NULL_HANDLE, 0, VK_NULL_HANDLE, queue
+        );
+        spatialScalingReady = scalingPass.readySemaphore.handle();
+    }
+
     this->renderFence->reset(vk);
     const size_t semaphoreBase = (
         this->frameState.sequenceIndex + acquiredImageIndices.size() + 1
@@ -225,10 +243,14 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             pass.acquireSemaphore.handle()
         };
         if (first) {
-            waits.insert(
-                waits.end(), applicationWaitSemaphores.begin(),
-                applicationWaitSemaphores.end()
-            );
+            if (spatialScalingReady != VK_NULL_HANDLE) {
+                waits.push_back(spatialScalingReady);
+            } else {
+                waits.insert(
+                    waits.end(), applicationWaitSemaphores.begin(),
+                    applicationWaitSemaphores.end()
+                );
+            }
         } else {
             const size_t previousSemaphoreIndex =
                 (semaphoreBase + i - 1) % this->postCopySemaphores.size();
@@ -361,7 +383,74 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
     }
 }
 
+VkResult Swapchain::presentSpatiallyScaledFrame(
+        const PresentInvocation& invocation) {
+    auto& pass = this->spatialScalingPasses.at(invocation.imageIndex);
+    const VkImage applicationImage = this->info.images.at(
+        invocation.imageIndex
+    );
+    const auto scalingStarted = startPresentDiagnostic();
+    pass.commandBuffer.begin(invocation.vk);
+    this->spatialScaler->record(
+        invocation.vk, pass.commandBuffer, applicationImage
+    );
+    pass.commandBuffer.end(invocation.vk);
+    pass.commandBuffer.submit(
+        invocation.vk,
+        invocation.waitSemaphores, VK_NULL_HANDLE, 0,
+        std::array{pass.readySemaphore.handle()},
+        VK_NULL_HANDLE, 0, VK_NULL_HANDLE, invocation.queue
+    );
+    const auto scalingDuration = finishPresentDiagnostic(scalingStarted);
+    logSlowPresentOperation(
+        "submit-spatial-scaling", this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, scalingStarted,
+        std::nullopt, std::nullopt, invocation.imageIndex
+    );
+
+    const VkSemaphore ready = pass.readySemaphore.handle();
+    const VkPresentInfoKHR presentInfo{
+        .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
+        .pNext = invocation.nextChain,
+        .waitSemaphoreCount = 1,
+        .pWaitSemaphores = &ready,
+        .swapchainCount = 1,
+        .pSwapchains = &invocation.swapchain,
+        .pImageIndices = &invocation.imageIndex,
+    };
+    const auto originalPresentStarted = startPresentDiagnostic();
+    const auto result = invocation.vk.df().QueuePresentKHR(
+        invocation.queue, &presentInfo
+    );
+    const auto originalPresentDuration = finishPresentDiagnostic(
+        originalPresentStarted
+    );
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+        throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
+
+    const auto presentWorkDuration = finishPresentDiagnostic(
+        invocation.started
+    );
+    logSlowPresentOperation(
+        "present-total", this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, invocation.started, result
+    );
+    logSlowPresentBreakdown(
+        this->diagnosticsState.contextId, this->frameState.realFrameIndex,
+        this->frameState.sequenceIndex, presentWorkDuration,
+        {
+            .sourceCopy = scalingDuration,
+            .originalPresent = originalPresentDuration,
+        }
+    );
+    this->frameState.realFrameIndex++;
+    return result;
+}
+
 VkResult Swapchain::presentNativeFrame(const PresentInvocation& invocation) {
+    if (this->spatialScaler)
+        return this->presentSpatiallyScaledFrame(invocation);
+
     const VkPresentInfoKHR presentInfo{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext = invocation.nextChain,
@@ -430,7 +519,8 @@ bool Swapchain::recoverBackendIfReady(const vk::Vulkan& vk) {
 
     bool backendReady = false;
     try {
-        backendReady = this->instance.get().contextReady(this->ctx.get());
+        backendReady = this->instance &&
+            this->instance->contextReady(this->ctx.get());
     } catch (const std::exception& error) {
         std::cerr << "MAKO Renderer: backend recovery poll failed; native "
                      "presentation retained: " << error.what() << '\n';
@@ -553,7 +643,8 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
     }
     if (gamescopeHdrTransport && pipelineReady) {
         try {
-            pipelineReady = this->instance.get().contextReady(this->ctx.get());
+            pipelineReady = this->instance &&
+                this->instance->contextReady(this->ctx.get());
         } catch (const std::exception& error) {
             std::cerr << "MAKO Renderer: backend readiness poll failed; native "
                          "presentation retained: " << error.what() << '\n';
@@ -731,6 +822,31 @@ void Swapchain::preacquireGeneratedImages(
 
 void Swapchain::submitSourceCopy(const PresentInvocation& invocation,
         const VkImage swapchainImage, const vk::Image& sourceImage) {
+    if (this->spatialScaler) {
+        auto& pass = this->spatialScalingPasses.at(invocation.imageIndex);
+        pass.commandBuffer.begin(invocation.vk);
+        this->spatialScaler->record(
+            invocation.vk, pass.commandBuffer,
+            swapchainImage, sourceImage.handle()
+        );
+        pass.commandBuffer.end(invocation.vk);
+
+        const auto sourceSubmitStarted = startPresentDiagnostic();
+        pass.commandBuffer.submit(
+            invocation.vk,
+            invocation.waitSemaphores, VK_NULL_HANDLE, 0,
+            {}, this->syncSemaphore->handle(),
+            this->frameState.sequenceIndex++,
+            VK_NULL_HANDLE, invocation.queue
+        );
+        logSlowPresentOperation(
+            "submit-spatial-source", this->frameState.realFrameIndex,
+            this->frameState.sequenceIndex, sourceSubmitStarted,
+            std::nullopt, std::nullopt, invocation.imageIndex
+        );
+        return;
+    }
+
     const auto& commandBuffer = *this->renderCommandBuffer;
     const std::array preBarriers{
         barrierHelper(swapchainImage,
@@ -804,7 +920,7 @@ VkResult Swapchain::presentHistoryOnly(
 
     const auto historyScheduleStarted = startPresentDiagnostic();
     try {
-        this->instance.get().scheduleFrameHistory(this->ctx.get());
+        this->instance->scheduleFrameHistory(this->ctx.get());
     } catch (const std::exception& error) {
         phases.schedule = finishPresentDiagnostic(historyScheduleStarted);
         // The fallback copy is already queued and signals fallbackSemaphore.
@@ -1421,15 +1537,31 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     const DiagnosticsContextScope diagnosticsContext(
         this->diagnosticsState.contextId
     );
-    const void* lowerNextChain = nextChain;
     // Match the immutable create-time choice. Ordered SDR filters Gamescope's
     // dynamic MAILBOX override so the lower FIFO swapchain stays ordered. HDR
     // preserves it. A feedback transition cannot change the game-owned
     // VkSwapchainKHR's creation contract.
-    ScopedPNextRemoval presentMode(
-        lowerNextChain, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT,
-        this->privateOrderedTransport
+    // Application damage rectangles are expressed in the virtual source
+    // coordinate space. The scaler rewrites the whole native WSI image, so a
+    // lower incremental-present region would incorrectly leave most of that
+    // image stale. Build a filtered copy of the present-chain prefix: Vulkan
+    // input chains are const and may be shared or stored in read-only memory.
+    const FilteredPresentPNextChain filteredPresentChain(
+        nextChain, this->privateOrderedTransport,
+        this->spatialScaler.has_value()
     );
+    if (!filteredPresentChain.valid()) {
+        throw ls::vulkan_error(
+            VK_ERROR_UNKNOWN,
+            "cannot safely filter an unknown VkPresentInfoKHR pNext prefix "
+            "structure (sType=" + std::to_string(
+                static_cast<int>(
+                    filteredPresentChain.unsupportedStructureType()
+                )
+            ) + ")"
+        );
+    }
+    const void* lowerNextChain = filteredPresentChain.head();
     const bool gamescopeHdrTransport =
         this->gamescopeDetected && !this->privateOrderedTransport;
 
@@ -1722,7 +1854,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     if (!bypassGeneratedFrames) {
         const auto scheduleStarted = startPresentDiagnostic();
         try {
-            this->instance.get().scheduleFrames(
+            this->instance->scheduleFrames(
                 this->ctx.get(), plan.scheduledGeneratedFrames.timestamps()
             );
         } catch (const std::exception& error) {

@@ -29,6 +29,11 @@ from shared_config import (
     PROFILE_KIND_MANUAL,
     PROFILE_KIND_PROCESS,
     PROFILE_KIND_VALUES,
+    SCALING_FACTOR_MAX,
+    SCALING_FACTOR_MIN,
+    SCALING_METHOD_VALUES,
+    SCALING_SHARPNESS_MAX,
+    SCALING_SHARPNESS_MIN,
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
     ConfigFieldType,
@@ -193,6 +198,30 @@ class ConfigurationManager:
             raise ValueError(
                 f"flow_scale must be between {FLOW_SCALE_MIN} and {FLOW_SCALE_MAX}"
             )
+        if not (
+            SCALING_FACTOR_MIN
+            <= validated["scaling_factor"]
+            <= SCALING_FACTOR_MAX
+        ):
+            raise ValueError(
+                "scaling_factor must be between "
+                f"{SCALING_FACTOR_MIN} and {SCALING_FACTOR_MAX}"
+            )
+        scaling_method = validated["scaling_method"].strip().lower()
+        if scaling_method not in SCALING_METHOD_VALUES:
+            raise ValueError(
+                "scaling_method must be 'mako', 'ls1', or 'ls1-performance'"
+            )
+        validated["scaling_method"] = scaling_method
+        if not (
+            SCALING_SHARPNESS_MIN
+            <= validated["scaling_sharpness"]
+            <= SCALING_SHARPNESS_MAX
+        ):
+            raise ValueError(
+                "scaling_sharpness must be between "
+                f"{SCALING_SHARPNESS_MIN} and {SCALING_SHARPNESS_MAX}"
+            )
         if validated["pacing"] != CONFIG_SCHEMA["pacing"].default:
             raise ValueError("only pacing = 'none' is currently available")
         external_vulkan_layer = validated["external_vulkan_layer"].strip().lower()
@@ -256,6 +285,10 @@ class ConfigurationManager:
             if config["gpu"]:
                 lines.append(f"gpu = {_toml_string(config['gpu'])}")
             lines.extend([
+                f"scaling_enabled = {str(config['scaling_enabled']).lower()}",
+                f"scaling_method = {_toml_string(config['scaling_method'])}",
+                f"scaling_factor = {config['scaling_factor']}",
+                f"scaling_sharpness = {config['scaling_sharpness']}",
                 f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
                 "frame_generation_refresh_threshold = "
                 f"{config['frame_generation_refresh_threshold']}",

@@ -36,6 +36,7 @@ if ! vulkaninfo --summary > "$raw_vulkan" 2>&1; then
 fi
 {
   echo "commit=${GITHUB_SHA:-unknown}"
+  echo "mako_gym_commit=${MAKO_GYM_COMMIT:-unknown}"
   echo "generated_at=$(date --utc --iso-8601=seconds)"
   echo "kernel_name=$(uname -s)"
   echo "kernel_release=$(uname -r)"

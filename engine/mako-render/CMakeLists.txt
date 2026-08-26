@@ -3,6 +3,7 @@ set(LAYER_SOURCES
     "src/gamescope_hdr_feedback.cpp"
     "src/instance.cpp"
     "src/present_diagnostics.cpp"
+    "src/spatial_scaler.cpp"
     "src/swapchain.cpp"
     "src/swapchain_present.cpp")
 
@@ -77,6 +78,16 @@ if(BUILD_TESTING)
         COMMAND mako-profile-update-tests)
     mako_register_portable_policy_test(
         mako-profile-update-tests profile-update)
+
+    add_executable(mako-spatial-scaling-policy-tests
+        "tests/spatial_scaling_policy_tests.cpp")
+    target_include_directories(mako-spatial-scaling-policy-tests
+        PRIVATE "src"
+        PRIVATE "../mako-common/include")
+    add_test(NAME spatial-scaling-policy
+        COMMAND mako-spatial-scaling-policy-tests)
+    mako_register_portable_policy_test(
+        mako-spatial-scaling-policy-tests spatial-scaling-policy)
 
     add_executable(mako-generated-frame-plan-tests
         "tests/generated_frame_plan_tests.cpp")

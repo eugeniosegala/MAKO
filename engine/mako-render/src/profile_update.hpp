@@ -7,6 +7,7 @@
 #include "mako-common/configuration/config.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -17,6 +18,8 @@ namespace mako::layer {
         NoRuntimeChange,
         ApplyLive,
         DeferUntilSwapchainRecreation,
+        DeferUntilProcessRestart,
+        RequestSwapchainRecreation,
     };
 
     struct ProfileUpdateDecision {
@@ -28,7 +31,192 @@ namespace mako::layer {
         bool fixedMultiplierChanged{false};
         bool baseFpsCapChanged{false};
         bool dynamicCadenceProbeIntervalChanged{false};
+        bool spatialScalingChanged{false};
+        bool frameGenerationBackendChanged{false};
+        bool generatedFrameCapacityExceeded{false};
+        bool processRestartRequired{false};
     };
+
+    struct ProcessStaticProfileProjection {
+        ls::GameConf runtimeProfile;
+        bool gpuSelectionPending{false};
+        bool pacingPending{false};
+        bool frameGenerationInteropPending{false};
+        bool ultraPerformancePending{false};
+
+        [[nodiscard]] bool restartRequired() const {
+            return this->gpuSelectionPending || this->pacingPending ||
+                this->frameGenerationInteropPending ||
+                this->ultraPerformancePending;
+        }
+    };
+
+    /// Retain settings selected during process/device/backend construction
+    /// while allowing unrelated fields from the requested profile to continue
+    /// through the normal live-update path.
+    [[nodiscard]] inline ProcessStaticProfileProjection
+    projectProcessStaticProfileForLiveUpdate(
+            const ls::GameConf& current,
+            const ls::GameConf& requested,
+            const bool frameGenerationConfiguredAtStartup) {
+        ProcessStaticProfileProjection projection{
+            .runtimeProfile = requested,
+            .gpuSelectionPending = requested.gpu != current.gpu,
+            .pacingPending = requested.pacing != current.pacing,
+            .frameGenerationInteropPending =
+                requested.frame_generation_enabled &&
+                !frameGenerationConfiguredAtStartup,
+            .ultraPerformancePending = requested.ultra_performance !=
+                current.ultra_performance,
+        };
+        if (projection.gpuSelectionPending)
+            projection.runtimeProfile.gpu = current.gpu;
+        if (projection.pacingPending)
+            projection.runtimeProfile.pacing = current.pacing;
+        if (projection.frameGenerationInteropPending)
+            projection.runtimeProfile.frame_generation_enabled = false;
+        if (projection.ultraPerformancePending) {
+            projection.runtimeProfile.ultra_performance =
+                current.ultra_performance;
+            projection.runtimeProfile.flow_scale = current.flow_scale;
+            projection.runtimeProfile.performance_mode =
+                current.performance_mode;
+        }
+        return projection;
+    }
+
+    /// Private generated outputs are selected by the active Fixed/Adaptive
+    /// policy. Initial construction may reserve more for the inactive policy,
+    /// but the active requirement is the boundary used for live updates.
+    [[nodiscard]] inline size_t generatedFrameCapacityForActivePolicy(
+            const ls::GameConf& profile) {
+        const size_t activeMultiplier = profile.adaptive
+            ? profile.adaptive_max_multiplier
+            : profile.multiplier;
+        return activeMultiplier - 1;
+    }
+
+    /// Project a requested profile onto the GPU resources already owned by a
+    /// live swapchain. Root retains the unmodified requested profile for the
+    /// requested recreation; the existing context can still apply unrelated
+    /// live-safe fields without changing scaler allocation, optical-flow
+    /// dimensions, or the selected frame-generation model.
+    [[nodiscard]] inline ls::GameConf maskRecreatedProfileResourcesForLiveUpdate(
+            const ls::GameConf& current,
+            const ls::GameConf& requested,
+            const bool generatedFrameCapacityPending = false) {
+        auto live = requested;
+        live.scaling_enabled = current.scaling_enabled;
+        live.scaling_method = current.scaling_method;
+        live.scaling_factor = current.scaling_factor;
+        live.scaling_sharpness = current.scaling_sharpness;
+        live.flow_scale = current.flow_scale;
+        live.performance_mode = current.performance_mode;
+        if (generatedFrameCapacityPending) {
+            live.adaptive = current.adaptive;
+            live.multiplier = current.multiplier;
+            live.adaptive_max_multiplier = current.adaptive_max_multiplier;
+        }
+        return live;
+    }
+
+    struct RecreatedProfileResourceKey {
+        bool scalingEnabled{false};
+        ls::ScalingMethod scalingMethod{ls::ScalingMethod::Mako};
+        float scalingFactor{1.0F};
+        float scalingSharpness{0.5F};
+        float effectiveFlowScale{ls::GameConfDefaults::flowScale};
+        bool effectivePerformanceMode{false};
+        size_t requiredGeneratedFrameCapacity{0};
+
+        friend bool operator==(
+            const RecreatedProfileResourceKey&,
+            const RecreatedProfileResourceKey&) = default;
+    };
+
+    [[nodiscard]] inline RecreatedProfileResourceKey recreatedProfileResourceKey(
+            const ls::GameConf& profile) {
+        return {
+            .scalingEnabled = profile.scaling_enabled,
+            .scalingMethod = profile.scaling_method,
+            .scalingFactor = profile.scaling_factor,
+            .scalingSharpness = profile.scaling_sharpness,
+            .effectiveFlowScale = ls::effectiveFlowScale(profile),
+            .effectivePerformanceMode = ls::effectivePerformanceMode(profile),
+            .requiredGeneratedFrameCapacity =
+                generatedFrameCapacityForActivePolicy(profile),
+        };
+    }
+
+    /// Scaling dimensions and frame-generation context construction cannot be
+    /// mutated while a swapchain is active. Arm one spec-defined OUT_OF_DATE
+    /// signal after the lower present has consumed the application's wait
+    /// semaphores. Repeated polls of the same requested resources do not
+    /// signal again, while a distinct request receives one fresh signal.
+    class LiveProfileResourceRecreation {
+    public:
+        using Clock = std::chrono::steady_clock;
+        static constexpr auto quietPeriod = std::chrono::milliseconds(500);
+
+        void update(const ls::GameConf& current,
+                const ls::GameConf& requested,
+                const uint64_t runtimeStateRevision,
+                const Clock::time_point now = Clock::now()) {
+            const auto currentKey = recreatedProfileResourceKey(current);
+            const auto requestedKey = recreatedProfileResourceKey(requested);
+            if (currentKey == requestedKey) {
+                this->request.reset();
+                return;
+            }
+            if (this->request && this->request->profile == requestedKey)
+                return;
+            this->request = Request{
+                .profile = requestedKey,
+                .runtimeStateRevision = runtimeStateRevision,
+                .signalAfter = now + quietPeriod,
+            };
+        }
+
+        [[nodiscard]] bool pending() const {
+            return this->request.has_value();
+        }
+
+        [[nodiscard]] bool armed() const {
+            return this->request && !this->request->signaled;
+        }
+
+        [[nodiscard]] std::optional<uint64_t> signalAfterSuccessfulPresent(
+                const Clock::time_point now = Clock::now()) {
+            if (!this->request || this->request->signaled ||
+                    now < this->request->signalAfter)
+                return std::nullopt;
+            this->request->signaled = true;
+            return this->request->runtimeStateRevision;
+        }
+
+    private:
+        struct Request {
+            RecreatedProfileResourceKey profile;
+            uint64_t runtimeStateRevision{0};
+            Clock::time_point signalAfter{};
+            bool signaled{false};
+        };
+        std::optional<Request> request;
+    };
+
+    /// Spatial resources can always be retried during application swapchain
+    /// creation. Flow Scale and Lighter FG Model require the process to have
+    /// retained its frame-generation device interop and private context.
+    [[nodiscard]] inline bool liveProfileResourceRecreationAvailable(
+            const ProfileUpdateDecision& decision,
+            const bool frameGenerationResourcesAvailable) {
+        if (decision.processRestartRequired)
+            return false;
+        return decision.spatialScalingChanged ||
+            ((decision.frameGenerationBackendChanged ||
+              decision.generatedFrameCapacityExceeded) &&
+             frameGenerationResourcesAvailable);
+    }
 
     /// Auto-cap aligns the common healthy path with an exact 2x cadence.
     /// Adaptive can still raise its multiplier when the game falls below this
@@ -141,8 +329,9 @@ namespace mako::layer {
     }
 
     /// Reserve one private output set that can serve both Fixed and Adaptive.
-    /// Ultra Performance deliberately keeps only the active policy because
-    /// its profile is frozen for the lifetime of the game process.
+    /// Ultra Performance deliberately keeps only the active policy. A live
+    /// mode or multiplier change that needs a different capacity uses the
+    /// game-owned recreation boundary before the new policy is selected.
     [[nodiscard]] inline size_t generatedFrameCapacityForProfile(
             const ls::GameConf& profile) {
         if (profile.ultra_performance) {
@@ -152,17 +341,6 @@ namespace mako::layer {
             return activeMultiplier - 1;
         }
         return std::max(profile.multiplier, profile.adaptive_max_multiplier) - 1;
-    }
-
-    /// Live updates need only the capacity selected by the active policy.
-    /// The inactive mode remains reserved at initial creation, but a dormant
-    /// larger setting must not block a live switch to a cheaper policy.
-    [[nodiscard]] inline size_t generatedFrameCapacityForActivePolicy(
-            const ls::GameConf& profile) {
-        const size_t activeMultiplier = profile.adaptive
-            ? profile.adaptive_max_multiplier
-            : profile.multiplier;
-        return activeMultiplier - 1;
     }
 
     [[nodiscard]] inline size_t fixedGeneratedFrameCount(
@@ -204,13 +382,20 @@ namespace mako::layer {
                 current.adaptive_stable_cadence !=
                     next.adaptive_stable_cadence
             ));
+        const bool spatialScalingChanged =
+            current.scaling_enabled != next.scaling_enabled ||
+            current.scaling_method != next.scaling_method ||
+            current.scaling_factor != next.scaling_factor ||
+            current.scaling_sharpness != next.scaling_sharpness;
+        const bool frameGenerationBackendChanged =
+            ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||
+            ls::effectivePerformanceMode(current) !=
+                ls::effectivePerformanceMode(next);
 
         const bool backendConstructionChanged =
             current.gpu != next.gpu ||
             current.ultra_performance != next.ultra_performance ||
-            ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||
-            ls::effectivePerformanceMode(current) !=
-                ls::effectivePerformanceMode(next);
+            frameGenerationBackendChanged;
         const bool presentationShapeChanged = current.pacing != next.pacing;
         const bool generatedCapacityExceeded =
             generatedFrameCapacityForActivePolicy(next) >
@@ -218,11 +403,18 @@ namespace mako::layer {
         const bool resourcesNeeded = !current.frame_generation_enabled &&
             next.frame_generation_enabled &&
             !frameGenerationResourcesAvailable;
+        const bool processRestartRequired =
+            current.gpu != next.gpu ||
+            current.ultra_performance != next.ultra_performance ||
+            presentationShapeChanged || resourcesNeeded;
 
         if (backendConstructionChanged || presentationShapeChanged ||
+                spatialScalingChanged ||
                 generatedCapacityExceeded || resourcesNeeded) {
             return {
-                .action = ProfileUpdateAction::DeferUntilSwapchainRecreation,
+                .action = processRestartRequired
+                    ? ProfileUpdateAction::DeferUntilProcessRestart
+                    : ProfileUpdateAction::DeferUntilSwapchainRecreation,
                 .frameGenerationChanged = frameGenerationChanged,
                 .refreshRateThresholdChanged = refreshRateThresholdChanged,
                 .generationPolicyChanged = generationPolicyChanged,
@@ -231,6 +423,12 @@ namespace mako::layer {
                 .baseFpsCapChanged = baseFpsCapChanged,
                 .dynamicCadenceProbeIntervalChanged =
                     dynamicCadenceProbeIntervalChanged,
+                .spatialScalingChanged = spatialScalingChanged,
+                .frameGenerationBackendChanged =
+                    frameGenerationBackendChanged,
+                .generatedFrameCapacityExceeded =
+                    generatedCapacityExceeded,
+                .processRestartRequired = processRestartRequired,
             };
         }
 
@@ -247,7 +445,13 @@ namespace mako::layer {
                 .fixedMultiplierChanged = fixedMultiplierChanged,
                 .baseFpsCapChanged = baseFpsCapChanged,
                 .dynamicCadenceProbeIntervalChanged =
-                    dynamicCadenceProbeIntervalChanged,
+                dynamicCadenceProbeIntervalChanged,
+                .spatialScalingChanged = spatialScalingChanged,
+                .frameGenerationBackendChanged =
+                    frameGenerationBackendChanged,
+                .generatedFrameCapacityExceeded =
+                    generatedCapacityExceeded,
+                .processRestartRequired = processRestartRequired,
             };
         }
 

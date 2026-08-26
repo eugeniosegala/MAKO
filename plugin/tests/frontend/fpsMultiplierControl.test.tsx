@@ -129,6 +129,8 @@ describe("Frame Generation Mode controls", () => {
     );
     expect(fixedMultiplierDescription.style.paddingTop).toBe("8px");
     expect(fixedMultiplierDescription.style.marginBottom).toBe("");
+    expect(screen.getByText(/Multiplier changes apply live/)).toBeTruthy();
+    expect(screen.queryByText(/may require a restart/)).toBeNull();
     expect(screen.getByText("−").className).toBe("Mako_DialogButton");
     expect(screen.getByText("+").className).toBe("Mako_DialogButton");
 
@@ -141,6 +143,9 @@ describe("Frame Generation Mode controls", () => {
     );
 
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
+    expect(
+      screen.getByText(/Mode, target, and ceiling changes apply live/),
+    ).toBeTruthy();
     expect(
       screen
         .getByText("Adaptive Frame Generation")

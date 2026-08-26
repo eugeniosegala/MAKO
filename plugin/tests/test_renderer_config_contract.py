@@ -19,6 +19,10 @@ from shared_config import (
     FLOW_SCALE_MIN,
     FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
     FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
+    SCALING_FACTOR_MAX,
+    SCALING_FACTOR_MIN,
+    SCALING_SHARPNESS_MAX,
+    SCALING_SHARPNESS_MIN,
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
     ULTRA_PERFORMANCE_FLOW_SCALE,
@@ -142,6 +146,20 @@ class RendererConfigContractTests(unittest.TestCase):
                 renderer_constant("minimumFlowScale"),
                 renderer_constant("maximumFlowScale"),
             ),
+            (
+                SCALING_FACTOR_MIN,
+                SCALING_FACTOR_MAX,
+                CONFIG_SCHEMA_DEF["scaling_factor"]["default"],
+                renderer_constant("minimumScalingFactor"),
+                renderer_constant("maximumScalingFactor"),
+            ),
+            (
+                SCALING_SHARPNESS_MIN,
+                SCALING_SHARPNESS_MAX,
+                CONFIG_SCHEMA_DEF["scaling_sharpness"]["default"],
+                renderer_constant("minimumScalingSharpness"),
+                renderer_constant("maximumScalingSharpness"),
+            ),
         )
         for (
             decky_minimum,
@@ -168,6 +186,19 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertEqual(
             ULTRA_PERFORMANCE_FLOW_SCALE,
             renderer_constant("ultraPerformanceFlowScale"),
+        )
+        self.assertEqual(
+            CONFIG_SCHEMA_DEF["scaling_factor"]["default"],
+            renderer_constant("scalingFactor"),
+        )
+        self.assertEqual(
+            CONFIG_SCHEMA_DEF["scaling_sharpness"]["default"],
+            renderer_constant("scalingSharpness"),
+        )
+        self.assertFalse(CONFIG_SCHEMA_DEF["scaling_enabled"]["default"])
+        self.assertIn(
+            "static constexpr bool scalingEnabled = false;",
+            source,
         )
 
         preset_match = re.search(
@@ -208,7 +239,7 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertIn(f'if (str == "{pacing}")', source)
         self.assertIn(f'profile.insert("pacing", "{pacing}")', source)
 
-    def test_renderer_ui_exposes_live_compatibility_controls(self):
+    def test_renderer_ui_exposes_profile_controls(self):
         ui_source = (
             REPOSITORY_ROOT / "engine/mako-ui/rsc/UI.qml"
         ).read_text(encoding="utf-8")
@@ -217,6 +248,9 @@ class RendererConfigContractTests(unittest.TestCase):
         ).read_text(encoding="utf-8")
 
         for field, property_type in (
+            ("scaling_enabled", "bool"),
+            ("scaling_factor", "float"),
+            ("scaling_sharpness", "float"),
             ("frame_generation_refresh_threshold", "uint"),
             ("dynamic_cadence_recovery", "bool"),
             ("dynamic_cadence_probe_interval_seconds", "double"),

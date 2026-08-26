@@ -8,9 +8,11 @@
 > [!NOTE]
 > **[LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
-MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Lossless Scaling frame generation to Steam Deck, Steam Machine, SteamOS, and Linux more broadly, with scaling coming soon.
+MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Lossless Scaling's LS1 spatial scaling and LSFG frame generation plus MAKO's built-in open spatial scaler to Steam Deck, Steam Machine, SteamOS, and Linux more broadly. Scaling can run independently or reconstruct each real frame once before Fixed or Adaptive Frame Generation.
 
-The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. It requires a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer does not bundle or replace that proprietary library.
+The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. LS1 scaling and LSFG frame generation require a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer does not bundle, copy, persist, replace, or modify that proprietary library. It translates the selected LS1 model shaders in memory through open-source vkd3d-shader; the MAKO scaling method remains fully open and dependency-free.
+
+A process that starts with scaling enabled and Frame Generation disabled does not negotiate the external-memory, external-semaphore, or timeline-semaphore LSFG interop, construct the private backend, or allocate generated-output resources. MAKO scaling also avoids `Lossless.dll`; LS1 reads its spatial resources without creating LSFG interop. Turning Frame Generation on afterward requires a complete game/process restart; natural swapchain recreation cannot add device-creation features. A process that started with Frame Generation enabled can still turn it off and back on live because its resources already exist.
 
 ## Downloads
 
@@ -32,7 +34,7 @@ See the [main MAKO installation guide](../README.md#install-and-use) for the com
 
 ### Direct Linux installation
 
-1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` but does not bundle, copy, or modify it.
+1. To use LS1 scaling or frame generation, purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` for LS1 and LSFG but does not bundle, copy, persist, or modify it. The open MAKO scaling method remains available without the DLL.
 2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0) and download `MAKO-Renderer-v<version>-linux.tar.xz` under **Assets**.
 3. Optionally save the archive's file list so you know exactly what was installed, then extract it into your user-local prefix:
 
@@ -57,7 +59,7 @@ After extracting the host archive, open the MAKO Renderer configuration UI using
 
 Do not run the UI with `sudo`. It reads and writes your per-user configuration under `~/.config/mako-render/`. If the command reports a missing Qt component, install the graphical-interface requirements below and try again.
 
-MAKO normally finds `Lossless.dll` in common Steam locations. Choose it explicitly in the UI or configuration file if your Steam library is elsewhere.
+MAKO normally finds `Lossless.dll` in common Steam locations. Choose it explicitly in the UI or configuration file if your Steam library is elsewhere and you use LS1 scaling or frame generation; the path is not required by the open MAKO spatial method.
 
 #### Qt requirements for the graphical interface
 
@@ -114,8 +116,8 @@ On SteamOS, switch to Desktop Mode and open **MAKO Renderer Configuration** from
 ~/.local/bin/mako-ui
 ```
 
-1. Choose the licensed Lossless Scaling DLL if MAKO did not find it automatically, then create a profile for the game.
-2. Under **Profile Matching**, add the game's Linux binary, Windows executable, or process name to **Matched Processes**. The selected profile's current matches remain visible in the main window. Start with fixed **2x** frame generation and adjust one setting at a time.
+1. If you will use frame generation, choose the licensed Lossless Scaling DLL when MAKO did not find it automatically. Then create a profile for the game.
+2. Under **Profile Matching**, add the game's Linux binary, Windows executable, or process name to **Matched Processes**. The selected profile's current matches remain visible in the main window. Start with fixed **2x** frame generation, or enable Scaling and select the intended lower rendering resolution in the game. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling, Flow Scale, and Lighter FG Model use one game-owned swapchain recreation after the edits settle when needed, so a brief flicker is expected. Restart only if the title ignores that compatibility signal, or before enabling Frame Generation when the current process started scaling-only.
 3. Launch only the selected game through MAKO. For a Steam game, use this launch option:
 
     ```text
@@ -136,7 +138,7 @@ Set an advanced launch variable before the helper and it is passed to the game u
 MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
 ```
 
-The configuration UI writes MAKO's normal configuration and does not launch games, so open `mako-ui` directly. Likewise, run `mako-cli` directly for validation, benchmarks, and quality tests; use `mako-launch` only for a Vulkan application that should load the frame-generation layer.
+The configuration UI writes MAKO's normal configuration and does not launch games, so open `mako-ui` directly. Likewise, run `mako-cli` directly for validation, benchmarks, and quality tests; use `mako-launch` only for a Vulkan application that should load the MAKO Renderer layer.
 
 The UI also exposes global standalone launch compatibility for Zink and ALSA. These off-by-default switches are stored separately in `~/.config/mako-render/launcher.conf`, apply only to the next game process started through `mako-launch`, and require a game restart. They do not alter the selected Renderer profile. Steam Deck mode and the guarded Gamescope WSI, MangoHud, and vkBasalt layer-chain controls remain MAKO Decky-only because they need per-game identity or validated manifest staging and ordering.
 
@@ -154,7 +156,7 @@ multiplier = 2
 frame_generation_enabled = true
 ```
 
-See [Configuration](docs/CONFIGURATION.md) for every setting, profile matching, Adaptive Frame Generation, and environment-variable overrides.
+See [Configuration](docs/CONFIGURATION.md) for every setting, profile matching, scaling, Adaptive Frame Generation, and environment-variable overrides. The [spatial scaling architecture](docs/SCALING.md) defines pipeline order, supported surfaces and formats, efficiency, live recreation semantics, and the required validation matrix.
 
 ### Validation
 
@@ -192,7 +194,9 @@ The default duration is 10 seconds. Run `~/.local/bin/mako-cli` without a subcom
 > [!TIP]
 > Try the game's V-Sync setting both on and off. It can make frame delivery feel steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep whichever setting feels smoother and more responsive for that game.
 
-Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart the game after major display, DLL, GPU, Flow Scale, Performance Mode, or model changes.
+Every game, renderer, and display setup behaves differently. Compare scaling-only, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling, Flow Scale, and Lighter FG Model use one game-owned swapchain recreation when needed. Restart if the title ignores that signal, after major display, DLL, GPU, or process/device-policy changes, or before enabling Frame Generation in a process that started scaling-only.
+
+Scaling currently accepts only an opaque swapchain with one image-array layer, no protected flag, and no shared-demand or shared-continuous present mode. It must use ordinary queue 0 from an application-created family with graphics and compute support that can present to the surface. A multi-swapchain present containing an active scaled swapchain is rejected before MAKO consumes application wait semaphores. Under Gamescope, HDR exposure must be disabled for every scaled surface. A variable Wayland compositor that echoes the enlarged presentation extent causes scaling to fail closed for that recreation rather than compound the factor, so fixed-extent Gamescope/X11 is the stable fullscreen path. These are fail-closed initial boundaries, not compatibility claims for unusual WSI paths; see [spatial scaling architecture](docs/SCALING.md).
 
 ## Identity
 
@@ -217,7 +221,7 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
-On a detected SteamOS or Steam Machine host, CTest makes the FP32 and FP16 image-quality regression mandatory by default; a missing AMD GPU or `Lossless.dll` fails the run. Macs and other unsupported hosts report it as skipped. Configure hardware CI with `-DMAKO_GPU_QUALITY_TEST=REQUIRED` to record the requirement explicitly.
+CTest remains portable and validates the deterministic image-quality scene and scoring policy without a licensed DLL. Real AMD FP32/FP16 execution is owned by the private sibling MAKO-Gym checkout and is mandatory in the SteamOS release gate; use `./scripts/run-mako-gym.sh --suite quality --cli <built-mako-cli>` from the MAKO root for the same local bridge.
 
 Local Linux archives and Flatpak runtime extensions can be built with:
 
@@ -230,7 +234,8 @@ Artifacts are written under `engine/out/`. The Decky package in the sibling `plu
 
 ## More documentation
 
-- [Configuration](docs/CONFIGURATION.md): profiles, frame-generation controls, Adaptive mode, and environment variables.
+- [Configuration](docs/CONFIGURATION.md): profiles, scaling and frame-generation controls, Adaptive mode, and environment variables.
+- [Spatial scaling architecture](docs/SCALING.md): pipeline order, fixed and variable surfaces, formats, resource cost, live recreation semantics, and validation.
 - [Adaptive validation](docs/ADAPTIVE-VALIDATION.md): deterministic scheduler stages, generated-frame-plan ownership, characterization tests, benchmarking, and the real-game matrix.
 - [WSI isolation](docs/WSI-ISOLATION.md): private Vulkan discovery, Gamescope presentation ownership, tradeoffs, diagnostics, and future HDR constraints.
 - [Optional graphics integrations](docs/LAYER-CHAINING.md): MAKO Decky's per-profile MangoHud and experimental vkBasalt controls, manual layer chaining, capture and DLL-injector test lanes, verification, evidence, and limits.

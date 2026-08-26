@@ -383,6 +383,71 @@ ApplicationWindow {
                 }
 
                 Group {
+                    name: t.scalingSettings
+                    enabled: backend.available
+
+                    GroupEntry {
+                        title: t.scalingEnabled
+                        description: t.scalingEnabledDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.scaling_enabled
+                            onToggled: backend.scaling_enabled = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.scalingFactor
+                        description: t.scalingFactorDesc
+                        visible: backend.scaling_enabled
+                        enabled: backend.scaling_enabled
+
+                        FlowSlider {
+                            Layout.fillWidth: true
+
+                            from: backend.minimum_scaling_factor
+                            to: backend.maximum_scaling_factor
+
+                            value: backend.scaling_factor
+                            onUpdate: value => backend.scaling_factor = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.scalingMethod
+                        description: t.scalingMethodDesc
+                        visible: backend.scaling_enabled
+                        enabled: backend.scaling_enabled
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
+                            currentIndex: backend.scaling_method === "ls1" ? 1 : backend.scaling_method === "ls1-performance" ? 2 : 0
+                            onActivated: index => backend.scaling_method = index === 1 ? "ls1" : index === 2 ? "ls1-performance" : "mako"
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.scalingSharpness
+                        description: t.scalingSharpnessDesc
+                        visible: backend.scaling_enabled
+                        enabled: backend.scaling_enabled
+
+                        FlowSlider {
+                            Layout.fillWidth: true
+
+                            from: backend.minimum_scaling_sharpness
+                            to: backend.maximum_scaling_sharpness
+
+                            value: backend.scaling_sharpness
+                            onUpdate: value => backend.scaling_sharpness = value
+                        }
+                    }
+                }
+
+                Group {
                     name: t.performanceSettings
                     enabled: backend.available
 

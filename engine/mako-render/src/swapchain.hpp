@@ -15,10 +15,12 @@
 #include "color_pipeline.hpp"
 #include "profile_update.hpp"
 #include "presentation_policy.hpp"
+#include "spatial_scaler.hpp"
 
 #include <array>
 #include <chrono>
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <span>
 #include <string>
@@ -35,12 +37,16 @@ namespace mako::layer {
         std::vector<VkImage> images;
         VkFormat format;
         VkColorSpaceKHR colorSpace;
+        // Extent the application requested after MAKO virtualized fixed WSI
+        // capabilities. The actual swapchain images retain `extent`.
+        VkExtent2D applicationExtent;
         VkExtent2D extent;
         VkPresentModeKHR presentMode;
         // Persist the exact create-time transport decision. HDR feedback can
         // change later, but Vulkan present mode/pNext compatibility cannot be
         // reinterpreted without replacing the game-owned swapchain.
         bool privateOrderedTransport{false};
+        bool spatialScalingActive{false};
     };
 
     /// modify the swapchain create info based on the profile pre-swapchain creation
@@ -51,18 +57,22 @@ namespace mako::layer {
         const ls::GameConf& profile, uint32_t maxImages,
         VkSwapchainCreateInfoKHR& createInfo, bool gamescopeHdrActive,
         bool gamescopeDetected,
-        const PresentationEnvironmentPolicy& presentationEnvironment);
+        const PresentationEnvironmentPolicy& presentationEnvironment,
+        bool frameGenerationInteropEnabled,
+        bool spatialScalingActive);
 
     /// swapchain context for a layer instance
     class Swapchain {
     public:
         /// create a new swapchain context
         /// @param vk vulkan instance
-        /// @param backend mako backend instance
+        /// @param backend optional MAKO frame-generation backend; scaling is
+        /// independent and remains available when this is null
         /// @param profile active game profile
         /// @param info swapchain info
-        Swapchain(const vk::Vulkan& vk, backend::Instance& backend,
+        Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             ls::GameConf profile, SwapchainInfo info,
+            std::optional<std::filesystem::path> scalingShaderDll,
             std::optional<bool> gamescopeHdrActive,
             bool gamescopeDetected, bool hdrExposureDisabled,
             std::optional<uint32_t> gamescopeRefreshHz,
@@ -83,13 +93,25 @@ namespace mako::layer {
         [[nodiscard]] uint64_t diagnosticsId() const {
             return this->diagnosticsState.contextId;
         }
+        [[nodiscard]] bool spatialScalingActive() const {
+            return this->spatialScaler.has_value();
+        }
 
         /// Apply configuration that is safe for an already-created context.
-        /// Resource-shape and backend-construction changes remain pending for
-        /// a natural game-owned recreation; this layer never forces one for a
-        /// Decky setting change.
+        /// Scaling and frame-generation model changes arm one
+        /// application-visible out-of-date result after a successful lower
+        /// present so the game can rebuild its owned swapchain. Other
+        /// resource-construction changes remain pending for a natural
+        /// recreation.
         [[nodiscard]] ProfileUpdateAction updateProfile(
             const ls::GameConf& profile, uint64_t runtimeStateRevision);
+
+        /// After the lower WSI has consumed this present's wait semaphores,
+        /// convert one successful result into VK_ERROR_OUT_OF_DATE_KHR for a
+        /// pending live profile-resource change. The application remains the
+        /// owner of destruction and recreation.
+        [[nodiscard]] bool requestLiveProfileResourceRecreationAfterPresent(
+            VkResult lowerPresentResult);
 
         /// Record a confirmed Gamescope application-HDR state change. Existing
         /// contexts retain their safe encoding until the game naturally
@@ -187,12 +209,20 @@ namespace mako::layer {
         std::vector<RenderPass> passes;
         std::vector<std::pair<vk::Semaphore, vk::Semaphore>> postCopySemaphores;
 
-        ls::R<backend::Instance> instance;
+        struct SpatialScalingPass {
+            vk::CommandBuffer commandBuffer;
+            vk::Semaphore readySemaphore;
+        };
+        std::optional<SpatialScaler> spatialScaler;
+        std::vector<SpatialScalingPass> spatialScalingPasses;
+
+        backend::Instance* instance{nullptr};
         ls::owned_ptr<ls::R<backend::Context>> ctx;
         FrameState frameState;
         RecoveryState recoveryState;
         DiagnosticsState diagnosticsState;
         ColorTransitionState colorTransitionState;
+        LiveProfileResourceRecreation liveProfileResourceRecreation;
         std::optional<AdaptiveScheduler> adaptiveScheduler;
         size_t configuredFixedGeneratedFrames{0};
 
@@ -220,6 +250,8 @@ namespace mako::layer {
         void recordPresentCadence(
             std::chrono::steady_clock::time_point presentNow);
         [[nodiscard]] VkResult presentNativeFrame(
+            const PresentInvocation& invocation);
+        [[nodiscard]] VkResult presentSpatiallyScaledFrame(
             const PresentInvocation& invocation);
         [[nodiscard]] VkResult presentOriginalImage(
             const PresentInvocation& invocation, VkSemaphore waitSemaphore,

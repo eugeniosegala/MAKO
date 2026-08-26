@@ -13,19 +13,17 @@ compiler="${CXX:-clang++}"
 jobs="${MAKO_BUILD_JOBS:-}"
 build_64_bit=true
 build_32_bit=false
-quality_regression=true
-gpu_quality_mode="${MAKO_GPU_QUALITY_TEST:-AUTO}"
 
 usage() {
     cat <<'EOF'
 Usage: scripts/build-steamos-dev.sh [options]
 
 Incrementally builds host Vulkan layers needed for native Steam-game testing.
-The default builds the 64-bit layer and CLI, then automatically runs the AMD
-GPU image-quality regression. The test is mandatory on a detected SteamOS or
-Steam Machine host. The build directories are retained between runs; this does not
-build the Qt UI, Flatpak extensions, general test suite, archives, or a Decky
-ZIP. Set CXX to choose a compiler. ccache is used automatically when present.
+The default builds the 64-bit layer and CLI. The build directories are retained
+between runs; this does not build the Qt UI, Flatpak extensions, general test
+suite, archives, or a Decky ZIP. Real-hardware licensed-model validation is
+owned by the sibling MAKO-Gym repository. Set CXX to choose a compiler. ccache
+is used automatically when present.
 
 Options:
   --with-32-bit          Build both the 64-bit and 32-bit host layers.
@@ -33,19 +31,11 @@ Options:
   --build-dir PATH       64-bit persistent CMake build directory.
   --build-32-dir PATH    32-bit persistent CMake build directory.
   --jobs COUNT           Parallel compile jobs.
-  --skip-quality-regression
-                        Skip the automatic AMD GPU image-quality regression.
-
 Environment:
   MAKO_BUILD_DIR     Persistent CMake build directory (default: build/steamos-dev)
   MAKO_BUILD_32_DIR  Persistent 32-bit build directory (default: build/steamos-dev-32)
   MAKO_BUILD_JOBS    Parallel compile jobs (default: available CPUs)
   CXX                C++ compiler (default: clang++)
-  MAKO_QUALITY_DLL   Lossless.dll path when it is outside standard Steam paths
-  MAKO_QUALITY_GPU   Exact AMD Vulkan device name on a multi-GPU system
-  MAKO_GPU_QUALITY_TEST
-                     AUTO (default; mandatory on Steam Machine), REQUIRED, or OFF
-  MAKO_STEAM_MACHINE  Set to 1 for mandatory AUTO policy on an unrecognized host OS
 EOF
 }
 
@@ -84,9 +74,6 @@ while (($#)); do
         --32-bit-only)
             build_64_bit=false
             build_32_bit=true
-            ;;
-        --skip-quality-regression)
-            quality_regression=false
             ;;
         -h|--help)
             usage
@@ -152,7 +139,7 @@ build_layer() {
     local build_cli=OFF
     local build_targets=(mako-render)
 
-    if [[ "$architecture" == "64-bit" && "$quality_regression" == true ]]; then
+    if [[ "$architecture" == "64-bit" ]]; then
         build_cli=ON
         build_targets+=(mako-cli)
     fi
@@ -180,12 +167,6 @@ build_layer() {
     fi
     echo "Incremental $architecture layer build ready: $layer_path"
 
-    if [[ "$architecture" == "64-bit" && "$quality_regression" == true ]]; then
-        bash "$repo_root/scripts/run-gpu-quality-regression.sh" \
-            "$target_build_dir/mako-cli/mako-cli" \
-            "$target_build_dir/quality-regression" \
-            "$gpu_quality_mode" 0
-    fi
 }
 
 if [[ "$build_64_bit" == true ]]; then

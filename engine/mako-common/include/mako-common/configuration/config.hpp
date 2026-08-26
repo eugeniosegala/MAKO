@@ -9,6 +9,7 @@
 #include <filesystem>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace ls {
@@ -27,10 +28,48 @@ namespace ls {
         None
     };
 
+    /// Spatial reconstruction implementation selected for a profile.
+    enum class ScalingMethod : uint8_t {
+        /// MAKO's open, single-pass edge-adaptive scaler.
+        Mako,
+        /// Lossless Scaling's multi-pass LS1 neural model.
+        Ls1,
+        /// Lossless Scaling's lower-cost LS1 neural model.
+        Ls1Performance,
+    };
+
+    [[nodiscard]] constexpr const char* scalingMethodName(
+            const ScalingMethod method) noexcept {
+        switch (method) {
+            case ScalingMethod::Mako:
+                return "mako";
+            case ScalingMethod::Ls1:
+                return "ls1";
+            case ScalingMethod::Ls1Performance:
+                return "ls1-performance";
+        }
+        return "mako";
+    }
+
+    [[nodiscard]] constexpr std::optional<ScalingMethod>
+    scalingMethodFromName(const std::string_view value) noexcept {
+        if (value == "mako")
+            return ScalingMethod::Mako;
+        if (value == "ls1")
+            return ScalingMethod::Ls1;
+        if (value == "ls1-performance")
+            return ScalingMethod::Ls1Performance;
+        return std::nullopt;
+    }
+
     /// Renderer defaults used when a game profile omits fields
     struct GameConfDefaults {
         static constexpr size_t multiplier = 2;
         static constexpr bool frameGenerationEnabled = true;
+        static constexpr bool scalingEnabled = false;
+        static constexpr ScalingMethod scalingMethod = ScalingMethod::Mako;
+        static constexpr float scalingFactor = 1.5F;
+        static constexpr float scalingSharpness = 0.5F;
         static constexpr uint32_t frameGenerationRefreshThreshold = 0;
         static constexpr uint32_t baseFpsCap = 0;
         static constexpr bool adaptive = false;
@@ -50,6 +89,10 @@ namespace ls {
     /// ranges accepted by the Renderer configuration parser
     struct GameConfLimits {
         static constexpr size_t minimumMultiplier = 2;
+        static constexpr float minimumScalingFactor = 1.0F;
+        static constexpr float maximumScalingFactor = 2.0F;
+        static constexpr float minimumScalingSharpness = 0.0F;
+        static constexpr float maximumScalingSharpness = 1.0F;
         static constexpr uint32_t minimumBaseFpsCap = 0;
         static constexpr uint32_t maximumBaseFpsCap = 1000;
         static constexpr uint32_t minimumFrameGenerationRefreshThreshold = 0;
@@ -81,6 +124,14 @@ namespace ls {
         size_t multiplier{GameConfDefaults::multiplier};
         /// allow frame synthesis to be toggled live without changing its mode
         bool frame_generation_enabled{GameConfDefaults::frameGenerationEnabled};
+        /// upscale presented frames independently from frame synthesis
+        bool scaling_enabled{GameConfDefaults::scalingEnabled};
+        /// spatial reconstruction implementation
+        ScalingMethod scaling_method{GameConfDefaults::scalingMethod};
+        /// ratio between the source and output dimensions when scaling
+        float scaling_factor{GameConfDefaults::scalingFactor};
+        /// normalized scaler sharpening strength
+        float scaling_sharpness{GameConfDefaults::scalingSharpness};
         /// pause synthesis at or below a confirmed refresh rate; zero disables it
         uint32_t frame_generation_refresh_threshold{
             GameConfDefaults::frameGenerationRefreshThreshold

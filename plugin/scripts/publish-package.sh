@@ -255,8 +255,9 @@ printf '%s\n' \
   '> [!TIP]' \
   '> **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.' \
   '' \
-  'Every game, renderer, and display setup behaves differently. Compare Fixed and Adaptive Frame Generation one setting at a time. For most games, fullscreen is the best starting point for performance and frame pacing. Keep the configuration that feels best for that game.' \
+  'Every game, renderer, and display setup behaves differently. Compare scaling-only, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time. For scaling, choose the intended lower game resolution. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling controls, Flow Scale, and Lighter FG Model use one game-owned swapchain recreation when needed. Restart if a title ignores that signal, and before enabling Frame Generation in a process that started scaling-only. For most games, fullscreen is the best starting point for performance and frame pacing.' \
   '' \
+  '- **Scaling quality and cost:** Higher factors render fewer source pixels but require more reconstruction. Compare text, UI edges, motion, GPU time, and frame pacing against native resolution, then tune sharpening conservatively.' \
   '- **Adaptive target behaviour:** Adaptive varies the generated-frame count toward an average target. It cannot reduce a native frame rate already above that target, and the result still depends on the selected multiplier plus available GPU and compositor capacity.' \
   '- **Quality and latency tuning:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness, so compare the available choices per game.' \
   '' \
@@ -302,12 +303,12 @@ printf '%s\n' \
   '' \
   '## Known limitation' \
   '' \
-  '- **HDR is unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
+  '- **HDR scaling and frame generation are unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
   '' \
   '## Before you play' \
   '' \
-  '- Confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery.' \
-  '- Do not combine `mako-run` with another Lossless Scaling Vulkan wrapper for the same game.' \
+  '- If you use LS1 scaling or Frame Generation, confirm that MAKO can discover `Lossless.dll` or select its path explicitly. The open MAKO scaling method does not need it.' \
+  '- Do not combine `mako-run` with another frame-generation or swapchain-scaling Vulkan wrapper for the same game.' \
   '' \
   "## Bundled MAKO Renderer \`$engine_version\`" \
   '' \

@@ -1,5 +1,6 @@
 set(BACKEND_SOURCES
     "src/extraction/dll_reader.cpp"
+    "src/extraction/ls1_shader_set.cpp"
     "src/extraction/shader_registry.cpp"
     "src/helpers/limits.cpp"
     "src/helpers/managed_shader.cpp"
@@ -23,7 +24,8 @@ target_include_directories(mako-backend
     PUBLIC include)
 
 target_link_libraries(mako-backend
-    PUBLIC mako-common)
+    PUBLIC mako-common
+    PRIVATE ${CMAKE_DL_LIBS})
 
 set_target_properties(mako-backend PROPERTIES
     CXX_VISIBILITY_PRESET hidden)
@@ -35,6 +37,7 @@ if(BUILD_TESTING)
         PRIVATE src)
     add_test(NAME backend-hot-path
         COMMAND mako-backend-hot-path-tests)
+
 endif()
 
 if(MAKO_INSTALL_DEVELOP)

@@ -13,6 +13,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <utility>
 
 #include <unistd.h>
 
@@ -44,6 +45,10 @@ namespace {
             left.gpu == right.gpu &&
             left.multiplier == right.multiplier &&
             left.frame_generation_enabled == right.frame_generation_enabled &&
+            left.scaling_enabled == right.scaling_enabled &&
+            left.scaling_method == right.scaling_method &&
+            left.scaling_factor == right.scaling_factor &&
+            left.scaling_sharpness == right.scaling_sharpness &&
             left.frame_generation_refresh_threshold ==
                 right.frame_generation_refresh_threshold &&
             left.base_fps_cap == right.base_fps_cap &&
@@ -72,6 +77,10 @@ name = "test"
 active_in = "game"
 removed_profile_option = true
 adaptive = false
+scaling_enabled = true
+scaling_method = "ls1"
+scaling_factor = 1.75
+scaling_sharpness = 0.6
 frame_generation_refresh_threshold = 60
 base_fps_cap = 60
 adaptive_auto_base_fps_cap = true
@@ -90,6 +99,13 @@ int main() {
     expect(defaults.multiplier == ls::GameConfDefaults::multiplier &&
             defaults.frame_generation_enabled ==
                 ls::GameConfDefaults::frameGenerationEnabled &&
+            defaults.scaling_enabled ==
+                ls::GameConfDefaults::scalingEnabled &&
+            defaults.scaling_method ==
+                ls::GameConfDefaults::scalingMethod &&
+            defaults.scaling_factor == ls::GameConfDefaults::scalingFactor &&
+            defaults.scaling_sharpness ==
+                ls::GameConfDefaults::scalingSharpness &&
             defaults.frame_generation_refresh_threshold ==
                 ls::GameConfDefaults::frameGenerationRefreshThreshold &&
             defaults.base_fps_cap == ls::GameConfDefaults::baseFpsCap &&
@@ -178,6 +194,12 @@ int main() {
         "The accepted configuration must expose the cadence probe interval");
     expect(config.get().profiles().front().frame_generation_refresh_threshold == 60,
         "The accepted configuration must expose the refresh-rate threshold");
+    expect(config.get().profiles().front().scaling_enabled &&
+            config.get().profiles().front().scaling_method ==
+                ls::ScalingMethod::Ls1 &&
+            config.get().profiles().front().scaling_factor == 1.75F &&
+            config.get().profiles().front().scaling_sharpness == 0.6F,
+        "The accepted configuration must expose the scaling policy");
     expect(config.get().profiles().front().ultra_performance &&
             config.get().profiles().front().flow_scale == 0.95F &&
             !config.get().profiles().front().performance_mode &&
@@ -197,6 +219,11 @@ int main() {
     expect(canonicalConfiguration.find("removed_global_option") == std::string::npos &&
             canonicalConfiguration.find("removed_profile_option") == std::string::npos,
         "A canonical Renderer write must remove unknown legacy options");
+    const ls::ConfigFile canonicalConfig(canonicalPath);
+    expect(std::ranges::equal(
+            config.get().profiles(), canonicalConfig.profiles(), sameGameConf
+        ),
+        "A canonical Renderer write must preserve scaling configuration");
 
     const auto fixedMultiplierPath = directory / "fixed-multiplier.toml";
     writeText(fixedMultiplierPath, R"(version = 2
@@ -224,6 +251,46 @@ multiplier = 5
         expect(invalidIntervalRejected,
             "Cadence probe intervals outside 0.1-3 seconds must be rejected");
     }
+
+    for (const auto& [field, value] : {
+            std::pair{"scaling_factor", "0.99"},
+            std::pair{"scaling_factor", "2.01"},
+            std::pair{"scaling_factor", "nan"},
+            std::pair{"scaling_sharpness", "-0.01"},
+            std::pair{"scaling_sharpness", "1.01"},
+            std::pair{"scaling_sharpness", "inf"},
+        }) {
+        const auto invalidScalingPath = directory /
+            ("invalid-" + std::string(field) + '-' + value + ".toml");
+        writeText(invalidScalingPath,
+            "version = 2\n[[profile]]\n" + std::string(field) + " = " +
+            value + "\n");
+        bool invalidScalingRejected = false;
+        try {
+            static_cast<void>(ls::ConfigFile(invalidScalingPath));
+        } catch (const std::exception&) {
+            invalidScalingRejected = true;
+        }
+        expect(invalidScalingRejected,
+            "Scaling values outside their public ranges must be rejected");
+    }
+
+    const auto scalingOnlyPath = directory / "scaling-only.toml";
+    writeText(scalingOnlyPath, R"(version = 2
+[[profile]]
+frame_generation_enabled = false
+scaling_enabled = true
+scaling_factor = 1.5
+scaling_sharpness = 0.5
+)");
+    const ls::ConfigFile scalingOnlyConfiguration(scalingOnlyPath);
+    const auto& scalingOnlyProfile =
+        scalingOnlyConfiguration.profiles().front();
+    expect(!scalingOnlyProfile.frame_generation_enabled &&
+            scalingOnlyProfile.scaling_enabled &&
+            scalingOnlyProfile.scaling_factor == 1.5F &&
+            scalingOnlyProfile.scaling_sharpness == 0.5F,
+        "Scaling configuration must remain independent of frame generation");
 
     ls::ConfigFile detectionConfig;
     detectionConfig.profiles() = {
@@ -274,6 +341,9 @@ multiplier = 5
     setenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS", "0.5", 1);
     setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
     setenv("MAKO_ULTRA_PERFORMANCE", "1", 1);
+    setenv("MAKO_SCALING_ENABLED", "1", 1);
+    setenv("MAKO_SCALING_FACTOR", "2", 1);
+    setenv("MAKO_SCALING_SHARPNESS", "0.75", 1);
     const ls::WatchedConfig environmentConfig;
     expect(environmentConfig.get().profiles().front().dynamic_cadence_recovery &&
             environmentConfig.get().profiles().front()
@@ -282,12 +352,18 @@ multiplier = 5
                 130 &&
             environmentConfig.get().profiles().front().base_fps_cap == 0 &&
             !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap &&
-            environmentConfig.get().profiles().front().ultra_performance,
-        "Environment dynamic cadence recovery must disable both base FPS caps");
+            environmentConfig.get().profiles().front().ultra_performance &&
+            environmentConfig.get().profiles().front().scaling_enabled &&
+            environmentConfig.get().profiles().front().scaling_factor == 2.0F &&
+            environmentConfig.get().profiles().front().scaling_sharpness == 0.75F,
+        "Environment configuration must expose scaling and cadence policy");
     unsetenv("MAKO_DYNAMIC_CADENCE_RECOVERY");
     unsetenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS");
     unsetenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
     unsetenv("MAKO_ULTRA_PERFORMANCE");
+    unsetenv("MAKO_SCALING_ENABLED");
+    unsetenv("MAKO_SCALING_FACTOR");
+    unsetenv("MAKO_SCALING_SHARPNESS");
     unsetenv("MAKO_ADAPTIVE");
     unsetenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");
     unsetenv("MAKO_BASE_FPS_CAP");

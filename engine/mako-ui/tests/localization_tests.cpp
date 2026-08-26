@@ -99,6 +99,75 @@ void test_catalog_validation(const QByteArray& catalog, const QString& settings_
     require(rejected, "incomplete translation catalog was accepted");
 }
 
+void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_file) {
+    mako::ui::Localization localization(catalog, settings_file, QLocale("en_US"));
+    const QStringList language_codes{
+        QStringLiteral("en"),
+        QStringLiteral("pt-BR"),
+        QStringLiteral("pt-PT"),
+        QStringLiteral("es"),
+        QStringLiteral("ko"),
+        QStringLiteral("ja"),
+        QStringLiteral("uk"),
+        QStringLiteral("zh"),
+    };
+    const QStringList scaling_keys{
+        QStringLiteral("scalingSettings"),
+        QStringLiteral("scalingEnabled"),
+        QStringLiteral("scalingEnabledDesc"),
+        QStringLiteral("scalingMethod"),
+        QStringLiteral("scalingMethodDesc"),
+        QStringLiteral("scalingMethodMako"),
+        QStringLiteral("scalingMethodLs1"),
+        QStringLiteral("scalingMethodLs1Performance"),
+        QStringLiteral("scalingFactor"),
+        QStringLiteral("scalingFactorDesc"),
+        QStringLiteral("scalingSharpness"),
+        QStringLiteral("scalingSharpnessDesc"),
+    };
+
+    for (const QString& language_code : language_codes) {
+        localization.set_language(language_code);
+        const QVariantMap strings = localization.strings();
+        for (const QString& key : scaling_keys) {
+            if (!strings.contains(key) || strings.value(key).toString().isEmpty()) {
+                throw std::runtime_error(
+                    QStringLiteral("scaling translation %1 is missing from %2")
+                        .arg(key, language_code)
+                        .toStdString()
+                );
+            }
+        }
+    }
+
+    localization.set_language(QStringLiteral("en"));
+    const QVariantMap english = localization.strings();
+    require(english.value(QStringLiteral("scalingEnabled")).toString() ==
+            QStringLiteral("Spatial Scaling (Live)"),
+        "English scaling enablement did not advertise its live boundary");
+    require(english.value(QStringLiteral("scalingMethod")).toString() ==
+            QStringLiteral("Scaling Method (Live)"),
+        "English scaling method did not advertise its live boundary");
+    require(english.value(QStringLiteral("scalingEnabledDesc")).toString()
+            .contains(QStringLiteral("game-owned swapchain recreation")),
+        "English scaling help omitted the game-owned recreation contract");
+    require(english.value(QStringLiteral("flowScaleDesc")).toString()
+            .contains(QStringLiteral("game-owned swapchain recreation")),
+        "English Flow Scale help omitted its live recreation contract");
+    require(english.value(QStringLiteral("performanceModeDesc")).toString()
+            .contains(QStringLiteral("game-owned swapchain recreation")),
+        "English lighter-model help omitted its live recreation contract");
+    require(english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
+            .contains(QStringLiteral("changes apply live")),
+        "English Adaptive ceiling help omitted its live capacity contract");
+    require(english.value(QStringLiteral("multiplierDesc")).toString()
+            .contains(QStringLiteral("changes apply live")),
+        "English Fixed multiplier help omitted its live capacity contract");
+    require(english.value(QStringLiteral("ultraPerformanceDesc")).toString()
+            .contains(QStringLiteral("compatible controls remain live")),
+        "English Ultra Performance help overstates its restart boundary");
+}
+
 } // namespace
 
 int main() {
@@ -111,6 +180,7 @@ int main() {
         test_persistence(catalog, temporary_directory.path() + "/persistent.ini");
         test_invalid_persisted_language(catalog, temporary_directory.path() + "/invalid.ini");
         test_catalog_validation(catalog, temporary_directory.path() + "/malformed.ini");
+        test_scaling_catalogs(catalog, temporary_directory.path() + "/scaling.ini");
     } catch (const std::exception& error) {
         std::cerr << "mako-ui localization test failed: " << error.what() << '\n';
         return 1;

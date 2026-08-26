@@ -260,8 +260,6 @@ cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
     -DMAKO_BUILD_VK_LAYER=ON \
     -DMAKO_BUILD_UI=ON \
     -DMAKO_BUILD_CLI=ON \
-    -DMAKO_GPU_QUALITY_TEST="${MAKO_GPU_QUALITY_TEST:-AUTO}" \
-    -DMAKO_GPU_QUALITY_OUTPUT="$build_cache_root/quality-regression" \
     -DMAKO_INSTALL_XDG_FILES=ON \
     -DMAKO_LAYER_LIBRARY_PATH="../../../lib/libmako-render.so"
 

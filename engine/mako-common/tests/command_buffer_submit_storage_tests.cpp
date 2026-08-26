@@ -52,6 +52,8 @@ namespace {
         require(storage.signalValues()[0] == 0 &&
                 storage.signalValues()[1] == 23,
             "inline signal values are not aligned with semaphores");
+        require(storage.usesTimelineSemaphores(),
+            "timeline submission did not request timeline submit info");
         for (const auto stage : storage.stages()) {
             require(stage == VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                 "wait stage changed");
@@ -96,6 +98,16 @@ namespace {
                 empty.stages().empty() && empty.signals().empty() &&
                 empty.signalValues().empty(),
             "empty submission storage is not empty");
+        require(!empty.usesTimelineSemaphores(),
+            "empty submission requested timeline submit info");
+
+        const std::array binarySignals{fakeHandle<VkSemaphore>(16)};
+        const vk::detail::CommandBufferSubmitStorage binaryOnly{
+            waits, VK_NULL_HANDLE, 0,
+            binarySignals, VK_NULL_HANDLE, 0
+        };
+        require(!binaryOnly.usesTimelineSemaphores(),
+            "binary-only submission requested timeline submit info");
     }
 
     void testTimelineOnlyComposition() {
@@ -113,6 +125,8 @@ namespace {
                 storage.signals()[0] == signal &&
                 storage.signalValues()[0] == 37,
             "timeline-only signal composition is wrong");
+        require(storage.usesTimelineSemaphores(),
+            "timeline-only submission did not request submit info");
     }
 }
 

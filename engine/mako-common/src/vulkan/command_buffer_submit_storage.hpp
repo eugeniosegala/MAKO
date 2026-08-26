@@ -71,7 +71,11 @@ namespace vk::detail {
                 this->combinedSignalSemaphores.values().size()
             ),
             waitStages(this->combinedWaitSemaphores.values().size(),
-                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT) {
+                VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT),
+            timelineSemaphoresPresent(
+                waitTimelineSemaphore != VK_NULL_HANDLE ||
+                signalTimelineSemaphore != VK_NULL_HANDLE
+            ) {
             std::copy(
                 waitSemaphores.begin(), waitSemaphores.end(),
                 this->combinedWaitSemaphores.values().begin()
@@ -107,6 +111,9 @@ namespace vk::detail {
         [[nodiscard]] auto stages() const {
             return this->waitStages.values();
         }
+        [[nodiscard]] bool usesTimelineSemaphores() const {
+            return this->timelineSemaphoresPresent;
+        }
     private:
         static constexpr size_t inlineSemaphoreCount = 4;
 
@@ -125,5 +132,6 @@ namespace vk::detail {
         InlineSubmitArray<uint64_t, inlineSemaphoreCount> signalTimelineValues;
         InlineSubmitArray<VkPipelineStageFlags, inlineSemaphoreCount>
             waitStages;
+        bool timelineSemaphoresPresent;
     };
 }

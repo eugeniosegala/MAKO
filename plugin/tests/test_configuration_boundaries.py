@@ -238,6 +238,31 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             content,
         )
 
+    def test_scaling_settings_remain_toml_only(self):
+        scaling = {
+            **ConfigurationManager.get_defaults(),
+            "scaling_enabled": True,
+            "scaling_factor": 1.8,
+            "scaling_sharpness": 0.7,
+        }
+
+        toml_content = ConfigurationManager.generate_toml_content(scaling)
+        wrapper_content = self.service._generate_script_content(scaling)
+        wrapper_settings = self.service._wrapper_settings_defaults()
+
+        self.assertIn("scaling_enabled = true", toml_content)
+        self.assertIn("scaling_factor = 1.8", toml_content)
+        self.assertIn("scaling_sharpness = 0.7", toml_content)
+        for field in (
+            "scaling_enabled",
+            "scaling_factor",
+            "scaling_sharpness",
+        ):
+            with self.subTest(field=field):
+                self.assertNotIn(field, wrapper_settings)
+                self.assertNotIn(field, wrapper_content.lower())
+        self.assertNotIn("MAKO_SCALING", wrapper_content)
+
     def test_unsupported_host_passthrough_bytes_are_characterized(self):
         lines = [
             "#!/bin/bash",

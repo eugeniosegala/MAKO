@@ -7,6 +7,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <span>
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -24,6 +25,12 @@ namespace vk {
         /// @param samplers number of samplers
         /// @throws ls::vulkan_error on failure
         Shader(const vk::Vulkan& vk, const std::vector<uint8_t>& code,
+            size_t sampledImages, size_t storageImages,
+            size_t buffers, size_t samplers);
+
+        /// create a Vulkan shader directly from aligned SPIR-V words without
+        /// constructing a process-startup byte vector
+        Shader(const vk::Vulkan& vk, std::span<const uint32_t> code,
             size_t sampledImages, size_t storageImages,
             size_t buffers, size_t samplers);
 

@@ -5,6 +5,7 @@
 #include "device_selection.hpp"
 #include "pnext_chain.hpp"
 #include "present_diagnostics.hpp"
+#include "spatial_scaling_policy.hpp"
 #include "swapchain.hpp"
 
 #include "mako-common/configuration/detection.hpp"
@@ -14,9 +15,11 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <cstdlib>
 #include <exception>
+#include <filesystem>
 #include <functional>
 #include <iostream>
 #include <optional>
@@ -40,6 +43,9 @@ using namespace mako::layer;
 #endif
 
 namespace {
+    constexpr uint64_t spatialScalingEnabledBit = uint64_t{1};
+    constexpr uint64_t spatialScalingProcessSupportedBit = uint64_t{2};
+
     constexpr char makoBuildIdentity[] =
         "MAKO Renderer: render layer active; identity="
         "VK_LAYER_MAKO_render; build="
@@ -116,9 +122,16 @@ namespace {
         };
         VkPhysicalDeviceProperties2 properties{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PROPERTIES_2,
-            .pNext = hasPciInfo ? &pciInfo : nullptr
+            .pNext = hasPciInfo && funcs.GetPhysicalDeviceProperties2
+                ? &pciInfo : nullptr
         };
-        funcs.GetPhysicalDeviceProperties2(physicalDevice, &properties);
+        if (funcs.GetPhysicalDeviceProperties2) {
+            funcs.GetPhysicalDeviceProperties2(physicalDevice, &properties);
+        } else {
+            funcs.GetPhysicalDeviceProperties(
+                physicalDevice, &properties.properties
+            );
+        }
 
         std::array<char, VK_MAX_PHYSICAL_DEVICE_NAME_SIZE> deviceName{};
         std::copy_n(
@@ -131,7 +144,7 @@ namespace {
             .name = deviceName.data(),
             .vendorId = toHexId(properties.properties.vendorID),
             .deviceId = toHexId(properties.properties.deviceID),
-            .pci = hasPciInfo
+            .pci = hasPciInfo && funcs.GetPhysicalDeviceProperties2
                 ? std::optional<std::string>{
                     std::to_string(pciInfo.pciBus) + ":" +
                     std::to_string(pciInfo.pciDevice) + "." +
@@ -244,12 +257,35 @@ namespace {
     }
 }
 
+void Root::publishSurfaceScalingPolicy() noexcept {
+    const bool enabled = this->active_profile &&
+        this->active_profile->scaling_enabled;
+    const float factor = this->active_profile
+        ? this->active_profile->scaling_factor : 1.0F;
+    const bool processSupported = spatialScalingProcessSupported(
+        this->gamescopeEnvironmentDetected,
+        this->gamescopeDetected,
+        this->presentationEnvironment.hdrExposureDisabled
+    );
+    const uint64_t packedFactor = static_cast<uint64_t>(
+        std::bit_cast<uint32_t>(factor)
+    ) << 32U;
+    this->surfaceScalingPolicy.store(
+        packedFactor |
+            (enabled ? spatialScalingEnabledBit : uint64_t{0}) |
+            (processSupported
+                ? spatialScalingProcessSupportedBit : uint64_t{0}),
+        std::memory_order_release
+    );
+}
+
 Root::Root() :
     presentationEnvironment(resolvePresentationEnvironmentPolicy(
         std::getenv("MAKO_DISABLE_HDR_EXPOSURE"),
         std::getenv("DXVK_HDR"),
         std::getenv("DISABLE_GAMESCOPE_WSI")
     )),
+    gamescopeEnvironmentDetected(gamescopeProcessEnvironmentHint()),
     hdrFeedbackReader(this->presentationEnvironment) {
     std::cerr << makoBuildIdentity << '\n';
 
@@ -259,6 +295,8 @@ Root::Root() :
               << "; hdr_exposure="
               << (this->presentationEnvironment.hdrExposureDisabled
                     ? "disabled" : "allowed")
+              << "; gamescope_process_hint="
+              << (this->gamescopeEnvironmentDetected ? "present" : "absent")
               << '\n';
 
     const auto initialHdrFeedback =
@@ -344,10 +382,14 @@ Root::Root() :
                   << " fingerprint=" << MAKO_BUILD_FINGERPRINT
                   << '\n';
     }
-    if (!profile.has_value())
+    if (!profile.has_value()) {
+        this->publishSurfaceScalingPolicy();
         return;
+    }
 
     this->active_profile = profile->second;
+    this->frameGenerationConfiguredAtStartup =
+        this->active_profile->frame_generation_enabled;
 
     std::cerr << "MAKO Renderer: using profile with name '" << this->active_profile->name << "' ";
     switch (profile->first) {
@@ -373,8 +415,9 @@ Root::Root() :
                   << "; lighter_model="
                   << ls::effectivePerformanceMode(*this->active_profile)
                   << "; resources=active-policy"
-                  << "; live_profile_reload=disabled\n";
+                  << "; compatible_profile_reload=live\n";
     }
+    this->publishSurfaceScalingPolicy();
 }
 
 ConfigurationUpdateResult Root::update() {
@@ -428,11 +471,7 @@ ConfigurationUpdateResult Root::update() {
                   << result.hdrContextsDeferred << '\n';
     }
 
-    // Ultra Performance freezes the startup profile. Continue sampling the
-    // compositor-owned state above because HDR and refresh changes are safety
-    // inputs rather than user configuration toggles.
-    if (this->active_profile && this->active_profile->ultra_performance)
-        return result;
+    this->publishSurfaceScalingPolicy();
 
     // Configuration hot reload does not need a filesystem metadata query for
     // every presented frame. Keep the UI responsive while bounding the check
@@ -457,18 +496,70 @@ ConfigurationUpdateResult Root::update() {
         ? std::optional<std::string>{this->active_profile->name}
         : std::nullopt;
     const auto& profile = findProfile(this->config.get(), ls::identify());
-    if (profile && profile->second.ultra_performance) {
-        std::cerr << "MAKO Renderer: Ultra Performance profile change deferred; "
-                     "restart the game to apply its static resource policy\n";
-        result.deferredContexts = this->swapchains.size();
-        return result;
+    const bool activeUltraPerformance = this->active_profile &&
+        this->active_profile->ultra_performance;
+    const bool requestedUltraPerformance = profile &&
+        profile->second.ultra_performance;
+
+    auto runtimeProfile = profile
+        ? std::optional<ls::GameConf>{profile->second}
+        : std::nullopt;
+    bool profileProcessRestartRequired = false;
+    bool gpuSelectionPending = false;
+    bool pacingPending = false;
+    bool frameGenerationInteropPending = false;
+    bool ultraPerformancePending =
+        activeUltraPerformance != requestedUltraPerformance;
+    if (runtimeProfile && this->active_profile) {
+        auto projection = projectProcessStaticProfileForLiveUpdate(
+            *this->active_profile, *runtimeProfile,
+            this->frameGenerationConfiguredAtStartup
+        );
+        *runtimeProfile = std::move(projection.runtimeProfile);
+        gpuSelectionPending = projection.gpuSelectionPending;
+        pacingPending = projection.pacingPending;
+        frameGenerationInteropPending =
+            projection.frameGenerationInteropPending;
+        ultraPerformancePending = projection.ultraPerformancePending;
+        profileProcessRestartRequired = projection.restartRequired();
+    } else if (runtimeProfile && runtimeProfile->frame_generation_enabled &&
+            !this->frameGenerationConfiguredAtStartup) {
+        runtimeProfile->frame_generation_enabled = false;
+        frameGenerationInteropPending = true;
+        profileProcessRestartRequired = true;
     }
+    if (ultraPerformancePending) {
+        profileProcessRestartRequired = true;
+        std::cerr << "MAKO Renderer: Ultra Performance toggle deferred; "
+                     "restart the game to apply its process-static FP16 and "
+                     "resource policy; compatible profile changes remain live\n";
+    }
+    if (profileProcessRestartRequired)
+        result.processRestartContexts += this->swapchains.size();
 
     this->runtimeStateRevision++;
-    if (profile.has_value())
-        this->active_profile = profile->second;
+    if (profileProcessRestartRequired && present_diagnostics::enabled()) {
+        for (const auto& [swapchain, context] : this->swapchains) {
+            static_cast<void>(swapchain);
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=runtime-transition-pending"
+                      << " context=" << context.diagnosticsId()
+                      << " state_revision=" << this->runtimeStateRevision
+                      << " reason=process-static-profile"
+                      << " gpu_selection_pending=" << gpuSelectionPending
+                      << " pacing_pending=" << pacingPending
+                      << " frame_generation_interop_pending="
+                      << frameGenerationInteropPending
+                      << " ultra_performance_pending="
+                      << ultraPerformancePending
+                      << " action=wait-for-process-restart\n";
+        }
+    }
+    if (runtimeProfile)
+        this->active_profile = std::move(*runtimeProfile);
     else
         this->active_profile = std::nullopt;
+    this->publishSurfaceScalingPolicy();
 
     const auto currentProfileName = this->active_profile
         ? std::optional<std::string>{this->active_profile->name}
@@ -513,6 +604,12 @@ ConfigurationUpdateResult Root::update() {
                 case ProfileUpdateAction::DeferUntilSwapchainRecreation:
                     result.deferredContexts++;
                     break;
+                case ProfileUpdateAction::DeferUntilProcessRestart:
+                    result.processRestartContexts++;
+                    break;
+                case ProfileUpdateAction::RequestSwapchainRecreation:
+                    result.recreationRequestedContexts++;
+                    break;
             }
         }
     } else {
@@ -530,7 +627,7 @@ ConfigurationUpdateResult Root::update() {
 
 void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
         const std::function<void(void)>& finish) const {
-    if (!this->active_profile.has_value()) {
+    if (!this->frameGenerationConfigured()) {
         finish();
         return;
     }
@@ -552,7 +649,7 @@ void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
 
 void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
         const std::function<void(void)>& finish) const {
-    if (!this->active_profile.has_value()) {
+    if (!this->frameGenerationConfigured()) {
         finish();
         return;
     }
@@ -571,17 +668,19 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
 
-    bool isFeatureEnabled = false;
+    bool timelineFeatureEnabled = false;
     auto* featureInfo = reinterpret_cast<VkBaseInStructure*>(const_cast<void*>(createInfo.pNext));
     while (featureInfo) {
-        if (featureInfo->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES) {
+        if (featureInfo->sType ==
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES) {
             auto* features = reinterpret_cast<VkPhysicalDeviceVulkan12Features*>(featureInfo);
             features->timelineSemaphore = VK_TRUE;
-            isFeatureEnabled = true;
-        } else if (featureInfo->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES) {
+            timelineFeatureEnabled = true;
+        } else if (featureInfo->sType ==
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES) {
             auto* features = reinterpret_cast<VkPhysicalDeviceTimelineSemaphoreFeatures*>(featureInfo);
             features->timelineSemaphore = VK_TRUE;
-            isFeatureEnabled = true;
+            timelineFeatureEnabled = true;
         }
 
         featureInfo = const_cast<VkBaseInStructure*>(featureInfo->pNext);
@@ -592,18 +691,23 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
         .pNext = const_cast<void*>(createInfo.pNext),
         .timelineSemaphore = VK_TRUE
     };
-    if (!isFeatureEnabled)
+    if (!timelineFeatureEnabled)
         createInfo.pNext = &timelineFeatures;
 
     finish();
 }
 
-bool Root::modifySwapchainCreateInfo(const vk::Vulkan& vk,
+SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk,
         VkSwapchainCreateInfoKHR& createInfo,
+        const std::optional<SpatialScalingExtents>& previousVariableExtents,
         const std::function<void(void)>& finish) const {
+    SwapchainCreateModification modification{
+        .applicationExtent = createInfo.imageExtent,
+        .presentationExtent = createInfo.imageExtent,
+    };
     if (!this->active_profile.has_value()) {
         finish();
-        return false;
+        return modification;
     }
 
     VkSurfaceCapabilitiesKHR caps{}; // NOLINT (enum value 0)
@@ -612,13 +716,169 @@ bool Root::modifySwapchainCreateInfo(const vk::Vulkan& vk,
     if (res != VK_SUCCESS)
         throw ls::vulkan_error(res, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed");
 
-    const bool privateOrderedTransport = context_ModifySwapchainCreateInfo(
+    modification.variableSurface = !fixedSurfaceExtent(caps.currentExtent);
+
+    const bool processSupportsSpatialScaling =
+        mako::layer::spatialScalingProcessSupported(
+            this->gamescopeEnvironmentDetected,
+            this->gamescopeDetected,
+            this->presentationEnvironment.hdrExposureDisabled
+        );
+    const auto scalingExtents = processSupportsSpatialScaling
+        ? scalingExtentsForCreate(
+            *this->active_profile, caps, createInfo.imageExtent,
+            previousVariableExtents
+        )
+        : std::nullopt;
+    modification.variableFeedbackSuppressed =
+        processSupportsSpatialScaling &&
+        variableSurfaceScalingFeedbackDetected(
+            *this->active_profile, caps, createInfo.imageExtent,
+            previousVariableExtents
+        );
+    const bool fixedVirtualSourceRequest =
+        fixedSurfaceExtent(caps.currentExtent) &&
+        !sameExtent(createInfo.imageExtent, caps.currentExtent);
+    if (fixedVirtualSourceRequest && !scalingExtents) {
+        throw ls::vulkan_error(
+            VK_ERROR_INITIALIZATION_FAILED,
+            "fixed-surface scaling policy changed after the capability query; "
+            "the application must query capabilities again"
+        );
+    }
+    const auto colorPipeline = classifySwapchainColor(
+        createInfo.imageFormat, createInfo.imageColorSpace,
+        this->gamescopeHdrActive.value_or(false)
+    );
+    const bool sdrScalingEncoding =
+        spatialScalingColorSupported(colorPipeline);
+    VkBool32 queueFamilySupportsPresentation = VK_FALSE;
+    const bool queueSurfaceSupportChecked =
+        scalingExtents && vk.fi().GetPhysicalDeviceSurfaceSupportKHR;
+    if (scalingExtents && vk.fi().GetPhysicalDeviceSurfaceSupportKHR) {
+        const auto surfaceSupportResult =
+            vk.fi().GetPhysicalDeviceSurfaceSupportKHR(
+                vk.physdev(), vk.queueFamilyIndex(), createInfo.surface,
+                &queueFamilySupportsPresentation
+            );
+        if (surfaceSupportResult != VK_SUCCESS) {
+            throw ls::vulkan_error(
+                surfaceSupportResult,
+                "vkGetPhysicalDeviceSurfaceSupportKHR() failed"
+            );
+        }
+    }
+    const bool spatialShapeSupported =
+        spatialScalingSwapchainShapeSupported(createInfo);
+    const bool spatialQueueCommandsSupported = vk.queueFamilySupports(
+        VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT
+    );
+    const bool spatialFormatSupported =
+        sdrScalingEncoding &&
+        (caps.supportedUsageFlags & (
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT
+        )) == (
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT
+        ) &&
+        vk.supportsOptimalTilingFormatFeatures(
+            createInfo.imageFormat,
+            VK_FORMAT_FEATURE_BLIT_SRC_BIT |
+                VK_FORMAT_FEATURE_BLIT_DST_BIT
+        ) &&
+        vk.supportsOptimalTilingFormatFeatures(
+            colorPipeline.exchangeFormat,
+            VK_FORMAT_FEATURE_BLIT_SRC_BIT |
+                VK_FORMAT_FEATURE_BLIT_DST_BIT |
+                VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT |
+                VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT |
+                VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
+        );
+    const bool spatialScalingSupported = spatialShapeSupported &&
+        spatialFormatSupported && spatialQueueCommandsSupported &&
+        queueFamilySupportsPresentation == VK_TRUE;
+    const char* const queuePresentationSupport =
+        !queueSurfaceSupportChecked ? "not-checked" :
+        queueFamilySupportsPresentation == VK_TRUE
+            ? "supported" : "unsupported";
+    if (scalingExtents && spatialScalingSupported) {
+        modification.spatialScalingActive = true;
+        modification.applicationExtent = scalingExtents->source;
+        modification.presentationExtent = scalingExtents->presentation;
+        createInfo.imageExtent = scalingExtents->presentation;
+    } else if (scalingExtents && fixedSurfaceExtent(caps.currentExtent)) {
+        // A fixed surface was previously advertised at the virtual source
+        // extent. Passing that low extent to the real WSI surface without a
+        // scaler would either fail lower creation or expose an incomplete
+        // top-left frame. Reject an unexpected format-capability mismatch
+        // explicitly instead of silently violating the advertised contract.
+        throw ls::vulkan_error(
+            VK_ERROR_INITIALIZATION_FAILED,
+            !spatialShapeSupported
+                ? "fixed-surface spatial scaling requires an opaque, "
+                  "single-layer, unprotected, non-shared-present swapchain"
+                : (queueFamilySupportsPresentation != VK_TRUE
+                    ? "MAKO's graphics/compute queue family cannot present to "
+                      "the fixed surface"
+                    : (!spatialQueueCommandsSupported
+                        ? "MAKO's presentation queue family lacks graphics and "
+                          "compute support"
+                    : "the selected fixed-surface format cannot be spatially scaled")
+                    )
+        );
+    }
+    if (this->active_profile->scaling_enabled) {
+        std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
+                  << "requested=" << modification.applicationExtent.width
+                  << 'x' << modification.applicationExtent.height
+                  << "; surface_current=" << caps.currentExtent.width
+                  << 'x' << caps.currentExtent.height
+                  << "; selected_source="
+                  << (scalingExtents ? scalingExtents->source.width : 0)
+                  << 'x'
+                  << (scalingExtents ? scalingExtents->source.height : 0)
+                  << "; selected_presentation="
+                  << (scalingExtents ? scalingExtents->presentation.width : 0)
+                  << 'x'
+                  << (scalingExtents ? scalingExtents->presentation.height : 0)
+                  << "; format=" << static_cast<int>(createInfo.imageFormat)
+                  << "; format_supported=" << spatialFormatSupported
+                  << "; shape_supported=" << spatialShapeSupported
+                  << "; queue_presentation_support="
+                  << queuePresentationSupport
+                  << "; queue_commands_supported="
+                  << spatialQueueCommandsSupported
+                  << "; variable_feedback_suppressed="
+                  << modification.variableFeedbackSuppressed
+                  << "; active=" << modification.spatialScalingActive
+                  << '\n';
+        if (modification.variableFeedbackSuppressed &&
+                previousVariableExtents) {
+            std::cerr << "MAKO Renderer: spatial scaling variable-surface "
+                         "feedback guard: surface=" << createInfo.surface
+                      << "; previous_source="
+                      << previousVariableExtents->source.width << 'x'
+                      << previousVariableExtents->source.height
+                      << "; previous_presentation="
+                      << previousVariableExtents->presentation.width << 'x'
+                      << previousVariableExtents->presentation.height
+                      << "; requested="
+                      << modification.applicationExtent.width << 'x'
+                      << modification.applicationExtent.height
+                      << "; action=native-feedback-guard\n";
+        }
+    }
+
+    modification.privateOrderedTransport = context_ModifySwapchainCreateInfo(
         *this->active_profile,
         caps.maxImageCount,
         createInfo,
         this->gamescopeHdrActive.value_or(false),
         this->gamescopeDetected,
-        this->presentationEnvironment
+        this->presentationEnvironment,
+        vk.frameGenerationInteropEnabled(),
+        modification.spatialScalingActive
     );
 
     // Gamescope forwards both a MAILBOX base mode and a MAILBOX-only
@@ -632,11 +892,33 @@ bool Root::modifySwapchainCreateInfo(const vk::Vulkan& vk,
     ScopedPNextRemoval presentModes(
         createInfo.pNext,
         VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT,
-        privateOrderedTransport
+        modification.privateOrderedTransport
     );
 
     finish();
-    return privateOrderedTransport;
+    modification.presentationExtent = createInfo.imageExtent;
+    return modification;
+}
+
+bool Root::modifySurfaceCapabilities(
+        VkSurfaceCapabilitiesKHR& capabilities) const {
+    const uint64_t packed = this->surfaceScalingPolicy.load(
+        std::memory_order_acquire
+    );
+    if ((packed & spatialScalingEnabledBit) == 0 ||
+            (packed & spatialScalingProcessSupportedBit) == 0) {
+        return false;
+    }
+    const SpatialScalingPolicy policy{
+        .enabled = true,
+        .factor = std::bit_cast<float>(
+            static_cast<uint32_t>(packed >> 32U)
+        ),
+    };
+    const auto extents = virtualizeSurfaceCapabilities(
+        policy, capabilities
+    );
+    return extents.has_value();
 }
 
 void Root::createSwapchainContext(const vk::Vulkan& vk,
@@ -644,10 +926,29 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     if (!this->active_profile.has_value())
         throw ls::error("attempted to create swapchain context while layer is inactive");
     const auto& profile = *this->active_profile;
+    const auto& global = this->config.get().global();
 
-    if (!this->backend.has_value()) { // emplace backend late, due to loader bug
-        const auto& global = this->config.get().global();
+    std::optional<std::filesystem::path> scalingShaderDll;
+    if (info.spatialScalingActive &&
+            profile.scaling_method != ls::ScalingMethod::Mako) {
+        try {
+            scalingShaderDll = global.dll.has_value()
+                ? std::filesystem::path(*global.dll)
+                : std::filesystem::path(ls::findShaderDll());
+        } catch (const std::exception& error) {
+            std::cerr << "MAKO Renderer: unable to locate Lossless.dll for LS1; "
+                         "the MAKO fallback will be used: "
+                      << error.what() << '\n';
+        }
+    }
 
+    std::optional<std::string> backendInitializationError;
+    const bool frameGenerationRequested =
+        profile.frame_generation_enabled;
+    const bool frameGenerationAvailableOnDevice =
+        vk.frameGenerationInteropEnabled();
+    if (frameGenerationAvailableOnDevice &&
+            !this->backend.has_value()) { // emplace backend late, due to loader bug
         try {
             // The backend owns a separate Vulkan instance. Prevent MAKO
             // Renderer from entering that internal instance while preserving
@@ -692,12 +993,37 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                 dll, ls::effectiveAllowFp16(global, profile)
             );
         } catch (const std::exception& e) {
-            throw ls::error("failed to create backend instance", e);
+            backendInitializationError = e.what();
+            if (!info.spatialScalingActive)
+                throw ls::error("failed to create backend instance", e);
         }
     }
 
+    backend::Instance* frameGenerationBackend =
+        frameGenerationAvailableOnDevice && this->backend.has_value()
+        ? &this->backend.mut() : nullptr;
+    if (frameGenerationRequested && !vk.frameGenerationInteropEnabled()) {
+        std::cerr << "MAKO Renderer: frame generation was enabled after the "
+                     "application device was created without external interop; "
+                     "a game restart is required; independent spatial scaling "
+                     "remains available\n";
+    } else if (frameGenerationRequested && !frameGenerationBackend &&
+            info.spatialScalingActive) {
+        std::cerr << "MAKO Renderer: frame-generation backend initialization "
+                     "failed; independent spatial scaling retained:\n"
+                  << "- "
+                  << backendInitializationError.value_or("unknown failure")
+                  << '\n';
+    } else if (!frameGenerationAvailableOnDevice &&
+            !frameGenerationRequested && info.spatialScalingActive) {
+        std::cerr << "MAKO Renderer: standalone spatial scaling: "
+                     "frame-generation backend and interop resources were not "
+                     "created\n";
+    }
+
     const bool inserted = this->swapchains.emplace(swapchain,
-        Swapchain(vk, this->backend.mut(), profile, info,
+        Swapchain(vk, frameGenerationBackend, profile, info,
+            std::move(scalingShaderDll),
             this->gamescopeHdrActive,
             this->gamescopeDetected,
             this->presentationEnvironment.hdrExposureDisabled,
@@ -724,7 +1050,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << (info.privateOrderedTransport ? 1 : 0)
                   << " active_contexts=" << this->swapchains.size()
                   << " inserted=" << inserted
-                  << " layer_forced_recreation=disabled"
+                  << " layer_forced_recreation=live-profile-resources-one-shot"
                   << '\n';
     }
 }

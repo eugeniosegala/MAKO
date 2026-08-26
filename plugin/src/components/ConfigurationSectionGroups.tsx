@@ -142,7 +142,7 @@ export function PerformanceConfigurationGroup({
               <MakoInlineWarning tone="warning">
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_WARNING",
-                  "Profile changes do not apply while this mode is enabled. Restart the game after changing settings.",
+                  "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls continue to apply live after startup.",
                 )}
               </MakoInlineWarning>
             </>
@@ -154,10 +154,10 @@ export function PerformanceConfigurationGroup({
 
       <PanelSectionRow>
         <ToggleField
-          label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model (Restart)")}
+          label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model")}
           description={t(
             "CONFIG_PERFORMANCE_MODE_DESC",
-            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. It is a less aggressive performance option than Ultra Performance. Restart the game after changing it. Ultra Performance locks this on.",
+            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. It is a less aggressive performance option than Ultra Performance. Changes apply live through one brief game-owned swapchain recreation. Ultra Performance locks this on.",
           )}
           checked={config.ultra_performance || config.performance_mode}
           disabled={config.ultra_performance}
@@ -200,10 +200,10 @@ export function AdvancedRenderingConfigurationGroup({
         <>
           <PanelSectionRow>
             <SliderField
-              label={`${t("CONFIG_FLOW_SCALE", "Flow Scale (Restart)")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
+              label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
               description={t(
                 "CONFIG_FLOW_SCALE_DESC",
-                "Controls internal motion-estimation resolution. Lower values reduce GPU work; higher values favour quality. Restart the game after changing it.",
+                "Controls internal motion-estimation resolution. Lower values reduce GPU work; higher values favour quality. Changes apply live through one brief game-owned swapchain recreation.",
               )}
               value={
                 config.ultra_performance
@@ -277,7 +277,7 @@ export function AdvancedRenderingConfigurationGroup({
               )}
               description={t(
                 "CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC",
-                "Troubleshooting only. Stops MAKO Renderer loading after restart. Use Frame Generation above for live on/off.",
+                "Troubleshooting only. Stops MAKO Renderer loading the next time the game starts. Use Frame Generation above for live on/off.",
               )}
               checked={config.disable_mako}
               onChange={(value) => onConfigChange(DISABLE_MAKO, value)}
@@ -429,7 +429,7 @@ export function CompatibilityConfigurationGroup({
 
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR (Restart)")}
+              label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR")}
               description={t(
                 "CONFIG_DISABLE_HDR_EXPOSURE_DESC",
                 "HDR is unavailable in this release. This required setting keeps the stable SDR path active.",
@@ -593,11 +593,11 @@ export function ExternalToolsConfigurationGroup({
             <ToggleField
               label={t(
                 "CONFIG_ENABLE_VKBASALT",
-                "Enable vkBasalt (Experimental, Restart)",
+                "Enable vkBasalt (Restart)",
               )}
               description={t(
                 "CONFIG_ENABLE_VKBASALT_DESC",
-                "Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
+                "Experimental. Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
               )}
               bottomSeparator="none"
               checked={

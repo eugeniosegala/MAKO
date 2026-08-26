@@ -28,6 +28,8 @@ int main() {
     expect(sdr.encoding == backend::FrameEncoding::Sdr8,
         "8-bit sRGB should select the SDR transport");
     expect(!sdr.hdr, "8-bit sRGB should not be HDR");
+    expect(layer::spatialScalingColorSupported(sdr),
+        "validated 8-bit SDR should support spatial scaling");
 
     const auto sdr10 = layer::classifySwapchainColor(
         VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR
@@ -36,6 +38,8 @@ int main() {
     expect(sdr10.encoding == backend::FrameEncoding::SdrHighPrecision,
         "10-bit SDR must not activate HDR model semantics");
     expect(!sdr10.hdr, "10-bit SDR should not be classified as HDR");
+    expect(layer::spatialScalingColorSupported(sdr10),
+        "validated high-precision SDR should support spatial scaling");
 
     // Below Gamescope the colour space can already be normalized to sRGB.
     // Confirmed compositor feedback plus an HDR-capable format recovers PQ;
@@ -51,6 +55,8 @@ int main() {
         "Gamescope-normalized packed 10-bit should recover PQ semantics");
     expect(gamescopeHdr10.hdr,
         "Gamescope-normalized packed 10-bit should be classified as HDR");
+    expect(!layer::spatialScalingColorSupported(gamescopeHdr10),
+        "Gamescope-normalized HDR must not enter the SDR scaler");
     expect(gamescopeHdr10.gamescopeColorSpaceRecovered,
         "Gamescope-normalized HDR10 should identify its recovered source");
 
@@ -159,12 +165,24 @@ int main() {
     );
     expect(!badScrgb.generationSupported,
         "invalid packed scRGB combinations should fail safely");
+    expect(!layer::spatialScalingColorSupported(badScrgb),
+        "an invalid scRGB pair must not inherit the default SDR scaler encoding");
 
     const auto hlg = layer::classifySwapchainColor(
         VK_FORMAT_A2B10G10R10_UNORM_PACK32, VK_COLOR_SPACE_HDR10_HLG_EXT
     );
     expect(!hlg.generationSupported, "HLG should pass through until implemented");
     expect(hlg.hdr, "unsupported HLG should still be diagnosed as HDR");
+    expect(!layer::spatialScalingColorSupported(hlg),
+        "unsupported HDR must not inherit the default SDR scaler encoding");
+
+    const auto unsupportedWideColor = layer::classifySwapchainColor(
+        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_DISPLAY_P3_NONLINEAR_EXT
+    );
+    expect(!unsupportedWideColor.generationSupported,
+        "unvalidated wide colour should pass through");
+    expect(!layer::spatialScalingColorSupported(unsupportedWideColor),
+        "unvalidated wide colour must not enter spatial scaling");
 
     std::cout << "All swapchain colour-pipeline tests passed.\n";
     return 0;
