@@ -1,0 +1,111 @@
+#!/usr/bin/env bash
+# Install one packaged MAKO Renderer Flatpak extension without a terminal.
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+
+fail() {
+    local message="$1"
+    if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && command -v kdialog >/dev/null 2>&1; then
+        kdialog --error "$message" || true
+    elif [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && command -v zenity >/dev/null 2>&1; then
+        zenity --error --text="$message" || true
+    fi
+    printf 'MAKO Flatpak installer: %s\n' "$message" >&2
+    exit 1
+}
+
+notice() {
+    local message="$1"
+    if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && command -v kdialog >/dev/null 2>&1; then
+        kdialog --msgbox "$message" || true
+    elif [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && command -v zenity >/dev/null 2>&1; then
+        zenity --info --text="$message" || true
+    else
+        printf '%s\n' "$message"
+    fi
+}
+
+confirm() {
+    local message="$1"
+    if [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" == "1" ]]; then
+        return 0
+    fi
+    if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && command -v kdialog >/dev/null 2>&1; then
+        kdialog --yesno "$message"
+        return
+    fi
+    if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && command -v zenity >/dev/null 2>&1; then
+        zenity --question --text="$message"
+        return
+    fi
+    local answer
+    read -r -p "$message [y/N] " answer
+    [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+choose_bundle() {
+    local requested_version="${MAKO_FLATPAK_RUNTIME:-}"
+    local bundle version
+    if [[ -n "$requested_version" ]]; then
+        for bundle in "${bundles[@]}"; do
+            if [[ "$bundle" == *"-$requested_version.flatpak" ]]; then
+                printf '%s\n' "$bundle"
+                return
+            fi
+        done
+        fail "The archive does not contain a MAKO Flatpak extension for runtime $requested_version."
+    fi
+    if ((${#bundles[@]} == 1)); then
+        printf '%s\n' "${bundles[0]}"
+        return
+    fi
+    if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && command -v kdialog >/dev/null 2>&1; then
+        local -a options=()
+        for bundle in "${bundles[@]}"; do
+            version="${bundle##*-}"
+            version="${version%.flatpak}"
+            options+=("$version" "Freedesktop runtime $version")
+        done
+        requested_version="$(kdialog --menu "Choose the Flatpak runtime used by your game or emulator." "${options[@]}")" || exit 0
+    elif [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]] && command -v zenity >/dev/null 2>&1; then
+        local -a options=()
+        for bundle in "${bundles[@]}"; do
+            version="${bundle##*-}"
+            version="${version%.flatpak}"
+            options+=("$version" "Freedesktop runtime $version")
+        done
+        requested_version="$(zenity --list --title="MAKO Flatpak extension" --text="Choose your game's Flatpak runtime." --column="Runtime" --column="Description" "${options[@]}")" || exit 0
+    else
+        printf 'Available MAKO Flatpak runtimes:\n'
+        select requested_version in "${bundles[@]##*-}"; do
+            requested_version="${requested_version%.flatpak}"
+            break
+        done
+    fi
+    for bundle in "${bundles[@]}"; do
+        if [[ "$bundle" == *"-$requested_version.flatpak" ]]; then
+            printf '%s\n' "$bundle"
+            return
+        fi
+    done
+    fail "No MAKO Flatpak extension was selected."
+}
+
+command -v flatpak >/dev/null 2>&1 ||
+    fail "Flatpak is not installed on this system."
+
+shopt -s nullglob
+bundles=("$script_dir"/org.freedesktop.Platform.VulkanLayer.makorender-*.flatpak)
+shopt -u nullglob
+((${#bundles[@]} > 0)) || fail "No MAKO Flatpak extension bundles were found next to this installer."
+
+selected_bundle="$(choose_bundle)"
+selected_runtime="${selected_bundle##*-}"
+selected_runtime="${selected_runtime%.flatpak}"
+if ! confirm "Install the MAKO Renderer Flatpak extension for runtime $selected_runtime for this user?"; then
+    exit 0
+fi
+
+flatpak install --user --noninteractive "$selected_bundle"
+notice "The MAKO Renderer Flatpak extension for runtime $selected_runtime is installed. Configure the target Flatpak application before launching it with MAKO."

@@ -69,6 +69,8 @@ if(MAKO_INSTALL_XDG_FILES)
     endforeach()
     install(FILES "rsc/io.github.eugeniosegala.mako.png"
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/icons/hicolor/256x256/apps")
-    install(FILES "rsc/io.github.eugeniosegala.mako.desktop"
+    install(FILES
+            "rsc/io.github.eugeniosegala.mako.desktop"
+            "rsc/io.github.eugeniosegala.mako.uninstaller.desktop"
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/applications")
 endif()

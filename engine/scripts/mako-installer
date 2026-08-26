@@ -1,0 +1,259 @@
+#!/usr/bin/env bash
+# Install or remove the packaged MAKO Renderer without requiring a terminal.
+set -euo pipefail
+
+script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+install_prefix="${MAKO_INSTALL_PREFIX:-$HOME/.local}"
+state_dir="$install_prefix/share/mako-render/installer"
+state_manifest="$state_dir/installed-files.sha256"
+config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/mako-render"
+payload_manifest="$script_dir/MAKO-Renderer-install-manifest.txt"
+version_file="$script_dir/MAKO-Renderer-version.txt"
+decky_plugin_manifest="$HOME/homebrew/plugins/Mako/plugin.json"
+
+fail() {
+    local message="$1"
+    if [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" != "1" ]] &&
+            { [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; }; then
+        if command -v kdialog >/dev/null 2>&1; then
+            kdialog --error "$message" || true
+        elif command -v zenity >/dev/null 2>&1; then
+            zenity --error --text="$message" || true
+        fi
+    fi
+    printf 'MAKO installer: %s\n' "$message" >&2
+    exit 1
+}
+
+notice() {
+    local message="$1"
+    if [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" != "1" ]] &&
+            { [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; }; then
+        if command -v kdialog >/dev/null 2>&1; then
+            kdialog --msgbox "$message" || true
+            return
+        fi
+        if command -v zenity >/dev/null 2>&1; then
+            zenity --info --text="$message" || true
+            return
+        fi
+    fi
+    printf '%s\n' "$message"
+}
+
+confirm() {
+    local message="$1"
+    if [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" == "1" ]]; then
+        return 0
+    fi
+    if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
+        if command -v kdialog >/dev/null 2>&1; then
+            kdialog --yesno "$message"
+            return
+        fi
+        if command -v zenity >/dev/null 2>&1; then
+            zenity --question --text="$message"
+            return
+        fi
+    fi
+    local answer
+    read -r -p "$message [y/N] " answer
+    [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
+}
+
+validate_relative_path() {
+    local path="$1"
+    case "$path" in
+        ""|/*|.|..|../*|*/../*|*/..)
+            return 1
+            ;;
+    esac
+    return 0
+}
+
+parse_manifest_line() {
+    local line="$1"
+    manifest_hash="${line%% *}"
+    manifest_path="${line#"$manifest_hash"}"
+    manifest_path="${manifest_path#  }"
+    [[ "$manifest_hash" =~ ^[a-fA-F0-9]{64}$ ]] &&
+        validate_relative_path "$manifest_path" ||
+        fail "The MAKO installation manifest is invalid."
+}
+
+validate_manifest() {
+    local manifest="$1"
+    local line
+    local entries=0
+    [[ -f "$manifest" ]] || fail "Missing MAKO installation manifest: $manifest"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        parse_manifest_line "$line"
+        entries=$((entries + 1))
+    done < "$manifest"
+    ((entries > 0)) || fail "The MAKO installation manifest is empty."
+}
+
+manifest_contains_path() {
+    local manifest="$1"
+    local wanted_path="$2"
+    local line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        parse_manifest_line "$line"
+        [[ "$manifest_path" == "$wanted_path" ]] && return 0
+    done < "$manifest"
+    return 1
+}
+
+hash_file() {
+    sha256sum -- "$1" | awk '{print $1}'
+}
+
+remove_if_managed() {
+    local path="$1"
+    local expected_hash="$2"
+    [[ -f "$path" ]] || return
+    if [[ "$(hash_file "$path")" == "$expected_hash" ]]; then
+        rm -f -- "$path"
+    else
+        printf 'MAKO installer: preserving modified file: %s\n' "$path" >&2
+    fi
+}
+
+warn_decky_installation() {
+    [[ -f "$decky_plugin_manifest" ]] || return 0
+    local message="Warning: MAKO Decky is installed at ${decky_plugin_manifest%/plugin.json}. Continuing replaces shared Renderer and Vulkan-manifest files. An incompatible Renderer may prevent MAKO Decky from working until its matching Renderer is installed again. Continue with the standalone installation?"
+    printf 'MAKO installer: %s\n' "$message" >&2
+    confirm "$message"
+}
+
+install_payload() {
+    [[ -f "$payload_manifest" && -f "$version_file" ]] ||
+        fail "Open ‘Install MAKO Renderer’ from the extracted MAKO Renderer archive."
+
+    if ! warn_decky_installation; then
+        exit 0
+    fi
+
+    local version
+    version="$(tr -d '[:space:]' < "$version_file")"
+    [[ -n "$version" ]] || fail "The MAKO Renderer version file is empty."
+
+    validate_manifest "$payload_manifest"
+    if [[ -f "$state_manifest" ]]; then
+        validate_manifest "$state_manifest"
+    fi
+
+    if ! confirm "Install MAKO Renderer $version to $install_prefix? Existing MAKO Renderer files in that location will be safely updated. Your profiles will be kept."; then
+        exit 0
+    fi
+
+    local source_path destination_path temporary_path line old_path old_hash
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        parse_manifest_line "$line"
+        source_path="$script_dir/$manifest_path"
+        [[ -f "$source_path" ]] || fail "The package is missing $manifest_path."
+        [[ "$(hash_file "$source_path")" == "$manifest_hash" ]] ||
+            fail "The package file $manifest_path does not match its recorded checksum."
+        destination_path="$install_prefix/$manifest_path"
+        mkdir -p -- "$(dirname -- "$destination_path")"
+        temporary_path="${destination_path}.mako-install.$$"
+        rm -f -- "$temporary_path"
+        cp -p -- "$source_path" "$temporary_path"
+        mv -f -- "$temporary_path" "$destination_path"
+    done < "$payload_manifest"
+
+    if [[ -f "$state_manifest" ]]; then
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            parse_manifest_line "$line"
+            old_path="$manifest_path"
+            old_hash="$manifest_hash"
+            if ! manifest_contains_path "$payload_manifest" "$old_path"; then
+                remove_if_managed "$install_prefix/$old_path" "$old_hash"
+            fi
+        done < "$state_manifest"
+    fi
+
+    mkdir -p -- "$state_dir"
+    temporary_path="$state_manifest.mako-install.$$"
+    cp -- "$payload_manifest" "$temporary_path"
+    mv -f -- "$temporary_path" "$state_manifest"
+
+    notice "MAKO Renderer $version is installed. MAKO Renderer Configuration will open now."
+    if [[ "${MAKO_INSTALLER_NO_LAUNCH:-0}" != "1" ]]; then
+        if [[ -x "$install_prefix/bin/mako-ui" ]]; then
+            "$install_prefix/bin/mako-ui" >/dev/null 2>&1 &
+        else
+            notice "MAKO Renderer was installed, but mako-ui is missing. Re-extract the archive and run the installer again."
+        fi
+    fi
+}
+
+uninstall_payload() {
+    local purge_configuration="${1:-0}"
+    [[ -f "$state_manifest" ]] ||
+        fail "No MAKO Renderer installation managed by this installer was found at $install_prefix."
+
+    validate_manifest "$state_manifest"
+    if ! confirm "Remove the MAKO Renderer files installed in $install_prefix? Modified files and your profiles will be kept."; then
+        exit 0
+    fi
+
+    local line
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        parse_manifest_line "$line"
+        remove_if_managed "$install_prefix/$manifest_path" "$manifest_hash"
+    done < "$state_manifest"
+    rm -f -- "$state_manifest"
+    rmdir -- "$state_dir" 2>/dev/null || true
+    rmdir -- "$(dirname -- "$state_dir")" 2>/dev/null || true
+    rmdir -- "$install_prefix/bin" 2>/dev/null || true
+
+    if [[ "$purge_configuration" == "1" ]] ||
+            { [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" != "1" ]] &&
+                confirm "Also remove your MAKO Renderer profiles and configuration from $config_dir?"; }; then
+        rm -rf -- "$config_dir"
+        notice "MAKO Renderer and its configuration have been removed."
+    else
+        notice "MAKO Renderer has been removed. Your profiles remain in $config_dir."
+    fi
+}
+
+usage() {
+    cat <<'EOF'
+Usage: mako-installer [--install] [--uninstall [--purge-configuration]]
+
+Run ‘Install MAKO Renderer’ from an extracted MAKO Renderer archive to install
+or update the standalone user-local Renderer. Run mako-installer --uninstall
+from an installed system to remove only files owned by the installer.
+EOF
+}
+
+mode="install"
+purge_configuration=0
+while (($#)); do
+    case "$1" in
+        --install)
+            mode="install"
+            ;;
+        --uninstall)
+            mode="uninstall"
+            ;;
+        --purge-configuration)
+            purge_configuration=1
+            ;;
+        -h|--help)
+            usage
+            exit 0
+            ;;
+        *)
+            usage >&2
+            exit 2
+            ;;
+    esac
+    shift
+done
+
+case "$mode" in
+    install) install_payload ;;
+    uninstall) uninstall_payload "$purge_configuration" ;;
+esac

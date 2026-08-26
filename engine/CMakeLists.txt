@@ -11,6 +11,8 @@ install(FILES "${MAKO_REPOSITORY_LICENSE}"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/mako-render")
 install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/mako-diagnostics"
     DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-installer"
+    DESTINATION "${CMAKE_INSTALL_BINDIR}")
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" MAKO_VERSION LIMIT_COUNT 1)
 string(STRIP "${MAKO_VERSION}" MAKO_VERSION)
@@ -97,6 +99,20 @@ if(BUILD_TESTING AND UNIX)
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-mako-launch.sh"
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-launch")
     set_tests_properties(standalone-launcher PROPERTIES
+        LABELS "portable-policy")
+
+    add_test(NAME standalone-installer
+        COMMAND bash
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-mako-installer.sh"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-installer")
+    set_tests_properties(standalone-installer PROPERTIES
+        LABELS "portable-policy")
+
+    add_test(NAME standalone-flatpak-installer
+        COMMAND bash
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-mako-flatpak-installer.sh"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-install-flatpaks")
+    set_tests_properties(standalone-flatpak-installer PROPERTIES
         LABELS "portable-policy")
 
     add_test(NAME embedded-color-conversion-spirv-freshness

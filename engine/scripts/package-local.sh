@@ -300,6 +300,7 @@ fi
 required_paths=(
     "bin/mako-cli" \
     "bin/mako-diagnostics" \
+    "bin/mako-installer" \
     "bin/mako-launch" \
     "bin/mako-ui" \
     "lib/libmako-render.so" \
@@ -321,8 +322,38 @@ for required_path in "${required_paths[@]}"; do
     fi
 done
 
+# The archive-root launcher is intentionally separate from the installed
+# `mako-installer` command. Users extract the archive, double-click this file,
+# and the installer copies only the verified payload into their user-local
+# prefix. The generated manifest gives upgrades and uninstalls an exact,
+# checksummed ownership record without treating the entire ~/.local tree as
+# disposable.
+cp "$repo_root/scripts/mako-installer" "$install_dir/Install MAKO Renderer"
+chmod 0755 "$install_dir/Install MAKO Renderer"
+printf '%s\n' "$version" > "$install_dir/MAKO-Renderer-version.txt"
+manifest_roots=(bin lib share)
+if [[ -d "$install_dir/lib32" ]]; then
+    manifest_roots+=(lib32)
+fi
+(
+    cd "$install_dir"
+    find "${manifest_roots[@]}" -type f -print | LC_ALL=C sort | xargs sha256sum
+) > "$install_dir/MAKO-Renderer-install-manifest.txt"
+if [[ ! -s "$install_dir/MAKO-Renderer-install-manifest.txt" ]]; then
+    echo "Packaging failed: standalone installer manifest is empty" >&2
+    exit 1
+fi
+if ! (cd "$install_dir" && sha256sum --check --status MAKO-Renderer-install-manifest.txt); then
+    echo "Packaging failed: standalone installer manifest does not verify" >&2
+    exit 1
+fi
+
 if [[ ! -x "$install_dir/bin/mako-launch" ]]; then
     echo "Packaging failed: bin/mako-launch is not executable" >&2
+    exit 1
+fi
+if [[ ! -x "$install_dir/bin/mako-installer" ]]; then
+    echo "Packaging failed: bin/mako-installer is not executable" >&2
     exit 1
 fi
 bash -n "$install_dir/bin/mako-launch"

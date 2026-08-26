@@ -32,6 +32,19 @@ See the [main MAKO installation guide](../README.md#install-and-use) for the com
 
 ### Direct Linux installation
 
+#### Graphical installation and update
+
+1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` but does not bundle, copy, or modify it.
+2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), download `MAKO-Renderer-v<version>-linux.tar.xz`, and extract it in your file manager.
+3. Double-click **Install MAKO Renderer** in the extracted folder. Choose **Execute** if your file manager asks. The installer verifies the archive, installs or updates only the standalone MAKO Renderer files below `~/.local`, preserves profiles, and opens **MAKO Renderer Configuration**.
+4. To update, extract a newer Renderer archive and repeat step 3. To uninstall, open **Uninstall MAKO Renderer** from the desktop application menu. It keeps profiles by default and asks separately before removing them.
+
+<!-- prettier-ignore -->
+> [!IMPORTANT]
+> The graphical installer owns only a direct standalone MAKO Renderer installation. It warns and asks for confirmation when MAKO Decky is installed because the current Decky and standalone flows share Renderer, Vulkan-manifest, and configuration paths. Continuing may leave MAKO Decky incompatible until you reinstall its matching Renderer.
+
+#### Manual installation
+
 1. Purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. MAKO requires its licensed `Lossless.dll` but does not bundle, copy, or modify it.
 2. Open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0) and download `MAKO-Renderer-v<version>-linux.tar.xz` under **Assets**.
 3. Optionally save the archive's file list so you know exactly what was installed, then extract it into your user-local prefix:
