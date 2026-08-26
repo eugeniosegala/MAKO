@@ -65,7 +65,7 @@ import { getDefaults } from "../../src/config/configSchema";
 afterEach(cleanup);
 
 describe("Performance Settings", () => {
-  test("keeps Ultra Performance restart-bound while exposing the lighter model live", () => {
+  test("keeps Ultra Performance restart-bound while exposing the lighter model", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
     const onConfigUpdate = vi.fn(async () => undefined);
@@ -97,7 +97,7 @@ describe("Performance Settings", () => {
       screen.getByText(/less aggressive performance option than Ultra Performance/),
     ).toBeTruthy();
     expect(
-      screen.getByText(/Changes apply live through one brief game-owned swapchain recreation/),
+      screen.getByText(/Changing it briefly recreates the game-owned swapchain/),
     ).toBeTruthy();
     expect(
       screen.getByText(/Primarily intended for low-power devices such as Steam Deck/),
@@ -105,7 +105,7 @@ describe("Performance Settings", () => {
     const warning = screen.getByRole("note");
     expect(warning.getAttribute("data-tone")).toBe("warning");
     expect(warning.textContent).toContain(
-      "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls continue to apply live after startup.",
+      "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
     );
 
     fireEvent.click(screen.getByText("Ultra Performance (Restart)"));

@@ -133,10 +133,10 @@ describe("Scaling controls", () => {
       <ScalingControl config={getDefaults()} onConfigChange={onConfigChange} />,
     );
 
-    const enabled = screen.getByText("Enable Scaling (Live)");
+    const enabled = screen.getByText("Enable Scaling");
     expect(enabled.getAttribute("data-checked")).toBe("false");
-    expect(screen.queryByText("Scale Factor (Live) (1.5x)")).toBeNull();
-    expect(screen.queryByText("Scaling Sharpness (Live) (50%)")).toBeNull();
+    expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
+    expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Scaling Method" }),
     ).toBeNull();
@@ -152,8 +152,8 @@ describe("Scaling controls", () => {
       />,
     );
 
-    const factor = screen.getByText("Scale Factor (Live) (1.5x)");
-    const sharpness = screen.getByText("Scaling Sharpness (Live) (50%)");
+    const factor = screen.getByText("Scale Factor (1.5x)");
+    const sharpness = screen.getByText("Scaling Sharpness (50%)");
     const method = screen.getByRole("button", { name: "Scaling Method" });
     expect((factor as HTMLButtonElement).disabled).toBe(false);
     expect((sharpness as HTMLButtonElement).disabled).toBe(false);
@@ -168,12 +168,12 @@ describe("Scaling controls", () => {
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "To activate, select an in-game resolution below the display resolution, enable Scaling, and choose a method. Changes apply live through one game-owned swapchain recreation; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
+        "To activate, select an in-game resolution below the display resolution, enable Scaling, and choose a method. The game recreates its swapchain once; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
       ),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "MAKO is the built-in open single-pass scaler and does not need Lossless.dll. LS1 Quality uses Lossless Scaling's proprietary full neural network; LS1 Performance uses its lower-cost network. If LS1 cannot start, MAKO takes over for that swapchain. Method changes apply live through swapchain recreation.",
+        "MAKO is the built-in open single-pass scaler and does not need Lossless.dll. LS1 Quality uses Lossless Scaling's proprietary full neural network; LS1 Performance uses its lower-cost network. If LS1 cannot start, MAKO takes over for that swapchain. Changing the method recreates the swapchain.",
       ),
     ).toBeTruthy();
   });
@@ -194,8 +194,8 @@ describe("Scaling controls", () => {
       />,
     );
 
-    fireEvent.click(screen.getByText("Scale Factor (Live) (1.5x)"));
-    fireEvent.click(screen.getByText("Scaling Sharpness (Live) (50%)"));
+    fireEvent.click(screen.getByText("Scale Factor (1.5x)"));
+    fireEvent.click(screen.getByText("Scaling Sharpness (50%)"));
     fireEvent.click(screen.getByRole("button", { name: "Scaling Method" }));
 
     expect(onConfigChange.mock.calls).toEqual([
@@ -225,17 +225,17 @@ describe("Scaling controls", () => {
     );
 
     expect(
-      (screen.getByText("Enable Scaling (Live)") as HTMLButtonElement)
+      (screen.getByText("Enable Scaling") as HTMLButtonElement)
         .disabled,
     ).toBe(true);
     expect(
-      (screen.getByText("Scale Factor (Live) (1.5x)") as HTMLButtonElement)
+      (screen.getByText("Scale Factor (1.5x)") as HTMLButtonElement)
         .disabled,
     ).toBe(true);
     expect(
       (
         screen.getByText(
-          "Scaling Sharpness (Live) (50%)",
+          "Scaling Sharpness (50%)",
         ) as HTMLButtonElement
       ).disabled,
     ).toBe(true);

@@ -143,28 +143,28 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     localization.set_language(QStringLiteral("en"));
     const QVariantMap english = localization.strings();
     require(english.value(QStringLiteral("scalingEnabled")).toString() ==
-            QStringLiteral("Spatial Scaling (Live)"),
-        "English scaling enablement did not advertise its live boundary");
+            QStringLiteral("Spatial Scaling"),
+        "English scaling enablement has an unexpected label");
     require(english.value(QStringLiteral("scalingMethod")).toString() ==
-            QStringLiteral("Scaling Method (Live)"),
-        "English scaling method did not advertise its live boundary");
+            QStringLiteral("Scaling Method"),
+        "English scaling method has an unexpected label");
     require(english.value(QStringLiteral("scalingEnabledDesc")).toString()
-            .contains(QStringLiteral("game-owned swapchain recreation")),
+            .contains(QStringLiteral("recreates its swapchain once")),
         "English scaling help omitted the game-owned recreation contract");
     require(english.value(QStringLiteral("flowScaleDesc")).toString()
-            .contains(QStringLiteral("game-owned swapchain recreation")),
-        "English Flow Scale help omitted its live recreation contract");
+            .contains(QStringLiteral("game-owned swapchain")),
+        "English Flow Scale help omitted its recreation contract");
     require(english.value(QStringLiteral("performanceModeDesc")).toString()
-            .contains(QStringLiteral("game-owned swapchain recreation")),
-        "English lighter-model help omitted its live recreation contract");
+            .contains(QStringLiteral("game-owned swapchain")),
+        "English lighter-model help omitted its recreation contract");
     require(english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
-            .contains(QStringLiteral("changes apply live")),
-        "English Adaptive ceiling help omitted its live capacity contract");
+            .contains(QStringLiteral("swapchain rebuild")),
+        "English Adaptive ceiling help omitted its capacity contract");
     require(english.value(QStringLiteral("multiplierDesc")).toString()
-            .contains(QStringLiteral("changes apply live")),
-        "English Fixed multiplier help omitted its live capacity contract");
+            .contains(QStringLiteral("swapchain rebuild")),
+        "English Fixed multiplier help omitted its capacity contract");
     require(english.value(QStringLiteral("ultraPerformanceDesc")).toString()
-            .contains(QStringLiteral("compatible controls remain live")),
+            .contains(QStringLiteral("compatible controls remain available")),
         "English Ultra Performance help overstates its restart boundary");
 }
 

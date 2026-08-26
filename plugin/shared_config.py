@@ -133,35 +133,35 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "scaling_enabled": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "live switch for independent spatial scaling through game-owned swapchain recreation",
+        "description": "independent spatial scaling switch applied through game-owned swapchain recreation",
         "location": "toml"
     },
 
     "scaling_method": {
         "fieldType": ConfigFieldType.STRING,
         "default": SCALING_METHOD_MAKO,
-        "description": "live spatial scaler selection: MAKO, LS1 Quality, or LS1 Performance",
+        "description": "spatial scaler selection: MAKO, LS1 Quality, or LS1 Performance",
         "location": "toml"
     },
 
     "scaling_factor": {
         "fieldType": ConfigFieldType.FLOAT,
         "default": 1.5,
-        "description": "live output scaling factor from 1.0x to 2.0x",
+        "description": "output scaling factor from 1.0x to 2.0x",
         "location": "toml"
     },
 
     "scaling_sharpness": {
         "fieldType": ConfigFieldType.FLOAT,
         "default": 0.5,
-        "description": "live scaling sharpness from zero to one",
+        "description": "scaling sharpness from zero to one",
         "location": "toml"
     },
 
     "frame_generation_enabled": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
-        "description": "live on/off switch; leave on for fixed or adaptive generation, off stops both modes",
+        "description": "on/off switch; leave on for fixed or adaptive generation, off stops both modes",
         "location": "toml"
     },
 
@@ -238,21 +238,21 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "ultra_performance": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain live after startup",
+        "description": "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain available after startup",
         "location": "toml"
     },
 
     "flow_scale": {
         "fieldType": ConfigFieldType.FLOAT,
         "default": 0.9,
-        "description": "change the flow scale live through game-owned swapchain recreation",
+        "description": "change the flow scale through game-owned swapchain recreation",
         "location": "toml"
     },
 
     "performance_mode": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "select a lighter FG model live through game-owned swapchain recreation, reducing GPU overhead at the cost of more visual artifacts",
+        "description": "select a lighter FG model through game-owned swapchain recreation, reducing GPU overhead at the cost of more visual artifacts",
         "location": "toml"
     },
 

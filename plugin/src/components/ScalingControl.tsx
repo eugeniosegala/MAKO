@@ -54,10 +54,10 @@ export function ScalingControl({
     <>
       <PanelSectionRow>
         <ToggleField
-          label={t("SCALING_ENABLED", "Enable Scaling (Live)")}
+          label={t("SCALING_ENABLED", "Enable Scaling")}
           description={t(
             "SCALING_ENABLED_DESC",
-            "To activate, select an in-game resolution below the display resolution, enable Scaling, and choose a method. Changes apply live through one game-owned swapchain recreation; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
+            "To activate, select an in-game resolution below the display resolution, enable Scaling, and choose a method. The game recreates its swapchain once; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
           )}
           checked={config.scaling_enabled}
           disabled={disabled}
@@ -69,10 +69,10 @@ export function ScalingControl({
         <>
           <PanelSectionRow>
             <Field
-              label={t("SCALING_METHOD", "Scaling Method (Live)")}
+              label={t("SCALING_METHOD", "Scaling Method")}
               description={t(
                 "SCALING_METHOD_DESC",
-                "MAKO is the built-in open single-pass scaler and does not need Lossless.dll. LS1 Quality uses Lossless Scaling's proprietary full neural network; LS1 Performance uses its lower-cost network. If LS1 cannot start, MAKO takes over for that swapchain. Method changes apply live through swapchain recreation.",
+                "MAKO is the built-in open single-pass scaler and does not need Lossless.dll. LS1 Quality uses Lossless Scaling's proprietary full neural network; LS1 Performance uses its lower-cost network. If LS1 cannot start, MAKO takes over for that swapchain. Changing the method recreates the swapchain.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
@@ -90,10 +90,10 @@ export function ScalingControl({
 
           <PanelSectionRow>
             <SliderField
-              label={`${t("SCALING_FACTOR", "Scale Factor (Live)")} (${config.scaling_factor.toFixed(1)}x)`}
+              label={`${t("SCALING_FACTOR", "Scale Factor")} (${config.scaling_factor.toFixed(1)}x)`}
               description={t(
                 "SCALING_FACTOR_DESC",
-                "Sets the output-to-input size ratio. Higher values upscale from a smaller source image. Changes apply live through swapchain recreation.",
+                "Sets the output-to-input size ratio. Higher values upscale from a smaller source image. Changing it recreates the swapchain.",
               )}
               value={config.scaling_factor}
               min={SCALING_FACTOR_MIN}
@@ -112,10 +112,10 @@ export function ScalingControl({
 
           <PanelSectionRow>
             <SliderField
-              label={`${t("SCALING_SHARPNESS", "Scaling Sharpness (Live)")} (${Math.round(config.scaling_sharpness * 100)}%)`}
+              label={`${t("SCALING_SHARPNESS", "Scaling Sharpness")} (${Math.round(config.scaling_sharpness * 100)}%)`}
               description={t(
                 "SCALING_SHARPNESS_DESC",
-                "For MAKO, controls continuous edge sharpening. For LS1, selects one of five learned sharpness variants. Changes apply live through swapchain recreation.",
+                "For MAKO, controls continuous edge sharpening. For LS1, selects one of five learned sharpness variants. Changing it recreates the swapchain.",
               )}
               value={config.scaling_sharpness}
               min={SCALING_SHARPNESS_MIN}

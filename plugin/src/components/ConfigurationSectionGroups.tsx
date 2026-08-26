@@ -142,7 +142,7 @@ export function PerformanceConfigurationGroup({
               <MakoInlineWarning tone="warning">
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_WARNING",
-                  "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls continue to apply live after startup.",
+                  "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
                 )}
               </MakoInlineWarning>
             </>
@@ -157,7 +157,7 @@ export function PerformanceConfigurationGroup({
           label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model")}
           description={t(
             "CONFIG_PERFORMANCE_MODE_DESC",
-            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. It is a less aggressive performance option than Ultra Performance. Changes apply live through one brief game-owned swapchain recreation. Ultra Performance locks this on.",
+            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. It is a less aggressive performance option than Ultra Performance. Changing it briefly recreates the game-owned swapchain. Ultra Performance locks this on.",
           )}
           checked={config.ultra_performance || config.performance_mode}
           disabled={config.ultra_performance}
@@ -203,7 +203,7 @@ export function AdvancedRenderingConfigurationGroup({
               label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
               description={t(
                 "CONFIG_FLOW_SCALE_DESC",
-                "Controls internal motion-estimation resolution. Lower values reduce GPU work; higher values favour quality. Changes apply live through one brief game-owned swapchain recreation.",
+                "Controls internal motion-estimation resolution. Lower values reduce GPU work; higher values favour quality. Changing it briefly recreates the game-owned swapchain.",
               )}
               value={
                 config.ultra_performance
@@ -226,7 +226,7 @@ export function AdvancedRenderingConfigurationGroup({
                   <div>
                     {t(
                       "CONFIG_BASE_FPS_CAP_DESC",
-                      "Caps real application frames before frame generation. Works with DirectX, OpenGL through Zink, and Vulkan; changes apply live.",
+                      "Caps real application frames before frame generation. Works with DirectX, OpenGL through Zink, and Vulkan.",
                     )}
                   </div>
                   {config.adaptive && config.adaptive_auto_base_fps_cap ? (
@@ -277,7 +277,7 @@ export function AdvancedRenderingConfigurationGroup({
               )}
               description={t(
                 "CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC",
-                "Troubleshooting only. Stops MAKO Renderer loading the next time the game starts. Use Frame Generation above for live on/off.",
+                "Troubleshooting only. Stops MAKO Renderer loading the next time the game starts. Use Frame Generation above to switch synthesis on or off.",
               )}
               checked={config.disable_mako}
               onChange={(value) => onConfigChange(DISABLE_MAKO, value)}
@@ -318,7 +318,7 @@ export function AdvancedRenderingConfigurationGroup({
                 )} (${config.frame_generation_refresh_threshold} Hz)`}
                 description={t(
                   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC",
-                  "Choose the highest refresh rate where frame generation should remain paused. Changes apply live.",
+                  "Choose the highest refresh rate where frame generation should remain paused.",
                 )}
                 value={config.frame_generation_refresh_threshold}
                 min={FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN}
@@ -406,7 +406,7 @@ export function CompatibilityConfigurationGroup({
                   <span style={{ display: "block", paddingBottom: "6px" }}>
                     {t(
                       "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC",
-                      "How often Recovery tests the native frame rate. 0.1 seconds is aggressive and may cause frequent brief pacing hitches; 2 seconds is the default, while 3 seconds checks least often. Test per game. Changes apply live.",
+                      "How often Recovery tests the native frame rate. 0.1 seconds is aggressive and may cause frequent brief pacing hitches; 2 seconds is the default, while 3 seconds checks least often. Test per game.",
                     )}
                   </span>
                 }

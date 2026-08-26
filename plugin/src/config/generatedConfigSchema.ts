@@ -155,31 +155,31 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "scaling_enabled",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "live switch for independent spatial scaling through game-owned swapchain recreation"
+    description: "independent spatial scaling switch applied through game-owned swapchain recreation"
   },
   scaling_method: {
     name: "scaling_method",
     fieldType: ConfigFieldType.STRING,
     default: "mako",
-    description: "live spatial scaler selection: MAKO, LS1 Quality, or LS1 Performance"
+    description: "spatial scaler selection: MAKO, LS1 Quality, or LS1 Performance"
   },
   scaling_factor: {
     name: "scaling_factor",
     fieldType: ConfigFieldType.FLOAT,
     default: 1.5,
-    description: "live output scaling factor from 1.0x to 2.0x"
+    description: "output scaling factor from 1.0x to 2.0x"
   },
   scaling_sharpness: {
     name: "scaling_sharpness",
     fieldType: ConfigFieldType.FLOAT,
     default: 0.5,
-    description: "live scaling sharpness from zero to one"
+    description: "scaling sharpness from zero to one"
   },
   frame_generation_enabled: {
     name: "frame_generation_enabled",
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
-    description: "live on/off switch; leave on for fixed or adaptive generation, off stops both modes"
+    description: "on/off switch; leave on for fixed or adaptive generation, off stops both modes"
   },
   frame_generation_refresh_threshold: {
     name: "frame_generation_refresh_threshold",
@@ -245,19 +245,19 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "ultra_performance",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain live after startup"
+    description: "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain available after startup"
   },
   flow_scale: {
     name: "flow_scale",
     fieldType: ConfigFieldType.FLOAT,
     default: 0.9,
-    description: "change the flow scale live through game-owned swapchain recreation"
+    description: "change the flow scale through game-owned swapchain recreation"
   },
   performance_mode: {
     name: "performance_mode",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "select a lighter FG model live through game-owned swapchain recreation, reducing GPU overhead at the cost of more visual artifacts"
+    description: "select a lighter FG model through game-owned swapchain recreation, reducing GPU overhead at the cost of more visual artifacts"
   },
   pacing: {
     name: "pacing",

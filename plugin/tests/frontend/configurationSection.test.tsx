@@ -314,7 +314,7 @@ describe("External Tools controls", () => {
     });
   });
 
-  test("reveals discrete live probe intervals only while Recovery is enabled", () => {
+  test("reveals discrete probe intervals only while Recovery is enabled", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const { container, rerender } = render(
       <ConfigurationSection
