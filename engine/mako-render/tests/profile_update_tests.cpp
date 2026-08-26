@@ -499,6 +499,17 @@ int main() {
             ProfileUpdateAction::ApplyLive,
         "Fixed multiplier changes must apply live within shared capacity");
 
+    auto fixedThreeX = fixed;
+    fixedThreeX.multiplier = 3;
+    const auto fixedThreeToTwo = planProfileUpdate(
+        fixedThreeX, fixed, 2, true
+    );
+    expect(fixedThreeToTwo.decision.action == ProfileUpdateAction::ApplyLive &&
+            fixedThreeToTwo.decision.fixedMultiplierChanged &&
+            !fixedThreeToTwo.decision.swapchainRecreationDeferred &&
+            fixedThreeToTwo.appliedProfile.multiplier == 2,
+        "Fixed 3x-to-2x must apply live without recreating the swapchain");
+
     expect(generatedFrameCapacityForProfile(fixed) == 2,
         "Fixed 2x should reserve the configured Adaptive 3x capacity");
     auto fixedUltra = fixed;

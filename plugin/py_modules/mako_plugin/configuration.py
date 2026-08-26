@@ -735,7 +735,12 @@ class ConfigurationService(BaseService):
 
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
-        self._write_file(self.config_file_path, toml_content, 0o644)
+        write_managed_text_atomically(
+            self.config_file_path,
+            toml_content,
+            0o644,
+            self.log,
+        )
 
     def get_profiles(self) -> ProfilesResponse:
         """Get list of all profiles and current profile
