@@ -1,0 +1,7 @@
+# MAKO website
+
+This directory owns MAKO's public product website. It has a Vinext preview/build for local Sites-compatible development and a static Vite build for GitHub Pages.
+
+Run `npm install`, then `npm run dev` for the local preview. Run `npm run build` to validate the Vinext production build and `npm run build:pages` to create the GitHub Pages artifact under `dist-pages/`.
+
+The repository workflow at `.github/workflows/pages.yml` publishes `dist-pages/` after an approved change reaches `main`. Local builds do not publish anything.
