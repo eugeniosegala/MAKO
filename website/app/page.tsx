@@ -243,7 +243,7 @@ export default function Home() {
           <div className="adaptive-copy">
             <p className="section-kicker"><span>03</span> Adaptive intelligence</p>
             <h2>It doesn’t just add frames.<br /><em>It reads the rhythm.</em></h2>
-            <p>Choose a target and ceiling. MAKO Renderer follows the game cadence, admits generated work deterministically, and backs off cleanly when presentation becomes unstable.</p>
+            <p>Choose a target and ceiling. MAKO Renderer observes each game interval, plans only the generated frames needed to reach the output rhythm, and backs off cleanly when delivery becomes unstable.</p>
             <div className="adaptive-points">
               <div><span>01</span><p><strong>Observe</strong> game cadence and delivery health</p></div>
               <div><span>02</span><p><strong>Plan</strong> the right generated-frame count</p></div>
@@ -251,7 +251,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="telemetry-card" aria-label="Adaptive frame generation telemetry example">
+          <div className="telemetry-card" aria-label="Adaptive frame generation example: changing native cadence with generated-frame segments filling the output to a 90 FPS target.">
             <div className="telemetry-head"><span>ADAPTIVE TELEMETRY</span></div>
             <div className="telemetry-readout">
               <div><span>TARGET</span><strong>90<small> FPS</small></strong></div>
@@ -259,17 +259,21 @@ export default function Home() {
               <div><span>STATUS</span><strong className="healthy">STABLE</strong></div>
             </div>
             <div className="chart-grid">
-              <div className="chart-y"><span>120</span><span>90</span><span>60</span><span>30</span></div>
+              <div className="chart-y"><span>120</span><span>90</span><span>60</span><span>0</span></div>
               <div className="chart-area">
-                <div className="target-line"><span>90 FPS TARGET</span></div>
+                <div className="chart-key" aria-hidden="true"><span><i className="native-key" />NATIVE CADENCE</span><span><i className="generated-key" />GENERATED FRAMES</span></div>
+                <div className="target-line"><span>90 FPS OUTPUT</span></div>
                 <div className="bars" aria-hidden="true">
-                  {[54, 62, 75, 83, 91, 88, 94, 90, 92, 87, 91, 90, 93, 89, 92, 90, 91, 90].map((height, index) => (
-                    <i key={index} style={{ height: `${height}%` }} />
+                  {[31, 40, 34, 47, 38, 45, 32, 49, 42, 36, 46, 39, 50, 33, 44, 37, 48, 41].map((nativeCadence, index) => (
+                    <i className="cadence-bar" key={index}>
+                      <span className="native-bar" style={{ height: `${nativeCadence}%` }} />
+                      <span className="generated-bar" style={{ height: `${75 - nativeCadence}%` }} />
+                    </i>
                   ))}
                 </div>
               </div>
             </div>
-            <div className="telemetry-foot"><span>INPUT CADENCE 30.1 FPS</span><span>FRAME TIME 11.1 MS</span></div>
+            <div className="telemetry-foot"><span>INPUT CADENCE 37—60 FPS</span><span>OUTPUT RHYTHM 90 FPS</span></div>
           </div>
         </section>
 
