@@ -25,6 +25,27 @@ namespace mako::layer {
             retiredSurface == destroyedSurface;
     }
 
+    /// An upper WSI may destroy its application-visible swapchain before
+    /// creating the replacement and consequently pass a null oldSwapchain to
+    /// the lower layer. If MAKO retained that exact lower swapchain for
+    /// maintenance-fence completion, it is still the non-retired swapchain
+    /// associated with the native window. Hand it to the lower create exactly
+    /// once so Vulkan can retire it without discarding MAKO's lifetime proof.
+    [[nodiscard]] constexpr bool shouldHandoffRetainedSwapchainAsOld(
+            const VkSwapchainKHR requestedOldSwapchain,
+            const VkDevice createDevice,
+            const VkSurfaceKHR createSurface,
+            const VkDevice retiredDevice,
+            const VkSurfaceKHR retiredSurface,
+            const bool handoffConsumed) noexcept {
+        return requestedOldSwapchain == VK_NULL_HANDLE &&
+            createDevice != VK_NULL_HANDLE &&
+            createDevice == retiredDevice &&
+            createSurface != VK_NULL_HANDLE &&
+            createSurface == retiredSurface &&
+            !handoffConsumed;
+    }
+
     /// Prefer the promoted extension name when the driver advertises it, then
     /// fall back to the EXT predecessor used by current Gamescope/RADV stacks.
     /// The feature bit is mandatory for either spelling.

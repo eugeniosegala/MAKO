@@ -99,6 +99,10 @@ test-engine-gym-gamescope-e2e *args:
 test-engine-gym-proton-e2e *args:
     ./engine/scripts/run-mako-gym.sh --suite proton-e2e {{args}}
 
+# Repeat curated translation sentinels across installed Proton runtime families.
+test-engine-gym-proton-compatibility *args:
+    ./engine/scripts/run-mako-gym.sh --suite proton-compatibility {{args}}
+
 # Build the Decky frontend.
 build-plugin:
     pnpm --dir plugin run build

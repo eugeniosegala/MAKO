@@ -78,6 +78,7 @@ namespace {
             ls::R<vk::Vulkan> vk;
             std::optional<Swapchain> context;
             std::chrono::steady_clock::time_point notBefore{};
+            bool replacementHandoffConsumed{false};
         };
         std::atomic_size_t retiredSwapchainCount{0};
         std::mutex retiredSwapchainsMutex;
@@ -213,6 +214,31 @@ namespace {
                 swapchain, 0, "same-surface-present"
             ));
         }
+    }
+
+    std::optional<VkSwapchainKHR> claimRetainedSwapchainForReplacement(
+            const VkDevice device, const VkSurfaceKHR surface,
+            const VkSwapchainKHR requestedOldSwapchain) {
+        const std::lock_guard retirementLock(
+            instance_info->retiredSwapchainsMutex
+        );
+        for (auto& [swapchain, retired] :
+                instance_info->retiredSwapchains) {
+            if (!shouldHandoffRetainedSwapchainAsOld(
+                    requestedOldSwapchain,
+                    device,
+                    surface,
+                    retired.device,
+                    retired.surface,
+                    retired.replacementHandoffConsumed)) {
+                continue;
+            }
+            // Vulkan retires oldSwapchain even when creation fails, so this
+            // candidate must never be supplied to a later retry.
+            retired.replacementHandoffConsumed = true;
+            return swapchain;
+        }
+        return std::nullopt;
     }
 
     void forceFinalizeRetiredSwapchains(const VkDevice device) {
@@ -1243,6 +1269,24 @@ namespace {
                     it->second, newInfo, previousVariableExtents,
                     fixedSurfaceContract,
                     [&, newInfo = &newInfo]() {
+                        const auto retainedOldSwapchain =
+                            claimRetainedSwapchainForReplacement(
+                                device,
+                                newInfo->surface,
+                                newInfo->oldSwapchain
+                            );
+                        if (retainedOldSwapchain) {
+                            newInfo->oldSwapchain = *retainedOldSwapchain;
+                            if (present_diagnostics::enabled()) {
+                                std::cerr << "MAKO Renderer: present diagnostics: "
+                                             "operation=swapchain-retirement-handoff"
+                                          << " swapchain="
+                                          << *retainedOldSwapchain
+                                          << " surface=" << newInfo->surface
+                                          << " reason=null-upper-old-swapchain"
+                                          << '\n';
+                            }
+                        }
                         auto res = it->second.df().CreateSwapchainKHR(
                             device, newInfo, alloc, swapchain);
                         if (res != VK_SUCCESS) {
@@ -1308,7 +1352,7 @@ namespace {
                     modification.privateOrderedTransport,
                 .spatialScalingActive =
                     modification.spatialScalingActive,
-                .replacement = info->oldSwapchain != VK_NULL_HANDLE,
+                .replacement = newInfo.oldSwapchain != VK_NULL_HANDLE,
             }).first->second;
 
             // An enabled implicit layer can run in a process that does not
@@ -1586,6 +1630,7 @@ namespace {
                                 .vk = ls::R<vk::Vulkan>(it->second),
                                 .context = std::move(context),
                                 .notBefore = now + swapchainRetirementGracePeriod,
+                                .replacementHandoffConsumed = false,
                             }
                         ).second;
                     if (inserted) {

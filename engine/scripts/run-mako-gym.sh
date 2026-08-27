@@ -19,8 +19,8 @@ Bridge options:
   --require        Fail when MAKO Gym is absent; intended for release gates.
   --suite NAME     Select vulkan (default), quality, repeatability, performance,
                    spatial-performance, runtime-overhead, sync-validation, recovery,
-                   gamescope-e2e, or proton-e2e.
-  --all-suites     Run all ten suites sequentially with the forwarded Gym options.
+                   gamescope-e2e, proton-e2e, or proton-compatibility.
+  --all-suites     Run all eleven suites sequentially with the forwarded Gym options.
   -h, --help       Show this bridge help.
 
 Every other argument is forwarded unchanged to the selected MAKO Gym runner.
@@ -106,6 +106,7 @@ suite_names=(
     recovery
     gamescope-e2e
     proton-e2e
+    proton-compatibility
 )
 
 resolve_runner() {
@@ -120,6 +121,7 @@ resolve_runner() {
         recovery) runner="$gym_repo/scripts/run-runtime-recovery-matrix.sh" ;;
         gamescope-e2e) runner="$gym_repo/scripts/run-gamescope-end-to-end.sh" ;;
         proton-e2e) runner="$gym_repo/scripts/run-proton-end-to-end.sh" ;;
+        proton-compatibility) runner="$gym_repo/scripts/run-proton-compatibility-matrix.sh" ;;
         *) return 1 ;;
     esac
 }

@@ -117,6 +117,22 @@ int main() {
             !retiredSwapchainBelongsToSurface(VK_NULL_HANDLE, surfaceA),
         "surface-terminal retirement crossed its exact non-null owner");
 
+    const auto deviceA = reinterpret_cast<VkDevice>(1);
+    const auto deviceB = reinterpret_cast<VkDevice>(2);
+    const auto swapchainA = reinterpret_cast<VkSwapchainKHR>(1);
+    expect(shouldHandoffRetainedSwapchainAsOld(
+            VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceA, false),
+        "a retained lower swapchain was not selected for null-old replacement");
+    expect(!shouldHandoffRetainedSwapchainAsOld(
+            swapchainA, deviceA, surfaceA, deviceA, surfaceA, false) &&
+            !shouldHandoffRetainedSwapchainAsOld(
+                VK_NULL_HANDLE, deviceA, surfaceA, deviceB, surfaceA, false) &&
+            !shouldHandoffRetainedSwapchainAsOld(
+                VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceB, false) &&
+            !shouldHandoffRetainedSwapchainAsOld(
+                VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceA, true),
+        "retained lower handoff ignored old-swapchain, owner, or one-shot bounds");
+
     expect(presentFenceWillSignal(VK_SUCCESS) &&
             presentFenceWillSignal(VK_SUBOPTIMAL_KHR) &&
             presentFenceWillSignal(VK_ERROR_OUT_OF_DATE_KHR) &&

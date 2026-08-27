@@ -48,9 +48,10 @@ namespace mako::layer {
         // reinterpreted without replacing the game-owned swapchain.
         bool privateOrderedTransport{false};
         bool spatialScalingActive{false};
-        // The application supplied a live oldSwapchain handle while creating
-        // this context. This is a known game-owned replacement rather than a
-        // cold process start, so Adaptive may use its bounded recovery guard.
+        // The upper WSI either supplied a live oldSwapchain handle or MAKO
+        // bridged its exact retained lower handle after a destroy-before-create
+        // sequence. This is a known owner-driven replacement rather than a cold
+        // process start, so Adaptive may use its bounded recovery guard.
         bool replacement{false};
     };
 
