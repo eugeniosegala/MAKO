@@ -1,9 +1,9 @@
 {
   "CONTENT_SCALING": "Escalado",
   "SCALING_ENABLED": "Activar motor de escalado (reinicio)",
-  "SCALING_ENABLED_DESC": "Activa la ruta de escalado de MAKO basada en Gamescope para el próximo inicio del juego. Una vez iniciado, puede cambiar en directo entre Nativa, MAKO y LS1; los cambios de modelo, factor y nitidez recrean la cadena de intercambio y pueden causar un breve parpadeo. El motor puede funcionar solo o antes de la generación de fotogramas.",
+  "SCALING_ENABLED_DESC": "Activa la ruta de escalado de MAKO basada en Gamescope para el próximo inicio del juego. Una vez iniciado, puede cambiar entre Nativa, MAKO y LS1; los cambios de modelo, factor y nitidez recrean la cadena de intercambio y pueden causar un breve parpadeo. El motor puede funcionar solo o antes de la generación de fotogramas.",
   "SCALING_METHOD": "Método de escalado",
-  "SCALING_METHOD_DESC": "Nativa mantiene preparado el motor de escalado, pero transmite la imagen del juego sin un escalador de MAKO. MAKO es la opción abierta de una sola pasada. LS1 Quality y Performance usan los modelos con licencia de Lossless Scaling; si LS1 no puede iniciarse, MAKO se hace cargo de esa cadena de intercambio. Los cambios de método se aplican en directo mediante la recreación de la cadena de intercambio.",
+  "SCALING_METHOD_DESC": "Nativa mantiene preparado el motor de escalado, pero transmite la imagen del juego sin un escalador de MAKO. MAKO es la opción abierta de una sola pasada. LS1 Quality y Performance usan los modelos con licencia de Lossless Scaling; si LS1 no puede iniciarse, MAKO se hace cargo de esa cadena de intercambio. Los cambios de método se aplican mediante la recreación de la cadena de intercambio.",
   "SCALING_METHOD_NATIVE": "Nativa (sin escalador de MAKO)",
   "SCALING_METHOD_MAKO": "MAKO (abierto)",
   "SCALING_METHOD_LS1": "LS1 Quality",

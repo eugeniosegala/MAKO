@@ -53,7 +53,7 @@ Run the **SteamOS hardware validation** workflow for that commit and require it 
 ./scripts/run-steamos-hardware-validation.sh --deploy-to-decky
 ```
 
-Omit `--deploy-to-decky` when the machine is not the dedicated MAKO Decky test installation. Review the retained GPU comparisons, MAKO-Gym 44-case summary and logs, recorded Gym commit, and sanitized environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate. The launcher preserves only scoped reusable caches and removes its runner, checkout, credentials, staging, and generated outputs when the job ends.
+Omit `--deploy-to-decky` when the machine is not the dedicated MAKO Decky test installation. Review the retained GPU comparisons, MAKO-Gym 47-case feature summary and logs, 66-case quality summary, 20-row default recovery summary, recorded Gym commit, and sanitized environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate. The launcher preserves only scoped reusable caches and removes its runner, checkout, credentials, staging, and generated outputs when the job ends.
 
 Then, from the repository root, replace `1.2.0` with the new version:
 

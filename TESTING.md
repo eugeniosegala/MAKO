@@ -95,7 +95,7 @@ The private sibling [MAKO-Gym](https://github.com/eugeniosegala/MAKO-Gym) reposi
 
 #### Select the smallest sufficient Gym scope
 
-Do not run all 130 default hardware cases after every edit. Run the portable MAKO and Gym contracts first, then select the smallest hardware suite and regex that exercise the changed boundary. Omitting `--filter` runs the complete selected suite; running all three complete suites is reserved for the SteamOS release gate, broad changes spanning scheduling, scaling and backend pixels, or an explicit final validation request. Two additional Gamescope WSI order rows remain explicit because they require reviewed positive and deliberately reversed two-layer launchers.
+Do not run all 133 default hardware cases after every edit. Run the portable MAKO and Gym contracts first, then select the smallest hardware suite and regex that exercise the changed boundary. Omitting `--filter` runs the complete selected suite; running all three complete suites is reserved for the SteamOS release gate, broad changes spanning scheduling, scaling and backend pixels, or an explicit final validation request. Two additional Gamescope WSI order rows remain explicit because they require reviewed positive and deliberately reversed two-layer launchers.
 
 | Change boundary | Development hardware selection |
 | --- | --- |

@@ -399,6 +399,20 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
+                        title: t.scalingMethod
+                        description: t.scalingMethodDesc
+                        visible: backend.scaling_enabled
+                        enabled: backend.scaling_enabled
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
+                            currentIndex: backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1
+                            onActivated: index => backend.scaling_method = index === 0 ? "native" : index === 2 ? "ls1" : index === 3 ? "ls1-performance" : "mako"
+                        }
+                    }
+
+                    GroupEntry {
                         title: t.scalingFactor
                         description: t.scalingFactorDesc
                         visible: backend.scaling_enabled && backend.scaling_method !== "native"
@@ -412,20 +426,6 @@ ApplicationWindow {
 
                             value: backend.scaling_factor
                             onUpdate: value => backend.scaling_factor = value
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.scalingMethod
-                        description: t.scalingMethodDesc
-                        visible: backend.scaling_enabled
-                        enabled: backend.scaling_enabled
-
-                        ComboBox {
-                            Layout.fillWidth: true
-                            model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
-                            currentIndex: backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1
-                            onActivated: index => backend.scaling_method = index === 0 ? "native" : index === 2 ? "ls1" : index === 3 ? "ls1-performance" : "mako"
                         }
                     }
 

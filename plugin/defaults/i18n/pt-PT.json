@@ -1,9 +1,9 @@
 {
   "CONTENT_SCALING": "Redimensionamento",
   "SCALING_ENABLED": "Ativar motor de redimensionamento (reinício)",
-  "SCALING_ENABLED_DESC": "Ativa o caminho de redimensionamento do MAKO baseado no Gamescope no próximo arranque do jogo. Depois de iniciado, alterne em direto entre Nativo, MAKO e LS1; alterações ao modelo, fator e nitidez recriam a cadeia de troca e podem causar um breve piscar. O motor pode funcionar isoladamente ou antes da geração de fotogramas.",
+  "SCALING_ENABLED_DESC": "Ativa o caminho de redimensionamento do MAKO baseado no Gamescope no próximo arranque do jogo. Depois de iniciado, alterne entre Nativo, MAKO e LS1; alterações ao modelo, fator e nitidez recriam a cadeia de troca e podem causar um breve piscar. O motor pode funcionar isoladamente ou antes da geração de fotogramas.",
   "SCALING_METHOD": "Método de redimensionamento",
-  "SCALING_METHOD_DESC": "Nativo mantém o motor de redimensionamento preparado, mas passa a imagem do jogo sem um redimensionador MAKO. MAKO é a opção aberta de uma passagem. LS1 Quality e Performance usam os modelos licenciados do Lossless Scaling; se o LS1 não iniciar, o MAKO assume essa cadeia de troca. As alterações de método são aplicadas em direto através da recriação da cadeia de troca.",
+  "SCALING_METHOD_DESC": "Nativo mantém o motor de redimensionamento preparado, mas passa a imagem do jogo sem um redimensionador MAKO. MAKO é a opção aberta de uma passagem. LS1 Quality e Performance usam os modelos licenciados do Lossless Scaling; se o LS1 não iniciar, o MAKO assume essa cadeia de troca. As alterações de método são aplicadas através da recriação da cadeia de troca.",
   "SCALING_METHOD_NATIVE": "Nativo (sem redimensionador MAKO)",
   "SCALING_METHOD_MAKO": "MAKO (aberto)",
   "SCALING_METHOD_LS1": "LS1 Quality",

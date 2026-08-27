@@ -162,7 +162,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "scaling_method",
     fieldType: ConfigFieldType.STRING,
     default: "mako",
-    description: "live spatial selection: Native, MAKO, LS1 Quality, or LS1 Performance"
+    description: "spatial selection inside a provisioned engine: Native, MAKO, LS1 Quality, or LS1 Performance"
   },
   scaling_factor: {
     name: "scaling_factor",

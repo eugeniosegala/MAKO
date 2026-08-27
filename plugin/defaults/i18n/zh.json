@@ -1,9 +1,9 @@
 {
   "CONTENT_SCALING": "图像缩放",
   "SCALING_ENABLED": "启用缩放引擎（重启）",
-  "SCALING_ENABLED_DESC": "在下次启动游戏时启用基于 Gamescope 的 MAKO 缩放路径。游戏启动后，可实时切换原生、MAKO 和 LS1；更改模型、缩放倍数或锐度会重建交换链，并可能导致短暂闪烁。该引擎既可单独运行，也可在帧生成之前运行。",
+  "SCALING_ENABLED_DESC": "在下次启动游戏时启用基于 Gamescope 的 MAKO 缩放路径。游戏启动后，可切换原生、MAKO 和 LS1；更改模型、缩放倍数或锐度会重建交换链，并可能导致短暂闪烁。该引擎既可单独运行，也可在帧生成之前运行。",
   "SCALING_METHOD": "缩放方法",
-  "SCALING_METHOD_DESC": "原生模式会让缩放引擎保持就绪，但不使用 MAKO 缩放器，直接传递游戏图像。MAKO 是开放式单通道选项。LS1 Quality 和 Performance 使用获得许可的 Lossless Scaling 模型；如果 LS1 无法启动，该交换链会由 MAKO 接管。更改方法会通过重建交换链实时生效。",
+  "SCALING_METHOD_DESC": "原生模式会让缩放引擎保持就绪，但不使用 MAKO 缩放器，直接传递游戏图像。MAKO 是开放式单通道选项。LS1 Quality 和 Performance 使用获得许可的 Lossless Scaling 模型；如果 LS1 无法启动，该交换链会由 MAKO 接管。更改方法会通过重建交换链生效。",
   "SCALING_METHOD_NATIVE": "原生（不使用 MAKO 缩放器）",
   "SCALING_METHOD_MAKO": "MAKO（开放）",
   "SCALING_METHOD_LS1": "LS1 Quality",
