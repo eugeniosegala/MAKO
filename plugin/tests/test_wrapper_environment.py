@@ -23,7 +23,10 @@ from py_modules.mako_plugin.configuration import (  # noqa: E402
     ConfigurationManager,
     ConfigurationService,
 )
-from py_modules.mako_plugin.config_schema import CONFIG_SCHEMA  # noqa: E402
+from py_modules.mako_plugin.config_schema import (  # noqa: E402
+    CONFIG_SCHEMA,
+    ProfileData,
+)
 from py_modules.mako_plugin.config_schema_generated import (  # noqa: E402
     ALL_FIELDS,
     get_script_generation_logic,
@@ -631,12 +634,116 @@ class WrapperEnvironmentTests(unittest.TestCase):
         })
         self.assertTrue(settings["disable_hdr_exposure"])
 
-    def test_released_v22_gamescope_selector_migrates_to_independent_switch(self):
-        settings = self.service._normalize_wrapper_settings({
-            "external_vulkan_layer": "gamescope-wsi",
-        })
-        self.assertTrue(settings["gamescope_wsi_compatibility"])
-        self.assertEqual(settings["external_vulkan_layer"], "")
+    def test_released_v22_gamescope_selector_survives_wrapper_regeneration(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.service.config_dir = root / "config"
+            self.service.config_file_path = self.service.config_dir / "conf.toml"
+            self.service.wrapper_profile_settings_path = (
+                self.service.config_dir / "profile-wrapper-settings.json"
+            )
+            self.service.profile_metadata_path = (
+                self.service.config_dir / "profile-metadata.json"
+            )
+            self.service.mako_script_path = root / "bin" / "mako-run"
+            self.service.local_share_dir = root / "implicit_layer.d"
+            self.service.gamescope_wsi_compatibility_dir = (
+                root / "gamescope_wsi_compatibility.d"
+            )
+            self.service.gamescope_wsi_compatibility_dir.mkdir(parents=True)
+            (
+                self.service.gamescope_wsi_compatibility_dir /
+                configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+
+            defaults = ConfigurationManager.get_defaults()
+            profile_data = ProfileData(
+                current_profile="mako",
+                profiles={"mako": defaults},
+                global_config={
+                    "dll": defaults["dll"],
+                    "allow_fp16": defaults["allow_fp16"],
+                },
+            )
+            self.service._save_profile_data(profile_data)
+            self.service.migrate_profile_metadata_if_needed()
+            self.service.wrapper_profile_settings_path.write_text(
+                json.dumps({
+                    "version": 1,
+                    "profiles": {
+                        "mako": {
+                            "external_vulkan_layer": "gamescope-wsi",
+                        },
+                    },
+                }) + "\n",
+                encoding="utf-8",
+            )
+            self.service.mako_script_path.parent.mkdir(parents=True)
+            self.service.mako_script_path.write_text(
+                "\n".join([
+                    "#!/bin/bash",
+                    "# mako-wrapper-format: 45",
+                    'mako_wrapper_profile="${MAKO_PROFILE:-mako}"',
+                    'case "$mako_wrapper_profile" in',
+                    "    mako)",
+                    "        export MAKO_EXTERNAL_VULKAN_LAYER=gamescope-wsi",
+                    "        ;;",
+                    "esac",
+                    'exec "$@"',
+                    "",
+                ]),
+                encoding="utf-8",
+            )
+
+            self.assertFalse(
+                self.service.migrate_wrapper_profile_settings_if_needed()
+            )
+            with patch.object(
+                    configuration_module,
+                    "FLATPAK_IMPLICIT_LAYER_DIR",
+                    str(root / "absent-flatpak-extension"),
+            ):
+                self.assertTrue(self.service.migrate_launch_script_if_needed())
+
+            settings = self.service._read_wrapper_profile_settings()["mako"]
+            self.assertTrue(settings["gamescope_wsi_compatibility"])
+            self.assertEqual(settings["external_vulkan_layer"], "")
+
+            generated_wrapper = self.service.mako_script_path.read_text(
+                encoding="utf-8"
+            )
+            self.assertIn(self.service._WRAPPER_FORMAT_MARKER, generated_wrapper)
+            self.assertNotIn("gamescope-wsi", generated_wrapper)
+
+            probe = "\n".join([
+                'printf "IMPLICIT=%s\\n" "${VK_IMPLICIT_LAYER_PATH:-}"',
+                'printf "ENABLE=%s\\n" "${ENABLE_GAMESCOPE_WSI:-}"',
+                'printf "DISABLE=%s\\n" "${DISABLE_GAMESCOPE_WSI:-}"',
+                'printf "SELECTOR=%s\\n" "${MAKO_EXTERNAL_VULKAN_LAYER:-}"',
+            ])
+            result = subprocess.run(
+                [
+                    str(self.service.mako_script_path),
+                    "/bin/bash",
+                    "-c",
+                    probe,
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+                env={"PATH": os.environ.get("PATH", "")},
+            )
+            values = dict(
+                line.split("=", 1) for line in result.stdout.splitlines()
+            )
+            self.assertEqual(
+                values["IMPLICIT"],
+                f"{self.service.gamescope_wsi_compatibility_dir}:"
+                f"{self.service.local_share_dir}",
+            )
+            self.assertEqual(values["ENABLE"], "1")
+            self.assertEqual(values["DISABLE"], "")
+            self.assertEqual(values["SELECTOR"], "")
 
     def test_explicit_hdr_test_opt_in_remains_blocked(self):
         lines = self.service._hdr_activation_lines({

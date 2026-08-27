@@ -78,21 +78,9 @@ jobs:
           }
           gym_repo="${MAKO_GYM_REPO:-$GITHUB_WORKSPACE/../MAKO-Gym}"
           ./engine/scripts/run-mako-gym.sh \
-            --gym-repo "$gym_repo" --require --validate
-          ./engine/scripts/run-mako-gym.sh \
-            --gym-repo "$gym_repo" --require --suite recovery --validate
-          ./engine/scripts/run-mako-gym.sh \
-            --gym-repo "$gym_repo" --require --suite performance --validate
-          ./engine/scripts/run-mako-gym.sh \
-            --gym-repo "$gym_repo" --require --suite spatial-performance --validate
-          ./engine/scripts/run-mako-gym.sh \
-            --gym-repo "$gym_repo" --require --suite runtime-overhead --validate
-          ./engine/scripts/run-mako-gym.sh \
-            --gym-repo "$gym_repo" --require --suite sync-validation --validate
-          ./engine/scripts/run-mako-gym.sh \
-            --gym-repo "$gym_repo" --require --suite repeatability --validate
+            --gym-repo "$gym_repo" --require --all-suites --validate
           if [[ -n "$(git -C "$gym_repo" status --porcelain)" ]]; then
-            echo "MAKO-Gym must be clean for hardware validation: $gym_repo" >&2
+            echo "MAKO Gym must be clean for hardware validation: $gym_repo" >&2
             exit 1
           fi
           {
@@ -115,7 +103,7 @@ jobs:
           MAKO_BUILD_DIR=build/hardware-validation
           ./scripts/build-steamos-dev.sh
 
-      - name: Run MAKO-Gym procedural render-quality matrix
+      - name: Run MAKO Gym procedural render-quality matrix
         working-directory: engine
         run: |
           ./scripts/run-mako-gym.sh --require --suite quality \
@@ -126,11 +114,11 @@ jobs:
               -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
           )
           if (( ${#quality_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO-Gym quality result." >&2
+            echo "Expected exactly one sanitized MAKO Gym quality result." >&2
             exit 1
           fi
 
-      - name: Run MAKO-Gym render-performance budgets
+      - name: Run MAKO Gym render-performance budgets
         working-directory: engine
         run: |
           ./scripts/run-mako-gym.sh --require --suite performance \
@@ -141,11 +129,11 @@ jobs:
               -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
           )
           if (( ${#performance_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO-Gym performance result." >&2
+            echo "Expected exactly one sanitized MAKO Gym performance result." >&2
             exit 1
           fi
 
-      - name: Run MAKO-Gym spatial GPU-time budgets
+      - name: Run MAKO Gym spatial GPU-time budgets
         working-directory: engine
         run: |
           ./scripts/run-mako-gym.sh --require --suite spatial-performance \
@@ -156,11 +144,11 @@ jobs:
               -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
           )
           if (( ${#spatial_performance_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO-Gym spatial-performance result." >&2
+            echo "Expected exactly one sanitized MAKO Gym spatial-performance result." >&2
             exit 1
           fi
 
-      - name: Run MAKO-Gym Vulkan synchronization validation
+      - name: Run MAKO Gym Vulkan synchronization validation
         working-directory: engine
         run: |
           ./scripts/run-mako-gym.sh --require --suite sync-validation \
@@ -171,11 +159,11 @@ jobs:
               -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
           )
           if (( ${#sync_validation_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO-Gym synchronization-validation result." >&2
+            echo "Expected exactly one sanitized MAKO Gym synchronization-validation result." >&2
             exit 1
           fi
 
-      - name: Run MAKO-Gym quality-repeatability sentinels
+      - name: Run MAKO Gym quality-repeatability sentinels
         working-directory: engine
         run: |
           ./scripts/run-mako-gym.sh --require --suite repeatability \
@@ -186,7 +174,7 @@ jobs:
               -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
           )
           if (( ${#repeatability_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO-Gym repeatability result." >&2
+            echo "Expected exactly one sanitized MAKO Gym repeatability result." >&2
             exit 1
           fi
 
@@ -228,7 +216,7 @@ jobs:
               -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
           )
           if (( ${#gym_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO-Gym result." >&2
+            echo "Expected exactly one sanitized MAKO Gym result." >&2
             exit 1
           fi
           ./scripts/run-mako-gym.sh --require --suite recovery \
@@ -239,7 +227,7 @@ jobs:
               -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
           )
           if (( ${#recovery_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO-Gym recovery result." >&2
+            echo "Expected exactly one sanitized MAKO Gym recovery result." >&2
             exit 1
           fi
           ./scripts/run-mako-gym.sh --require --suite runtime-overhead \
@@ -250,7 +238,7 @@ jobs:
               -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
           )
           if (( ${#runtime_overhead_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO-Gym runtime-overhead result." >&2
+            echo "Expected exactly one sanitized MAKO Gym runtime-overhead result." >&2
             exit 1
           fi
 

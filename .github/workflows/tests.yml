@@ -28,7 +28,7 @@ jobs:
       - name: Set up portable Python runtime
         uses: actions/setup-python@v6
         with:
-          python-version: "3.11"
+          python-version: "3.10"
       - name: Reject protected licensed inputs and binary payloads
         run: ./scripts/test-protected-inputs.sh
       - name: Exercise safe capture staging and sanitization

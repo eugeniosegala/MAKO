@@ -2,12 +2,14 @@
 set -euo pipefail
 
 bridge="${1:?usage: test-run-mako-gym.sh /path/to/run-mako-gym.sh}"
+bridge_dir="$(cd "$(dirname "$bridge")" && pwd)"
+expected_version="$(tr -d '[:space:]' < "$bridge_dir/mako-gym-contract-version.txt")"
 temporary_root="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_root"' EXIT
 
 absent="$temporary_root/absent"
 optional_output="$($bridge --gym-repo "$absent" --list)"
-if [[ "$optional_output" != *'MAKO-Gym: SKIP checkout absent:'* ]]; then
+if [[ "$optional_output" != *'MAKO Gym: SKIP checkout absent:'* ]]; then
     echo "Optional missing-Gym invocation did not report a skip." >&2
     exit 1
 fi
@@ -18,7 +20,7 @@ fi
 
 fake_gym="$temporary_root/MAKO-Gym"
 mkdir -p "$fake_gym/scripts"
-printf '6\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '%s\n' "$expected_version" > "$fake_gym/GYM_CONTRACT_VERSION"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$@"' \
     > "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 chmod +x "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
@@ -93,18 +95,28 @@ if [[ "$recovery_forwarded" != "$recovery_expected" ]]; then
     echo "Gym recovery-suite arguments were not forwarded exactly." >&2
     exit 1
 fi
+all_suites_forwarded="$($bridge --gym-repo "$fake_gym" --all-suites --validate)"
+all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate'
+if [[ "$all_suites_forwarded" != "$all_suites_expected" ]]; then
+    echo "Gym all-suites validation did not invoke all eight runners exactly once." >&2
+    exit 1
+fi
+if "$bridge" --gym-repo "$fake_gym" --all-suites --suite quality --validate >/dev/null 2>&1; then
+    echo "Conflicting Gym suite selections unexpectedly succeeded." >&2
+    exit 1
+fi
 if "$bridge" --gym-repo "$fake_gym" --suite unknown >/dev/null 2>&1; then
     echo "Unknown Gym suite unexpectedly succeeded." >&2
     exit 1
 fi
 
-printf '1\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '%s\n' "${expected_version}-mismatch" > "$fake_gym/GYM_CONTRACT_VERSION"
 if "$bridge" --gym-repo "$fake_gym" --list >/dev/null 2>&1; then
     echo "Incompatible Gym contract unexpectedly succeeded." >&2
     exit 1
 fi
 
-printf '6\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '%s\n' "$expected_version" > "$fake_gym/GYM_CONTRACT_VERSION"
 chmod -x "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 if "$bridge" --gym-repo "$fake_gym" --list >/dev/null 2>&1; then
     echo "Non-executable Gym runner unexpectedly succeeded." >&2

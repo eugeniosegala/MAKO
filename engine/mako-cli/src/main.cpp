@@ -8,13 +8,17 @@
 #include "tools/validate.hpp"
 
 #include <array>
-#include <filesystem>
+#include <charconv>
+#include <cmath>
 #include <cstdlib>
+#include <cstring>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <span>
 #include <string>
 #include <string_view>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -23,6 +27,26 @@
 using namespace mako::cli;
 
 namespace {
+    template<typename Number>
+    Number numericArgument(
+            const char* const text, const std::string_view option) {
+        Number value{};
+        const char* const begin = text[0] == '+' ? text + 1 : text;
+        const char* const end = text + std::strlen(text);
+        const auto [parsed, error] = std::from_chars(begin, end, value);
+        const bool nonFinite = [](const Number parsedValue) {
+            if constexpr (std::is_floating_point_v<Number>)
+                return !std::isfinite(parsedValue);
+            return false;
+        }(value);
+        if (begin == end || error != std::errc{} || parsed != end || nonFinite) {
+            std::cerr << "error: " << option
+                << " requires a valid finite number: " << text << '\n';
+            std::exit(EXIT_FAILURE);
+        }
+        return value;
+    }
+
     /// print usage information
     void usage(const std::string& prog) {
         std::cerr <<
@@ -184,16 +208,18 @@ SUBCOMMAND OPTIONS:
                     opts.allow_fp16 = true;
                     break;
                 case 'w':
-                    opts.width = std::stoi(optarg);
+                    opts.width = numericArgument<int>(optarg, "--width");
                     break;
                 case 'h':
-                    opts.height = std::stoi(optarg);
+                    opts.height = numericArgument<int>(optarg, "--height");
                     break;
                 case 'f':
-                    opts.flow = std::stof(optarg);
+                    opts.flow = numericArgument<float>(optarg, "--flow");
                     break;
                 case 'm':
-                    opts.multiplier = std::stoi(optarg);
+                    opts.multiplier = numericArgument<int>(
+                        optarg, "--multiplier"
+                    );
                     break;
                 case 'p':
                     opts.performance_mode = true;
@@ -202,7 +228,7 @@ SUBCOMMAND OPTIONS:
                     opts.gpu.emplace(optarg);
                     break;
                 case 't':
-                    opts.duration = std::stoi(optarg);
+                    opts.duration = numericArgument<int>(optarg, "--duration");
                     break;
                 case '?':
                 default:
@@ -246,16 +272,18 @@ SUBCOMMAND OPTIONS:
                     opts.allow_fp16 = true;
                     break;
                 case 'w':
-                    opts.width = std::stoi(optarg);
+                    opts.width = numericArgument<int>(optarg, "--width");
                     break;
                 case 'h':
-                    opts.height = std::stoi(optarg);
+                    opts.height = numericArgument<int>(optarg, "--height");
                     break;
                 case 'f':
-                    opts.flow = std::stof(optarg);
+                    opts.flow = numericArgument<float>(optarg, "--flow");
                     break;
                 case 'm':
-                    opts.multiplier = std::stoi(optarg);
+                    opts.multiplier = numericArgument<int>(
+                        optarg, "--multiplier"
+                    );
                     break;
                 case 'p':
                     opts.performance_mode = true;
@@ -316,10 +344,12 @@ SUBCOMMAND OPTIONS:
                     opts.scene = optarg;
                     break;
                 case 't':
-                    opts.interpolation = std::stof(optarg);
+                    opts.interpolation = numericArgument<float>(
+                        optarg, "--interpolation"
+                    );
                     break;
                 case 'f':
-                    opts.flow_scale = std::stof(optarg);
+                    opts.flow_scale = numericArgument<float>(optarg, "--flow");
                     break;
                 case 'p':
                     opts.performance_mode = true;
@@ -375,19 +405,25 @@ SUBCOMMAND OPTIONS:
                     opts.method = optarg;
                     break;
                 case 'f':
-                    opts.scaling_factor = std::stof(optarg);
+                    opts.scaling_factor = numericArgument<float>(
+                        optarg, "--factor"
+                    );
                     break;
                 case 's':
-                    opts.sharpness = std::stof(optarg);
+                    opts.sharpness = numericArgument<float>(
+                        optarg, "--sharpness"
+                    );
                     break;
                 case 't':
-                    opts.scene_time = std::stof(optarg);
+                    opts.scene_time = numericArgument<float>(
+                        optarg, "--scene-time"
+                    );
                     break;
                 case 'w':
-                    opts.width = static_cast<uint32_t>(std::stoul(optarg));
+                    opts.width = numericArgument<uint32_t>(optarg, "--width");
                     break;
                 case 'h':
-                    opts.height = static_cast<uint32_t>(std::stoul(optarg));
+                    opts.height = numericArgument<uint32_t>(optarg, "--height");
                     break;
                 case '?':
                 default:
@@ -434,24 +470,30 @@ SUBCOMMAND OPTIONS:
                     opts.method = optarg;
                     break;
                 case 'w':
-                    opts.width = static_cast<uint32_t>(std::stoul(optarg));
+                    opts.width = numericArgument<uint32_t>(optarg, "--width");
                     break;
                 case 'h':
-                    opts.height = static_cast<uint32_t>(std::stoul(optarg));
+                    opts.height = numericArgument<uint32_t>(optarg, "--height");
                     break;
                 case 'f':
-                    opts.scaling_factor = std::stof(optarg);
+                    opts.scaling_factor = numericArgument<float>(
+                        optarg, "--factor"
+                    );
                     break;
                 case 's':
-                    opts.sharpness = std::stof(optarg);
+                    opts.sharpness = numericArgument<float>(
+                        optarg, "--sharpness"
+                    );
                     break;
                 case 'u':
-                    opts.warmup_iterations = static_cast<uint32_t>(
-                        std::stoul(optarg)
+                    opts.warmup_iterations = numericArgument<uint32_t>(
+                        optarg, "--warmup"
                     );
                     break;
                 case 'n':
-                    opts.samples = static_cast<uint32_t>(std::stoul(optarg));
+                    opts.samples = numericArgument<uint32_t>(
+                        optarg, "--samples"
+                    );
                     break;
                 case 'x':
                     opts.frame_generation_handoff = true;
@@ -542,25 +584,31 @@ SUBCOMMAND OPTIONS:
                     opts.method = optarg;
                     break;
                 case 'f':
-                    opts.scaling_factor = std::stof(optarg);
+                    opts.scaling_factor = numericArgument<float>(
+                        optarg, "--factor"
+                    );
                     break;
                 case 's':
-                    opts.sharpness = std::stof(optarg);
+                    opts.sharpness = numericArgument<float>(
+                        optarg, "--sharpness"
+                    );
                     break;
                 case 't':
-                    opts.interpolation = std::stof(optarg);
+                    opts.interpolation = numericArgument<float>(
+                        optarg, "--interpolation"
+                    );
                     break;
                 case 'w':
-                    opts.flow_scale = std::stof(optarg);
+                    opts.flow_scale = numericArgument<float>(optarg, "--flow");
                     break;
                 case 'p':
                     opts.performance_mode = true;
                     break;
                 case 1000:
-                    opts.width = static_cast<uint32_t>(std::stoul(optarg));
+                    opts.width = numericArgument<uint32_t>(optarg, "--width");
                     break;
                 case 1001:
-                    opts.height = static_cast<uint32_t>(std::stoul(optarg));
+                    opts.height = numericArgument<uint32_t>(optarg, "--height");
                     break;
                 case '?':
                 default:

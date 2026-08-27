@@ -222,7 +222,7 @@ Decky is optional. Desktop Linux users can install the published MAKO Renderer a
 - [Local packaging and publishing](plugin/docs/PACKAGING.md): build a ZIP for a Steam machine or publish a release.
 - [Release process](HOW_TO_RELEASE.md): publish both components end to end with one versioned command.
 - [Testing](TESTING.md): pull-request gates, sanitizer coverage, SteamOS hardware validation, and the runtime compatibility boundary.
-- [MAKO-Gym](https://github.com/eugeniosegala/MAKO-Gym): private real-hardware Vulkan, Gamescope, scaling, and frame-generation QA scenarios used by the SteamOS release gate.
+- [MAKO Gym](https://github.com/eugeniosegala/MAKO-Gym): private real-hardware Vulkan, Gamescope, scaling, and frame-generation QA scenarios used by the SteamOS release gate.
 - [MAKO Renderer documentation](engine/README.md): engine identity, source builds, configuration, and direct use.
 
 ## Featured in

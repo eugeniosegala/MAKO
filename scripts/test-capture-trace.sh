@@ -121,6 +121,10 @@ expect_failure 'session end precedes' \
   --session-end '2026-08-21T13:00:00.100000+01:00'
 expect_failure 'invalid ISO timestamp' \
   --session-start '2026-08-21 13:00:00+01:00'
+expect_failure 'invalid ISO timestamp' \
+  --session-start '2026-08-21T12:00:60Z'
+expect_failure 'invalid ISO timestamp' \
+  --session-start '2026-08-21T12:00:00-00:00'
 expect_failure 'session end is later than the capture time' \
   --session-end '2999-08-21T13:01:00+01:00'
 
@@ -280,7 +284,7 @@ destination=$(
     --game-id 1 \
     --version '2.1.0-dev-test' \
     --label '_Steady Scenario' \
-    --session-start '2016-12-31t23:59:60z' \
+    --session-start '2016-12-31t16:00:00-08:00' \
     --session-end '2017-01-01T00:01:00+00:00'
 )
 [[ "$destination" == "$trace_repo/traces/2.1.0-dev-test/game-name/20170101T000000Z-steady-scenario-r01" ]]
@@ -325,7 +329,7 @@ assert metadata["renderer_reported_build"] == "2.1.0"
 assert metadata["session"]["id"] == "20170101T000000Z-steady-scenario-r01"
 assert metadata["session"]["label"] == "_Steady Scenario"
 assert metadata["session"]["run_index"] == 1
-assert metadata["session"]["started_at"] == "2016-12-31t23:59:60z"
+assert metadata["session"]["started_at"] == "2016-12-31t16:00:00-08:00"
 assert metadata["session"]["ended_at"] == "2017-01-01T00:01:00+00:00"
 captured_at = datetime.fromisoformat(metadata["session"]["captured_at"])
 ended_at = datetime.fromisoformat(metadata["session"]["ended_at"])

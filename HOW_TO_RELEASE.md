@@ -10,7 +10,7 @@ MAKO deliberately separates development, tester packaging, release-candidate val
 | --- | --- | --- | --- |
 | Local iteration | Exercise a focused frontend, backend, native Renderer, host, or Flatpak change on the development machine | The `dev:*` commands in [MAKO Decky packaging](plugin/docs/PACKAGING.md) | Directly updates the installed development plugin; creates no release |
 | Tester package | Validate installation and upgrades with a self-contained package | `pnpm --dir plugin run package:local-engine` | Produces a complete local ZIP that can be sent to trusted testers; creates no tag or release |
-| Release candidate | Rebuild the committed, pushed source in a clean checkout on the dedicated SteamOS/AMD host and exercise it through MAKO-Gym | `./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Retains the verified ZIP and evidence for 14 days and optionally installs that exact ZIP; publishes nothing |
+| Release candidate | Rebuild the committed, pushed source in a clean checkout on the dedicated SteamOS/AMD host and exercise it through MAKO Gym | `./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Retains the verified ZIP and evidence for 14 days and optionally installs that exact ZIP; publishes nothing |
 | Published release | Publish immutable matched artifacts after the release candidate and manual game matrix pass | `./scripts/publish-release.sh X.Y.Z` | Publishes MAKO Renderer, pins it by checksum, then publishes MAKO Decky |
 | Published-package check | Prove the public asset installs through the user-facing path | Download the new MAKO Decky ZIP and use **Install MAKO Renderer** | Confirms the released asset, not a local or CI copy |
 
@@ -53,7 +53,7 @@ Run the **SteamOS hardware validation** workflow for that commit and require it 
 ./scripts/run-steamos-hardware-validation.sh --deploy-to-decky
 ```
 
-Omit `--deploy-to-decky` when the machine is not the dedicated MAKO Decky test installation. Review the retained GPU comparisons, MAKO-Gym 47-case feature summary and logs, 74-case quality summary, eight-row performance summary, nine-sentinel repeatability summary, 29-row default recovery summary, recorded Gym commit, and sanitized environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate. The launcher preserves only scoped reusable caches and removes its runner, checkout, credentials, staging, and generated outputs when the job ends.
+Omit `--deploy-to-decky` when the machine is not the dedicated MAKO Decky test installation. Review the retained GPU comparisons, MAKO Gym's 47-case feature summary and logs, 74-case quality summary, 17-row LSFG-performance summary, 36-row spatial-performance summary, 12-row runtime-overhead summary, eight-row synchronization-validation summary, nine-sentinel repeatability summary, 29-row default recovery summary, recorded Gym commit, and sanitized environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate. The launcher preserves only scoped reusable caches and removes its runner, checkout, credentials, staging, and generated outputs when the job ends.
 
 Then, from the repository root, replace `1.2.0` with the new version:
 

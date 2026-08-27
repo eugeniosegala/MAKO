@@ -44,6 +44,7 @@ class ConfigurationService(BaseService):
 
     _WRAPPER_FORMAT_VERSION = wrapper_generation.WRAPPER_FORMAT_VERSION
     _WRAPPER_FORMAT_MARKER = wrapper_generation.WRAPPER_FORMAT_MARKER
+    _FIRST_MULTI_PROFILE_WRAPPER_FORMAT = 32
     _HOST_COMPATIBILITY_MARKER = (
         wrapper_generation.HOST_COMPATIBILITY_MARKER
     )
@@ -270,6 +271,29 @@ class ConfigurationService(BaseService):
             self._wrapper_settings_for_profile,
         )
 
+    @staticmethod
+    def _wrapper_format_version(script_content: str) -> Optional[int]:
+        """Parse one canonical wrapper marker, retaining unmarked legacy input."""
+        marker_lines = [
+            line
+            for line in script_content.splitlines()
+            if "mako-wrapper-format" in line
+        ]
+        if not marker_lines:
+            if 'case "$mako_wrapper_profile" in' in script_content:
+                raise ValueError("unmarked wrapper contains multi-profile branches")
+            return None
+        if len(marker_lines) != 1:
+            raise ValueError("wrapper must contain exactly one format marker")
+
+        match = re.fullmatch(
+            r"# mako-wrapper-format: ([1-9][0-9]*)",
+            marker_lines[0],
+        )
+        if match is None:
+            raise ValueError("wrapper contains an invalid format marker")
+        return int(match.group(1))
+
     def migrate_wrapper_profile_settings_if_needed(self) -> bool:
         """Preserve old current-wrapper compatibility settings on first upgrade.
 
@@ -282,10 +306,15 @@ class ConfigurationService(BaseService):
 
         try:
             script_content = self.mako_script_path.read_text(encoding="utf-8")
-            # Format 32 contains a branch for every profile. It is not a safe
-            # source from which to reconstruct a missing settings database.
-            # Only the pre-profile wrappers represented one selected profile.
-            if self._WRAPPER_FORMAT_MARKER in script_content:
+            wrapper_format = self._wrapper_format_version(script_content)
+            # Format 32 and every later format contain a branch for every
+            # profile. They are not safe sources from which to reconstruct a
+            # missing settings database. Genuinely unmarked predecessor
+            # wrappers remain eligible for the skipped-version upgrade path.
+            if (
+                    wrapper_format is not None
+                    and wrapper_format >= self._FIRST_MULTI_PROFILE_WRAPPER_FORMAT
+            ):
                 return False
             script_values = ConfigurationManager.parse_script_content(script_content)
             profile_data = self._get_profile_data()

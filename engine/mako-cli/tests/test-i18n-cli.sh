@@ -49,6 +49,12 @@ help_output="$("$cli" --help 2>&1)" || fail "--help failed: $help_output"
     fail "MAKO spatial-quality-regression command disappeared from help"
 [[ $help_output == *'combined-quality-regression'* ]] ||
     fail "MAKO combined-quality-regression command disappeared from help"
+[[ $help_output == *'spatial-profile'* ]] ||
+    fail "MAKO spatial-profile command disappeared from help"
+[[ $help_output == *'synchronization-validation-canary'* ]] ||
+    fail "MAKO synchronization-validation-canary command disappeared from help"
+[[ $help_output == *'--width <INT>'* && $help_output == *'--height <INT>'* ]] ||
+    fail "MAKO exact-resolution options disappeared from help"
 
 run_failure "$cli" quality-regression --scene unknown-scene
 [[ $command_output == 'error: unknown quality scene: unknown-scene' ]] ||
@@ -61,6 +67,22 @@ run_failure "$cli" spatial-quality-regression --method unknown-method
 run_failure "$cli" spatial-quality-regression --method native
 [[ $command_output == 'error: spatial quality method native is passthrough, not a scaler' ]] ||
     fail "Native passthrough entered the spatial quality scaler path: $command_output"
+
+run_failure "$cli" spatial-profile --method unknown-method
+[[ $command_output == 'error: unknown spatial profile method: unknown-method' ]] ||
+    fail "unknown spatial profile method did not fail closed: $command_output"
+
+run_failure "$cli" spatial-profile --method native --width +1280 --factor +1.5
+[[ $command_output == 'error: spatial profile method native performs no GPU scaling work' ]] ||
+    fail "Native passthrough or leading-plus parsing regressed: $command_output"
+
+run_failure "$cli" spatial-profile --method mako --width nope
+[[ $command_output == 'error: --width requires a valid finite number: nope' ]] ||
+    fail "invalid spatial profile width did not fail cleanly: $command_output"
+
+run_failure "$cli" spatial-profile --method mako --factor nan
+[[ $command_output == 'error: --factor requires a valid finite number: nan' ]] ||
+    fail "non-finite spatial profile factor did not fail cleanly: $command_output"
 
 run_failure "$cli" combined-quality-regression --method unknown-method
 [[ $command_output == 'error: unknown combined quality spatial method: unknown-method' ]] ||

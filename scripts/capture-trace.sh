@@ -24,7 +24,7 @@ Options:
   --steam-log PATH         Steam console log to clip to the session window
   --config PATH            Renderer configuration source
   --mako-repo PATH         MAKO source checkout used for branch/commit identity
-  --trace-repo PATH        MAKO-Traces checkout that receives the capture
+  --trace-repo PATH        MAKO Traces checkout that receives the capture
   --notes PATH             Prepared Markdown observations
   -h, --help               Show this help
 
@@ -49,22 +49,21 @@ slugify() {
 
 iso_value() {
   python3 -c '
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 import re
 import sys
 mode = sys.argv[1]
 value = sys.argv[2]
 if re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}[Tt][0-9]{2}:[0-9]{2}:[0-9]{2}(?:\.[0-9]+)?(?:[Zz]|[+-][0-9]{2}:[0-9]{2})", value) is None:
     raise ValueError("timestamp must use RFC 3339 date-time syntax with a UTC offset")
+if value.endswith("-00:00"):
+    raise ValueError("timestamp must use a known UTC offset")
+if value[17:19] == "60":
+    raise ValueError("leap-second timestamps are not supported")
 value = value[:10] + "T" + value[11:]
 if value.endswith(("Z", "z")):
     value = value[:-1] + "+00:00"
-leap_second = value[17:19] == "60"
-if leap_second:
-    value = value[:17] + "59" + value[19:]
 parsed = datetime.fromisoformat(value)
-if leap_second:
-    parsed += timedelta(seconds=1)
 if parsed.tzinfo is None or parsed.utcoffset() is None:
     raise ValueError("timestamp must include a UTC offset")
 if mode == "microseconds":

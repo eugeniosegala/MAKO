@@ -2,7 +2,7 @@
 
 The MAKO trace extractor turns one completed real-game session into a structured, sanitized evidence bundle for comparison across Renderer versions. The producer is [`scripts/capture-trace.sh`](scripts/capture-trace.sh) in this public MAKO repository so diagnostic-format changes and extraction behavior evolve together.
 
-> **Private repository:** The companion [`eugeniosegala/MAKO-Traces`](https://github.com/eugeniosegala/MAKO-Traces) repository is private. It contains game-session logs, machine and runtime metadata, test observations, and performance evidence that must not be copied into the public MAKO repository. Access to that repository is not required to build, test, package, install, or release MAKO.
+> **Private repository:** The companion [MAKO Traces](https://github.com/eugeniosegala/MAKO-Traces) repository is private. It contains game-session logs, machine and runtime metadata, test observations, and performance evidence that must not be copied into the public MAKO repository. Access to that repository is not required to build, test, package, install, or release MAKO.
 
 ## Repository boundary
 
@@ -98,13 +98,13 @@ The archive being private reduces exposure but does not remove the need for mini
 
 ## Validation and contract changes
 
-Validate the private archive after every capture or user-report import from the MAKO-Traces checkout:
+Validate the private archive after every capture or user-report import from the MAKO Traces checkout:
 
 ```bash
 ./scripts/check.sh
 # or: just check
 ```
 
-The public producer emits the initial controlled-trace manifest. The private schemas are executable field authorities, and its shared validator owns chronology, path identity, the canonical checksum contract and verification, guarded initialization and refresh, privacy, protected inputs, and append-only history. If an intentional notes, derived-events, report, or factual metadata correction changes archived evidence, run `./scripts/refresh-checksums.sh <evidence-directory>` followed by `./scripts/check.sh` from MAKO-Traces; `just refresh <evidence-directory>` is the equivalent alias. Raw diagnostic, configuration, clipped source logs, and supplied user artifacts are immutable evidence and cannot be resealed after modification.
+The public producer emits the initial controlled-trace manifest. The private schemas are executable field authorities, and its shared validator owns chronology, path identity, the canonical checksum contract and verification, guarded initialization and refresh, privacy, protected inputs, and append-only history. If an intentional notes, derived-events, report, or factual metadata correction changes archived evidence, run `./scripts/refresh-checksums.sh <evidence-directory>` followed by `./scripts/check.sh` from MAKO Traces; `just refresh <evidence-directory>` is the equivalent alias. Raw diagnostic, configuration, clipped source logs, and supplied user artifacts are immutable evidence and cannot be resealed after modification.
 
-When the capture contract changes, update `scripts/capture-trace.sh`, `scripts/test-capture-trace.sh`, and `TRACES.md` in MAKO together with the schema, format/validation guides, notes template, validator, and mutation tests in MAKO-Traces. Historical raw evidence should remain intact; use a compatible reader or factual metadata migration instead of rewriting it.
+When the capture contract changes, update `scripts/capture-trace.sh`, `scripts/test-capture-trace.sh`, and `TRACES.md` in MAKO together with the schema, format/validation guides, notes template, validator, and mutation tests in MAKO Traces. Historical raw evidence should remain intact; use a compatible reader or factual metadata migration instead of rewriting it.

@@ -51,7 +51,7 @@ test-engine-portable:
 test-engine-sanitized:
     cd engine && MAKO_ENABLE_SANITIZERS=ON ./scripts/test-adaptive-scheduler.sh
 
-# Run MAKO-Gym's feature suite when its sibling checkout is available; pass --filter for focused development.
+# Run MAKO Gym's feature suite when its sibling checkout is available; pass --filter for focused development.
 test-engine-gym *args:
     ./engine/scripts/run-mako-gym.sh {{args}}
 
@@ -59,7 +59,7 @@ test-engine-gym *args:
 test-engine-gym-feature *args:
     ./engine/scripts/run-mako-gym.sh --suite vulkan {{args}}
 
-# Run a selected MAKO-Gym suite and fail when its sibling checkout is unavailable; vulkan remains the default.
+# Run a selected MAKO Gym suite and fail when its sibling checkout is unavailable; vulkan remains the default.
 test-engine-gym-required *args:
     ./engine/scripts/run-mako-gym.sh --require {{args}}
 

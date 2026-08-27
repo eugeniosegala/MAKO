@@ -149,27 +149,15 @@ if [[ -n "$(git status --porcelain)" ]]; then
   exit 1
 fi
 if ! git -C "$gym_repo" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-  echo "Hardware validation requires an initialized MAKO-Gym checkout: $gym_repo" >&2
+  echo "Hardware validation requires an initialized MAKO Gym checkout: $gym_repo" >&2
   exit 1
 fi
 if [[ -n "$(git -C "$gym_repo" status --porcelain)" ]]; then
-  echo "Hardware validation requires a clean MAKO-Gym worktree: $gym_repo" >&2
+  echo "Hardware validation requires a clean MAKO Gym worktree: $gym_repo" >&2
   exit 1
 fi
 ./engine/scripts/run-mako-gym.sh \
-  --gym-repo "$gym_repo" --require --validate
-./engine/scripts/run-mako-gym.sh \
-  --gym-repo "$gym_repo" --require --suite quality --validate
-./engine/scripts/run-mako-gym.sh \
-  --gym-repo "$gym_repo" --require --suite repeatability --validate
-./engine/scripts/run-mako-gym.sh \
-  --gym-repo "$gym_repo" --require --suite performance --validate
-./engine/scripts/run-mako-gym.sh \
-  --gym-repo "$gym_repo" --require --suite spatial-performance --validate
-./engine/scripts/run-mako-gym.sh \
-  --gym-repo "$gym_repo" --require --suite sync-validation --validate
-./engine/scripts/run-mako-gym.sh \
-  --gym-repo "$gym_repo" --require --suite recovery --validate
+  --gym-repo "$gym_repo" --require --all-suites --validate
 export MAKO_GYM_REPO="$gym_repo"
 branch="${branch:-$(git branch --show-current)}"
 if [[ -z "$branch" ]]; then

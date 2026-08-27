@@ -82,13 +82,13 @@ For native Steam-game iteration, use the persistent incremental build instead of
 ./scripts/build-steamos-dev.sh
 ```
 
-It builds the 64-bit Vulkan layer and CLI and keeps `build/steamos-dev` between runs. Real AMD image-quality orchestration is intentionally separate in the private sibling MAKO-Gym checkout; after building, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli` from `engine/` when that checkout is available. The SteamOS release workflow requires Gym's complete 74-case LSFG, spatial, and combined visual matrix, 17 repeated LSFG performance workloads, 36 exact-resolution pixel-qualified timestamp-query spatial-performance rows, 12 paired live runtime-overhead rows, eight synchronization-validation paths, and nine three-run deterministic-output sentinels, including FP32 and FP16 through 5120×2160. To retain a second incremental tree for genuine 32-bit games, run:
+It builds the 64-bit Vulkan layer and CLI and keeps `build/steamos-dev` between runs. Real AMD image-quality orchestration is intentionally separate in the private sibling MAKO Gym checkout; after building, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli` from `engine/` when that checkout is available. The SteamOS release workflow requires Gym's complete 74-case LSFG, spatial, and combined visual matrix, 17 repeated LSFG performance workloads, 36 exact-resolution pixel-qualified timestamp-query spatial-performance rows, 12 paired live runtime-overhead rows, eight synchronization-validation paths, and nine three-run deterministic-output sentinels, including FP32 and FP16 through 5120×2160. To retain a second incremental tree for genuine 32-bit games, run:
 
 ```bash
 ./scripts/build-steamos-dev.sh --with-32-bit
 ```
 
-The 32-bit tree defaults to `build/steamos-dev-32`. Both commands intentionally skip the Qt UI, Flatpak extensions, general test suite, archives, Decky ZIP, and private hardware QA. MAKO-Gym accepts `--dll` for a nonstandard Lossless Scaling installation and `--gpu` for an exact AMD device name. Subsequent builds compile only changed source and its dependants. When available, `ccache` is enabled automatically and stored under `build/cache/ccache`; install it with the rest of the Arch build prerequisites to retain compiler results across larger rebuilds.
+The 32-bit tree defaults to `build/steamos-dev-32`. Both commands intentionally skip the Qt UI, Flatpak extensions, general test suite, archives, Decky ZIP, and private hardware QA. MAKO Gym accepts `--dll` for a nonstandard Lossless Scaling installation and `--gpu` for an exact AMD device name. Subsequent builds compile only changed source and its dependants. When available, `ccache` is enabled automatically and stored under `build/cache/ccache`; install it with the rest of the Arch build prerequisites to retain compiler results across larger rebuilds.
 
 ### SteamOS Flatpak development cache
 

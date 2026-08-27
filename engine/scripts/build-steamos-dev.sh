@@ -22,7 +22,7 @@ Incrementally builds host Vulkan layers needed for native Steam-game testing.
 The default builds the 64-bit layer and CLI. The build directories are retained
 between runs; this does not build the Qt UI, Flatpak extensions, general test
 suite, archives, or a Decky ZIP. Real-hardware licensed-model validation is
-owned by the sibling MAKO-Gym repository. Set CXX to choose a compiler. ccache
+owned by the sibling MAKO Gym repository. Set CXX to choose a compiler. ccache
 is used automatically when present.
 
 Options:
