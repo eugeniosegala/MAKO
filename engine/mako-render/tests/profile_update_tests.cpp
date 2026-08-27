@@ -140,7 +140,8 @@ int main() {
     expect(adaptiveSchedulerPolicy &&
             adaptiveSchedulerPolicy->targetFps == current.target_fps &&
             adaptiveSchedulerPolicy->maximumMultiplier ==
-                current.adaptive_max_multiplier,
+                current.adaptive_max_multiplier &&
+            adaptiveSchedulerPolicy->nearTargetNativePreference,
         "Adaptive must retain its configured target when refresh is available");
 
     auto steadyPacing = current;
@@ -220,8 +221,10 @@ int main() {
             fixedRecoveryPolicy->targetFps == 60 &&
             fixedRecoveryPolicy->maximumMultiplier == 2 &&
             !fixedRecoveryPolicy->stableCadence &&
+            !fixedRecoveryPolicy->nearTargetNativePreference &&
             fixedRecoveryPolicy->dynamicCadenceRecovery,
-        "Fixed recovery must follow refresh with its multiplier as a ceiling");
+        "Fixed recovery must follow refresh with its multiplier as a ceiling "
+        "without enabling Adaptive-only native preference");
     expect(!generationSchedulerPolicy(next, std::nullopt),
         "Fixed recovery must not borrow Adaptive's hidden target");
     expect(generationSchedulerPolicy(next, 90)->targetFps == 90,

@@ -55,6 +55,11 @@ namespace {
             VkPhysicalDevice,
             std::unordered_map<VkSurfaceKHR, SurfaceScalingEligibility>
         > surfaceScalingEligibility;
+        uint64_t nextSurfaceScalingQueryGeneration{1};
+        std::unordered_map<
+            VkPhysicalDevice,
+            std::unordered_map<VkSurfaceKHR, FixedSurfaceScalingContract>
+        > fixedSurfaceScalingContracts;
         std::unordered_map<VkSurfaceKHR, SpatialScalingExtents>
             variableSurfaceScalingExtents;
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
@@ -716,6 +721,26 @@ namespace {
         };
     }
 
+    void clearFixedSurfaceScalingContract(
+            const VkPhysicalDevice physicalDevice,
+            const VkSurfaceKHR surface) {
+        if (!instance_info)
+            return;
+
+        const std::lock_guard lock(instance_info->surfaceScalingMutex);
+        const auto physicalContracts =
+            instance_info->fixedSurfaceScalingContracts.find(physicalDevice);
+        if (physicalContracts !=
+                instance_info->fixedSurfaceScalingContracts.end()) {
+            physicalContracts->second.erase(surface);
+            if (physicalContracts->second.empty()) {
+                instance_info->fixedSurfaceScalingContracts.erase(
+                    physicalContracts
+                );
+            }
+        }
+    }
+
     void maybeVirtualizeSurfaceCapabilities(
             const VkPhysicalDevice physicalDevice,
             const VkSurfaceKHR surface,
@@ -725,12 +750,17 @@ namespace {
         }
         try {
             auto candidate = capabilities;
-            if (!layer_info->root.modifySurfaceCapabilities(candidate))
+            const auto selection =
+                layer_info->root.modifySurfaceCapabilities(candidate);
+            if (!selection) {
+                clearFixedSurfaceScalingContract(physicalDevice, surface);
                 return;
+            }
             const auto eligibility = supportsSpatialScalingSurface(
                 physicalDevice, surface, capabilities
             );
             if (!eligibility.supported) {
+                clearFixedSurfaceScalingContract(physicalDevice, surface);
                 if (eligibility.firstObservation) {
                     std::cerr << "MAKO Renderer: spatial scaling capability "
                              "virtualization unavailable: not every advertised "
@@ -739,16 +769,39 @@ namespace {
                 }
                 return;
             }
+            uint64_t queryGeneration{};
+            {
+                const std::lock_guard lock(
+                    instance_info->surfaceScalingMutex
+                );
+                queryGeneration =
+                    instance_info->nextSurfaceScalingQueryGeneration++;
+                instance_info->fixedSurfaceScalingContracts[physicalDevice]
+                    .insert_or_assign(
+                        surface,
+                        FixedSurfaceScalingContract{
+                            .extents = selection->extents,
+                            .factor = selection->factor,
+                            .policyRevision = selection->policyRevision,
+                            .queryGeneration = queryGeneration,
+                        }
+                    );
+            }
             if (eligibility.firstObservation) {
                 std::cerr << "MAKO Renderer: spatial scaling surface virtualized: "
                           << "source=" << candidate.currentExtent.width << 'x'
                           << candidate.currentExtent.height
                           << "; presentation="
                           << capabilities.currentExtent.width << 'x'
-                          << capabilities.currentExtent.height << '\n';
+                          << capabilities.currentExtent.height
+                          << "; policy_revision="
+                          << selection->policyRevision
+                          << "; query_generation=" << queryGeneration
+                          << '\n';
             }
             capabilities = candidate;
         } catch (const std::exception& error) {
+            clearFixedSurfaceScalingContract(physicalDevice, surface);
             std::cerr << "MAKO Renderer: spatial scaling capability policy "
                          "failed closed: " << error.what() << '\n';
         }
@@ -765,10 +818,13 @@ namespace {
             instance_info->funcs.GetPhysicalDeviceSurfaceCapabilitiesKHR(
                 physicalDevice, surface, capabilities
             );
-        if (result == VK_SUCCESS && capabilities)
+        if (result == VK_SUCCESS && capabilities) {
             maybeVirtualizeSurfaceCapabilities(
                 physicalDevice, surface, *capabilities
             );
+        } else {
+            clearFixedSurfaceScalingContract(physicalDevice, surface);
+        }
         return result;
     }
 
@@ -785,13 +841,21 @@ namespace {
                     "vkGetPhysicalDeviceSurfaceCapabilities2KHR"
                 )
             );
-        if (!lower)
+        if (!lower) {
+            clearFixedSurfaceScalingContract(
+                physicalDevice, surfaceInfo->surface
+            );
             return VK_ERROR_EXTENSION_NOT_PRESENT;
+        }
         const auto result = lower(physicalDevice, surfaceInfo, capabilities);
         if (result == VK_SUCCESS) {
             maybeVirtualizeSurfaceCapabilities(
                 physicalDevice, surfaceInfo->surface,
                 capabilities->surfaceCapabilities
+            );
+        } else {
+            clearFixedSurfaceScalingContract(
+                physicalDevice, surfaceInfo->surface
             );
         }
         return result;
@@ -808,6 +872,11 @@ namespace {
                     instance_info->surfaceScalingEligibility) {
                 static_cast<void>(physicalDevice);
                 surfaces.erase(surface);
+            }
+            for (auto& [physicalDevice, contracts] :
+                    instance_info->fixedSurfaceScalingContracts) {
+                static_cast<void>(physicalDevice);
+                contracts.erase(surface);
             }
             instance_info->variableSurfaceScalingExtents.erase(surface);
         }
@@ -860,6 +929,7 @@ namespace {
             // create swapchain
             VkSwapchainCreateInfoKHR newInfo = *info;
             std::optional<SpatialScalingExtents> previousVariableExtents;
+            std::optional<FixedSurfaceScalingContract> fixedSurfaceContract;
             {
                 const std::lock_guard lock(
                     instance_info->surfaceScalingMutex
@@ -872,19 +942,35 @@ namespace {
                         instance_info->variableSurfaceScalingExtents.end()) {
                     previousVariableExtents = previous->second;
                 }
+                const auto physicalContracts =
+                    instance_info->fixedSurfaceScalingContracts.find(
+                        it->second.physdev()
+                    );
+                if (physicalContracts !=
+                        instance_info->fixedSurfaceScalingContracts.end()) {
+                    const auto contract = physicalContracts->second.find(
+                        info->surface
+                    );
+                    if (contract != physicalContracts->second.end())
+                        fixedSurfaceContract = contract->second;
+                }
             }
             const auto modification =
                 layer_info->root.modifySwapchainCreateInfo(
-                it->second, newInfo, previousVariableExtents,
-                [&, newInfo = &newInfo]() {
-                    auto res = it->second.df().CreateSwapchainKHR(
-                        device, newInfo, alloc, swapchain);
-                    if (res != VK_SUCCESS)
-                        throw ls::vulkan_error(res, "vkCreateSwapchainKHR() failed");
-                    createdSwapchain = *swapchain;
-                    lowerSwapchainCreated = true;
-                }
-            );
+                    it->second, newInfo, previousVariableExtents,
+                    fixedSurfaceContract,
+                    [&, newInfo = &newInfo]() {
+                        auto res = it->second.df().CreateSwapchainKHR(
+                            device, newInfo, alloc, swapchain);
+                        if (res != VK_SUCCESS) {
+                            throw ls::vulkan_error(
+                                res, "vkCreateSwapchainKHR() failed"
+                            );
+                        }
+                        createdSwapchain = *swapchain;
+                        lowerSwapchainCreated = true;
+                    }
+                );
             const auto commitVariableSurfaceScaling = [&]() {
                 const std::lock_guard lock(
                     instance_info->surfaceScalingMutex

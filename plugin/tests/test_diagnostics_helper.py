@@ -39,8 +39,9 @@ MAKO Renderer: present diagnostics: operation=runtime-transition-pending context
 MAKO Renderer: live profile resource change requested a game-owned swapchain recreation after one successful lower present
 MAKO Renderer: present diagnostics: operation=runtime-transition-recreation-requested context=1 state_revision=2 reason=profile-resources lower_present_result=0 signal=VK_ERROR_OUT_OF_DATE_KHR delivery=one-shot-after-semaphore-consumption
 MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 effective_flow_scale=0.75 lighter_model=1 generated_frame_capacity=3 hdr=1
-MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800
-MAKO Renderer: spatial scaling swapchain policy: requested=854x532; surface_current=1280x800; selected_source=854x532; selected_presentation=1280x800; format=44; format_supported=1; shape_supported=1; queue_presentation_support=supported; queue_commands_supported=1; variable_feedback_suppressed=0; active=1
+MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
+MAKO Renderer: spatial scaling swapchain policy: requested=854x532; surface_current=1280x800; surface_extent_mode=fixed; advertised_source=854x532; advertised_presentation=1280x800; actual_source=854x532; actual_presentation=1280x800; policy_revision=4; contract_policy_revision=4; query_generation=9; selected_source=854x532; selected_presentation=1280x800; format=44; format_supported=1; shape_supported=1; queue_presentation_support=supported; queue_commands_supported=1; variable_feedback_suppressed=0; inactive_reason=none; source_presentation_split=1; active=1
+MAKO Renderer: spatial scaling swapchain policy: requested=1280x800; surface_current=1280x800; surface_extent_mode=fixed; advertised_source=854x532; advertised_presentation=1280x800; actual_source=1280x800; actual_presentation=1280x800; policy_revision=4; contract_policy_revision=4; query_generation=9; selected_source=0x0; selected_presentation=0x0; format=44; format_supported=1; shape_supported=1; queue_presentation_support=not-checked; queue_commands_supported=1; variable_feedback_suppressed=0; inactive_reason=application-extent-override-no-source-presentation-split; source_presentation_split=0; active=0
 MAKO Renderer: spatial scaling active: source=854x532; presentation=1280x800; factor=1.5; requested_method=ls1; active_method=ls1; sharpness=0.5; ls1_model_variant=2; ls1_translator=/runtime/libvkd3d-shader.so.1; working_format=37; pipeline=pre-frame-generation
 MAKO Renderer: LS1 scaling unavailable; using MAKO fallback: test translator unavailable
 MAKO Renderer: spatial scaling variable-surface feedback guard: surface=5678; previous_source=500x500; previous_presentation=750x750; requested=750x750; action=native-feedback-guard
@@ -52,6 +53,7 @@ MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2
 MAKO Renderer: present diagnostics: operation=acquire-generated-image context=1 duration_ms=50 result=VK_TIMEOUT
 MAKO Renderer: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
 MAKO Renderer: present diagnostics: operation=ordered-acquire-policy context=1 configured_timeout_ms=50 slow_threshold_ms=25 severe_threshold_ms=50 budget_scope=application-present first_slow_action=zero-wait-protection guard_miss_action=native-relief-history-warmup recovery_probe_timeout_ms=8.33 recovery_probe_timeout_max_ms=25 recovery_probe_failure=backoff post_probe_policy=native-only stabilization_ms=2000
+MAKO Renderer: present diagnostics: operation=ordered-acquire-classification-split context=1 acquire_total_ms=27 acquire_max_ms=10.5 acquire_classification=maximum slow_threshold_ms=25 action=observe-only
 MAKO Renderer: present diagnostics: operation=ordered-acquire-budget-exhausted context=1 phase=acquire acquire_total_ms=50 acquire_max_ms=30 budget_ms=50 requested_generated=2 admitted_generated=2 presented_generated=1 action=stop-acquiring
 MAKO Renderer: present diagnostics: operation=ordered-acquire-guard context=1 phase=zero-wait-guard acquire_total_ms=31 acquire_max_ms=31 slow_threshold_ms=25 consecutive_slow_frames=1 action=zero-wait-protection
 MAKO Renderer: present diagnostics: operation=ordered-acquire-guard-bypass context=1 phase=native-relief acquire_timeout_ns=0 history_warmup_frames=3 action=native-present-warm-history-then-normal-retry
@@ -108,6 +110,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("skip-generated-frames", result.stdout)
         self.assertIn("ordered-acquire-quarantine", result.stdout)
         self.assertIn("ordered-acquire-policy", result.stdout)
+        self.assertIn("ordered-acquire-classification-split", result.stdout)
         self.assertIn("ordered-acquire-budget-exhausted", result.stdout)
         self.assertIn("ordered-acquire-guard", result.stdout)
         self.assertIn("ordered-acquire-guard-bypass", result.stdout)
@@ -131,6 +134,20 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("spatial scaling surface virtualized", result.stdout)
         self.assertIn("selected_source=854x532", result.stdout)
         self.assertIn("selected_presentation=1280x800", result.stdout)
+        self.assertIn("surface_extent_mode=fixed", result.stdout)
+        self.assertIn("advertised_source=854x532", result.stdout)
+        self.assertIn("advertised_presentation=1280x800", result.stdout)
+        self.assertIn("actual_source=854x532", result.stdout)
+        self.assertIn("actual_presentation=1280x800", result.stdout)
+        self.assertIn("policy_revision=4", result.stdout)
+        self.assertIn("contract_policy_revision=4", result.stdout)
+        self.assertIn("query_generation=9", result.stdout)
+        self.assertIn("inactive_reason=none", result.stdout)
+        self.assertIn(
+            "inactive_reason=application-extent-override-no-source-presentation-split",
+            result.stdout,
+        )
+        self.assertIn("source_presentation_split=0", result.stdout)
         self.assertIn("queue_presentation_support=supported", result.stdout)
         self.assertIn("queue_commands_supported=1", result.stdout)
         self.assertIn("spatial scaling active", result.stdout)
@@ -195,6 +212,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "generated-admission-recovered",
             "ordered-acquire-quarantine",
             "ordered-acquire-policy",
+            "ordered-acquire-classification-split",
             "ordered-acquire-budget-exhausted",
             "ordered-acquire-guard",
             "ordered-acquire-guard-bypass",
@@ -260,6 +278,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("operation=fixed-plan", result.stdout)
         self.assertIn("generated_skipped=0", result.stdout)
         self.assertIn("ordered-acquire-quarantine", result.stdout)
+        self.assertIn("ordered-acquire-classification-split", result.stdout)
         self.assertIn("ordered-acquire-recovered", result.stdout)
         self.assertIn("pipeline-busy-bypass", result.stdout)
         self.assertIn("pipeline-busy-recovered", result.stdout)

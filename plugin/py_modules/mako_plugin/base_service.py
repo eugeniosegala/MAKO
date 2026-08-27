@@ -128,7 +128,7 @@ class BaseService:
             self.log.info(f"File not found: {path}")
             return False
 
-    def _write_file(self, path: Path, content: str, mode: int = 0o644) -> None:
+    def _write_file(self, path: Path, content: str, mode: int = 0o644) -> bool:
         """Write content to a user-owned file.
 
         Args:
@@ -138,8 +138,24 @@ class BaseService:
 
         Raises:
             OSError: If write fails
+
+        Returns:
+            True when the file was updated, False when it was already current
         """
         try:
+            if path.is_file():
+                try:
+                    current_content = path.read_text(encoding="utf-8")
+                except (OSError, UnicodeError):
+                    current_content = None
+                if current_content == content:
+                    if path.stat().st_mode & 0o777 != mode:
+                        path.chmod(mode)
+                        self.log.info(f"Corrected permissions for {path}")
+                        return True
+                    self.log.debug(f"MAKO file already current: {path}")
+                    return False
+
             with open(path, "w", encoding="utf-8") as output:
                 output.write(content)
                 output.flush()
@@ -147,6 +163,7 @@ class BaseService:
 
             path.chmod(mode)
             self.log.info(f"Wrote to {path}")
+            return True
         except (OSError, IOError, PermissionError) as error:
             self.log.error(f"Failed to write to {path}: {error}")
             raise

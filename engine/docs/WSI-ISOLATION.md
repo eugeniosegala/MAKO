@@ -7,7 +7,7 @@ This document is the architectural source of truth for MAKO Renderer's Vulkan la
 Gamescope the compositor and Gamescope's Vulkan WSI layer are different components:
 
 - **Gamescope compositor:** owns the display session, scanout, Game Mode UI, focus, refresh information, and final composition. It remains active.
-- **Gamescope WSI Vulkan layer:** joins the game's Vulkan dispatch chain and applies swapchain/presentation policy. Managed MAKO launches exclude it from the game process by default; MAKO Decky can admit it through one per-profile experimental compatibility lane.
+- **Gamescope WSI Vulkan layer:** joins the game's Vulkan dispatch chain and applies swapchain/presentation policy. Managed MAKO launches exclude it from the game process by default; MAKO Decky can admit it through one per-profile experimental compatibility lane or the narrowly ordered scaling-at-process-start lane documented below.
 
 Disabling Gamescope WSI does not disable Gamescope, Steam, or Game Mode. It changes only the implicit Vulkan layers visible inside the launched application.
 
@@ -55,13 +55,17 @@ MAKO Decky uses the equivalent per-user path below `~/.local/share/mako-render/`
 
 `VK_IMPLICIT_LAYER_PATH` must be set before process startup. The Renderer cannot repair layer order after `vkCreateInstance`, so this behavior belongs in launchers, manifests, packaging checks, and Flatpak overrides as well as in C++ policy tests.
 
+The bounded managed scaling exception is selected before process startup: an eligible host profile that already has scaling enabled and has no explicit external Vulkan tool stages Gamescope WSI before MAKO. Other managed launches retain the isolated contract above. This is not a live layer-chain change and does not expand the optional-layer selector.
+
 ## Experimental MAKO Decky Gamescope WSI exception
 
 MAKO Decky exposes **Experimental Gamescope WSI (Restart)** under **Compatibility Settings** for games affected by coloured or pixelated motion artifacts when the default WSI-isolated path is active. It is off by default, stored per profile, requires a game restart, and shares one mutually exclusive optional-layer selector with MangoHud and vkBasalt.
 
 MAKO Renderer installation validates the host's `/usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.x86_64.json`: the layer identity, absolute available library, and enable/disable gates must match the expected 64-bit Gamescope WSI contract. A valid manifest is copied into MAKO's managed `~/.local/share/mako-render/vulkan/gamescope_wsi_compatibility.d` directory. The wrapper admits only MAKO's private manifests plus that staged WSI manifest, sets `ENABLE_GAMESCOPE_WSI=1`, removes `DISABLE_GAMESCOPE_WSI`, and keeps the known LSFG-VK, Mesa device-selection, and Mesa anti-lag guards. Missing or invalid host evidence leaves the default isolated path active.
 
-This exception remains SDR-only: `MAKO_DISABLE_HDR_EXPOSURE=1` stays set and inherited `DXVK_HDR` is removed. It is implemented only for direct host launches; Flatpak, Heroic/UMU, 32-bit validation, non-SteamOS layouts, HDR, and stable layer ordering remain outside the current evidence. Loader discovery is not a compatibility result. Verify the actual instance and device order, final generated FPS, image quality, and pacing before expanding this lane.
+This exception remains SDR-only: `MAKO_DISABLE_HDR_EXPOSURE=1` stays set and inherited `DXVK_HDR` is removed. It is implemented only for direct host launches; Flatpak, Heroic/UMU, 32-bit presentation, non-SteamOS layouts, HDR, real-game pacing, and every Gamescope limiter state remain outside the current evidence. The exact staged directory order and one headless native-Vulkan scaling-plus-Fixed probe are now verified below, but loader discovery alone is not a compatibility result. Verify the actual instance and device order, final generated FPS, image quality, and pacing before expanding this lane.
+
+Manifest order is decisive for the verified spatial-scaling compatibility lane. Headless probes with the Gamescope WSI manifest directory before MAKO's directory produced `Application -> Gamescope WSI -> MAKO`; MAKO then observed variable `currentExtent=UINT32_MAX` capabilities and safely activated a 640×360 source to 960×540 presentation split through its existing variable-surface policy. The reverse directory order produced `Application -> MAKO -> Gamescope WSI`; MAKO observed a fixed 640×360 surface and correctly remained inactive rather than forcing a hidden split. A combined scaling plus Fixed 2× probe with WSI above MAKO held approximately 60 source FPS and 120 output FPS across five observation windows. This evidence supports only the narrow, process-start SDR lane: managed launch may stage WSI before MAKO when the profile starts with scaling enabled and no explicit external Vulkan tool, while the existing isolated order remains the default for other launches. Enabling scaling for the first time inside an already isolated process cannot insert Gamescope WSI and therefore cannot manufacture the split; after the process starts with the ordered lane provisioned, scaling method, factor, sharpness, and enablement changes can use the variable-surface live recreation path. If MAKO instead observes a fixed native extent and the application or upper layer requests that native extent, the policy reports `inactive_reason=application-extent-override-no-source-presentation-split` and remains inactive.
 
 Observed compatibility evidence now includes Helldivers 2 on Steam Deck: the reporter saw purple or pixelated artifacts during camera movement on the default WSI-isolated path, and the curated Gamescope WSI path removed them. The corresponding WSI-on diagnostics contained only successful Vulkan presentation results. This is SDR compatibility evidence rather than HDR validation, and it demonstrates that successful presentation calls do not prove image correctness; WSI validation must retain a visual A/B check.
 
@@ -72,7 +76,7 @@ Observed compatibility evidence now includes Helldivers 2 on Steam Deck: the rep
 | MAKO Renderer | Included and gated by `ENABLE_MAKO=1` | Owns the swapchain sequence |
 | Gamescope compositor | Active | It is outside the application's implicit-layer chain |
 | Steam/Game Mode interface | Active | Compositor UI is not the Vulkan WSI layer |
-| Gamescope WSI Vulkan layer | Excluded | Avoids competing presentation policy |
+| Gamescope WSI Vulkan layer | Excluded by default; ordered before MAKO only for the bounded scaling-at-start or explicit compatibility lane | Avoids competing presentation policy while preserving the verified variable-surface scaling split where selected |
 | Steam Fossilize/implicit overlay hooks | Excluded | Prevents dispatch-chain bypass and ordering changes |
 | System-wide implicit layers | Excluded by default | Makes swapchain ownership deterministic; MAKO Decky may admit the guarded host directory for one selected External Tool |
 | Known LSFG-VK frame-generation layers | Disabled | Two frame generators cannot own one swapchain |
@@ -157,7 +161,7 @@ Expected Renderer evidence includes:
 - `Gamescope SDR presentation transport: mode=fifo-ordered` when Gamescope is detected; and
 - generated/original delivery records when presentation diagnostics are explicitly enabled.
 
-For the experimental compatibility exception, the process policy must instead report `gamescope_wsi=allowed` while `hdr_exposure=disabled`, and loader diagnostics must show both `VK_LAYER_MAKO_render` and `VK_LAYER_FROG_gamescope_wsi_x86_64`. That policy record proves only that MAKO did not set its isolation guard; loader evidence is still required to prove the WSI layer actually joined.
+For the explicit compatibility exception or automatic native scaling lane, the process policy must instead report `gamescope_wsi=allowed` while `hdr_exposure=disabled`, and loader diagnostics must show `VK_LAYER_FROG_gamescope_wsi_x86_64` above `VK_LAYER_MAKO_render`. That policy record proves only that MAKO did not set its isolation guard. Positive spatial-scaling evidence additionally requires `surface_extent_mode=variable`, `inactive_reason=none`, `source_presentation_split=1`, differing selected source/presentation extents, and a matching `spatial scaling active` record. A selected method or recreation request without those records is not evidence that a scaler ran.
 
 Use `VK_LOADER_DEBUG=layer` only for a focused reproduction because loader logs are verbose. Presentation diagnostics are also opt-in; synchronous logging can distort the timing problem under investigation. Follow [Collect diagnostics](COLLECT_DIAGNOSTICS.md) and retain the `layers`, `startup`, `performance`, and `recovery` presets.
 

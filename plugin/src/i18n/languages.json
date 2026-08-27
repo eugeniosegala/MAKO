@@ -2,7 +2,7 @@
   "es": {
     "CONTENT_SCALING": "Escalado",
     "SCALING_ENABLED": "Activar escalado",
-    "SCALING_ENABLED_DESC": "Para activarlo, elija en el juego una resolución inferior a la de la pantalla, active el escalado y seleccione un método. El juego recrea una vez la cadena de intercambio; es normal un breve parpadeo. El escalado puede usarse solo o antes de la generación de cuadros.",
+    "SCALING_ENABLED_DESC": "Active el escalado antes de iniciar el juego para que MAKO Decky prepare su ruta de presentación de Gamescope; después elija en el juego una resolución inferior a la de la pantalla. En esa sesión, el interruptor, el método, el factor y la nitidez se aplican mediante la recreación de la cadena de intercambio; es normal un breve parpadeo. El escalado puede usarse solo o antes de la generación de fotogramas.",
     "SCALING_METHOD": "Método de escalado",
     "SCALING_METHOD_DESC": "MAKO es el escalador abierto integrado de una sola pasada y no necesita Lossless.dll. LS1 Quality usa la red neuronal completa propietaria de Lossless Scaling; LS1 Performance usa su red de menor coste. Si LS1 no puede iniciarse, MAKO se hace cargo de ese intercambio. Cambiar el método recrea la cadena de intercambio.",
     "SCALING_METHOD_MAKO": "MAKO (abierto)",
@@ -245,7 +245,7 @@
   "ja": {
     "CONTENT_SCALING": "スケーリング",
     "SCALING_ENABLED": "スケーリングを有効化",
-    "SCALING_ENABLED_DESC": "有効にするには、ゲーム内でディスプレイより低い解像度を選び、スケーリングを有効化して方式を選択してください。ゲームがスワップチェーンを一度再作成するため、短い点滅は正常です。スケーリングは単独でもフレーム生成の前段でも使用できます。",
+    "SCALING_ENABLED_DESC": "MAKO Decky が Gamescope のプレゼンテーション経路を準備できるよう、ゲームを起動する前にスケーリングを有効にし、その後ゲーム内でディスプレイより低い解像度を選択してください。そのセッションでは、スイッチ、方式、倍率、シャープネスの変更がスワップチェーンの再作成によって適用されます。短い点滅は正常です。スケーリングは単独でもフレーム生成の前段でも使用できます。",
     "SCALING_METHOD": "スケーリング方式",
     "SCALING_METHOD_DESC": "MAKO は内蔵のオープンなシングルパススケーラーで、Lossless.dll は不要です。LS1 Quality は Lossless Scaling 独自の完全なニューラルネットワークを使用し、LS1 Performance は低負荷のネットワークを使用します。LS1 を開始できない場合、そのスワップチェーンでは MAKO が引き継ぎます。方式を変更するとスワップチェーンが再作成されます。",
     "SCALING_METHOD_MAKO": "MAKO（オープン）",
@@ -488,7 +488,7 @@
   "ko": {
     "CONTENT_SCALING": "스케일링",
     "SCALING_ENABLED": "스케일링 활성화",
-    "SCALING_ENABLED_DESC": "활성화하려면 게임에서 디스플레이보다 낮은 해상도를 선택하고 스케일링을 켠 뒤 방식을 선택하세요. 게임이 소유한 스왑체인이 한 번 다시 생성되며 짧은 깜박임은 정상입니다. 스케일링은 단독으로 또는 프레임 생성 전에 사용할 수 있습니다.",
+    "SCALING_ENABLED_DESC": "MAKO Decky가 Gamescope 프레젠테이션 경로를 준비할 수 있도록 게임을 실행하기 전에 스케일링을 켠 다음, 게임에서 디스플레이보다 낮은 해상도를 선택하세요. 해당 세션에서는 토글, 방식, 배율, 선명도 변경이 스왑체인 재생성을 통해 적용되며 짧은 깜박임은 정상입니다. 스케일링은 단독으로 또는 프레임 생성 전에 사용할 수 있습니다.",
     "SCALING_METHOD": "스케일링 방식",
     "SCALING_METHOD_DESC": "MAKO는 내장된 오픈 단일 패스 스케일러이며 Lossless.dll이 필요하지 않습니다. LS1 Quality는 Lossless Scaling의 독점 전체 신경망을 사용하고 LS1 Performance는 더 가벼운 신경망을 사용합니다. LS1을 시작할 수 없으면 해당 스왑체인에서 MAKO가 대신 작동합니다. 방식을 변경하면 스왑체인이 다시 생성됩니다.",
     "SCALING_METHOD_MAKO": "MAKO (오픈)",
@@ -757,7 +757,7 @@
   "pt-BR": {
     "CONTENT_SCALING": "Redimensionamento",
     "SCALING_ENABLED": "Ativar redimensionamento",
-    "SCALING_ENABLED_DESC": "Para ativar, selecione no jogo uma resolução abaixo da tela, ative o redimensionamento e escolha um método. O jogo recria a cadeia de troca uma vez; uma breve piscada é normal. O redimensionamento pode funcionar sozinho ou antes da geração de quadros.",
+    "SCALING_ENABLED_DESC": "Ative o redimensionamento antes de iniciar o jogo para que o MAKO Decky prepare o caminho de apresentação do Gamescope; depois, selecione no jogo uma resolução abaixo da tela. Nessa sessão, a opção, o método, o fator e a nitidez são aplicados por meio da recriação da cadeia de troca; uma breve piscada é normal. O redimensionamento pode funcionar sozinho ou antes da geração de quadros.",
     "SCALING_METHOD": "Método de redimensionamento",
     "SCALING_METHOD_DESC": "MAKO é o redimensionador aberto integrado de uma passagem e não precisa do Lossless.dll. LS1 Quality usa a rede neural completa proprietária do Lossless Scaling; LS1 Performance usa a rede de menor custo. Se o LS1 não iniciar, o MAKO assume essa cadeia de troca. Alterar o método recria a cadeia de troca.",
     "SCALING_METHOD_MAKO": "MAKO (aberto)",
@@ -1000,7 +1000,7 @@
   "pt-PT": {
     "CONTENT_SCALING": "Redimensionamento",
     "SCALING_ENABLED": "Ativar redimensionamento",
-    "SCALING_ENABLED_DESC": "Para ativar, selecione no jogo uma resolução inferior à do ecrã, ative o redimensionamento e escolha um método. O jogo recria a cadeia de troca uma vez; é normal um breve piscar. O redimensionamento pode funcionar isoladamente ou antes da geração de fotogramas.",
+    "SCALING_ENABLED_DESC": "Ative o redimensionamento antes de iniciar o jogo para que o MAKO Decky prepare o caminho de apresentação do Gamescope; depois, selecione no jogo uma resolução inferior à do ecrã. Nessa sessão, o seletor, o método, o fator e a nitidez são aplicados através da recriação da cadeia de troca; é normal um breve piscar. O redimensionamento pode funcionar isoladamente ou antes da geração de fotogramas.",
     "SCALING_METHOD": "Método de redimensionamento",
     "SCALING_METHOD_DESC": "MAKO é o redimensionador aberto integrado de uma passagem e não precisa do Lossless.dll. LS1 Quality usa a rede neural completa proprietária do Lossless Scaling; LS1 Performance usa a rede de menor custo. Se o LS1 não iniciar, o MAKO assume essa cadeia de troca. Alterar o método recria a cadeia de troca.",
     "SCALING_METHOD_MAKO": "MAKO (aberto)",
@@ -1256,7 +1256,7 @@
   "template": {
     "CONTENT_SCALING": "Spatial Scaling",
     "SCALING_ENABLED": "Enable Scaling",
-    "SCALING_ENABLED_DESC": "To activate, select an in-game resolution below the display resolution, enable Scaling, and choose a method. The game recreates its swapchain once; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
+    "SCALING_ENABLED_DESC": "Enable Scaling before launching a game so MAKO Decky can provision its Gamescope presentation path, then select an in-game resolution below the display resolution. In that session, the toggle, method, factor, and sharpness apply through swapchain recreation; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
     "SCALING_METHOD": "Scaling Method",
     "SCALING_METHOD_DESC": "MAKO is the built-in open single-pass scaler and does not need Lossless.dll. LS1 Quality uses Lossless Scaling's proprietary full neural network; LS1 Performance uses its lower-cost network. If LS1 cannot start, MAKO takes over for that swapchain. Changing the method recreates the swapchain.",
     "SCALING_METHOD_MAKO": "MAKO (Open)",
@@ -1499,7 +1499,7 @@
   "uk": {
     "CONTENT_SCALING": "Масштабування",
     "SCALING_ENABLED": "Увімкнути масштабування",
-    "SCALING_ENABLED_DESC": "Щоб активувати, виберіть у грі роздільну здатність нижчу за роздільну здатність дисплея, увімкніть масштабування та виберіть метод. Гра один раз перестворить свій ланцюжок обміну; коротке мерехтіння є нормальним. Масштабування може працювати окремо або перед генерацією кадрів.",
+    "SCALING_ENABLED_DESC": "Увімкніть масштабування перед запуском гри, щоб MAKO Decky підготував шлях презентації Gamescope, а потім виберіть у грі роздільну здатність нижчу за роздільну здатність дисплея. У цьому сеансі перемикач, метод, коефіцієнт і різкість застосовуються через перестворення ланцюжка обміну; коротке мерехтіння є нормальним. Масштабування може працювати окремо або перед генерацією кадрів.",
     "SCALING_METHOD": "Метод масштабування",
     "SCALING_METHOD_DESC": "MAKO — вбудований відкритий однопрохідний масштабувальник, якому не потрібен Lossless.dll. LS1 Quality використовує повну пропрієтарну нейронну мережу Lossless Scaling, а LS1 Performance — її менш витратну мережу. Якщо LS1 не запускається, для цього ланцюжка обміну його замінює MAKO. Зміна методу перестворює ланцюжок обміну.",
     "SCALING_METHOD_MAKO": "MAKO (відкритий)",
@@ -1742,7 +1742,7 @@
   "zh": {
     "CONTENT_SCALING": "图像缩放",
     "SCALING_ENABLED": "启用图像缩放",
-    "SCALING_ENABLED_DESC": "要启用缩放，请在游戏中选择低于显示器的分辨率，开启缩放并选择方法。游戏会重建一次其交换链，短暂闪烁属于正常现象。缩放可以单独运行，也可以在帧生成之前运行。",
+    "SCALING_ENABLED_DESC": "请在启动游戏前启用缩放，以便 MAKO Decky 配置 Gamescope 呈现路径，然后在游戏内选择低于显示器的分辨率。在该会话中，开关、方法、缩放倍数和锐度的更改会通过重建交换链生效；短暂闪烁属于正常现象。缩放可以单独运行，也可以在帧生成之前运行。",
     "SCALING_METHOD": "缩放方法",
     "SCALING_METHOD_DESC": "MAKO 是内置的开放式单通道缩放器，不需要 Lossless.dll。LS1 Quality 使用 Lossless Scaling 的专有完整神经网络；LS1 Performance 使用开销更低的网络。如果 LS1 无法启动，该交换链会由 MAKO 接管。更改方法会重建交换链。",
     "SCALING_METHOD_MAKO": "MAKO（开放）",

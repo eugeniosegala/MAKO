@@ -193,6 +193,7 @@ namespace mako::layer {
             size_t fixedGeneratedFrames{0};
             size_t fixedSkippedFrames{0};
             uint64_t contextId{0};
+            bool orderedAcquireClassificationSplitLogged{false};
         };
 
         struct ColorTransitionState {

@@ -18,6 +18,7 @@ namespace {
         double estimatedOutputFps{0.0};
         size_t finalValidatedLimit{0};
         size_t generatedCountChanges{0};
+        bool nearTargetNativePreference{false};
         bool valid{true};
     };
 
@@ -28,6 +29,7 @@ namespace {
             .maximumMultiplier = maximumMultiplier,
             .generatedFrameCapacity = 3,
             .stableCadence = stableCadence,
+            .nearTargetNativePreference = true,
         });
 
         AdaptiveScheduler::TimePoint now{};
@@ -75,26 +77,32 @@ namespace {
 
         const double averageGeneratedFrames = generatedFrames /
             static_cast<double>(sampleFrames);
+        const auto snapshot = scheduler.snapshot();
         return {
             .averageGeneratedFrames = averageGeneratedFrames,
             .estimatedOutputFps = baseFps * (1.0 + averageGeneratedFrames),
-            .finalValidatedLimit =
-                scheduler.snapshot().validatedGenerationLimit,
+            .finalValidatedLimit = snapshot.validatedGenerationLimit,
             .generatedCountChanges = generatedCountChanges,
+            .nearTargetNativePreference =
+                snapshot.nearTargetNativePreference,
             .valid = valid,
         };
     }
 }
 
 int main() {
-    constexpr std::array<double, 5> baseRates{30.0, 45.0, 47.0, 60.0, 90.0};
+    constexpr std::array<double, 11> baseRates{
+        30.0, 45.0, 47.0, 60.0, 80.0, 89.0,
+        90.0, 96.0, 100.0, 110.0, 114.0,
+    };
     constexpr std::array<uint32_t, 4> targets{60, 90, 100, 120};
     constexpr std::array<size_t, 3> maximumMultipliers{2, 3, 4};
     constexpr std::array<bool, 2> stableCadenceOptions{false, true};
 
     std::cout << "base_fps,target_fps,max_multiplier,smooth_cadence,"
                  "average_generated,generated_share,estimated_output_fps,"
-                 "validated_generated_limit,count_changes,status\n";
+                 "validated_generated_limit,count_changes,"
+                 "near_target_native,status\n";
 
     size_t failures = 0;
     size_t cases = 0;
@@ -109,6 +117,9 @@ int main() {
                         result.finalValidatedLimit <= maximumMultiplier - 1;
                     if (baseFps >= static_cast<double>(targetFps)) {
                         valid = valid && result.averageGeneratedFrames == 0.0;
+                    } else if (result.nearTargetNativePreference) {
+                        valid = valid && result.averageGeneratedFrames == 0.0 &&
+                            result.finalValidatedLimit == 0;
                     } else {
                         const double achievableOutputFps = std::min(
                             static_cast<double>(targetFps),
@@ -144,6 +155,8 @@ int main() {
                               << result.estimatedOutputFps << ','
                               << result.finalValidatedLimit << ','
                               << result.generatedCountChanges << ','
+                              << (result.nearTargetNativePreference ? 1 : 0)
+                              << ','
                               << (valid ? "pass" : "fail") << '\n';
                 }
             }

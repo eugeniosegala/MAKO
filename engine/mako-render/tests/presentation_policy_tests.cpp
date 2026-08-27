@@ -125,6 +125,9 @@ int main() {
     expect(OrderedAcquireRecovery::slowAcquireDuration(40) >= 37ms &&
             OrderedAcquireRecovery::slowAcquireDuration(40) < 38ms,
         "40 Hz ordered acquire pressure threshold lost display scaling");
+    expect(orderedAcquireRecoveryClassificationDuration(33ms, 11ms) == 11ms &&
+            orderedAcquireRecoveryClassificationDuration(30ms, 30ms) == 30ms,
+        "ordered multi-image recovery did not classify the longest individual acquire");
     expect(!preacquiredImagesRequireRetirement(false, 1) &&
             !preacquiredImagesRequireRetirement(true, 0) &&
             preacquiredImagesRequireRetirement(true, 1),

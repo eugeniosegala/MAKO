@@ -62,6 +62,20 @@ namespace {
     constexpr auto adaptiveRecoveryStabilizationDuration = std::chrono::seconds(3);
     constexpr auto adaptiveRampEvaluationDuration = std::chrono::seconds(1);
     constexpr auto adaptiveTargetDeficitDuration = std::chrono::seconds(1);
+    constexpr auto adaptiveNearTargetNativeHoldDuration =
+        std::chrono::seconds(1);
+    // Once native cadence has won the ideal interval-RMS comparison, require
+    // Fractional placement to become materially better before leaving the
+    // native preference. This quality margin supplies hysteresis without an
+    // absolute FPS boundary and scales with every configured target.
+    constexpr double adaptiveNearTargetFractionalExitRmsRatio = 0.85;
+    // The prediction is exactly tied at 75 percent of target, but measured
+    // cadence naturally wanders around that boundary. Admit a half-percent
+    // target-interval RMS tolerance so a nominal boundary cadence cannot
+    // chatter back into the equally irregular sparse Fractional sequence.
+    // Expressing the margin as target time keeps it proportional at 60, 90,
+    // 120, 144 Hz, and other configured targets.
+    constexpr double adaptiveNearTargetEntryTargetIntervalTolerance = 0.005;
     constexpr auto adaptiveRampStepDelay = std::chrono::milliseconds(250);
     constexpr auto adaptiveRampFirstRetryDelay = std::chrono::seconds(5);
     constexpr auto adaptiveRampSecondRetryDelay = std::chrono::seconds(15);
@@ -113,6 +127,52 @@ namespace {
     );
 
     AdaptiveSchedulerDiagnostics nullDiagnostics;
+
+    struct NearTargetCadenceQualityPrediction {
+        bool valid{false};
+        double nativeIntervalSquaredErrorMilliseconds{0.0};
+        double fractionalIntervalSquaredErrorMilliseconds{0.0};
+
+        [[nodiscard]] double nativeIntervalRmsMilliseconds() const {
+            return std::sqrt(std::max(
+                0.0, this->nativeIntervalSquaredErrorMilliseconds
+            ));
+        }
+
+        [[nodiscard]] double fractionalIntervalRmsMilliseconds() const {
+            return std::sqrt(std::max(
+                0.0, this->fractionalIntervalSquaredErrorMilliseconds
+            ));
+        }
+    };
+
+    [[nodiscard]] NearTargetCadenceQualityPrediction
+    predictNearTargetCadenceQuality(const double baseFps,
+            const uint32_t targetFps) {
+        const double target = static_cast<double>(targetFps);
+        if (baseFps <= target * 0.5 || baseFps >= target)
+            return {};
+
+        const double desiredOutputsPerRealFrame = target / baseFps;
+        const double generatedSourceShare = desiredOutputsPerRealFrame - 1.0;
+        const double sourceIntervalMilliseconds = 1000.0 / baseFps;
+        const double targetIntervalMilliseconds = 1000.0 / target;
+        const double nativeError =
+            sourceIntervalMilliseconds - targetIntervalMilliseconds;
+        const double dividedError =
+            sourceIntervalMilliseconds * 0.5 - targetIntervalMilliseconds;
+        const double fractionalSquaredError = (
+            (1.0 - generatedSourceShare) * nativeError * nativeError +
+            2.0 * generatedSourceShare * dividedError * dividedError
+        ) / desiredOutputsPerRealFrame;
+        return {
+            .valid = true,
+            .nativeIntervalSquaredErrorMilliseconds =
+                nativeError * nativeError,
+            .fractionalIntervalSquaredErrorMilliseconds =
+                std::max(0.0, fractionalSquaredError),
+        };
+    }
 
     std::chrono::steady_clock::duration adaptiveRampRetryDelayForFailures(
             const size_t failures) {
@@ -253,6 +313,8 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
         phase = AdaptiveSchedulerPhase::NativeCadenceProbe;
     } else if (this->state.stableCadence.limit) {
         phase = AdaptiveSchedulerPhase::StableCadence;
+    } else if (this->state.nearTargetNativePreference.active) {
+        phase = AdaptiveSchedulerPhase::NearTargetNative;
     }
 
     return {
@@ -271,6 +333,8 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
         .discontinuityRecoveryActive =
             this->state.discontinuityRecovery.deadline.has_value(),
         .nativeCadenceProbeActive = this->state.nativeCadenceProbe.active,
+        .nearTargetNativePreference =
+            this->state.nearTargetNativePreference.active,
         .targetOutputClockActive =
             this->state.outputPlanner.targetClockActive,
         .targetOutputBudgetCreditOutputs =
@@ -1469,6 +1533,130 @@ AdaptiveScheduler::advanceNativeCadenceProbe(
     return {};
 }
 
+MAKO_ADAPTIVE_STAGE_INLINE bool
+AdaptiveScheduler::advanceNearTargetNativePreference(
+        const TimePoint now, const double baseFps,
+        const size_t configuredGenerationLimit) {
+    auto& preference = this->state.nearTargetNativePreference;
+    if (!this->config.nearTargetNativePreference ||
+            configuredGenerationLimit == 0) {
+        preference.reset();
+        return false;
+    }
+
+    // Recovery, delivery evaluation, and qualified Smooth Cadence retain their
+    // existing ownership. Near-target preference is only an Active Fractional
+    // policy and never changes a transition already being measured.
+    if (this->state.discontinuityRecovery.deadline ||
+            this->state.rescue.until || this->state.rearm.required ||
+            this->state.ramp.evaluationAt ||
+            this->state.stableCadence.limit ||
+            this->state.stableCadence.evaluationAt ||
+            this->state.efficiencyProbe.evaluationAt ||
+            this->state.nativeCadenceProbe.active) {
+        preference.resetCandidate();
+        return preference.active;
+    }
+
+    const double targetFps = static_cast<double>(this->config.targetFps);
+    const bool couldPreferNative = baseFps > targetFps * 0.5 &&
+        baseFps < targetFps;
+    const auto quality = preference.active || couldPreferNative
+        ? predictNearTargetCadenceQuality(baseFps, this->config.targetFps)
+        : NearTargetCadenceQualityPrediction{};
+    bool requestedActive = false;
+    if (preference.active) {
+        if (baseFps >= targetFps) {
+            requestedActive = true;
+        } else if (quality.valid) {
+            requestedActive =
+                quality.fractionalIntervalSquaredErrorMilliseconds >
+                quality.nativeIntervalSquaredErrorMilliseconds *
+                    adaptiveNearTargetFractionalExitRmsRatio *
+                    adaptiveNearTargetFractionalExitRmsRatio;
+        }
+    } else if (baseFps >= targetFps &&
+            preference.candidateActive.value_or(false)) {
+        // Preserve an already-started near-target qualification through a
+        // noisy sample that briefly crosses the target. Do not start the state
+        // from a genuinely above-target stream, where native output is already
+        // mandatory and no preference transition is needed.
+        requestedActive = true;
+    } else if (quality.valid) {
+        // The ideal constant-source prediction crosses at exactly 75 percent
+        // of target. Compare the two derived RMS values with a small
+        // target-interval tolerance so measurement noise around an equal-
+        // quality boundary does not retain sparse Fractional placement.
+        const double entryToleranceMilliseconds =
+            1000.0 / targetFps *
+            adaptiveNearTargetEntryTargetIntervalTolerance;
+        requestedActive =
+            quality.fractionalIntervalRmsMilliseconds() +
+                entryToleranceMilliseconds >=
+            quality.nativeIntervalRmsMilliseconds();
+    }
+
+    if (requestedActive == preference.active) {
+        preference.resetCandidate();
+        return preference.active;
+    }
+    if (preference.candidateActive != requestedActive) {
+        preference.candidateActive = requestedActive;
+        preference.candidateSince = now;
+        // Qualification observes the current policy; it does not own it.
+        // Keep Fractional updates active until the held transition commits.
+        return preference.active;
+    }
+    if (!preference.candidateSince ||
+            now - *preference.candidateSince <
+                adaptiveNearTargetNativeHoldDuration) {
+        return preference.active;
+    }
+
+    preference.active = requestedActive;
+    preference.resetCandidate();
+    this->state.outputPlanner.resetTargetClock();
+    if (preference.active) {
+        this->state.outputPlanner.generationLimit = 0;
+        this->state.ramp.nextAt.reset();
+        this->state.ramp.evaluationAt.reset();
+        this->state.ramp.targetDeficitSince.reset();
+        this->state.ramp.delivery.reset();
+        this->state.ramp.previousLimit = 0;
+        this->state.ramp.baselineBaseFps = 0.0;
+        this->state.ramp.bridgeActive = false;
+        this->state.ramp.bridgeBaselineLimit = 0;
+        this->state.ramp.bridgeBaselineBaseFps = 0.0;
+        this->state.strictLoad.baselineLimit = 0;
+        this->state.strictLoad.baselineBaseFps = 0.0;
+        this->state.strictLoad.collapseSince.reset();
+        this->state.strictLoad.healthySince.reset();
+        this->state.strictLoad.recoverySince.reset();
+        this->state.efficiencyProbe.reset();
+        this->state.nativeCadenceProbe.reset();
+    } else {
+        // The one-second quality hold already proved a sustained Fractional
+        // advantage. Credit that interval to the normal ramp deficit hold so
+        // generation can resume without imposing a second policy delay.
+        this->state.ramp.targetDeficitSince =
+            now - adaptiveTargetDeficitDuration;
+    }
+    this->diagnostics->nearTargetNativePreference(
+        preference.active
+            ? "adaptive-near-target-native-enabled"
+            : "adaptive-near-target-native-disabled",
+        this->config.targetFps,
+        baseFps,
+        quality.nativeIntervalRmsMilliseconds(),
+        quality.fractionalIntervalRmsMilliseconds(),
+        adaptiveNearTargetNativeHoldDuration,
+        preference.active
+            ? "native-predicted-rms-not-worse"
+            : "fractional-predicted-rms-advantage"
+    );
+    return preference.active;
+}
+
 MAKO_ADAPTIVE_STAGE_INLINE AdaptiveScheduler::PlanningStageResult
 AdaptiveScheduler::applyStrictLoadGuard(
         const TimePoint now, const double baseFps,
@@ -1753,6 +1941,9 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
                 now < *this->state.rearm.notBefore
             ? *this->state.rearm.notBefore - now
             : AdaptiveScheduler::Clock::duration::zero();
+        const auto nearTargetQuality = predictNearTargetCadenceQuality(
+            baseFps, this->config.targetFps
+        );
         this->diagnostics->plan({
             .baseFps = baseFps,
             .targetFps = this->config.targetFps,
@@ -1761,7 +1952,17 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
             .configuredMaximumGeneratedFrames =
                 this->configuredGenerationLimit(),
             .stableCadence = this->state.stableCadence.limit.has_value(),
-            .phase = this->state.rearm.required ? "rearm-cooldown" : "",
+            .nearTargetNativePreference =
+                this->state.nearTargetNativePreference.active,
+            .predictedNativeIntervalRmsMilliseconds =
+                nearTargetQuality.nativeIntervalRmsMilliseconds(),
+            .predictedFractionalIntervalRmsMilliseconds =
+                nearTargetQuality.fractionalIntervalRmsMilliseconds(),
+            .phase = this->state.rearm.required
+                ? "rearm-cooldown"
+                : this->state.nearTargetNativePreference.active
+                    ? "near-target-native"
+                    : "",
             .consecutiveFailures = this->state.rearm.consecutiveProbeFailures,
             .rearmReason = this->state.rearm.reason,
             .rearmCooldownRemaining = rearmRemaining,
@@ -1843,6 +2044,7 @@ void AdaptiveScheduler::resetTiming(
     this->state.ramp.targetDeficitSince.reset();
     this->state.outputPlanner.resetTargetClock();
     this->state.nativeCadenceProbe.reset();
+    this->state.nearTargetNativePreference.resetCandidate();
     this->state.efficiencyProbe.reset();
     this->state.pacingWindow.reset();
 }
@@ -1909,6 +2111,7 @@ void AdaptiveScheduler::restoreGenerationLimit(
     this->state.strictLoad.healthySince.reset();
     this->state.strictLoad.recoverySince.reset();
     this->state.efficiencyProbe.reset();
+    this->state.nearTargetNativePreference.reset();
     this->state.outputPlanner.resetTargetClock();
 
     const auto stabilizationEnd = this->state.stabilization.until.value_or(now);
@@ -1989,6 +2192,7 @@ void AdaptiveScheduler::beginDiscontinuityRecovery(
         : now + adaptiveDiscontinuityMaximumDuration;
     this->state.discontinuityRecovery.stableSince.reset();
     this->state.discontinuityRecovery.softRecoveryAttempted = softRecoveryAttempted;
+    this->state.nearTargetNativePreference.reset();
     this->state.ramp.targetDeficitSince.reset();
     this->state.outputPlanner.resetTargetClock();
 
@@ -2110,6 +2314,7 @@ void AdaptiveScheduler::beginStabilization(
     this->state.ramp.evaluationAt.reset();
     this->state.ramp.delivery.reset();
     this->state.outputPlanner.generationLimit = 0;
+    this->state.nearTargetNativePreference.reset();
     this->state.ramp.previousLimit = 0;
     this->state.ramp.baselineBaseFps = 0.0;
     this->state.ramp.bridgeActive = false;
@@ -2398,6 +2603,12 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             this->state.stableCadence.retryAt =
                 now + adaptiveStableCadenceStrictSettlingDuration;
         }
+    }
+
+    if (this->advanceNearTargetNativePreference(
+            now, baseFps, configuredLimit)) {
+        this->state.ramp.targetDeficitSince.reset();
+        return;
     }
 
     // Once the current proven ceiling can already supply the requested target,

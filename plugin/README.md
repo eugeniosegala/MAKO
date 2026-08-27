@@ -25,7 +25,7 @@ Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bi
 - Installs the private MAKO Renderer Vulkan layer for the current user.
 - Generates the `/home/deck/.local/bin/mako-run` per-game launcher.
 - Stores renderer settings in `~/.config/mako-render/conf.toml` and versioned game/process identity separately for automatic per-game selection.
-- Supports independent spatial scaling plus fixed and adaptive frame generation with per-game controls. Scaling and frame generation can be used separately or together.
+- Supports independent spatial scaling plus fixed and adaptive frame generation with per-game controls. Scaling and frame generation can be used separately or together. Native Steam/Proton profiles launched with Scaling enabled automatically use the validated staged Gamescope WSI-before-MAKO order needed to keep the game's low render extent distinct from MAKO's presentation extent; later scaler changes remain live inside that provisioned process.
 - Provides a per-profile experimental Gamescope WSI compatibility toggle plus **External Tools** controls for host-installed MangoHud and experimental vkBasalt; only one optional Vulkan layer can be selected.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Launches selected games through MAKO's private renderer and configuration.
@@ -56,12 +56,12 @@ The resulting Decky ZIP is written under `plugin/out/`. Nothing is published by 
 | Canonical profile metadata, Decky-only wrapper-setting sidecars, and merged profile views | `py_modules/mako_plugin/profile_storage.py` |
 | Pure generated-wrapper text, compatibility guards, profile selection, and launch environment | `py_modules/mako_plugin/wrapper_generation.py` |
 | Running-game/editor session synchronisation and profile transactions | `src/hooks/useProfileSession.ts`, `src/hooks/useProfileEditorModel.ts` |
-| Reusable UI state for deferred Target FPS writes and collapsed sections | `src/hooks/useDeferredTargetFps.ts`, `src/hooks/usePersistentCollapseState.ts` |
+| Bounded optimistic configuration writes and reusable collapsed-section state | `src/hooks/useProfileConfigWriter.ts`, `src/hooks/usePersistentCollapseState.ts` |
 | View composition | `src/components/Content.tsx`, `ContentNotices.tsx`, `ConfigurationSection.tsx`, `ConfigurationSectionGroups.tsx`, `ProfileManagement.tsx`, `ScalingControl.tsx`, `FpsMultiplierControl.tsx` |
 | English translation keys, fallbacks, and dictionary order | `defaults/i18n/template.json` |
 | Advertised languages, Steam aliases, translated dictionaries, static call-site validation, and generated frontend bundle | `defaults/i18n/language_metadata.json`, `steam_language_map.json`, language JSON files, `scripts/i18n-contract.mjs`, and generated `src/i18n/languages.json` |
 
-The generated wrapper is disposable cache, not another configuration store. Backend characterization tests compare pure generator output with the service facade and lock exact wrapper and sidecar bytes; focused hook tests lock deferred writes, runtime profile transitions, offline editor selection, and local collapse-state recovery without snapshotting static layout.
+The generated wrapper is disposable cache, not another configuration store. Backend characterization tests compare pure generator output with the service facade and lock exact wrapper and sidecar bytes; focused hook tests lock bounded last-write-wins configuration bursts, single-flight persistence, close-panel flushing, runtime profile transitions, offline editor selection, and local collapse-state recovery without snapshotting static layout.
 
 MAKO Decky supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, Ukrainian, and Simplified Chinese, matching the MAKO Renderer desktop UI's ordered supported-language inventory and native display names through `tests/test_localization_language_contract.py`. Every translated dictionary has the same ordered key set as `template.json`, contains only strings, and preserves each named placeholder exactly. Every frontend `t()` call uses a static key and English fallback matching that template plus the exact replacement fields. Run `pnpm run check:i18n` for the read-only dictionary, call-site, and generated-file gate; after an intentional source-dictionary change, run `pnpm run generate:i18n` to regenerate `src/i18n/languages.json` rather than editing it directly. The normal one-shot build requires the tracked bundle to be current before bundling, and watch mode intentionally regenerates it before Rollup starts.
 

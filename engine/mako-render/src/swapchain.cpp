@@ -589,6 +589,8 @@ bool Swapchain::resetGenerationScheduler(
             .maximumMultiplier = policy->maximumMultiplier,
             .generatedFrameCapacity = this->destinationImages.size(),
             .stableCadence = policy->stableCadence,
+            .nearTargetNativePreference =
+                policy->nearTargetNativePreference,
             .dynamicCadenceRecovery = policy->dynamicCadenceRecovery,
             .dynamicCadenceProbeInterval =
                 ls::dynamicCadenceProbeIntervalDuration(

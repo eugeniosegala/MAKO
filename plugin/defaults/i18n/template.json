@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "Spatial Scaling",
   "SCALING_ENABLED": "Enable Scaling",
-  "SCALING_ENABLED_DESC": "To activate, select an in-game resolution below the display resolution, enable Scaling, and choose a method. The game recreates its swapchain once; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
+  "SCALING_ENABLED_DESC": "Enable Scaling before launching a game so MAKO Decky can provision its Gamescope presentation path, then select an in-game resolution below the display resolution. In that session, the toggle, method, factor, and sharpness apply through swapchain recreation; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
   "SCALING_METHOD": "Scaling Method",
   "SCALING_METHOD_DESC": "MAKO is the built-in open single-pass scaler and does not need Lossless.dll. LS1 Quality uses Lossless Scaling's proprietary full neural network; LS1 Performance uses its lower-cost network. If LS1 cannot start, MAKO takes over for that swapchain. Changing the method recreates the swapchain.",
   "SCALING_METHOD_MAKO": "MAKO (Open)",

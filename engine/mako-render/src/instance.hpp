@@ -12,11 +12,12 @@
 #include "spatial_scaling_policy.hpp"
 #include "swapchain.hpp"
 
-#include <chrono>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstddef>
 #include <cstdint>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -101,10 +102,13 @@ namespace mako::layer {
             const vk::Vulkan& vk, VkSwapchainCreateInfoKHR& createInfo,
             const std::optional<SpatialScalingExtents>&
                 previousVariableExtents,
+            const std::optional<FixedSurfaceScalingContract>&
+                fixedSurfaceContract,
             const std::function<void(void)>& finish) const;
         /// Replace a fixed native surface extent with the configured source
         /// extent after the lower driver has populated the capabilities.
-        [[nodiscard]] bool modifySurfaceCapabilities(
+        [[nodiscard]] std::optional<SpatialScalingCapabilitySelection>
+        modifySurfaceCapabilities(
             VkSurfaceCapabilitiesKHR& capabilities) const;
         /// create swapchain context
         /// @param vk vulkan instance
@@ -129,6 +133,8 @@ namespace mako::layer {
         void removeSwapchainContext(VkSwapchainKHR swapchain);
     private:
         void publishSurfaceScalingPolicy() noexcept;
+        [[nodiscard]] SpatialScalingPolicySnapshot
+        surfaceScalingPolicySnapshot() const noexcept;
 
         ls::WatchedConfig config;
         std::optional<ls::GameConf> active_profile;
@@ -152,8 +158,11 @@ namespace mako::layer {
         std::optional<std::chrono::steady_clock::time_point> lastHdrFeedbackPoll;
         std::optional<std::chrono::steady_clock::time_point> lastConfigurationPoll;
         uint64_t runtimeStateRevision{1};
-        // Packed flags + IEEE-754 factor form one coherent, lock-free policy
-        // snapshot for instance-level surface capability queries.
+        // A seqlock publishes packed flags + IEEE-754 factor as one coherent
+        // policy snapshot. The even sequence divided by two is the revision
+        // consumed by fixed-surface capability/create contracts.
+        std::mutex surfaceScalingPolicyPublishMutex;
+        std::atomic<uint64_t> surfaceScalingPolicySequence{0};
         std::atomic<uint64_t> surfaceScalingPolicy{0};
     };
 

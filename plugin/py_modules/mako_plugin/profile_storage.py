@@ -40,7 +40,7 @@ class ProfileMetadataEntry(TypedDict):
 
 ProfileMetadata = Dict[str, ProfileMetadataEntry]
 WrapperProfileSettings = Dict[str, WrapperSettingsData]
-ManagedTextWriter = Callable[[Path, str, int], None]
+ManagedTextWriter = Callable[[Path, str, int], bool]
 NormalizeWrapperSettings = Callable[[Dict[str, Any]], WrapperSettingsData]
 WrapperSettingsDefaults = Callable[[], WrapperSettingsData]
 ProcessesForConfig = Callable[[Dict[str, Any]], list[str]]

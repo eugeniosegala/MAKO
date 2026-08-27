@@ -74,14 +74,23 @@ vi.mock("@decky/ui", () => ({
   }) => <button className={className}>{children}</button>,
 }));
 vi.mock("../../src/components/MakoUi", () => ({
+  MakoFocusable: ({
+    children,
+    style,
+  }: {
+    children: React.ReactNode;
+    style?: React.CSSProperties;
+  }) => (
+    <div data-focusable="true" style={style}>
+      {children}
+    </div>
+  ),
   MakoInlineWarning: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
-  MakoSettingRelationship: ({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) => <div data-mako-setting-relationship="true">{children}</div>,
+  MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
+    <div data-mako-setting-relationship="true">{children}</div>
+  ),
   makoDialogButtonStyle: () => ({}),
 }));
 vi.mock("../../src/i18n/i18n", () => ({

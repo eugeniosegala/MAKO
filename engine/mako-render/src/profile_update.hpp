@@ -328,6 +328,7 @@ namespace mako::layer {
         uint32_t targetFps{0};
         size_t maximumMultiplier{0};
         bool stableCadence{false};
+        bool nearTargetNativePreference{false};
         bool dynamicCadenceRecovery{false};
         float dynamicCadenceProbeIntervalSeconds{
             ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
@@ -346,6 +347,7 @@ namespace mako::layer {
                 .targetFps = profile.target_fps,
                 .maximumMultiplier = profile.adaptive_max_multiplier,
                 .stableCadence = profile.adaptive_stable_cadence,
+                .nearTargetNativePreference = true,
                 .dynamicCadenceRecovery =
                     dynamicCadenceRecoveryEnabled(profile),
                 .dynamicCadenceProbeIntervalSeconds =
@@ -366,6 +368,7 @@ namespace mako::layer {
             .targetFps = *gamescopeRefreshHz,
             .maximumMultiplier = profile.multiplier,
             .stableCadence = false,
+            .nearTargetNativePreference = false,
             .dynamicCadenceRecovery = true,
             .dynamicCadenceProbeIntervalSeconds =
                 profile.dynamic_cadence_probe_interval_seconds,

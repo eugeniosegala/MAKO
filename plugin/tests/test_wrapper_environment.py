@@ -95,6 +95,63 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "")
 
+    def test_scaling_profile_admits_gamescope_presentation_split_at_start(self):
+        with tempfile.TemporaryDirectory() as compatibility_dir:
+            compatibility_path = Path(compatibility_dir)
+            (
+                compatibility_path /
+                configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            self.service.gamescope_wsi_compatibility_dir = compatibility_path
+            config = ConfigurationManager.get_defaults()
+            config["scaling_enabled"] = True
+            values = self._evaluate(config=config)
+
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"{compatibility_dir}:/private/mako/implicit_layer.d",
+        )
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
+        self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
+
+    def test_scaling_profile_fails_closed_without_staged_gamescope_wsi(self):
+        with tempfile.TemporaryDirectory() as compatibility_dir:
+            self.service.gamescope_wsi_compatibility_dir = Path(
+                compatibility_dir
+            )
+            config = ConfigurationManager.get_defaults()
+            config["scaling_enabled"] = True
+            values = self._evaluate(
+                {"ENABLE_GAMESCOPE_WSI": "1"},
+                config,
+            )
+
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+
+    def test_explicit_external_tool_remains_authoritative_for_scaling_profile(self):
+        with tempfile.TemporaryDirectory() as system_dir:
+            with patch.object(
+                configuration_module,
+                "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+                Path(system_dir),
+            ):
+                config = ConfigurationManager.get_defaults()
+                config["scaling_enabled"] = True
+                config["external_vulkan_layer"] = "mangohud"
+                values = self._evaluate(config=config)
+
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"/private/mako/implicit_layer.d:{system_dir}",
+        )
+        self.assertEqual(values["MANGOHUD"], "1")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+
     def test_mangohud_profile_admits_only_the_guarded_system_directory(self):
         with tempfile.TemporaryDirectory() as system_dir:
             with patch.object(
@@ -171,7 +228,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
         self.assertEqual(
             values["IMPLICIT"],
-            f"/private/mako/implicit_layer.d:{compatibility_dir}",
+            f"{compatibility_dir}:/private/mako/implicit_layer.d",
         )
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
@@ -388,6 +445,30 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 )
                 config = ConfigurationManager.get_defaults()
                 config["external_vulkan_layer"] = "gamescope-wsi"
+                with patch.object(
+                    configuration_module,
+                    "FLATPAK_IMPLICIT_LAYER_DIR",
+                    flatpak_dir,
+                ):
+                    values = self._evaluate(config=config)
+
+        self.assertEqual(values["IMPLICIT"], flatpak_dir)
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+
+    def test_flatpak_scaling_does_not_admit_host_gamescope_wsi(self):
+        with tempfile.TemporaryDirectory() as flatpak_dir:
+            with tempfile.TemporaryDirectory() as compatibility_dir:
+                compatibility_path = Path(compatibility_dir)
+                (
+                    compatibility_path /
+                    configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+                ).write_text("{}", encoding="utf-8")
+                self.service.gamescope_wsi_compatibility_dir = (
+                    compatibility_path
+                )
+                config = ConfigurationManager.get_defaults()
+                config["scaling_enabled"] = True
                 with patch.object(
                     configuration_module,
                     "FLATPAK_IMPLICIT_LAYER_DIR",

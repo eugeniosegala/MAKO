@@ -418,6 +418,32 @@ namespace {
                   << '\n';
     }
 
+    void logAdaptiveNearTargetNativePreference(
+            const std::string_view operation, const uint32_t targetFps,
+            const double baseFps, const double nativeIntervalRmsMilliseconds,
+            const double fractionalIntervalRmsMilliseconds,
+            const Clock::duration holdDuration,
+            const std::string_view reason) {
+        if (!enabled())
+            return;
+
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
+                  << operation
+                  << " context=" << activeContextId
+                  << " target_fps=" << targetFps
+                  << " base_fps=" << baseFps
+                  << " predicted_native_interval_rms_ms="
+                  << nativeIntervalRmsMilliseconds
+                  << " predicted_fractional_interval_rms_ms="
+                  << fractionalIntervalRmsMilliseconds
+                  << " hold_ms="
+                  << std::chrono::duration_cast<std::chrono::milliseconds>(
+                         holdDuration
+                     ).count()
+                  << " reason=" << reason
+                  << '\n';
+    }
+
     class SchedulerDiagnostics final : public AdaptiveSchedulerDiagnostics {
     public:
         [[nodiscard]] bool enabled() const override {
@@ -439,6 +465,13 @@ namespace {
                     << " generated=" << plan.generatedFrames
                     << " max_generated=" << plan.maximumGeneratedFrames
                     << " stable_cadence=" << (plan.stableCadence ? 1 : 0);
+            if (plan.nearTargetNativePreference) {
+                message << " near_target_native=1"
+                        << " predicted_native_interval_rms_ms="
+                        << plan.predictedNativeIntervalRmsMilliseconds
+                        << " predicted_fractional_interval_rms_ms="
+                        << plan.predictedFractionalIntervalRmsMilliseconds;
+            }
             if (plan.configuredMaximumGeneratedFrames) {
                 message << " configured_max_generated="
                         << plan.configuredMaximumGeneratedFrames;
@@ -683,6 +716,19 @@ namespace {
             logDynamicCadenceRecovery(
                 operation, generationLimit, baselineBaseFps,
                 measuredBaseFps, confirmedSamples
+            );
+        }
+
+        void nearTargetNativePreference(const std::string_view operation,
+                const uint32_t targetFps, const double baseFps,
+                const double nativeIntervalRmsMilliseconds,
+                const double fractionalIntervalRmsMilliseconds,
+                const Clock::duration holdDuration,
+                const std::string_view reason) override {
+            logAdaptiveNearTargetNativePreference(
+                operation, targetFps, baseFps,
+                nativeIntervalRmsMilliseconds,
+                fractionalIntervalRmsMilliseconds, holdDuration, reason
             );
         }
     };

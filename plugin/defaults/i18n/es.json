@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "Escalado",
   "SCALING_ENABLED": "Activar escalado",
-  "SCALING_ENABLED_DESC": "Para activarlo, elija en el juego una resolución inferior a la de la pantalla, active el escalado y seleccione un método. El juego recrea una vez la cadena de intercambio; es normal un breve parpadeo. El escalado puede usarse solo o antes de la generación de cuadros.",
+  "SCALING_ENABLED_DESC": "Active el escalado antes de iniciar el juego para que MAKO Decky prepare su ruta de presentación de Gamescope; después elija en el juego una resolución inferior a la de la pantalla. En esa sesión, el interruptor, el método, el factor y la nitidez se aplican mediante la recreación de la cadena de intercambio; es normal un breve parpadeo. El escalado puede usarse solo o antes de la generación de fotogramas.",
   "SCALING_METHOD": "Método de escalado",
   "SCALING_METHOD_DESC": "MAKO es el escalador abierto integrado de una sola pasada y no necesita Lossless.dll. LS1 Quality usa la red neuronal completa propietaria de Lossless Scaling; LS1 Performance usa su red de menor coste. Si LS1 no puede iniciarse, MAKO se hace cargo de ese intercambio. Cambiar el método recrea la cadena de intercambio.",
   "SCALING_METHOD_MAKO": "MAKO (abierto)",

@@ -50,8 +50,19 @@ def _create_staged_file(
 
 
 def write_managed_text_atomically(
-        destination: Path, content: str, mode: int, logger: Any) -> None:
-    """Atomically replace a generated MAKO text file."""
+        destination: Path, content: str, mode: int, logger: Any) -> bool:
+    """Atomically replace a generated MAKO text file only when needed."""
+    try:
+        actual_mode = destination.stat().st_mode & 0o777
+        if (
+                actual_mode == mode
+                and destination.read_text(encoding="utf-8") == content
+        ):
+            logger.debug("Generated MAKO file already current: %s", destination)
+            return False
+    except (OSError, UnicodeError):
+        pass
+
     file_descriptor, temporary_path = _create_staged_file(
         destination,
         mode,
@@ -67,6 +78,7 @@ def write_managed_text_atomically(
 
         temporary_path.replace(destination)
         logger.info("Wrote generated MAKO file to %s", destination)
+        return True
     except OSError as error:
         logger.error("Failed to atomically replace %s: %s", destination, error)
         raise OSError(

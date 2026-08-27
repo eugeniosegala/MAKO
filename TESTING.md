@@ -41,7 +41,7 @@ The `Tests` GitHub Actions workflow runs on every pull request and push to `main
 
 The Renderer suite also exercises the standalone `mako-launch` contract: deterministic implicit-layer selection, loader activation, LSFG-VK conflict guards, the Gamescope WSI/HDR process-start boundary, strict fail-closed launcher settings, Zink/ALSA environment application, advanced environment forwarding, argument quoting, input validation, and child exit-status propagation. The portable `run-mako-gym.sh` contract separately proves optional absence, required fail-closed behavior, exact argument forwarding, version mismatch rejection, and runner validation without needing the private checkout. The packaged hardware smoke test proves instance/device insertion with `vulkaninfo` and, when a graphical compositor and `vkcube` are available, covers finite swapchain creation and presentation too. Presentation changes must preserve the invariants and expanded matrices in [WSI isolation](engine/docs/WSI-ISOLATION.md), [HDR pipeline architecture](engine/docs/HDR-PIPELINE.md), and [spatial scaling architecture](engine/docs/SCALING.md).
 
-The frontend suite intentionally tests operations where a UI/backend disagreement can damage or misrepresent user state: Renderer installation, configuration persistence, typed profile-field patches, profile-bound deferred Target FPS writes, profile runtime-session transitions, out-of-order profile loads, profile switching, default-profile protection, persistent section state, and Decky RPC method names. It does not use snapshots or test static labels and layout.
+The frontend suite intentionally tests operations where a UI/backend disagreement can damage or misrepresent user state: Renderer installation, configuration persistence, typed profile-field patches, centralized burst coalescing, single-flight writes, close-panel flushing, profile runtime-session transitions, out-of-order profile loads, profile switching, default-profile protection, persistent section state, supported Steam focus-flow values, and Decky RPC method names. It does not use snapshots or test static labels and layout.
 
 The backend suite characterizes the exact generated wrapper and profile-sidecar bytes at the pure-module/service boundary. These tests ensure refactoring cannot silently change wrapper ordering, safety exports, profile metadata, or the allowlisted Decky-only settings that are merged with Renderer TOML.
 
@@ -95,7 +95,7 @@ The private sibling [MAKO-Gym](https://github.com/eugeniosegala/MAKO-Gym) reposi
 
 #### Select the smallest sufficient Gym scope
 
-Do not run all 122 hardware cases after every edit. Run the portable MAKO and Gym contracts first, then select the smallest hardware suite and regex that exercise the changed boundary. Omitting `--filter` runs the complete selected suite; running all three complete suites is reserved for the SteamOS release gate, broad changes spanning scheduling, scaling and backend pixels, or an explicit final validation request.
+Do not run all 130 default hardware cases after every edit. Run the portable MAKO and Gym contracts first, then select the smallest hardware suite and regex that exercise the changed boundary. Omitting `--filter` runs the complete selected suite; running all three complete suites is reserved for the SteamOS release gate, broad changes spanning scheduling, scaling and backend pixels, or an explicit final validation request. Two additional Gamescope WSI order rows remain explicit because they require reviewed positive and deliberately reversed two-layer launchers.
 
 | Change boundary | Development hardware selection |
 | --- | --- |
@@ -104,7 +104,7 @@ Do not run all 122 hardware cases after every edit. Run the portable MAKO and Gy
 | LSFG output, spatial reconstruction, shaders, colour conversion, precision, Flow Scale, model selection or scaling-to-FG handoff | Quality suite filtered by affected pipeline, method, scene or parameter; add relevant feature rows when lifecycle or presentation also changed. |
 | Cadence transitions, Steady Adaptive, Dynamic Cadence Recovery, stalls, scheduler recovery or swapchain lifecycle | Recovery suite filtered by the affected recovery family; add relevant feature rows when configuration or construction also changed. |
 | Shared Vulkan synchronization, presentation, backend resource ownership or cross-cutting Renderer changes | Run every affected suite completely; run all three when the boundary genuinely spans them. |
-| Release candidate | The required SteamOS workflow runs all 44 feature, 66 quality and 12 recovery cases against the exact package. |
+| Release candidate | The required SteamOS workflow runs all 44 feature, 66 quality and 20 default recovery cases against the exact package. |
 
 Examples:
 
@@ -114,6 +114,8 @@ just test-engine-gym-quality --filter '^spatial-mako-'
 just test-engine-gym-quality --filter '^combined-ls1-performance-.*traffic'
 just test-engine-gym-recovery --filter '(stall|cadence-drop)$'
 just test-engine-gym-recovery --filter 'recreate$'
+just test-engine-gym-recovery --filter 'near-target|four-x'
+just test-engine-gym-recovery --filter 'scaling-live'
 ```
 
 Every filtered result is evidence only for its selected rows. Before merging a production change, widen from the iteration filter to the complete affected suite when the change touches a shared owner used by multiple rows. Portable-only changes and isolated scenario/assertion edits do not acquire an unrelated full-Gym requirement.
@@ -138,7 +140,7 @@ Select the scripted recovery matrix through the bridge:
 ./engine/scripts/run-mako-gym.sh --suite recovery
 ```
 
-That 12-case manifest uses a small native-Vulkan moving workload to control cadence rise, false-probe rejection, isolated hitch, hard stall, sustained cadence drop, and game-owned swapchain replacement. It covers Fixed, Fractional Adaptive, Steady Adaptive, Ultra Performance, MAKO scaling, and LS1 scaling. Every row enforces a 90% source-cadence floor, exact ordered recovery diagnostics, positive generation before disruption, and generation or native recovery afterward. Its authoritative phase and evidence contract is in `MAKO-Gym/docs/RUNTIME-RECOVERY-MATRIX.md`.
+That manifest has 20 default rows plus two explicit Gamescope WSI order rows. Its small native-Vulkan moving workload controls cadence rise, false-probe rejection, isolated hitch, hard stall, sustained cadence drop, game-owned swapchain replacement, steady and noisy near-target cadence, ordered 4× health, 4× target-rate control, and live scaling lifecycle changes. It covers Fixed, Fractional Adaptive, Steady Adaptive, Ultra Performance, MAKO scaling, LS1 scaling, method/factor switching, disable/re-enable, compatible re-query activation, and fixed-extent rejection. Every default row enforces its source-cadence validity floor, exact ordered diagnostics, and the expectation-specific recovery, cadence, lifecycle, or delivery threshold. Its authoritative phase and evidence contract is in `MAKO-Gym/docs/RUNTIME-RECOVERY-MATRIX.md`.
 
 The replacement rows use Vulkan's real `oldSwapchain` handoff rather than destroying first. They require the new Renderer context to be classified as a replacement while both contexts are live, the old context to retire afterward, Adaptive's one-second replacement settling guard to remain distinct from the three-second cold-start guard, and native plus LS1 Adaptive generation to resume within a three-second post-replacement source phase.
 
@@ -176,7 +178,7 @@ The workflow:
 4. builds the complete Decky ZIP from the same source tree;
 5. extracts the packaged Renderer and proves that the real Vulkan loader activates `VK_LAYER_MAKO_render` on the runner's AMD GPU;
 6. passes that exact extracted Renderer launcher to MAKO-Gym and requires all 44 native-Vulkan feature scenarios to pass;
-7. builds Gym's test-only native-Vulkan workload and requires all 12 scripted recovery scenarios to pass against the same extracted launcher; and
+7. builds Gym's test-only native-Vulkan workload and requires all 20 default scripted recovery, cadence, and lifecycle scenarios to pass against the same extracted launcher; and
 8. retains the complete verified Decky ZIP, sanitized environment evidence, procedural GPU comparison images, and MAKO-Gym feature/recovery logs and summaries for 14 days under the tested commit.
 
 Pass `--deploy-to-decky` only on a dedicated device with an existing MAKO Decky development installation. That option safely synchronizes the already-verified ZIP into the existing plugin, asks Decky Loader to reload it, and invokes MAKO Decky's normal installer against that exact bundled Renderer. The production installer owns host libraries, manifests, wrappers, engine state, diagnostics, and refreshes of already-installed Flatpak runtime branches; no component is rebuilt or installed through a second CI-only implementation. It intentionally does not run by default because it changes the installed test device.

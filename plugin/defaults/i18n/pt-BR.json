@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "Redimensionamento",
   "SCALING_ENABLED": "Ativar redimensionamento",
-  "SCALING_ENABLED_DESC": "Para ativar, selecione no jogo uma resolução abaixo da tela, ative o redimensionamento e escolha um método. O jogo recria a cadeia de troca uma vez; uma breve piscada é normal. O redimensionamento pode funcionar sozinho ou antes da geração de quadros.",
+  "SCALING_ENABLED_DESC": "Ative o redimensionamento antes de iniciar o jogo para que o MAKO Decky prepare o caminho de apresentação do Gamescope; depois, selecione no jogo uma resolução abaixo da tela. Nessa sessão, a opção, o método, o fator e a nitidez são aplicados por meio da recriação da cadeia de troca; uma breve piscada é normal. O redimensionamento pode funcionar sozinho ou antes da geração de quadros.",
   "SCALING_METHOD": "Método de redimensionamento",
   "SCALING_METHOD_DESC": "MAKO é o redimensionador aberto integrado de uma passagem e não precisa do Lossless.dll. LS1 Quality usa a rede neural completa proprietária do Lossless Scaling; LS1 Performance usa a rede de menor custo. Se o LS1 não iniciar, o MAKO assume essa cadeia de troca. Alterar o método recria a cadeia de troca.",
   "SCALING_METHOD_MAKO": "MAKO (aberto)",

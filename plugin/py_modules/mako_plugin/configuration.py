@@ -489,14 +489,15 @@ class ConfigurationService(BaseService):
         try:
             script_content = self._generate_script_content(config)
 
-            write_managed_text_atomically(
+            script_changed = write_managed_text_atomically(
                 self.mako_script_path,
                 script_content,
                 0o755,
                 self.log,
             )
 
-            self.log.info(f"Updated MAKO launch script at {self.mako_script_path}")
+            if script_changed:
+                self.log.info(f"Updated MAKO launch script at {self.mako_script_path}")
 
             return self._success_response(ConfigurationResponse,
                                         "Launch script updated successfully",
@@ -1320,14 +1321,15 @@ class ConfigurationService(BaseService):
             script_content = self._generate_script_content_for_profile(profile_data)
 
             # Write the script file
-            write_managed_text_atomically(
+            script_changed = write_managed_text_atomically(
                 self.mako_script_path,
                 script_content,
                 0o755,
                 self.log,
             )
 
-            self.log.info(f"Updated MAKO launch script at {self.mako_script_path} for profile '{profile_data['current_profile']}'")
+            if script_changed:
+                self.log.info(f"Updated MAKO launch script at {self.mako_script_path} for profile '{profile_data['current_profile']}'")
 
             # Get current profile config for response
             current_config = self._config_for_profile(

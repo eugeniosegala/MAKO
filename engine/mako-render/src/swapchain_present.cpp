@@ -1038,9 +1038,46 @@ VkResult Swapchain::presentGeneratedFrames(
             OrderedAcquireRecovery::slowAcquireDuration(
                 this->gamescopeRefreshHz
             );
+        const auto recoveryAcquireDuration =
+            orderedAcquireRecoveryClassificationDuration(
+                totalAcquireDuration, maximumAcquireDuration
+            );
+        if (presentDiagnosticsEnabled() &&
+                !this->diagnosticsState.
+                    orderedAcquireClassificationSplitLogged &&
+                totalAcquireDuration >= slowThreshold &&
+                maximumAcquireDuration < slowThreshold) {
+            this->diagnosticsState.
+                orderedAcquireClassificationSplitLogged = true;
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=ordered-acquire-classification-split"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " acquire_total_ms="
+                      << std::chrono::duration<double, std::milli>(
+                             totalAcquireDuration
+                         ).count()
+                      << " acquire_max_ms="
+                      << std::chrono::duration<double, std::milli>(
+                             maximumAcquireDuration
+                         ).count()
+                      << " acquire_classification=maximum"
+                      << " slow_threshold_ms="
+                      << std::chrono::duration<double, std::milli>(
+                             slowThreshold
+                         ).count()
+                      << " requested_generated="
+                      << plan.requestedGeneratedFrames.size()
+                      << " admitted_generated="
+                      << plan.admittedGeneratedFrameCount
+                      << " presented_generated="
+                      << presentedGeneratedFrames
+                      << " frame=" << this->frameState.realFrameIndex
+                      << " sequence=" << this->frameState.sequenceIndex
+                      << " action=observe-only\n";
+        }
         const auto observation =
             this->recoveryState.orderedAcquireRecovery.observe(
-                observedAt, totalAcquireDuration, slowThreshold, timedOut,
+                observedAt, recoveryAcquireDuration, slowThreshold, timedOut,
                 acquireDeadlineExceeded,
                 plan.boundedOrderedAcquireProbe
             );
@@ -1069,6 +1106,7 @@ VkResult Swapchain::presentGeneratedFrames(
                           << std::chrono::duration<double, std::milli>(
                                  maximumAcquireDuration
                              ).count()
+                          << " acquire_classification=maximum"
                           << " acquire_budget_ms="
                           << (plan.configuredAcquireTimeout
                                 ? static_cast<double>(
@@ -1119,6 +1157,7 @@ VkResult Swapchain::presentGeneratedFrames(
                       << std::chrono::duration<double, std::milli>(
                              maximumAcquireDuration
                          ).count()
+                      << " acquire_classification=maximum"
                       << " acquire_budget_ms="
                       << (plan.configuredAcquireTimeout
                             ? static_cast<double>(
@@ -1158,6 +1197,7 @@ VkResult Swapchain::presentGeneratedFrames(
                       << std::chrono::duration<double, std::milli>(
                              maximumAcquireDuration
                          ).count()
+                      << " acquire_classification=maximum"
                       << " acquire_budget_ms="
                       << (plan.configuredAcquireTimeout
                             ? static_cast<double>(

@@ -168,7 +168,7 @@ describe("Scaling controls", () => {
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "To activate, select an in-game resolution below the display resolution, enable Scaling, and choose a method. The game recreates its swapchain once; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
+        "Enable Scaling before launching a game so MAKO Decky can provision its Gamescope presentation path, then select an in-game resolution below the display resolution. In that session, the toggle, method, factor, and sharpness apply through swapchain recreation; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
       ),
     ).toBeTruthy();
     expect(

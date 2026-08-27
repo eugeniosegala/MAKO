@@ -67,7 +67,7 @@ test-engine-gym-required *args:
 test-engine-gym-quality *args:
     ./engine/scripts/run-mako-gym.sh --suite quality {{args}}
 
-# Run selected scripted runtime-recovery rows; no --filter runs all 12 cases.
+# Run selected scripted runtime-recovery rows; no --filter runs all 20 default cases.
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
 

@@ -1,6 +1,6 @@
 # Optional graphics integrations
 
-This guide documents deliberate exceptions to MAKO Renderer's managed implicit-layer isolation and the separate boundary for game-local integrations. [WSI isolation](WSI-ISOLATION.md) remains the architectural source of truth: the supported default gives MAKO one deterministic presentation owner and exposes only MAKO's private Vulkan manifests. MAKO Decky's experimental Gamescope WSI compatibility control is an evidence-gathering exception, not a change to that default.
+This guide documents deliberate exceptions to MAKO Renderer's managed implicit-layer isolation and the separate boundary for game-local integrations. [WSI isolation](WSI-ISOLATION.md) remains the architectural source of truth: profiles without spatial scaling or an explicit optional layer use the isolated default, which gives MAKO one deterministic presentation owner and exposes only MAKO's private Vulkan manifests. A native profile launched with Scaling enabled uses the same guarded Gamescope WSI exception described below to obtain a real source/presentation split; this does not broaden discovery to unrelated host layers.
 
 MAKO Renderer owns this Vulkan compatibility contract, which is why the guide lives with the engine documentation. Every `/home/deck/.local/bin/mako-run` command below is nevertheless a **MAKO Decky** launch workflow: MAKO Decky installs and generates `mako-run`, while a directly installed MAKO Renderer uses `mako-launch`. External-layer chaining through standalone `mako-launch` has not been validated and is not claimed by this guide.
 
@@ -12,17 +12,17 @@ MAKO Decky normally launches a native Steam or Proton game with:
 /home/deck/.local/bin/mako-run %command%
 ```
 
-The wrapper selects MAKO's private `VK_IMPLICIT_LAYER_PATH`, removes additive implicit-layer discovery, disables Gamescope WSI and competing frame-generation identities, and keeps Gamescope itself active outside the game's Vulkan chain. Keep this default unless a specific additional layer has its own compatibility evidence.
+For a profile without Scaling or an explicit optional layer, the wrapper selects MAKO's private `VK_IMPLICIT_LAYER_PATH`, removes additive implicit-layer discovery, disables Gamescope WSI and competing frame-generation identities, and keeps Gamescope itself active outside the game's Vulkan chain. Keep this default unless a specific additional layer has its own compatibility evidence.
 
 ## Experimental Gamescope WSI compatibility
 
 MAKO Decky exposes **Experimental Gamescope WSI (Restart)** under **Compatibility Settings**. It exists for reports such as [#7](https://github.com/eugeniosegala/MAKO/issues/7) and [#12](https://github.com/eugeniosegala/MAKO/issues/12), where users observed coloured or pixelated artifacts during camera movement on the default isolated path and reported that older WSI-enabled configurations changed the result.
 
-The toggle is off by default, stored per profile, and shares one mutually exclusive selector with MangoHud and vkBasalt. Enabling it keeps HDR disabled, verifies that MAKO Renderer installation staged the expected 64-bit host Gamescope WSI manifest, exposes only MAKO's private manifest directory plus that one managed compatibility directory, enables Gamescope WSI, and retains the known Mesa and competing-frame-generation guards. If the staged manifest is absent, invalid, or inaccessible, the wrapper fails closed to MAKO's normal isolated path.
+The explicit compatibility toggle is off by default, stored per profile, and shares one mutually exclusive selector with MangoHud and vkBasalt. A native profile that starts with Scaling enabled selects the same guarded lane automatically only when no explicit external tool is selected. In either case the wrapper keeps HDR disabled, verifies that MAKO Renderer installation staged the expected 64-bit host Gamescope WSI manifest, exposes only that managed compatibility directory followed by MAKO's private manifest directory, enables Gamescope WSI, and retains the known Mesa and competing-frame-generation guards. The directory order is part of the contract: it yields `Application -> Gamescope WSI -> MAKO`, allowing MAKO to receive WSI's internal variable Wayland surface and enlarge the lower presentation extent. The reverse order leaves MAKO on the fixed application surface and scaling correctly remains inactive. If the staged manifest is absent, invalid, or inaccessible, the wrapper fails closed to MAKO's normal isolated path.
 
 MAKO Decky validates and stages the host manifest during Renderer installation and repairs that managed copy automatically when an existing installation loads after a plugin upgrade. The initial lane is limited to a 64-bit native Vulkan or Proton game launched directly by Steam on a host with the SteamOS-style `VK_LAYER_FROG_gamescope_wsi_x86_64` manifest. It does not apply to Flatpak games and does not enable HDR.
 
-Gamescope WSI can reduce performance, suppress useful generated output, or recreate the earlier competing-presentation-policy regression. Test Fixed 2x before Adaptive, confirm that a final-output counter still reports generated FPS, and turn the toggle off if pacing or output regresses. A visual improvement is not sufficient evidence if WSI merely prevents generated frames reaching the display.
+Gamescope WSI can reduce performance, suppress useful generated output, or recreate the earlier competing-presentation-policy regression. The verified headless scaling lane activated 640×360 to 960×540 and its combined Fixed 2× probe held approximately 60 source FPS and 120 output FPS across five windows, but that does not cover every real-session Gamescope limiter state or game engine. Test Fixed 2× before Adaptive, confirm that a final-output counter still reports generated FPS, and disable Scaling or the explicit compatibility toggle if pacing or output regresses. A visual improvement is not sufficient evidence if WSI merely prevents generated frames reaching the display.
 
 ## Recommended setup: MAKO Decky External Tools
 
@@ -160,7 +160,7 @@ Use these compatibility rules:
 | vkBasalt | Available through the per-profile **Enable vkBasalt** experimental toggle or the guarded MAKO Decky manual candidate command. Activation wiring is implemented, but runtime order, image quality, and pacing still need vkBasalt hardware validation. |
 | OBS Vulkan Capture | Experimental candidate only. The game and OBS must see their matching capture components; validate that the recording contains generated output and remains stable. |
 | RenderDoc | Experimental diagnostic candidate only. Use RenderDoc's registration and activation workflow, expose its manifest deliberately, and measure the resulting order. |
-| Gamescope WSI | Excluded from the default managed SDR chain. MAKO Decky's off-by-default per-profile compatibility toggle can admit one validated 64-bit host manifest while HDR remains disabled; performance, generated output, runtime order, Flatpak, and broader platform support remain experimental. |
+| Gamescope WSI | Excluded from the isolated managed SDR chain. MAKO Decky's explicit compatibility toggle or a native profile launched with Scaling enabled can admit one validated 64-bit host manifest before MAKO while HDR remains disabled. The exact native order and a headless scaling-plus-Fixed probe are verified; real-game pacing, Flatpak, 32-bit presentation, HDR, and broader platform support remain outside that evidence. |
 | Other frame generation | Never combine with MAKO. Two frame generators cannot own one swapchain. |
 | Mesa device selection or anti-lag | Excluded by the guarded External Tools paths and documented manual commands so only the selected integration joins MAKO's layer chain. |
 | Other capture, post-processing, vendor, or developer layers | Unsupported until their exact activation, order, and runtime matrix have real evidence. |
@@ -171,7 +171,7 @@ Do not broaden the path to a new manifest directory or remove a guard globally. 
 For each candidate, start from the normal MAKO launch and verify the game first. Then enable only that candidate, turn on `VK_LOADER_DEBUG=layer` and MAKO presentation diagnostics for one short run, and check all of the following before considering the combination usable:
 
 - the architecture-correct MAKO and candidate identities both appear in the instance and device call stacks;
-- Gamescope WSI appears only when its per-profile compatibility toggle is selected; Mesa device-selection, Mesa anti-lag, competing frame-generation, and unrelated layer identities stay out of the game chain;
+- Gamescope WSI appears only when its per-profile compatibility toggle is selected or the native profile started with Scaling enabled and no explicit external tool; its identity precedes MAKO in that scaling lane, while Mesa device-selection, Mesa anti-lag, competing frame-generation, and unrelated layer identities stay out of the game chain;
 - the candidate visibly works or captures the intended original and generated frames;
 - Fixed and Adaptive generation remain paced during normal play, hitches, focus changes, overlays, swapchain recreation, and shutdown; and
 - removing the candidate restores the normal MAKO baseline.

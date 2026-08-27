@@ -6,13 +6,17 @@ import {
   DialogButton,
   Dropdown,
   Field,
-  Focusable,
   ModalRoot,
   PanelSectionRow,
   TextField,
-  showModal
+  showModal,
 } from "@decky/ui";
-import { RiArrowDownSFill, RiArrowUpSFill, RiDeleteBinLine, RiEditLine } from "react-icons/ri";
+import {
+  RiArrowDownSFill,
+  RiArrowUpSFill,
+  RiDeleteBinLine,
+  RiEditLine,
+} from "react-icons/ri";
 import t from "../i18n/i18n";
 import {
   DEFAULT_PROFILE_NAME,
@@ -21,7 +25,11 @@ import {
 } from "../config/configSchema";
 import { useProfileEditorModel } from "../hooks/useProfileEditorModel";
 import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
-import { MakoSectionHeader, makoDialogButtonStyle } from "./MakoUi";
+import {
+  MakoFocusable,
+  MakoSectionHeader,
+  makoDialogButtonStyle,
+} from "./MakoUi";
 
 const PROFILES_COLLAPSED_KEY = "mako-profiles-collapsed";
 
@@ -42,7 +50,7 @@ function TextInputModal({
   okText = "OK",
   cancelText = "Cancel",
   onOK,
-  closeModal
+  closeModal,
 }: TextInputModalProps) {
   const [value, setValue] = useState(defaultValue);
   const handleOK = () => {
@@ -57,20 +65,31 @@ function TextInputModal({
       <div style={{ padding: "16px", minWidth: "400px" }}>
         <h2 style={{ marginBottom: "16px" }}>{title}</h2>
         <p style={{ marginBottom: "24px" }}>{description}</p>
-        <Field label={t("PROFILE_NAME_LABEL", "Name")} childrenLayout="below" childrenContainerWidth="max">
+        <Field
+          label={t("PROFILE_NAME_LABEL", "Name")}
+          childrenLayout="below"
+          childrenContainerWidth="max"
+        >
           <TextField
             value={value}
             onChange={(event) => setValue(event?.target?.value || "")}
             style={{ width: "100%" }}
           />
         </Field>
-        <Focusable
-          style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "24px" }}
-          flow-children="horizontal"
+        <MakoFocusable
+          style={{
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "8px",
+            marginTop: "24px",
+          }}
+          flow-children="row"
         >
           <DialogButton onClick={closeModal}>{cancelText}</DialogButton>
-          <DialogButton onClick={handleOK} disabled={!value.trim()}>{okText}</DialogButton>
-        </Focusable>
+          <DialogButton onClick={handleOK} disabled={!value.trim()}>
+            {okText}
+          </DialogButton>
+        </MakoFocusable>
       </div>
     </ModalRoot>
   );
@@ -83,10 +102,20 @@ interface ProfileManagementProps {
   topMargin?: CSSProperties["marginTop"];
 }
 
-export function ProfileManagement({ editingProfile, onProfileChange, mainRunningApp, topMargin }: ProfileManagementProps) {
-  const [focusedAction, setFocusedAction] = useState<"edit" | "delete" | null>(null);
-  const [profilesCollapsed, setProfilesCollapsed] =
-    usePersistentCollapseState(PROFILES_COLLAPSED_KEY, false, "profiles");
+export function ProfileManagement({
+  editingProfile,
+  onProfileChange,
+  mainRunningApp,
+  topMargin,
+}: ProfileManagementProps) {
+  const [focusedAction, setFocusedAction] = useState<"edit" | "delete" | null>(
+    null,
+  );
+  const [profilesCollapsed, setProfilesCollapsed] = usePersistentCollapseState(
+    PROFILES_COLLAPSED_KEY,
+    false,
+    "profiles",
+  );
   const {
     selectedProfile,
     selectedDetails,
@@ -96,11 +125,11 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
     switchProfile,
     saveRunningGame,
     renameSelectedProfile,
-    deleteSelectedProfile
+    deleteSelectedProfile,
   } = useProfileEditorModel({
     editingProfile,
     onProfileChange,
-    mainRunningApp
+    mainRunningApp,
   });
 
   const showRenameProfile = () => {
@@ -108,12 +137,15 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
     showModal(
       <TextInputModal
         title={t("PROFILE_RENAME_TITLE", "Rename Profile")}
-        description={t("PROFILE_RENAME_DESC_PREFIX", "Choose a friendly name for this game or process profile.")}
+        description={t(
+          "PROFILE_RENAME_DESC_PREFIX",
+          "Choose a friendly name for this game or process profile.",
+        )}
         defaultValue={selectedDetails?.display_name || selectedProfile}
         okText={t("PROFILE_RENAME_BTN", "Rename")}
         cancelText={t("PROFILE_CANCEL_BTN", "Cancel")}
         onOK={(name) => void renameSelectedProfile(name)}
-      />
+      />,
     );
   };
 
@@ -125,12 +157,12 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
         strDescription={t(
           "PROFILE_DELETE_CONFIRM",
           'Delete "{profile}" and all of its saved settings?',
-          { profile: selectedDetails?.display_name || selectedProfile }
+          { profile: selectedDetails?.display_name || selectedProfile },
         )}
         strOKButtonText={t("PROFILE_DELETE_BTN", "Delete")}
         strCancelButtonText={t("PROFILE_CANCEL_BTN", "Cancel")}
         onOK={() => void deleteSelectedProfile()}
-      />
+      />,
     );
   };
 
@@ -148,10 +180,17 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
       </MakoSectionHeader>
 
       <PanelSectionRow>
-        <div style={{ fontSize: "11px", lineHeight: "1.35", color: "#b8c5d6", marginBottom: "4px" }}>
+        <div
+          style={{
+            fontSize: "11px",
+            lineHeight: "1.35",
+            color: "#b8c5d6",
+            marginBottom: "4px",
+          }}
+        >
           {t(
             "PROFILE_HELP",
-            "Start a game and save its process once. MAKO selects saved profiles automatically; outside a game, the dropdown only chooses which profile to edit."
+            "Start a game and save its process once. MAKO selects saved profiles automatically; outside a game, the dropdown only chooses which profile to edit.",
           )}
         </div>
       </PanelSectionRow>
@@ -159,23 +198,38 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
       {mainRunningApp && !runningProfile && (
         <PanelSectionRow>
           <div className="Mako_BrandButton">
-            <ButtonItem layout="below" onClick={() => void saveRunningGame()} disabled={isLoading}>
-              {t("PROFILE_SAVE_RUNNING", "Save profile for {game}", { game: mainRunningApp.display_name })}
+            <ButtonItem
+              layout="below"
+              onClick={() => void saveRunningGame()}
+              disabled={isLoading}
+            >
+              {t("PROFILE_SAVE_RUNNING", "Save profile for {game}", {
+                game: mainRunningApp.display_name,
+              })}
             </ButtonItem>
           </div>
         </PanelSectionRow>
       )}
 
       <PanelSectionRow>
-        <div className="Mako_ProfilesCollapseButton_Container" style={{ marginTop: "2px", marginBottom: "4px" }}>
+        <div
+          className="Mako_ProfilesCollapseButton_Container"
+          style={{ marginTop: "2px", marginBottom: "4px" }}
+        >
           <ButtonItem
             layout="below"
             bottomSeparator="none"
             onClick={() => setProfilesCollapsed(!profilesCollapsed)}
           >
-            {profilesCollapsed
-              ? <RiArrowDownSFill style={{ transform: "translate(0, -13px)", fontSize: "1.5em" }} />
-              : <RiArrowUpSFill style={{ transform: "translate(0, -12px)", fontSize: "1.5em" }} />}
+            {profilesCollapsed ? (
+              <RiArrowDownSFill
+                style={{ transform: "translate(0, -13px)", fontSize: "1.5em" }}
+              />
+            ) : (
+              <RiArrowUpSFill
+                style={{ transform: "translate(0, -12px)", fontSize: "1.5em" }}
+              />
+            )}
           </ButtonItem>
         </div>
       </PanelSectionRow>
@@ -183,7 +237,12 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
       {!profilesCollapsed && (
         <>
           <PanelSectionRow>
-            <Field label={t("PROFILE_SAVED_LABEL", "Saved profile")} childrenLayout="below" childrenContainerWidth="max" bottomSeparator="none">
+            <Field
+              label={t("PROFILE_SAVED_LABEL", "Saved profile")}
+              childrenLayout="below"
+              childrenContainerWidth="max"
+              bottomSeparator="none"
+            >
               <Dropdown
                 rgOptions={profileOptions}
                 selectedOption={selectedProfile}
@@ -195,27 +254,54 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
 
           {selectedDetails && (
             <PanelSectionRow>
-              <div style={{ width: "100%", padding: "6px 8px", boxSizing: "border-box", borderRadius: "4px", background: "rgba(255,255,255,0.06)", color: "#c8d3df", fontSize: "10px", lineHeight: "1.35", overflowWrap: "anywhere" }}>
-                <div>{
-                  selectedDetails.kind === PROFILE_KIND_DEFAULT
-                    ? t("PROFILE_DETAIL_DEFAULT", "Open a game to save its profile")
+              <div
+                style={{
+                  width: "100%",
+                  padding: "6px 8px",
+                  boxSizing: "border-box",
+                  borderRadius: "4px",
+                  background: "rgba(255,255,255,0.06)",
+                  color: "#c8d3df",
+                  fontSize: "10px",
+                  lineHeight: "1.35",
+                  overflowWrap: "anywhere",
+                }}
+              >
+                <div>
+                  {selectedDetails.kind === PROFILE_KIND_DEFAULT
+                    ? t(
+                        "PROFILE_DETAIL_DEFAULT",
+                        "Open a game to save its profile",
+                      )
                     : selectedDetails.kind === PROFILE_KIND_GAME
                       ? t("PROFILE_DETAIL_GAME", "Saved game")
-                      : t("PROFILE_DETAIL_PROCESS", "Saved process")
-                }</div>
+                      : t("PROFILE_DETAIL_PROCESS", "Saved process")}
+                </div>
                 {selectedDetails.steam_app_id && (
-                  <div>{t("PROFILE_STEAM_APP_ID", "Steam app ID: {app_id}", { app_id: selectedDetails.steam_app_id })}</div>
+                  <div>
+                    {t("PROFILE_STEAM_APP_ID", "Steam app ID: {app_id}", {
+                      app_id: selectedDetails.steam_app_id,
+                    })}
+                  </div>
                 )}
                 {selectedDetails.kind !== PROFILE_KIND_DEFAULT && (
-                  <div>{
-                    selectedDetails.processes.length
-                      ? t("PROFILE_PROCESSES", "Processes: {processes}", { processes: selectedDetails.processes.join(", ") })
-                      : t("PROFILE_PROCESSES_EMPTY", "Processes: enter one in Matched Processes below")
-                  }</div>
+                  <div>
+                    {selectedDetails.processes.length
+                      ? t("PROFILE_PROCESSES", "Processes: {processes}", {
+                          processes: selectedDetails.processes.join(", "),
+                        })
+                      : t(
+                          "PROFILE_PROCESSES_EMPTY",
+                          "Processes: enter one in Matched Processes below",
+                        )}
+                  </div>
                 )}
                 {mainRunningApp && (
                   <div style={{ marginTop: "4px", color: "#d9b98c" }}>
-                    {t("PROFILE_MANAGE_WHEN_IDLE", "Close the running game to rename or delete profiles.")}
+                    {t(
+                      "PROFILE_MANAGE_WHEN_IDLE",
+                      "Close the running game to rename or delete profiles.",
+                    )}
                   </div>
                 )}
               </div>
@@ -223,7 +309,7 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
           )}
 
           <PanelSectionRow>
-            <Focusable
+            <MakoFocusable
               style={{
                 display: "flex",
                 flexDirection: "column",
@@ -231,9 +317,9 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
                 gap: "6px",
                 width: "100%",
                 marginTop: "6px",
-                marginBottom: "2px"
+                marginBottom: "2px",
               }}
-              flow-children="vertical"
+              flow-children="column"
               noFocusRing
             >
               <DialogButton
@@ -248,12 +334,16 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
                   gap: "6px",
                   padding: "4px 8px",
                   fontSize: "12px",
-                  ...makoDialogButtonStyle(focusedAction === "edit")
+                  ...makoDialogButtonStyle(focusedAction === "edit"),
                 }}
                 onClick={showRenameProfile}
                 onGamepadFocus={() => setFocusedAction("edit")}
                 onGamepadBlur={() => setFocusedAction(null)}
-                disabled={isLoading || selectedProfile === DEFAULT_PROFILE_NAME || !!mainRunningApp}
+                disabled={
+                  isLoading ||
+                  selectedProfile === DEFAULT_PROFILE_NAME ||
+                  !!mainRunningApp
+                }
               >
                 <RiEditLine size={16} />
                 <span>{t("PROFILE_RENAME_BTN", "Rename")}</span>
@@ -270,17 +360,24 @@ export function ProfileManagement({ editingProfile, onProfileChange, mainRunning
                   gap: "6px",
                   padding: "4px 8px",
                   fontSize: "12px",
-                  ...makoDialogButtonStyle(focusedAction === "delete", "danger")
+                  ...makoDialogButtonStyle(
+                    focusedAction === "delete",
+                    "danger",
+                  ),
                 }}
                 onClick={showDeleteProfile}
                 onGamepadFocus={() => setFocusedAction("delete")}
                 onGamepadBlur={() => setFocusedAction(null)}
-                disabled={isLoading || selectedProfile === DEFAULT_PROFILE_NAME || !!mainRunningApp}
+                disabled={
+                  isLoading ||
+                  selectedProfile === DEFAULT_PROFILE_NAME ||
+                  !!mainRunningApp
+                }
               >
                 <RiDeleteBinLine size={16} />
                 <span>{t("PROFILE_DELETE_BTN", "Delete")}</span>
               </DialogButton>
-            </Focusable>
+            </MakoFocusable>
           </PanelSectionRow>
         </>
       )}

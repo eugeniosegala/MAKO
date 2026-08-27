@@ -3,7 +3,6 @@ import {
   PanelSectionRow,
   DialogButton,
   Field,
-  Focusable,
   SliderField,
   ToggleField,
 } from "@decky/ui";
@@ -18,6 +17,7 @@ import {
   FRAME_GENERATION_ENABLED,
   getDefaults,
   MULTIPLIER,
+  TARGET_FPS,
   TARGET_FPS_MAX,
   TARGET_FPS_MIN,
   type ConfigurationData,
@@ -29,9 +29,9 @@ import {
   steadyBaseCapChanges,
 } from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
-import { useDeferredTargetFps } from "../hooks/useDeferredTargetFps";
 import {
   MakoInlineWarning,
+  MakoFocusable,
   MakoSettingRelationship,
   makoDialogButtonStyle,
 } from "./MakoUi";
@@ -55,10 +55,7 @@ export function FpsMultiplierControl({
   const [focusedControl, setFocusedControl] = useState<
     "decrease" | "increase" | null
   >(null);
-  const { targetFps, changeTargetFps } = useDeferredTargetFps(
-    config.target_fps,
-    onConfigChange,
-  );
+  const targetFps = config.target_fps;
   const adaptiveMaxMultiplier =
     config.adaptive_max_multiplier ??
     DEFAULT_CONFIGURATION.adaptive_max_multiplier;
@@ -90,10 +87,7 @@ export function FpsMultiplierControl({
     <>
       <PanelSectionRow>
         <ToggleField
-          label={t(
-            "FRAME_GENERATION_ENABLED",
-            "Frame Generation",
-          )}
+          label={t("FRAME_GENERATION_ENABLED", "Frame Generation")}
           description={
             <>
               <div>
@@ -168,7 +162,7 @@ export function FpsMultiplierControl({
               min={TARGET_FPS_MIN}
               max={TARGET_FPS_MAX}
               step={1}
-              onChange={changeTargetFps}
+              onChange={(value) => onConfigChange(TARGET_FPS, value)}
             />
           </PanelSectionRow>
           <PanelSectionRow>
@@ -248,7 +242,7 @@ export function FpsMultiplierControl({
               <span style={{ display: "block", paddingTop: "8px" }}>
                 {t(
                   "MULTIPLIER_DESC",
-          "Sets Fixed mode to 2x–4x. Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. Test both per game. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh; Adaptive manages its own multiplier. MAKO briefly asks the game to rebuild its swapchain only when more generated-frame capacity is needed.",
+                  "Sets Fixed mode to 2x–4x. Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. Test both per game. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh; Adaptive manages its own multiplier. MAKO briefly asks the game to rebuild its swapchain only when more generated-frame capacity is needed.",
                 )}
               </span>
               {config.adaptive && (
@@ -263,7 +257,7 @@ export function FpsMultiplierControl({
           }
           childrenLayout="below"
         >
-          <Focusable
+          <MakoFocusable
             style={{
               width: "100%",
               boxSizing: "border-box",
@@ -272,7 +266,7 @@ export function FpsMultiplierControl({
               justifyContent: "center",
               alignItems: "center",
             }}
-            flow-children="horizontal"
+            flow-children="row"
             noFocusRing
           >
             <DialogButton
@@ -338,7 +332,7 @@ export function FpsMultiplierControl({
             >
               +
             </DialogButton>
-          </Focusable>
+          </MakoFocusable>
         </Field>
       </PanelSectionRow>
     </>

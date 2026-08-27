@@ -8,7 +8,11 @@ import {
   type ConfigUpdateResult,
   configFailureResult,
 } from "../api/makoApi";
-import { ConfigurationData, getDefaults } from "../config/configSchema";
+import {
+  ConfigurationData,
+  type ConfigurationPatch,
+  getDefaults,
+} from "../config/configSchema";
 import { showErrorToast, ToastMessages } from "../utils/toastUtils";
 import t from "../i18n/i18n";
 
@@ -184,6 +188,14 @@ export function useMakoConfig() {
     [config, updateConfig],
   );
 
+  const applyConfigPatch = useCallback((changes: ConfigurationPatch) => {
+    setConfig((currentConfig) => ({ ...currentConfig, ...changes }));
+  }, []);
+
+  const replaceConfig = useCallback((canonicalConfig: ConfigurationData) => {
+    setConfig({ ...getDefaults(), ...canonicalConfig });
+  }, []);
+
   useEffect(() => {
     loadMakoConfig();
   }, []);
@@ -191,6 +203,8 @@ export function useMakoConfig() {
   return {
     config,
     setConfig,
+    applyConfigPatch,
+    replaceConfig,
     loadMakoConfig,
     updateConfig,
     updateField,

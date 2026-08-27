@@ -42,6 +42,7 @@ namespace mako::layer {
         size_t maximumMultiplier{ls::GameConfDefaults::adaptiveMaxMultiplier};
         size_t generatedFrameCapacity{0};
         bool stableCadence{ls::GameConfDefaults::adaptiveStableCadence};
+        bool nearTargetNativePreference{false};
         bool dynamicCadenceRecovery{
             ls::GameConfDefaults::dynamicCadenceRecovery
         };
@@ -69,6 +70,7 @@ namespace mako::layer {
         StableCadence,
         Active,
         NativeCadenceProbe,
+        NearTargetNative,
     };
 
     struct AdaptiveSchedulerSnapshot {
@@ -83,6 +85,7 @@ namespace mako::layer {
         bool rearmRequired{false};
         bool discontinuityRecoveryActive{false};
         bool nativeCadenceProbeActive{false};
+        bool nearTargetNativePreference{false};
         bool targetOutputClockActive{false};
         double targetOutputBudgetCreditOutputs{0.0};
         double targetOutputPhaseErrorOutputs{0.0};
@@ -96,6 +99,9 @@ namespace mako::layer {
         size_t maximumGeneratedFrames{0};
         size_t configuredMaximumGeneratedFrames{0};
         bool stableCadence{false};
+        bool nearTargetNativePreference{false};
+        double predictedNativeIntervalRmsMilliseconds{0.0};
+        double predictedFractionalIntervalRmsMilliseconds{0.0};
         std::string_view phase;
         size_t recoveryGenerationLimit{0};
         size_t consecutiveFailures{0};
@@ -169,6 +175,9 @@ namespace mako::layer {
             std::string_view) {}
         virtual void nativeCadenceProbe(std::string_view, size_t, double,
             double, size_t) {}
+        virtual void nearTargetNativePreference(std::string_view, uint32_t,
+            double, double, double, std::chrono::steady_clock::duration,
+            std::string_view) {}
     };
 
     /// Pure adaptive frame-generation policy.
@@ -295,6 +304,8 @@ namespace mako::layer {
             double desiredOutputsPerRealFrame,
             size_t maximumGeneratedFrameCount,
             size_t& generatedFrameCount);
+        [[nodiscard]] inline bool advanceNearTargetNativePreference(
+            TimePoint now, double baseFps, size_t configuredGenerationLimit);
         [[nodiscard]] inline PlanningStageResult applyStrictLoadGuard(
             TimePoint now, double baseFps, size_t& generatedFrameCount);
         void beginCadenceRefresh(TimePoint now, std::string_view reason);
@@ -552,6 +563,22 @@ namespace mako::layer {
                     this->confirmedSamples = 0;
                 }
             } nativeCadenceProbe;
+
+            struct NearTargetNativePreference {
+                bool active{false};
+                std::optional<bool> candidateActive;
+                std::optional<TimePoint> candidateSince;
+
+                void resetCandidate() {
+                    this->candidateActive.reset();
+                    this->candidateSince.reset();
+                }
+
+                void reset() {
+                    this->active = false;
+                    this->resetCandidate();
+                }
+            } nearTargetNativePreference;
 
             struct Stabilization {
                 std::optional<TimePoint> until;

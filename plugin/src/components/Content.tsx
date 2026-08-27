@@ -51,7 +51,8 @@ export function Content() {
 
   const { dllDetected, dllDetectionStatus } = useDllDetection();
 
-  const { config, loadMakoConfig } = useMakoConfig();
+  const { config, applyConfigPatch, replaceConfig, loadMakoConfig } =
+    useMakoConfig();
 
   const { updateProfileConfigFields, syncCurrentProfile } =
     useProfileManagement();
@@ -83,6 +84,8 @@ export function Content() {
     getEditingProfile,
     updateProfileConfigFields,
     loadProfileConfig: loadMakoConfig,
+    applyConfigPatch,
+    replaceConfig,
   });
 
   const onInstall = async () => {

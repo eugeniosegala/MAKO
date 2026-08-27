@@ -62,6 +62,9 @@ vi.mock("@decky/ui", () => ({
 vi.mock("../../src/api/makoApi", () => api);
 vi.mock("../../src/components/MakoUi", () => ({
   MakoCompactSpinner: () => <span>Working</span>,
+  MakoFocusable: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   makoPanelDivider: "1px solid",
   makoPanelItemStyle: {},
   makoPanelSectionHeaderStyle: {},

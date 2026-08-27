@@ -1,5 +1,5 @@
-import { PanelSectionRow, Spinner } from "@decky/ui";
-import type { CSSProperties, ReactNode } from "react";
+import { Focusable, PanelSectionRow, Spinner } from "@decky/ui";
+import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { FiAlertTriangle, FiInfo, FiLink } from "react-icons/fi";
 
 interface MakoSectionHeaderProps {
@@ -12,6 +12,21 @@ interface MakoReleaseIdentityProps {
   version: string;
   codename: string;
   bottomMargin?: CSSProperties["marginBottom"];
+}
+
+type SteamFocusFlow =
+  "column" | "column-reverse" | "row" | "row-reverse" | "grid" | "geometric";
+
+type MakoFocusableProps = Omit<
+  ComponentProps<typeof Focusable>,
+  "flow-children"
+> & {
+  "flow-children"?: SteamFocusFlow;
+};
+
+/** Restrict Decky's open string type to directions supported by Steam. */
+export function MakoFocusable(props: MakoFocusableProps) {
+  return <Focusable {...props} />;
 }
 
 export const makoPanelDivider = "1px solid rgba(77, 170, 190, 0.2)";
@@ -91,11 +106,7 @@ export function MakoInlineWarning({
   );
 }
 
-export function MakoSettingRelationship({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export function MakoSettingRelationship({ children }: { children: ReactNode }) {
   return (
     <div
       data-mako-setting-relationship="true"

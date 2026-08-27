@@ -35,6 +35,7 @@ namespace {
             .maximumMultiplier = benchmark.maximumMultiplier,
             .generatedFrameCapacity = 3,
             .stableCadence = benchmark.stableCadence,
+            .nearTargetNativePreference = true,
         });
 
         AdaptiveScheduler::TimePoint simulatedNow{};
@@ -107,12 +108,17 @@ namespace {
 
 int main() {
     constexpr size_t iterations = 2'000'000;
-    constexpr std::array<BenchmarkCase, 5> cases{{
+    constexpr std::array<BenchmarkCase, 10> cases{{
         {"above-target-real-only", 144.0, 120, 4, false, 0.0},
         {"strict-2x", 60.0, 120, 3, false, 0.0},
         {"strict-4x", 30.0, 120, 4, false, 0.0},
         {"fractional-noisy-placement", 60.0, 90, 2, false, 0.22},
         {"smooth-fractional", 47.0, 90, 2, true, 0.0},
+        {"fractional-below-native-boundary", 89.0, 120, 2, false, 0.0},
+        {"near-target-native-90", 90.0, 120, 2, false, 0.0},
+        {"near-target-native-100", 100.0, 120, 2, false, 0.0},
+        {"near-target-native-110", 110.0, 120, 2, false, 0.0},
+        {"near-target-native-noisy", 100.0, 120, 2, false, 0.10},
     }};
 
     std::cout << "case,base_fps,target_fps,max_multiplier,smooth_cadence,"

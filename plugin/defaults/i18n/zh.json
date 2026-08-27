@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "图像缩放",
   "SCALING_ENABLED": "启用图像缩放",
-  "SCALING_ENABLED_DESC": "要启用缩放，请在游戏中选择低于显示器的分辨率，开启缩放并选择方法。游戏会重建一次其交换链，短暂闪烁属于正常现象。缩放可以单独运行，也可以在帧生成之前运行。",
+  "SCALING_ENABLED_DESC": "请在启动游戏前启用缩放，以便 MAKO Decky 配置 Gamescope 呈现路径，然后在游戏内选择低于显示器的分辨率。在该会话中，开关、方法、缩放倍数和锐度的更改会通过重建交换链生效；短暂闪烁属于正常现象。缩放可以单独运行，也可以在帧生成之前运行。",
   "SCALING_METHOD": "缩放方法",
   "SCALING_METHOD_DESC": "MAKO 是内置的开放式单通道缩放器，不需要 Lossless.dll。LS1 Quality 使用 Lossless Scaling 的专有完整神经网络；LS1 Performance 使用开销更低的网络。如果 LS1 无法启动，该交换链会由 MAKO 接管。更改方法会重建交换链。",
   "SCALING_METHOD_MAKO": "MAKO（开放）",

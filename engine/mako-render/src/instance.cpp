@@ -270,13 +270,61 @@ void Root::publishSurfaceScalingPolicy() noexcept {
     const uint64_t packedFactor = static_cast<uint64_t>(
         std::bit_cast<uint32_t>(factor)
     ) << 32U;
-    this->surfaceScalingPolicy.store(
-        packedFactor |
-            (enabled ? spatialScalingEnabledBit : uint64_t{0}) |
-            (processSupported
-                ? spatialScalingProcessSupportedBit : uint64_t{0}),
-        std::memory_order_release
+    const uint64_t packed = packedFactor |
+        (enabled ? spatialScalingEnabledBit : uint64_t{0}) |
+        (processSupported
+            ? spatialScalingProcessSupportedBit : uint64_t{0});
+    const uint64_t observedSequence =
+        this->surfaceScalingPolicySequence.load(std::memory_order_acquire);
+    if ((observedSequence & uint64_t{1}) == 0 &&
+            this->surfaceScalingPolicy.load(std::memory_order_acquire) ==
+                packed &&
+            this->surfaceScalingPolicySequence.load(
+                std::memory_order_acquire
+            ) == observedSequence) {
+        return;
+    }
+
+    const std::lock_guard lock(this->surfaceScalingPolicyPublishMutex);
+    if (this->surfaceScalingPolicy.load(std::memory_order_relaxed) == packed)
+        return;
+
+    this->surfaceScalingPolicySequence.fetch_add(
+        1, std::memory_order_acq_rel
     );
+    this->surfaceScalingPolicy.store(packed, std::memory_order_release);
+    this->surfaceScalingPolicySequence.fetch_add(
+        1, std::memory_order_release
+    );
+}
+
+SpatialScalingPolicySnapshot Root::surfaceScalingPolicySnapshot()
+        const noexcept {
+    while (true) {
+        const uint64_t sequenceBefore =
+            this->surfaceScalingPolicySequence.load(std::memory_order_acquire);
+        if ((sequenceBefore & uint64_t{1}) != 0)
+            continue;
+        const uint64_t packed = this->surfaceScalingPolicy.load(
+            std::memory_order_acquire
+        );
+        const uint64_t sequenceAfter =
+            this->surfaceScalingPolicySequence.load(std::memory_order_acquire);
+        if (sequenceBefore != sequenceAfter)
+            continue;
+
+        return SpatialScalingPolicySnapshot{
+            .policy = {
+                .enabled = (packed & spatialScalingEnabledBit) != 0,
+                .factor = std::bit_cast<float>(
+                    static_cast<uint32_t>(packed >> 32U)
+                ),
+            },
+            .processSupported =
+                (packed & spatialScalingProcessSupportedBit) != 0,
+            .revision = sequenceAfter / 2,
+        };
+    }
 }
 
 Root::Root() :
@@ -703,6 +751,7 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
 SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk,
         VkSwapchainCreateInfoKHR& createInfo,
         const std::optional<SpatialScalingExtents>& previousVariableExtents,
+        const std::optional<FixedSurfaceScalingContract>& fixedSurfaceContract,
         const std::function<void(void)>& finish) const {
     SwapchainCreateModification modification{
         .applicationExtent = createInfo.imageExtent,
@@ -721,34 +770,23 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
 
     modification.variableSurface = !fixedSurfaceExtent(caps.currentExtent);
 
-    const bool processSupportsSpatialScaling =
-        mako::layer::spatialScalingProcessSupported(
-            this->gamescopeEnvironmentDetected,
-            this->gamescopeDetected,
-            this->presentationEnvironment.hdrExposureDisabled
-        );
-    const auto scalingExtents = processSupportsSpatialScaling
-        ? scalingExtentsForCreate(
-            *this->active_profile, caps, createInfo.imageExtent,
-            previousVariableExtents
-        )
-        : std::nullopt;
+    const auto policySnapshot = this->surfaceScalingPolicySnapshot();
+    const auto scalingDecision = scalingDecisionForCreate(
+        policySnapshot.policy,
+        policySnapshot.processSupported,
+        policySnapshot.revision,
+        caps,
+        createInfo.imageExtent,
+        previousVariableExtents,
+        fixedSurfaceContract
+    );
+    const auto& scalingExtents = scalingDecision.extents;
     modification.variableFeedbackSuppressed =
-        processSupportsSpatialScaling &&
-        variableSurfaceScalingFeedbackDetected(
-            *this->active_profile, caps, createInfo.imageExtent,
-            previousVariableExtents
-        );
+        scalingDecision.inactiveReason ==
+            SpatialScalingInactiveReason::VariableSurfaceFeedback;
     const bool fixedVirtualSourceRequest =
         fixedSurfaceExtent(caps.currentExtent) &&
         !sameExtent(createInfo.imageExtent, caps.currentExtent);
-    if (fixedVirtualSourceRequest && !scalingExtents) {
-        throw ls::vulkan_error(
-            VK_ERROR_INITIALIZATION_FAILED,
-            "fixed-surface scaling policy changed after the capability query; "
-            "the application must query capabilities again"
-        );
-    }
     const auto colorPipeline = classifySwapchainColor(
         createInfo.imageFormat, createInfo.imageColorSpace,
         this->gamescopeHdrActive.value_or(false)
@@ -805,12 +843,106 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         !queueSurfaceSupportChecked ? "not-checked" :
         queueFamilySupportsPresentation == VK_TRUE
             ? "supported" : "unsupported";
+    auto inactiveReason = scalingDecision.inactiveReason;
     if (scalingExtents && spatialScalingSupported) {
         modification.spatialScalingActive = true;
         modification.applicationExtent = scalingExtents->source;
         modification.presentationExtent = scalingExtents->presentation;
         createInfo.imageExtent = scalingExtents->presentation;
-    } else if (scalingExtents && fixedSurfaceExtent(caps.currentExtent)) {
+        inactiveReason = SpatialScalingInactiveReason::None;
+    } else if (scalingExtents) {
+        inactiveReason = !spatialShapeSupported
+            ? SpatialScalingInactiveReason::SwapchainShapeUnsupported
+            : (queueFamilySupportsPresentation != VK_TRUE
+                ? SpatialScalingInactiveReason::QueuePresentationUnsupported
+                : (!spatialQueueCommandsSupported
+                    ? SpatialScalingInactiveReason::QueueCommandsUnsupported
+                    : SpatialScalingInactiveReason::SwapchainFormatUnsupported));
+    }
+    if (this->active_profile->scaling_enabled) {
+        const auto advertised = scalingDecision.fixedContract;
+        std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
+                  << "requested=" << modification.applicationExtent.width
+                  << 'x' << modification.applicationExtent.height
+                  << "; surface_current=" << caps.currentExtent.width
+                  << 'x' << caps.currentExtent.height
+                  << "; surface_extent_mode="
+                  << (modification.variableSurface ? "variable" : "fixed")
+                  << "; advertised_source="
+                  << (advertised ? advertised->extents.source.width : 0)
+                  << 'x'
+                  << (advertised ? advertised->extents.source.height : 0)
+                  << "; advertised_presentation="
+                  << (advertised ? advertised->extents.presentation.width : 0)
+                  << 'x'
+                  << (advertised ? advertised->extents.presentation.height : 0)
+                  << "; actual_source="
+                  << (fixedVirtualSourceRequest && !scalingExtents
+                        ? 0 : modification.applicationExtent.width)
+                  << 'x'
+                  << (fixedVirtualSourceRequest && !scalingExtents
+                        ? 0 : modification.applicationExtent.height)
+                  << "; actual_presentation="
+                  << (fixedVirtualSourceRequest && !scalingExtents
+                        ? 0 : modification.presentationExtent.width)
+                  << 'x'
+                  << (fixedVirtualSourceRequest && !scalingExtents
+                        ? 0 : modification.presentationExtent.height)
+                  << "; policy_revision=" << policySnapshot.revision
+                  << "; contract_policy_revision="
+                  << (advertised ? advertised->policyRevision : 0)
+                  << "; query_generation="
+                  << (advertised ? advertised->queryGeneration : 0)
+                  << "; selected_source="
+                  << (scalingExtents ? scalingExtents->source.width : 0)
+                  << 'x'
+                  << (scalingExtents ? scalingExtents->source.height : 0)
+                  << "; selected_presentation="
+                  << (scalingExtents ? scalingExtents->presentation.width : 0)
+                  << 'x'
+                  << (scalingExtents ? scalingExtents->presentation.height : 0)
+                  << "; format=" << static_cast<int>(createInfo.imageFormat)
+                  << "; format_supported=" << spatialFormatSupported
+                  << "; shape_supported=" << spatialShapeSupported
+                  << "; queue_presentation_support="
+                  << queuePresentationSupport
+                  << "; queue_commands_supported="
+                  << spatialQueueCommandsSupported
+                  << "; variable_feedback_suppressed="
+                  << modification.variableFeedbackSuppressed
+                  << "; inactive_reason="
+                  << spatialScalingInactiveReasonName(inactiveReason)
+                  << "; source_presentation_split="
+                  << (modification.spatialScalingActive ? 1 : 0)
+                  << "; active=" << modification.spatialScalingActive
+                  << '\n';
+        if (modification.variableFeedbackSuppressed &&
+                previousVariableExtents) {
+            std::cerr << "MAKO Renderer: spatial scaling variable-surface "
+                         "feedback guard: surface=" << createInfo.surface
+                      << "; previous_source="
+                      << previousVariableExtents->source.width << 'x'
+                      << previousVariableExtents->source.height
+                      << "; previous_presentation="
+                      << previousVariableExtents->presentation.width << 'x'
+                      << previousVariableExtents->presentation.height
+                      << "; requested="
+                      << modification.applicationExtent.width << 'x'
+                      << modification.applicationExtent.height
+                      << "; action=native-feedback-guard\n";
+        }
+    }
+
+    if (fixedVirtualSourceRequest && !scalingExtents) {
+        throw ls::vulkan_error(
+            VK_ERROR_INITIALIZATION_FAILED,
+            "fixed-surface spatial scaling create request does not match the "
+            "latest capability contract; inactive_reason=" +
+                std::string(spatialScalingInactiveReasonName(inactiveReason))
+        );
+    }
+    if (scalingExtents && !spatialScalingSupported &&
+            fixedSurfaceExtent(caps.currentExtent)) {
         // A fixed surface was previously advertised at the virtual source
         // extent. Passing that low extent to the real WSI surface without a
         // scaler would either fail lower creation or expose an incomplete
@@ -830,47 +962,6 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                     : "the selected fixed-surface format cannot be spatially scaled")
                     )
         );
-    }
-    if (this->active_profile->scaling_enabled) {
-        std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
-                  << "requested=" << modification.applicationExtent.width
-                  << 'x' << modification.applicationExtent.height
-                  << "; surface_current=" << caps.currentExtent.width
-                  << 'x' << caps.currentExtent.height
-                  << "; selected_source="
-                  << (scalingExtents ? scalingExtents->source.width : 0)
-                  << 'x'
-                  << (scalingExtents ? scalingExtents->source.height : 0)
-                  << "; selected_presentation="
-                  << (scalingExtents ? scalingExtents->presentation.width : 0)
-                  << 'x'
-                  << (scalingExtents ? scalingExtents->presentation.height : 0)
-                  << "; format=" << static_cast<int>(createInfo.imageFormat)
-                  << "; format_supported=" << spatialFormatSupported
-                  << "; shape_supported=" << spatialShapeSupported
-                  << "; queue_presentation_support="
-                  << queuePresentationSupport
-                  << "; queue_commands_supported="
-                  << spatialQueueCommandsSupported
-                  << "; variable_feedback_suppressed="
-                  << modification.variableFeedbackSuppressed
-                  << "; active=" << modification.spatialScalingActive
-                  << '\n';
-        if (modification.variableFeedbackSuppressed &&
-                previousVariableExtents) {
-            std::cerr << "MAKO Renderer: spatial scaling variable-surface "
-                         "feedback guard: surface=" << createInfo.surface
-                      << "; previous_source="
-                      << previousVariableExtents->source.width << 'x'
-                      << previousVariableExtents->source.height
-                      << "; previous_presentation="
-                      << previousVariableExtents->presentation.width << 'x'
-                      << previousVariableExtents->presentation.height
-                      << "; requested="
-                      << modification.applicationExtent.width << 'x'
-                      << modification.applicationExtent.height
-                      << "; action=native-feedback-guard\n";
-        }
     }
 
     modification.privateOrderedTransport = context_ModifySwapchainCreateInfo(
@@ -903,25 +994,22 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     return modification;
 }
 
-bool Root::modifySurfaceCapabilities(
+std::optional<SpatialScalingCapabilitySelection>
+Root::modifySurfaceCapabilities(
         VkSurfaceCapabilitiesKHR& capabilities) const {
-    const uint64_t packed = this->surfaceScalingPolicy.load(
-        std::memory_order_acquire
-    );
-    if ((packed & spatialScalingEnabledBit) == 0 ||
-            (packed & spatialScalingProcessSupportedBit) == 0) {
-        return false;
-    }
-    const SpatialScalingPolicy policy{
-        .enabled = true,
-        .factor = std::bit_cast<float>(
-            static_cast<uint32_t>(packed >> 32U)
-        ),
-    };
+    const auto snapshot = this->surfaceScalingPolicySnapshot();
+    if (!snapshot.policy.enabled || !snapshot.processSupported)
+        return std::nullopt;
     const auto extents = virtualizeSurfaceCapabilities(
-        policy, capabilities
+        snapshot.policy, capabilities
     );
-    return extents.has_value();
+    if (!extents)
+        return std::nullopt;
+    return SpatialScalingCapabilitySelection{
+        .extents = *extents,
+        .factor = snapshot.policy.factor,
+        .policyRevision = snapshot.revision,
+    };
 }
 
 void Root::createSwapchainContext(const vk::Vulkan& vk,

@@ -108,6 +108,18 @@ namespace mako::layer {
         return *configuredBudget - consumedNanoseconds;
     }
 
+    /// Ordered 3x/4x presentation can legitimately wait once per generated
+    /// image. Recovery classifies the longest individual wait; summing healthy
+    /// refresh-sized waits would falsely turn a normal multi-image sequence
+    /// into starvation. The separately enforced configured budget remains
+    /// cumulative across the whole application present.
+    [[nodiscard]] inline std::chrono::steady_clock::duration
+    orderedAcquireRecoveryClassificationDuration(
+            const std::chrono::steady_clock::duration totalDuration,
+            const std::chrono::steady_clock::duration maximumDuration) {
+        return std::min(totalDuration, maximumDuration);
+    }
+
     /// A recovery probe owns one image and one small, display-relative wait.
     /// Later failed attempts may span more refresh periods, but never exceed
     /// 25 ms or the user's normal application-present acquire ceiling. This
@@ -206,12 +218,12 @@ namespace mako::layer {
     };
 
     /// Classifies generated-image starvation on the ordered SDR transport.
-    /// One isolated slow successful application-present acquire total arms a
+    /// One isolated slow successful generated-image acquire arms a
     /// zero-wait guard for the next present so transport delay cannot
     /// immediately recur or contaminate Adaptive cadence. A guard miss gives
     /// one native frame back to the FIFO before normal policy retries; only a
-    /// repeated slow total, an exhausted cumulative budget, or one severe
-    /// total requests a native-only drain. Recovery warms history and attempts
+    /// repeated slow image, an exhausted cumulative budget, or one severe
+    /// image requests a native-only drain. Recovery warms history and attempts
     /// one bounded single-image probe, returning to backoff on failure.
     class OrderedAcquireRecovery {
     public:

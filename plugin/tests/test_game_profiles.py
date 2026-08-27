@@ -376,6 +376,126 @@ class GameProfileTests(unittest.TestCase):
         self.assertEqual(saved["target_fps"], 120)
         self.assertTrue(saved["performance_mode"])
 
+    def test_profile_updates_do_not_replace_unchanged_managed_artifacts(self):
+        defaults = ConfigurationManager.get_defaults()
+        self.assertTrue(
+            self.service.update_profile_config("mako", defaults)["success"]
+        )
+        managed_results = []
+        sidecar_results = []
+        original_managed_write = (
+            configuration_module.write_managed_text_atomically
+        )
+        original_sidecar_write = self.service._write_file
+
+        def observe_managed_write(destination, content, mode, logger):
+            changed = original_managed_write(
+                destination, content, mode, logger
+            )
+            managed_results.append((destination, changed))
+            return changed
+
+        def observe_sidecar_write(path, content, mode=0o644):
+            changed = original_sidecar_write(path, content, mode)
+            sidecar_results.append((path, changed))
+            return changed
+
+        with (
+            patch.object(
+                configuration_module,
+                "write_managed_text_atomically",
+                side_effect=observe_managed_write,
+            ),
+            patch.object(
+                self.service,
+                "_write_file",
+                side_effect=observe_sidecar_write,
+            ),
+        ):
+            renderer_result = self.service.update_profile_config_fields(
+                "mako", {"scaling_sharpness": 0.73}
+            )
+
+        self.assertTrue(renderer_result["success"])
+        self.assertEqual(
+            managed_results,
+            [
+                (self.service.config_file_path, True),
+                (self.service.mako_script_path, False),
+            ],
+        )
+        self.assertEqual(
+            sidecar_results,
+            [(self.service.wrapper_profile_settings_path, False)],
+        )
+
+        self.service.config_file_path.chmod(0o666)
+        managed_results.clear()
+        sidecar_results.clear()
+        with (
+            patch.object(
+                configuration_module,
+                "write_managed_text_atomically",
+                side_effect=observe_managed_write,
+            ),
+            patch.object(
+                self.service,
+                "_write_file",
+                side_effect=observe_sidecar_write,
+            ),
+        ):
+            permission_result = self.service.update_profile_config_fields(
+                "mako", {"scaling_sharpness": 0.73}
+            )
+
+        self.assertTrue(permission_result["success"])
+        self.assertEqual(
+            managed_results,
+            [
+                (self.service.config_file_path, True),
+                (self.service.mako_script_path, False),
+            ],
+        )
+        self.assertEqual(
+            self.service.config_file_path.stat().st_mode & 0o777,
+            0o644,
+        )
+        self.assertEqual(
+            sidecar_results,
+            [(self.service.wrapper_profile_settings_path, False)],
+        )
+
+        managed_results.clear()
+        sidecar_results.clear()
+        with (
+            patch.object(
+                configuration_module,
+                "write_managed_text_atomically",
+                side_effect=observe_managed_write,
+            ),
+            patch.object(
+                self.service,
+                "_write_file",
+                side_effect=observe_sidecar_write,
+            ),
+        ):
+            script_result = self.service.update_profile_config_fields(
+                "mako", {"enable_zink": True}
+            )
+
+        self.assertTrue(script_result["success"])
+        self.assertEqual(
+            managed_results,
+            [
+                (self.service.config_file_path, False),
+                (self.service.mako_script_path, True),
+            ],
+        )
+        self.assertEqual(
+            sidecar_results,
+            [(self.service.wrapper_profile_settings_path, True)],
+        )
+
     def test_field_update_rejects_unknown_options_without_rewriting_profile(self):
         original = self.service.config_file_path.read_text(encoding="utf-8")
 

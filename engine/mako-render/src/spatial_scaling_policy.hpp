@@ -29,6 +29,99 @@ namespace mako::layer {
         float factor{1.0F};
     };
 
+    /// One coherent policy snapshot used for a fixed-surface capability query.
+    /// The revision changes only when enablement, process support, or factor
+    /// changes, so method/sharpness-only recreations can safely reuse the same
+    /// advertised extent contract.
+    struct SpatialScalingPolicySnapshot {
+        SpatialScalingPolicy policy{};
+        bool processSupported{false};
+        uint64_t revision{0};
+    };
+
+    /// Result of virtualizing one fixed-surface capability query. Entrypoint
+    /// code adds the surface-scoped query generation only after its queue and
+    /// format preflight succeeds and the virtual capabilities are returned to
+    /// the application.
+    struct SpatialScalingCapabilitySelection {
+        SpatialScalingExtents extents{};
+        float factor{1.0F};
+        uint64_t policyRevision{0};
+    };
+
+    /// Exact fixed-surface contract observed by the application. Swapchain
+    /// creation consumes this record instead of recomputing a source extent
+    /// from capabilities that may have changed since the query.
+    struct FixedSurfaceScalingContract {
+        SpatialScalingExtents extents{};
+        float factor{1.0F};
+        uint64_t policyRevision{0};
+        uint64_t queryGeneration{0};
+    };
+
+    enum class SpatialScalingInactiveReason {
+        None,
+        ProcessUnsupported,
+        InvalidFactor,
+        FactorNotUpscaling,
+        NoFixedCapabilityContract,
+        PolicyChangedAfterCapabilityQuery,
+        SurfaceChangedAfterCapabilityQuery,
+        ApplicationExtentOverrideNoSplit,
+        ApplicationExtentMismatch,
+        VariableSurfaceFeedback,
+        VariableSurfaceNoHeadroom,
+        SwapchainShapeUnsupported,
+        SwapchainFormatUnsupported,
+        QueuePresentationUnsupported,
+        QueueCommandsUnsupported,
+    };
+
+    [[nodiscard]] constexpr const char* spatialScalingInactiveReasonName(
+            const SpatialScalingInactiveReason reason) noexcept {
+        switch (reason) {
+            case SpatialScalingInactiveReason::None:
+                return "none";
+            case SpatialScalingInactiveReason::ProcessUnsupported:
+                return "process-unsupported";
+            case SpatialScalingInactiveReason::InvalidFactor:
+                return "invalid-factor";
+            case SpatialScalingInactiveReason::FactorNotUpscaling:
+                return "factor-not-upscaling";
+            case SpatialScalingInactiveReason::NoFixedCapabilityContract:
+                return "no-fixed-capability-contract";
+            case SpatialScalingInactiveReason::PolicyChangedAfterCapabilityQuery:
+                return "policy-changed-after-capability-query";
+            case SpatialScalingInactiveReason::SurfaceChangedAfterCapabilityQuery:
+                return "surface-changed-after-capability-query";
+            case SpatialScalingInactiveReason::ApplicationExtentOverrideNoSplit:
+                return "application-extent-override-no-source-presentation-split";
+            case SpatialScalingInactiveReason::ApplicationExtentMismatch:
+                return "application-extent-mismatch";
+            case SpatialScalingInactiveReason::VariableSurfaceFeedback:
+                return "variable-surface-feedback";
+            case SpatialScalingInactiveReason::VariableSurfaceNoHeadroom:
+                return "variable-surface-no-headroom";
+            case SpatialScalingInactiveReason::SwapchainShapeUnsupported:
+                return "swapchain-shape-unsupported";
+            case SpatialScalingInactiveReason::SwapchainFormatUnsupported:
+                return "swapchain-format-unsupported";
+            case SpatialScalingInactiveReason::QueuePresentationUnsupported:
+                return "queue-presentation-unsupported";
+            case SpatialScalingInactiveReason::QueueCommandsUnsupported:
+                return "queue-commands-unsupported";
+        }
+        return "unknown";
+    }
+
+    struct SpatialScalingCreateDecision {
+        std::optional<SpatialScalingExtents> extents;
+        std::optional<FixedSurfaceScalingContract> fixedContract;
+        SpatialScalingInactiveReason inactiveReason{
+            SpatialScalingInactiveReason::None
+        };
+    };
+
     [[nodiscard]] constexpr bool spatialScalingProcessSupported(
             const bool gamescopeEnvironmentHint,
             const bool gamescopeFeedbackDetected,
@@ -207,32 +300,75 @@ namespace mako::layer {
     /// Match a create request against the source extent that MAKO advertised.
     /// An application-selected override is left alone rather than silently
     /// changing its requested rendering size.
-    [[nodiscard]] inline std::optional<SpatialScalingExtents>
-    scalingExtentsForCreate(
-            const ls::GameConf& profile,
+    [[nodiscard]] inline SpatialScalingCreateDecision
+    scalingDecisionForCreate(
+            const SpatialScalingPolicy policy,
+            const bool processSupported,
+            const uint64_t policyRevision,
             const VkSurfaceCapabilitiesKHR& realCapabilities,
             const VkExtent2D requestedExtent,
             const std::optional<SpatialScalingExtents>&
-                previousVariableExtents = std::nullopt) noexcept {
-        const auto extents = selectSpatialScalingExtents(
-            profile, realCapabilities
-        );
-        if (extents) {
-            if (!sameExtent(extents->source, requestedExtent))
-                return std::nullopt;
-            return extents;
+                previousVariableExtents = std::nullopt,
+            const std::optional<FixedSurfaceScalingContract>&
+                fixedContract = std::nullopt) noexcept {
+        SpatialScalingCreateDecision decision{
+            .fixedContract = fixedContract,
+        };
+        if (!processSupported) {
+            decision.inactiveReason =
+                SpatialScalingInactiveReason::ProcessUnsupported;
+            return decision;
+        }
+        if (!validSpatialScalingFactor(policy.factor)) {
+            decision.inactiveReason =
+                SpatialScalingInactiveReason::InvalidFactor;
+            return decision;
+        }
+        if (!policy.enabled || policy.factor <= 1.0F) {
+            decision.inactiveReason =
+                SpatialScalingInactiveReason::FactorNotUpscaling;
+            return decision;
+        }
+
+        if (fixedSurfaceExtent(realCapabilities.currentExtent)) {
+            if (!fixedContract) {
+                decision.inactiveReason =
+                    SpatialScalingInactiveReason::NoFixedCapabilityContract;
+                return decision;
+            }
+            if (fixedContract->policyRevision != policyRevision ||
+                    fixedContract->factor != policy.factor) {
+                decision.inactiveReason = SpatialScalingInactiveReason::
+                    PolicyChangedAfterCapabilityQuery;
+                return decision;
+            }
+            if (!sameExtent(
+                    fixedContract->extents.presentation,
+                    realCapabilities.currentExtent)) {
+                decision.inactiveReason = SpatialScalingInactiveReason::
+                    SurfaceChangedAfterCapabilityQuery;
+                return decision;
+            }
+            if (!sameExtent(fixedContract->extents.source, requestedExtent)) {
+                decision.inactiveReason = sameExtent(
+                    requestedExtent, realCapabilities.currentExtent
+                ) ? SpatialScalingInactiveReason::ApplicationExtentOverrideNoSplit
+                  : SpatialScalingInactiveReason::ApplicationExtentMismatch;
+                return decision;
+            }
+            decision.extents = fixedContract->extents;
+            return decision;
         }
 
         // Variable-extent window systems cannot expose a compositor-owned
         // native size through currentExtent. Use MAKO's explicit factor
         // contract instead: retain the application's requested render extent
         // and enlarge the lower WSI image by the configured factor.
-        if (!profile.scaling_enabled ||
-                !validSpatialScalingFactor(profile.scaling_factor) ||
-                profile.scaling_factor <= 1.0F ||
-                fixedSurfaceExtent(realCapabilities.currentExtent) ||
-                requestedExtent.width == 0 || requestedExtent.height == 0) {
-            return std::nullopt;
+        decision.fixedContract.reset();
+        if (requestedExtent.width == 0 || requestedExtent.height == 0) {
+            decision.inactiveReason =
+                SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
+            return decision;
         }
 
         // Some variable Wayland surfaces echo the enlarged lower WSI extent
@@ -250,7 +386,9 @@ namespace mako::layer {
                     previousVariableExtents->source,
                     previousVariableExtents->presentation
                 )) {
-            return std::nullopt;
+            decision.inactiveReason =
+                SpatialScalingInactiveReason::VariableSurfaceFeedback;
+            return decision;
         }
 
         const double maximumWidthFactor =
@@ -260,12 +398,15 @@ namespace mako::layer {
             static_cast<double>(realCapabilities.maxImageExtent.height) /
             static_cast<double>(requestedExtent.height);
         const double effectiveFactor = std::min({
-            static_cast<double>(profile.scaling_factor),
+            static_cast<double>(policy.factor),
             maximumWidthFactor,
             maximumHeightFactor,
         });
-        if (effectiveFactor <= 1.0)
-            return std::nullopt;
+        if (effectiveFactor <= 1.0) {
+            decision.inactiveReason =
+                SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
+            return decision;
+        }
 
         VkExtent2D presentation{
             .width = static_cast<uint32_t>(std::floor(
@@ -280,13 +421,58 @@ namespace mako::layer {
         if (presentation.height > 1)
             presentation.height &= ~uint32_t{1};
         if (presentation.width <= requestedExtent.width ||
-                presentation.height <= requestedExtent.height)
-            return std::nullopt;
+                presentation.height <= requestedExtent.height) {
+            decision.inactiveReason =
+                SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
+            return decision;
+        }
 
-        return SpatialScalingExtents{
+        decision.extents = SpatialScalingExtents{
             .source = requestedExtent,
             .presentation = presentation,
         };
+        return decision;
+    }
+
+    [[nodiscard]] inline SpatialScalingCreateDecision
+    scalingDecisionForCreate(
+            const ls::GameConf& profile,
+            const bool processSupported,
+            const uint64_t policyRevision,
+            const VkSurfaceCapabilitiesKHR& realCapabilities,
+            const VkExtent2D requestedExtent,
+            const std::optional<SpatialScalingExtents>&
+                previousVariableExtents = std::nullopt,
+            const std::optional<FixedSurfaceScalingContract>&
+                fixedContract = std::nullopt) noexcept {
+        return scalingDecisionForCreate(
+            SpatialScalingPolicy{
+                .enabled = profile.scaling_enabled,
+                .factor = profile.scaling_factor,
+            },
+            processSupported,
+            policyRevision,
+            realCapabilities,
+            requestedExtent,
+            previousVariableExtents,
+            fixedContract
+        );
+    }
+
+    /// Compatibility wrapper for callers that only need variable-surface
+    /// policy. Fixed-surface activation intentionally requires an explicit
+    /// capability contract and therefore returns no extent here.
+    [[nodiscard]] inline std::optional<SpatialScalingExtents>
+    scalingExtentsForCreate(
+            const ls::GameConf& profile,
+            const VkSurfaceCapabilitiesKHR& realCapabilities,
+            const VkExtent2D requestedExtent,
+            const std::optional<SpatialScalingExtents>&
+                previousVariableExtents = std::nullopt) noexcept {
+        return scalingDecisionForCreate(
+            profile, true, 0, realCapabilities, requestedExtent,
+            previousVariableExtents
+        ).extents;
     }
 
     [[nodiscard]] inline bool variableSurfaceScalingFeedbackDetected(

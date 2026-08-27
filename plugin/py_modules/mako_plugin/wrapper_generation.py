@@ -50,7 +50,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 45
+WRAPPER_FORMAT_VERSION = 46
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -63,6 +63,7 @@ REQUIRED_WRAPPER_EXPORTS = (
     *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
     f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
     f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
+    "mako_scaling_presentation_required=",
     f"export {EXTERNAL_VULKAN_LAYER_ENV}=",
     f"export {VK_IMPLICIT_LAYER_PATH_ENV}=",
     f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
@@ -165,6 +166,15 @@ def script_configuration_lines(
 ) -> list[str]:
     """Generate wrapper settings without repeating forced compatibility exports."""
     lines = get_script_generation_logic()(config)
+    # A fixed Vulkan layer chain cannot gain Gamescope WSI after instance
+    # creation. Record whether this profile needs the compositor-owned
+    # source/presentation split before the wrapper assembles that chain. Keep
+    # this as a shell-local generated hint rather than another persisted field
+    # or public environment interface.
+    lines.append(
+        "mako_scaling_presentation_required="
+        f"{1 if config.get('scaling_enabled', False) else 0}"
+    )
     for line in hdr_lines(config):
         if line not in lines:
             lines.append(line)
@@ -253,6 +263,16 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"    mako_implicit_layer_path={shlex.quote(context.flatpak_implicit_layer_dir)}",
         "else",
         f"    mako_implicit_layer_path={shlex.quote(str(context.local_share_dir))}",
+        # Gamescope's WSI layer runs above MAKO. In that order its internal
+        # Wayland surface gives MAKO a variable lower surface, so the game can
+        # keep its selected render extent while MAKO owns the larger
+        # presentation extent. Admit the already-validated staged manifest
+        # automatically only for profiles that start with scaling enabled.
+        # An explicit optional tool remains authoritative and mutually
+        # exclusive; fixed-surface scaling can still work without WSI there.
+        '    if [ "${mako_scaling_presentation_required:-0}" = 1 ] && [ -z "$mako_external_vulkan_layer" ]; then',
+        f"        mako_external_vulkan_layer={EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI}",
+        "    fi",
         '    case "$mako_external_vulkan_layer" in',
         f"        {EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI})",
         f"            if [ -r {gamescope_wsi_manifest} ]; then",
@@ -260,7 +280,12 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"                export {GAMESCOPE_WSI_ENABLE_ENV}=1",
         "                export NODEVICE_SELECT=1",
         "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
-        '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_gamescope_wsi_layer_dir"',
+        # Search order is dispatch order for these staged implicit manifests:
+        # Gamescope WSI must intercept the application surface first and call
+        # down into MAKO with its internal variable Wayland surface. Reversing
+        # these directories leaves MAKO on the fixed X11 surface and scaling
+        # cannot obtain a distinct presentation extent.
+        '                mako_implicit_layer_path="$mako_gamescope_wsi_layer_dir:$mako_implicit_layer_path"',
         "            fi",
         "            ;;",
         f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
@@ -282,6 +307,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "            ;;",
         "    esac",
         "fi",
+        "unset mako_scaling_presentation_required",
         f'export {VK_IMPLICIT_LAYER_PATH_ENV}="$mako_implicit_layer_path"',
         f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
         f"export {MAKO_CONFIG_ENV}={shlex.quote(str(context.config_file_path))}",

@@ -7,7 +7,6 @@ import {
   ButtonItem,
   PanelSectionRow,
   Toggle,
-  Focusable,
   Navigation,
   showModal,
   ConfirmModal,
@@ -35,6 +34,7 @@ import t from "../i18n/i18n";
 import { showErrorToast, showSuccessToast } from "../utils/toastUtils";
 import {
   MakoCompactSpinner,
+  MakoFocusable,
   makoPanelDivider,
   makoPanelItemStyle,
   makoPanelSectionHeaderStyle,
@@ -276,7 +276,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
         {t("FLATPAK_MODAL_TITLE", "Flatpak Extensions")}
       </DialogHeader>
       <DialogBody>
-        <Focusable flow-children="vertical">
+        <MakoFocusable flow-children="column">
           <div
             style={{
               ...makoPanelStyle,
@@ -714,7 +714,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               </div>
 
               {instructionSteps.map((step) => (
-                <Focusable
+                <MakoFocusable
                   key={step.id}
                   focusWithinClassName="gpfocuswithin"
                   onActivate={() => {}}
@@ -722,7 +722,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                 >
                   <div style={{ fontWeight: "bold" }}>{step.title}</div>
                   <div style={commandStyle}>{step.command}</div>
-                </Focusable>
+                </MakoFocusable>
               ))}
 
               <div className="Mako_BrandButton">
@@ -748,7 +748,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               </div>
             </PanelSectionRow>
           </DialogControlsSection>
-        </Focusable>
+        </MakoFocusable>
       </DialogBody>
     </ModalRoot>
   );

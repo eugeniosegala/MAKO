@@ -177,10 +177,58 @@ int main() {
 
     profile.scaling_factor = 1.5F;
     const auto real = fixedCapabilities(1920, 1080);
-    expect(scalingExtentsForCreate(profile, real, {1280, 720}).has_value(),
+    const FixedSurfaceScalingContract fixedContract{
+        .extents = {
+            .source = {1280, 720},
+            .presentation = {1920, 1080},
+        },
+        .factor = 1.5F,
+        .policyRevision = 7,
+        .queryGeneration = 11,
+    };
+    const auto matchingFixed = scalingDecisionForCreate(
+        profile, true, 7, real, {1280, 720}, std::nullopt, fixedContract
+    );
+    expect(matchingFixed.extents.has_value() &&
+            matchingFixed.fixedContract &&
+            matchingFixed.fixedContract->queryGeneration == 11 &&
+            matchingFixed.inactiveReason ==
+                SpatialScalingInactiveReason::None,
         "A create request matching the advertised source extent must scale");
-    expect(!scalingExtentsForCreate(profile, real, {1600, 900}),
+    const auto nativeOverride = scalingDecisionForCreate(
+        profile, true, 7, real, {1920, 1080}, std::nullopt, fixedContract
+    );
+    expect(!nativeOverride.extents &&
+            nativeOverride.inactiveReason ==
+                SpatialScalingInactiveReason::ApplicationExtentOverrideNoSplit,
+        "A native application extent override must remain application-owned");
+    const auto customOverride = scalingDecisionForCreate(
+        profile, true, 7, real, {1600, 900}, std::nullopt, fixedContract
+    );
+    expect(!customOverride.extents &&
+            customOverride.inactiveReason ==
+                SpatialScalingInactiveReason::ApplicationExtentMismatch,
         "An application extent override must remain application-owned");
+    const auto missingContract = scalingDecisionForCreate(
+        profile, true, 7, real, {1280, 720}
+    );
+    expect(!missingContract.extents &&
+            missingContract.inactiveReason == SpatialScalingInactiveReason::
+                NoFixedCapabilityContract,
+        "A fixed source request without a capability contract must fail closed");
+    const auto blockedProcess = scalingDecisionForCreate(
+        profile, false, 7, real, {1280, 720}, std::nullopt, fixedContract
+    );
+    expect(!blockedProcess.extents && blockedProcess.inactiveReason ==
+            SpatialScalingInactiveReason::ProcessUnsupported,
+        "A process outside the SDR scaling boundary must fail closed");
+
+    profile.scaling_sharpness = 0.75F;
+    profile.scaling_method = ls::ScalingMethod::Ls1;
+    expect(scalingDecisionForCreate(
+            profile, true, 7, real, {1280, 720}, std::nullopt,
+            fixedContract).extents.has_value(),
+        "Method and sharpness recreations must reuse an unchanged extent contract");
 
     auto previouslyAdvertisedCapabilities = real;
     const auto previouslyAdvertised = virtualizeSurfaceCapabilities(
@@ -192,15 +240,38 @@ int main() {
             previouslyAdvertised->source),
         "A fixed-surface query must advertise the selected source extent");
     profile.scaling_factor = 2.0F;
-    expect(!scalingExtentsForCreate(
-            profile, real, previouslyAdvertisedCapabilities.currentExtent),
+    const auto changedPolicy = scalingDecisionForCreate(
+        profile, true, 8, real,
+        previouslyAdvertisedCapabilities.currentExtent,
+        std::nullopt, fixedContract
+    );
+    expect(!changedPolicy.extents && changedPolicy.inactiveReason ==
+            SpatialScalingInactiveReason::PolicyChangedAfterCapabilityQuery,
         "A stale fixed-surface request must not match a changed scaling policy");
     profile.scaling_enabled = false;
-    expect(!scalingExtentsForCreate(
-            profile, real, previouslyAdvertisedCapabilities.currentExtent),
+    expect(!scalingDecisionForCreate(
+            profile, true, 9, real,
+            previouslyAdvertisedCapabilities.currentExtent,
+            std::nullopt, fixedContract).extents,
         "A fixed-surface request must not scale after the policy is disabled");
     profile.scaling_enabled = true;
     profile.scaling_factor = 1.5F;
+    auto resizedSurface = real;
+    resizedSurface.currentExtent = {2560, 1440};
+    const auto surfaceDrift = scalingDecisionForCreate(
+        profile, true, 7, resizedSurface, {1280, 720}, std::nullopt,
+        fixedContract
+    );
+    expect(!surfaceDrift.extents && surfaceDrift.inactiveReason ==
+            SpatialScalingInactiveReason::SurfaceChangedAfterCapabilityQuery,
+        "A changed fixed presentation extent must invalidate the old contract");
+    expect(std::string_view(spatialScalingInactiveReasonName(
+            SpatialScalingInactiveReason::ApplicationExtentOverrideNoSplit)) ==
+            "application-extent-override-no-source-presentation-split" &&
+            std::string_view(spatialScalingInactiveReasonName(
+                SpatialScalingInactiveReason::SwapchainFormatUnsupported)) ==
+            "swapchain-format-unsupported",
+        "Inactive reason diagnostics must retain stable machine-readable names");
 
     VkSurfaceCapabilitiesKHR variableCreate{
         .currentExtent = {UINT32_MAX, UINT32_MAX},
@@ -220,6 +291,11 @@ int main() {
     expect(!scalingExtentsForCreate(
             profile, variableCreate, {960, 600}, customFactor),
         "A compositor-echoed extent must not compound the scale factor");
+    expect(scalingDecisionForCreate(
+            profile, true, 7, variableCreate, {960, 600}, customFactor
+        ).inactiveReason == SpatialScalingInactiveReason::
+            VariableSurfaceFeedback,
+        "Variable compositor feedback must expose a stable inactive reason");
     expect(!variableSurfaceScalingFeedbackDetected(
             profile, variableCreate, {800, 500}, customFactor) &&
             scalingExtentsForCreate(
@@ -267,6 +343,11 @@ int main() {
     expect(!scalingExtentsForCreate(
             profile, variableCreate, {1280, 800}),
         "A variable surface with no enlargement headroom must fail closed");
+    expect(scalingDecisionForCreate(
+            profile, true, 7, variableCreate, {1280, 800}
+        ).inactiveReason == SpatialScalingInactiveReason::
+            VariableSurfaceNoHeadroom,
+        "Variable maximum-extent exhaustion must expose a stable inactive reason");
 
     profile.scaling_factor = std::numeric_limits<float>::infinity();
     expect(!selectSpatialScalingExtents(

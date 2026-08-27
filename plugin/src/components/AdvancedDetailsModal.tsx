@@ -3,29 +3,41 @@ import {
   ModalRoot,
   DialogBody,
   DialogHeader,
-  Focusable,
   DialogControlsSection,
   PanelSectionRow,
-  ButtonItem
+  ButtonItem,
 } from "@decky/ui";
-import { getDllStats, DllStatsResult, getConfigFileContent, getLaunchScriptContent, FileContentResult } from "../api/makoApi";
-import t from '../i18n/i18n';
+import {
+  getDllStats,
+  DllStatsResult,
+  getConfigFileContent,
+  getLaunchScriptContent,
+  FileContentResult,
+} from "../api/makoApi";
+import t from "../i18n/i18n";
 import {
   MakoCompactSpinner,
+  MakoFocusable,
   makoPanelDivider,
   makoPanelItemStyle,
   makoPanelSectionHeaderStyle,
-  makoPanelStyle
-} from './MakoUi';
+  makoPanelStyle,
+} from "./MakoUi";
 
 interface AdvancedDetailsModalProps {
   closeModal?: () => void;
 }
 
-export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) {
+export function AdvancedDetailsModal({
+  closeModal,
+}: AdvancedDetailsModalProps) {
   const [dllStats, setDllStats] = useState<DllStatsResult | null>(null);
-  const [configContent, setConfigContent] = useState<FileContentResult | null>(null);
-  const [scriptContent, setScriptContent] = useState<FileContentResult | null>(null);
+  const [configContent, setConfigContent] = useState<FileContentResult | null>(
+    null,
+  );
+  const [scriptContent, setScriptContent] = useState<FileContentResult | null>(
+    null,
+  );
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -39,14 +51,18 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
         const [dllResult, configResult, scriptResult] = await Promise.all([
           getDllStats(),
           getConfigFileContent(),
-          getLaunchScriptContent()
+          getLaunchScriptContent(),
         ]);
 
         setDllStats(dllResult);
         setConfigContent(configResult);
         setScriptContent(scriptResult);
       } catch (err) {
-        setError(err instanceof Error ? err.message : t('ADVANCED_DETAILS_FAILED_LOAD_DATA', 'Failed to load data'));
+        setError(
+          err instanceof Error
+            ? err.message
+            : t("ADVANCED_DETAILS_FAILED_LOAD_DATA", "Failed to load data"),
+        );
       } finally {
         setLoading(false);
       }
@@ -57,7 +73,7 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
 
   const formatSHA256 = (hash: string) => {
     // Format SHA256 hash for better readability (add spaces every 8 characters)
-    return hash.replace(/(.{8})/g, '$1 ').trim();
+    return hash.replace(/(.{8})/g, "$1 ").trim();
   };
 
   const copyToClipboard = async (text: string) => {
@@ -74,7 +90,7 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
     minWidth: 0,
     maxWidth: "100%",
     overflowWrap: "anywhere",
-    wordBreak: "break-word"
+    wordBreak: "break-word",
   };
 
   const pathStyle: CSSProperties = {
@@ -82,7 +98,7 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
     marginBottom: "9px",
     color: "#b9cbd0",
     fontSize: "12px",
-    lineHeight: 1.35
+    lineHeight: 1.35,
   };
 
   const detailLabelStyle: CSSProperties = {
@@ -92,14 +108,14 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
     fontWeight: 600,
     lineHeight: 1.3,
     textTransform: "uppercase",
-    letterSpacing: "0.35px"
+    letterSpacing: "0.35px",
   };
 
   const detailValueStyle: CSSProperties = {
     ...copyableValueStyle,
     color: "#edf8fb",
     fontSize: "13px",
-    lineHeight: 1.4
+    lineHeight: 1.4,
   };
 
   const codeBlockStyle: CSSProperties = {
@@ -117,64 +133,132 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
     fontSize: "0.8em",
     whiteSpace: "pre-wrap",
     overflowWrap: "anywhere",
-    wordBreak: "break-word"
+    wordBreak: "break-word",
   };
 
   return (
     <ModalRoot closeModal={closeModal}>
-      <DialogHeader>{t("CONTENT_ADVANCED_DETAILS", "Advanced Details")}</DialogHeader>
+      <DialogHeader>
+        {t("CONTENT_ADVANCED_DETAILS", "Advanced Details")}
+      </DialogHeader>
       <DialogBody>
         {loading && (
-          <div style={{ ...makoPanelStyle, margin: '8px 0 18px', padding: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '9px', color: '#dcecef' }}>
+          <div
+            style={{
+              ...makoPanelStyle,
+              margin: "8px 0 18px",
+              padding: "18px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "9px",
+              color: "#dcecef",
+            }}
+          >
             <MakoCompactSpinner />
-            <span>{t('ADVANCED_DETAILS_LOADING', 'Loading information...')}</span>
+            <span>
+              {t("ADVANCED_DETAILS_LOADING", "Loading information...")}
+            </span>
           </div>
         )}
 
         {error && (
-          <div style={{ ...makoPanelStyle, margin: '8px 0 18px', padding: '14px', color: '#ffb3b9' }}>
-            {t('ADVANCED_DETAILS_ERROR_PREFIX', 'Error:')} {error}
+          <div
+            style={{
+              ...makoPanelStyle,
+              margin: "8px 0 18px",
+              padding: "14px",
+              color: "#ffb3b9",
+            }}
+          >
+            {t("ADVANCED_DETAILS_ERROR_PREFIX", "Error:")} {error}
           </div>
         )}
 
         {!loading && !error && (
-          <Focusable flow-children="vertical">
-            <div style={{ ...makoPanelStyle, margin: '8px 0 18px' }}>
+          <MakoFocusable flow-children="column">
+            <div style={{ ...makoPanelStyle, margin: "8px 0 18px" }}>
               {dllStats && (
                 <>
                   <div style={makoPanelSectionHeaderStyle}>
-                    {t('ADVANCED_DETAILS_LIBRARY', 'Lossless Scaling Library')}
+                    {t("ADVANCED_DETAILS_LIBRARY", "Lossless Scaling Library")}
                   </div>
                   {!dllStats.success ? (
-                    <div style={{ ...makoPanelItemStyle, color: '#ffb3b9', overflowWrap: 'anywhere' }}>
-                      {dllStats.error || t('ADVANCED_DETAILS_FAILED_DLL_STATS', 'Failed to get DLL stats')}
+                    <div
+                      style={{
+                        ...makoPanelItemStyle,
+                        color: "#ffb3b9",
+                        overflowWrap: "anywhere",
+                      }}
+                    >
+                      {dllStats.error ||
+                        t(
+                          "ADVANCED_DETAILS_FAILED_DLL_STATS",
+                          "Failed to get DLL stats",
+                        )}
                     </div>
                   ) : (
                     <>
                       <div style={makoPanelItemStyle}>
-                        <div style={detailLabelStyle}>{t('ADVANCED_DETAILS_DLL_PATH', 'DLL Path')}</div>
-                        <Focusable
-                          onClick={() => dllStats.dll_path && copyToClipboard(dllStats.dll_path)}
-                          onActivate={() => dllStats.dll_path && copyToClipboard(dllStats.dll_path)}
+                        <div style={detailLabelStyle}>
+                          {t("ADVANCED_DETAILS_DLL_PATH", "DLL Path")}
+                        </div>
+                        <MakoFocusable
+                          onClick={() =>
+                            dllStats.dll_path &&
+                            copyToClipboard(dllStats.dll_path)
+                          }
+                          onActivate={() =>
+                            dllStats.dll_path &&
+                            copyToClipboard(dllStats.dll_path)
+                          }
                           style={detailValueStyle}
                         >
-                          {dllStats.dll_path || t('ADVANCED_DETAILS_NOT_AVAILABLE', 'Not available')}
-                        </Focusable>
+                          {dllStats.dll_path ||
+                            t(
+                              "ADVANCED_DETAILS_NOT_AVAILABLE",
+                              "Not available",
+                            )}
+                        </MakoFocusable>
                       </div>
                       <div style={makoPanelItemStyle}>
-                        <div style={detailLabelStyle}>{t('ADVANCED_DETAILS_DLL_HASH', 'DLL SHA256 Hash')}</div>
-                        <Focusable
-                          onClick={() => dllStats.dll_sha256 && copyToClipboard(dllStats.dll_sha256)}
-                          onActivate={() => dllStats.dll_sha256 && copyToClipboard(dllStats.dll_sha256)}
-                          style={{ ...detailValueStyle, fontFamily: 'monospace', fontSize: '12px' }}
+                        <div style={detailLabelStyle}>
+                          {t("ADVANCED_DETAILS_DLL_HASH", "DLL SHA256 Hash")}
+                        </div>
+                        <MakoFocusable
+                          onClick={() =>
+                            dllStats.dll_sha256 &&
+                            copyToClipboard(dllStats.dll_sha256)
+                          }
+                          onActivate={() =>
+                            dllStats.dll_sha256 &&
+                            copyToClipboard(dllStats.dll_sha256)
+                          }
+                          style={{
+                            ...detailValueStyle,
+                            fontFamily: "monospace",
+                            fontSize: "12px",
+                          }}
                         >
-                          {dllStats.dll_sha256 ? formatSHA256(dllStats.dll_sha256) : t('ADVANCED_DETAILS_NOT_AVAILABLE', 'Not available')}
-                        </Focusable>
+                          {dllStats.dll_sha256
+                            ? formatSHA256(dllStats.dll_sha256)
+                            : t(
+                                "ADVANCED_DETAILS_NOT_AVAILABLE",
+                                "Not available",
+                              )}
+                        </MakoFocusable>
                       </div>
                       {dllStats.dll_source && (
                         <div style={makoPanelItemStyle}>
-                          <div style={detailLabelStyle}>{t('ADVANCED_DETAILS_DETECTION_SOURCE', 'Detection Source')}</div>
-                          <div style={detailValueStyle}>{dllStats.dll_source}</div>
+                          <div style={detailLabelStyle}>
+                            {t(
+                              "ADVANCED_DETAILS_DETECTION_SOURCE",
+                              "Detection Source",
+                            )}
+                          </div>
+                          <div style={detailValueStyle}>
+                            {dllStats.dll_source}
+                          </div>
                         </div>
                       )}
                     </>
@@ -184,27 +268,46 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
 
               {scriptContent && (
                 <>
-                  <div style={{ ...makoPanelSectionHeaderStyle, borderTop: makoPanelDivider }}>
-                    {t('ADVANCED_DETAILS_LAUNCH_SCRIPT', 'Launch Script')}
+                  <div
+                    style={{
+                      ...makoPanelSectionHeaderStyle,
+                      borderTop: makoPanelDivider,
+                    }}
+                  >
+                    {t("ADVANCED_DETAILS_LAUNCH_SCRIPT", "Launch Script")}
                   </div>
                   <div style={makoPanelItemStyle}>
                     {!scriptContent.success ? (
-                      <div style={{ color: '#ffb3b9', overflowWrap: 'anywhere' }}>
-                        {t('ADVANCED_DETAILS_SCRIPT_NOT_FOUND_PREFIX', 'Script not found:')} {scriptContent.error}
+                      <div
+                        style={{ color: "#ffb3b9", overflowWrap: "anywhere" }}
+                      >
+                        {t(
+                          "ADVANCED_DETAILS_SCRIPT_NOT_FOUND_PREFIX",
+                          "Script not found:",
+                        )}{" "}
+                        {scriptContent.error}
                       </div>
                     ) : (
                       <div style={{ minWidth: 0 }}>
                         <div style={pathStyle}>
-                          {t('ADVANCED_DETAILS_PATH_PREFIX', 'Path:')} {scriptContent.path}
+                          {t("ADVANCED_DETAILS_PATH_PREFIX", "Path:")}{" "}
+                          {scriptContent.path}
                         </div>
-                        <Focusable
-                          onClick={() => scriptContent.content && copyToClipboard(scriptContent.content)}
-                          onActivate={() => scriptContent.content && copyToClipboard(scriptContent.content)}
+                        <MakoFocusable
+                          onClick={() =>
+                            scriptContent.content &&
+                            copyToClipboard(scriptContent.content)
+                          }
+                          onActivate={() =>
+                            scriptContent.content &&
+                            copyToClipboard(scriptContent.content)
+                          }
                         >
                           <pre style={codeBlockStyle}>
-                            {scriptContent.content || t('ADVANCED_DETAILS_NO_CONTENT', 'No content')}
+                            {scriptContent.content ||
+                              t("ADVANCED_DETAILS_NO_CONTENT", "No content")}
                           </pre>
-                        </Focusable>
+                        </MakoFocusable>
                       </div>
                     )}
                   </div>
@@ -213,27 +316,46 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
 
               {configContent && (
                 <>
-                  <div style={{ ...makoPanelSectionHeaderStyle, borderTop: makoPanelDivider }}>
-                    {t('ADVANCED_DETAILS_CONFIG_FILE', 'Configuration File')}
+                  <div
+                    style={{
+                      ...makoPanelSectionHeaderStyle,
+                      borderTop: makoPanelDivider,
+                    }}
+                  >
+                    {t("ADVANCED_DETAILS_CONFIG_FILE", "Configuration File")}
                   </div>
                   <div style={makoPanelItemStyle}>
                     {!configContent.success ? (
-                      <div style={{ color: '#ffb3b9', overflowWrap: 'anywhere' }}>
-                        {t('ADVANCED_DETAILS_CONFIG_NOT_FOUND_PREFIX', 'Config not found:')} {configContent.error}
+                      <div
+                        style={{ color: "#ffb3b9", overflowWrap: "anywhere" }}
+                      >
+                        {t(
+                          "ADVANCED_DETAILS_CONFIG_NOT_FOUND_PREFIX",
+                          "Config not found:",
+                        )}{" "}
+                        {configContent.error}
                       </div>
                     ) : (
                       <div style={{ minWidth: 0 }}>
                         <div style={pathStyle}>
-                          {t('ADVANCED_DETAILS_PATH_PREFIX', 'Path:')} {configContent.path}
+                          {t("ADVANCED_DETAILS_PATH_PREFIX", "Path:")}{" "}
+                          {configContent.path}
                         </div>
-                        <Focusable
-                          onClick={() => configContent.content && copyToClipboard(configContent.content)}
-                          onActivate={() => configContent.content && copyToClipboard(configContent.content)}
+                        <MakoFocusable
+                          onClick={() =>
+                            configContent.content &&
+                            copyToClipboard(configContent.content)
+                          }
+                          onActivate={() =>
+                            configContent.content &&
+                            copyToClipboard(configContent.content)
+                          }
                         >
                           <pre style={codeBlockStyle}>
-                            {configContent.content || t('ADVANCED_DETAILS_NO_CONTENT', 'No content')}
+                            {configContent.content ||
+                              t("ADVANCED_DETAILS_NO_CONTENT", "No content")}
                           </pre>
-                        </Focusable>
+                        </MakoFocusable>
                       </div>
                     )}
                   </div>
@@ -244,16 +366,13 @@ export function AdvancedDetailsModal({ closeModal }: AdvancedDetailsModalProps) 
             <DialogControlsSection>
               <PanelSectionRow>
                 <div className="Mako_BrandButton">
-                  <ButtonItem
-                    layout="below"
-                    onClick={closeModal}
-                  >
-                    {t('ADVANCED_DETAILS_CLOSE', 'Close')}
+                  <ButtonItem layout="below" onClick={closeModal}>
+                    {t("ADVANCED_DETAILS_CLOSE", "Close")}
                   </ButtonItem>
                 </div>
               </PanelSectionRow>
             </DialogControlsSection>
-          </Focusable>
+          </MakoFocusable>
         )}
       </DialogBody>
     </ModalRoot>
