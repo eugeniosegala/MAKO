@@ -10,6 +10,7 @@
 #include "swapchain_retirement.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <chrono>
 #include <cstring>
 #include <optional>
@@ -73,10 +74,13 @@ namespace {
         std::unordered_set<VkSwapchainKHR> nativeSwapchains;
         struct RetiredSwapchain {
             VkDevice device{VK_NULL_HANDLE};
+            VkSurfaceKHR surface{VK_NULL_HANDLE};
             ls::R<vk::Vulkan> vk;
             std::optional<Swapchain> context;
             std::chrono::steady_clock::time_point notBefore{};
         };
+        std::atomic_size_t retiredSwapchainCount{0};
+        std::mutex retiredSwapchainsMutex;
         std::unordered_map<VkSwapchainKHR, RetiredSwapchain>
             retiredSwapchains;
     }* instance_info; // NOLINT (global variable)
@@ -84,7 +88,11 @@ namespace {
     bool initializeLayerInfo();
 
     bool finalizeRetiredSwapchain(
-            const VkSwapchainKHR swapchain, const uint64_t timeoutNs) {
+            const VkSwapchainKHR swapchain, const uint64_t timeoutNs,
+            const std::string_view trigger) {
+        const std::lock_guard retirementLock(
+            instance_info->retiredSwapchainsMutex
+        );
         const auto retired = instance_info->retiredSwapchains.find(swapchain);
         if (retired == instance_info->retiredSwapchains.end())
             return true;
@@ -118,10 +126,14 @@ namespace {
         state.vk.get().df().DestroySwapchainKHR(
             state.device, swapchain, VK_NULL_HANDLE
         );
+        instance_info->retiredSwapchainCount.fetch_sub(
+            1, std::memory_order_acq_rel
+        );
         if (present_diagnostics::enabled()) {
             std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=swapchain-retirement-complete"
                       << " swapchain=" << swapchain
+                      << " trigger=" << trigger
                       << " pending="
                       << instance_info->retiredSwapchains.size() << '\n';
         }
@@ -129,14 +141,24 @@ namespace {
     }
 
     void collectRetiredSwapchains(
-            const VkDevice device, const uint64_t timeoutNs = 0) {
+            const VkDevice device, const uint64_t timeoutNs,
+            const std::string_view trigger) {
+        if (instance_info->retiredSwapchainCount.load(
+                std::memory_order_acquire) == 0) {
+            return;
+        }
         const auto started = std::chrono::steady_clock::now();
         std::vector<VkSwapchainKHR> candidates;
-        candidates.reserve(instance_info->retiredSwapchains.size());
-        for (const auto& [swapchain, retired] :
-                instance_info->retiredSwapchains) {
-            if (retired.device == device)
-                candidates.push_back(swapchain);
+        {
+            const std::lock_guard retirementLock(
+                instance_info->retiredSwapchainsMutex
+            );
+            candidates.reserve(instance_info->retiredSwapchains.size());
+            for (const auto& [swapchain, retired] :
+                    instance_info->retiredSwapchains) {
+                if (retired.device == device)
+                    candidates.push_back(swapchain);
+            }
         }
         for (const auto swapchain : candidates) {
             uint64_t remainingTimeoutNs = timeoutNs;
@@ -151,19 +173,64 @@ namespace {
                     : timeoutNs - static_cast<uint64_t>(elapsed);
             }
             static_cast<void>(finalizeRetiredSwapchain(
-                swapchain, remainingTimeoutNs
+                swapchain, remainingTimeoutNs, trigger
+            ));
+        }
+    }
+
+    void collectRetiredSwapchainsAfterPresent(
+            const VkDevice device, const VkPresentInfoKHR& presentInfo) {
+        if (instance_info->retiredSwapchainCount.load(
+                std::memory_order_acquire) == 0) {
+            return;
+        }
+        std::vector<VkSwapchainKHR> candidates;
+        {
+            const std::lock_guard retirementLock(
+                instance_info->retiredSwapchainsMutex
+            );
+            candidates.reserve(instance_info->retiredSwapchains.size());
+            for (const auto& [retiredHandle, retired] :
+                    instance_info->retiredSwapchains) {
+                if (retired.device != device)
+                    continue;
+                for (uint32_t index = 0;
+                        index < presentInfo.swapchainCount; ++index) {
+                    const auto live = instance_info->swapchainInfos.find(
+                        presentInfo.pSwapchains[index]
+                    );
+                    if (live != instance_info->swapchainInfos.end() &&
+                            retiredSwapchainBelongsToSurface(
+                                retired.surface, live->second.surface)) {
+                        candidates.push_back(retiredHandle);
+                        break;
+                    }
+                }
+            }
+        }
+        for (const auto swapchain : candidates) {
+            static_cast<void>(finalizeRetiredSwapchain(
+                swapchain, 0, "same-surface-present"
             ));
         }
     }
 
     void forceFinalizeRetiredSwapchains(const VkDevice device) {
         std::vector<VkSwapchainKHR> candidates;
-        for (const auto& [swapchain, retired] :
-                instance_info->retiredSwapchains) {
-            if (retired.device == device)
-                candidates.push_back(swapchain);
+        {
+            const std::lock_guard retirementLock(
+                instance_info->retiredSwapchainsMutex
+            );
+            for (const auto& [swapchain, retired] :
+                    instance_info->retiredSwapchains) {
+                if (retired.device == device)
+                    candidates.push_back(swapchain);
+            }
         }
         for (const auto swapchain : candidates) {
+            const std::lock_guard retirementLock(
+                instance_info->retiredSwapchainsMutex
+            );
             auto node = instance_info->retiredSwapchains.extract(swapchain);
             if (node.empty())
                 continue;
@@ -174,7 +241,35 @@ namespace {
             state.vk.get().df().DestroySwapchainKHR(
                 state.device, swapchain, VK_NULL_HANDLE
             );
+            instance_info->retiredSwapchainCount.fetch_sub(
+                1, std::memory_order_acq_rel
+            );
         }
+    }
+
+    void collectRetiredSwapchainsForSurface(const VkSurfaceKHR surface) {
+        if (instance_info->retiredSwapchainCount.load(
+                std::memory_order_acquire) == 0) {
+            return;
+        }
+        std::vector<VkSwapchainKHR> candidates;
+        {
+            const std::lock_guard retirementLock(
+                instance_info->retiredSwapchainsMutex
+            );
+            candidates.reserve(instance_info->retiredSwapchains.size());
+            for (const auto& [swapchain, retired] :
+                    instance_info->retiredSwapchains) {
+                if (retiredSwapchainBelongsToSurface(
+                        retired.surface, surface)) {
+                    candidates.push_back(swapchain);
+                }
+            }
+        }
+        for (const auto swapchain : candidates)
+            static_cast<void>(finalizeRetiredSwapchain(
+                swapchain, UINT64_MAX, "surface-destroy"
+            ));
     }
 
     std::optional<uint32_t> selectLayerQueueFamily(
@@ -600,7 +695,9 @@ namespace {
         if (!instance_info)
             return;
 
-        collectRetiredSwapchains(device, 250'000'000);
+        collectRetiredSwapchains(
+            device, 250'000'000, "device-destroy"
+        );
         forceFinalizeRetiredSwapchains(device);
 
         // destroy layer instance
@@ -1046,6 +1143,11 @@ namespace {
             const VkInstance instance, const VkSurfaceKHR surface,
             const VkAllocationCallbacks* alloc) {
         if (instance_info) {
+            // Destroying the application surface is an explicit terminal
+            // boundary: no replacement swapchain on this surface can follow.
+            // Drain the maintenance1 lifetime proof and release every deferred
+            // lower swapchain before forwarding the surface destruction.
+            collectRetiredSwapchainsForSurface(surface);
             const std::lock_guard lock(
                 instance_info->surfaceScalingMutex
             );
@@ -1196,6 +1298,7 @@ namespace {
 
             auto& swapchainInfo = instance_info->swapchainInfos.emplace(*swapchain, SwapchainInfo {
                 .images = std::move(swapchainImages),
+                .surface = info->surface,
                 .format = newInfo.imageFormat,
                 .colorSpace = newInfo.imageColorSpace,
                 .applicationExtent = modification.applicationExtent,
@@ -1427,7 +1530,9 @@ namespace {
 
         const auto queueIdentity = instance_info->queueIdentities.find(queue);
         if (queueIdentity != instance_info->queueIdentities.end())
-            collectRetiredSwapchains(queueIdentity->second.device);
+            collectRetiredSwapchainsAfterPresent(
+                queueIdentity->second.device, *info
+            );
 
         // Preserve a genuine game/driver out-of-date result, or MAKO's guarded
         // one-shot live-scaling recreation request, across the present batch.
@@ -1442,12 +1547,23 @@ namespace {
         const auto& it = instance_info->devices.find(device);
         if (it == instance_info->devices.end())
             return;
-        if (instance_info->retiredSwapchains.contains(swapchain)) {
-            std::cerr << "MAKO Renderer: duplicate deferred swapchain "
-                         "destruction ignored\n";
-            return;
+        {
+            const std::lock_guard retirementLock(
+                instance_info->retiredSwapchainsMutex
+            );
+            if (instance_info->retiredSwapchains.contains(swapchain)) {
+                std::cerr << "MAKO Renderer: duplicate deferred swapchain "
+                             "destruction ignored\n";
+                return;
+            }
         }
 
+        const auto swapchainMetadata =
+            instance_info->swapchainInfos.find(swapchain);
+        const VkSurfaceKHR surface = swapchainMetadata ==
+                instance_info->swapchainInfos.end()
+            ? VK_NULL_HANDLE
+            : swapchainMetadata->second.surface;
         instance_info->swapchainInfos.erase(swapchain);
         instance_info->swapchains.erase(swapchain);
         const bool native = instance_info->nativeSwapchains.erase(swapchain) > 0;
@@ -1455,17 +1571,30 @@ namespace {
 
         if (!native && context && context->presentRetirementEnabled()) {
             if (!alloc) {
-                const bool inserted =
-                    instance_info->retiredSwapchains.emplace(
-                        swapchain,
-                        InstanceInfo::RetiredSwapchain{
-                            .device = device,
-                            .vk = ls::R<vk::Vulkan>(it->second),
-                            .context = std::move(context),
-                            .notBefore = std::chrono::steady_clock::now() +
-                                swapchainRetirementGracePeriod,
-                        }
-                    ).second;
+                const auto now = std::chrono::steady_clock::now();
+                bool inserted = false;
+                size_t pending = 0;
+                {
+                    const std::lock_guard retirementLock(
+                        instance_info->retiredSwapchainsMutex
+                    );
+                    inserted = instance_info->retiredSwapchains.emplace(
+                            swapchain,
+                            InstanceInfo::RetiredSwapchain{
+                                .device = device,
+                                .surface = surface,
+                                .vk = ls::R<vk::Vulkan>(it->second),
+                                .context = std::move(context),
+                                .notBefore = now + swapchainRetirementGracePeriod,
+                            }
+                        ).second;
+                    if (inserted) {
+                        instance_info->retiredSwapchainCount.fetch_add(
+                            1, std::memory_order_release
+                        );
+                    }
+                    pending = instance_info->retiredSwapchains.size();
+                }
                 if (!inserted) {
                     std::cerr << "MAKO Renderer: duplicate deferred swapchain "
                                  "retirement ignored\n";
@@ -1479,7 +1608,7 @@ namespace {
                               << " grace_ms="
                               << swapchainRetirementGracePeriod.count()
                               << " pending="
-                              << instance_info->retiredSwapchains.size()
+                              << pending
                               << '\n';
                 }
                 return;

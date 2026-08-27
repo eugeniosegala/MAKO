@@ -15,6 +15,16 @@ namespace mako::layer {
     inline constexpr auto swapchainRetirementGracePeriod =
         std::chrono::milliseconds(50);
 
+    /// Surface destruction is a terminal boundary only for lower swapchains
+    /// created from that exact application-visible surface. A missing mapping
+    /// must remain deferred for device teardown rather than match null handles.
+    [[nodiscard]] constexpr bool retiredSwapchainBelongsToSurface(
+            const VkSurfaceKHR retiredSurface,
+            const VkSurfaceKHR destroyedSurface) noexcept {
+        return retiredSurface != VK_NULL_HANDLE &&
+            retiredSurface == destroyedSurface;
+    }
+
     /// Prefer the promoted extension name when the driver advertises it, then
     /// fall back to the EXT predecessor used by current Gamescope/RADV stacks.
     /// The feature bit is mandatory for either spelling.

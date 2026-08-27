@@ -91,6 +91,14 @@ test-engine-gym-sync-validation *args:
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
 
+# Run the release-only real Gamescope compositor + WSI + MAKO end-to-end lane.
+test-engine-gym-gamescope-e2e *args:
+    ./engine/scripts/run-mako-gym.sh --suite gamescope-e2e {{args}}
+
+# Run the release-only D3D11/DXVK and D3D12/VKD3D-Proton end-to-end lane.
+test-engine-gym-proton-e2e *args:
+    ./engine/scripts/run-mako-gym.sh --suite proton-e2e {{args}}
+
 # Build the Decky frontend.
 build-plugin:
     pnpm --dir plugin run build

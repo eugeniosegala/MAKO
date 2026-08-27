@@ -8,7 +8,7 @@ MAKO uses separate gates for deterministic product behavior and hardware behavio
 | --- | --- | --- |
 | Deterministic implementation and public command contracts | MAKO | Scene generation, reference images, masks, scoring, scheduler/policy tests, CLI parsing, generated-shader freshness, package layout, and synthetic bridge behavior |
 | Individual production-path diagnostic executables | MAKO | `mako-cli` LSFG, spatial-scaling, and combined quality commands, because they compile against the production backend and scaler rather than reimplementing either in QA code |
-| Declarative hardware scenarios and licensed execution | Private MAKO Gym | Vulkan/Gamescope feature, procedural-quality, LSFG/spatial/runtime performance, repeatability, synchronization-validation, and scripted recovery manifests; DLL discovery; AMD requirements; complete matrix orchestration; runtime/parameter/phase assertions; and PPM artifact validation |
+| Declarative hardware scenarios and licensed execution | Private MAKO Gym | Vulkan/Gamescope feature, procedural-quality, LSFG/spatial/runtime performance, repeatability, synchronization-validation, scripted recovery, real Gamescope WSI, and D3D11/DXVK plus D3D12/VKD3D-Proton end-to-end manifests; DLL discovery; AMD requirements; complete matrix orchestration; runtime/parameter/phase assertions; and PPM artifact validation |
 | Hardware evidence and sanitization | Private MAKO Gym | Per-case logs, comparison images, summaries, and sanitization markers beneath ignored Gym output directories |
 | Release-gate dispatch and exact-package selection | MAKO | The optional/required Gym bridge, contract-version handshake, disposable SteamOS runner workflow, and selection of the exact package or source-built CLI under test |
 | Comparative real-game sessions | Private MAKO Traces | Reviewed game captures, schemas, checksums, and append-only evidence history |
@@ -39,7 +39,7 @@ The `Tests` GitHub Actions workflow runs on every pull request and push to `main
 - **Renderer sanitizers:** the portable scheduling, generated-frame-plan, presentation-policy, spatial-scaling policy, profile, transition, and colour-math boundaries under AddressSanitizer and UndefinedBehaviorSanitizer; and
 - **Trace producer and protected inputs:** safe capture staging, sanitization, metadata, checksum, containment, rollback, and concurrent no-clobber behavior, plus an index-level rejection gate for licensed DLL/model content and disguised binary, shader, dump, or archive payloads, on Linux and macOS.
 
-The Renderer suite also exercises the standalone `mako-launch` contract: deterministic implicit-layer selection, loader activation, LSFG-VK conflict guards, the Gamescope WSI/HDR process-start boundary, strict fail-closed launcher settings, Zink/ALSA environment application, advanced environment forwarding, argument quoting, input validation, and child exit-status propagation. The portable `run-mako-gym.sh` contract separately proves optional absence, required fail-closed behavior, exact argument forwarding, centralized eight-suite dispatch, version mismatch rejection, and runner validation without needing the private checkout. The packaged hardware smoke test proves instance/device insertion with `vulkaninfo` and, when a graphical compositor and `vkcube` are available, covers finite swapchain creation and presentation too. Presentation changes must preserve the invariants and expanded matrices in [WSI isolation](engine/docs/WSI-ISOLATION.md), [HDR pipeline architecture](engine/docs/HDR-PIPELINE.md), and [spatial scaling architecture](engine/docs/SCALING.md).
+The Renderer suite also exercises the standalone `mako-launch` contract: deterministic implicit-layer selection, loader activation, LSFG-VK conflict guards, the Gamescope WSI/HDR process-start boundary, strict fail-closed launcher settings, Zink/ALSA environment application, advanced environment forwarding, argument quoting, input validation, and child exit-status propagation. The portable `run-mako-gym.sh` contract separately proves optional absence, required fail-closed behavior, exact argument forwarding, centralized ten-suite dispatch, version mismatch rejection, and runner validation without needing the private checkout. The packaged hardware smoke test proves instance/device insertion with `vulkaninfo` and, when a graphical compositor and `vkcube` are available, covers finite swapchain creation and presentation too. Presentation changes must preserve the invariants and expanded matrices in [WSI isolation](engine/docs/WSI-ISOLATION.md), [HDR pipeline architecture](engine/docs/HDR-PIPELINE.md), and [spatial scaling architecture](engine/docs/SCALING.md).
 
 The frontend suite intentionally tests operations where a UI/backend disagreement can damage or misrepresent user state: Renderer installation, configuration persistence, typed profile-field patches, centralized burst coalescing, single-flight writes, close-panel flushing, profile runtime-session transitions, out-of-order profile loads, profile switching, default-profile protection, persistent section state, supported Steam focus-flow values, and Decky RPC method names. It does not use snapshots or test static labels and layout.
 
@@ -95,7 +95,7 @@ The private sibling [MAKO Gym](https://github.com/eugeniosegala/MAKO-Gym) reposi
 
 #### Select the smallest sufficient Gym scope
 
-Do not run every default hardware inventory after every edit. Run the portable MAKO and Gym contracts first, then select the smallest hardware suite and regex that exercise the changed boundary. Omitting `--filter` runs the complete selected suite; running every complete suite is reserved for the SteamOS release gate, broad changes spanning scheduling, scaling, backend pixels, synchronization, determinism and cost, or an explicit final validation request. Two additional Gamescope WSI order rows remain explicit because they require reviewed positive and deliberately reversed two-layer launchers.
+Do not run every hardware inventory after every edit. Run the portable MAKO and Gym contracts first, then select the smallest hardware suite and regex that exercise the changed boundary. Omitting `--filter` runs the complete selected suite; running every complete suite is reserved for the SteamOS release gate, broad changes spanning scheduling, scaling, backend pixels, synchronization, determinism and cost, or an explicit final validation request. The native Gamescope E2E lane owns production and reversed WSI order plus cross-layer live/recreation behavior; the Proton E2E lane owns D3D11/DXVK and D3D12/VKD3D-Proton game-like scenes through that production chain. Run focused E2E rows only when their boundary changed and all seven native plus twelve translated rows before release.
 
 | Change boundary | Development hardware selection |
 | --- | --- |
@@ -108,8 +108,9 @@ Do not run every default hardware inventory after every edit. Run the portable M
 | Missing barriers, access hazards, image transitions, command recording, or exported-resource synchronization | Synchronization-validation suite filtered by the affected canonical quality label; widen to all eight for a shared owner. |
 | Initialization, shader selection, or unexplained pixel instability | Repeatability suite filtered by the affected sentinel; widen to all nine for a shared owner. |
 | Cadence transitions, Steady Adaptive, Dynamic Cadence Recovery, stalls, scheduler recovery or swapchain lifecycle | Recovery suite filtered by the affected recovery family; add relevant feature rows when configuration or construction also changed. |
+| Proton, DXVK, VKD3D-Proton, D3D11/D3D12 presentation, or translated game-like scene behavior | Proton E2E suite filtered by translation, scene, scheduler, or scaler; widen to all twelve for a shared translation/WSI owner. |
 | Shared Vulkan synchronization, presentation, backend resource ownership or cross-cutting Renderer changes | Run every affected suite completely; run every suite only when the boundary genuinely spans them. |
-| Release candidate | The required SteamOS workflow runs all 47 feature, 74 quality, 17 LSFG-performance, 36 spatial-performance, 12 runtime-overhead, eight synchronization-validation, nine repeatability-sentinel and 30 default recovery rows against the exact source/package boundary. |
+| Release candidate | The required SteamOS workflow runs all 47 feature, 74 quality, 17 LSFG-performance, 36 spatial-performance, 12 runtime-overhead, eight synchronization-validation, nine repeatability-sentinel, 30 recovery, seven native Gamescope E2E, and twelve Proton E2E rows against the exact source/package boundary. |
 
 Examples:
 
@@ -126,6 +127,8 @@ just test-engine-gym-recovery --filter '(stall|cadence-drop)$'
 just test-engine-gym-recovery --filter 'recreate$'
 just test-engine-gym-recovery --filter 'near-target|four-x'
 just test-engine-gym-recovery --filter 'scaling-live'
+just test-engine-gym-gamescope-e2e --filter '^gamescope-live-'
+just test-engine-gym-proton-e2e --filter '^proton-vkd3d-hud-'
 ```
 
 Every filtered result is evidence only for its selected rows. Before merging a production change, widen from the iteration filter to the complete affected suite when the change touches a shared owner used by multiple rows. Portable-only changes and isolated scenario/assertion edits do not acquire an unrelated full-Gym requirement.
@@ -150,7 +153,30 @@ Select the scripted recovery matrix through the bridge:
 ./engine/scripts/run-mako-gym.sh --suite recovery
 ```
 
-That manifest has 30 default rows plus two explicit Gamescope WSI order rows. Its small native-Vulkan moving workload controls cadence rise, false-probe rejection, 150/210 ms hitches, 300/500 ms and repeated stalls, sustained cadence drop, single and chained game-owned swapchain replacement, steady and noisy near-target cadence, a 60→100→60 high-base round trip, Fixed 100→120 display-budget admission, ordered 4× health, 2×/3×/4× target-rate control, and live scaling lifecycle/coalescing changes. It covers Fixed, Fractional Adaptive, Steady Adaptive, Ultra Performance, MAKO scaling, LS1 scaling, method/factor/sharpness/Flow/model/capacity switching, Native bypass and scaler restoration inside a process that started with Scaling Engine provisioned, compatible re-query activation, variable source/presentation scaling, and fixed-extent rejection. Every default row enforces its source-cadence validity floor, exact ordered diagnostics, and the expectation-specific recovery, cadence, lifecycle, or delivery threshold. Its authoritative phase and evidence contract is in `MAKO-Gym/docs/RUNTIME-RECOVERY-MATRIX.md`.
+That manifest has 30 rows. Its small native-Vulkan moving workload controls cadence rise, false-probe rejection, 150/210 ms hitches, 300/500 ms and repeated stalls, sustained cadence drop, single and chained game-owned swapchain replacement, steady and noisy near-target cadence, a 60→100→60 high-base round trip, Fixed 100→120 display-budget admission, ordered 4× health, 2×/3×/4× target-rate control, and live scaling lifecycle/coalescing changes. It covers Fixed, Fractional Adaptive, Steady Adaptive, Ultra Performance, MAKO scaling, LS1 scaling, method/factor/sharpness/Flow/model/capacity switching, Native bypass and scaler restoration inside an isolated MAKO presentation chain, compatible re-query activation, variable source/presentation scaling, and fixed-extent rejection. Every row enforces its source-cadence validity floor, exact ordered diagnostics, and the expectation-specific recovery, cadence, lifecycle, or delivery threshold. Its authoritative phase and evidence contract is in `MAKO-Gym/docs/RUNTIME-RECOVERY-MATRIX.md`.
+
+Select the release-only real Gamescope end-to-end lane when a change crosses the compositor, WSI, swapchain, live-transition, or generated-presentation boundary:
+
+```bash
+./engine/scripts/run-mako-gym.sh --suite gamescope-e2e --list
+./engine/scripts/run-mako-gym.sh --suite gamescope-e2e --filter '^gamescope-live-'
+./engine/scripts/run-mako-gym.sh --suite gamescope-e2e
+```
+
+This separate seven-row matrix automatically constructs a controlled chain from the installed 64-bit Gamescope WSI and exact MAKO package manifests. It proves loader membership and order, MAKO's allowed WSI presentation policy, Fixed and Adaptive generated delivery, Native Resolution passthrough, variable 640×360-to-960×540 scaling, every live scaler method, live FG Off/On without an FG-only recreation, maintenance1-fenced scaler replacements, deferred/completed lower retirement, natural recreation, transport health, and the deliberately reversed fail-closed layer order. It is slower and environment-specific, so normal edits retain unit and integration coverage and run focused E2E rows only when the affected boundary warrants them; the complete E2E matrix is required before release. Its authoritative contract is in `MAKO-Gym/docs/GAMESCOPE-END-TO-END.md`.
+
+Select the release-only Proton translation lane when a change crosses D3D11/D3D12, DXVK/VKD3D-Proton, translated presentation, or the game-like WSI boundary:
+
+```bash
+./engine/scripts/run-mako-gym.sh --suite proton-e2e --list
+./engine/scripts/run-mako-gym.sh --suite proton-e2e --filter '^proton-dxvk-traffic-'
+./engine/scripts/run-mako-gym.sh --suite proton-e2e --filter '^proton-vkd3d-hud-'
+./engine/scripts/run-mako-gym.sh --suite proton-e2e
+```
+
+This separate twelve-row matrix locally builds a source-only Windows workload and runs motion-boundary, traffic, crowd, camera-motion, HUD/disocclusion/particle, and mixed-stress scenes through each of D3D11/DXVK and D3D12/VKD3D-Proton. Each translation retains Fixed and Adaptive generation plus Native Resolution, MAKO Scaler, LS1, and LS1 Performance. A pass requires exact translation-engine proof, the real Gamescope WSI-before-MAKO chain, production MAKO activation, the requested scaler or Native passthrough, at least three positive generated-frame windows, all 360 bounded source frames, no unhealthy recovery/delivery record, and clean process exit. The runner owns a disposable Proton prefix and hard deadline; generated PE/DLL/cache data stays ignored and is never package content. Run focused rows while iterating and all twelve only before release or after shared translation/WSI changes. Its authoritative contract is in `MAKO-Gym/docs/PROTON-END-TO-END.md`.
+
+The complete validation hierarchy is portable unit invariants, small real-Vulkan construction tests, deterministic multi-object scenes, real WSI/Gamescope lifecycle tests, distinct DXVK and VKD3D-Proton lanes, and sanitized real-game traces as final compatibility evidence. MAKO Gym owns the hardware inventories and orchestration through the Proton tier; MAKO Traces owns stored real-game evidence. A synthetic pass must never be presented as proof for an untested commercial game.
 
 The replacement rows use Vulkan's real `oldSwapchain` handoff rather than destroying first. They require the new Renderer context to be classified as a replacement while both contexts are live, the old context to retire afterward, Adaptive's one-second replacement settling guard to remain distinct from the three-second cold-start guard, and native plus LS1 Adaptive generation to resume within a three-second post-replacement source phase.
 
@@ -201,8 +227,10 @@ The workflow:
 5. builds the complete Decky ZIP from the same source tree;
 6. extracts the packaged Renderer and proves that the real Vulkan loader activates `VK_LAYER_MAKO_render` on the runner's AMD GPU;
 7. passes that exact extracted Renderer launcher to MAKO Gym and requires all 47 native-Vulkan feature scenarios to pass;
-8. builds Gym's test-only native-Vulkan workload and requires all 30 default scripted recovery, cadence, live-transition, target-rate, and lifecycle scenarios plus 12 paired idle/active runtime-overhead rows to pass against the same extracted launcher; and
-9. retains the complete verified Decky ZIP, sanitized environment evidence, procedural GPU comparison images, performance/repeatability/overhead evidence, and MAKO Gym feature/recovery logs and summaries for 14 days under the tested commit.
+8. builds Gym's test-only native-Vulkan workload and requires all 30 scripted recovery, cadence, live-transition, target-rate, and lifecycle scenarios plus 12 paired idle/active runtime-overhead rows to pass against the same extracted launcher;
+9. requires all seven native Gamescope E2E rows to load the host's real WSI layer above that exact packaged MAKO layer, prove variable scaling, live FG/scaler transitions, fenced retirement, natural recreation, and the reversed-order fail-closed path;
+10. locally builds Gym's source-only Windows workload and requires all twelve D3D11/DXVK and D3D12/VKD3D-Proton scene rows to prove the translation engine, production WSI/MAKO chain, scaling, generated delivery, bounded completion, and clean shutdown; and
+11. retains the complete verified Decky ZIP, sanitized environment evidence, procedural GPU comparison images, performance/repeatability/overhead evidence, and MAKO Gym feature/recovery/native-E2E/Proton-E2E logs and summaries for 14 days under the tested commit.
 
 Pass `--deploy-to-decky` only on a dedicated device with an existing MAKO Decky development installation. That option safely synchronizes the already-verified ZIP into the existing plugin, asks Decky Loader to reload it, and invokes MAKO Decky's normal installer against that exact bundled Renderer. The production installer owns host libraries, manifests, wrappers, engine state, diagnostics, and refreshes of already-installed Flatpak runtime branches; no component is rebuilt or installed through a second CI-only implementation. It intentionally does not run by default because it changes the installed test device.
 

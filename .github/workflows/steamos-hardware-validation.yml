@@ -66,7 +66,7 @@ jobs:
           test "$(uname -s)" = Linux
           grep -qi '^ID=steamos' /etc/os-release
           grep -qi '0x1002' /sys/class/drm/renderD*/device/vendor
-          for command in cmake ninja clang++ g++ vulkaninfo vkcube gamescope python3 flatpak flatpak-builder; do
+          for command in cmake ninja clang++ clang-cl g++ ld timeout vulkaninfo vkcube gamescope python3 flatpak flatpak-builder; do
             command -v "$command" >/dev/null || {
               echo "Required hardware-runner command is missing: $command" >&2
               exit 1
@@ -230,6 +230,28 @@ jobs:
             echo "Expected exactly one sanitized MAKO Gym recovery result." >&2
             exit 1
           fi
+          ./scripts/run-mako-gym.sh --require --suite gamescope-e2e \
+            --launcher "$matrix_prefix/bin/mako-launch" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-gamescope-e2e"
+          mapfile -t gamescope_e2e_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-gamescope-e2e" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#gamescope_e2e_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO Gym Gamescope E2E result." >&2
+            exit 1
+          fi
+          ./scripts/run-mako-gym.sh --require --suite proton-e2e \
+            --launcher "$matrix_prefix/bin/mako-launch" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-proton-e2e"
+          mapfile -t proton_e2e_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-proton-e2e" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#proton_e2e_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO Gym Proton E2E result." >&2
+            exit 1
+          fi
           ./scripts/run-mako-gym.sh --require --suite runtime-overhead \
             --launcher "$matrix_prefix/bin/mako-launch" \
             --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-runtime-overhead"
@@ -265,6 +287,8 @@ jobs:
             engine/out/mako-gym-repeatability
             engine/out/mako-gym
             engine/out/mako-gym-recovery
+            engine/out/mako-gym-gamescope-e2e
+            engine/out/mako-gym-proton-e2e
             plugin/out/*.zip
           if-no-files-found: warn
           retention-days: 14

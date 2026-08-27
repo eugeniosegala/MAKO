@@ -109,6 +109,14 @@ int main() {
     expect(swapchainRetirementGracePeriod == std::chrono::milliseconds(50),
         "the compositor retirement grace contract changed unexpectedly");
 
+    const auto surfaceA = reinterpret_cast<VkSurfaceKHR>(1);
+    const auto surfaceB = reinterpret_cast<VkSurfaceKHR>(2);
+    expect(retiredSwapchainBelongsToSurface(surfaceA, surfaceA),
+        "the creating surface did not own terminal retirement");
+    expect(!retiredSwapchainBelongsToSurface(surfaceA, surfaceB) &&
+            !retiredSwapchainBelongsToSurface(VK_NULL_HANDLE, surfaceA),
+        "surface-terminal retirement crossed its exact non-null owner");
+
     expect(presentFenceWillSignal(VK_SUCCESS) &&
             presentFenceWillSignal(VK_SUBOPTIMAL_KHR) &&
             presentFenceWillSignal(VK_ERROR_OUT_OF_DATE_KHR) &&

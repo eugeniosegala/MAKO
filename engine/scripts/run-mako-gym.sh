@@ -18,8 +18,9 @@ Bridge options:
   --gym-repo PATH  Use an explicit MAKO Gym checkout.
   --require        Fail when MAKO Gym is absent; intended for release gates.
   --suite NAME     Select vulkan (default), quality, repeatability, performance,
-                   spatial-performance, runtime-overhead, sync-validation, or recovery.
-  --all-suites     Run all eight suites sequentially with the forwarded Gym options.
+                   spatial-performance, runtime-overhead, sync-validation, recovery,
+                   gamescope-e2e, or proton-e2e.
+  --all-suites     Run all ten suites sequentially with the forwarded Gym options.
   -h, --help       Show this bridge help.
 
 Every other argument is forwarded unchanged to the selected MAKO Gym runner.
@@ -103,6 +104,8 @@ suite_names=(
     runtime-overhead
     sync-validation
     recovery
+    gamescope-e2e
+    proton-e2e
 )
 
 resolve_runner() {
@@ -115,6 +118,8 @@ resolve_runner() {
         runtime-overhead) runner="$gym_repo/scripts/run-runtime-overhead.sh" ;;
         sync-validation) runner="$gym_repo/scripts/run-synchronization-validation.sh" ;;
         recovery) runner="$gym_repo/scripts/run-runtime-recovery-matrix.sh" ;;
+        gamescope-e2e) runner="$gym_repo/scripts/run-gamescope-end-to-end.sh" ;;
+        proton-e2e) runner="$gym_repo/scripts/run-proton-end-to-end.sh" ;;
         *) return 1 ;;
     esac
 }

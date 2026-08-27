@@ -35,6 +35,7 @@ namespace mako::layer {
     /// swapchain info struct
     struct SwapchainInfo {
         std::vector<VkImage> images;
+        VkSurfaceKHR surface;
         VkFormat format;
         VkColorSpaceKHR colorSpace;
         // Extent the application requested after MAKO virtualized fixed WSI

@@ -45,6 +45,12 @@ chmod +x "$fake_gym/scripts/run-synchronization-validation.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "recovery:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-runtime-recovery-matrix.sh"
 chmod +x "$fake_gym/scripts/run-runtime-recovery-matrix.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "gamescope-e2e:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-gamescope-end-to-end.sh"
+chmod +x "$fake_gym/scripts/run-gamescope-end-to-end.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "proton-e2e:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-proton-end-to-end.sh"
+chmod +x "$fake_gym/scripts/run-proton-end-to-end.sh"
 
 forwarded="$($bridge --gym-repo "$fake_gym" --list --filter '^fixed-')"
 expected=$'--list\n--filter\n^fixed-'
@@ -95,10 +101,22 @@ if [[ "$recovery_forwarded" != "$recovery_expected" ]]; then
     echo "Gym recovery-suite arguments were not forwarded exactly." >&2
     exit 1
 fi
+gamescope_e2e_forwarded="$($bridge --gym-repo "$fake_gym" --suite gamescope-e2e --filter '^gamescope-live-')"
+gamescope_e2e_expected=$'gamescope-e2e:--filter\ngamescope-e2e:^gamescope-live-'
+if [[ "$gamescope_e2e_forwarded" != "$gamescope_e2e_expected" ]]; then
+    echo "Gym Gamescope E2E arguments were not forwarded exactly." >&2
+    exit 1
+fi
+proton_e2e_forwarded="$($bridge --gym-repo "$fake_gym" --suite proton-e2e --filter '^proton-vkd3d-')"
+proton_e2e_expected=$'proton-e2e:--filter\nproton-e2e:^proton-vkd3d-'
+if [[ "$proton_e2e_forwarded" != "$proton_e2e_expected" ]]; then
+    echo "Gym Proton E2E arguments were not forwarded exactly." >&2
+    exit 1
+fi
 all_suites_forwarded="$($bridge --gym-repo "$fake_gym" --all-suites --validate)"
-all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate'
+all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate\ngamescope-e2e:--validate\nproton-e2e:--validate'
 if [[ "$all_suites_forwarded" != "$all_suites_expected" ]]; then
-    echo "Gym all-suites validation did not invoke all eight runners exactly once." >&2
+    echo "Gym all-suites validation did not invoke all ten runners exactly once." >&2
     exit 1
 fi
 if "$bridge" --gym-repo "$fake_gym" --all-suites --suite quality --validate >/dev/null 2>&1; then
