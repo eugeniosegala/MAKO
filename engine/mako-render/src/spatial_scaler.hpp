@@ -16,9 +16,10 @@
 namespace mako::layer {
 
     /// Application-device spatial reconstruction resources for one swapchain.
-    /// The implementation can be MAKO's native stage or LS1 translated from a
-    /// user-supplied Lossless.dll. All allocation and translation happens at
-    /// construction; record() is allocation-free.
+    /// The implementation can be the model-free Native Resolution baseline,
+    /// MAKO's spatial stage, or LS1 translated from a user-supplied
+    /// Lossless.dll. All allocation and translation happens at construction;
+    /// record() is allocation-free.
     class SpatialScaler {
     public:
         SpatialScaler(const vk::Vulkan& vk,

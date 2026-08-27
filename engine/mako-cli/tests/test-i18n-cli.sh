@@ -64,17 +64,17 @@ run_failure "$cli" spatial-quality-regression --method unknown-method
 [[ $command_output == 'error: unknown spatial quality method: unknown-method' ]] ||
     fail "unknown spatial method did not fail closed: $command_output"
 
-run_failure "$cli" spatial-quality-regression --method native
-[[ $command_output == 'error: spatial quality method native is passthrough, not a scaler' ]] ||
-    fail "Native passthrough entered the spatial quality scaler path: $command_output"
+run_failure "$cli" spatial-quality-regression --method native --factor 1.0
+[[ $command_output == 'error: spatial quality factor must be above 1.0 and at most 2.0' ]] ||
+    fail "Native scaling method parsing regressed: $command_output"
 
 run_failure "$cli" spatial-profile --method unknown-method
 [[ $command_output == 'error: unknown spatial profile method: unknown-method' ]] ||
     fail "unknown spatial profile method did not fail closed: $command_output"
 
-run_failure "$cli" spatial-profile --method native --width +1280 --factor +1.5
-[[ $command_output == 'error: spatial profile method native performs no GPU scaling work' ]] ||
-    fail "Native passthrough or leading-plus parsing regressed: $command_output"
+run_failure "$cli" spatial-profile --method native --width +1280 --factor +1.0
+[[ $command_output == 'error: spatial profile factor must be above 1.0 and at most 2.0' ]] ||
+    fail "Native scaling or leading-plus parsing regressed: $command_output"
 
 run_failure "$cli" spatial-profile --method mako --width nope
 [[ $command_output == 'error: --width requires a valid finite number: nope' ]] ||
@@ -88,8 +88,8 @@ run_failure "$cli" combined-quality-regression --method unknown-method
 [[ $command_output == 'error: unknown combined quality spatial method: unknown-method' ]] ||
     fail "unknown combined spatial method did not fail closed: $command_output"
 
-run_failure "$cli" combined-quality-regression --method native
-[[ $command_output == 'error: combined quality spatial method native is passthrough, not a scaler' ]] ||
-    fail "Native passthrough entered the combined quality scaler path: $command_output"
+run_failure "$cli" combined-quality-regression --method native --factor 1.0
+[[ $command_output == 'error: combined quality factor must be above 1.0 and at most 2.0' ]] ||
+    fail "Native combined-scaling method parsing regressed: $command_output"
 
 printf 'mako-cli i18n contract: PASS\n'

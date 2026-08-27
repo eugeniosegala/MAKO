@@ -84,8 +84,8 @@ void test_independent_scaling_group() {
     require(scaling_group.count(
             QStringLiteral("visible: backend.scaling_enabled")) == 3 &&
             scaling_group.count(QStringLiteral(
-                "visible: backend.scaling_enabled && backend.scaling_method !== \"native\"")) == 2,
-        "Native must hide tuning controls while the engine keeps its method visible");
+                "visible: backend.scaling_enabled && backend.scaling_method !== \"native\"")) == 1,
+        "Native must retain Scale Factor while hiding model-only sharpness");
     require(scaling_group.contains(QStringLiteral(
             "model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]")),
         "Scaling method order must expose Native before every scaler");

@@ -138,7 +138,81 @@ namespace {
         [[nodiscard]] virtual uint32_t modelVariant() const { return 0; }
     };
 
-    class NativePipeline final : public Pipeline {
+    class NativeResolutionPipeline final : public Pipeline {
+    public:
+        NativeResolutionPipeline(const vk::Vulkan& vk,
+                const VkExtent2D sourceExtent,
+                const VkExtent2D presentationExtent,
+                const VkFormat workingFormat) :
+            sourceSize(sourceExtent),
+            presentationSize(presentationExtent),
+            sourceImage(vk, sourceExtent, workingFormat,
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT),
+            reconstructedImage(vk, presentationExtent, workingFormat,
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT) {}
+
+        [[nodiscard]] const vk::Image& input() const override {
+            return this->sourceImage;
+        }
+        [[nodiscard]] const vk::Image& output() const override {
+            return this->reconstructedImage;
+        }
+        void recordCompute(const vk::Vulkan& vk,
+                const VkCommandBuffer commandBuffer) const override {
+            const std::array barriers{
+                imageBarrier(
+                    this->sourceImage.handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_TRANSFER_READ_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+                ),
+                imageBarrier(
+                    this->reconstructedImage.handle(), VK_ACCESS_NONE,
+                    VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+                ),
+            };
+            vk.df().CmdPipelineBarrier(
+                commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                0, nullptr, 0, nullptr,
+                static_cast<uint32_t>(barriers.size()), barriers.data()
+            );
+            const auto region = blitRegion(
+                this->sourceSize, this->presentationSize
+            );
+            vk.df().CmdBlitImage(
+                commandBuffer,
+                this->sourceImage.handle(),
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                this->reconstructedImage.handle(),
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                1, &region, VK_FILTER_LINEAR
+            );
+            const auto outputBarrier = imageBarrier(
+                this->reconstructedImage.handle(),
+                VK_ACCESS_TRANSFER_WRITE_BIT,
+                VK_ACCESS_TRANSFER_READ_BIT,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+            );
+            vk.df().CmdPipelineBarrier(
+                commandBuffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                VK_PIPELINE_STAGE_TRANSFER_BIT, 0,
+                0, nullptr, 0, nullptr, 1, &outputBarrier
+            );
+        }
+
+    private:
+        VkExtent2D sourceSize{};
+        VkExtent2D presentationSize{};
+        vk::Image sourceImage;
+        vk::Image reconstructedImage;
+    };
+
+    class MakoPipeline final : public Pipeline {
     public:
         struct alignas(16) Parameters {
             float sourceWidth;
@@ -151,7 +225,7 @@ namespace {
             float reserved2{0.0F};
         };
 
-        NativePipeline(const vk::Vulkan& vk,
+        MakoPipeline(const vk::Vulkan& vk,
                 const VkExtent2D sourceExtent,
                 const VkExtent2D presentationExtent,
                 const VkFormat workingFormat,
@@ -522,9 +596,10 @@ public:
         requested(requested),
         active(requested) {
         if (requested == ls::ScalingMethod::Native) {
-            throw ls::error(
-                "native passthrough must not construct a spatial scaler"
+            this->pipeline = std::make_unique<NativeResolutionPipeline>(
+                vk, sourceExtent, presentationExtent, workingFormat
             );
+            return;
         }
         const bool ls1Requested =
             ls::licensedScalingModelRequested(requested);
@@ -548,7 +623,7 @@ public:
                 this->active = ls::ScalingMethod::Mako;
             }
         }
-        this->pipeline = std::make_unique<NativePipeline>(
+        this->pipeline = std::make_unique<MakoPipeline>(
             vk, sourceExtent, presentationExtent, workingFormat, sharpness
         );
     }

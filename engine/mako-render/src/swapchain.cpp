@@ -187,6 +187,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             info.format, info.colorSpace, gamescopeHdrActive, gamescopeDetected,
             hdrExposureDisabled
         )),
+        scalingShaderDll(scalingShaderDll),
         profile(std::move(profile)), info(std::move(info)) {
     this->diagnosticsState.contextId = allocateDiagnosticsContextId();
     const DiagnosticsContextScope diagnosticsContext(
@@ -241,12 +242,19 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             });
         }
         const auto activeScalingMethod = this->spatialScaler->activeMethod();
+        const double effectiveScalingFactor = std::min(
+            static_cast<double>(this->info.extent.width) /
+                static_cast<double>(this->info.applicationExtent.width),
+            static_cast<double>(this->info.extent.height) /
+                static_cast<double>(this->info.applicationExtent.height)
+        );
         std::cerr << "MAKO Renderer: spatial scaling active: source="
                   << this->info.applicationExtent.width << 'x'
                   << this->info.applicationExtent.height
                   << "; presentation=" << this->info.extent.width << 'x'
                   << this->info.extent.height
                   << "; factor=" << this->profile.scaling_factor
+                  << "; effective_factor=" << effectiveScalingFactor
                   << "; requested_method="
                   << ls::scalingMethodName(
                       this->spatialScaler->requestedMethod()
@@ -255,7 +263,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                   << ls::scalingMethodName(activeScalingMethod)
                   << "; sharpness=" << this->profile.scaling_sharpness
                   << "; ls1_model_variant=";
-        if (activeScalingMethod == ls::ScalingMethod::Mako)
+        if (!ls::licensedScalingModelRequested(activeScalingMethod))
             std::cerr << "none";
         else
             std::cerr << this->spatialScaler->ls1ModelVariant();
@@ -855,21 +863,137 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
     return true;
 }
 
+void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
+    if (!this->spatialTransitionState.pendingMethod || !this->spatialScaler)
+        return;
+
+    const auto now = DiagnosticsClock::now();
+    if (this->spatialTransitionState.applyAfter &&
+            now < *this->spatialTransitionState.applyAfter) {
+        return;
+    }
+    if (this->spatialTransitionState.retryAt &&
+            now < *this->spatialTransitionState.retryAt) {
+        return;
+    }
+
+    const auto requestedMethod =
+        *this->spatialTransitionState.pendingMethod;
+    const float requestedSharpness =
+        this->spatialTransitionState.pendingSharpness;
+    try {
+        SpatialScaler replacement(
+            vk, this->info.applicationExtent, this->info.extent,
+            this->colorPipeline.exchangeFormat, requestedMethod,
+            requestedSharpness, this->scalingShaderDll
+        );
+
+        // Spatial submissions use reusable per-image command buffers without
+        // private completion fences. This transition is infrequent and
+        // user-driven, so one device-idle boundary is the only safe point to
+        // destroy the previous pipeline without involving the application's
+        // WSI lifecycle. Normal presents never take this path.
+        const auto idleResult = vk.df().DeviceWaitIdle(vk.dev());
+        if (idleResult != VK_SUCCESS) {
+            throw ls::vulkan_error(
+                idleResult,
+                "vkDeviceWaitIdle() failed during spatial model transition"
+            );
+        }
+
+        *this->spatialScaler = std::move(replacement);
+        this->profile.scaling_method = requestedMethod;
+        this->profile.scaling_sharpness = requestedSharpness;
+        this->ensureHistoryWarmup();
+        this->fixedRefreshBudget.reset();
+        this->recoveryState.lowerPresentStallRecovery.reset();
+
+        const auto activeMethod = this->spatialScaler->activeMethod();
+        std::cerr << "MAKO Renderer: spatial scaling model changed live: "
+                  << "requested_method="
+                  << ls::scalingMethodName(requestedMethod)
+                  << "; active_method="
+                  << ls::scalingMethodName(activeMethod)
+                  << "; sharpness=" << requestedSharpness
+                  << "; transition=private-scaler\n";
+        if (!this->spatialScaler->fallbackReason().empty()) {
+            std::cerr << "MAKO Renderer: LS1 scaling unavailable; using MAKO "
+                         "fallback: "
+                      << this->spatialScaler->fallbackReason() << '\n';
+        }
+        if (presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=runtime-transition-applied"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " state_revision="
+                      << this->spatialTransitionState.pendingStateRevision
+                      << " reason=spatial-scaler"
+                      << " transition=private-context"
+                      << " requested_method="
+                      << ls::scalingMethodName(requestedMethod)
+                      << " active_method="
+                      << ls::scalingMethodName(activeMethod)
+                      << " sharpness=" << requestedSharpness << '\n';
+        }
+        this->spatialTransitionState.pendingMethod.reset();
+        this->spatialTransitionState.pendingStateRevision = 0;
+        this->spatialTransitionState.applyAfter.reset();
+        this->spatialTransitionState.retryAt.reset();
+    } catch (const std::exception& error) {
+        std::cerr << "MAKO Renderer: spatial scaling model transition failed; "
+                     "the previous model remains active and retry is scheduled: "
+                  << error.what() << '\n';
+        this->spatialTransitionState.retryAt = now + std::chrono::seconds(5);
+    }
+}
+
 ProfileUpdateDecision Swapchain::updateProfile(
         const ls::GameConf& nextProfile,
         const uint64_t runtimeStateRevision) {
     const bool resourcesAvailable = this->sourceImages.size() == 2 &&
         !this->destinationImages.empty() && this->syncSemaphore.has_value();
     auto plan = planProfileUpdate(
-        this->profile, nextProfile, this->destinationImages.size(), resourcesAvailable
+        this->profile, nextProfile, this->destinationImages.size(),
+        resourcesAvailable, this->spatialScaler.has_value()
     );
     auto decision = plan.decision;
+    if (decision.spatialScalingLiveRebuild) {
+        this->spatialTransitionState.pendingMethod =
+            nextProfile.scaling_method;
+        this->spatialTransitionState.pendingSharpness =
+            nextProfile.scaling_sharpness;
+        this->spatialTransitionState.pendingStateRevision =
+            runtimeStateRevision;
+        this->spatialTransitionState.applyAfter =
+            DiagnosticsClock::now() + spatialScalerRebuildQuietPeriod(
+                this->profile, nextProfile
+            );
+        this->spatialTransitionState.retryAt.reset();
+        if (presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=runtime-transition-pending"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " state_revision=" << runtimeStateRevision
+                      << " reason=spatial-scaler"
+                      << " requested_method="
+                      << ls::scalingMethodName(nextProfile.scaling_method)
+                      << " requested_sharpness="
+                      << nextProfile.scaling_sharpness
+                      << " action=rebuild-private-scaler\n";
+        }
+    } else if (nextProfile.scaling_method == this->profile.scaling_method &&
+            nextProfile.scaling_sharpness ==
+                this->profile.scaling_sharpness) {
+        this->spatialTransitionState.pendingMethod.reset();
+        this->spatialTransitionState.applyAfter.reset();
+        this->spatialTransitionState.retryAt.reset();
+    }
     const bool liveRecreationAvailable =
         liveProfileResourceRecreationAvailable(
             decision,
             this->instance && resourcesAvailable &&
                 this->colorPipeline.generationSupported
-        ) && this->presentRetirementEnabled();
+        ) && this->presentRetirementEnabled() && !this->gamescopeDetected;
     this->liveProfileResourceRecreation.update(
         this->profile,
         liveRecreationAvailable ? nextProfile : this->profile,

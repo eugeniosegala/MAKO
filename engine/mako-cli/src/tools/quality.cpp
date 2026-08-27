@@ -716,10 +716,6 @@ int quality::runSpatial(const SpatialOptions& opts) {
         const auto method = ls::scalingMethodFromName(opts.method);
         if (!method)
             throw ls::error("unknown spatial quality method: " + opts.method);
-        if (*method == ls::ScalingMethod::Native)
-            throw ls::error(
-                "spatial quality method native is passthrough, not a scaler"
-            );
         if (!std::isfinite(opts.scaling_factor) ||
                 opts.scaling_factor <= ls::GameConfLimits::minimumScalingFactor ||
                 opts.scaling_factor > ls::GameConfLimits::maximumScalingFactor)
@@ -761,7 +757,7 @@ int quality::runSpatial(const SpatialOptions& opts) {
         const vk::Vulkan vk = makeVulkan(opts.gpu, "mako-spatial-quality-regression");
         const std::string selectedGpu = selectedDeviceName(vk);
         const auto dll = configuredDll(
-            opts.dll, *method != ls::ScalingMethod::Mako
+            opts.dll, ls::licensedScalingModelRequested(*method)
         );
         const mako::layer::SpatialScaler scaler{
             vk,
@@ -831,7 +827,7 @@ int quality::runSpatial(const SpatialOptions& opts) {
             << " -> " << presentationExtent.width << 'x'
             << presentationExtent.height << '\n'
             << "  GPU: " << selectedGpu << '\n';
-        if (*method != ls::ScalingMethod::Mako) {
+        if (ls::licensedScalingModelRequested(*method)) {
             std::cout << "  LS1 model variant: " << scaler.ls1ModelVariant() << '\n'
                 << "  LS1 translator: " << scaler.ls1Translator() << '\n';
         }
@@ -853,10 +849,6 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         const auto method = ls::scalingMethodFromName(opts.method);
         if (!method)
             throw ls::error("unknown spatial profile method: " + opts.method);
-        if (*method == ls::ScalingMethod::Native)
-            throw ls::error(
-                "spatial profile method native performs no GPU scaling work"
-            );
         if (opts.width == 0 || opts.height == 0)
             throw ls::error("spatial profile extent must be non-zero");
         if (!std::isfinite(opts.scaling_factor) ||
@@ -895,7 +887,7 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         const vk::Vulkan vk = makeVulkan(opts.gpu, "mako-spatial-gpu-profile");
         const std::string selectedGpu = selectedDeviceName(vk);
         const auto dll = configuredDll(
-            opts.dll, *method != ls::ScalingMethod::Mako
+            opts.dll, ls::licensedScalingModelRequested(*method)
         );
         const mako::layer::SpatialScaler scaler{
             vk,
@@ -1002,7 +994,7 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         for (const double sample : samples)
             std::cout << ' ' << sample;
         std::cout << '\n';
-        if (*method != ls::ScalingMethod::Mako) {
+        if (ls::licensedScalingModelRequested(*method)) {
             std::cout << "  LS1 model variant: " << scaler.ls1ModelVariant() << '\n'
                 << "  LS1 translator: " << scaler.ls1Translator() << '\n';
         }
@@ -1053,10 +1045,6 @@ int quality::runCombined(const CombinedOptions& opts) {
         const auto method = ls::scalingMethodFromName(opts.method);
         if (!method)
             throw ls::error("unknown combined quality spatial method: " + opts.method);
-        if (*method == ls::ScalingMethod::Native)
-            throw ls::error(
-                "combined quality spatial method native is passthrough, not a scaler"
-            );
         if (!std::isfinite(opts.scaling_factor) ||
                 opts.scaling_factor <= ls::GameConfLimits::minimumScalingFactor ||
                 opts.scaling_factor > ls::GameConfLimits::maximumScalingFactor)
@@ -1219,7 +1207,7 @@ int quality::runCombined(const CombinedOptions& opts) {
             << " -> " << presentationExtent.width << 'x'
             << presentationExtent.height << '\n'
             << "  GPU: " << selectedGpu << '\n';
-        if (*method != ls::ScalingMethod::Mako) {
+        if (ls::licensedScalingModelRequested(*method)) {
             std::cout << "  LS1 model variant: " << scaler.ls1ModelVariant() << '\n'
                 << "  LS1 translator: " << scaler.ls1Translator() << '\n';
         }

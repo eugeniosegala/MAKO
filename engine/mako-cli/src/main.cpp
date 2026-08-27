@@ -110,7 +110,7 @@ SUBCOMMAND OPTIONS:
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -c, --scene <NAME>              Procedural scene name
-        -m, --method <NAME>             mako, ls1, or ls1-performance
+        -m, --method <NAME>             native, mako, ls1, or ls1-performance
         -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
         -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
         -t, --scene-time <FLOAT>        Scene time from 0.0 through 1.0
@@ -120,7 +120,7 @@ SUBCOMMAND OPTIONS:
     spatial-profile
         -d, --dll <PATH>                Path to Lossless.dll for LS1 methods
         -g, --gpu <STRING>              GPU to use
-        -m, --method <NAME>             mako, ls1, or ls1-performance
+        -m, --method <NAME>             native, mako, ls1, or ls1-performance
         -w, --width <INT>               Presentation width
         -h, --height <INT>              Presentation height
         -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
@@ -138,7 +138,7 @@ SUBCOMMAND OPTIONS:
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -c, --scene <NAME>              Procedural scene name
-        -m, --method <NAME>             mako, ls1, or ls1-performance
+        -m, --method <NAME>             native, mako, ls1, or ls1-performance
         -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
         -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
         -t, --interpolation <FLOAT>     Generated timestamp between 0 and 1

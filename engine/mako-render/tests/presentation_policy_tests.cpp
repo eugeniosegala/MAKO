@@ -525,6 +525,25 @@ int main() {
             presentStallDecision.bypassedFrames == 1 &&
             !presentStallRecovery.active(),
         "lower-present recovery did not end at its absolute deadline");
+    presentStall = presentStallRecovery.observe(
+        presentStallStart + 2100ms, 72ms, 120
+    );
+    expect(presentStall.quarantined &&
+            presentStall.consecutiveStalls == 2 &&
+            presentStall.stabilizationDuration == 10s,
+        "a repeated lower-present collapse did not increase its retry backoff");
+    presentStallDecision = presentStallRecovery.beforePresent(
+        presentStallStart + 11s
+    );
+    expect(presentStallDecision.bypassGeneration,
+        "repeated lower-present recovery retried inside its extended backoff");
+    presentStallDecision = presentStallRecovery.beforePresent(
+        presentStallStart + 13s
+    );
+    expect(presentStallDecision.recovered &&
+            !presentStallRecovery.active(),
+        "extended lower-present recovery did not end at its absolute deadline");
+    presentStallRecovery.reset();
 
     FixedRefreshBudget budget;
     const auto start = FixedRefreshBudget::TimePoint{};

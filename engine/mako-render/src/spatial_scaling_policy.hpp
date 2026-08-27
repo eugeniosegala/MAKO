@@ -26,14 +26,13 @@ namespace mako::layer {
     /// never race the mutable configuration/profile state.
     struct SpatialScalingPolicy {
         bool enabled{false};
-        bool nativePassthrough{false};
         float factor{1.0F};
     };
 
     /// One coherent policy snapshot used for a fixed-surface capability query.
-    /// The revision changes only when scaler activity, Native passthrough,
-    /// process support, or factor changes. Sharpness and changes between active
-    /// scaler methods can safely reuse the same advertised extent contract.
+    /// The revision changes only when scaler activity, process support, or the
+    /// factor changes. Native Resolution and changes between active scaler
+    /// methods safely reuse the same advertised extent contract.
     struct SpatialScalingPolicySnapshot {
         SpatialScalingPolicy policy{};
         bool processSupported{false};
@@ -62,7 +61,6 @@ namespace mako::layer {
 
     enum class SpatialScalingInactiveReason {
         None,
-        NativePassthrough,
         ProcessUnsupported,
         InvalidFactor,
         FactorNotUpscaling,
@@ -85,8 +83,6 @@ namespace mako::layer {
         switch (reason) {
             case SpatialScalingInactiveReason::None:
                 return "none";
-            case SpatialScalingInactiveReason::NativePassthrough:
-                return "native-passthrough";
             case SpatialScalingInactiveReason::ProcessUnsupported:
                 return "process-unsupported";
             case SpatialScalingInactiveReason::InvalidFactor:
@@ -124,6 +120,7 @@ namespace mako::layer {
     struct SpatialScalingCreateDecision {
         std::optional<SpatialScalingExtents> extents;
         std::optional<FixedSurfaceScalingContract> fixedContract;
+        bool reusedPreviousPresentationBudget{false};
         SpatialScalingInactiveReason inactiveReason{
             SpatialScalingInactiveReason::None
         };
@@ -362,11 +359,6 @@ namespace mako::layer {
         SpatialScalingCreateDecision decision{
             .fixedContract = fixedContract,
         };
-        if (policy.nativePassthrough) {
-            decision.inactiveReason =
-                SpatialScalingInactiveReason::NativePassthrough;
-            return decision;
-        }
         if (!processSupported) {
             decision.inactiveReason =
                 SpatialScalingInactiveReason::ProcessUnsupported;
@@ -484,9 +476,62 @@ namespace mako::layer {
             static_cast<uint64_t>(presentation.height);
         if (variablePresentationPixels &&
                 presentationPixels > *variablePresentationPixels) {
-            decision.inactiveReason = SpatialScalingInactiveReason::
-                VariableSurfaceMemoryBudget;
-            return decision;
+            // A resolution increase can make the configured factor request a
+            // presentation surface larger than the display-sized envelope
+            // that was already running successfully (for example 1440p × 2
+            // after a 1080p -> 4K context). Prefer the previous proven lower
+            // extent, aspect-fit to the new source, over either allocating a
+            // 5K surface or dropping the scaler and changing WSI behaviour.
+            if (previousVariableExtents &&
+                    !sameExtent(
+                        previousVariableExtents->source,
+                        previousVariableExtents->presentation
+                    )) {
+                const double previousWidthFactor =
+                    static_cast<double>(
+                        previousVariableExtents->presentation.width
+                    ) / static_cast<double>(requestedExtent.width);
+                const double previousHeightFactor =
+                    static_cast<double>(
+                        previousVariableExtents->presentation.height
+                    ) / static_cast<double>(requestedExtent.height);
+                const double retainedFactor = std::min({
+                    effectiveFactor,
+                    previousWidthFactor,
+                    previousHeightFactor,
+                });
+                if (retainedFactor > 1.0) {
+                    VkExtent2D retainedPresentation{
+                        .width = static_cast<uint32_t>(std::floor(
+                            static_cast<double>(requestedExtent.width) *
+                                retainedFactor
+                        )),
+                        .height = static_cast<uint32_t>(std::floor(
+                            static_cast<double>(requestedExtent.height) *
+                                retainedFactor
+                        )),
+                    };
+                    if (retainedPresentation.width > 1)
+                        retainedPresentation.width &= ~uint32_t{1};
+                    if (retainedPresentation.height > 1)
+                        retainedPresentation.height &= ~uint32_t{1};
+                    const uint64_t retainedPixels =
+                        static_cast<uint64_t>(retainedPresentation.width) *
+                        static_cast<uint64_t>(retainedPresentation.height);
+                    if (retainedPresentation.width > requestedExtent.width &&
+                            retainedPresentation.height >
+                                requestedExtent.height &&
+                            retainedPixels <= *variablePresentationPixels) {
+                        presentation = retainedPresentation;
+                        decision.reusedPreviousPresentationBudget = true;
+                    }
+                }
+            }
+            if (!decision.reusedPreviousPresentationBudget) {
+                decision.inactiveReason = SpatialScalingInactiveReason::
+                    VariableSurfaceMemoryBudget;
+                return decision;
+            }
         }
 
         decision.extents = SpatialScalingExtents{
@@ -512,8 +557,6 @@ namespace mako::layer {
         return scalingDecisionForCreate(
             SpatialScalingPolicy{
                 .enabled = ls::spatialScalingRequested(profile),
-                .nativePassthrough = profile.scaling_enabled &&
-                    profile.scaling_method == ls::ScalingMethod::Native,
                 .factor = profile.scaling_factor,
             },
             processSupported,

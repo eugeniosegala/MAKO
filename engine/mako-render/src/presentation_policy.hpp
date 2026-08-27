@@ -831,6 +831,8 @@ namespace mako::layer {
             bool quarantined{false};
             Duration presentDuration{};
             Duration threshold{};
+            Duration stabilizationDuration{};
+            size_t consecutiveStalls{0};
         };
 
         [[nodiscard]] static Duration stallThreshold(
@@ -850,7 +852,14 @@ namespace mako::layer {
             );
         }
 
-        [[nodiscard]] static constexpr auto stabilizationDuration() {
+        [[nodiscard]] static constexpr auto stabilizationDuration(
+                const size_t consecutiveStalls = 1) {
+            if (consecutiveStalls >= 4)
+                return std::chrono::seconds{60};
+            if (consecutiveStalls == 3)
+                return std::chrono::seconds{30};
+            if (consecutiveStalls == 2)
+                return std::chrono::seconds{10};
             return std::chrono::seconds{2};
         }
 
@@ -858,19 +867,38 @@ namespace mako::layer {
                 const Duration maximumPresentDuration,
                 const std::optional<uint32_t> refreshHz) {
             const auto threshold = stallThreshold(refreshHz);
-            if (maximumPresentDuration < threshold)
+            if (maximumPresentDuration < threshold) {
+                if (this->lastStallAt &&
+                        now - *this->lastStallAt >=
+                            healthyResetDuration()) {
+                    this->consecutiveStalls = 0;
+                    this->lastStallAt.reset();
+                }
                 return {
                     .presentDuration = maximumPresentDuration,
                     .threshold = threshold,
                 };
+            }
 
+            if (this->lastStallAt &&
+                    now - *this->lastStallAt < healthyResetDuration()) {
+                this->consecutiveStalls++;
+            } else {
+                this->consecutiveStalls = 1;
+            }
+            this->lastStallAt = now;
+            const auto stabilization = stabilizationDuration(
+                this->consecutiveStalls
+            );
             this->startedAt = now;
-            this->stabilizingUntil = now + stabilizationDuration();
+            this->stabilizingUntil = now + stabilization;
             this->bypassedFrames = 0;
             return {
                 .quarantined = true,
                 .presentDuration = maximumPresentDuration,
                 .threshold = threshold,
+                .stabilizationDuration = stabilization,
+                .consecutiveStalls = this->consecutiveStalls,
             };
         }
 
@@ -894,7 +922,9 @@ namespace mako::layer {
                 .recoveryDuration = this->startedAt
                     ? now - *this->startedAt : Duration{},
             };
-            this->reset();
+            this->startedAt.reset();
+            this->stabilizingUntil.reset();
+            this->bypassedFrames = 0;
             return decision;
         }
 
@@ -906,12 +936,21 @@ namespace mako::layer {
             this->startedAt.reset();
             this->stabilizingUntil.reset();
             this->bypassedFrames = 0;
+            this->lastStallAt.reset();
+            this->consecutiveStalls = 0;
         }
 
     private:
+        [[nodiscard]] static constexpr std::chrono::seconds
+        healthyResetDuration() {
+            return std::chrono::seconds{30};
+        }
+
         std::optional<TimePoint> startedAt;
         std::optional<TimePoint> stabilizingUntil;
         size_t bypassedFrames{0};
+        std::optional<TimePoint> lastStallAt;
+        size_t consecutiveStalls{0};
     };
 
     /// Deterministically suppress synthetic frames which cannot be scanned out

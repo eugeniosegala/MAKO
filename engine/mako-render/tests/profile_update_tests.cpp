@@ -520,6 +520,15 @@ int main() {
             decision.spatialScalingChanged &&
             makoScalingEngine.frame_generation_enabled,
         "Native-to-MAKO method changes must remain live FG-compatible recreations");
+    decision = planProfileUpdate(
+        nativeScalingEngine, makoScalingEngine, 3, true, true
+    ).decision;
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.spatialScalingChanged &&
+            decision.spatialScalingLiveRebuild &&
+            !decision.swapchainRecreationDeferred &&
+            !liveProfileResourceRecreationAvailable(decision, true),
+        "A provisioned scaler must switch Native-to-MAKO inside its private context without WSI recreation");
 
     LiveProfileResourceRecreation resourceRecreation;
     const auto resourceChangeStarted =
@@ -618,6 +627,25 @@ int main() {
             ProfileUpdateAction::DeferUntilSwapchainRecreation &&
             decision.spatialScalingChanged,
         "Scaling shader parameters are recreation-bound in the initial pipeline");
+    decision = planProfileUpdate(
+        scalingCurrent, next, 3, true, true
+    ).decision;
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.spatialScalingLiveRebuild &&
+            !decision.swapchainRecreationDeferred &&
+            !liveProfileResourceRecreationAvailable(decision, true),
+        "A provisioned scaler must apply sharpness through a private rebuild without WSI recreation");
+
+    next = scalingCurrent;
+    next.scaling_factor = 2.0F;
+    decision = planProfileUpdate(
+        scalingCurrent, next, 3, true, true
+    ).decision;
+    expect(decision.action ==
+            ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+            !decision.spatialScalingLiveRebuild &&
+            decision.swapchainRecreationDeferred,
+        "A factor change must remain extent-bound even when private model rebuilding is available");
 
     next = current;
     next.scaling_enabled = true;

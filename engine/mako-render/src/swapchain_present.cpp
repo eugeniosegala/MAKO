@@ -1672,9 +1672,15 @@ VkResult Swapchain::presentGeneratedFrames(
         plan, plan.scheduledGeneratedFrames.size()
     );
     if (this->privateOrderedTransport) {
+        const auto lowerPresentWorkDuration =
+            generatedPresentDuration + originalPresentDuration;
         const auto stall =
             this->recoveryState.lowerPresentStallRecovery.observe(
-                DiagnosticsClock::now(), maximumLowerPresentDuration,
+                DiagnosticsClock::now(),
+                std::max(
+                    maximumLowerPresentDuration,
+                    lowerPresentWorkDuration
+                ),
                 this->gamescopeRefreshHz
             );
         if (stall.quarantined) {
@@ -1692,10 +1698,11 @@ VkResult Swapchain::presentGeneratedFrames(
                           << std::chrono::duration<double, std::milli>(
                                  stall.threshold
                              ).count()
+                          << " consecutive_stalls="
+                          << stall.consecutiveStalls
                           << " stabilization_ms="
                           << std::chrono::duration<double, std::milli>(
-                                 LowerPresentStallRecovery::
-                                     stabilizationDuration()
+                                 stall.stabilizationDuration
                              ).count()
                           << " requested_generated="
                           << plan.requestedGeneratedFrames.size()
@@ -1731,6 +1738,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     const DiagnosticsContextScope diagnosticsContext(
         this->diagnosticsState.contextId
     );
+    this->applyPendingSpatialScaler(vk);
     // Match the immutable create-time choice. Ordered SDR filters Gamescope's
     // dynamic MAILBOX override so the lower FIFO swapchain stays ordered. HDR
     // preserves it. A feedback transition cannot change the game-owned

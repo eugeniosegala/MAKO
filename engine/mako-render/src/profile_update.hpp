@@ -33,6 +33,7 @@ namespace mako::layer {
         bool baseFpsCapChanged{false};
         bool dynamicCadenceProbeIntervalChanged{false};
         bool spatialScalingChanged{false};
+        bool spatialScalingLiveRebuild{false};
         bool frameGenerationBackendChanged{false};
         bool generatedFrameCapacityExceeded{false};
         bool swapchainRecreationDeferred{false};
@@ -44,6 +45,15 @@ namespace mako::layer {
         ls::GameConf appliedProfile;
         ProfileUpdateDecision decision;
     };
+
+    [[nodiscard]] inline std::chrono::milliseconds
+    spatialScalerRebuildQuietPeriod(
+            const ls::GameConf& current,
+            const ls::GameConf& requested) noexcept {
+        if (current.scaling_method != requested.scaling_method)
+            return std::chrono::milliseconds::zero();
+        return std::chrono::milliseconds(500);
+    }
 
     struct ProcessStaticProfileProjection {
         ls::GameConf runtimeProfile;
@@ -237,7 +247,8 @@ namespace mako::layer {
             const bool frameGenerationResourcesAvailable) {
         if (decision.processRestartDeferred)
             return false;
-        return decision.spatialScalingChanged ||
+        return (decision.spatialScalingChanged &&
+                !decision.spatialScalingLiveRebuild) ||
             ((decision.frameGenerationBackendChanged ||
               decision.generatedFrameCapacityExceeded) &&
              frameGenerationResourcesAvailable);
@@ -414,7 +425,8 @@ namespace mako::layer {
     [[nodiscard]] inline ProfileUpdatePlan planProfileUpdate(
             const ls::GameConf& current, const ls::GameConf& next,
             const size_t generatedFrameCapacity,
-            const bool frameGenerationResourcesAvailable) {
+            const bool frameGenerationResourcesAvailable,
+            const bool spatialScalerLiveRebuildAvailable = false) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
@@ -442,20 +454,28 @@ namespace mako::layer {
         // private resources, while pacing shapes the game-owned swapchain.
         // They remain at their actually applied values until recreation
         // completes inside an already compatible process.
-        const bool scalerSettingsChanged =
-            current.scaling_method != next.scaling_method ||
-            current.scaling_factor != next.scaling_factor ||
+        const bool scalingMethodChanged =
+            current.scaling_method != next.scaling_method;
+        const bool scalingFactorChanged =
+            current.scaling_factor != next.scaling_factor;
+        const bool scalingSharpnessChanged =
             current.scaling_sharpness != next.scaling_sharpness;
+        const bool scalerSettingsChanged = scalingMethodChanged ||
+            scalingFactorChanged || scalingSharpnessChanged;
         const bool spatialScalingResourcesChanged =
             current.scaling_enabled == next.scaling_enabled &&
             (ls::spatialScalingRequested(current) ||
              ls::spatialScalingRequested(next)) &&
             scalerSettingsChanged;
+        const bool spatialScalingLiveRebuild =
+            spatialScalingResourcesChanged &&
+            spatialScalerLiveRebuildAvailable &&
+            !scalingFactorChanged;
         if (spatialScalingResourcesChanged) {
             applied.scaling_method = current.scaling_method;
             applied.scaling_factor = current.scaling_factor;
             applied.scaling_sharpness = current.scaling_sharpness;
-            swapchainRecreationDeferred = true;
+            swapchainRecreationDeferred = !spatialScalingLiveRebuild;
         }
         if (ls::effectiveFlowScale(current) !=
                 ls::effectiveFlowScale(applied)) {
@@ -535,7 +555,8 @@ namespace mako::layer {
             refreshRateThresholdChanged ||
                 generationPolicyChanged ||
                 generationModeChanged || fixedMultiplierChanged ||
-                baseFpsCapChanged || dynamicCadenceProbeIntervalChanged;
+                baseFpsCapChanged || dynamicCadenceProbeIntervalChanged ||
+                spatialScalingLiveRebuild;
 
         ProfileUpdateAction action = ProfileUpdateAction::NoRuntimeChange;
         if (liveChange)
@@ -558,6 +579,8 @@ namespace mako::layer {
                 .dynamicCadenceProbeIntervalChanged =
                     dynamicCadenceProbeIntervalChanged,
                 .spatialScalingChanged = spatialScalingChanged,
+                .spatialScalingLiveRebuild =
+                    spatialScalingLiveRebuild,
                 .frameGenerationBackendChanged =
                     frameGenerationBackendChanged,
                 .generatedFrameCapacityExceeded =

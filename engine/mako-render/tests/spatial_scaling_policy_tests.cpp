@@ -163,16 +163,12 @@ int main() {
     profile.adaptive = false;
 
     profile.scaling_method = ls::ScalingMethod::Native;
-    expect(!ls::spatialScalingRequested(profile) &&
-            !selectSpatialScalingExtents(
-                profile, fixedCapabilities(1280, 800)),
-        "Native must bypass spatial extent virtualization while FG remains enabled");
-    const auto nativeDecision = scalingDecisionForCreate(
-        profile, true, 0, fixedCapabilities(1280, 800), {1280, 800}
+    const auto nativeBaseline = selectSpatialScalingExtents(
+        profile, fixedCapabilities(1280, 800)
     );
-    expect(!nativeDecision.extents && nativeDecision.inactiveReason ==
-            SpatialScalingInactiveReason::NativePassthrough,
-        "Native must expose a distinct diagnostic passthrough reason");
+    expect(ls::spatialScalingRequested(profile) && nativeBaseline &&
+            sameExtent(nativeBaseline->source, deck->source),
+        "Native Resolution must retain the model-free reconstruction lane for live switching");
     profile.scaling_method = ls::ScalingMethod::Mako;
 
     profile.scaling_factor = 2.0F;
@@ -412,6 +408,24 @@ int main() {
     expect(!fiveKRejected.extents && fiveKRejected.inactiveReason ==
             SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
         "An 8 GiB device must reject an exact 5K presentation over its envelope");
+    const auto fiveKRetainsProvenFourK = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {2560, 1440},
+        SpatialScalingExtents{
+            .source = {1920, 1080},
+            .presentation = {3840, 2160},
+        },
+        std::nullopt,
+        variablePresentationPixelBudget(eightGiB)
+    );
+    expect(fiveKRetainsProvenFourK.extents &&
+            fiveKRetainsProvenFourK.reusedPreviousPresentationBudget &&
+            sameExtent(
+                fiveKRetainsProvenFourK.extents->source, {2560, 1440}
+            ) &&
+            sameExtent(
+                fiveKRetainsProvenFourK.extents->presentation, {3840, 2160}
+            ),
+        "A 1440p resolution change must retain the proven 4K presentation envelope instead of falling back to native");
     const auto eightKRejected = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {3840, 2160},
         std::nullopt, std::nullopt,

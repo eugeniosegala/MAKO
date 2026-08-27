@@ -170,11 +170,12 @@ namespace ls {
         Pacing pacing{GameConfDefaults::pacing};
     };
 
-    /// Whether this profile should construct and execute a spatial scaler.
+    /// Whether this profile should retain the spatial reconstruction lane.
+    /// Native Resolution is the model-free baseline inside that lane so a
+    /// running process can switch models without replacing its WSI objects.
     [[nodiscard]] constexpr bool spatialScalingRequested(
             const GameConf& profile) noexcept {
-        return profile.scaling_enabled &&
-            profile.scaling_method != ScalingMethod::Native;
+        return profile.scaling_enabled;
     }
 
     /// Whether this method requires user-supplied licensed model resources.

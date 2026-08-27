@@ -140,8 +140,8 @@ int main() {
     auto nativeEngine = defaults;
     nativeEngine.scaling_enabled = true;
     nativeEngine.scaling_method = ls::ScalingMethod::Native;
-    expect(!ls::spatialScalingRequested(nativeEngine),
-        "Native must provision the engine without requesting a scaler");
+    expect(ls::spatialScalingRequested(nativeEngine),
+        "Native must retain the model-free reconstruction lane for live switching");
     nativeEngine.scaling_method = ls::ScalingMethod::Mako;
     expect(ls::spatialScalingRequested(nativeEngine),
         "A selected scaler must activate when the engine is enabled");
@@ -374,7 +374,7 @@ scaling_sharpness = 0.5
             environmentConfig.get().profiles().front().scaling_enabled &&
             environmentConfig.get().profiles().front().scaling_method ==
                 ls::ScalingMethod::Native &&
-            !ls::spatialScalingRequested(
+            ls::spatialScalingRequested(
                 environmentConfig.get().profiles().front()) &&
             environmentConfig.get().profiles().front().scaling_factor == 2.0F &&
             environmentConfig.get().profiles().front().scaling_sharpness == 0.75F,

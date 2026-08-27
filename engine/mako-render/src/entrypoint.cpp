@@ -1383,9 +1383,10 @@ namespace {
             } catch (const std::exception& e) {
                 // The lower image is native-sized when scaling is active,
                 // while the application intentionally renders only the
-                // virtual source rectangle. Native passthrough would expose
-                // an incomplete top-left frame, so fail creation and let the
-                // normal rollback destroy the lower swapchain instead.
+                // virtual source rectangle. Falling back to direct native
+                // presentation would expose an incomplete top-left frame, so
+                // fail creation and let the normal rollback destroy the lower
+                // swapchain instead.
                 if (swapchainInfo.spatialScalingActive)
                     throw ls::error(
                         "spatial scaling context initialization failed", e

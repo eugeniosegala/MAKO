@@ -45,7 +45,6 @@ using namespace mako::layer;
 namespace {
     constexpr uint64_t spatialScalingEnabledBit = uint64_t{1};
     constexpr uint64_t spatialScalingProcessSupportedBit = uint64_t{2};
-    constexpr uint64_t spatialScalingNativePassthroughBit = uint64_t{4};
 
     constexpr char makoBuildIdentity[] =
         "MAKO Renderer: render layer active; identity="
@@ -261,9 +260,6 @@ namespace {
 void Root::publishSurfaceScalingPolicy() noexcept {
     const bool enabled = this->active_profile &&
         ls::spatialScalingRequested(*this->active_profile);
-    const bool nativePassthrough = this->active_profile &&
-        this->active_profile->scaling_enabled &&
-        this->active_profile->scaling_method == ls::ScalingMethod::Native;
     const float factor = this->active_profile
         ? this->active_profile->scaling_factor : 1.0F;
     const bool processSupported = spatialScalingProcessSupported(
@@ -276,8 +272,6 @@ void Root::publishSurfaceScalingPolicy() noexcept {
     ) << 32U;
     const uint64_t packed = packedFactor |
         (enabled ? spatialScalingEnabledBit : uint64_t{0}) |
-        (nativePassthrough
-            ? spatialScalingNativePassthroughBit : uint64_t{0}) |
         (processSupported
             ? spatialScalingProcessSupportedBit : uint64_t{0});
     const uint64_t observedSequence =
@@ -322,8 +316,6 @@ SpatialScalingPolicySnapshot Root::surfaceScalingPolicySnapshot()
         return SpatialScalingPolicySnapshot{
             .policy = {
                 .enabled = (packed & spatialScalingEnabledBit) != 0,
-                .nativePassthrough =
-                    (packed & spatialScalingNativePassthroughBit) != 0,
                 .factor = std::bit_cast<float>(
                     static_cast<uint32_t>(packed >> 32U)
                 ),
@@ -970,6 +962,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << spatialQueueCommandsSupported
                   << "; variable_feedback_suppressed="
                   << modification.variableFeedbackSuppressed
+                  << "; previous_presentation_budget_reused="
+                  << scalingDecision.reusedPreviousPresentationBudget
                   << "; inactive_reason="
                   << spatialScalingInactiveReasonName(inactiveReason)
                   << "; source_presentation_split="
@@ -1081,16 +1075,20 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     const auto& global = this->config.get().global();
 
     std::optional<std::filesystem::path> scalingShaderDll;
-    if (info.spatialScalingActive &&
-            ls::licensedScalingModelRequested(profile.scaling_method)) {
+    if (info.spatialScalingActive) {
         try {
             scalingShaderDll = global.dll.has_value()
                 ? std::filesystem::path(*global.dll)
                 : std::filesystem::path(ls::findShaderDll());
         } catch (const std::exception& error) {
-            std::cerr << "MAKO Renderer: unable to locate Lossless.dll for LS1; "
-                         "the MAKO fallback will be used: "
-                      << error.what() << '\n';
+            // Native Resolution and MAKO do not require the licensed shader,
+            // but retaining its path while the Scaling Engine is provisioned
+            // is what makes a later private LS1 selection genuinely live.
+            if (ls::licensedScalingModelRequested(profile.scaling_method)) {
+                std::cerr << "MAKO Renderer: unable to locate Lossless.dll for LS1; "
+                             "the MAKO fallback will be used: "
+                          << error.what() << '\n';
+            }
         }
     }
 

@@ -415,8 +415,8 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.scalingFactor
                         description: t.scalingFactorDesc
-                        visible: backend.scaling_enabled && backend.scaling_method !== "native"
-                        enabled: backend.scaling_enabled && backend.scaling_method !== "native"
+                        visible: backend.scaling_enabled
+                        enabled: backend.scaling_enabled
 
                         FlowSlider {
                             Layout.fillWidth: true

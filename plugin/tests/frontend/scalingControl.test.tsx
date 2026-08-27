@@ -175,12 +175,12 @@ describe("Scaling controls", () => {
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once the game starts, switch between Native Resolution, MAKO Scaler, and LS1 models; the game recreates its swapchain and may briefly flicker. Factor and sharpness changes use the same boundary. The engine can run alone or before Frame Generation.",
+        "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once running, model and sharpness changes rebuild only MAKO's private scaler and do not recreate the game's swapchain. Scale Factor applies after the game's next natural resolution change. The engine can run alone or before Frame Generation.",
       ),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Native Resolution keeps the Scaling Engine ready without spatial reconstruction. MAKO Scaler is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO Scaler takes over for that swapchain. Model changes apply through game-owned swapchain recreation.",
+        "Native Resolution uses a fast model-free linear baseline at the selected scale factor. MAKO Scaler is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO Scaler takes over. Model changes apply inside MAKO without recreating the game swapchain.",
       ),
     ).toBeTruthy();
 
@@ -195,7 +195,7 @@ describe("Scaling controls", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Scaling Method" })).toBeTruthy();
-    expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
+    expect(screen.getByText("Scale Factor (1.5x)")).toBeTruthy();
     expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
   });
 
