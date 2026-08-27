@@ -165,6 +165,10 @@ fi
 ./engine/scripts/run-mako-gym.sh \
   --gym-repo "$gym_repo" --require --suite performance --validate
 ./engine/scripts/run-mako-gym.sh \
+  --gym-repo "$gym_repo" --require --suite spatial-performance --validate
+./engine/scripts/run-mako-gym.sh \
+  --gym-repo "$gym_repo" --require --suite sync-validation --validate
+./engine/scripts/run-mako-gym.sh \
   --gym-repo "$gym_repo" --require --suite recovery --validate
 export MAKO_GYM_REPO="$gym_repo"
 branch="${branch:-$(git branch --show-current)}"

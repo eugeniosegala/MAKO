@@ -673,6 +673,10 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
     // initialize all images
     std::vector<VkImage> images{};
     images.push_back(this->blackImage.handle());
+    images.push_back(this->sourceImages.first.handle());
+    images.push_back(this->sourceImages.second.handle());
+    for (const auto& image : this->destImages)
+        images.push_back(image.handle());
     if (this->workingSourceImages) {
         images.push_back(this->workingSourceImages->first.handle());
         images.push_back(this->workingSourceImages->second.handle());

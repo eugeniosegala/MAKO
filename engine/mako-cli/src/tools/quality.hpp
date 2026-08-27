@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -37,6 +38,32 @@ namespace mako::cli::quality {
 
     /// Run one procedural scene through the production spatial scaler.
     int runSpatial(const SpatialOptions& opts);
+
+    /// Options for timestamp-query profiling of the production spatial graph.
+    struct SpatialProfileOptions {
+        std::optional<std::string> dll;
+        std::optional<std::string> gpu;
+        std::string method{"mako"};
+        uint32_t width{1280};
+        uint32_t height{800};
+        float scaling_factor{1.5F};
+        float sharpness{0.5F};
+        uint32_t warmup_iterations{12};
+        uint32_t samples{50};
+        bool frame_generation_handoff{false};
+    };
+
+    /// Measure the complete production spatial command graph with Vulkan GPU
+    /// timestamps. Instrumentation exists only in this CLI path.
+    int runSpatialProfile(const SpatialProfileOptions& opts);
+
+    /// Options for proving that synchronization validation is active.
+    struct SynchronizationCanaryOptions {
+        std::optional<std::string> gpu;
+    };
+
+    /// Record one intentional transfer hazard for validation-tooling checks.
+    int runSynchronizationCanary(const SynchronizationCanaryOptions& opts);
 
     /// Options for the production spatial-scaling-to-LSFG handoff.
     struct CombinedOptions {

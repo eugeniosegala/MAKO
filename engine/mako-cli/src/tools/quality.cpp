@@ -13,7 +13,9 @@
 #include "mako-common/vulkan/timeline_semaphore.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 #include "spatial_scaler.hpp"
+#include "spatial_scaling_policy.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <cstddef>
@@ -25,6 +27,7 @@
 #include <iomanip>
 #include <iostream>
 #include <optional>
+#include <numeric>
 #include <span>
 #include <string>
 #include <utility>
@@ -36,6 +39,190 @@ using namespace mako::cli;
 using namespace mako::cli::quality;
 
 namespace {
+    template<typename Function>
+    [[nodiscard]] Function deviceFunction(
+            const vk::Vulkan& vk, const char* name) {
+        const auto function = reinterpret_cast<Function>(
+            vk.fi().GetDeviceProcAddr(vk.dev(), name)
+        );
+        if (!function)
+            throw ls::vulkan_error(
+                "failed to get device proc addr for " + std::string(name)
+            );
+        return function;
+    }
+
+    class TimestampQueryPool {
+    public:
+        TimestampQueryPool(const vk::Vulkan& vk, const uint32_t queryCount) :
+            device(vk.dev()),
+            create(deviceFunction<PFN_vkCreateQueryPool>(vk, "vkCreateQueryPool")),
+            destroy(deviceFunction<PFN_vkDestroyQueryPool>(vk, "vkDestroyQueryPool")),
+            resetFunction(deviceFunction<PFN_vkCmdResetQueryPool>(
+                vk, "vkCmdResetQueryPool"
+            )),
+            writeFunction(deviceFunction<PFN_vkCmdWriteTimestamp>(
+                vk, "vkCmdWriteTimestamp"
+            )),
+            resultsFunction(deviceFunction<PFN_vkGetQueryPoolResults>(
+                vk, "vkGetQueryPoolResults"
+            )),
+            count(queryCount) {
+            uint32_t familyCount{};
+            vk.fi().GetPhysicalDeviceQueueFamilyProperties(
+                vk.physdev(), &familyCount, nullptr
+            );
+            std::vector<VkQueueFamilyProperties> families(familyCount);
+            vk.fi().GetPhysicalDeviceQueueFamilyProperties(
+                vk.physdev(), &familyCount, families.data()
+            );
+            if (vk.queueFamilyIndex() >= families.size())
+                throw ls::vulkan_error("timestamp queue family is out of range");
+            this->validBits = families.at(
+                vk.queueFamilyIndex()
+            ).timestampValidBits;
+            if (this->validBits == 0)
+                throw ls::vulkan_error(
+                    "selected Vulkan queue does not support timestamps"
+                );
+            if (this->validBits > 64)
+                throw ls::vulkan_error(
+                    "selected Vulkan queue reports an invalid timestamp width"
+                );
+
+            VkPhysicalDeviceProperties properties{};
+            vk.fi().GetPhysicalDeviceProperties(vk.physdev(), &properties);
+            this->periodNanoseconds = properties.limits.timestampPeriod;
+            if (!std::isfinite(this->periodNanoseconds) ||
+                    this->periodNanoseconds <= 0.0F) {
+                throw ls::vulkan_error(
+                    "selected Vulkan device reports an invalid timestamp period"
+                );
+            }
+
+            const VkQueryPoolCreateInfo info{
+                .sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO,
+                .queryType = VK_QUERY_TYPE_TIMESTAMP,
+                .queryCount = queryCount,
+            };
+            const auto result = this->create(
+                this->device, &info, nullptr, &this->pool
+            );
+            if (result != VK_SUCCESS)
+                throw ls::vulkan_error(result, "vkCreateQueryPool() failed");
+        }
+
+        ~TimestampQueryPool() {
+            if (this->pool != VK_NULL_HANDLE)
+                this->destroy(this->device, this->pool, nullptr);
+        }
+
+        TimestampQueryPool(const TimestampQueryPool&) = delete;
+        TimestampQueryPool& operator=(const TimestampQueryPool&) = delete;
+
+        void reset(const VkCommandBuffer commandBuffer) const {
+            this->resetFunction(commandBuffer, this->pool, 0, this->count);
+        }
+
+        void write(const VkCommandBuffer commandBuffer,
+                const VkPipelineStageFlagBits stage,
+                const uint32_t query) const {
+            this->writeFunction(commandBuffer, stage, this->pool, query);
+        }
+
+        [[nodiscard]] std::vector<double> microseconds() const {
+            std::vector<uint64_t> timestamps(this->count);
+            const auto result = this->resultsFunction(
+                this->device, this->pool, 0, this->count,
+                timestamps.size() * sizeof(uint64_t), timestamps.data(),
+                sizeof(uint64_t), VK_QUERY_RESULT_64_BIT
+            );
+            if (result != VK_SUCCESS)
+                throw ls::vulkan_error(
+                    result, "vkGetQueryPoolResults() failed"
+                );
+
+            const uint64_t mask = this->validBits == 64
+                ? UINT64_MAX : (uint64_t{1} << this->validBits) - 1;
+            std::vector<double> samples;
+            samples.reserve(this->count / 2);
+            for (uint32_t query = 0; query < this->count; query += 2) {
+                const uint64_t elapsed =
+                    (timestamps.at(query + 1) - timestamps.at(query)) & mask;
+                samples.push_back(
+                    static_cast<double>(elapsed) *
+                    static_cast<double>(this->periodNanoseconds) / 1000.0
+                );
+            }
+            return samples;
+        }
+
+        [[nodiscard]] uint32_t timestampValidBits() const {
+            return this->validBits;
+        }
+
+        [[nodiscard]] float timestampPeriodNanoseconds() const {
+            return this->periodNanoseconds;
+        }
+
+    private:
+        VkDevice device{VK_NULL_HANDLE};
+        PFN_vkCreateQueryPool create{};
+        PFN_vkDestroyQueryPool destroy{};
+        PFN_vkCmdResetQueryPool resetFunction{};
+        PFN_vkCmdWriteTimestamp writeFunction{};
+        PFN_vkGetQueryPoolResults resultsFunction{};
+        VkQueryPool pool{VK_NULL_HANDLE};
+        uint32_t count{};
+        uint32_t validBits{};
+        float periodNanoseconds{};
+    };
+
+    struct ProfileStatistics {
+        double minimum{};
+        double median{};
+        double percentile95{};
+        double maximum{};
+        double coefficientOfVariationPercent{};
+    };
+
+    [[nodiscard]] ProfileStatistics profileStatistics(
+            const std::vector<double>& samples) {
+        if (samples.empty())
+            throw ls::error("spatial GPU profile returned no samples");
+        std::vector<double> ordered = samples;
+        std::ranges::sort(ordered);
+        const size_t middle = ordered.size() / 2;
+        const double median = ordered.size() % 2 == 0
+            ? (ordered.at(middle - 1) + ordered.at(middle)) / 2.0
+            : ordered.at(middle);
+        const size_t percentile95Index = std::min(
+            ordered.size() - 1,
+            static_cast<size_t>(std::ceil(ordered.size() * 0.95)) - 1
+        );
+        const double mean = std::accumulate(
+            ordered.begin(), ordered.end(), 0.0
+        ) / static_cast<double>(ordered.size());
+        const double squaredDeviation = std::accumulate(
+            ordered.begin(), ordered.end(), 0.0,
+            [mean](const double total, const double value) {
+                const double difference = value - mean;
+                return total + difference * difference;
+            }
+        );
+        const double deviation = std::sqrt(
+            squaredDeviation / static_cast<double>(ordered.size())
+        );
+        return {
+            .minimum = ordered.front(),
+            .median = median,
+            .percentile95 = ordered.at(percentile95Index),
+            .maximum = ordered.back(),
+            .coefficientOfVariationPercent = mean > 0.0
+                ? deviation / mean * 100.0 : 0.0,
+        };
+    }
+
     [[nodiscard]] VkImageMemoryBarrier imageBarrier(
             const VkImage image, const VkAccessFlags sourceAccess,
             const VkAccessFlags destinationAccess, const VkImageLayout oldLayout,
@@ -233,7 +420,25 @@ namespace {
         command.submit(vk);
     }
 
-    void submitSpatialEndpoint(const vk::Vulkan& vk,
+    void initializeExternalImageLayout(const vk::Vulkan& vk,
+            const vk::Image& image) {
+        const vk::CommandBuffer command{vk};
+        command.begin(vk);
+        const auto toGeneral = imageBarrier(
+            image.handle(), 0,
+            VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL
+        );
+        vk.df().CmdPipelineBarrier(
+            command.handle(), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+            VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, 0,
+            0, nullptr, 0, nullptr, 1, &toGeneral
+        );
+        command.end(vk);
+        command.submit(vk);
+    }
+
+    [[nodiscard]] vk::CommandBuffer submitSpatialEndpoint(const vk::Vulkan& vk,
             const mako::layer::SpatialScaler& scaler,
             const vk::Image& applicationImage,
             const vk::Image& frameGenerationSource,
@@ -242,7 +447,7 @@ namespace {
             const vk::TimelineSemaphore& sync,
             const uint64_t signalValue) {
         uploadSpatialSource(vk, applicationImage, sourceExtent, rgba);
-        const vk::CommandBuffer command{vk};
+        vk::CommandBuffer command{vk};
         command.begin(vk);
         scaler.record(
             vk,
@@ -256,6 +461,7 @@ namespace {
             vk, {}, VK_NULL_HANDLE, 0,
             {}, sync.handle(), signalValue
         );
+        return command;
     }
 
     [[nodiscard]] std::vector<uint8_t> downloadImage(
@@ -433,6 +639,7 @@ int quality::run(const Options& opts) {
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             std::nullopt, &destinationFd
         };
+        initializeExternalImageLayout(vk, destinationImage);
 
         int syncFd{};
         const vk::TimelineSemaphore sync{vk, 0, std::nullopt, &syncFd};
@@ -560,7 +767,8 @@ int quality::runSpatial(const SpatialOptions& opts) {
             vk,
             presentationExtent,
             VK_FORMAT_R8G8B8A8_UNORM,
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                VK_IMAGE_USAGE_SAMPLED_BIT
         };
         uploadSpatialSource(vk, applicationImage, sourceExtent, scene.source);
 
@@ -623,6 +831,206 @@ int quality::runSpatial(const SpatialOptions& opts) {
     }
 }
 
+int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
+    try {
+        const auto method = ls::scalingMethodFromName(opts.method);
+        if (!method)
+            throw ls::error("unknown spatial profile method: " + opts.method);
+        if (*method == ls::ScalingMethod::Native)
+            throw ls::error(
+                "spatial profile method native performs no GPU scaling work"
+            );
+        if (opts.width == 0 || opts.height == 0)
+            throw ls::error("spatial profile extent must be non-zero");
+        if (!std::isfinite(opts.scaling_factor) ||
+                opts.scaling_factor <= ls::GameConfLimits::minimumScalingFactor ||
+                opts.scaling_factor > ls::GameConfLimits::maximumScalingFactor) {
+            throw ls::error(
+                "spatial profile factor must be above 1.0 and at most 2.0"
+            );
+        }
+        if (!std::isfinite(opts.sharpness) ||
+                opts.sharpness < ls::GameConfLimits::minimumScalingSharpness ||
+                opts.sharpness > ls::GameConfLimits::maximumScalingSharpness) {
+            throw ls::error(
+                "spatial profile sharpness must be between 0.0 and 1.0"
+            );
+        }
+        if (opts.warmup_iterations == 0 || opts.warmup_iterations > 1000)
+            throw ls::error(
+                "spatial profile warm-up iterations must be from 1 through 1000"
+            );
+        if (opts.samples == 0 || opts.samples > 1000)
+            throw ls::error("spatial profile samples must be from 1 through 1000");
+
+        const VkExtent2D presentationExtent{
+            .width = opts.width,
+            .height = opts.height,
+        };
+        const VkExtent2D sourceExtent{
+            .width = mako::layer::scaledSourceDimension(
+                opts.width, opts.scaling_factor
+            ),
+            .height = mako::layer::scaledSourceDimension(
+                opts.height, opts.scaling_factor
+            ),
+        };
+        const vk::Vulkan vk = makeVulkan(opts.gpu, "mako-spatial-gpu-profile");
+        const std::string selectedGpu = selectedDeviceName(vk);
+        const auto dll = configuredDll(
+            opts.dll, *method != ls::ScalingMethod::Mako
+        );
+        const mako::layer::SpatialScaler scaler{
+            vk,
+            sourceExtent,
+            presentationExtent,
+            VK_FORMAT_R8G8B8A8_UNORM,
+            *method,
+            opts.sharpness,
+            dll
+        };
+        if (scaler.activeMethod() != *method) {
+            throw ls::error(
+                "requested spatial profile method fell back to " +
+                std::string(ls::scalingMethodName(scaler.activeMethod())) +
+                ": " + std::string(scaler.fallbackReason())
+            );
+        }
+
+        const auto applicationUsage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+        const vk::Image applicationImage{
+            vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
+            applicationUsage
+        };
+        std::optional<vk::Image> frameGenerationSource;
+        if (opts.frame_generation_handoff) {
+            frameGenerationSource.emplace(
+                vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+            );
+        }
+        const size_t sourceBytes = static_cast<size_t>(sourceExtent.width) *
+            sourceExtent.height * 4;
+        const std::vector<uint8_t> sourcePixels(sourceBytes, 0x80);
+        uploadSpatialSource(
+            vk, applicationImage, sourceExtent, sourcePixels
+        );
+
+        const auto recordScaler = [&](const vk::CommandBuffer& command) {
+            scaler.record(
+                vk,
+                command,
+                applicationImage.handle(),
+                frameGenerationSource
+                    ? frameGenerationSource->handle() : VK_NULL_HANDLE,
+                VK_IMAGE_LAYOUT_GENERAL
+            );
+        };
+        {
+            const vk::CommandBuffer warmup{vk};
+            warmup.begin(vk);
+            for (uint32_t iteration = 0;
+                    iteration < opts.warmup_iterations; ++iteration) {
+                recordScaler(warmup);
+            }
+            warmup.end(vk);
+            warmup.submit(vk);
+        }
+
+        TimestampQueryPool timestamps(vk, opts.samples * 2);
+        const vk::CommandBuffer measured{vk};
+        measured.begin(vk);
+        timestamps.reset(measured.handle());
+        for (uint32_t sample = 0; sample < opts.samples; ++sample) {
+            timestamps.write(
+                measured.handle(), VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                sample * 2
+            );
+            recordScaler(measured);
+            timestamps.write(
+                measured.handle(), VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                sample * 2 + 1
+            );
+        }
+        measured.end(vk);
+        measured.submit(vk);
+
+        const auto samples = timestamps.microseconds();
+        const auto statistics = profileStatistics(samples);
+        std::cout << std::fixed << std::setprecision(3)
+            << "MAKO spatial GPU profile: PASS schema=1\n"
+            << "  method: " << ls::scalingMethodName(*method) << '\n'
+            << "  factor: " << opts.scaling_factor << '\n'
+            << "  sharpness: " << opts.sharpness << '\n'
+            << "  frame-generation handoff: "
+            << (opts.frame_generation_handoff ? "yes" : "no") << '\n'
+            << "  extent: " << sourceExtent.width << 'x' << sourceExtent.height
+            << " -> " << presentationExtent.width << 'x'
+            << presentationExtent.height << '\n'
+            << "  GPU: " << selectedGpu << '\n'
+            << "  timestamp valid bits: "
+            << timestamps.timestampValidBits() << '\n'
+            << "  timestamp period ns: "
+            << timestamps.timestampPeriodNanoseconds() << '\n'
+            << "  warm-up iterations: " << opts.warmup_iterations << '\n'
+            << "  samples: " << opts.samples << '\n'
+            << "  gpu-time minimum us: " << statistics.minimum << '\n'
+            << "  gpu-time median us: " << statistics.median << '\n'
+            << "  gpu-time p95 us: " << statistics.percentile95 << '\n'
+            << "  gpu-time maximum us: " << statistics.maximum << '\n'
+            << "  gpu-time cv percent: "
+            << statistics.coefficientOfVariationPercent << '\n'
+            << "  sample-us:";
+        for (const double sample : samples)
+            std::cout << ' ' << sample;
+        std::cout << '\n';
+        if (*method != ls::ScalingMethod::Mako) {
+            std::cout << "  LS1 model variant: " << scaler.ls1ModelVariant() << '\n'
+                << "  LS1 translator: " << scaler.ls1Translator() << '\n';
+        }
+        return EXIT_SUCCESS;
+    } catch (const std::exception& error) {
+        std::cerr << "error: " << error.what() << '\n';
+        return EXIT_FAILURE;
+    }
+}
+
+int quality::runSynchronizationCanary(
+        const SynchronizationCanaryOptions& opts) {
+    try {
+        const vk::Vulkan vk = makeVulkan(
+            opts.gpu, "mako-synchronization-validation-canary"
+        );
+        constexpr std::array<uint32_t, 16> initial{};
+        const auto usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+            VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+        const vk::Buffer source{vk, initial, usage};
+        const vk::Buffer destination{vk, initial, usage};
+        const auto fill = deviceFunction<PFN_vkCmdFillBuffer>(
+            vk, "vkCmdFillBuffer"
+        );
+        const auto copy = deviceFunction<PFN_vkCmdCopyBuffer>(
+            vk, "vkCmdCopyBuffer"
+        );
+        const VkBufferCopy region{.size = sizeof(initial)};
+        const vk::CommandBuffer command{vk};
+        command.begin(vk);
+        fill(
+            command.handle(), source.handle(), 0, sizeof(initial), 0x5a5a5a5a
+        );
+        copy(
+            command.handle(), source.handle(), destination.handle(), 1, &region
+        );
+        command.end(vk);
+        std::cout << "MAKO synchronization-validation canary: RECORDED\n";
+        return EXIT_SUCCESS;
+    } catch (const std::exception& error) {
+        std::cerr << "error: " << error.what() << '\n';
+        return EXIT_FAILURE;
+    }
+}
+
 int quality::runCombined(const CombinedOptions& opts) {
     try {
         const auto method = ls::scalingMethodFromName(opts.method);
@@ -678,7 +1086,7 @@ int quality::runCombined(const CombinedOptions& opts) {
         }
 
         const auto applicationUsage = VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
         const vk::Image previousApplication{
             vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM, applicationUsage
         };
@@ -702,6 +1110,7 @@ int quality::runCombined(const CombinedOptions& opts) {
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             std::nullopt, &destinationFd
         };
+        initializeExternalImageLayout(vk, destinationImage);
         int syncFd{};
         const vk::TimelineSemaphore sync{vk, 0, std::nullopt, &syncFd};
         mako::backend::Instance backend{
@@ -719,7 +1128,7 @@ int quality::runCombined(const CombinedOptions& opts) {
             1.0F / opts.flow_scale, opts.performance_mode
         );
 
-        submitSpatialEndpoint(
+        const auto previousSpatialCommand = submitSpatialEndpoint(
             vk,
             scaler,
             previousApplication,
@@ -733,7 +1142,7 @@ int quality::runCombined(const CombinedOptions& opts) {
         if (!sync.wait(vk, 2))
             throw ls::error("timed out while priming combined quality history");
 
-        submitSpatialEndpoint(
+        const auto currentSpatialCommand = submitSpatialEndpoint(
             vk,
             scaler,
             currentApplication,

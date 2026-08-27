@@ -84,6 +84,10 @@ jobs:
           ./engine/scripts/run-mako-gym.sh \
             --gym-repo "$gym_repo" --require --suite performance --validate
           ./engine/scripts/run-mako-gym.sh \
+            --gym-repo "$gym_repo" --require --suite spatial-performance --validate
+          ./engine/scripts/run-mako-gym.sh \
+            --gym-repo "$gym_repo" --require --suite sync-validation --validate
+          ./engine/scripts/run-mako-gym.sh \
             --gym-repo "$gym_repo" --require --suite repeatability --validate
           if [[ -n "$(git -C "$gym_repo" status --porcelain)" ]]; then
             echo "MAKO-Gym must be clean for hardware validation: $gym_repo" >&2
@@ -136,6 +140,36 @@ jobs:
           )
           if (( ${#performance_markers[@]} != 1 )); then
             echo "Expected exactly one sanitized MAKO-Gym performance result." >&2
+            exit 1
+          fi
+
+      - name: Run MAKO-Gym spatial GPU-time budgets
+        working-directory: engine
+        run: |
+          ./scripts/run-mako-gym.sh --require --suite spatial-performance \
+            --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-spatial-performance"
+          mapfile -t spatial_performance_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-spatial-performance" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#spatial_performance_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO-Gym spatial-performance result." >&2
+            exit 1
+          fi
+
+      - name: Run MAKO-Gym Vulkan synchronization validation
+        working-directory: engine
+        run: |
+          ./scripts/run-mako-gym.sh --require --suite sync-validation \
+            --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-sync-validation"
+          mapfile -t sync_validation_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-sync-validation" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#sync_validation_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO-Gym synchronization-validation result." >&2
             exit 1
           fi
 
@@ -224,6 +258,8 @@ jobs:
             engine/out/hardware-validation.txt
             engine/out/mako-gym-quality
             engine/out/mako-gym-performance
+            engine/out/mako-gym-spatial-performance
+            engine/out/mako-gym-sync-validation
             engine/out/mako-gym-repeatability
             engine/out/mako-gym
             engine/out/mako-gym-recovery

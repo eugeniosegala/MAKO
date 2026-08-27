@@ -43,6 +43,10 @@ COMMANDS:
                 Run a procedural LSFG image-quality regression
     spatial-quality-regression
                 Run a procedural MAKO/LS1 spatial-quality regression
+    spatial-profile
+                Profile the production spatial graph with Vulkan GPU timestamps
+    synchronization-validation-canary
+                Record an intentional hazard to prove synchronization validation
     combined-quality-regression
                 Run spatial scaling into LSFG on one procedural scene
 
@@ -86,6 +90,21 @@ SUBCOMMAND OPTIONS:
         -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
         -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
         -t, --scene-time <FLOAT>        Scene time from 0.0 through 1.0
+
+    spatial-profile
+        -d, --dll <PATH>                Path to Lossless.dll for LS1 methods
+        -g, --gpu <STRING>              GPU to use
+        -m, --method <NAME>             mako, ls1, or ls1-performance
+        -w, --width <INT>               Presentation width
+        -h, --height <INT>              Presentation height
+        -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
+        -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
+        -u, --warmup <INT>              Untimed warm-up graph iterations
+        -n, --samples <INT>             Timestamped graph iterations
+        -x, --frame-generation-handoff Include the full-resolution FG source copy
+
+    synchronization-validation-canary
+        -g, --gpu <STRING>              GPU to use
 
     combined-quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
@@ -371,6 +390,102 @@ SUBCOMMAND OPTIONS:
         std::exit(quality::runSpatial(opts));
     }
 
+    /// Parse the spatial-profile command options.
+    [[noreturn]] void on_spatial_profile(int argc, char** argv,
+            const std::string& program) {
+        quality::SpatialProfileOptions opts{};
+        const std::array<option, 11> GETOPT {{
+            { "dll",                      required_argument, nullptr, 'd' },
+            { "gpu",                      required_argument, nullptr, 'g' },
+            { "method",                   required_argument, nullptr, 'm' },
+            { "width",                    required_argument, nullptr, 'w' },
+            { "height",                   required_argument, nullptr, 'h' },
+            { "factor",                   required_argument, nullptr, 'f' },
+            { "sharpness",                required_argument, nullptr, 's' },
+            { "warmup",                   required_argument, nullptr, 'u' },
+            { "samples",                  required_argument, nullptr, 'n' },
+            { "frame-generation-handoff", no_argument,       nullptr, 'x' },
+            { nullptr,                       no_argument,       nullptr,  0  }
+        }};
+
+        int c{0};
+        while ((c = getopt_long(
+                argc, argv, "d:g:m:w:h:f:s:u:n:x", GETOPT.data(), nullptr)) != -1) {
+            switch (c) {
+                case 'd':
+                    opts.dll.emplace(optarg);
+                    break;
+                case 'g':
+                    opts.gpu.emplace(optarg);
+                    break;
+                case 'm':
+                    opts.method = optarg;
+                    break;
+                case 'w':
+                    opts.width = static_cast<uint32_t>(std::stoul(optarg));
+                    break;
+                case 'h':
+                    opts.height = static_cast<uint32_t>(std::stoul(optarg));
+                    break;
+                case 'f':
+                    opts.scaling_factor = std::stof(optarg);
+                    break;
+                case 's':
+                    opts.sharpness = std::stof(optarg);
+                    break;
+                case 'u':
+                    opts.warmup_iterations = static_cast<uint32_t>(
+                        std::stoul(optarg)
+                    );
+                    break;
+                case 'n':
+                    opts.samples = static_cast<uint32_t>(std::stoul(optarg));
+                    break;
+                case 'x':
+                    opts.frame_generation_handoff = true;
+                    break;
+                case '?':
+                default:
+                    usage(program);
+                    std::exit(EXIT_FAILURE);
+            }
+        }
+        if (optind < argc) {
+            usage(program);
+            std::exit(EXIT_FAILURE);
+        }
+        std::exit(quality::runSpatialProfile(opts));
+    }
+
+    /// Parse the synchronization-validation-canary command options.
+    [[noreturn]] void on_synchronization_validation_canary(
+            int argc, char** argv, const std::string& program) {
+        quality::SynchronizationCanaryOptions opts{};
+        const std::array<option, 2> GETOPT {{
+            { "gpu", required_argument, nullptr, 'g' },
+            { nullptr,   no_argument, nullptr,  0  }
+        }};
+
+        int c{0};
+        while ((c = getopt_long(
+                argc, argv, "g:", GETOPT.data(), nullptr)) != -1) {
+            switch (c) {
+                case 'g':
+                    opts.gpu.emplace(optarg);
+                    break;
+                case '?':
+                default:
+                    usage(program);
+                    std::exit(EXIT_FAILURE);
+            }
+        }
+        if (optind < argc) {
+            usage(program);
+            std::exit(EXIT_FAILURE);
+        }
+        std::exit(quality::runSynchronizationCanary(opts));
+    }
+
     /// parse the combined-quality-regression command options
     [[noreturn]] void on_combined_quality_regression(int argc, char** argv,
             const std::string& program) {
@@ -478,6 +593,12 @@ int main(int argc, char** argv) {
         on_quality_regression(command_argc, command_argv, program);
     else if (command == "spatial-quality-regression")
         on_spatial_quality_regression(command_argc, command_argv, program);
+    else if (command == "spatial-profile")
+        on_spatial_profile(command_argc, command_argv, program);
+    else if (command == "synchronization-validation-canary")
+        on_synchronization_validation_canary(
+            command_argc, command_argv, program
+        );
     else if (command == "combined-quality-regression")
         on_combined_quality_regression(command_argc, command_argv, program);
 

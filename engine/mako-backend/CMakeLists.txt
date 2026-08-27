@@ -1,6 +1,7 @@
 set(BACKEND_SOURCES
     "src/extraction/dll_reader.cpp"
     "src/extraction/ls1_shader_set.cpp"
+    "src/extraction/ls1_spirv_patch.cpp"
     "src/extraction/shader_registry.cpp"
     "src/helpers/limits.cpp"
     "src/helpers/managed_shader.cpp"
@@ -37,6 +38,16 @@ if(BUILD_TESTING)
         PRIVATE src)
     add_test(NAME backend-hot-path
         COMMAND mako-backend-hot-path-tests)
+
+    add_executable(mako-backend-ls1-spirv-patch-tests
+        "tests/ls1_spirv_patch_tests.cpp"
+        "src/extraction/ls1_spirv_patch.cpp")
+    target_include_directories(mako-backend-ls1-spirv-patch-tests
+        PRIVATE src)
+    target_link_libraries(mako-backend-ls1-spirv-patch-tests
+        PRIVATE mako-common)
+    add_test(NAME backend-ls1-spirv-patch
+        COMMAND mako-backend-ls1-spirv-patch-tests)
 
 endif()
 

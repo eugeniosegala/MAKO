@@ -75,6 +75,14 @@ test-engine-gym-repeatability *args:
 test-engine-gym-performance *args:
     ./engine/scripts/run-mako-gym.sh --suite performance {{args}}
 
+# Measure each production spatial scaler with Vulkan timestamp queries.
+test-engine-gym-spatial-performance *args:
+    ./engine/scripts/run-mako-gym.sh --suite spatial-performance {{args}}
+
+# Run selected production GPU paths under Khronos synchronization validation.
+test-engine-gym-sync-validation *args:
+    ./engine/scripts/run-mako-gym.sh --suite sync-validation {{args}}
+
 # Run selected scripted runtime-recovery rows; no --filter runs all 29 default cases.
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
