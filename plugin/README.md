@@ -10,7 +10,7 @@
 
 MAKO Decky is the Decky Loader component of MAKO. It provides per-game controls, installation, updates, Flatpak preparation, and game launch integration for MAKO Renderer on Steam Deck, Steam Machine, SteamOS, and Linux more broadly.
 
-MAKO is an independent community project bringing Lossless Scaling LS1 scaling and LSFG frame generation plus MAKO's built-in open spatial scaler to Linux. LS1 and LSFG require a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation; the open MAKO scaling method does not use it. MAKO Decky does not bundle, copy, persist, or modify that proprietary library.
+MAKO is an independent community project bringing LS1 scaling, LSFG frame generation, and MAKO's built-in open spatial scaler to Linux. LS1 and LSFG require a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation; the open MAKO scaler does not. MAKO Decky never bundles, copies, persists, or modifies that proprietary library.
 
 ## Download
 
@@ -18,17 +18,16 @@ Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/relea
 
 For direct Vulkan-layer installation without Decky, open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0) and download the Linux archive under **Assets**.
 
-Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bit and 32-bit x86 game-process layers. MAKO Decky detects native AArch64/Armada hosts, refuses incompatible installation, and converts older activation state to a safe game-launch passthrough. See [Armada and native AArch64 support](docs/ARMADA.md) for the exact boundary and the hardware gates required before enabling it.
+Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-bit x86 game-process layers. MAKO Decky safely refuses incompatible native AArch64/Armada installation; see [Armada and native AArch64 support](docs/ARMADA.md) for that boundary.
 
 ## What it manages
 
 - Installs the private MAKO Renderer Vulkan layer for the current user.
-- Generates the `/home/deck/.local/bin/mako-run` per-game launcher.
-- Stores renderer settings in `~/.config/mako-render/conf.toml` and versioned game/process identity separately for automatic per-game selection.
-- Supports a restart-bound Scaling Engine plus fixed and adaptive frame generation with per-game controls. Scaling and frame generation can be used separately or together. Native Steam/Proton profiles launched with Scaling Engine enabled automatically use the validated staged Gamescope WSI-before-MAKO order; Native, MAKO, LS1, factor, and sharpness changes remain live through swapchain recreation inside that provisioned process.
-- Provides a per-profile experimental Gamescope WSI compatibility toggle independently from **External Tools** controls for host-installed MangoHud and experimental vkBasalt. MangoHud and vkBasalt remain mutually exclusive with each other, while either can run after MAKO with WSI and scaling/frame generation active.
+- Creates a per-game `mako-run` launcher and profile-based configuration.
+- Provides spatial scaling plus Fixed and Adaptive Frame Generation, separately or together. Enable Scaling Engine before launching a game; compatible in-game model and tuning changes recreate the game's swapchain when necessary.
+- Provides an experimental per-profile Gamescope WSI compatibility toggle plus host-installed MangoHud or experimental vkBasalt under **External Tools**.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
-- Launches selected games through MAKO's private renderer and configuration.
+- Keeps MAKO activation limited to the selected game process.
 
 ## Development
 
@@ -43,29 +42,7 @@ pnpm run package:local-engine
 
 `pnpm run package:local-engine` builds and bundles the sibling MAKO Renderer checkout. Use `pnpm run package:local-engine-fast` for a native, 64-bit development package without Flatpak extensions.
 
-The resulting Decky ZIP is written under `plugin/out/`. Nothing is published by the local packaging commands.
-
-### Code boundaries
-
-| Responsibility | Source of truth |
-| --- | --- |
-| Cross-language configuration fields, defaults, limits, profile identities and kinds, install-relative wrapper path, supported Flatpak runtimes, and per-game-wrapper Flatpak app IDs | `shared_config.py`, emitted to TypeScript by `scripts/generate_ts_schema.py` |
-| Pre-RPC launcher fallback derived from the generated install-relative path | `src/config/runtimePaths.ts` |
-| Import-safe installed package root, payload identities, layer/environment identifiers, and Flatpak bundle descriptors | `py_modules/mako_plugin/package_paths.py`, `constants.py`, guarded across components by `tests/test_decky_loader_import.py`, `test_path_package_contract.py`, and focused contract tests |
-| RPC orchestration, migrations, persistence, and atomic wrapper regeneration | `py_modules/mako_plugin/configuration.py` |
-| Canonical profile metadata, Decky-only wrapper-setting sidecars, and merged profile views | `py_modules/mako_plugin/profile_storage.py` |
-| Pure generated-wrapper text, compatibility guards, profile selection, and launch environment | `py_modules/mako_plugin/wrapper_generation.py` |
-| Running-game/editor session synchronisation and profile transactions | `src/hooks/useProfileSession.ts`, `src/hooks/useProfileEditorModel.ts` |
-| Bounded optimistic configuration writes and reusable collapsed-section state | `src/hooks/useProfileConfigWriter.ts`, `src/hooks/usePersistentCollapseState.ts` |
-| View composition | `src/components/Content.tsx`, `ContentNotices.tsx`, `ConfigurationSection.tsx`, `ConfigurationSectionGroups.tsx`, `ProfileManagement.tsx`, `ScalingControl.tsx`, `FpsMultiplierControl.tsx` |
-| English translation keys, fallbacks, and dictionary order | `defaults/i18n/template.json` |
-| Advertised languages, Steam aliases, translated dictionaries, static call-site validation, and generated frontend bundle | `defaults/i18n/language_metadata.json`, `steam_language_map.json`, language JSON files, `scripts/i18n-contract.mjs`, and generated `src/i18n/languages.json` |
-
-The generated wrapper is disposable cache, not another configuration store. Backend characterization tests compare pure generator output with the service facade and lock exact wrapper and sidecar bytes; focused hook tests lock bounded last-write-wins configuration bursts, single-flight persistence, close-panel flushing, runtime profile transitions, offline editor selection, and local collapse-state recovery without snapshotting static layout.
-
-MAKO Decky supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, Ukrainian, and Simplified Chinese, matching the MAKO Renderer desktop UI's ordered supported-language inventory and native display names through `tests/test_localization_language_contract.py`. Every translated dictionary has the same ordered key set as `template.json`, contains only strings, and preserves each named placeholder exactly. Every frontend `t()` call uses a static key and English fallback matching that template plus the exact replacement fields. Run `pnpm run check:i18n` for the read-only dictionary, call-site, and generated-file gate; after an intentional source-dictionary change, run `pnpm run generate:i18n` to regenerate `src/i18n/languages.json` rather than editing it directly. The normal one-shot build requires the tracked bundle to be current before bundling, and watch mode intentionally regenerates it before Rollup starts.
-
-Use direct `dev:*` deployment for iteration, `package:local-engine` for a complete tester ZIP, the dedicated SteamOS/AMD workflow for a release candidate, and the root publisher only for the actual release. The exact boundaries are documented in [Packaging](docs/PACKAGING.md) and [Testing](../TESTING.md).
+The resulting ZIP is written under `plugin/out/`; local commands never publish. Use direct `dev:*` deployment for iteration, `package:local-engine` for a tester ZIP, and the documented release workflow only for a release candidate. See [Packaging](docs/PACKAGING.md) and [Testing](../TESTING.md) for the exact commands and validation gates.
 
 ## Using a local build
 
