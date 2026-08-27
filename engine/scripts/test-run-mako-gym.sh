@@ -18,13 +18,19 @@ fi
 
 fake_gym="$temporary_root/MAKO-Gym"
 mkdir -p "$fake_gym/scripts"
-printf '3\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '4\n' > "$fake_gym/GYM_CONTRACT_VERSION"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$@"' \
     > "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 chmod +x "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "quality:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-amd-quality-regression.sh"
 chmod +x "$fake_gym/scripts/run-amd-quality-regression.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "repeatability:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-quality-repeatability.sh"
+chmod +x "$fake_gym/scripts/run-quality-repeatability.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "performance:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-render-performance.sh"
+chmod +x "$fake_gym/scripts/run-render-performance.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "recovery:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-runtime-recovery-matrix.sh"
 chmod +x "$fake_gym/scripts/run-runtime-recovery-matrix.sh"
@@ -40,6 +46,18 @@ quality_forwarded="$($bridge --gym-repo "$fake_gym" --suite quality --cli /tmp/m
 quality_expected=$'quality:--cli\nquality:/tmp/mako-cli'
 if [[ "$quality_forwarded" != "$quality_expected" ]]; then
     echo "Gym quality-suite arguments were not forwarded exactly." >&2
+    exit 1
+fi
+repeatability_forwarded="$($bridge --gym-repo "$fake_gym" --suite repeatability --repetitions 4)"
+repeatability_expected=$'repeatability:--repetitions\nrepeatability:4'
+if [[ "$repeatability_forwarded" != "$repeatability_expected" ]]; then
+    echo "Gym repeatability-suite arguments were not forwarded exactly." >&2
+    exit 1
+fi
+performance_forwarded="$($bridge --gym-repo "$fake_gym" --suite performance --baseline /tmp/baseline.json)"
+performance_expected=$'performance:--baseline\nperformance:/tmp/baseline.json'
+if [[ "$performance_forwarded" != "$performance_expected" ]]; then
+    echo "Gym performance-suite arguments were not forwarded exactly." >&2
     exit 1
 fi
 recovery_forwarded="$($bridge --gym-repo "$fake_gym" --suite recovery --filter '^adaptive-')"
@@ -59,7 +77,7 @@ if "$bridge" --gym-repo "$fake_gym" --list >/dev/null 2>&1; then
     exit 1
 fi
 
-printf '3\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '4\n' > "$fake_gym/GYM_CONTRACT_VERSION"
 chmod -x "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 if "$bridge" --gym-repo "$fake_gym" --list >/dev/null 2>&1; then
     echo "Non-executable Gym runner unexpectedly succeeded." >&2

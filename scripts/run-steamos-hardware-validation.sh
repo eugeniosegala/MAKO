@@ -158,6 +158,14 @@ if [[ -n "$(git -C "$gym_repo" status --porcelain)" ]]; then
 fi
 ./engine/scripts/run-mako-gym.sh \
   --gym-repo "$gym_repo" --require --validate
+./engine/scripts/run-mako-gym.sh \
+  --gym-repo "$gym_repo" --require --suite quality --validate
+./engine/scripts/run-mako-gym.sh \
+  --gym-repo "$gym_repo" --require --suite repeatability --validate
+./engine/scripts/run-mako-gym.sh \
+  --gym-repo "$gym_repo" --require --suite performance --validate
+./engine/scripts/run-mako-gym.sh \
+  --gym-repo "$gym_repo" --require --suite recovery --validate
 export MAKO_GYM_REPO="$gym_repo"
 branch="${branch:-$(git branch --show-current)}"
 if [[ -z "$branch" ]]; then

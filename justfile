@@ -63,11 +63,19 @@ test-engine-gym-feature *args:
 test-engine-gym-required *args:
     ./engine/scripts/run-mako-gym.sh --require {{args}}
 
-# Run selected procedural render-quality rows; no --filter runs all 66 cases.
+# Run selected procedural render-quality rows; no --filter runs all 74 cases.
 test-engine-gym-quality *args:
     ./engine/scripts/run-mako-gym.sh --suite quality {{args}}
 
-# Run selected scripted runtime-recovery rows; no --filter runs all 20 default cases.
+# Require byte-identical output across independent executions of curated quality sentinels.
+test-engine-gym-repeatability *args:
+    ./engine/scripts/run-mako-gym.sh --suite repeatability {{args}}
+
+# Run repeated warmed LSFG throughput samples with practical budgets and variance checks.
+test-engine-gym-performance *args:
+    ./engine/scripts/run-mako-gym.sh --suite performance {{args}}
+
+# Run selected scripted runtime-recovery rows; no --filter runs all 29 default cases.
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
 

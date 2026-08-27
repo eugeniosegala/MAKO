@@ -81,6 +81,10 @@ jobs:
             --gym-repo "$gym_repo" --require --validate
           ./engine/scripts/run-mako-gym.sh \
             --gym-repo "$gym_repo" --require --suite recovery --validate
+          ./engine/scripts/run-mako-gym.sh \
+            --gym-repo "$gym_repo" --require --suite performance --validate
+          ./engine/scripts/run-mako-gym.sh \
+            --gym-repo "$gym_repo" --require --suite repeatability --validate
           if [[ -n "$(git -C "$gym_repo" status --porcelain)" ]]; then
             echo "MAKO-Gym must be clean for hardware validation: $gym_repo" >&2
             exit 1
@@ -117,6 +121,36 @@ jobs:
           )
           if (( ${#quality_markers[@]} != 1 )); then
             echo "Expected exactly one sanitized MAKO-Gym quality result." >&2
+            exit 1
+          fi
+
+      - name: Run MAKO-Gym render-performance budgets
+        working-directory: engine
+        run: |
+          ./scripts/run-mako-gym.sh --require --suite performance \
+            --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-performance"
+          mapfile -t performance_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-performance" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#performance_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO-Gym performance result." >&2
+            exit 1
+          fi
+
+      - name: Run MAKO-Gym quality-repeatability sentinels
+        working-directory: engine
+        run: |
+          ./scripts/run-mako-gym.sh --require --suite repeatability \
+            --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-repeatability"
+          mapfile -t repeatability_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-repeatability" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#repeatability_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO-Gym repeatability result." >&2
             exit 1
           fi
 
@@ -189,6 +223,8 @@ jobs:
           path: |
             engine/out/hardware-validation.txt
             engine/out/mako-gym-quality
+            engine/out/mako-gym-performance
+            engine/out/mako-gym-repeatability
             engine/out/mako-gym
             engine/out/mako-gym-recovery
             plugin/out/*.zip

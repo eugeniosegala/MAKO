@@ -82,7 +82,7 @@ For native Steam-game iteration, use the persistent incremental build instead of
 ./scripts/build-steamos-dev.sh
 ```
 
-It builds the 64-bit Vulkan layer and CLI and keeps `build/steamos-dev` between runs. Real AMD image-quality orchestration is intentionally separate in the private sibling MAKO-Gym checkout; after building, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli` from `engine/` when that checkout is available. The SteamOS release workflow requires Gym's complete 66-case LSFG, spatial, and combined visual matrix, including FP32 and FP16. To retain a second incremental tree for genuine 32-bit games, run:
+It builds the 64-bit Vulkan layer and CLI and keeps `build/steamos-dev` between runs. Real AMD image-quality orchestration is intentionally separate in the private sibling MAKO-Gym checkout; after building, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli` from `engine/` when that checkout is available. The SteamOS release workflow requires Gym's complete 74-case LSFG, spatial, and combined visual matrix, eight repeated performance workloads, and nine three-run deterministic-output sentinels, including FP32 and FP16. To retain a second incremental tree for genuine 32-bit games, run:
 
 ```bash
 ./scripts/build-steamos-dev.sh --with-32-bit

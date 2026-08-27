@@ -87,7 +87,7 @@ The portable Renderer suite verifies scaling configuration, fixed and variable s
 
 Every spatial-scaling change needs the proportionate real-Vulkan matrix in [Spatial scaling architecture](engine/docs/SCALING.md). At minimum, exercise a fresh MAKO scaling-only process that negotiates no external-memory/semaphore/timeline interop, does not load `Lossless.dll`, and allocates no frame-generation resources; exercise LS1 Quality and Performance scaling-only while proving they read the DLL without creating LSFG interop; prove that enabling Frame Generation then requires process restart rather than swapchain recreation; and test every method with Fixed and Adaptive paths. Cover fixed Gamescope with HDR exposure disabled, variable desktop surfaces including a compositor-echoed presentation extent, standard and high-precision SDR for every method including LS1's RGBA8 model-boundary conversion, every LS1 sharpness variant, missing DLL/translator/resources, ordinary queue 0 from an application-created graphics-and-compute family that presents to the surface, supported and rejected swapchain shapes, natural swapchain recreation, a process started with Scaling Engine on while switching live between Native and each scaler plus factor/sharpness/Flow Scale/Lighter FG Model changes, live Fixed/Adaptive changes that grow generated-frame capacity, rapid-edit debounce and coalescing, one successful lower present before the out-of-date signal, replacement-context flow/model/capacity evidence, and fail-closed HDR/unsupported-format behavior. Scaling Engine itself remains process-static because its WSI chain is fixed at instance creation; only Native/scaler activity and the documented tuning controls are live inside a provisioned process. Flow Scale, model, and capacity edits without retained FG resources must remain deferred. An echoed variable extent must stop scaling rather than be multiplied again. A present batch containing multiple swapchains and any active scaler must return before consuming application wait semaphores. Combined frame-generation runs still require separate FP32 and FP16 evidence. Record requested/active method plus source and presentation dimensions from Renderer policy logs, preserve Vulkan-loader evidence that the intended development layer was active, and compare image quality and GPU cost against a native-resolution reference.
 
-MAKO-Gym's 66-case procedural visual matrix measures LSFG, the production spatial scalers, and their real exported-image/timeline-semaphore handoff against vector-rendered references. It provides deterministic pixel evidence, including FP32/FP16, every spatial method, every scene, and representative Flow Scale/model/factor/sharpness/timestamp interactions. It does not measure WSI presentation, subjective game quality, latency, or GPU cost. Likewise, a successful `vulkaninfo` or one-frame `vkcube` smoke test proves only the loader or basic presentation boundary. A release that changes spatial reconstruction must retain visual, performance, lifecycle, and relevant game/runtime evidence rather than treating any one gate as a substitute.
+MAKO-Gym's 74-case procedural visual matrix measures LSFG, the production spatial scalers, and their real exported-image/timeline-semaphore handoff against vector-rendered references. It includes FP32/FP16, every spatial method, every scene, near-endpoint interpolation, near-native scaling, and representative Flow Scale/model/factor/sharpness interactions. A separate nine-case three-run sentinel requires byte-identical output across independent initialization, while an eight-row repeated LSFG benchmark enforces practical throughput and sample-variance budgets. These lanes do not measure WSI presentation, subjective game quality, end-to-end latency, spatial-scaler GPU time, power, or scanout cost. Likewise, a successful `vulkaninfo` or one-frame `vkcube` smoke test proves only the loader or basic presentation boundary. A release that changes spatial reconstruction must retain visual, deterministic, performance, lifecycle, and relevant game/runtime evidence rather than treating any one gate as a substitute.
 
 ### MAKO-Gym advanced native-Vulkan smoke matrix
 
@@ -95,16 +95,18 @@ The private sibling [MAKO-Gym](https://github.com/eugeniosegala/MAKO-Gym) reposi
 
 #### Select the smallest sufficient Gym scope
 
-Do not run all 133 default hardware cases after every edit. Run the portable MAKO and Gym contracts first, then select the smallest hardware suite and regex that exercise the changed boundary. Omitting `--filter` runs the complete selected suite; running all three complete suites is reserved for the SteamOS release gate, broad changes spanning scheduling, scaling and backend pixels, or an explicit final validation request. Two additional Gamescope WSI order rows remain explicit because they require reviewed positive and deliberately reversed two-layer launchers.
+Do not run every default hardware inventory after every edit. Run the portable MAKO and Gym contracts first, then select the smallest hardware suite and regex that exercise the changed boundary. Omitting `--filter` runs the complete selected suite; running all five complete suites is reserved for the SteamOS release gate, broad changes spanning scheduling, scaling, backend pixels, determinism and cost, or an explicit final validation request. Two additional Gamescope WSI order rows remain explicit because they require reviewed positive and deliberately reversed two-layer launchers.
 
 | Change boundary | Development hardware selection |
 | --- | --- |
 | Documentation, website, Decky-only UI/backend, or portable schema work | No Gym run unless the change alters a Renderer-facing contract; use the owning portable tests. |
 | Fixed/Adaptive configuration, resource construction, option combinations, scaler selection or fallback | Feature suite with the narrowest matching labels. |
 | LSFG output, spatial reconstruction, shaders, colour conversion, precision, Flow Scale, model selection or scaling-to-FG handoff | Quality suite filtered by affected pipeline, method, scene or parameter; add relevant feature rows when lifecycle or presentation also changed. |
+| LSFG dispatch cost, precision/model/Flow throughput, or generated-frame capacity | Performance suite filtered by affected resolution, model, precision, multiplier, or Flow workload. |
+| Synchronization, initialization, command recording, exported-resource ownership, or unexplained pixel instability | Repeatability suite filtered by the affected sentinel; widen to all nine for a shared owner. |
 | Cadence transitions, Steady Adaptive, Dynamic Cadence Recovery, stalls, scheduler recovery or swapchain lifecycle | Recovery suite filtered by the affected recovery family; add relevant feature rows when configuration or construction also changed. |
-| Shared Vulkan synchronization, presentation, backend resource ownership or cross-cutting Renderer changes | Run every affected suite completely; run all three when the boundary genuinely spans them. |
-| Release candidate | The required SteamOS workflow runs all 47 feature, 66 quality and 20 default recovery cases against the exact package. |
+| Shared Vulkan synchronization, presentation, backend resource ownership or cross-cutting Renderer changes | Run every affected suite completely; run all five when the boundary genuinely spans them. |
+| Release candidate | The required SteamOS workflow runs all 47 feature, 74 quality, eight performance, nine repeatability-sentinel and 29 default recovery rows against the exact source/package boundary. |
 
 Examples:
 
@@ -112,6 +114,8 @@ Examples:
 just test-engine-gym-feature --filter '^(fixed-|adaptive-)'
 just test-engine-gym-quality --filter '^spatial-mako-'
 just test-engine-gym-quality --filter '^combined-ls1-performance-.*traffic'
+just test-engine-gym-performance --filter '800p-90'
+just test-engine-gym-repeatability --filter '^combined-'
 just test-engine-gym-recovery --filter '(stall|cadence-drop)$'
 just test-engine-gym-recovery --filter 'recreate$'
 just test-engine-gym-recovery --filter 'near-target|four-x'
@@ -140,7 +144,7 @@ Select the scripted recovery matrix through the bridge:
 ./engine/scripts/run-mako-gym.sh --suite recovery
 ```
 
-That manifest has 20 default rows plus two explicit Gamescope WSI order rows. Its small native-Vulkan moving workload controls cadence rise, false-probe rejection, isolated hitch, hard stall, sustained cadence drop, game-owned swapchain replacement, steady and noisy near-target cadence, ordered 4× health, 4× target-rate control, and live scaling lifecycle changes. It covers Fixed, Fractional Adaptive, Steady Adaptive, Ultra Performance, MAKO scaling, LS1 scaling, method/factor switching, Native bypass and scaler restoration inside a process that started with Scaling Engine provisioned, compatible re-query activation, and fixed-extent rejection. Every default row enforces its source-cadence validity floor, exact ordered diagnostics, and the expectation-specific recovery, cadence, lifecycle, or delivery threshold. Its authoritative phase and evidence contract is in `MAKO-Gym/docs/RUNTIME-RECOVERY-MATRIX.md`.
+That manifest has 29 default rows plus two explicit Gamescope WSI order rows. Its small native-Vulkan moving workload controls cadence rise, false-probe rejection, 150/225 ms hitches, 300/500 ms and repeated stalls, sustained cadence drop, single and chained game-owned swapchain replacement, steady and noisy near-target cadence, a 60→100→60 high-base round trip, ordered 4× health, 2×/3×/4× target-rate control, and live scaling lifecycle/coalescing changes. It covers Fixed, Fractional Adaptive, Steady Adaptive, Ultra Performance, MAKO scaling, LS1 scaling, method/factor/sharpness/Flow/model/capacity switching, Native bypass and scaler restoration inside a process that started with Scaling Engine provisioned, compatible re-query activation, and fixed-extent rejection. Every default row enforces its source-cadence validity floor, exact ordered diagnostics, and the expectation-specific recovery, cadence, lifecycle, or delivery threshold. Its authoritative phase and evidence contract is in `MAKO-Gym/docs/RUNTIME-RECOVERY-MATRIX.md`.
 
 The replacement rows use Vulkan's real `oldSwapchain` handoff rather than destroying first. They require the new Renderer context to be classified as a replacement while both contexts are live, the old context to retire afterward, Adaptive's one-second replacement settling guard to remain distinct from the three-second cold-start guard, and native plus LS1 Adaptive generation to resume within a three-second post-replacement source phase.
 
@@ -154,7 +158,16 @@ Select the separate procedural visual matrix through the same bridge:
   --cli "$PWD/engine/build/mako-cli/mako-cli"
 ```
 
-That manifest contains 18 frame-generation, 28 spatial-scaling, and 20 combined cases across five procedural game-like scenes. Gym validates every row and PPM artifact, records one complete log per case, and sanitizes the final summary. Its authoritative catalog and evidence boundary are in `MAKO-Gym/docs/AMD-QUALITY-REGRESSION.md`.
+That manifest contains 20 frame-generation, 31 spatial-scaling, and 23 combined cases across five procedural game-like scenes. Gym validates every row and PPM artifact, records one complete log per case, and sanitizes the final summary. Its authoritative catalog and evidence boundary are in `MAKO-Gym/docs/AMD-QUALITY-REGRESSION.md`.
+
+Select the performance and repeatability lanes through the same bridge:
+
+```bash
+./engine/scripts/run-mako-gym.sh --suite performance --cli "$PWD/engine/build/mako-cli/mako-cli"
+./engine/scripts/run-mako-gym.sh --suite repeatability --cli "$PWD/engine/build/mako-cli/mako-cli"
+```
+
+Performance runs eight warmed, repeated LSFG workloads and enforces conservative practical generated-FPS plus coefficient-of-variation budgets; its optional baseline is signature-checked and valid only for a controlled same-host comparison. Repeatability runs nine cross-pipeline sentinels three times from independent initialization and requires byte-identical generated PPMs. Their authoritative claim boundaries are in `MAKO-Gym/docs/RENDER-PERFORMANCE.md` and `MAKO-Gym/docs/QUALITY-REPEATABILITY.md`.
 
 These remain bounded hardware contracts, not a release-compatibility verdict. The finite-cube pass proves real swapchain construction, selected scaler/context activation, actual Fixed/Adaptive delivery diagnostics, and clean finite presentation. The recovery pass additionally proves ordered response to controlled cadence, stall, and swapchain events. Neither proves subjective spatial quality, actual selected LSFG shader precision from logs alone, DXVK or VKD3D-Proton game behavior, arbitrary live configuration mutation in a title, generated-image starvation, device-loss recovery, 32-bit Vulkan presentation, Flatpak runtime behavior, Steam Deck/RDNA2, another driver, HDR scaling, or compositor scanout timing. Retain those rows as not tested until their owning hardware, capture, lifecycle, and game matrices run.
 
@@ -172,14 +185,15 @@ The launcher refuses a dirty or remote-divergent branch, an existing queued hard
 
 The workflow:
 
-1. runs MAKO-Gym's complete 66-case procedural render-quality matrix with the source-built CLI, including FP32/FP16 LSFG, every spatial method, and combined handoffs;
-2. builds and tests the native 64-bit and 32-bit Renderer payloads;
-3. builds and installs each supported Flatpak runtime extension for verification;
-4. builds the complete Decky ZIP from the same source tree;
-5. extracts the packaged Renderer and proves that the real Vulkan loader activates `VK_LAYER_MAKO_render` on the runner's AMD GPU;
-6. passes that exact extracted Renderer launcher to MAKO-Gym and requires all 47 native-Vulkan feature scenarios to pass;
-7. builds Gym's test-only native-Vulkan workload and requires all 20 default scripted recovery, cadence, and lifecycle scenarios to pass against the same extracted launcher; and
-8. retains the complete verified Decky ZIP, sanitized environment evidence, procedural GPU comparison images, and MAKO-Gym feature/recovery logs and summaries for 14 days under the tested commit.
+1. runs MAKO-Gym's complete 74-case procedural render-quality matrix with the source-built CLI, including FP32/FP16 LSFG, every spatial method, edge parameters, and combined handoffs;
+2. runs eight repeated LSFG performance workloads plus nine three-run deterministic-output sentinels with the same source-built CLI;
+3. builds and tests the native 64-bit and 32-bit Renderer payloads;
+4. builds and installs each supported Flatpak runtime extension for verification;
+5. builds the complete Decky ZIP from the same source tree;
+6. extracts the packaged Renderer and proves that the real Vulkan loader activates `VK_LAYER_MAKO_render` on the runner's AMD GPU;
+7. passes that exact extracted Renderer launcher to MAKO-Gym and requires all 47 native-Vulkan feature scenarios to pass;
+8. builds Gym's test-only native-Vulkan workload and requires all 29 default scripted recovery, cadence, live-transition, target-rate, and lifecycle scenarios to pass against the same extracted launcher; and
+9. retains the complete verified Decky ZIP, sanitized environment evidence, procedural GPU comparison images, performance/repeatability evidence, and MAKO-Gym feature/recovery logs and summaries for 14 days under the tested commit.
 
 Pass `--deploy-to-decky` only on a dedicated device with an existing MAKO Decky development installation. That option safely synchronizes the already-verified ZIP into the existing plugin, asks Decky Loader to reload it, and invokes MAKO Decky's normal installer against that exact bundled Renderer. The production installer owns host libraries, manifests, wrappers, engine state, diagnostics, and refreshes of already-installed Flatpak runtime branches; no component is rebuilt or installed through a second CI-only implementation. It intentionally does not run by default because it changes the installed test device.
 

@@ -15,7 +15,7 @@ Usage: engine/scripts/run-mako-gym.sh [bridge options] [Gym options]
 Bridge options:
   --gym-repo PATH  Use an explicit MAKO-Gym checkout.
   --require        Fail when MAKO-Gym is absent; intended for release gates.
-  --suite NAME     Select vulkan (default), quality, or recovery.
+  --suite NAME     Select vulkan (default), quality, repeatability, performance, or recovery.
   -h, --help       Show this bridge help.
 
 Every other argument is forwarded unchanged to the selected MAKO-Gym runner.
@@ -84,6 +84,8 @@ fi
 case "$suite" in
     vulkan) runner="$gym_repo/scripts/run-vulkan-feature-matrix.sh" ;;
     quality) runner="$gym_repo/scripts/run-amd-quality-regression.sh" ;;
+    repeatability) runner="$gym_repo/scripts/run-quality-repeatability.sh" ;;
+    performance) runner="$gym_repo/scripts/run-render-performance.sh" ;;
     recovery) runner="$gym_repo/scripts/run-runtime-recovery-matrix.sh" ;;
     *)
         echo "Unknown MAKO-Gym suite: $suite" >&2
