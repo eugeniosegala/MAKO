@@ -25,7 +25,6 @@ from shared_config import (
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
-    EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
     EXTERNAL_VULKAN_LAYER_MANGOHUD,
     EXTERNAL_VULKAN_LAYER_NONE,
     EXTERNAL_VULKAN_LAYER_VKBASALT,
@@ -46,6 +45,7 @@ from shared_config import (
     SCALING_METHOD_LS1,
     SCALING_METHOD_LS1_PERFORMANCE,
     SCALING_METHOD_MAKO,
+    SCALING_METHOD_NATIVE,
     SCALING_SHARPNESS_MAX,
     SCALING_SHARPNESS_MIN,
     SUPPORTED_FLATPAK_RUNTIME_VERSIONS,
@@ -145,11 +145,13 @@ def generate_typescript_schema():
         f"export const FLOW_SCALE_MAX = {FLOW_SCALE_MAX} as const;",
         f"export const SCALING_FACTOR_MIN = {SCALING_FACTOR_MIN} as const;",
         f"export const SCALING_FACTOR_MAX = {SCALING_FACTOR_MAX} as const;",
+        f'export const SCALING_METHOD_NATIVE = "{SCALING_METHOD_NATIVE}" as const;',
         f'export const SCALING_METHOD_MAKO = "{SCALING_METHOD_MAKO}" as const;',
         f'export const SCALING_METHOD_LS1 = "{SCALING_METHOD_LS1}" as const;',
         "export const SCALING_METHOD_LS1_PERFORMANCE = "
         f'"{SCALING_METHOD_LS1_PERFORMANCE}" as const;',
         "export const SCALING_METHOD_VALUES = [",
+        "  SCALING_METHOD_NATIVE,",
         "  SCALING_METHOD_MAKO,",
         "  SCALING_METHOD_LS1,",
         "  SCALING_METHOD_LS1_PERFORMANCE,",
@@ -175,18 +177,15 @@ def generate_typescript_schema():
         "export const FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = "
         f"{FRAME_GENERATION_REFRESH_THRESHOLD_PRESET} as const;",
         "",
-        "// Stable persisted values for the optional external Vulkan layer",
+        "// Stable persisted values for the optional post-process Vulkan layer",
         "export const EXTERNAL_VULKAN_LAYER_NONE = "
         f'"{EXTERNAL_VULKAN_LAYER_NONE}" as const;',
-        "export const EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI = "
-        f'"{EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI}" as const;',
         "export const EXTERNAL_VULKAN_LAYER_MANGOHUD = "
         f'"{EXTERNAL_VULKAN_LAYER_MANGOHUD}" as const;',
         "export const EXTERNAL_VULKAN_LAYER_VKBASALT = "
         f'"{EXTERNAL_VULKAN_LAYER_VKBASALT}" as const;',
         "export const EXTERNAL_VULKAN_LAYER_VALUES = [",
         "  EXTERNAL_VULKAN_LAYER_NONE,",
-        "  EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,",
         "  EXTERNAL_VULKAN_LAYER_MANGOHUD,",
         "  EXTERNAL_VULKAN_LAYER_VKBASALT,",
         "] as const;",

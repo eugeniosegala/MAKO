@@ -46,7 +46,7 @@ int main() {
     staticRequest.performance_mode = true;
     staticRequest.target_fps = 120;
     const auto staticProjection = projectProcessStaticProfileForLiveUpdate(
-        current, staticRequest, true
+        current, staticRequest, true, current.scaling_enabled
     );
     expect(staticProjection.restartRequired() &&
             staticProjection.gpuSelectionPending &&
@@ -59,12 +59,27 @@ int main() {
                 current.performance_mode &&
             staticProjection.runtimeProfile.target_fps == 120,
         "Process-static projection must retain construction fields and apply live policy");
+    auto scalingEngineRequest = current;
+    scalingEngineRequest.scaling_enabled = !current.scaling_enabled;
+    scalingEngineRequest.scaling_method = ls::ScalingMethod::Native;
+    const auto scalingEngineProjection =
+        projectProcessStaticProfileForLiveUpdate(
+            current, scalingEngineRequest, true, current.scaling_enabled
+        );
+    expect(scalingEngineProjection.restartRequired() &&
+            scalingEngineProjection.scalingEnginePending &&
+            scalingEngineProjection.runtimeProfile.scaling_enabled ==
+                current.scaling_enabled &&
+            scalingEngineProjection.runtimeProfile.scaling_method ==
+                ls::ScalingMethod::Native,
+        "Scaling Engine provisioning must wait for restart while method selection remains live");
     auto interopRequest = current;
     interopRequest.frame_generation_enabled = true;
     auto scalingOnlyCurrent = current;
     scalingOnlyCurrent.frame_generation_enabled = false;
     const auto interopProjection = projectProcessStaticProfileForLiveUpdate(
-        scalingOnlyCurrent, interopRequest, false
+        scalingOnlyCurrent, interopRequest, false,
+        scalingOnlyCurrent.scaling_enabled
     );
     expect(interopProjection.frameGenerationInteropPending &&
             !interopProjection.runtimeProfile.frame_generation_enabled,
@@ -481,11 +496,43 @@ int main() {
     next.scaling_enabled = true;
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action ==
+            ProfileUpdateAction::DeferUntilProcessRestart &&
+            decision.spatialScalingChanged &&
+            decision.processRestartDeferred &&
+            !decision.swapchainRecreationDeferred,
+        "Scaling Engine enablement must require a process restart");
+    expect(!liveProfileResourceRecreationAvailable(decision, false),
+        "A swapchain recreation must not satisfy Scaling Engine provisioning");
+
+    auto nativeScalingEngine = current;
+    nativeScalingEngine.scaling_enabled = true;
+    nativeScalingEngine.scaling_method = ls::ScalingMethod::Native;
+    decision = classifyProfileUpdate(current, nativeScalingEngine, 3, true);
+    expect(decision.action ==
+            ProfileUpdateAction::DeferUntilProcessRestart &&
+            decision.processRestartDeferred &&
+            !decision.swapchainRecreationDeferred &&
+            nativeScalingEngine.frame_generation_enabled,
+        "Native Scaling Engine activation must retain FG without a redundant live recreation");
+    auto dormantScalingChoice = current;
+    dormantScalingChoice.scaling_method = ls::ScalingMethod::Ls1;
+    dormantScalingChoice.scaling_factor = 2.0F;
+    dormantScalingChoice.scaling_sharpness = 0.75F;
+    decision = classifyProfileUpdate(current, dormantScalingChoice, 3, true);
+    expect(decision.action == ProfileUpdateAction::NoRuntimeChange &&
+            !decision.spatialScalingChanged &&
+            !decision.swapchainRecreationDeferred,
+        "Dormant scaler choices must save without disrupting an engine-off process");
+    auto makoScalingEngine = nativeScalingEngine;
+    makoScalingEngine.scaling_method = ls::ScalingMethod::Mako;
+    decision = classifyProfileUpdate(
+        nativeScalingEngine, makoScalingEngine, 3, true
+    );
+    expect(decision.action ==
             ProfileUpdateAction::DeferUntilSwapchainRecreation &&
-            decision.spatialScalingChanged,
-        "Scaling enablement must require swapchain recreation");
-    expect(liveProfileResourceRecreationAvailable(decision, false),
-        "Scaling recreation must remain available without FG resources");
+            decision.spatialScalingChanged &&
+            makoScalingEngine.frame_generation_enabled,
+        "Native-to-MAKO method changes must remain live FG-compatible recreations");
 
     LiveProfileResourceRecreation resourceRecreation;
     const auto resourceChangeStarted =
@@ -554,17 +601,19 @@ int main() {
                 current.adaptive_max_multiplier,
         "Pending generated capacity must retain the active scheduling shape");
 
-    next = current;
+    auto scalingCurrent = current;
+    scalingCurrent.scaling_enabled = true;
+    next = scalingCurrent;
     next.scaling_factor = 2.0F;
-    decision = classifyProfileUpdate(current, next, 3, true);
+    decision = classifyProfileUpdate(scalingCurrent, next, 3, true);
     expect(decision.action ==
             ProfileUpdateAction::DeferUntilSwapchainRecreation &&
             decision.spatialScalingChanged,
         "Scaling extent changes must not mutate a live swapchain");
 
-    next = current;
+    next = scalingCurrent;
     next.scaling_sharpness = 0.75F;
-    decision = classifyProfileUpdate(current, next, 3, true);
+    decision = classifyProfileUpdate(scalingCurrent, next, 3, true);
     expect(decision.action ==
             ProfileUpdateAction::DeferUntilSwapchainRecreation &&
             decision.spatialScalingChanged,
@@ -578,6 +627,7 @@ int main() {
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive &&
             decision.swapchainRecreationDeferred &&
+            decision.processRestartDeferred &&
             decision.spatialScalingChanged &&
             decision.frameGenerationBackendChanged &&
             decision.frameGenerationChanged,

@@ -117,6 +117,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("scalingEnabledDesc"),
         QStringLiteral("scalingMethod"),
         QStringLiteral("scalingMethodDesc"),
+        QStringLiteral("scalingMethodNative"),
         QStringLiteral("scalingMethodMako"),
         QStringLiteral("scalingMethodLs1"),
         QStringLiteral("scalingMethodLs1Performance"),
@@ -143,13 +144,13 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     localization.set_language(QStringLiteral("en"));
     const QVariantMap english = localization.strings();
     require(english.value(QStringLiteral("scalingEnabled")).toString() ==
-            QStringLiteral("Spatial Scaling"),
+            QStringLiteral("Scaling Engine (Restart)"),
         "English scaling enablement has an unexpected label");
     require(english.value(QStringLiteral("scalingMethod")).toString() ==
             QStringLiteral("Scaling Method"),
         "English scaling method has an unexpected label");
     require(english.value(QStringLiteral("scalingEnabledDesc")).toString()
-            .contains(QStringLiteral("recreates its swapchain once")),
+            .contains(QStringLiteral("game-owned swapchain recreation")),
         "English scaling help omitted the game-owned recreation contract");
     require(english.value(QStringLiteral("flowScaleDesc")).toString()
             .contains(QStringLiteral("game-owned swapchain")),

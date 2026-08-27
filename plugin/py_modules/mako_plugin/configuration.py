@@ -24,7 +24,10 @@ from .constants import (
     ARMADA_GAME_LAUNCH,
     FLATPAK_IMPLICIT_LAYER_DIR,
     GAMESCOPE_WSI_MANIFEST_FILENAME_64,
-    HOST_SYSTEM_IMPLICIT_LAYER_DIR,
+    MANGOHUD_MANIFEST_FILENAME_64,
+    MANGOHUD_MANIFEST_FILENAME_32,
+    VKBASALT_MANIFEST_FILENAME_64,
+    VKBASALT_MANIFEST_FILENAME_32,
 )
 from .managed_files import write_managed_text_atomically
 from .process_detection import (
@@ -77,11 +80,16 @@ class ConfigurationService(BaseService):
             gamescope_wsi_compatibility_dir=(
                 self.gamescope_wsi_compatibility_dir
             ),
+            mangohud_layer_dir=self.mangohud_layer_dir,
+            vkbasalt_layer_dir=self.vkbasalt_layer_dir,
             flatpak_implicit_layer_dir=FLATPAK_IMPLICIT_LAYER_DIR,
-            host_system_implicit_layer_dir=HOST_SYSTEM_IMPLICIT_LAYER_DIR,
             gamescope_wsi_manifest_filename_64=(
                 GAMESCOPE_WSI_MANIFEST_FILENAME_64
             ),
+            mangohud_manifest_filename_64=MANGOHUD_MANIFEST_FILENAME_64,
+            mangohud_manifest_filename_32=MANGOHUD_MANIFEST_FILENAME_32,
+            vkbasalt_manifest_filename_64=VKBASALT_MANIFEST_FILENAME_64,
+            vkbasalt_manifest_filename_32=VKBASALT_MANIFEST_FILENAME_32,
             armada_device_env=ARMADA_DEVICE_ENV,
             armada_game_launch=ARMADA_GAME_LAUNCH,
         )

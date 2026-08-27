@@ -67,7 +67,7 @@ namespace mako::layer {
         }
         [[nodiscard]] bool spatialScalingConfigured() const {
             return this->active_profile &&
-                this->active_profile->scaling_enabled &&
+                ls::spatialScalingRequested(*this->active_profile) &&
                 std::isfinite(this->active_profile->scaling_factor) &&
                 this->active_profile->scaling_factor > 1.0F &&
                 this->active_profile->scaling_factor <=
@@ -139,6 +139,7 @@ namespace mako::layer {
         ls::WatchedConfig config;
         std::optional<ls::GameConf> active_profile;
         bool frameGenerationConfiguredAtStartup{false};
+        bool scalingEngineConfiguredAtStartup{false};
 
         ls::lazy<backend::Instance> backend;
         std::optional<ls::GlobalConf> backendGlobal;

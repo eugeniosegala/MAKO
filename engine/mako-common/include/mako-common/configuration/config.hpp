@@ -30,6 +30,8 @@ namespace ls {
 
     /// Spatial reconstruction implementation selected for a profile.
     enum class ScalingMethod : uint8_t {
+        /// Preserve the game's native image while the Scaling Engine remains provisioned.
+        Native,
         /// MAKO's open, single-pass edge-adaptive scaler.
         Mako,
         /// Lossless Scaling's multi-pass LS1 neural model.
@@ -41,6 +43,8 @@ namespace ls {
     [[nodiscard]] constexpr const char* scalingMethodName(
             const ScalingMethod method) noexcept {
         switch (method) {
+            case ScalingMethod::Native:
+                return "native";
             case ScalingMethod::Mako:
                 return "mako";
             case ScalingMethod::Ls1:
@@ -53,6 +57,8 @@ namespace ls {
 
     [[nodiscard]] constexpr std::optional<ScalingMethod>
     scalingMethodFromName(const std::string_view value) noexcept {
+        if (value == "native")
+            return ScalingMethod::Native;
         if (value == "mako")
             return ScalingMethod::Mako;
         if (value == "ls1")
@@ -124,7 +130,7 @@ namespace ls {
         size_t multiplier{GameConfDefaults::multiplier};
         /// allow frame synthesis to be toggled live without changing its mode
         bool frame_generation_enabled{GameConfDefaults::frameGenerationEnabled};
-        /// upscale presented frames independently from frame synthesis
+        /// provision the scaling engine independently from frame synthesis
         bool scaling_enabled{GameConfDefaults::scalingEnabled};
         /// spatial reconstruction implementation
         ScalingMethod scaling_method{GameConfDefaults::scalingMethod};
@@ -163,6 +169,20 @@ namespace ls {
         /// pacing method
         Pacing pacing{GameConfDefaults::pacing};
     };
+
+    /// Whether this profile should construct and execute a spatial scaler.
+    [[nodiscard]] constexpr bool spatialScalingRequested(
+            const GameConf& profile) noexcept {
+        return profile.scaling_enabled &&
+            profile.scaling_method != ScalingMethod::Native;
+    }
+
+    /// Whether this method requires user-supplied licensed model resources.
+    [[nodiscard]] constexpr bool licensedScalingModelRequested(
+            const ScalingMethod method) noexcept {
+        return method == ScalingMethod::Ls1 ||
+            method == ScalingMethod::Ls1Performance;
+    }
 
     /// Flow scale selected for backend construction after applying presets.
     [[nodiscard]] constexpr float effectiveFlowScale(

@@ -109,6 +109,10 @@ def generate_script_parsing() -> str:
     ]
 
     for field_name, field_def in script_fields:
+        if field_name == "gamescope_wsi_compatibility":
+            # This persisted switch is folded into the wrapper's shell-local
+            # WSI decision and is not a public environment interface.
+            continue
         env_var = get_env_var_name(field_name)
         field_type = ConfigFieldType(field_def["fieldType"])
 
@@ -173,6 +177,10 @@ def generate_script_generation() -> str:
     ]
 
     for field_name, field_def in script_fields:
+        if field_name == "gamescope_wsi_compatibility":
+            # wrapper_generation.py combines this with Scaling Engine before
+            # Vulkan instance creation; do not leak another environment knob.
+            continue
         env_var = get_env_var_name(field_name)
         field_type = ConfigFieldType(field_def["fieldType"])
 

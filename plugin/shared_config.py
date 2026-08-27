@@ -65,10 +65,12 @@ SCALING_FACTOR_MIN = 1.0
 SCALING_FACTOR_MAX = 2.0
 SCALING_SHARPNESS_MIN = 0.0
 SCALING_SHARPNESS_MAX = 1.0
+SCALING_METHOD_NATIVE = "native"
 SCALING_METHOD_MAKO = "mako"
 SCALING_METHOD_LS1 = "ls1"
 SCALING_METHOD_LS1_PERFORMANCE = "ls1-performance"
 SCALING_METHOD_VALUES = (
+    SCALING_METHOD_NATIVE,
     SCALING_METHOD_MAKO,
     SCALING_METHOD_LS1,
     SCALING_METHOD_LS1_PERFORMANCE,
@@ -81,14 +83,15 @@ FRAME_GENERATION_REFRESH_THRESHOLD_MAX = 240
 FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = 30
 FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = 60
 
-# Stable persisted values for the mutually exclusive optional Vulkan layer.
+# Stable persisted values for the mutually exclusive post-process layer.
+# Decky 2.2 stored Gamescope WSI in this released selector. Retain that exact
+# value only as an upgrade token; it is not accepted by the current selector.
 EXTERNAL_VULKAN_LAYER_NONE = ""
 EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI = "gamescope-wsi"
 EXTERNAL_VULKAN_LAYER_MANGOHUD = "mangohud"
 EXTERNAL_VULKAN_LAYER_VKBASALT = "vkbasalt"
 EXTERNAL_VULKAN_LAYER_VALUES = (
     EXTERNAL_VULKAN_LAYER_NONE,
-    EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
     EXTERNAL_VULKAN_LAYER_MANGOHUD,
     EXTERNAL_VULKAN_LAYER_VKBASALT,
 )
@@ -133,14 +136,14 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "scaling_enabled": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "independent spatial scaling switch applied through game-owned swapchain recreation",
+        "description": "restart-bound scaling engine switch that provisions the Gamescope WSI presentation path",
         "location": "toml"
     },
 
     "scaling_method": {
         "fieldType": ConfigFieldType.STRING,
         "default": SCALING_METHOD_MAKO,
-        "description": "spatial scaler selection: MAKO, LS1 Quality, or LS1 Performance",
+        "description": "live spatial selection: Native, MAKO, LS1 Quality, or LS1 Performance",
         "location": "toml"
     },
 
@@ -294,10 +297,17 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "script"
     },
 
+    "gamescope_wsi_compatibility": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "enable the restart-bound Gamescope WSI compatibility layer independently of scaling",
+        "location": "script"
+    },
+
     "external_vulkan_layer": {
         "fieldType": ConfigFieldType.STRING,
         "default": "",
-        "description": "optional guarded host Vulkan layer: gamescope-wsi, mangohud, or vkbasalt",
+        "description": "optional guarded post-process Vulkan layer: MangoHud or vkBasalt",
         "location": "script"
     },
 

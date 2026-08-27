@@ -592,6 +592,17 @@ class Plugin:
             )
 
         try:
+            if self.installation_service.refresh_guarded_postprocess_manifests_if_needed():
+                decky.logger.info(
+                    "Refreshed guarded optional post-process manifests"
+                )
+        except OSError as error:
+            decky.logger.warning(
+                "Could not stage optional post-process manifests: %s",
+                error,
+            )
+
+        try:
             if self.installation_service.migrate_diagnostics_helper_if_needed():
                 decky.logger.info("Installed the diagnostics helper")
         except OSError as error:

@@ -150,6 +150,19 @@ int main() {
         "Adaptive frame generation must not alter spatial extent selection");
     profile.adaptive = false;
 
+    profile.scaling_method = ls::ScalingMethod::Native;
+    expect(!ls::spatialScalingRequested(profile) &&
+            !selectSpatialScalingExtents(
+                profile, fixedCapabilities(1280, 800)),
+        "Native must bypass spatial extent virtualization while FG remains enabled");
+    const auto nativeDecision = scalingDecisionForCreate(
+        profile, true, 0, fixedCapabilities(1280, 800), {1280, 800}
+    );
+    expect(!nativeDecision.extents && nativeDecision.inactiveReason ==
+            SpatialScalingInactiveReason::NativePassthrough,
+        "Native must expose a distinct diagnostic passthrough reason");
+    profile.scaling_method = ls::ScalingMethod::Mako;
+
     profile.scaling_factor = 2.0F;
     const auto odd = selectSpatialScalingExtents(
         profile, fixedCapabilities(321, 181)

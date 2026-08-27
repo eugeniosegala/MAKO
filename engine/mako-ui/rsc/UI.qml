@@ -401,8 +401,8 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.scalingFactor
                         description: t.scalingFactorDesc
-                        visible: backend.scaling_enabled
-                        enabled: backend.scaling_enabled
+                        visible: backend.scaling_enabled && backend.scaling_method !== "native"
+                        enabled: backend.scaling_enabled && backend.scaling_method !== "native"
 
                         FlowSlider {
                             Layout.fillWidth: true
@@ -423,17 +423,17 @@ ApplicationWindow {
 
                         ComboBox {
                             Layout.fillWidth: true
-                            model: [t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
-                            currentIndex: backend.scaling_method === "ls1" ? 1 : backend.scaling_method === "ls1-performance" ? 2 : 0
-                            onActivated: index => backend.scaling_method = index === 1 ? "ls1" : index === 2 ? "ls1-performance" : "mako"
+                            model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
+                            currentIndex: backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1
+                            onActivated: index => backend.scaling_method = index === 0 ? "native" : index === 2 ? "ls1" : index === 3 ? "ls1-performance" : "mako"
                         }
                     }
 
                     GroupEntry {
                         title: t.scalingSharpness
                         description: t.scalingSharpnessDesc
-                        visible: backend.scaling_enabled
-                        enabled: backend.scaling_enabled
+                        visible: backend.scaling_enabled && backend.scaling_method !== "native"
+                        enabled: backend.scaling_enabled && backend.scaling_method !== "native"
 
                         FlowSlider {
                             Layout.fillWidth: true

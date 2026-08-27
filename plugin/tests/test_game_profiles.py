@@ -929,25 +929,37 @@ class GameProfileTests(unittest.TestCase):
         })
 
         with tempfile.TemporaryDirectory() as system_dir:
-            previous = configuration_module.HOST_SYSTEM_IMPLICIT_LAYER_DIR
-            configuration_module.HOST_SYSTEM_IMPLICIT_LAYER_DIR = Path(system_dir)
-            try:
-                result = self.service.update_mako_script_from_profile_data(
-                    profile_data
-                )
-                self.assertTrue(result["success"])
-                matched = self._run_wrapper("12345")
-                unrelated = self._run_wrapper("67890")
-            finally:
-                configuration_module.HOST_SYSTEM_IMPLICIT_LAYER_DIR = previous
+            self.service.mangohud_layer_dir = Path(system_dir) / "mangohud"
+            self.service.vkbasalt_layer_dir = Path(system_dir) / "vkbasalt"
+            self.service.mangohud_layer_dir.mkdir()
+            self.service.vkbasalt_layer_dir.mkdir()
+            (
+                self.service.mangohud_layer_dir /
+                configuration_module.MANGOHUD_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            (
+                self.service.vkbasalt_layer_dir /
+                configuration_module.VKBASALT_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            result = self.service.update_mako_script_from_profile_data(
+                profile_data
+            )
+            self.assertTrue(result["success"])
+            matched = self._run_wrapper("12345")
+            unrelated = self._run_wrapper("67890")
 
-        expected_path = f"{self.service.local_share_dir}:{system_dir}"
         self.assertEqual(matched["MANGOHUD"], "1")
         self.assertEqual(matched["VKBASALT"], "")
-        self.assertEqual(matched["IMPLICIT"], expected_path)
+        self.assertEqual(
+            matched["IMPLICIT"],
+            f"{self.service.local_share_dir}:{self.service.mangohud_layer_dir}",
+        )
         self.assertEqual(unrelated["MANGOHUD"], "")
         self.assertEqual(unrelated["VKBASALT"], "1")
-        self.assertEqual(unrelated["IMPLICIT"], expected_path)
+        self.assertEqual(
+            unrelated["IMPLICIT"],
+            f"{self.service.local_share_dir}:{self.service.vkbasalt_layer_dir}",
+        )
 
     def test_current_wrapper_is_never_reverse_migrated_as_one_profile(self):
         self.service.migrate_profile_metadata_if_needed()

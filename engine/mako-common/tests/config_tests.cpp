@@ -128,6 +128,23 @@ int main() {
                 ls::GameConfDefaults::performanceMode &&
             defaults.pacing == ls::GameConfDefaults::pacing,
         "GameConf must use the Renderer profile defaults");
+    expect(ls::scalingMethodFromName("native") ==
+                ls::ScalingMethod::Native &&
+            std::string_view(ls::scalingMethodName(
+                ls::ScalingMethod::Native)) == "native" &&
+            !ls::licensedScalingModelRequested(ls::ScalingMethod::Native) &&
+            ls::licensedScalingModelRequested(ls::ScalingMethod::Ls1) &&
+            ls::licensedScalingModelRequested(
+                ls::ScalingMethod::Ls1Performance),
+        "Native and licensed scaling method identities must remain explicit");
+    auto nativeEngine = defaults;
+    nativeEngine.scaling_enabled = true;
+    nativeEngine.scaling_method = ls::ScalingMethod::Native;
+    expect(!ls::spatialScalingRequested(nativeEngine),
+        "Native must provision the engine without requesting a scaler");
+    nativeEngine.scaling_method = ls::ScalingMethod::Mako;
+    expect(ls::spatialScalingRequested(nativeEngine),
+        "A selected scaler must activate when the engine is enabled");
 
     const auto directory = std::filesystem::temp_directory_path() /
         ("mako-config-test-" + std::to_string(static_cast<long long>(::getpid())));
@@ -342,6 +359,7 @@ scaling_sharpness = 0.5
     setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
     setenv("MAKO_ULTRA_PERFORMANCE", "1", 1);
     setenv("MAKO_SCALING_ENABLED", "1", 1);
+    setenv("MAKO_SCALING_METHOD", "native", 1);
     setenv("MAKO_SCALING_FACTOR", "2", 1);
     setenv("MAKO_SCALING_SHARPNESS", "0.75", 1);
     const ls::WatchedConfig environmentConfig;
@@ -354,6 +372,10 @@ scaling_sharpness = 0.5
             !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap &&
             environmentConfig.get().profiles().front().ultra_performance &&
             environmentConfig.get().profiles().front().scaling_enabled &&
+            environmentConfig.get().profiles().front().scaling_method ==
+                ls::ScalingMethod::Native &&
+            !ls::spatialScalingRequested(
+                environmentConfig.get().profiles().front()) &&
             environmentConfig.get().profiles().front().scaling_factor == 2.0F &&
             environmentConfig.get().profiles().front().scaling_sharpness == 0.75F,
         "Environment configuration must expose scaling and cadence policy");
@@ -362,6 +384,7 @@ scaling_sharpness = 0.5
     unsetenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
     unsetenv("MAKO_ULTRA_PERFORMANCE");
     unsetenv("MAKO_SCALING_ENABLED");
+    unsetenv("MAKO_SCALING_METHOD");
     unsetenv("MAKO_SCALING_FACTOR");
     unsetenv("MAKO_SCALING_SHARPNESS");
     unsetenv("MAKO_ADAPTIVE");

@@ -29,6 +29,14 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     GAMESCOPE_WSI_ENABLE_ENV,
     GAMESCOPE_WSI_LAYER_NAME_64,
     GAMESCOPE_WSI_MANIFEST_FILENAME_64,
+    MANGOHUD_LAYER_NAME_64,
+    MANGOHUD_MANIFEST_FILENAME_64,
+    MANGOHUD_LAYER_NAME_32,
+    MANGOHUD_MANIFEST_FILENAME_32,
+    VKBASALT_LAYER_NAME_64,
+    VKBASALT_MANIFEST_FILENAME_64,
+    VKBASALT_LAYER_NAME_32,
+    VKBASALT_MANIFEST_FILENAME_32,
     JSON32_FILENAME,
     JSON_FILENAME,
     LIB_FILENAME,
@@ -62,6 +70,28 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.gamescope_wsi_compatibility_manifest = (
             self.service.gamescope_wsi_compatibility_dir /
             GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        )
+        self.service.mangohud_layer_dir = (
+            self.root / "share/vulkan/mangohud.d"
+        )
+        self.service.vkbasalt_layer_dir = (
+            self.root / "share/vulkan/vkbasalt.d"
+        )
+        self.service.mangohud_manifest = (
+            self.service.mangohud_layer_dir /
+            MANGOHUD_MANIFEST_FILENAME_64
+        )
+        self.service.mangohud_manifest32 = (
+            self.service.mangohud_layer_dir /
+            MANGOHUD_MANIFEST_FILENAME_32
+        )
+        self.service.vkbasalt_manifest = (
+            self.service.vkbasalt_layer_dir /
+            VKBASALT_MANIFEST_FILENAME_64
+        )
+        self.service.vkbasalt_manifest32 = (
+            self.service.vkbasalt_layer_dir /
+            VKBASALT_MANIFEST_FILENAME_32
         )
         registered_dir = self.root / "registered/vulkan/implicit_layer.d"
         self.service.user_vulkan_layer_dir = registered_dir
@@ -193,6 +223,7 @@ class DualArchInstallationTests(unittest.TestCase):
             "file_format_version": "1.0.0",
             "layer": {
                 "name": GAMESCOPE_WSI_LAYER_NAME_64,
+                "type": "GLOBAL",
                 "library_path": str(library),
                 "enable_environment": {GAMESCOPE_WSI_ENABLE_ENV: "1"},
                 "disable_environment": {GAMESCOPE_WSI_DISABLE_ENV: "1"},
@@ -259,6 +290,145 @@ class DualArchInstallationTests(unittest.TestCase):
             )
 
         self.assertFalse(self.service.gamescope_wsi_compatibility_manifest.exists())
+
+    def test_stages_only_valid_selected_postprocess_manifests(self):
+        self.service.lib_file.parent.mkdir(parents=True)
+        self.service.lib_file.write_bytes(b"installed")
+        system_dir = self.root / "system-postprocess"
+        system_dir.mkdir()
+        mangohud_library = self.root / "libMangoHud.so"
+        mangohud_library.write_bytes(b"mangohud")
+        mangohud_library32 = self.root / "libMangoHud32.so"
+        mangohud_library32.write_bytes(b"mangohud32")
+        (system_dir / MANGOHUD_MANIFEST_FILENAME_64).write_text(
+            json.dumps({
+                "file_format_version": "1.0.0",
+                "layer": {
+                    "name": MANGOHUD_LAYER_NAME_64,
+                    "type": "GLOBAL",
+                    "library_path": str(mangohud_library),
+                    "enable_environment": {"MANGOHUD": "1"},
+                    "disable_environment": {"DISABLE_MANGOHUD": "1"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        (system_dir / MANGOHUD_MANIFEST_FILENAME_32).write_text(
+            json.dumps({
+                "file_format_version": "1.0.0",
+                "layer": {
+                    "name": MANGOHUD_LAYER_NAME_32,
+                    "type": "GLOBAL",
+                    "library_path": str(mangohud_library32),
+                    "enable_environment": {"MANGOHUD": "1"},
+                    "disable_environment": {"DISABLE_MANGOHUD": "1"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        (system_dir / VKBASALT_MANIFEST_FILENAME_64).write_text(
+            json.dumps({
+                "file_format_version": "1.0.0",
+                "layer": {
+                    "name": VKBASALT_LAYER_NAME_64,
+                    "type": "GLOBAL",
+                    "library_path": "libvkbasalt.so",
+                    "enable_environment": {"ENABLE_VKBASALT": "1"},
+                    "disable_environment": {"DISABLE_VKBASALT": "1"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        (system_dir / VKBASALT_MANIFEST_FILENAME_32).write_text(
+            json.dumps({
+                "file_format_version": "1.0.0",
+                "layer": {
+                    "name": VKBASALT_LAYER_NAME_32,
+                    "type": "GLOBAL",
+                    "library_path": "libvkbasalt32.so",
+                    "library_arch": "32",
+                    "enable_environment": {"ENABLE_VKBASALT": "1"},
+                    "disable_environment": {"DISABLE_VKBASALT": "1"},
+                },
+            }),
+            encoding="utf-8",
+        )
+        (system_dir / "unrelated-capture.json").write_text(
+            '{"layer":{"name":"VK_LAYER_unrelated"}}',
+            encoding="utf-8",
+        )
+
+        with patch.object(
+            installation_module,
+            "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+            system_dir,
+        ):
+            self.assertTrue(
+                self.service.refresh_guarded_postprocess_manifests_if_needed()
+            )
+            self.assertFalse(
+                self.service.refresh_guarded_postprocess_manifests_if_needed()
+            )
+
+        mangohud64 = json.loads(self.service.mangohud_manifest.read_text(
+            encoding="utf-8"
+        ))["layer"]
+        self.assertEqual(mangohud64["name"], MANGOHUD_LAYER_NAME_64)
+        self.assertEqual(mangohud64["library_arch"], "64")
+        vkbasalt64 = json.loads(self.service.vkbasalt_manifest.read_text(
+            encoding="utf-8"
+        ))["layer"]
+        self.assertEqual(vkbasalt64["name"], VKBASALT_LAYER_NAME_64)
+        self.assertEqual(vkbasalt64["library_arch"], "64")
+        self.assertEqual(
+            json.loads(self.service.mangohud_manifest32.read_text(
+                encoding="utf-8"
+            ))["layer"]["name"],
+            MANGOHUD_LAYER_NAME_32,
+        )
+        self.assertEqual(
+            json.loads(self.service.vkbasalt_manifest32.read_text(
+                encoding="utf-8"
+            ))["layer"]["library_arch"],
+            "32",
+        )
+        self.assertEqual(
+            set(self.service.mangohud_layer_dir.iterdir()),
+            {
+                self.service.mangohud_manifest,
+                self.service.mangohud_manifest32,
+            },
+        )
+        self.assertEqual(
+            set(self.service.vkbasalt_layer_dir.iterdir()),
+            {
+                self.service.vkbasalt_manifest,
+                self.service.vkbasalt_manifest32,
+            },
+        )
+
+    def test_invalid_postprocess_manifest_removes_stale_staged_copy(self):
+        self.service.lib_file.parent.mkdir(parents=True)
+        self.service.lib_file.write_bytes(b"installed")
+        system_dir = self.root / "invalid-postprocess"
+        system_dir.mkdir()
+        (system_dir / MANGOHUD_MANIFEST_FILENAME_64).write_text(
+            '{"layer":{"name":"VK_LAYER_unrelated"}}',
+            encoding="utf-8",
+        )
+        self.service.mangohud_manifest.parent.mkdir(parents=True)
+        self.service.mangohud_manifest.write_text("stale", encoding="utf-8")
+
+        with patch.object(
+            installation_module,
+            "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
+            system_dir,
+        ):
+            self.assertTrue(
+                self.service.refresh_guarded_postprocess_manifests_if_needed()
+            )
+
+        self.assertFalse(self.service.mangohud_manifest.exists())
 
     def test_installs_64bit_only_archive_and_removes_stale_32bit_files(self):
         self.service.lib32_file.parent.mkdir(parents=True, exist_ok=True)

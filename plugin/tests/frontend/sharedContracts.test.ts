@@ -135,7 +135,7 @@ describe("generated cross-language contracts", () => {
       refreshThresholdPreset: 60,
       fixedMultiplierMin: 2,
       fixedMultiplierUi: [2, 4],
-      externalVulkanLayers: ["", "gamescope-wsi", "mangohud", "vkbasalt"],
+      externalVulkanLayers: ["", "mangohud", "vkbasalt"],
     });
   });
 

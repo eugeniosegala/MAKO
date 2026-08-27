@@ -25,8 +25,8 @@ Published MAKO Renderer packages currently target x86_64 Linux hosts, with 64-bi
 - Installs the private MAKO Renderer Vulkan layer for the current user.
 - Generates the `/home/deck/.local/bin/mako-run` per-game launcher.
 - Stores renderer settings in `~/.config/mako-render/conf.toml` and versioned game/process identity separately for automatic per-game selection.
-- Supports independent spatial scaling plus fixed and adaptive frame generation with per-game controls. Scaling and frame generation can be used separately or together. Native Steam/Proton profiles launched with Scaling enabled automatically use the validated staged Gamescope WSI-before-MAKO order needed to keep the game's low render extent distinct from MAKO's presentation extent; later scaler changes remain live inside that provisioned process.
-- Provides a per-profile experimental Gamescope WSI compatibility toggle plus **External Tools** controls for host-installed MangoHud and experimental vkBasalt; only one optional Vulkan layer can be selected.
+- Supports a restart-bound Scaling Engine plus fixed and adaptive frame generation with per-game controls. Scaling and frame generation can be used separately or together. Native Steam/Proton profiles launched with Scaling Engine enabled automatically use the validated staged Gamescope WSI-before-MAKO order; Native, MAKO, LS1, factor, and sharpness changes remain live through swapchain recreation inside that provisioned process.
+- Provides a per-profile experimental Gamescope WSI compatibility toggle independently from **External Tools** controls for host-installed MangoHud and experimental vkBasalt. MangoHud and vkBasalt remain mutually exclusive with each other, while either can run after MAKO with WSI and scaling/frame generation active.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Launches selected games through MAKO's private renderer and configuration.
 

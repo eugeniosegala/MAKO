@@ -144,7 +144,10 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { ConfigurationSection } from "../../src/components/ConfigurationSection";
-import { getDefaults } from "../../src/config/configSchema";
+import {
+  GAMESCOPE_WSI_COMPATIBILITY,
+  getDefaults,
+} from "../../src/config/configSchema";
 
 afterEach(cleanup);
 
@@ -234,10 +237,11 @@ describe("External Tools controls", () => {
   });
 
   test("uses the orange warning treatment for Experimental Gamescope WSI", () => {
+    const onConfigChange = vi.fn(async () => undefined);
     const { container } = render(
       <ConfigurationSection
         config={getDefaults()}
-        onConfigChange={vi.fn(async () => undefined)}
+        onConfigChange={onConfigChange}
         onConfigUpdate={vi.fn(async () => undefined)}
       />,
     );
@@ -252,8 +256,34 @@ describe("External Tools controls", () => {
 
     const warning = container.querySelector('[data-tone="warning"]');
     expect(warning?.textContent).toContain(
-      "Keep it off if not needed. It may reduce performance or interfere with frame generation.",
+      "The explicit compatibility path is experimental and currently limited to supported 64-bit host launches. Leave it off when the game does not need it.",
     );
+    fireEvent.click(screen.getByText("Experimental Gamescope WSI (Restart)"));
+    expect(onConfigChange).toHaveBeenCalledWith(
+      GAMESCOPE_WSI_COMPATIBILITY,
+      true,
+    );
+  });
+
+  test("Scaling Engine provides and locks Gamescope WSI compatibility", () => {
+    const { container } = render(
+      <ConfigurationSection
+        config={{ ...getDefaults(), scaling_enabled: true }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>(
+        ".MAKO_WorkaroundsCollapseButton_Container button",
+      )!,
+    );
+    const compatibility = screen.getByText(
+      "Experimental Gamescope WSI (Restart)",
+    ) as HTMLButtonElement;
+    expect(compatibility.getAttribute("data-checked")).toBe("true");
+    expect(compatibility.disabled).toBe(true);
   });
 
   test("starts collapsed and remembers when it is expanded", () => {

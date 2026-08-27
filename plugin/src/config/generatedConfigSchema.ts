@@ -56,10 +56,12 @@ export const FLOW_SCALE_MIN = 0.25 as const;
 export const FLOW_SCALE_MAX = 1.0 as const;
 export const SCALING_FACTOR_MIN = 1.0 as const;
 export const SCALING_FACTOR_MAX = 2.0 as const;
+export const SCALING_METHOD_NATIVE = "native" as const;
 export const SCALING_METHOD_MAKO = "mako" as const;
 export const SCALING_METHOD_LS1 = "ls1" as const;
 export const SCALING_METHOD_LS1_PERFORMANCE = "ls1-performance" as const;
 export const SCALING_METHOD_VALUES = [
+  SCALING_METHOD_NATIVE,
   SCALING_METHOD_MAKO,
   SCALING_METHOD_LS1,
   SCALING_METHOD_LS1_PERFORMANCE,
@@ -76,14 +78,12 @@ export const FRAME_GENERATION_REFRESH_THRESHOLD_MAX = 240 as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = 30 as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = 60 as const;
 
-// Stable persisted values for the optional external Vulkan layer
+// Stable persisted values for the optional post-process Vulkan layer
 export const EXTERNAL_VULKAN_LAYER_NONE = "" as const;
-export const EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI = "gamescope-wsi" as const;
 export const EXTERNAL_VULKAN_LAYER_MANGOHUD = "mangohud" as const;
 export const EXTERNAL_VULKAN_LAYER_VKBASALT = "vkbasalt" as const;
 export const EXTERNAL_VULKAN_LAYER_VALUES = [
   EXTERNAL_VULKAN_LAYER_NONE,
-  EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
   EXTERNAL_VULKAN_LAYER_MANGOHUD,
   EXTERNAL_VULKAN_LAYER_VKBASALT,
 ] as const;
@@ -124,6 +124,7 @@ export const ACTIVE_IN = "active_in" as const;
 export const GPU = "gpu" as const;
 export const DISABLE_MAKO = "disable_mako" as const;
 export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
+export const GAMESCOPE_WSI_COMPATIBILITY = "gamescope_wsi_compatibility" as const;
 export const EXTERNAL_VULKAN_LAYER = "external_vulkan_layer" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
@@ -155,13 +156,13 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "scaling_enabled",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "independent spatial scaling switch applied through game-owned swapchain recreation"
+    description: "restart-bound scaling engine switch that provisions the Gamescope WSI presentation path"
   },
   scaling_method: {
     name: "scaling_method",
     fieldType: ConfigFieldType.STRING,
     default: "mako",
-    description: "spatial scaler selection: MAKO, LS1 Quality, or LS1 Performance"
+    description: "live spatial selection: Native, MAKO, LS1 Quality, or LS1 Performance"
   },
   scaling_factor: {
     name: "scaling_factor",
@@ -289,11 +290,17 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: true,
     description: "required SDR safety boundary while HDR is unavailable"
   },
+  gamescope_wsi_compatibility: {
+    name: "gamescope_wsi_compatibility",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "enable the restart-bound Gamescope WSI compatibility layer independently of scaling"
+  },
   external_vulkan_layer: {
     name: "external_vulkan_layer",
     fieldType: ConfigFieldType.STRING,
     default: "",
-    description: "optional guarded host Vulkan layer: gamescope-wsi, mangohud, or vkbasalt"
+    description: "optional guarded post-process Vulkan layer: MangoHud or vkBasalt"
   },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",
@@ -342,6 +349,7 @@ export interface ConfigurationData {
   gpu: string;
   disable_mako: boolean;
   disable_hdr_exposure: boolean;
+  gamescope_wsi_compatibility: boolean;
   external_vulkan_layer: string;
   disable_steamdeck_mode: boolean;
   enable_zink: boolean;
@@ -383,6 +391,7 @@ export function getDefaults(): ConfigurationData {
     gpu: "",
     disable_mako: false,
     disable_hdr_exposure: true,
+    gamescope_wsi_compatibility: false,
     external_vulkan_layer: "",
     disable_steamdeck_mode: false,
     enable_zink: false,
@@ -417,6 +426,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     gpu: ConfigFieldType.STRING,
     disable_mako: ConfigFieldType.BOOLEAN,
     disable_hdr_exposure: ConfigFieldType.BOOLEAN,
+    gamescope_wsi_compatibility: ConfigFieldType.BOOLEAN,
     external_vulkan_layer: ConfigFieldType.STRING,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,

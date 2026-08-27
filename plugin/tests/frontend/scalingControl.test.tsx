@@ -36,7 +36,7 @@ vi.mock("@decky/ui", () => ({
       <button
         data-selected={selectedOption}
         disabled={disabled}
-        onClick={() => onChange(rgOptions[1])}
+        onClick={() => onChange(rgOptions[2])}
       >
         Scaling Method
       </button>
@@ -118,6 +118,7 @@ import {
   SCALING_FACTOR,
   SCALING_METHOD,
   SCALING_METHOD_LS1,
+  SCALING_METHOD_NATIVE,
   SCALING_SHARPNESS,
   getDefaults,
 } from "../../src/config/configSchema";
@@ -133,7 +134,7 @@ describe("Scaling controls", () => {
       <ScalingControl config={getDefaults()} onConfigChange={onConfigChange} />,
     );
 
-    const enabled = screen.getByText("Enable Scaling");
+    const enabled = screen.getByText("Enable Scaling Engine (Restart)");
     expect(enabled.getAttribute("data-checked")).toBe("false");
     expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
     expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
@@ -164,18 +165,33 @@ describe("Scaling controls", () => {
     expect(factor.getAttribute("data-notch-count")).toBe("11");
     expect(factor.getAttribute("data-notch-ticks-visible")).toBe("true");
     expect(screen.getByText("MAKO (Open)")).toBeTruthy();
+    expect(screen.getByText("Native (No MAKO Scaler)")).toBeTruthy();
     expect(screen.getByText("LS1 Quality")).toBeTruthy();
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "Enable Scaling before launching a game so MAKO Decky can provision its Gamescope presentation path, then select an in-game resolution below the display resolution. In that session, the toggle, method, factor, and sharpness apply through swapchain recreation; a brief flicker is normal. Scaling can run alone or before Frame Generation.",
+        "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once the game starts, switch between Native, MAKO, and LS1 methods; model, factor, and sharpness changes recreate the swapchain and may briefly flicker. The engine can run alone or before Frame Generation.",
       ),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "MAKO is the built-in open single-pass scaler and does not need Lossless.dll. LS1 Quality uses Lossless Scaling's proprietary full neural network; LS1 Performance uses its lower-cost network. If LS1 cannot start, MAKO takes over for that swapchain. Changing the method recreates the swapchain.",
+        "Native keeps the Scaling Engine ready but passes the game's image through without a MAKO scaler. MAKO is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO takes over for that swapchain. Method changes use swapchain recreation.",
       ),
     ).toBeTruthy();
+
+    rerender(
+      <ScalingControl
+        config={{
+          ...getDefaults(),
+          scaling_enabled: true,
+          scaling_method: SCALING_METHOD_NATIVE,
+        }}
+        onConfigChange={onConfigChange}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Scaling Method" })).toBeTruthy();
+    expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
+    expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
   });
 
   test("writes only the selected scaling field when combined with frame generation", () => {
@@ -225,7 +241,7 @@ describe("Scaling controls", () => {
     );
 
     expect(
-      (screen.getByText("Enable Scaling") as HTMLButtonElement)
+      (screen.getByText("Enable Scaling Engine (Restart)") as HTMLButtonElement)
         .disabled,
     ).toBe(true);
     expect(

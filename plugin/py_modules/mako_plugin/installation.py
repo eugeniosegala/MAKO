@@ -19,6 +19,11 @@ from .constants import (
     MAKO_LAYER_BUILD_MARKER, MAKO_PROFILE_FALLBACK_MARKER,
     GAMESCOPE_WSI_DISABLE_ENV, GAMESCOPE_WSI_ENABLE_ENV,
     GAMESCOPE_WSI_LAYER_NAME_64, GAMESCOPE_WSI_MANIFEST_FILENAME_64,
+    MANGOHUD_LAYER_NAME_64, MANGOHUD_MANIFEST_FILENAME_64,
+    MANGOHUD_LAYER_NAME_32, MANGOHUD_MANIFEST_FILENAME_32,
+    VKBASALT_LAYER_NAME_64, VKBASALT_MANIFEST_FILENAME_64,
+    VKBASALT_LAYER_NAME_32, VKBASALT_MANIFEST_FILENAME_32,
+    VKBASALT_MANIFEST_FILENAMES_64, VKBASALT_MANIFEST_FILENAMES_32,
     HOST_SYSTEM_IMPLICIT_LAYER_DIR,
     ARMADA_DEVICE_ENV,
     LEGACY_LOSSLESS_DLL_PLACEHOLDER,
@@ -72,6 +77,18 @@ class InstallationService(BaseService):
             self.gamescope_wsi_compatibility_dir /
             GAMESCOPE_WSI_MANIFEST_FILENAME_64
         )
+        self.mangohud_manifest = (
+            self.mangohud_layer_dir / MANGOHUD_MANIFEST_FILENAME_64
+        )
+        self.mangohud_manifest32 = (
+            self.mangohud_layer_dir / MANGOHUD_MANIFEST_FILENAME_32
+        )
+        self.vkbasalt_manifest = (
+            self.vkbasalt_layer_dir / VKBASALT_MANIFEST_FILENAME_64
+        )
+        self.vkbasalt_manifest32 = (
+            self.vkbasalt_layer_dir / VKBASALT_MANIFEST_FILENAME_32
+        )
         self.cli_file = self.user_home / CLI_DIR / CLI_FILENAME
         self.engine_state_file = self.local_lib_dir.parent / "installed-engine.json"
 
@@ -107,6 +124,7 @@ class InstallationService(BaseService):
             self._register_layer_manifests()
 
             self.migrate_gamescope_wsi_compatibility_manifest_if_needed()
+            self.refresh_guarded_postprocess_manifests_if_needed()
 
             self._create_config_file()
 
@@ -481,11 +499,15 @@ class InstallationService(BaseService):
                 raise ValueError("missing layer object")
             if layer.get("name") != GAMESCOPE_WSI_LAYER_NAME_64:
                 raise ValueError("unexpected layer identity")
+            if layer.get("type") != "GLOBAL":
+                raise ValueError("unexpected layer type")
             library_path = layer.get("library_path")
             if not isinstance(library_path, str) or not Path(library_path).is_absolute():
                 raise ValueError("library_path must be absolute")
             if not Path(library_path).is_file():
                 raise ValueError("library_path is unavailable")
+            if layer.get("library_arch") not in (None, "64"):
+                raise ValueError("manifest is not a 64-bit layer")
             if layer.get("enable_environment") != {
                 GAMESCOPE_WSI_ENABLE_ENV: "1"
             }:
@@ -524,6 +546,130 @@ class InstallationService(BaseService):
             destination,
         )
         return True
+
+    def _stage_guarded_host_manifest(
+            self,
+            source_names: tuple[str, ...],
+            destination: Path,
+            expected_layer_name: str,
+            expected_library_arch: str,
+            expected_enable_environment: Dict[str, str],
+            expected_disable_environment: Dict[str, str],
+    ) -> bool:
+        """Stage one exact host layer identity without exposing its directory."""
+        source = next((
+            HOST_SYSTEM_IMPLICIT_LAYER_DIR / name
+            for name in source_names
+            if (HOST_SYSTEM_IMPLICIT_LAYER_DIR / name).is_file()
+        ), None)
+        if source is None:
+            return self._remove_if_exists(destination)
+
+        try:
+            manifest = json.loads(source.read_text(encoding="utf-8"))
+            layer = manifest.get("layer")
+            if not isinstance(layer, dict):
+                raise ValueError("missing layer object")
+            if layer.get("name") != expected_layer_name:
+                raise ValueError("unexpected layer identity")
+            if layer.get("type") != "GLOBAL":
+                raise ValueError("unexpected layer type")
+            library_path = layer.get("library_path")
+            if not isinstance(library_path, str) or not library_path:
+                raise ValueError("missing library_path")
+            if Path(library_path).is_absolute() and not Path(library_path).is_file():
+                raise ValueError("absolute library_path is unavailable")
+            if layer.get("library_arch") not in (
+                    None, expected_library_arch):
+                raise ValueError(
+                    f"manifest is not a {expected_library_arch}-bit layer"
+                )
+            if layer.get("enable_environment") != expected_enable_environment:
+                raise ValueError("unexpected enable_environment gate")
+            if layer.get("disable_environment") != expected_disable_environment:
+                raise ValueError("unexpected disable_environment gate")
+            # The host manifests do not consistently declare architecture.
+            # Stamp the validated filename/identity contract into the managed
+            # copy so a directory containing both variants stays deterministic.
+            layer["library_arch"] = expected_library_arch
+            managed_content = json.dumps(manifest, indent=2) + "\n"
+        except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
+            changed = self._remove_if_exists(destination)
+            self.log.warning(
+                "Optional Vulkan layer %s remains unavailable: %s",
+                expected_layer_name,
+                error,
+            )
+            return changed
+
+        try:
+            if (
+                    destination.is_file() and
+                    destination.read_text(encoding="utf-8") == managed_content
+            ):
+                return False
+        except OSError:
+            pass
+
+        write_managed_text_atomically(
+            destination,
+            managed_content,
+            0o644,
+            self.log,
+        )
+        self.log.info(
+            "Installed guarded optional Vulkan manifest %s at %s",
+            expected_layer_name,
+            destination,
+        )
+        return True
+
+    def refresh_guarded_postprocess_manifests_if_needed(self) -> bool:
+        """Stage only the exact supported post-process manifests.
+
+        This is intentionally independent from profile selection. The wrapper
+        exposes at most one private tool directory when its matching control
+        is selected. Each directory may contain the validated 64-bit and
+        32-bit identities for that one tool, never unrelated host layers.
+        """
+        if not self.lib_file.is_file():
+            return False
+        mangohud_changed = self._stage_guarded_host_manifest(
+            (MANGOHUD_MANIFEST_FILENAME_64,),
+            self.mangohud_manifest,
+            MANGOHUD_LAYER_NAME_64,
+            "64",
+            {"MANGOHUD": "1"},
+            {"DISABLE_MANGOHUD": "1"},
+        )
+        mangohud32_changed = self._stage_guarded_host_manifest(
+            (MANGOHUD_MANIFEST_FILENAME_32,),
+            self.mangohud_manifest32,
+            MANGOHUD_LAYER_NAME_32,
+            "32",
+            {"MANGOHUD": "1"},
+            {"DISABLE_MANGOHUD": "1"},
+        )
+        vkbasalt_changed = self._stage_guarded_host_manifest(
+            VKBASALT_MANIFEST_FILENAMES_64,
+            self.vkbasalt_manifest,
+            VKBASALT_LAYER_NAME_64,
+            "64",
+            {"ENABLE_VKBASALT": "1"},
+            {"DISABLE_VKBASALT": "1"},
+        )
+        vkbasalt32_changed = self._stage_guarded_host_manifest(
+            VKBASALT_MANIFEST_FILENAMES_32,
+            self.vkbasalt_manifest32,
+            VKBASALT_LAYER_NAME_32,
+            "32",
+            {"ENABLE_VKBASALT": "1"},
+            {"DISABLE_VKBASALT": "1"},
+        )
+        return (
+            mangohud_changed or mangohud32_changed or
+            vkbasalt_changed or vkbasalt32_changed
+        )
 
     def _create_config_file(self) -> None:
         """Create or update this plugin's private TOML config with detected DLL path.
@@ -596,6 +742,11 @@ class InstallationService(BaseService):
         config_service = ConfigurationService(logger=self.log)
         config_service.user_home = self.user_home
         config_service.local_share_dir = self.local_share_dir
+        config_service.gamescope_wsi_compatibility_dir = (
+            self.gamescope_wsi_compatibility_dir
+        )
+        config_service.mangohud_layer_dir = self.mangohud_layer_dir
+        config_service.vkbasalt_layer_dir = self.vkbasalt_layer_dir
         config_service.config_dir = self.config_dir
         config_service.config_file_path = self.config_file_path
         config_service.wrapper_profile_settings_path = self.wrapper_profile_settings_path
@@ -761,6 +912,8 @@ class InstallationService(BaseService):
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
                 self.registered_json_file, self.registered_json32_file,
                 self.gamescope_wsi_compatibility_manifest,
+                self.mangohud_manifest, self.mangohud_manifest32,
+                self.vkbasalt_manifest, self.vkbasalt_manifest32,
                 self.cli_file, self.engine_state_file, self.mako_script_path,
                 self.diagnostics_script_path,
             ]
@@ -809,6 +962,8 @@ class InstallationService(BaseService):
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
                 self.registered_json_file, self.registered_json32_file,
                 self.gamescope_wsi_compatibility_manifest,
+                self.mangohud_manifest, self.mangohud_manifest32,
+                self.vkbasalt_manifest, self.vkbasalt_manifest32,
                 self.cli_file, self.engine_state_file, self.mako_script_path,
                 self.diagnostics_script_path,
             ]

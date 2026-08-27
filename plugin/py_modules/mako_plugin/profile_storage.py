@@ -11,6 +11,8 @@ import json
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, TypedDict, cast
 
+from shared_config import EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI
+
 from .config_schema import (
     CONFIG_SCHEMA,
     DEFAULT_PROFILE_NAME,
@@ -118,11 +120,19 @@ def normalize_wrapper_settings(
     never create an environment export unless the current schema and wrapper
     generator both support it.
     """
+    migrated_settings = dict(raw_settings)
+    if (
+            migrated_settings.get("external_vulkan_layer") ==
+            EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI
+    ):
+        migrated_settings.setdefault("gamescope_wsi_compatibility", True)
+        migrated_settings["external_vulkan_layer"] = ""
+
     candidate = ConfigurationManager.get_defaults()
     candidate.update({
-        field_name: raw_settings[field_name]
+        field_name: migrated_settings[field_name]
         for field_name in SCRIPT_ONLY_FIELDS
-        if field_name in raw_settings
+        if field_name in migrated_settings
     })
     validated = ConfigurationManager.validate_config(candidate)
     # HDR remains an engine foundation in this release, not a supported Decky

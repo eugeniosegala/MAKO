@@ -21,7 +21,6 @@ import {
   DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS,
   DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
   ENABLE_ZINK,
-  EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
   EXTERNAL_VULKAN_LAYER_MANGOHUD,
   EXTERNAL_VULKAN_LAYER_NONE,
   EXTERNAL_VULKAN_LAYER_VKBASALT,
@@ -34,6 +33,7 @@ import {
   FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
   FRAME_GENERATION_REFRESH_THRESHOLD_PRESET,
   FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
+  GAMESCOPE_WSI_COMPATIBILITY,
   GPU,
   PERFORMANCE_MODE,
   ULTRA_PERFORMANCE_FLOW_SCALE,
@@ -451,28 +451,23 @@ export function CompatibilityConfigurationGroup({
                   <div>
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC",
-                      "May reduce coloured or pixelated motion artifacts in affected games. Tested only with 64-bit native Vulkan or Proton games launched through Steam.",
+                      "Provided automatically by Scaling Engine. Enable it separately for FG-only profiles that need the Gamescope WSI presentation path. It can run with Frame Generation and one post-process tool. Restart the game after changing it.",
                     )}
                   </div>
                   <MakoInlineWarning tone="warning">
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
-                      "Keep it off if not needed. It may reduce performance or interfere with frame generation.",
+                      "The explicit compatibility path is experimental and currently limited to supported 64-bit host launches. Leave it off when the game does not need it.",
                     )}
                   </MakoInlineWarning>
                 </>
               }
               checked={
-                config.external_vulkan_layer ===
-                EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI
+                config.scaling_enabled || config.gamescope_wsi_compatibility
               }
+              disabled={config.scaling_enabled}
               onChange={(value) =>
-                onConfigChange(
-                  EXTERNAL_VULKAN_LAYER,
-                  value
-                    ? EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI
-                    : EXTERNAL_VULKAN_LAYER_NONE,
-                )
+                onConfigChange(GAMESCOPE_WSI_COMPATIBILITY, value)
               }
             />
           </PanelSectionRow>
@@ -548,7 +543,7 @@ export function ExternalToolsConfigurationGroup({
           <div>
             {t(
               "CONFIG_EXTERNAL_TOOLS_DESC",
-              "Optional and per profile. Enable a tool in Default for games without a saved profile, or save a game profile first to limit it to that title. Gamescope WSI, MangoHud, and vkBasalt are mutually exclusive. Restart the game after changing the selection.",
+              "Optional and per profile. MangoHud and vkBasalt are mutually exclusive with each other, but either can run with Gamescope WSI, Scaling Engine, and Frame Generation. Restart the game after changing the tool.",
             )}
           </div>
           <MakoInlineWarning>

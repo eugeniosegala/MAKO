@@ -79,7 +79,7 @@ class PluginLifecycleTests(unittest.TestCase):
             ),
         ])
 
-    def test_main_runs_every_current_startup_migration(self):
+    def test_main_runs_every_current_startup_maintenance_task(self):
         calls = []
         plugin = Plugin.__new__(Plugin)
         plugin.configuration_service = SimpleNamespace(
@@ -109,6 +109,9 @@ class PluginLifecycleTests(unittest.TestCase):
             migrate_gamescope_wsi_compatibility_manifest_if_needed=lambda: calls.append(
                 "gamescope-wsi-manifest"
             ) or False,
+            refresh_guarded_postprocess_manifests_if_needed=lambda: calls.append(
+                "postprocess-manifests"
+            ) or False,
             migrate_diagnostics_helper_if_needed=lambda: calls.append(
                 "diagnostics-helper"
             ) or False,
@@ -128,6 +131,7 @@ class PluginLifecycleTests(unittest.TestCase):
             "base-fps-cap",
             "launch-script",
             "gamescope-wsi-manifest",
+            "postprocess-manifests",
             "diagnostics-helper",
         ])
 

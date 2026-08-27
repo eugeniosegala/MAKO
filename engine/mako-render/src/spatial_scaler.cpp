@@ -521,7 +521,13 @@ public:
         presentationSize(presentationExtent),
         requested(requested),
         active(requested) {
-        const bool ls1Requested = requested != ls::ScalingMethod::Mako;
+        if (requested == ls::ScalingMethod::Native) {
+            throw ls::error(
+                "native passthrough must not construct a spatial scaler"
+            );
+        }
+        const bool ls1Requested =
+            ls::licensedScalingModelRequested(requested);
         if (ls1Requested) {
             try {
                 if (!shaderDllPath)

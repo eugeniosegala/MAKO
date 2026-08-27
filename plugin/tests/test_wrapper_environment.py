@@ -41,6 +41,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.service.gamescope_wsi_compatibility_dir = Path(
             "/private/mako/gamescope_wsi_compatibility.d"
         )
+        self.service.mangohud_layer_dir = Path("/private/mako/mangohud.d")
+        self.service.vkbasalt_layer_dir = Path("/private/mako/vkbasalt.d")
 
     def _evaluate(self, extra_environment=None, config=None):
         lines = []
@@ -61,6 +63,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "INSTANCE=%s\\n" "${VK_INSTANCE_LAYERS:-}"',
             'printf "EXTERNAL_SELECTOR=%s\\n" "${MAKO_EXTERNAL_VULKAN_LAYER:-}"',
             'printf "MANGOHUD=%s\\n" "${MANGOHUD:-}"',
+            'printf "MANGOHUD_DISABLED=%s\\n" "${DISABLE_MANGOHUD:-}"',
             'printf "MANGOHUD_CONFIG=%s\\n" "${MANGOHUD_CONFIG:-}"',
             'printf "VKBASALT=%s\\n" "${ENABLE_VKBASALT:-}"',
             'printf "VKBASALT_DISABLED=%s\\n" "${DISABLE_VKBASALT:-}"',
@@ -132,45 +135,89 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
 
-    def test_explicit_external_tool_remains_authoritative_for_scaling_profile(self):
+    def test_scaling_engine_combines_gamescope_wsi_with_mangohud(self):
+        with (
+            tempfile.TemporaryDirectory() as compatibility_dir,
+            tempfile.TemporaryDirectory() as system_dir,
+        ):
+            compatibility_path = Path(compatibility_dir)
+            (
+                compatibility_path /
+                configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            self.service.gamescope_wsi_compatibility_dir = compatibility_path
+            self.service.mangohud_layer_dir = Path(system_dir)
+            (
+                self.service.mangohud_layer_dir /
+                configuration_module.MANGOHUD_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["scaling_enabled"] = True
+            config["scaling_method"] = "native"
+            config["external_vulkan_layer"] = "mangohud"
+            values = self._evaluate(config=config)
+
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"{compatibility_dir}:/private/mako/implicit_layer.d:{system_dir}",
+        )
+        self.assertEqual(values["MANGOHUD"], "1")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
+
+    def test_explicit_gamescope_wsi_combines_with_vkbasalt(self):
+        with (
+            tempfile.TemporaryDirectory() as compatibility_dir,
+            tempfile.TemporaryDirectory() as system_dir,
+        ):
+            compatibility_path = Path(compatibility_dir)
+            (
+                compatibility_path /
+                configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            self.service.gamescope_wsi_compatibility_dir = compatibility_path
+            self.service.vkbasalt_layer_dir = Path(system_dir)
+            (
+                self.service.vkbasalt_layer_dir /
+                configuration_module.VKBASALT_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["gamescope_wsi_compatibility"] = True
+            config["external_vulkan_layer"] = "vkbasalt"
+            values = self._evaluate(config=config)
+
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"{compatibility_dir}:/private/mako/implicit_layer.d:{system_dir}",
+        )
+        self.assertEqual(values["VKBASALT"], "1")
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
+
+    def test_mangohud_profile_admits_only_its_guarded_manifest_directory(self):
         with tempfile.TemporaryDirectory() as system_dir:
-            with patch.object(
-                configuration_module,
-                "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
-                Path(system_dir),
-            ):
-                config = ConfigurationManager.get_defaults()
-                config["scaling_enabled"] = True
-                config["external_vulkan_layer"] = "mangohud"
-                values = self._evaluate(config=config)
+            self.service.mangohud_layer_dir = Path(system_dir)
+            (
+                self.service.mangohud_layer_dir /
+                configuration_module.MANGOHUD_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "mangohud"
+            values = self._evaluate(
+                {
+                    "MANGOHUD_CONFIG": "fps,frametime,position=top-right",
+                    "DISABLE_MANGOHUD": "1",
+                },
+                config,
+            )
 
         self.assertEqual(
             values["IMPLICIT"],
             f"/private/mako/implicit_layer.d:{system_dir}",
         )
         self.assertEqual(values["MANGOHUD"], "1")
-        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
-        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
-
-    def test_mangohud_profile_admits_only_the_guarded_system_directory(self):
-        with tempfile.TemporaryDirectory() as system_dir:
-            with patch.object(
-                configuration_module,
-                "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
-                Path(system_dir),
-            ):
-                config = ConfigurationManager.get_defaults()
-                config["external_vulkan_layer"] = "mangohud"
-                values = self._evaluate(
-                    {"MANGOHUD_CONFIG": "fps,frametime,position=top-right"},
-                    config,
-                )
-
-        self.assertEqual(
-            values["IMPLICIT"],
-            f"/private/mako/implicit_layer.d:{system_dir}",
-        )
-        self.assertEqual(values["MANGOHUD"], "1")
+        self.assertEqual(values["MANGOHUD_DISABLED"], "")
         self.assertEqual(
             values["MANGOHUD_CONFIG"],
             "fps,frametime,position=top-right",
@@ -180,22 +227,56 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
         self.assertEqual(values["EXTERNAL_SELECTOR"], "")
 
+    def test_mangohud_profile_retains_guarded_32bit_only_installation(self):
+        with tempfile.TemporaryDirectory() as system_dir:
+            self.service.mangohud_layer_dir = Path(system_dir)
+            (
+                self.service.mangohud_layer_dir /
+                configuration_module.MANGOHUD_MANIFEST_FILENAME_32
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "mangohud"
+            values = self._evaluate(config=config)
+
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"/private/mako/implicit_layer.d:{system_dir}",
+        )
+        self.assertEqual(values["MANGOHUD"], "1")
+        self.assertEqual(values["VKBASALT"], "")
+
+    def test_selected_postprocess_tool_fails_closed_without_staged_manifest(self):
+        with tempfile.TemporaryDirectory() as empty_dir:
+            self.service.mangohud_layer_dir = Path(empty_dir)
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "mangohud"
+            values = self._evaluate(
+                {"MANGOHUD": "1", "ENABLE_VKBASALT": "1"},
+                config,
+            )
+
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(values["VKBASALT"], "")
+        self.assertEqual(values["DEVICE_SELECT_DISABLED"], "")
+        self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "")
+
     def test_vkbasalt_profile_is_mutually_exclusive_with_mangohud(self):
         with tempfile.TemporaryDirectory() as system_dir:
-            with patch.object(
-                configuration_module,
-                "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
-                Path(system_dir),
-            ):
-                config = ConfigurationManager.get_defaults()
-                config["external_vulkan_layer"] = "vkbasalt"
-                values = self._evaluate(
-                    {
-                        "MANGOHUD": "1",
-                        "DISABLE_VKBASALT": "1",
-                    },
-                    config,
-                )
+            self.service.vkbasalt_layer_dir = Path(system_dir)
+            (
+                self.service.vkbasalt_layer_dir /
+                configuration_module.VKBASALT_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "vkbasalt"
+            values = self._evaluate(
+                {
+                    "MANGOHUD": "1",
+                    "DISABLE_VKBASALT": "1",
+                },
+                config,
+            )
 
         self.assertEqual(
             values["IMPLICIT"],
@@ -207,7 +288,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
         self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
 
-    def test_gamescope_wsi_profile_admits_the_guarded_system_directory(self):
+    def test_explicit_gamescope_wsi_compatibility_is_independent(self):
         with tempfile.TemporaryDirectory() as compatibility_dir:
             compatibility_path = Path(compatibility_dir)
             (
@@ -216,7 +297,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             ).write_text("{}", encoding="utf-8")
             self.service.gamescope_wsi_compatibility_dir = compatibility_path
             config = ConfigurationManager.get_defaults()
-            config["external_vulkan_layer"] = "gamescope-wsi"
+            config["gamescope_wsi_compatibility"] = True
             values = self._evaluate(
                 {
                     "DISABLE_GAMESCOPE_WSI": "1",
@@ -237,13 +318,13 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
         self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
 
-    def test_gamescope_wsi_profile_fails_closed_without_its_manifest(self):
+    def test_gamescope_wsi_compatibility_fails_closed_without_its_manifest(self):
         with tempfile.TemporaryDirectory() as compatibility_dir:
             self.service.gamescope_wsi_compatibility_dir = Path(
                 compatibility_dir
             )
             config = ConfigurationManager.get_defaults()
-            config["external_vulkan_layer"] = "gamescope-wsi"
+            config["gamescope_wsi_compatibility"] = True
             values = self._evaluate(
                 {"ENABLE_GAMESCOPE_WSI": "1"},
                 config,
@@ -269,6 +350,13 @@ class WrapperEnvironmentTests(unittest.TestCase):
     def test_external_layer_schema_rejects_unknown_tools(self):
         config = ConfigurationManager.get_defaults()
         config["external_vulkan_layer"] = "renderdoc"
+
+        with self.assertRaisesRegex(ValueError, "external_vulkan_layer"):
+            ConfigurationManager.validate_config(config)
+
+    def test_external_layer_schema_rejects_released_v22_gamescope_value(self):
+        config = ConfigurationManager.get_defaults()
+        config["external_vulkan_layer"] = "gamescope-wsi"
 
         with self.assertRaisesRegex(ValueError, "external_vulkan_layer"):
             ConfigurationManager.validate_config(config)
@@ -412,19 +500,17 @@ class WrapperEnvironmentTests(unittest.TestCase):
     def test_flatpak_does_not_admit_selected_host_external_layer(self):
         with tempfile.TemporaryDirectory() as flatpak_dir:
             with tempfile.TemporaryDirectory() as system_dir:
+                self.service.mangohud_layer_dir = Path(system_dir)
+                (
+                    self.service.mangohud_layer_dir /
+                    configuration_module.MANGOHUD_MANIFEST_FILENAME_64
+                ).write_text("{}", encoding="utf-8")
                 config = ConfigurationManager.get_defaults()
                 config["external_vulkan_layer"] = "mangohud"
-                with (
-                    patch.object(
-                        configuration_module,
-                        "FLATPAK_IMPLICIT_LAYER_DIR",
-                        flatpak_dir,
-                    ),
-                    patch.object(
-                        configuration_module,
-                        "HOST_SYSTEM_IMPLICIT_LAYER_DIR",
-                        Path(system_dir),
-                    ),
+                with patch.object(
+                    configuration_module,
+                    "FLATPAK_IMPLICIT_LAYER_DIR",
+                    flatpak_dir,
                 ):
                     values = self._evaluate(config=config)
 
@@ -444,7 +530,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     compatibility_path
                 )
                 config = ConfigurationManager.get_defaults()
-                config["external_vulkan_layer"] = "gamescope-wsi"
+                config["gamescope_wsi_compatibility"] = True
                 with patch.object(
                     configuration_module,
                     "FLATPAK_IMPLICIT_LAYER_DIR",
@@ -544,6 +630,13 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "disable_hdr_exposure": False,
         })
         self.assertTrue(settings["disable_hdr_exposure"])
+
+    def test_released_v22_gamescope_selector_migrates_to_independent_switch(self):
+        settings = self.service._normalize_wrapper_settings({
+            "external_vulkan_layer": "gamescope-wsi",
+        })
+        self.assertTrue(settings["gamescope_wsi_compatibility"])
+        self.assertEqual(settings["external_vulkan_layer"], "")
 
     def test_explicit_hdr_test_opt_in_remains_blocked(self):
         lines = self.service._hdr_activation_lines({

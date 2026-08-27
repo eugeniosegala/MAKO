@@ -509,6 +509,10 @@ int quality::runSpatial(const SpatialOptions& opts) {
         const auto method = ls::scalingMethodFromName(opts.method);
         if (!method)
             throw ls::error("unknown spatial quality method: " + opts.method);
+        if (*method == ls::ScalingMethod::Native)
+            throw ls::error(
+                "spatial quality method native is passthrough, not a scaler"
+            );
         if (!std::isfinite(opts.scaling_factor) ||
                 opts.scaling_factor <= ls::GameConfLimits::minimumScalingFactor ||
                 opts.scaling_factor > ls::GameConfLimits::maximumScalingFactor)
@@ -624,6 +628,10 @@ int quality::runCombined(const CombinedOptions& opts) {
         const auto method = ls::scalingMethodFromName(opts.method);
         if (!method)
             throw ls::error("unknown combined quality spatial method: " + opts.method);
+        if (*method == ls::ScalingMethod::Native)
+            throw ls::error(
+                "combined quality spatial method native is passthrough, not a scaler"
+            );
         if (!std::isfinite(opts.scaling_factor) ||
                 opts.scaling_factor <= ls::GameConfLimits::minimumScalingFactor ||
                 opts.scaling_factor > ls::GameConfLimits::maximumScalingFactor)

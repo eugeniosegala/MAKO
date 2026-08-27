@@ -26,13 +26,14 @@ namespace mako::layer {
     /// never race the mutable configuration/profile state.
     struct SpatialScalingPolicy {
         bool enabled{false};
+        bool nativePassthrough{false};
         float factor{1.0F};
     };
 
     /// One coherent policy snapshot used for a fixed-surface capability query.
-    /// The revision changes only when enablement, process support, or factor
-    /// changes, so method/sharpness-only recreations can safely reuse the same
-    /// advertised extent contract.
+    /// The revision changes only when scaler activity, Native passthrough,
+    /// process support, or factor changes. Sharpness and changes between active
+    /// scaler methods can safely reuse the same advertised extent contract.
     struct SpatialScalingPolicySnapshot {
         SpatialScalingPolicy policy{};
         bool processSupported{false};
@@ -61,6 +62,7 @@ namespace mako::layer {
 
     enum class SpatialScalingInactiveReason {
         None,
+        NativePassthrough,
         ProcessUnsupported,
         InvalidFactor,
         FactorNotUpscaling,
@@ -82,6 +84,8 @@ namespace mako::layer {
         switch (reason) {
             case SpatialScalingInactiveReason::None:
                 return "none";
+            case SpatialScalingInactiveReason::NativePassthrough:
+                return "native-passthrough";
             case SpatialScalingInactiveReason::ProcessUnsupported:
                 return "process-unsupported";
             case SpatialScalingInactiveReason::InvalidFactor:
@@ -239,7 +243,7 @@ namespace mako::layer {
             const VkSurfaceCapabilitiesKHR& capabilities) noexcept {
         return selectSpatialScalingExtents(
             SpatialScalingPolicy{
-                .enabled = profile.scaling_enabled,
+                .enabled = ls::spatialScalingRequested(profile),
                 .factor = profile.scaling_factor,
             },
             capabilities
@@ -290,7 +294,7 @@ namespace mako::layer {
             VkSurfaceCapabilitiesKHR& capabilities) noexcept {
         return virtualizeSurfaceCapabilities(
             SpatialScalingPolicy{
-                .enabled = profile.scaling_enabled,
+                .enabled = ls::spatialScalingRequested(profile),
                 .factor = profile.scaling_factor,
             },
             capabilities
@@ -314,6 +318,11 @@ namespace mako::layer {
         SpatialScalingCreateDecision decision{
             .fixedContract = fixedContract,
         };
+        if (policy.nativePassthrough) {
+            decision.inactiveReason =
+                SpatialScalingInactiveReason::NativePassthrough;
+            return decision;
+        }
         if (!processSupported) {
             decision.inactiveReason =
                 SpatialScalingInactiveReason::ProcessUnsupported;
@@ -447,7 +456,9 @@ namespace mako::layer {
                 fixedContract = std::nullopt) noexcept {
         return scalingDecisionForCreate(
             SpatialScalingPolicy{
-                .enabled = profile.scaling_enabled,
+                .enabled = ls::spatialScalingRequested(profile),
+                .nativePassthrough = profile.scaling_enabled &&
+                    profile.scaling_method == ls::ScalingMethod::Native,
                 .factor = profile.scaling_factor,
             },
             processSupported,
@@ -481,7 +492,7 @@ namespace mako::layer {
             const VkExtent2D requestedExtent,
             const std::optional<SpatialScalingExtents>&
                 previousVariableExtents) noexcept {
-        return profile.scaling_enabled &&
+        return ls::spatialScalingRequested(profile) &&
             validSpatialScalingFactor(profile.scaling_factor) &&
             profile.scaling_factor > 1.0F &&
             !fixedSurfaceExtent(realCapabilities.currentExtent) &&

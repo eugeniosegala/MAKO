@@ -13,6 +13,8 @@ from .constants import (
     LOCAL_LIB32,
     VULKAN_LAYER_DIR,
     GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR,
+    MANGOHUD_LAYER_DIR,
+    VKBASALT_LAYER_DIR,
     USER_VULKAN_LAYER_DIR,
     JSON_FILENAME,
     JSON32_FILENAME,
@@ -65,6 +67,8 @@ class BaseService:
         self.gamescope_wsi_compatibility_dir = (
             self.user_home / GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR
         )
+        self.mangohud_layer_dir = self.user_home / MANGOHUD_LAYER_DIR
+        self.vkbasalt_layer_dir = self.user_home / VKBASALT_LAYER_DIR
         self.user_vulkan_layer_dir = self.user_home / USER_VULKAN_LAYER_DIR
         self.registered_json_file = self.user_vulkan_layer_dir / JSON_FILENAME
         self.registered_json32_file = self.user_vulkan_layer_dir / JSON32_FILENAME
@@ -90,15 +94,19 @@ class BaseService:
         self.local_lib32_dir.mkdir(parents=True, exist_ok=True)
         self.local_share_dir.mkdir(parents=True, exist_ok=True)
         self.gamescope_wsi_compatibility_dir.mkdir(parents=True, exist_ok=True)
+        self.mangohud_layer_dir.mkdir(parents=True, exist_ok=True)
+        self.vkbasalt_layer_dir.mkdir(parents=True, exist_ok=True)
         self.user_vulkan_layer_dir.mkdir(parents=True, exist_ok=True)
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.mako_script_path.parent.mkdir(parents=True, exist_ok=True)
         self.log.info(
-            "Ensured isolated directories exist: %s, %s, %s, %s, %s, %s, %s",
+            "Ensured isolated directories exist: %s, %s, %s, %s, %s, %s, %s, %s, %s",
             self.local_lib_dir,
             self.local_lib32_dir,
             self.local_share_dir,
             self.gamescope_wsi_compatibility_dir,
+            self.mangohud_layer_dir,
+            self.vkbasalt_layer_dir,
             self.user_vulkan_layer_dir,
             self.config_dir,
             self.mako_script_path.parent,

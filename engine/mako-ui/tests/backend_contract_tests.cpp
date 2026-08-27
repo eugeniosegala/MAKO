@@ -82,8 +82,13 @@ void test_independent_scaling_group() {
     require(scaling_group.contains(QStringLiteral("backend.scaling_sharpness")),
         "Scaling group does not bind the sharpness property");
     require(scaling_group.count(
-            QStringLiteral("visible: backend.scaling_enabled")) == 3,
-        "Scaling toggle does not hide every dependent setting");
+            QStringLiteral("visible: backend.scaling_enabled")) == 3 &&
+            scaling_group.count(QStringLiteral(
+                "visible: backend.scaling_enabled && backend.scaling_method !== \"native\"")) == 2,
+        "Native must hide tuning controls while the engine keeps its method visible");
+    require(scaling_group.contains(QStringLiteral(
+            "model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]")),
+        "Scaling method order must expose Native before every scaler");
     require(!scaling_group.contains(QStringLiteral("backend.adaptive")),
         "Scaling group is coupled to Adaptive");
     require(!scaling_group.contains(

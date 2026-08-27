@@ -45,6 +45,7 @@ using namespace mako::layer;
 namespace {
     constexpr uint64_t spatialScalingEnabledBit = uint64_t{1};
     constexpr uint64_t spatialScalingProcessSupportedBit = uint64_t{2};
+    constexpr uint64_t spatialScalingNativePassthroughBit = uint64_t{4};
 
     constexpr char makoBuildIdentity[] =
         "MAKO Renderer: render layer active; identity="
@@ -259,7 +260,10 @@ namespace {
 
 void Root::publishSurfaceScalingPolicy() noexcept {
     const bool enabled = this->active_profile &&
-        this->active_profile->scaling_enabled;
+        ls::spatialScalingRequested(*this->active_profile);
+    const bool nativePassthrough = this->active_profile &&
+        this->active_profile->scaling_enabled &&
+        this->active_profile->scaling_method == ls::ScalingMethod::Native;
     const float factor = this->active_profile
         ? this->active_profile->scaling_factor : 1.0F;
     const bool processSupported = spatialScalingProcessSupported(
@@ -272,6 +276,8 @@ void Root::publishSurfaceScalingPolicy() noexcept {
     ) << 32U;
     const uint64_t packed = packedFactor |
         (enabled ? spatialScalingEnabledBit : uint64_t{0}) |
+        (nativePassthrough
+            ? spatialScalingNativePassthroughBit : uint64_t{0}) |
         (processSupported
             ? spatialScalingProcessSupportedBit : uint64_t{0});
     const uint64_t observedSequence =
@@ -316,6 +322,8 @@ SpatialScalingPolicySnapshot Root::surfaceScalingPolicySnapshot()
         return SpatialScalingPolicySnapshot{
             .policy = {
                 .enabled = (packed & spatialScalingEnabledBit) != 0,
+                .nativePassthrough =
+                    (packed & spatialScalingNativePassthroughBit) != 0,
                 .factor = std::bit_cast<float>(
                     static_cast<uint32_t>(packed >> 32U)
                 ),
@@ -438,6 +446,8 @@ Root::Root() :
     this->active_profile = profile->second;
     this->frameGenerationConfiguredAtStartup =
         this->active_profile->frame_generation_enabled;
+    this->scalingEngineConfiguredAtStartup =
+        this->active_profile->scaling_enabled;
 
     std::cerr << "MAKO Renderer: using profile with name '" << this->active_profile->name << "' ";
     switch (profile->first) {
@@ -556,28 +566,45 @@ ConfigurationUpdateResult Root::update() {
     bool frameGenerationInteropPending = false;
     bool ultraPerformancePending =
         activeUltraPerformance != requestedUltraPerformance;
+    bool scalingEnginePending = false;
     if (runtimeProfile && this->active_profile) {
         auto projection = projectProcessStaticProfileForLiveUpdate(
             *this->active_profile, *runtimeProfile,
-            this->frameGenerationConfiguredAtStartup
+            this->frameGenerationConfiguredAtStartup,
+            this->scalingEngineConfiguredAtStartup
         );
         *runtimeProfile = std::move(projection.runtimeProfile);
         gpuSelectionPending = projection.gpuSelectionPending;
         frameGenerationInteropPending =
             projection.frameGenerationInteropPending;
         ultraPerformancePending = projection.ultraPerformancePending;
+        scalingEnginePending = projection.scalingEnginePending;
         profileProcessRestartRequired = projection.restartRequired();
-    } else if (runtimeProfile && runtimeProfile->frame_generation_enabled &&
-            !this->frameGenerationConfiguredAtStartup) {
-        runtimeProfile->frame_generation_enabled = false;
-        frameGenerationInteropPending = true;
-        profileProcessRestartRequired = true;
+    } else if (runtimeProfile) {
+        if (runtimeProfile->frame_generation_enabled &&
+                !this->frameGenerationConfiguredAtStartup) {
+            runtimeProfile->frame_generation_enabled = false;
+            frameGenerationInteropPending = true;
+            profileProcessRestartRequired = true;
+        }
+        if (runtimeProfile->scaling_enabled !=
+                this->scalingEngineConfiguredAtStartup) {
+            runtimeProfile->scaling_enabled =
+                this->scalingEngineConfiguredAtStartup;
+            scalingEnginePending = true;
+            profileProcessRestartRequired = true;
+        }
     }
     if (ultraPerformancePending) {
         profileProcessRestartRequired = true;
         std::cerr << "MAKO Renderer: Ultra Performance toggle deferred; "
                      "restart the game to apply its process-static FP16 and "
                      "resource policy; compatible profile changes remain live\n";
+    }
+    if (scalingEnginePending) {
+        std::cerr << "MAKO Renderer: Scaling Engine toggle deferred; restart "
+                     "the game to rebuild the process Vulkan layer chain; "
+                     "method and tuning changes remain live\n";
     }
     if (profileProcessRestartRequired) {
         result.processRestartDeferredContexts += this->swapchains.size();
@@ -598,6 +625,8 @@ ConfigurationUpdateResult Root::update() {
                       << frameGenerationInteropPending
                       << " ultra_performance_pending="
                       << ultraPerformancePending
+                      << " scaling_engine_pending="
+                      << scalingEnginePending
                       << " action=wait-for-process-restart\n";
         }
     }
@@ -1021,7 +1050,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
 
     std::optional<std::filesystem::path> scalingShaderDll;
     if (info.spatialScalingActive &&
-            profile.scaling_method != ls::ScalingMethod::Mako) {
+            ls::licensedScalingModelRequested(profile.scaling_method)) {
         try {
             scalingShaderDll = global.dll.has_value()
                 ? std::filesystem::path(*global.dll)

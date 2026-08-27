@@ -50,11 +50,13 @@ namespace mako::layer {
         bool gpuSelectionPending{false};
         bool frameGenerationInteropPending{false};
         bool ultraPerformancePending{false};
+        bool scalingEnginePending{false};
 
         [[nodiscard]] bool restartRequired() const {
             return this->gpuSelectionPending ||
                 this->frameGenerationInteropPending ||
-                this->ultraPerformancePending;
+                this->ultraPerformancePending ||
+                this->scalingEnginePending;
         }
     };
 
@@ -65,7 +67,8 @@ namespace mako::layer {
     projectProcessStaticProfileForLiveUpdate(
             const ls::GameConf& current,
             const ls::GameConf& requested,
-            const bool frameGenerationConfiguredAtStartup) {
+            const bool frameGenerationConfiguredAtStartup,
+            const bool scalingEngineConfiguredAtStartup) {
         ProcessStaticProfileProjection projection{
             .runtimeProfile = requested,
             .gpuSelectionPending = requested.gpu != current.gpu,
@@ -74,6 +77,8 @@ namespace mako::layer {
                 !frameGenerationConfiguredAtStartup,
             .ultraPerformancePending = requested.ultra_performance !=
                 current.ultra_performance,
+            .scalingEnginePending = requested.scaling_enabled !=
+                scalingEngineConfiguredAtStartup,
         };
         if (projection.gpuSelectionPending)
             projection.runtimeProfile.gpu = current.gpu;
@@ -85,6 +90,10 @@ namespace mako::layer {
             projection.runtimeProfile.flow_scale = current.flow_scale;
             projection.runtimeProfile.performance_mode =
                 current.performance_mode;
+        }
+        if (projection.scalingEnginePending) {
+            projection.runtimeProfile.scaling_enabled =
+                scalingEngineConfiguredAtStartup;
         }
         return projection;
     }
@@ -140,11 +149,14 @@ namespace mako::layer {
 
     [[nodiscard]] inline RecreatedProfileResourceKey recreatedProfileResourceKey(
             const ls::GameConf& profile) {
+        const bool scalingActive = ls::spatialScalingRequested(profile);
         return {
-            .scalingEnabled = profile.scaling_enabled,
-            .scalingMethod = profile.scaling_method,
-            .scalingFactor = profile.scaling_factor,
-            .scalingSharpness = profile.scaling_sharpness,
+            .scalingEnabled = scalingActive,
+            .scalingMethod = scalingActive
+                ? profile.scaling_method : ls::ScalingMethod::Native,
+            .scalingFactor = scalingActive ? profile.scaling_factor : 1.0F,
+            .scalingSharpness = scalingActive
+                ? profile.scaling_sharpness : 0.5F,
             .effectiveFlowScale = ls::effectiveFlowScale(profile),
             .effectivePerformanceMode = ls::effectivePerformanceMode(profile),
             .requiredGeneratedFrameCapacity =
@@ -407,9 +419,10 @@ namespace mako::layer {
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
 
-        // GPU and Ultra Performance participate in process-wide backend
-        // construction. A natural application swapchain recreation reuses that
-        // backend and therefore cannot satisfy either change.
+        // GPU, Ultra Performance, and Scaling Engine participate in
+        // process-wide backend or Vulkan-layer construction. A natural
+        // application swapchain recreation reuses those process owners and
+        // therefore cannot satisfy any of these changes.
         if (current.gpu != next.gpu) {
             applied.gpu = current.gpu;
             processRestartDeferred = true;
@@ -420,15 +433,25 @@ namespace mako::layer {
             applied.performance_mode = current.performance_mode;
             processRestartDeferred = true;
         }
-
-        // Scaling, Flow Scale, and model selection shape private resources,
-        // while pacing shapes the game-owned swapchain. They remain at their
-        // actually applied values until recreation completes.
-        if (current.scaling_enabled != next.scaling_enabled ||
-                current.scaling_method != next.scaling_method ||
-                current.scaling_factor != next.scaling_factor ||
-                current.scaling_sharpness != next.scaling_sharpness) {
+        if (current.scaling_enabled != next.scaling_enabled) {
             applied.scaling_enabled = current.scaling_enabled;
+            processRestartDeferred = true;
+        }
+
+        // Scaler selection/tuning, Flow Scale, and model selection shape
+        // private resources, while pacing shapes the game-owned swapchain.
+        // They remain at their actually applied values until recreation
+        // completes inside an already compatible process.
+        const bool scalerSettingsChanged =
+            current.scaling_method != next.scaling_method ||
+            current.scaling_factor != next.scaling_factor ||
+            current.scaling_sharpness != next.scaling_sharpness;
+        const bool spatialScalingResourcesChanged =
+            current.scaling_enabled == next.scaling_enabled &&
+            (ls::spatialScalingRequested(current) ||
+             ls::spatialScalingRequested(next)) &&
+            scalerSettingsChanged;
+        if (spatialScalingResourcesChanged) {
             applied.scaling_method = current.scaling_method;
             applied.scaling_factor = current.scaling_factor;
             applied.scaling_sharpness = current.scaling_sharpness;
@@ -499,9 +522,7 @@ namespace mako::layer {
             ));
         const bool spatialScalingChanged =
             current.scaling_enabled != next.scaling_enabled ||
-            current.scaling_method != next.scaling_method ||
-            current.scaling_factor != next.scaling_factor ||
-            current.scaling_sharpness != next.scaling_sharpness;
+            spatialScalingResourcesChanged;
         const bool frameGenerationBackendChanged =
             current.ultra_performance == next.ultra_performance && (
             ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||

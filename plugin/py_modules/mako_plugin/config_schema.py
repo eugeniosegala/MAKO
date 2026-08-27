@@ -210,7 +210,8 @@ class ConfigurationManager:
         scaling_method = validated["scaling_method"].strip().lower()
         if scaling_method not in SCALING_METHOD_VALUES:
             raise ValueError(
-                "scaling_method must be 'mako', 'ls1', or 'ls1-performance'"
+                "scaling_method must be 'native', 'mako', 'ls1', or "
+                "'ls1-performance'"
             )
         validated["scaling_method"] = scaling_method
         if not (
@@ -227,8 +228,8 @@ class ConfigurationManager:
         external_vulkan_layer = validated["external_vulkan_layer"].strip().lower()
         if external_vulkan_layer not in EXTERNAL_VULKAN_LAYER_VALUES:
             raise ValueError(
-                "external_vulkan_layer must be empty, 'gamescope-wsi', "
-                "'mangohud', or 'vkbasalt'"
+                "external_vulkan_layer must be empty, 'mangohud', or "
+                "'vkbasalt'"
             )
         validated["external_vulkan_layer"] = external_vulkan_layer
         if validated["dynamic_cadence_recovery"]:

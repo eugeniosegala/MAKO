@@ -21,7 +21,6 @@ from .constants import (
     COMPETING_LSFG_DISABLE_ENVS,
     DXVK_HDR_ENV,
     EXTERNAL_VULKAN_LAYER_ENV,
-    EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI,
     EXTERNAL_VULKAN_LAYER_MANGOHUD,
     EXTERNAL_VULKAN_LAYER_VKBASALT,
     GAMESCOPE_WSI_DISABLE_ENV,
@@ -50,7 +49,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 46
+WRAPPER_FORMAT_VERSION = 47
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -63,7 +62,7 @@ REQUIRED_WRAPPER_EXPORTS = (
     *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
     f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
     f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
-    "mako_scaling_presentation_required=",
+    "mako_gamescope_wsi_required=",
     f"export {EXTERNAL_VULKAN_LAYER_ENV}=",
     f"export {VK_IMPLICIT_LAYER_PATH_ENV}=",
     f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
@@ -108,9 +107,14 @@ class WrapperGenerationContext:
     config_file_path: Path
     local_share_dir: Path
     gamescope_wsi_compatibility_dir: Path
+    mangohud_layer_dir: Path
+    vkbasalt_layer_dir: Path
     flatpak_implicit_layer_dir: str
-    host_system_implicit_layer_dir: Path
     gamescope_wsi_manifest_filename_64: str
+    mangohud_manifest_filename_64: str
+    mangohud_manifest_filename_32: str
+    vkbasalt_manifest_filename_64: str
+    vkbasalt_manifest_filename_32: str
     armada_device_env: Path
     armada_game_launch: Path
 
@@ -166,14 +170,13 @@ def script_configuration_lines(
 ) -> list[str]:
     """Generate wrapper settings without repeating forced compatibility exports."""
     lines = get_script_generation_logic()(config)
-    # A fixed Vulkan layer chain cannot gain Gamescope WSI after instance
-    # creation. Record whether this profile needs the compositor-owned
-    # source/presentation split before the wrapper assembles that chain. Keep
-    # this as a shell-local generated hint rather than another persisted field
-    # or public environment interface.
+    # A Vulkan layer chain cannot gain Gamescope WSI after instance creation.
+    # The Scaling Engine provisions that presentation path even while its live
+    # method is Native; the explicit compatibility switch provisions the same
+    # path for FG-only profiles. Keep the combined decision shell-local.
     lines.append(
-        "mako_scaling_presentation_required="
-        f"{1 if config.get('scaling_enabled', False) else 0}"
+        "mako_gamescope_wsi_required="
+        f"{1 if (config.get('scaling_enabled', False) or config.get('gamescope_wsi_compatibility', False)) else 0}"
     )
     for line in hdr_lines(config):
         if line not in lines:
@@ -236,7 +239,6 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
     if PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT != 3:
         raise ValueError("the managed diagnostics rotation requires three sessions")
     diagnostics_log_path = context.config_dir / PRESENT_DIAGNOSTICS_LOG_FILENAME
-    system_layer_dir = shlex.quote(str(context.host_system_implicit_layer_dir))
     gamescope_wsi_manifest = shlex.quote(str(
         context.gamescope_wsi_compatibility_dir /
         context.gamescope_wsi_manifest_filename_64
@@ -244,6 +246,20 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
     gamescope_wsi_layer_dir = shlex.quote(str(
         context.gamescope_wsi_compatibility_dir
     ))
+    mangohud_manifest = shlex.quote(str(
+        context.mangohud_layer_dir / context.mangohud_manifest_filename_64
+    ))
+    mangohud_manifest32 = shlex.quote(str(
+        context.mangohud_layer_dir / context.mangohud_manifest_filename_32
+    ))
+    mangohud_layer_dir = shlex.quote(str(context.mangohud_layer_dir))
+    vkbasalt_manifest = shlex.quote(str(
+        context.vkbasalt_layer_dir / context.vkbasalt_manifest_filename_64
+    ))
+    vkbasalt_manifest32 = shlex.quote(str(
+        context.vkbasalt_layer_dir / context.vkbasalt_manifest_filename_32
+    ))
+    vkbasalt_layer_dir = shlex.quote(str(context.vkbasalt_layer_dir))
     return [
         f'export {PRESENT_ACQUIRE_TIMEOUT_ENV}="${{{PRESENT_ACQUIRE_TIMEOUT_ENV}:-{PRESENT_ACQUIRE_TIMEOUT_MS}}}"',
         # Presentation logging is intentionally opt-in for every build.
@@ -257,57 +273,58 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f'mako_external_vulkan_layer="${{{EXTERNAL_VULKAN_LAYER_ENV}:-}}"',
         f"unset {EXTERNAL_VULKAN_LAYER_ENV}",
         f"mako_gamescope_wsi_layer_dir={gamescope_wsi_layer_dir}",
+        f"mako_mangohud_layer_dir={mangohud_layer_dir}",
+        f"mako_vkbasalt_layer_dir={vkbasalt_layer_dir}",
         "unset MANGOHUD",
         "unset ENABLE_VKBASALT",
         f"if [ -d {shlex.quote(context.flatpak_implicit_layer_dir)} ]; then",
         f"    mako_implicit_layer_path={shlex.quote(context.flatpak_implicit_layer_dir)}",
         "else",
         f"    mako_implicit_layer_path={shlex.quote(str(context.local_share_dir))}",
-        # Gamescope's WSI layer runs above MAKO. In that order its internal
-        # Wayland surface gives MAKO a variable lower surface, so the game can
-        # keep its selected render extent while MAKO owns the larger
-        # presentation extent. Admit the already-validated staged manifest
-        # automatically only for profiles that start with scaling enabled.
-        # An explicit optional tool remains authoritative and mutually
-        # exclusive; fixed-surface scaling can still work without WSI there.
-        '    if [ "${mako_scaling_presentation_required:-0}" = 1 ] && [ -z "$mako_external_vulkan_layer" ]; then',
-        f"        mako_external_vulkan_layer={EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI}",
-        "    fi",
-        '    case "$mako_external_vulkan_layer" in',
-        f"        {EXTERNAL_VULKAN_LAYER_GAMESCOPE_WSI})",
-        f"            if [ -r {gamescope_wsi_manifest} ]; then",
-        f"                unset {GAMESCOPE_WSI_DISABLE_ENV}",
-        f"                export {GAMESCOPE_WSI_ENABLE_ENV}=1",
-        "                export NODEVICE_SELECT=1",
-        "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
+        # Gamescope WSI runs above MAKO. Its internal Wayland surface gives
+        # MAKO a variable lower surface while the game keeps its render extent.
+        # Scaling Engine and explicit WSI compatibility own this independent
+        # presentation boundary; MangoHud or vkBasalt may be admitted below
+        # MAKO as a separate, mutually exclusive post-process choice.
+        '    if [ "${mako_gamescope_wsi_required:-0}" = 1 ] && [ -r '
+        f"{gamescope_wsi_manifest} ]; then",
+        f"        unset {GAMESCOPE_WSI_DISABLE_ENV}",
+        f"        export {GAMESCOPE_WSI_ENABLE_ENV}=1",
+        "        export NODEVICE_SELECT=1",
+        "        export DISABLE_LAYER_MESA_ANTI_LAG=1",
         # Search order is dispatch order for these staged implicit manifests:
         # Gamescope WSI must intercept the application surface first and call
         # down into MAKO with its internal variable Wayland surface. Reversing
         # these directories leaves MAKO on the fixed X11 surface and scaling
         # cannot obtain a distinct presentation extent.
-        '                mako_implicit_layer_path="$mako_gamescope_wsi_layer_dir:$mako_implicit_layer_path"',
-        "            fi",
-        "            ;;",
+        '        mako_implicit_layer_path="$mako_gamescope_wsi_layer_dir:$mako_implicit_layer_path"',
+        "    fi",
+        '    case "$mako_external_vulkan_layer" in',
         f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
-        "            export MANGOHUD=1",
-        "            export NODEVICE_SELECT=1",
-        "            export DISABLE_LAYER_MESA_ANTI_LAG=1",
-        f"            if [ -d {system_layer_dir} ]; then",
-        f'                mako_implicit_layer_path="$mako_implicit_layer_path:{context.host_system_implicit_layer_dir}"',
+        f"            if [ -r {mangohud_manifest} ] || [ -r {mangohud_manifest32} ]; then",
+        "                unset DISABLE_MANGOHUD",
+        "                export MANGOHUD=1",
+        "                export NODEVICE_SELECT=1",
+        "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
+        '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_mangohud_layer_dir"',
         "            fi",
         "            ;;",
         f"        {EXTERNAL_VULKAN_LAYER_VKBASALT})",
-        "            unset DISABLE_VKBASALT",
-        "            export ENABLE_VKBASALT=1",
-        "            export NODEVICE_SELECT=1",
-        "            export DISABLE_LAYER_MESA_ANTI_LAG=1",
-        f"            if [ -d {system_layer_dir} ]; then",
-        f'                mako_implicit_layer_path="$mako_implicit_layer_path:{context.host_system_implicit_layer_dir}"',
+        f"            if [ -r {vkbasalt_manifest} ] || [ -r {vkbasalt_manifest32} ]; then",
+        "                unset DISABLE_VKBASALT",
+        "                export ENABLE_VKBASALT=1",
+        "                export NODEVICE_SELECT=1",
+        "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
+        '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_vkbasalt_layer_dir"',
         "            fi",
         "            ;;",
         "    esac",
         "fi",
-        "unset mako_scaling_presentation_required",
+        "unset mako_gamescope_wsi_required",
+        "unset mako_external_vulkan_layer",
+        "unset mako_gamescope_wsi_layer_dir",
+        "unset mako_mangohud_layer_dir",
+        "unset mako_vkbasalt_layer_dir",
         f'export {VK_IMPLICIT_LAYER_PATH_ENV}="$mako_implicit_layer_path"',
         f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
         f"export {MAKO_CONFIG_ENV}={shlex.quote(str(context.config_file_path))}",

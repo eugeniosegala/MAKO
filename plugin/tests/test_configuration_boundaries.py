@@ -48,6 +48,12 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.service.gamescope_wsi_compatibility_dir = Path(
             "/home/deck/.local/share/mako/gamescope_wsi_compatibility.d"
         )
+        self.service.mangohud_layer_dir = Path(
+            "/home/deck/.local/share/mako/mangohud.d"
+        )
+        self.service.vkbasalt_layer_dir = Path(
+            "/home/deck/.local/share/mako/vkbasalt.d"
+        )
 
     def test_default_profile_name_comes_from_the_shared_contract(self):
         self.assertEqual(DEFAULT_PROFILE_NAME, SHARED_DEFAULT_PROFILE_NAME)
@@ -123,10 +129,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         defaults = ConfigurationManager.get_defaults()
         content = self.service._generate_script_content(defaults)
 
-        self.assertEqual(len(content.encode("utf-8")), 4659)
+        self.assertEqual(len(content.encode("utf-8")), 4922)
         self.assertEqual(
             _sha256(content),
-            "d31ffc45ea2270622798e9c60ad56513ea7eaa4ddade21b1056c6da04da29ee4",
+            "c7f04d18f0f78aad3ae3e85e1bbf9bc59db01e40fbdc130f51c0937d398b391f",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -193,10 +199,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
                 profile_data
             )
 
-        self.assertEqual(len(content.encode("utf-8")), 6757)
+        self.assertEqual(len(content.encode("utf-8")), 7006)
         self.assertEqual(
             _sha256(content),
-            "463ede6914539d836222feb9aa223a7259b0b9938576150172b4db4c84db3a10",
+            "3d686ee885394668f106e911f6aa226f3b3712d66f947c0d7158dc0f222ba717",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -276,7 +282,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "e98579a1c60a0d1adbf64d014de5e87cc207217308bc4cb4ed5245d1c12bad57",
+            "d7254bf2fd2c7b265db59f27a3192090a88184a86f034accbdeb5d0d5415a8aa",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):
@@ -316,7 +322,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertNotIn("retired_option", stored_wrapper_settings)
         self.assertEqual(
             _sha256(wrapper_content),
-            "28040de9fc3c8c0909013ee71449cc0439d8bb5bf96ed83eb3df1069df5acf9c",
+            "b5c94c753f2b7b85bfaae74d98c53580ed0b0e03903e87b1d12199489b002dd6",
         )
         self.assertEqual(
             _sha256(metadata_content),
