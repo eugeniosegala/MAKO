@@ -540,19 +540,12 @@ int main() {
     resourceRecreation.update(current, next, 7, resourceChangeStarted);
     expect(resourceRecreation.pending() && resourceRecreation.armed(),
         "A changed resource profile must arm one live recreation signal");
-    expect(!resourceRecreation.signalAfterSuccessfulPresent(
-            resourceChangeStarted +
-                LiveProfileResourceRecreation::quietPeriod -
-                std::chrono::milliseconds(1)),
-        "A live resource request must debounce an in-progress control edit");
     expect(resourceRecreation.signalAfterSuccessfulPresent(
-            resourceChangeStarted +
-                LiveProfileResourceRecreation::quietPeriod) == 7,
-        "The first successful lower present must receive the request revision");
+            resourceChangeStarted) == 7,
+        "A discrete scaler topology change must use the next successful present");
     expect(resourceRecreation.pending() && !resourceRecreation.armed() &&
             !resourceRecreation.signalAfterSuccessfulPresent(
-                resourceChangeStarted +
-                    LiveProfileResourceRecreation::quietPeriod),
+                resourceChangeStarted),
         "A resource request must emit only one out-of-date signal");
     resourceRecreation.update(current, next, 8,
         resourceChangeStarted + std::chrono::seconds(1));
@@ -564,9 +557,8 @@ int main() {
         resourceChangeStarted + std::chrono::seconds(1));
     expect(resourceRecreation.armed() &&
             resourceRecreation.signalAfterSuccessfulPresent(
-                resourceChangeStarted + std::chrono::seconds(1) +
-                    LiveProfileResourceRecreation::quietPeriod) == 9,
-        "A different pending scaling profile must receive one fresh signal");
+                resourceChangeStarted + std::chrono::seconds(1)) == 9,
+        "A different scaler method must receive one immediate fresh signal");
     resourceRecreation.update(current, current, 10,
         resourceChangeStarted + std::chrono::seconds(2));
     expect(!resourceRecreation.pending() && !resourceRecreation.armed(),
@@ -582,6 +574,23 @@ int main() {
                 resourceChangeStarted + std::chrono::seconds(3) +
                     LiveProfileResourceRecreation::quietPeriod) == 11,
         "Flow-scale and model changes must share the live recreation boundary");
+
+    auto scalingParameterCurrent = current;
+    scalingParameterCurrent.scaling_enabled = true;
+    auto scalingParameterRequest = scalingParameterCurrent;
+    scalingParameterRequest.scaling_factor = 2.0F;
+    resourceRecreation.update(
+        scalingParameterCurrent, scalingParameterRequest, 13,
+        resourceChangeStarted + std::chrono::seconds(5)
+    );
+    expect(!resourceRecreation.signalAfterSuccessfulPresent(
+            resourceChangeStarted + std::chrono::seconds(5) +
+                LiveProfileResourceRecreation::quietPeriod -
+                std::chrono::milliseconds(1)) &&
+            resourceRecreation.signalAfterSuccessfulPresent(
+                resourceChangeStarted + std::chrono::seconds(5) +
+                    LiveProfileResourceRecreation::quietPeriod) == 13,
+        "Numeric scaling controls must retain recreation debouncing");
 
     auto capacityRequest = current;
     capacityRequest.adaptive_max_multiplier = 4;

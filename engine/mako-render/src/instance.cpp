@@ -799,6 +799,15 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
 
     modification.variableSurface = !fixedSurfaceExtent(caps.currentExtent);
 
+    VkPhysicalDeviceMemoryProperties memoryProperties{};
+    vk.fi().GetPhysicalDeviceMemoryProperties(
+        vk.physdev(), &memoryProperties
+    );
+    const VkDeviceSize deviceLocalHeapBytes =
+        largestDeviceLocalHeapBytes(memoryProperties);
+    const uint64_t presentationPixelBudget =
+        variablePresentationPixelBudget(memoryProperties);
+
     const auto policySnapshot = this->surfaceScalingPolicySnapshot();
     const auto scalingDecision = scalingDecisionForCreate(
         policySnapshot.policy,
@@ -807,7 +816,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         caps,
         createInfo.imageExtent,
         previousVariableExtents,
-        fixedSurfaceContract
+        fixedSurfaceContract,
+        presentationPixelBudget
     );
     const auto& scalingExtents = scalingDecision.extents;
     modification.variableFeedbackSuppressed =
@@ -897,6 +907,10 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << 'x' << caps.currentExtent.height
                   << "; surface_extent_mode="
                   << (modification.variableSurface ? "variable" : "fixed")
+                  << "; device_local_heap_mib="
+                  << (deviceLocalHeapBytes / (1024 * 1024))
+                  << "; variable_presentation_pixel_budget="
+                  << presentationPixelBudget
                   << "; advertised_source="
                   << (advertised ? advertised->extents.source.width : 0)
                   << 'x'

@@ -31,6 +31,17 @@ namespace {
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         };
     }
+
+    VkPhysicalDeviceMemoryProperties memoryProperties(
+            const VkDeviceSize deviceLocalHeapBytes) {
+        VkPhysicalDeviceMemoryProperties properties{};
+        properties.memoryHeapCount = 1;
+        properties.memoryHeaps[0] = {
+            .size = deviceLocalHeapBytes,
+            .flags = VK_MEMORY_HEAP_DEVICE_LOCAL_BIT,
+        };
+        return properties;
+    }
 }
 
 int main() {
@@ -361,6 +372,69 @@ int main() {
         ).inactiveReason == SpatialScalingInactiveReason::
             VariableSurfaceNoHeadroom,
         "Variable maximum-extent exhaustion must expose a stable inactive reason");
+
+    VkSurfaceCapabilitiesKHR largeVariableCreate{
+        .currentExtent = {UINT32_MAX, UINT32_MAX},
+        .minImageExtent = {16, 16},
+        .maxImageExtent = {8192, 8192},
+    };
+    constexpr VkDeviceSize gibibyte = uint64_t{1024} * 1024 * 1024;
+    const auto twoGiB = memoryProperties(2 * gibibyte);
+    const auto eightGiB = memoryProperties(8 * gibibyte);
+    const auto twentyFourGiB = memoryProperties(24 * gibibyte);
+    expect(largestDeviceLocalHeapBytes(eightGiB) == 8 * gibibyte,
+        "The allocation envelope must use the largest device-local heap");
+    expect(variablePresentationPixelBudget(twoGiB) ==
+            minimumVariablePresentationPixels,
+        "Low-memory devices must retain the baseline 4K presentation tier");
+    expect(variablePresentationPixelBudget(eightGiB) == 11'184'810,
+        "An 8 GiB heap must receive the conservative variable-presentation budget");
+    expect(variablePresentationPixelBudget(twentyFourGiB) == 33'554'432,
+        "A 24 GiB heap must admit the 8K presentation tier");
+    expect(variablePresentationPixelBudget(
+            VkPhysicalDeviceMemoryProperties{}) == 0,
+        "A device without a local heap must fail the allocation envelope closed");
+
+    const auto fourKPresentation = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {1920, 1080},
+        std::nullopt, std::nullopt,
+        variablePresentationPixelBudget(eightGiB)
+    );
+    expect(fourKPresentation.extents && sameExtent(
+            fourKPresentation.extents->presentation, {3840, 2160}),
+        "An 8 GiB device must retain exact 1080p-to-4K scaling");
+    const auto fiveKRejected = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {2560, 1440},
+        std::nullopt, std::nullopt,
+        variablePresentationPixelBudget(eightGiB)
+    );
+    expect(!fiveKRejected.extents && fiveKRejected.inactiveReason ==
+            SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+        "An 8 GiB device must reject an exact 5K presentation over its envelope");
+    const auto eightKRejected = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {3840, 2160},
+        std::nullopt, std::nullopt,
+        variablePresentationPixelBudget(eightGiB)
+    );
+    expect(!eightKRejected.extents && eightKRejected.inactiveReason ==
+            SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+        "An 8 GiB device must not allocate an 8K lower swapchain");
+    const auto nonWidescreen = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {1280, 1024},
+        std::nullopt, std::nullopt,
+        variablePresentationPixelBudget(eightGiB)
+    );
+    expect(nonWidescreen.extents && sameExtent(
+            nonWidescreen.extents->presentation, {2560, 2048}),
+        "Allocation safety must retain valid 5:4 source scaling");
+    const auto eightKPresentation = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {3840, 2160},
+        std::nullopt, std::nullopt,
+        variablePresentationPixelBudget(twentyFourGiB)
+    );
+    expect(eightKPresentation.extents && sameExtent(
+            eightKPresentation.extents->presentation, {7680, 4320}),
+        "A 24 GiB device must retain exact 4K-to-8K scaling");
 
     profile.scaling_factor = std::numeric_limits<float>::infinity();
     expect(!selectSpatialScalingExtents(

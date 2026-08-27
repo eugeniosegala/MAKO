@@ -490,6 +490,42 @@ int main() {
     expect(handoff.active && handoff.changed,
         "explicit pacing-handoff reset retained stale cooldown state");
 
+    expect(LowerPresentStallRecovery::stallThreshold(120) == 50ms &&
+            LowerPresentStallRecovery::stallThreshold(60) >= 66ms &&
+            LowerPresentStallRecovery::stallThreshold(60) < 67ms &&
+            LowerPresentStallRecovery::stallThreshold(40) == 100ms,
+        "lower-present stall thresholds lost their display-relative floor");
+    LowerPresentStallRecovery presentStallRecovery;
+    const auto presentStallStart =
+        LowerPresentStallRecovery::TimePoint{};
+    auto presentStall = presentStallRecovery.observe(
+        presentStallStart, 49ms, 120
+    );
+    expect(!presentStall.quarantined &&
+            !presentStallRecovery.active(),
+        "a sub-threshold lower present entered recovery");
+    presentStall = presentStallRecovery.observe(
+        presentStallStart + 1ms, 621ms, 120
+    );
+    expect(presentStall.quarantined &&
+            presentStall.threshold == 50ms &&
+            presentStallRecovery.active(),
+        "a severe lower present did not enter native stabilization");
+    auto presentStallDecision = presentStallRecovery.beforePresent(
+        presentStallStart + 1001ms
+    );
+    expect(presentStallDecision.bypassGeneration &&
+            presentStallDecision.bypassedFrames == 1,
+        "lower-present recovery did not protect the stabilization window");
+    presentStallDecision = presentStallRecovery.beforePresent(
+        presentStallStart + 2001ms
+    );
+    expect(presentStallDecision.recovered &&
+            presentStallDecision.beginHistoryWarmup &&
+            presentStallDecision.bypassedFrames == 1 &&
+            !presentStallRecovery.active(),
+        "lower-present recovery did not end at its absolute deadline");
+
     FixedRefreshBudget budget;
     const auto start = FixedRefreshBudget::TimePoint{};
     size_t generated = 0;

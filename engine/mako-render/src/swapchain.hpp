@@ -181,6 +181,7 @@ namespace mako::layer {
         struct RecoveryState {
             GeneratedImageAdmission generatedImageAdmission;
             OrderedAcquireRecovery orderedAcquireRecovery;
+            LowerPresentStallRecovery lowerPresentStallRecovery;
             PipelineBusyRecovery pipelineBusyRecovery;
             bool backendPending{false};
             size_t historyWarmupRemaining{0};
@@ -267,7 +268,6 @@ namespace mako::layer {
         void ensureHistoryWarmup();
         [[nodiscard]] PresentationFramePlan prepareFramePlan(
             std::chrono::steady_clock::time_point presentNow,
-            bool gamescopeHdrTransport,
             bool orderedAcquireRecoveryProbe);
         void reportAdaptiveDelivery(const PresentationFramePlan& plan,
             size_t acceptedForPresentation);

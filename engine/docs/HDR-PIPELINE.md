@@ -187,7 +187,7 @@ If this proof succeeds, MAKO Decky could eventually offer a per-game experimenta
 - Never expose the complete host implicit-layer directory as an HDR compatibility policy.
 - Never assume discovery proves the required `Gamescope WSI -> MAKO Renderer` order; retain loader evidence.
 - Never change presentation transport for a live `VkSwapchainKHR`.
-- Never force a game-owned swapchain recreation for an HDR or presentation-transport setting change. The profile-resource controls documented in [Spatial scaling](SCALING.md)—spatial scaling, Flow Scale, and Lighter FG Model—are the narrow exception: after debounce and successful lower presentation they emit one standard out-of-date result, without changing transport on the live handle or destroying it inside MAKO.
+- Never force a game-owned swapchain recreation for an HDR or presentation-transport setting change. The profile-resource controls documented in [Spatial scaling](SCALING.md)—spatial scaling, Flow Scale, and Lighter FG Model—are the narrow exception: discrete scaler methods use the next successful lower presentation, while numeric/model/capacity controls retain their quiet period before emitting one standard out-of-date result, without changing transport on the live handle or destroying it inside MAKO.
 - Never wait for a generated image on the Gamescope HDR bridge; native frames take priority under pressure.
 - Never treat an unavailable generated image as temporal-history corruption.
 - Keep unsupported encodings and failed private transitions on real-frame passthrough.

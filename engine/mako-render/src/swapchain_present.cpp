@@ -367,6 +367,8 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
                     << " target_applies=0"
                     << " display_budget_hz="
                     << this->gamescopeRefreshHz.value_or(0)
+                    << " display_budget_applies="
+                    << (this->gamescopeRefreshHz.value_or(0) > 0 ? 1 : 0)
                     << '\n';
             std::cerr << message.str();
             this->diagnosticsState.fixedWindowStarted = presentNow;
@@ -569,7 +571,6 @@ void Swapchain::ensureHistoryWarmup() {
 
 Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         const DiagnosticsClock::time_point presentNow,
-        const bool gamescopeHdrTransport,
         const bool orderedAcquireRecoveryProbe) {
     PresentationFramePlan plan;
     plan.orderedAcquireRecoveryProbe = orderedAcquireRecoveryProbe;
@@ -586,12 +587,10 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         : AdaptiveFramePlan{};
     const size_t fixedGeneratedFrameCount = schedulerEnabled
         ? 0
-        : (gamescopeHdrTransport
-            ? this->fixedRefreshBudget.plan(
-                presentNow, this->gamescopeRefreshHz,
-                this->configuredFixedGeneratedFrames
-            )
-            : this->configuredFixedGeneratedFrames);
+        : this->fixedRefreshBudget.plan(
+            presentNow, this->gamescopeRefreshHz,
+            this->configuredFixedGeneratedFrames
+        );
     if (!schedulerEnabled &&
             fixedGeneratedFrameCount < this->configuredFixedGeneratedFrames) {
         this->diagnosticsState.fixedSkippedFrames +=
@@ -1026,6 +1025,7 @@ VkResult Swapchain::presentGeneratedFrames(
     auto generatedSubmitDuration = DiagnosticsClock::duration::zero();
     auto generatedPresentDuration = DiagnosticsClock::duration::zero();
     auto originalPresentDuration = DiagnosticsClock::duration::zero();
+    auto maximumLowerPresentDuration = DiagnosticsClock::duration::zero();
     bool acquireDeadlineExceeded = false;
     const auto reportOrderedAcquire = [&](const bool timedOut,
             const bool budgetExhausted,
@@ -1513,8 +1513,12 @@ VkResult Swapchain::presentGeneratedFrames(
         result = invocation.vk.df().QueuePresentKHR(
             invocation.queue, &presentInfo
         );
-        generatedPresentDuration += finishPresentDiagnostic(
+        const auto oneGeneratedPresentDuration = finishPresentDiagnostic(
             generatedPresentStarted
+        );
+        generatedPresentDuration += oneGeneratedPresentDuration;
+        maximumLowerPresentDuration = std::max(
+            maximumLowerPresentDuration, oneGeneratedPresentDuration
         );
         logSlowPresentOperation(
             "present-generated-image", this->frameState.realFrameIndex,
@@ -1539,6 +1543,9 @@ VkResult Swapchain::presentGeneratedFrames(
     );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
+    maximumLowerPresentDuration = std::max(
+        maximumLowerPresentDuration, originalPresentDuration
+    );
 
     const auto presentWorkDuration = finishPresentDiagnostic(
         invocation.started
@@ -1553,6 +1560,42 @@ VkResult Swapchain::presentGeneratedFrames(
     this->reportAdaptiveDelivery(
         plan, plan.scheduledGeneratedFrames.size()
     );
+    if (this->privateOrderedTransport) {
+        const auto stall =
+            this->recoveryState.lowerPresentStallRecovery.observe(
+                DiagnosticsClock::now(), maximumLowerPresentDuration,
+                this->gamescopeRefreshHz
+            );
+        if (stall.quarantined) {
+            this->fixedRefreshBudget.reset();
+            if (presentDiagnosticsEnabled()) {
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=lower-present-stall-quarantine"
+                          << " context=" << this->diagnosticsState.contextId
+                          << " phase=native-stabilization"
+                          << " present_max_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 stall.presentDuration
+                             ).count()
+                          << " threshold_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 stall.threshold
+                             ).count()
+                          << " stabilization_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 LowerPresentStallRecovery::
+                                     stabilizationDuration()
+                             ).count()
+                          << " requested_generated="
+                          << plan.requestedGeneratedFrames.size()
+                          << " presented_generated="
+                          << plan.scheduledGeneratedFrames.size()
+                          << " frame=" << this->frameState.realFrameIndex
+                          << " sequence=" << this->frameState.sequenceIndex
+                          << " action=native-only\n";
+            }
+        }
+    }
     logSlowPresentBreakdown(
         this->diagnosticsState.contextId, this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, presentWorkDuration,
@@ -1670,6 +1713,45 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     if (!this->recoverBackendIfReady(vk))
         return this->presentNativeFrame(invocation);
 
+    if (this->privateOrderedTransport) {
+        const auto stallRecovery =
+            this->recoveryState.lowerPresentStallRecovery.beforePresent(
+                presentNow
+            );
+        if (stallRecovery.beginHistoryWarmup) {
+            this->ensureHistoryWarmup();
+            this->fixedRefreshBudget.reset();
+            if (presentDiagnosticsEnabled()) {
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=lower-present-stall-recovered"
+                          << " context=" << this->diagnosticsState.contextId
+                          << " phase=history-warmup"
+                          << " bypassed_frames="
+                          << stallRecovery.bypassedFrames
+                          << " recovery_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 stallRecovery.recoveryDuration
+                             ).count()
+                          << " history_warmup_frames="
+                          << AdaptiveScheduler::historyWarmupFrameCount()
+                          << " frame=" << this->frameState.realFrameIndex
+                          << " sequence=" << this->frameState.sequenceIndex
+                          << " action=warm-history-before-normal-policy\n";
+            }
+        }
+        if (stallRecovery.bypassGeneration) {
+            if (this->adaptiveScheduler) {
+                static_cast<void>(
+                    this->adaptiveScheduler->planFrame(presentNow, true)
+                );
+            } else {
+                this->diagnosticsState.fixedSkippedFrames +=
+                    this->configuredFixedGeneratedFrames;
+            }
+            return this->presentNativeFrame(invocation);
+        }
+    }
+
     bool orderedAcquireRecoveryProbe = false;
     bool boundedOrderedAcquireProbe = false;
     size_t orderedAcquireConsecutiveFailures = 0;
@@ -1758,7 +1840,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         this->frameState.backendFrameIndex % 2
     );
     auto plan = this->prepareFramePlan(
-        presentNow, gamescopeHdrTransport, orderedAcquireRecoveryProbe
+        presentNow, orderedAcquireRecoveryProbe
     );
     plan.boundedOrderedAcquireProbe = boundedOrderedAcquireProbe;
 

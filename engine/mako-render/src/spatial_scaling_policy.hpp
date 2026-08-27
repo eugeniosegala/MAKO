@@ -73,6 +73,7 @@ namespace mako::layer {
         ApplicationExtentMismatch,
         VariableSurfaceFeedback,
         VariableSurfaceNoHeadroom,
+        VariableSurfaceMemoryBudget,
         SwapchainShapeUnsupported,
         SwapchainFormatUnsupported,
         QueuePresentationUnsupported,
@@ -106,6 +107,8 @@ namespace mako::layer {
                 return "variable-surface-feedback";
             case SpatialScalingInactiveReason::VariableSurfaceNoHeadroom:
                 return "variable-surface-no-headroom";
+            case SpatialScalingInactiveReason::VariableSurfaceMemoryBudget:
+                return "variable-surface-memory-budget";
             case SpatialScalingInactiveReason::SwapchainShapeUnsupported:
                 return "swapchain-shape-unsupported";
             case SpatialScalingInactiveReason::SwapchainFormatUnsupported:
@@ -173,6 +176,45 @@ namespace mako::layer {
         return std::isfinite(factor) &&
             factor >= ls::GameConfLimits::minimumScalingFactor &&
             factor <= ls::GameConfLimits::maximumScalingFactor;
+    }
+
+    /// Variable WSI surfaces do not expose a compositor-owned presentation
+    /// extent. Bound their requested lower swapchain using a conservative
+    /// fraction of the largest device-local heap so a high source resolution
+    /// cannot multiply into a pathological allocation. The fixed 4K floor
+    /// retains the baseline display tier on unified-memory devices whose
+    /// driver exposes only a small device-local aperture. The 768-byte ratio
+    /// reserves one third of the heap against a 256-byte-per-presentation-
+    /// pixel combined active/retired spatial + frame-generation envelope.
+    inline constexpr uint64_t minimumVariablePresentationPixels =
+        uint64_t{3840} * uint64_t{2160};
+    inline constexpr VkDeviceSize
+        variablePresentationHeapBytesPerPixel = 768;
+
+    [[nodiscard]] constexpr VkDeviceSize largestDeviceLocalHeapBytes(
+            const VkPhysicalDeviceMemoryProperties& properties) noexcept {
+        VkDeviceSize largest{};
+        for (uint32_t index = 0; index < properties.memoryHeapCount; ++index) {
+            if ((properties.memoryHeaps[index].flags &
+                    VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0) {
+                largest = std::max(largest,
+                    properties.memoryHeaps[index].size);
+            }
+        }
+        return largest;
+    }
+
+    [[nodiscard]] constexpr uint64_t variablePresentationPixelBudget(
+            const VkPhysicalDeviceMemoryProperties& properties) noexcept {
+        const auto heapBytes = largestDeviceLocalHeapBytes(properties);
+        if (heapBytes == 0)
+            return 0;
+        return std::max(
+            minimumVariablePresentationPixels,
+            static_cast<uint64_t>(
+                heapBytes / variablePresentationHeapBytesPerPixel
+            )
+        );
     }
 
     /// The initial scaler contract is a conventional, unprotected,
@@ -314,7 +356,9 @@ namespace mako::layer {
             const std::optional<SpatialScalingExtents>&
                 previousVariableExtents = std::nullopt,
             const std::optional<FixedSurfaceScalingContract>&
-                fixedContract = std::nullopt) noexcept {
+                fixedContract = std::nullopt,
+            const std::optional<uint64_t>
+                variablePresentationPixels = std::nullopt) noexcept {
         SpatialScalingCreateDecision decision{
             .fixedContract = fixedContract,
         };
@@ -435,6 +479,15 @@ namespace mako::layer {
                 SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
             return decision;
         }
+        const uint64_t presentationPixels =
+            static_cast<uint64_t>(presentation.width) *
+            static_cast<uint64_t>(presentation.height);
+        if (variablePresentationPixels &&
+                presentationPixels > *variablePresentationPixels) {
+            decision.inactiveReason = SpatialScalingInactiveReason::
+                VariableSurfaceMemoryBudget;
+            return decision;
+        }
 
         decision.extents = SpatialScalingExtents{
             .source = requestedExtent,
@@ -453,7 +506,9 @@ namespace mako::layer {
             const std::optional<SpatialScalingExtents>&
                 previousVariableExtents = std::nullopt,
             const std::optional<FixedSurfaceScalingContract>&
-                fixedContract = std::nullopt) noexcept {
+                fixedContract = std::nullopt,
+            const std::optional<uint64_t>
+                variablePresentationPixels = std::nullopt) noexcept {
         return scalingDecisionForCreate(
             SpatialScalingPolicy{
                 .enabled = ls::spatialScalingRequested(profile),
@@ -466,7 +521,8 @@ namespace mako::layer {
             realCapabilities,
             requestedExtent,
             previousVariableExtents,
-            fixedContract
+            fixedContract,
+            variablePresentationPixels
         );
     }
 

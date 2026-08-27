@@ -12,7 +12,7 @@ A setting belongs to the earliest lifetime boundary that can safely establish al
 | --- | --- | --- |
 | Process-start discovery | Scaling Engine enablement, implicit-layer membership and order, Gamescope WSI isolation, HDR exposure, launcher compatibility environment | Start a new game process |
 | Process-wide backend | DLL, effective FP16 permission, GPU selection, Ultra Performance backend policy | First backend construction, or a new game process once a backend already exists |
-| Game-owned swapchain and private context | Spatial-scaling shape, Flow Scale, model selection, generated-image capacity, presentation shape | A natural game-owned recreation, or one debounced `VK_ERROR_OUT_OF_DATE_KHR` after a successful lower present for scaling/model/capacity edits |
+| Game-owned swapchain and private context | Spatial-scaling shape, Flow Scale, model selection, generated-image capacity, presentation shape | A natural game-owned recreation, or one `VK_ERROR_OUT_OF_DATE_KHR` after a successful lower present; discrete scaler methods request it immediately and numeric/model/capacity edits first coalesce |
 | Live context policy | Generation enable, refresh threshold, Fixed/Adaptive selection within reserved capacity, target, caps, cadence policy | The next successful configuration reload and application-present boundary |
 | Compositor safety feedback | Confirmed refresh rate and HDR application state | A stabilized runtime feedback sample, independently of profile reload |
 | Stored metadata or dormant policy | Values that do not alter current profile selection and values belonging only to an inactive mode | Saved immediately; no running-state reset until the value becomes active |
@@ -29,7 +29,7 @@ The process-wide backend is created lazily for the first managed swapchain. Befo
 4. Toggling Ultra Performance or Scaling Engine is a process-restart transition, but compatible scheduler and scaler-method fields from the same write can still apply at their normal boundaries.
 5. Every existing swapchain context calls `planProfileUpdate()` with its actually applied profile, the requested profile, its reserved generated-image capacity, and current resource availability.
 6. `Swapchain::updateProfile()` applies the live-safe merged profile and resets only the runtime state invalidated by those applied fields. Deferred values remain requested at Root for their later boundary.
-7. Native/scaler method, spatial factor/sharpness, Flow Scale, FG model, or generated-capacity edits arm one debounced recreation request after the lower WSI has consumed the application's wait semaphores; Scaling Engine and pacing wait for process and natural-recreation boundaries respectively. Diagnostics report live application, recreation deferral/request, and process-restart deferral independently. One update may have all three outcomes.
+7. Native/scaler method edits arm a recreation request for the next successful lower present. Spatial factor/sharpness, Flow Scale, FG model, or generated-capacity edits retain a 500 ms quiet period so continuous or grouped controls coalesce before requesting recreation. Scaling Engine and pacing wait for process and natural-recreation boundaries respectively. Diagnostics report live application, recreation deferral/request, and process-restart deferral independently. One update may have all three outcomes.
 
 The layer never destroys an application swapchain itself. For live scaler/model/capacity controls, it forwards one successful present so the lower WSI consumes the application's semaphores, then returns `VK_ERROR_OUT_OF_DATE_KHR` once and leaves destruction/recreation to the game. A resize, display change, or other natural recreation also consumes the latest request. Root substitutes process-static backend values used by the existing process, so a recreation cannot falsely apply GPU or Ultra Performance changes.
 
@@ -62,7 +62,8 @@ For example, if one save changes Flow Scale from 1.0 to 0.75 and Base FPS Cap fr
 | Dynamic Cadence probe interval | Live | Reschedules the inactive probe interval without discarding validated cadence or an active confirmation |
 | Base FPS Cap and Adaptive auto-cap | Live | Resets the real-frame pacer, fixed-window timing, and scheduler policy affected by the effective cap |
 | Scaling Engine enable (`scaling_enabled`) | Process restart | Existing process retains its actual engine and WSI membership; Decky provisions or removes the WSI lane only for the next launch |
-| Native/scaler method, factor, and sharpness | Requested recreation when Scaling Engine is provisioned | Existing context retains its actual surface/pipeline state; a debounced one-shot out-of-date result asks the game to recreate; Native allocates and dispatches no spatial scaler |
+| Native/scaler method | Requested recreation when Scaling Engine is provisioned | Existing context retains its actual surface/pipeline state; the next successful lower present produces one out-of-date result so the game recreates promptly; Native allocates and dispatches no spatial scaler |
+| Scaling factor and sharpness | Requested recreation when Scaling Engine is provisioned | Existing context retains its actual surface/pipeline state; a 500 ms quiet period coalesces numeric edits before one out-of-date result asks the game to recreate |
 | Flow Scale and Lighter FG Model | Requested recreation when retained generation resources exist | Existing private context retains its actual model construction; a debounced one-shot out-of-date result asks the game to recreate |
 | Pacing shape | Natural recreation | Existing game-owned swapchain and presentation transport remain unchanged |
 | Generated-image capacity growth | Requested recreation when retained generation resources exist | Current active policy remains within available capacity; unrelated targets, caps, or switches still apply live |
@@ -116,7 +117,7 @@ Do not use a broad "configuration changed" reset. It would discard validated cad
 
 - Do not parse or plan configuration on every present. Preserve the bounded watcher interval and unchanged-file fast path.
 - Do not allocate per frame for configuration or generated-frame planning. `ProfileUpdatePlan` is built only for an observed configuration change; `GeneratedFramePlan` remains the separate inline hot-path object.
-- Do not destroy a game-owned swapchain. Preserve the debounced, one-shot, post-semaphore-consumption out-of-date request for live scaler/model/capacity edits.
+- Do not destroy a game-owned swapchain. Preserve the one-shot, post-semaphore-consumption out-of-date request, including immediate discrete scaler methods and debounced numeric/model/capacity edits.
 - Do not mark a requested field applied unless the running context or backend actually uses it.
 - Do not let a deferred field block Frame Generation Off or another independent live-safe field.
 - Do not run generation work when the effective Frame Generation state is Off.

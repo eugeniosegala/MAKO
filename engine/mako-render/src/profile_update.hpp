@@ -164,6 +164,21 @@ namespace mako::layer {
         };
     }
 
+    /// Discrete scaler topology selections are complete user actions rather
+    /// than continuous controls. Let the next successful present apply them
+    /// immediately so a short return to gameplay cannot be overtaken by the
+    /// next Quick Access edit. Numeric resource controls retain a quiet period
+    /// to coalesce slider movement and avoid recreation storms.
+    [[nodiscard]] inline std::chrono::milliseconds
+    recreatedProfileResourceQuietPeriod(
+            const RecreatedProfileResourceKey& current,
+            const RecreatedProfileResourceKey& requested) noexcept {
+        if (current.scalingEnabled != requested.scalingEnabled ||
+                current.scalingMethod != requested.scalingMethod)
+            return std::chrono::milliseconds::zero();
+        return std::chrono::milliseconds(500);
+    }
+
     /// Scaling dimensions and frame-generation context construction cannot be
     /// mutated while a swapchain is active. Arm one spec-defined OUT_OF_DATE
     /// signal after the lower present has consumed the application's wait
@@ -189,7 +204,9 @@ namespace mako::layer {
             this->request = Request{
                 .profile = requestedKey,
                 .runtimeStateRevision = runtimeStateRevision,
-                .signalAfter = now + quietPeriod,
+                .signalAfter = now + recreatedProfileResourceQuietPeriod(
+                    currentKey, requestedKey
+                ),
             };
         }
 

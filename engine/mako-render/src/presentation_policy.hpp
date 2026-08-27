@@ -807,6 +807,113 @@ namespace mako::layer {
         std::optional<TimePoint> retryAt;
     };
 
+    /// A successful lower QueuePresentKHR can still block long enough to make
+    /// Steam's overlay unresponsive. This is distinct from generated-image
+    /// acquisition pressure: once observed, stop adding synthetic presents
+    /// for one fixed stabilization window, then warm temporal history before
+    /// retrying. The deadline is absolute so recovery cannot become a
+    /// self-extending native-only mode.
+    class LowerPresentStallRecovery {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+        using Duration = Clock::duration;
+
+        struct PresentDecision {
+            bool bypassGeneration{false};
+            bool beginHistoryWarmup{false};
+            bool recovered{false};
+            size_t bypassedFrames{0};
+            Duration recoveryDuration{};
+        };
+
+        struct Observation {
+            bool quarantined{false};
+            Duration presentDuration{};
+            Duration threshold{};
+        };
+
+        [[nodiscard]] static Duration stallThreshold(
+                const std::optional<uint32_t> refreshHz) {
+            constexpr auto minimumThreshold =
+                std::chrono::milliseconds{50};
+            if (!refreshHz || *refreshHz == 0)
+                return minimumThreshold;
+            const auto displayRelativeThreshold =
+                std::chrono::duration_cast<Duration>(
+                    std::chrono::duration<double>(
+                        4.0 / static_cast<double>(*refreshHz)
+                    )
+                );
+            return std::max<Duration>(
+                minimumThreshold, displayRelativeThreshold
+            );
+        }
+
+        [[nodiscard]] static constexpr auto stabilizationDuration() {
+            return std::chrono::seconds{2};
+        }
+
+        [[nodiscard]] Observation observe(const TimePoint now,
+                const Duration maximumPresentDuration,
+                const std::optional<uint32_t> refreshHz) {
+            const auto threshold = stallThreshold(refreshHz);
+            if (maximumPresentDuration < threshold)
+                return {
+                    .presentDuration = maximumPresentDuration,
+                    .threshold = threshold,
+                };
+
+            this->startedAt = now;
+            this->stabilizingUntil = now + stabilizationDuration();
+            this->bypassedFrames = 0;
+            return {
+                .quarantined = true,
+                .presentDuration = maximumPresentDuration,
+                .threshold = threshold,
+            };
+        }
+
+        [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
+            if (!this->stabilizingUntil)
+                return {};
+            if (now < *this->stabilizingUntil) {
+                this->bypassedFrames++;
+                return {
+                    .bypassGeneration = true,
+                    .bypassedFrames = this->bypassedFrames,
+                    .recoveryDuration = this->startedAt
+                        ? now - *this->startedAt : Duration{},
+                };
+            }
+
+            const PresentDecision decision{
+                .beginHistoryWarmup = true,
+                .recovered = true,
+                .bypassedFrames = this->bypassedFrames,
+                .recoveryDuration = this->startedAt
+                    ? now - *this->startedAt : Duration{},
+            };
+            this->reset();
+            return decision;
+        }
+
+        [[nodiscard]] bool active() const {
+            return this->stabilizingUntil.has_value();
+        }
+
+        void reset() {
+            this->startedAt.reset();
+            this->stabilizingUntil.reset();
+            this->bypassedFrames = 0;
+        }
+
+    private:
+        std::optional<TimePoint> startedAt;
+        std::optional<TimePoint> stabilizingUntil;
+        size_t bypassedFrames{0};
+    };
+
     /// Deterministically suppress synthetic frames which cannot be scanned out
     /// at the confirmed Gamescope refresh rate. Fixed mode remains at its full
     /// multiplier whenever that output fits the display budget.
