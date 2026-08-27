@@ -7,9 +7,10 @@
   },
   "scripts": {
     "dev": "vinext dev",
-    "build": "vinext build",
+    "check:release-contract": "node scripts/check-release-contract.mjs",
+    "build": "npm run check:release-contract && vinext build",
     "dev:pages": "vite --config vite.pages.config.ts",
-    "build:pages": "vite build --config vite.pages.config.ts",
+    "build:pages": "npm run check:release-contract && vite build --config vite.pages.config.ts",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },

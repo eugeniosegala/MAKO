@@ -69,10 +69,10 @@ That one command:
 4. Publishes `render-v1.2.0`, calculates its checksums, and commits the exact archive URLs, checksums, tag, and source commit to `plugin/package.json`.
 5. Updates and commits the plugin version, tests and verifies its bundled renderer payload, and builds the MAKO Decky ZIP.
 6. Publishes `plugin-v1.2.0` as GitHub's **Latest** release.
-7. Updates all versioned README release links, pushes `main`, and verifies that the remote release-asset checksums, pins, tags, and worktree agree.
+7. Updates all versioned README release links, pushes `main`, triggers the website deployment from the canonical `plugin/package.json` release metadata, and verifies that the remote release-asset checksums, pins, tags, and worktree agree.
 8. After complete verification only, removes the reproducible local release archives, generated frontend/coverage output, and disposable build staging while preserving the reusable compiler, SDK, Flatpak, dependency, and container caches.
 
-No version, checksum, binary URL, Flatpak pin, or README release link needs to be edited manually. The two “What’s new” files are intentionally the only manual release content; the stable installation, update, in-game, limitations, and payload sections are assembled by the component publishers.
+No version, checksum, binary URL, Flatpak pin, README release link, or website release link needs to be edited manually. The website derives its component versions and asset URLs from `plugin/package.json`, and the Pages workflow redeploys when that canonical metadata changes. The two “What’s new” files are intentionally the only manual release content; the stable installation, update, in-game, limitations, and payload sections are assembled by the component publishers.
 
 ## Resume or publish one component
 

@@ -1,4 +1,5 @@
 .git/
+.agents/
 engine/build/
 engine/mako-common/thirdparty/
 engine/out/

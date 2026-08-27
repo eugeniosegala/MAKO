@@ -1,17 +1,10 @@
 'use client';
 
 import type { PointerEvent as ReactPointerEvent } from 'react';
+import { releaseData } from './release-data';
+import { DiscordIcon, GitHubIcon } from './social-icons';
 
-const links = {
-  repository: 'https://github.com/eugeniosegala/MAKO',
-  deckyRelease: 'https://github.com/eugeniosegala/MAKO/releases/tag/plugin-v2.2.0',
-  rendererRelease: 'https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0',
-  deckyDownload: 'https://github.com/eugeniosegala/MAKO/releases/download/plugin-v2.2.0/MAKO-Decky-v2.2.0.zip',
-  rendererDownload: 'https://github.com/eugeniosegala/MAKO/releases/download/render-v2.2.0/MAKO-Renderer-v2.2.0-linux.tar.xz',
-  flatpakDownload: 'https://github.com/eugeniosegala/MAKO/releases/download/render-v2.2.0/MAKO-Renderer-v2.2.0-flatpaks.tar.xz',
-  docs: 'https://github.com/eugeniosegala/MAKO#install-and-use',
-  losslessScaling: 'https://store.steampowered.com/app/993090/Lossless_Scaling/',
-};
+const { deckyVersion, rendererVersion, links } = releaseData;
 
 const newTabProps = { target: '_blank', rel: 'noopener noreferrer' } as const;
 
@@ -101,18 +94,31 @@ export default function Home() {
 
       <nav className="site-nav" aria-label="Main navigation">
         <a className="brand" href="#top" aria-label="MAKO home">
-          <img src="assets/mako-logo.webp" alt="" width="44" height="44" draggable={false} />
+          <img src="assets/mako-discord-icon.webp" alt="" width="44" height="44" draggable={false} />
           <span>MAKO</span>
         </a>
         <div className="nav-links">
           <a href="#system">System</a>
           <a href="#features">Features</a>
+          <a href={links.docs} {...newTabProps}>Installation Guide</a>
           <a href="#downloads">Downloads</a>
-          <a href={links.repository} {...newTabProps}>GitHub</a>
+          <a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a>
+          <a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a>
         </div>
         <a className="nav-download" href={links.deckyDownload} {...newTabProps}>
-          Download <span>v2.2.0</span>
+          Download <span>v{deckyVersion}</span>
         </a>
+        <details className="mobile-nav">
+          <summary>Menu <span aria-hidden="true">+</span></summary>
+          <div className="mobile-nav-panel">
+            <a href="#system">System</a>
+            <a href="#features">Features</a>
+            <a href={links.docs} {...newTabProps}>Installation Guide</a>
+            <a href="#downloads">Downloads</a>
+            <a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a>
+            <a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a>
+          </div>
+        </details>
       </nav>
 
       <div id="content">
@@ -122,10 +128,11 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow"><span /> Spatial scaling + frame generation / Linux</p>
             <h1>Scale. Generate.<br /><em>On Linux.</em></h1>
-            <p className="hero-intro">MAKO brings proprietary Lossless Scaling LS1, a built-in open Vulkan spatial scaler, and LSFG frame generation to Steam Deck, SteamOS, and Linux through a focused Decky control layer and a purpose-built renderer.</p>
+            <p className="hero-intro">MAKO brings proprietary Lossless Scaling LS1, a built-in open Vulkan spatial scaler, and LSFG frame generation to Steam Deck, Steam Machine, SteamOS, and Linux through a focused Decky control layer and a purpose-built renderer.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Decky</span></a>
               <a className="button button-primary button-renderer" href={links.rendererDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Renderer</span></a>
+              <a className="button button-secondary" href={links.docs} {...newTabProps}>Installation Guide <span aria-hidden="true">→</span></a>
               <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
             <div className="hero-meta">
@@ -153,6 +160,7 @@ export default function Home() {
 
         <div className="signal-strip" aria-hidden="true">
           <div>STEAM DECK</div><span />
+          <div>STEAM MACHINE</div><span />
           <div>STEAMOS</div><span />
           <div>LINUX</div><span />
           <div>VULKAN</div><span />
@@ -235,7 +243,7 @@ export default function Home() {
           <div className="adaptive-copy">
             <p className="section-kicker"><span>03</span> Adaptive intelligence</p>
             <h2>It doesn’t just add frames.<br /><em>It reads the rhythm.</em></h2>
-            <p>Choose a target and ceiling. MAKO Renderer follows the game cadence, admits generated work deterministically, and backs off cleanly when presentation becomes unstable.</p>
+            <p>Choose a target and ceiling. MAKO Renderer observes each game interval, plans only the generated frames needed to reach the output rhythm, and backs off cleanly when delivery becomes unstable.</p>
             <div className="adaptive-points">
               <div><span>01</span><p><strong>Observe</strong> game cadence and delivery health</p></div>
               <div><span>02</span><p><strong>Plan</strong> the right generated-frame count</p></div>
@@ -243,7 +251,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="telemetry-card" aria-label="Adaptive frame generation telemetry example">
+          <div className="telemetry-card" aria-label="Adaptive frame generation example: changing native cadence with generated-frame segments filling the output to a 90 FPS target.">
             <div className="telemetry-head"><span>ADAPTIVE TELEMETRY</span></div>
             <div className="telemetry-readout">
               <div><span>TARGET</span><strong>90<small> FPS</small></strong></div>
@@ -251,17 +259,21 @@ export default function Home() {
               <div><span>STATUS</span><strong className="healthy">STABLE</strong></div>
             </div>
             <div className="chart-grid">
-              <div className="chart-y"><span>120</span><span>90</span><span>60</span><span>30</span></div>
+              <div className="chart-y"><span>120</span><span>90</span><span>60</span><span>0</span></div>
               <div className="chart-area">
-                <div className="target-line"><span>90 FPS TARGET</span></div>
+                <div className="chart-key" aria-hidden="true"><span><i className="native-key" />NATIVE CADENCE</span><span><i className="generated-key" />GENERATED FRAMES</span></div>
+                <div className="target-line"><span>90 FPS OUTPUT</span></div>
                 <div className="bars" aria-hidden="true">
-                  {[54, 62, 75, 83, 91, 88, 94, 90, 92, 87, 91, 90, 93, 89, 92, 90, 91, 90].map((height, index) => (
-                    <i key={index} style={{ height: `${height}%` }} />
+                  {[31, 40, 34, 47, 38, 45, 32, 49, 42, 36, 46, 39, 50, 33, 44, 37, 48, 41].map((nativeCadence, index) => (
+                    <i className="cadence-bar" key={index}>
+                      <span className="native-bar" style={{ height: `${nativeCadence}%` }} />
+                      <span className="generated-bar" style={{ height: `${75 - nativeCadence}%` }} />
+                    </i>
                   ))}
                 </div>
               </div>
             </div>
-            <div className="telemetry-foot"><span>INPUT CADENCE 30.1 FPS</span><span>FRAME TIME 11.1 MS</span></div>
+            <div className="telemetry-foot"><span>INPUT CADENCE 37—60 FPS</span><span>OUTPUT RHYTHM 90 FPS</span></div>
           </div>
         </section>
 
@@ -293,7 +305,7 @@ export default function Home() {
           <header className="downloads-heading">
             <p className="section-kicker"><span>05</span> Latest release</p>
             <h2>Choose your<br /><em>entry point.</em></h2>
-            <p>Both components are open source and independently versioned. The current release is v2.2.0.</p>
+            <p>Both components are open source and independently versioned. Current packages are MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion}.</p>
           </header>
 
           <div className="download-grid">
@@ -304,9 +316,9 @@ export default function Home() {
               <h3>MAKO Decky</h3>
               <p className="download-copy">The complete managed experience for Steam Deck, Steam Machine, Decky Loader, Heroic, and EmuDeck.</p>
               <dl>
-                <div><dt>VERSION</dt><dd>2.2.0</dd></div>
+                <div><dt>VERSION</dt><dd>{deckyVersion}</dd></div>
                 <div><dt>FORMAT</dt><dd>ZIP</dd></div>
-                <div><dt>SIZE</dt><dd>24.6 MB</dd></div>
+                <div><dt>INSTALL</dt><dd>DECKY</dd></div>
               </dl>
               <a className="download-button" href={links.deckyDownload} {...newTabProps}><span>Download Decky ZIP</span><i>→</i></a>
               <a className="release-link" href={links.deckyRelease} {...newTabProps}>View release notes <span>→</span></a>
@@ -319,9 +331,9 @@ export default function Home() {
               <h3>MAKO Renderer</h3>
               <p className="download-copy">The direct host archive for desktop Linux, with the UI, launcher, CLI, and both x86 Vulkan layers.</p>
               <dl>
-                <div><dt>VERSION</dt><dd>2.2.0</dd></div>
+                <div><dt>VERSION</dt><dd>{rendererVersion}</dd></div>
                 <div><dt>FORMAT</dt><dd>TAR.XZ</dd></div>
-                <div><dt>SIZE</dt><dd>746 KB</dd></div>
+                <div><dt>ARCH</dt><dd>x86_64</dd></div>
               </dl>
               <a className="download-button" href={links.rendererDownload} {...newTabProps}><span>Download Renderer</span><i>→</i></a>
               <div className="release-links">
@@ -353,11 +365,11 @@ export default function Home() {
             </details>
             <details>
               <summary><span>03</span> Can scaling and frame generation run together?<i>+</i></summary>
-              <p>Yes. Choose LS1 Quality, LS1 Performance, or the open MAKO method, then run scaling alone or feed each reconstructed real frame into Fixed or Adaptive frame generation. The published downloads above remain v2.2.0 until the next approved release.</p>
+              <p>Yes. Choose LS1 Quality, LS1 Performance, or the open MAKO method, then run scaling alone or feed each reconstructed real frame into Fixed or Adaptive frame generation. The downloads above track MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion} from canonical release metadata.</p>
             </details>
             <details>
               <summary><span>04</span> What hardware is published today?<i>+</i></summary>
-              <p>Current packages target x86_64 Linux hosts and include 64-bit and 32-bit x86 Vulkan layers. Native AArch64 packages are not included in v2.2.0.</p>
+              <p>MAKO Renderer v{rendererVersion} targets x86_64 Linux hosts and includes 64-bit and 32-bit x86 Vulkan layers. Native AArch64 packages are not included in this release.</p>
             </details>
           </div>
         </section>
@@ -371,7 +383,8 @@ export default function Home() {
             <p>Choose MAKO Decky for the managed SteamOS workflow or MAKO Renderer for a direct Linux installation.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>Download MAKO <span>→</span></a>
-              <a className="button button-secondary" href={links.repository} {...newTabProps}>View on GitHub <span>→</span></a>
+              <a className="button button-secondary social-button" href={links.repository} {...newTabProps}><span className="social-button-label"><GitHubIcon />View on GitHub</span><span aria-hidden="true">→</span></a>
+              <a className="button button-secondary social-button" href={links.discord} {...newTabProps}><span className="social-button-label"><DiscordIcon />Join Discord</span><span aria-hidden="true">→</span></a>
             </div>
           </div>
         </section>
@@ -379,12 +392,12 @@ export default function Home() {
 
       <footer className="site-footer">
         <div className="footer-brand">
-          <a className="brand" href="#top"><img src="assets/mako-logo.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
-          <p>LS1 and open MAKO spatial scaling plus Lossless Scaling frame generation for SteamOS and Linux.</p>
+          <a className="brand" href="#top"><img src="assets/mako-discord-icon.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
+          <p>LS1 and open MAKO spatial scaling plus Lossless Scaling frame generation for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
         </div>
         <div className="footer-links">
-          <div><span>PROJECT</span><a href={links.repository} {...newTabProps}>GitHub</a><a href={links.docs} {...newTabProps}>Documentation</a><a href="https://github.com/eugeniosegala/MAKO/issues" {...newTabProps}>Issues</a></div>
-          <div><span>DOWNLOAD</span><a href={links.deckyRelease} {...newTabProps}>MAKO Decky</a><a href={links.rendererRelease} {...newTabProps}>MAKO Renderer</a><a href="https://github.com/eugeniosegala/MAKO/releases" {...newTabProps}>All releases</a></div>
+          <div><span>PROJECT</span><a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a><a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a><a href={links.docs} {...newTabProps}>Installation Guide</a><a href={links.issues} {...newTabProps}>Issues</a></div>
+          <div><span>DOWNLOAD</span><a href={links.deckyRelease} {...newTabProps}>MAKO Decky</a><a href={links.rendererRelease} {...newTabProps}>MAKO Renderer</a><a href={links.allReleases} {...newTabProps}>All releases</a></div>
         </div>
         <div className="footer-bottom"><span>GPL-3.0-OR-LATER</span><span>INDEPENDENT COMMUNITY PROJECT</span><span>© 2026 MAKO</span></div>
       </footer>
