@@ -90,6 +90,8 @@ SUBCOMMAND OPTIONS:
         -f, --factor <FLOAT>            Scaling factor above 1.0 through 2.0
         -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
         -t, --scene-time <FLOAT>        Scene time from 0.0 through 1.0
+        -w, --width <INT>               Exact presentation width
+        -h, --height <INT>              Exact presentation height
 
     spatial-profile
         -d, --dll <PATH>                Path to Lossless.dll for LS1 methods
@@ -118,6 +120,8 @@ SUBCOMMAND OPTIONS:
         -t, --interpolation <FLOAT>     Generated timestamp between 0 and 1
         -w, --flow <FLOAT>              Flow scale from 0.25 to 1.0
         -p, --performance-mode          Use the lighter LSFG model
+            --width <INT>               Exact presentation width
+            --height <INT>              Exact presentation height
 )" << '\n';
     }
 
@@ -337,7 +341,7 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_spatial_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::SpatialOptions opts{};
-        const std::array<option, 9> GETOPT {{
+        const std::array<option, 11> GETOPT {{
             { "dll",        required_argument, nullptr, 'd' },
             { "gpu",        required_argument, nullptr, 'g' },
             { "output",     required_argument, nullptr, 'o' },
@@ -346,12 +350,14 @@ SUBCOMMAND OPTIONS:
             { "factor",     required_argument, nullptr, 'f' },
             { "sharpness",  required_argument, nullptr, 's' },
             { "scene-time", required_argument, nullptr, 't' },
+            { "width",      required_argument, nullptr, 'w' },
+            { "height",     required_argument, nullptr, 'h' },
             { nullptr,       no_argument,       nullptr,  0  }
         }};
 
         int c{0};
         while ((c = getopt_long(
-                argc, argv, "d:g:o:c:m:f:s:t:", GETOPT.data(), nullptr)) != -1) {
+                argc, argv, "d:g:o:c:m:f:s:t:w:h:", GETOPT.data(), nullptr)) != -1) {
             switch (c) {
                 case 'd':
                     opts.dll.emplace(optarg);
@@ -376,6 +382,12 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 't':
                     opts.scene_time = std::stof(optarg);
+                    break;
+                case 'w':
+                    opts.width = static_cast<uint32_t>(std::stoul(optarg));
+                    break;
+                case 'h':
+                    opts.height = static_cast<uint32_t>(std::stoul(optarg));
                     break;
                 case '?':
                 default:
@@ -490,7 +502,7 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_combined_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::CombinedOptions opts{};
-        const std::array<option, 12> GETOPT {{
+        const std::array<option, 14> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
             { "gpu",              required_argument, nullptr, 'g' },
@@ -502,6 +514,8 @@ SUBCOMMAND OPTIONS:
             { "interpolation",    required_argument, nullptr, 't' },
             { "flow",             required_argument, nullptr, 'w' },
             { "performance-mode", no_argument,       nullptr, 'p' },
+            { "width",             required_argument, nullptr, 1000 },
+            { "height",            required_argument, nullptr, 1001 },
             { nullptr,             no_argument,       nullptr,  0  }
         }};
 
@@ -541,6 +555,12 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'p':
                     opts.performance_mode = true;
+                    break;
+                case 1000:
+                    opts.width = static_cast<uint32_t>(std::stoul(optarg));
+                    break;
+                case 1001:
+                    opts.height = static_cast<uint32_t>(std::stoul(optarg));
                     break;
                 case '?':
                 default:

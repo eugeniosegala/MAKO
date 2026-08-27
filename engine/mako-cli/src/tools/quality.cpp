@@ -728,11 +728,28 @@ int quality::runSpatial(const SpatialOptions& opts) {
                 opts.sharpness < ls::GameConfLimits::minimumScalingSharpness ||
                 opts.sharpness > ls::GameConfLimits::maximumScalingSharpness)
             throw ls::error("spatial quality sharpness must be between 0.0 and 1.0");
+        if (opts.width.has_value() != opts.height.has_value())
+            throw ls::error("spatial quality width and height must be provided together");
+        if ((opts.width && *opts.width == 0) || (opts.height && *opts.height == 0))
+            throw ls::error("spatial quality extent must be non-zero");
 
         const auto kind = sceneKind(opts.scene);
-        const auto scene = mako::quality::makeSpatialQualityRegressionScene(
-            kind, opts.scaling_factor, opts.scene_time
-        );
+        const auto scene = opts.width
+            ? mako::quality::makeSpatialQualityRegressionScene(
+                kind,
+                mako::layer::scaledSourceDimension(
+                    *opts.width, opts.scaling_factor
+                ),
+                mako::layer::scaledSourceDimension(
+                    *opts.height, opts.scaling_factor
+                ),
+                *opts.width,
+                *opts.height,
+                opts.scene_time
+            )
+            : mako::quality::makeSpatialQualityRegressionScene(
+                kind, opts.scaling_factor, opts.scene_time
+            );
         const VkExtent2D sourceExtent{
             .width = scene.sourceWidth,
             .height = scene.sourceHeight,
@@ -1052,11 +1069,28 @@ int quality::runCombined(const CombinedOptions& opts) {
                 opts.flow_scale < ls::GameConfLimits::minimumFlowScale ||
                 opts.flow_scale > ls::GameConfLimits::maximumFlowScale)
             throw ls::error("combined quality flow scale must be between 0.25 and 1.0");
+        if (opts.width.has_value() != opts.height.has_value())
+            throw ls::error("combined quality width and height must be provided together");
+        if ((opts.width && *opts.width == 0) || (opts.height && *opts.height == 0))
+            throw ls::error("combined quality extent must be non-zero");
 
         const auto kind = sceneKind(opts.scene);
-        const auto scene = mako::quality::makeCombinedQualityRegressionScene(
-            kind, opts.scaling_factor, opts.interpolation
-        );
+        const auto scene = opts.width
+            ? mako::quality::makeCombinedQualityRegressionScene(
+                kind,
+                mako::layer::scaledSourceDimension(
+                    *opts.width, opts.scaling_factor
+                ),
+                mako::layer::scaledSourceDimension(
+                    *opts.height, opts.scaling_factor
+                ),
+                *opts.width,
+                *opts.height,
+                opts.interpolation
+            )
+            : mako::quality::makeCombinedQualityRegressionScene(
+                kind, opts.scaling_factor, opts.interpolation
+            );
         const VkExtent2D sourceExtent{
             .width = scene.sourceWidth,
             .height = scene.sourceHeight,

@@ -18,7 +18,7 @@ fi
 
 fake_gym="$temporary_root/MAKO-Gym"
 mkdir -p "$fake_gym/scripts"
-printf '5\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '6\n' > "$fake_gym/GYM_CONTRACT_VERSION"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$@"' \
     > "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 chmod +x "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
@@ -34,6 +34,9 @@ chmod +x "$fake_gym/scripts/run-render-performance.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "spatial-performance:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-spatial-performance.sh"
 chmod +x "$fake_gym/scripts/run-spatial-performance.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "runtime-overhead:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-runtime-overhead.sh"
+chmod +x "$fake_gym/scripts/run-runtime-overhead.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "sync-validation:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-synchronization-validation.sh"
 chmod +x "$fake_gym/scripts/run-synchronization-validation.sh"
@@ -72,6 +75,12 @@ if [[ "$spatial_performance_forwarded" != "$spatial_performance_expected" ]]; th
     echo "Gym spatial-performance arguments were not forwarded exactly." >&2
     exit 1
 fi
+runtime_overhead_forwarded="$($bridge --gym-repo "$fake_gym" --suite runtime-overhead --tier fast)"
+runtime_overhead_expected=$'runtime-overhead:--tier\nruntime-overhead:fast'
+if [[ "$runtime_overhead_forwarded" != "$runtime_overhead_expected" ]]; then
+    echo "Gym runtime-overhead arguments were not forwarded exactly." >&2
+    exit 1
+fi
 sync_forwarded="$($bridge --gym-repo "$fake_gym" --suite sync-validation --layer-dir /tmp/layers)"
 sync_expected=$'sync-validation:--layer-dir\nsync-validation:/tmp/layers'
 if [[ "$sync_forwarded" != "$sync_expected" ]]; then
@@ -95,7 +104,7 @@ if "$bridge" --gym-repo "$fake_gym" --list >/dev/null 2>&1; then
     exit 1
 fi
 
-printf '5\n' > "$fake_gym/GYM_CONTRACT_VERSION"
+printf '6\n' > "$fake_gym/GYM_CONTRACT_VERSION"
 chmod -x "$fake_gym/scripts/run-vulkan-feature-matrix.sh"
 if "$bridge" --gym-repo "$fake_gym" --list >/dev/null 2>&1; then
     echo "Non-executable Gym runner unexpectedly succeeded." >&2

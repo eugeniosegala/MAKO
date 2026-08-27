@@ -23,6 +23,8 @@ mako-cli spatial-quality-regression \
   --scene crowd \
   --method ls1 \
   --factor 1.5 \
+  --width 2560 \
+  --height 1440 \
   --sharpness 0.5 \
   --scene-time 0.5 \
   --output ./mako-spatial-result
@@ -35,6 +37,8 @@ mako-cli combined-quality-regression \
   --scene camera-pan \
   --method ls1-performance \
   --factor 1.5 \
+  --width 3840 \
+  --height 2160 \
   --sharpness 0.5 \
   --interpolation 0.67 \
   --flow 0.75 \
@@ -43,7 +47,7 @@ mako-cli combined-quality-regression \
   --output ./mako-combined-result
 ```
 
-Use `--dll /path/to/Lossless.dll` when automatic discovery is unavailable and `--gpu "GPU name"` on a multi-GPU system. `--allow-fp16` permits LSFG acceleration; `--performance-mode` selects the lighter frame-generation model. Spatial method names are `mako`, `ls1`, and `ls1-performance`.
+Use `--dll /path/to/Lossless.dll` when automatic discovery is unavailable and `--gpu "GPU name"` on a multi-GPU system. `--allow-fp16` permits LSFG acceleration; `--performance-mode` selects the lighter frame-generation model. Spatial method names are `mako`, `ls1`, and `ls1-performance`. Spatial and combined commands accept `--width` and `--height` only as a pair; these select the exact presentation resolution while the production factor policy derives the source extent. Omitting them retains the deliberately odd-sized 321×181 portable regression scene.
 
 The spatial command invokes the production `mako-render/src/spatial_scaler.cpp` graph rather than a test implementation. It fails if an LS1 request falls back to MAKO. The combined command scales both low-resolution temporal endpoints into the exported full-resolution source images used by MAKO Renderer, synchronizes them through the shared timeline semaphore, runs the real licensed backend, and scores the final generated frame against a presentation-resolution ideal.
 
@@ -55,7 +59,7 @@ Frame-generation artifacts contain `previous.ppm`, `current.ppm`, `reference.ppm
 
 ## MAKO-Gym hardware validation
 
-Portable CTest owns deterministic scene generation, masks, extents, scoring policy, invalid-input behavior, and perfect/corrupted reference checks without a GPU or licensed input. The private sibling MAKO-Gym repository owns the declarative 74-case AMD visual matrix, DLL discovery, parameter assertions, mandatory execution, PPM evidence validation, sanitization, and retained summaries. Its 20 LSFG cases cover every scene in FP32/FP16 plus Flow Scale, model, and timestamps from 0.05 to 0.95. Its 31 spatial cases cover every scene through every method, 1.01× near-native through 2× factors, MAKO sharpness edges, and all five LS1 variants. Its 23 combined cases cover every scene and spatial method plus representative FP16, lighter-model, lower-flow, near-endpoint, near-native, 2× factor, and sharpness interactions. Gym's separate repeatability lane requires nine cross-pipeline sentinels to remain byte-identical across three independent executions, its spatial-performance lane timestamps nine production scaler graphs, and its synchronization-validation lane executes eight canonical quality paths under the active Khronos validation layer.
+Portable CTest owns deterministic scene generation, masks, extents, scoring policy, invalid-input behavior, and perfect/corrupted reference checks without a GPU or licensed input. The private sibling MAKO-Gym repository owns the declarative 74-case AMD visual matrix, DLL discovery, parameter assertions, mandatory execution, PPM evidence validation, sanitization, and retained summaries. Its 20 LSFG cases cover every scene in FP32/FP16 plus Flow Scale, model, and timestamps from 0.05 to 0.95. Its 31 spatial cases cover every scene through every method, 1.01× near-native through 2× factors, MAKO sharpness edges, and all five LS1 variants. Its 23 combined cases cover every scene and spatial method plus representative FP16, lighter-model, lower-flow, near-endpoint, near-native, 2× factor, and sharpness interactions. Gym's separate repeatability lane requires nine cross-pipeline sentinels to remain byte-identical across three independent executions, its spatial-performance lane scores and timestamps 36 exact-resolution production scaler graphs through 5120×2160, and its synchronization-validation lane executes eight canonical quality paths under the active Khronos validation layer.
 
 After building `mako-cli`, run the MAKO-side bridge from the repository root:
 

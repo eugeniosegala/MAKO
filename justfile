@@ -79,6 +79,10 @@ test-engine-gym-performance *args:
 test-engine-gym-spatial-performance *args:
     ./engine/scripts/run-mako-gym.sh --suite spatial-performance {{args}}
 
+# Compare MAKO-idle and active live presentation overhead on the same workload.
+test-engine-gym-runtime-overhead *args:
+    ./engine/scripts/run-mako-gym.sh --suite runtime-overhead {{args}}
+
 # Run selected production GPU paths under Khronos synchronization validation.
 test-engine-gym-sync-validation *args:
     ./engine/scripts/run-mako-gym.sh --suite sync-validation {{args}}

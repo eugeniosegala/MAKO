@@ -242,6 +242,18 @@ int main() {
             mako::quality::QualitySceneKind::Traffic, 0.0F
         ));
     }, "temporal endpoints must not be accepted as interpolation targets");
+    const auto exactSpatial = mako::quality::makeSpatialQualityRegressionScene(
+        mako::quality::QualitySceneKind::Traffic,
+        320, 180, 640, 360, 0.37F
+    );
+    expect(exactSpatial.sourceWidth == 320 &&
+            exactSpatial.sourceHeight == 180 &&
+            exactSpatial.presentationWidth == 640 &&
+            exactSpatial.presentationHeight == 360,
+        "exact spatial scenes must preserve production extents");
+    expect(exactSpatial.source.size() == 320U * 180U * 4U &&
+            exactSpatial.reference.size() == 640U * 360U * 4U,
+        "exact spatial scenes must render complete source and reference images");
     expectInvalidArgument([] {
         static_cast<void>(mako::quality::makeSpatialQualityRegressionScene(
             mako::quality::QualitySceneKind::Crowd, 1.0F
@@ -262,6 +274,12 @@ int main() {
             mako::quality::QualitySceneKind::Traffic, 1.5F, 1.0F
         ));
     }, "combined regression must reject temporal endpoints");
+    expectInvalidArgument([] {
+        static_cast<void>(mako::quality::makeSpatialQualityRegressionScene(
+            mako::quality::QualitySceneKind::Traffic,
+            1920, 1080, 1280, 720, 0.5F
+        ));
+    }, "exact spatial scenes must reject downscaling extents");
 
     std::cout << "Procedural image-quality regression tests passed\n";
     return 0;

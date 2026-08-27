@@ -34,6 +34,8 @@ namespace mako::cli::quality {
         float scaling_factor{1.5F};
         float sharpness{0.5F};
         float scene_time{0.5F};
+        std::optional<uint32_t> width;
+        std::optional<uint32_t> height;
     };
 
     /// Run one procedural scene through the production spatial scaler.
@@ -78,6 +80,8 @@ namespace mako::cli::quality {
         float interpolation{0.5F};
         float flow_scale{1.0F};
         bool performance_mode{false};
+        std::optional<uint32_t> width;
+        std::optional<uint32_t> height;
     };
 
     /// Scale both low-resolution endpoints and feed the reconstructed frames

@@ -27,11 +27,12 @@ printf '%s\n' \
     > "$fake_bin/flatpak"
 chmod 0755 "$fake_bin/flatpak"
 
-PATH="$fake_bin:$PATH" \
-MAKO_TEST_FLATPAK_LOG="$invocation_log" \
-MAKO_INSTALLER_ASSUME_YES=1 \
-MAKO_FLATPAK_RUNTIME=24.08 \
-"$package_root/Install MAKO Flatpak Extensions" >/dev/null
+env -u DISPLAY -u WAYLAND_DISPLAY \
+    PATH="$fake_bin:$PATH" \
+    MAKO_TEST_FLATPAK_LOG="$invocation_log" \
+    MAKO_INSTALLER_ASSUME_YES=1 \
+    MAKO_FLATPAK_RUNTIME=24.08 \
+    "$package_root/Install MAKO Flatpak Extensions" >/dev/null
 
 package_root_physical="$(cd "$package_root" && pwd -P)"
 expected="install --user --noninteractive $package_root_physical/org.freedesktop.Platform.VulkanLayer.makorender-24.08.flatpak"

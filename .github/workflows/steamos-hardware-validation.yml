@@ -86,6 +86,8 @@ jobs:
           ./engine/scripts/run-mako-gym.sh \
             --gym-repo "$gym_repo" --require --suite spatial-performance --validate
           ./engine/scripts/run-mako-gym.sh \
+            --gym-repo "$gym_repo" --require --suite runtime-overhead --validate
+          ./engine/scripts/run-mako-gym.sh \
             --gym-repo "$gym_repo" --require --suite sync-validation --validate
           ./engine/scripts/run-mako-gym.sh \
             --gym-repo "$gym_repo" --require --suite repeatability --validate
@@ -240,6 +242,17 @@ jobs:
             echo "Expected exactly one sanitized MAKO-Gym recovery result." >&2
             exit 1
           fi
+          ./scripts/run-mako-gym.sh --require --suite runtime-overhead \
+            --launcher "$matrix_prefix/bin/mako-launch" \
+            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-runtime-overhead"
+          mapfile -t runtime_overhead_markers < <(
+            find "$GITHUB_WORKSPACE/engine/out/mako-gym-runtime-overhead" \
+              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
+          )
+          if (( ${#runtime_overhead_markers[@]} != 1 )); then
+            echo "Expected exactly one sanitized MAKO-Gym runtime-overhead result." >&2
+            exit 1
+          fi
 
       - name: Deploy to the dedicated Decky test installation
         if: inputs.deploy_to_decky
@@ -259,6 +272,7 @@ jobs:
             engine/out/mako-gym-quality
             engine/out/mako-gym-performance
             engine/out/mako-gym-spatial-performance
+            engine/out/mako-gym-runtime-overhead
             engine/out/mako-gym-sync-validation
             engine/out/mako-gym-repeatability
             engine/out/mako-gym

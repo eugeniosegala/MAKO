@@ -121,11 +121,28 @@ namespace mako::quality {
         QualitySceneKind kind, float scalingFactor, float time = 0.5F
     );
 
+    /// Build a spatial scene for an exact production source/presentation
+    /// extent pair. This overload lets hardware qualification exercise real
+    /// display resolutions without duplicating the procedural renderer.
+    [[nodiscard]] SpatialRegressionScene makeSpatialQualityRegressionScene(
+        QualitySceneKind kind, uint32_t sourceWidth, uint32_t sourceHeight,
+        uint32_t presentationWidth, uint32_t presentationHeight,
+        float time = 0.5F
+    );
+
     /// Build low-resolution temporal endpoints and a vector-rendered
     /// native-resolution interpolation reference for the production
     /// spatial-scaling-to-LSFG handoff.
     [[nodiscard]] CombinedRegressionScene makeCombinedQualityRegressionScene(
         QualitySceneKind kind, float scalingFactor,
+        float interpolation = 0.5F
+    );
+
+    /// Build a combined scaling/LSFG scene for an exact production extent
+    /// pair.
+    [[nodiscard]] CombinedRegressionScene makeCombinedQualityRegressionScene(
+        QualitySceneKind kind, uint32_t sourceWidth, uint32_t sourceHeight,
+        uint32_t presentationWidth, uint32_t presentationHeight,
         float interpolation = 0.5F
     );
 

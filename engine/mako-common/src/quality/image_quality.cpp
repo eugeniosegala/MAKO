@@ -811,21 +811,46 @@ SpatialRegressionScene mako::quality::makeSpatialQualityRegressionScene(
         const QualitySceneKind kind, const float scalingFactor, const float time) {
     if (!std::isfinite(scalingFactor) || scalingFactor <= 1.0F || scalingFactor > 4.0F)
         throw std::invalid_argument("spatial quality scaling factor must be above one and at most four");
-    if (!std::isfinite(time) || time < 0.0F || time > 1.0F)
-        throw std::invalid_argument("spatial quality scene time must be between zero and one");
-
     const uint32_t presentationWidth = static_cast<uint32_t>(std::lround(
         static_cast<float>(baseWidth) * scalingFactor
     ));
     const uint32_t presentationHeight = static_cast<uint32_t>(std::lround(
         static_cast<float>(baseHeight) * scalingFactor
     ));
+    return makeSpatialQualityRegressionScene(
+        kind, baseWidth, baseHeight, presentationWidth, presentationHeight, time
+    );
+}
+
+SpatialRegressionScene mako::quality::makeSpatialQualityRegressionScene(
+        const QualitySceneKind kind,
+        const uint32_t sourceWidth,
+        const uint32_t sourceHeight,
+        const uint32_t presentationWidth,
+        const uint32_t presentationHeight,
+        const float time) {
+    if (!std::isfinite(time) || time < 0.0F || time > 1.0F)
+        throw std::invalid_argument("spatial quality scene time must be between zero and one");
+    if (sourceWidth == 0 || sourceHeight == 0 ||
+            presentationWidth == 0 || presentationHeight == 0)
+        throw std::invalid_argument("spatial quality extents must be non-zero");
+    if (sourceWidth > presentationWidth || sourceHeight > presentationHeight ||
+            (sourceWidth == presentationWidth && sourceHeight == presentationHeight))
+        throw std::invalid_argument("spatial quality extents must describe upscaling");
+    const float horizontalFactor = static_cast<float>(presentationWidth) /
+        static_cast<float>(sourceWidth);
+    const float verticalFactor = static_cast<float>(presentationHeight) /
+        static_cast<float>(sourceHeight);
+    const float scalingFactor = std::max(horizontalFactor, verticalFactor);
+    if (!std::isfinite(scalingFactor) || scalingFactor > 4.0F)
+        throw std::invalid_argument("spatial quality extent ratio must be at most four");
+
     SpatialRegressionScene scene{
-        .sourceWidth = baseWidth,
-        .sourceHeight = baseHeight,
+        .sourceWidth = sourceWidth,
+        .sourceHeight = sourceHeight,
         .presentationWidth = presentationWidth,
         .presentationHeight = presentationHeight,
-        .source = renderScene(kind, time, baseWidth, baseHeight),
+        .source = renderScene(kind, time, sourceWidth, sourceHeight),
         .reference = {},
         .focusMask = {},
         .detailMask = std::vector<uint8_t>(
@@ -856,8 +881,36 @@ CombinedRegressionScene mako::quality::makeCombinedQualityRegressionScene(
         const float interpolation) {
     if (!std::isfinite(interpolation) || interpolation <= 0.0F || interpolation >= 1.0F)
         throw std::invalid_argument("combined quality interpolation must be between zero and one");
+    if (!std::isfinite(scalingFactor) || scalingFactor <= 1.0F || scalingFactor > 4.0F)
+        throw std::invalid_argument("spatial quality scaling factor must be above one and at most four");
+    const uint32_t presentationWidth = static_cast<uint32_t>(std::lround(
+        static_cast<float>(baseWidth) * scalingFactor
+    ));
+    const uint32_t presentationHeight = static_cast<uint32_t>(std::lround(
+        static_cast<float>(baseHeight) * scalingFactor
+    ));
+    return makeCombinedQualityRegressionScene(
+        kind, baseWidth, baseHeight, presentationWidth, presentationHeight,
+        interpolation
+    );
+}
+
+CombinedRegressionScene mako::quality::makeCombinedQualityRegressionScene(
+        const QualitySceneKind kind,
+        const uint32_t sourceWidth,
+        const uint32_t sourceHeight,
+        const uint32_t presentationWidth,
+        const uint32_t presentationHeight,
+        const float interpolation) {
+    if (!std::isfinite(interpolation) || interpolation <= 0.0F || interpolation >= 1.0F)
+        throw std::invalid_argument("combined quality interpolation must be between zero and one");
     const auto spatialReference = makeSpatialQualityRegressionScene(
-        kind, scalingFactor, interpolation
+        kind,
+        sourceWidth,
+        sourceHeight,
+        presentationWidth,
+        presentationHeight,
+        interpolation
     );
     const auto previousReference = renderScene(
         kind,
@@ -876,8 +929,8 @@ CombinedRegressionScene mako::quality::makeCombinedQualityRegressionScene(
         .sourceHeight = spatialReference.sourceHeight,
         .presentationWidth = spatialReference.presentationWidth,
         .presentationHeight = spatialReference.presentationHeight,
-        .previous = renderScene(kind, 0.0F, baseWidth, baseHeight),
-        .current = renderScene(kind, 1.0F, baseWidth, baseHeight),
+        .previous = renderScene(kind, 0.0F, sourceWidth, sourceHeight),
+        .current = renderScene(kind, 1.0F, sourceWidth, sourceHeight),
         .reference = spatialReference.reference,
         .focusMask = makeFocusMask(
             previousReference,
