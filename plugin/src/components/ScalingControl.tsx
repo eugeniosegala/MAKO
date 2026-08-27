@@ -40,11 +40,11 @@ export function ScalingControl({
   const scalingMethodOptions = [
     {
       data: SCALING_METHOD_NATIVE,
-      label: t("SCALING_METHOD_NATIVE", "Native (No MAKO Scaler)"),
+      label: t("SCALING_METHOD_NATIVE", "Native Resolution"),
     },
     {
       data: SCALING_METHOD_MAKO,
-      label: t("SCALING_METHOD_MAKO", "MAKO (Open)"),
+      label: t("SCALING_METHOD_MAKO", "MAKO Scaler"),
     },
     {
       data: SCALING_METHOD_LS1,
@@ -63,7 +63,7 @@ export function ScalingControl({
           label={t("SCALING_ENABLED", "Enable Scaling Engine (Restart)")}
           description={t(
             "SCALING_ENABLED_DESC",
-            "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once the game starts, switch between Native, MAKO, and LS1 methods; model, factor, and sharpness changes recreate the swapchain and may briefly flicker. The engine can run alone or before Frame Generation.",
+            "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once the game starts, switch between Native Resolution, MAKO Scaler, and LS1 models; the game recreates its swapchain and may briefly flicker. Factor and sharpness changes use the same boundary. The engine can run alone or before Frame Generation.",
           )}
           checked={config.scaling_enabled}
           disabled={disabled}
@@ -78,7 +78,7 @@ export function ScalingControl({
               label={t("SCALING_METHOD", "Scaling Method")}
               description={t(
                 "SCALING_METHOD_DESC",
-                "Native keeps the Scaling Engine ready but passes the game's image through without a MAKO scaler. MAKO is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO takes over for that swapchain. Method changes use swapchain recreation.",
+                "Native Resolution keeps the Scaling Engine ready without spatial reconstruction. MAKO Scaler is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO Scaler takes over for that swapchain. Model changes apply through game-owned swapchain recreation.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"

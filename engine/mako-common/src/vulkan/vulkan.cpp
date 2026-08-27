@@ -404,7 +404,12 @@ VulkanInstanceFuncs vk::initVulkanInstanceFuncs(VkInstance i, PFN_vkGetInstanceP
             ipa<PFN_vkGetPhysicalDeviceQueueFamilyProperties>(mpa, i,
                 "vkGetPhysicalDeviceQueueFamilyProperties"),
         .GetPhysicalDeviceFeatures2 = graphical ?
-            nullptr : ipa<PFN_vkGetPhysicalDeviceFeatures2>(mpa, i, "vkGetPhysicalDeviceFeatures2"),
+            optionalIpa<PFN_vkGetPhysicalDeviceFeatures2>(
+                mpa, i, "vkGetPhysicalDeviceFeatures2",
+                "vkGetPhysicalDeviceFeatures2KHR"
+            ) : ipa<PFN_vkGetPhysicalDeviceFeatures2>(
+                mpa, i, "vkGetPhysicalDeviceFeatures2"
+            ),
         .GetPhysicalDeviceFormatProperties =
             ipa<PFN_vkGetPhysicalDeviceFormatProperties>(mpa, i,
                 "vkGetPhysicalDeviceFormatProperties"),

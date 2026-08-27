@@ -1,0 +1,127 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+#include "swapchain_retirement.hpp"
+
+#include <array>
+#include <cstdint>
+#include <cstdlib>
+#include <iostream>
+#include <string>
+
+using namespace mako::layer;
+
+namespace {
+    void expect(const bool condition, const std::string& message) {
+        if (!condition) {
+            std::cerr << "FAIL: " << message << '\n';
+            std::exit(1);
+        }
+    }
+}
+
+int main() {
+    expect(selectSwapchainMaintenance1Extension(true, true, true) ==
+            VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+        "the promoted maintenance1 extension was not preferred");
+    expect(selectSwapchainMaintenance1Extension(false, true, true) ==
+            VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+        "the EXT maintenance1 fallback was not selected");
+    expect(!selectSwapchainMaintenance1Extension(true, true, false) &&
+            !selectSwapchainMaintenance1Extension(false, false, true),
+        "maintenance1 was selected without both extension and feature support");
+
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,
+        .swapchainMaintenance1 = VK_TRUE,
+    };
+    const std::array<const char*, 1> extensions{
+        VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+    };
+    const VkDeviceCreateInfo enabled{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &maintenance,
+        .enabledExtensionCount = static_cast<uint32_t>(extensions.size()),
+        .ppEnabledExtensionNames = extensions.data(),
+    };
+    expect(swapchainMaintenance1Enabled(enabled),
+        "enabled maintenance1 extension and feature were not recognized");
+
+    maintenance.swapchainMaintenance1 = VK_FALSE;
+    expect(!swapchainMaintenance1Enabled(enabled),
+        "a disabled maintenance1 feature was accepted");
+    maintenance.swapchainMaintenance1 = VK_TRUE;
+
+    const VkDeviceCreateInfo missingExtension{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &maintenance,
+    };
+    expect(!swapchainMaintenance1Enabled(missingExtension),
+        "a maintenance1 feature without its extension was accepted");
+
+    const VkDeviceCreateInfo malformedExtensionList{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &maintenance,
+        .enabledExtensionCount = 1,
+    };
+    expect(!swapchainMaintenance1Enabled(malformedExtensionList),
+        "a malformed extension list was dereferenced or accepted");
+
+    const std::array<const char*, 1> khrExtensions{
+        VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+    };
+    const VkDeviceCreateInfo khrEnabled{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .pNext = &maintenance,
+        .enabledExtensionCount = static_cast<uint32_t>(khrExtensions.size()),
+        .ppEnabledExtensionNames = khrExtensions.data(),
+    };
+    expect(swapchainMaintenance1Enabled(khrEnabled),
+        "the promoted KHR maintenance1 extension was not recognized");
+
+    VkFence fence = VK_NULL_HANDLE;
+    const VkSwapchainPresentFenceInfoKHR presentFence{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR,
+        .swapchainCount = 1,
+        .pFences = &fence,
+    };
+    expect(findSwapchainPresentFenceInfo(&presentFence) == &presentFence,
+        "present-fence pNext lookup failed");
+    expect(!upstreamPresentFenceProtectsSwapchain(&presentFence),
+        "a null upstream present fence was accepted as lifetime proof");
+    fence = reinterpret_cast<VkFence>(static_cast<uintptr_t>(1));
+    expect(upstreamPresentFenceProtectsSwapchain(&presentFence),
+        "a valid upstream present fence was not accepted as lifetime proof");
+    expect(!upstreamPresentFenceProtectsSwapchain(&presentFence, 1),
+        "an out-of-range upstream present fence was accepted");
+
+    const VkBaseInStructure precedingNode{
+        .sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR,
+        .pNext = reinterpret_cast<const VkBaseInStructure*>(&presentFence),
+    };
+    // Production pNext chains enter through an opaque Vulkan ABI pointer.
+    // Keep the fixture opaque too so LTO cannot reason across distinct Vulkan
+    // aggregate types in a way that no real loader call permits.
+    const void* volatile opaquePrecedingNode = &precedingNode;
+    expect(findSwapchainPresentFenceInfo(opaquePrecedingNode) == &presentFence,
+        "present-fence lookup failed behind a preceding pNext node");
+
+    expect(swapchainRetirementGracePeriod == std::chrono::milliseconds(50),
+        "the compositor retirement grace contract changed unexpectedly");
+
+    expect(presentFenceWillSignal(VK_SUCCESS) &&
+            presentFenceWillSignal(VK_SUBOPTIMAL_KHR) &&
+            presentFenceWillSignal(VK_ERROR_OUT_OF_DATE_KHR) &&
+            presentFenceWillSignal(VK_ERROR_SURFACE_LOST_KHR) &&
+            presentFenceWillSignal(
+                VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT
+            ),
+        "a queued presentation result lost its retirement fence");
+    expect(!presentFenceWillSignal(VK_ERROR_OUT_OF_HOST_MEMORY) &&
+            !presentFenceWillSignal(VK_ERROR_OUT_OF_DEVICE_MEMORY) &&
+            !presentFenceWillSignal(VK_ERROR_DEVICE_LOST),
+        "an unqueueable failure retained an unsignalable fence");
+
+    std::cout << "swapchain retirement tests passed\n";
+    return 0;
+}

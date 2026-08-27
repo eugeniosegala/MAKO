@@ -80,7 +80,8 @@ namespace mako::layer {
             std::optional<bool> gamescopeHdrActive,
             bool gamescopeDetected, bool hdrExposureDisabled,
             std::optional<uint32_t> gamescopeRefreshHz,
-            uint64_t runtimeStateRevision);
+            uint64_t runtimeStateRevision,
+            bool swapchainMaintenance1Enabled);
 
         /// present a frame
         /// @param vk vulkan instance
@@ -117,6 +118,15 @@ namespace mako::layer {
         /// owner of destruction and recreation.
         [[nodiscard]] bool requestLiveProfileResourceRecreationAfterPresent(
             VkResult lowerPresentResult);
+
+        /// Wait for every layer-owned maintenance1 present fence associated
+        /// with this swapchain. A zero timeout is a nonblocking retirement
+        /// poll; finite waits are used only at application destruction.
+        [[nodiscard]] bool waitForPresentRetirement(
+            const vk::Vulkan& vk, uint64_t timeoutNs);
+        [[nodiscard]] bool presentRetirementEnabled() const {
+            return !this->presentRetirementFences.empty();
+        }
 
         /// Record a confirmed Gamescope application-HDR state change. Existing
         /// contexts retain their safe encoding until the game naturally
@@ -223,6 +233,16 @@ namespace mako::layer {
         std::optional<SpatialScaler> spatialScaler;
         std::vector<SpatialScalingPass> spatialScalingPasses;
 
+        struct PresentRetirementFence {
+            vk::Fence fence;
+            bool associated{false};
+            bool used{false};
+        };
+        std::vector<PresentRetirementFence> presentRetirementFences;
+        bool lastLowerPresentRetirementProtected{false};
+        bool presentRetirementBusyLogged{false};
+        bool externalPresentFenceLogged{false};
+
         backend::Instance* instance{nullptr};
         ls::owned_ptr<ls::R<backend::Context>> ctx;
         FrameState frameState;
@@ -264,6 +284,9 @@ namespace mako::layer {
             const PresentInvocation& invocation, VkSemaphore waitSemaphore,
             const void* nextChain,
             std::chrono::steady_clock::duration* duration = nullptr);
+        [[nodiscard]] VkResult queuePresentWithRetirementFence(
+            const vk::Vulkan& vk, VkQueue queue,
+            const VkPresentInfoKHR& presentInfo);
         [[nodiscard]] bool recoverBackendIfReady(const vk::Vulkan& vk);
         void ensureHistoryWarmup();
         [[nodiscard]] PresentationFramePlan prepareFramePlan(

@@ -444,8 +444,11 @@ Root::Root() :
     }
 
     this->active_profile = profile->second;
-    this->frameGenerationConfiguredAtStartup =
-        this->active_profile->frame_generation_enabled;
+    // Every matched MAKO process reserves the application-device interop used
+    // by LSFG. The user's Frame Generation switch remains a live execution
+    // policy: Off performs no generation work, while On can reuse the retained
+    // backend and private resources without reconstructing the Vulkan device.
+    this->frameGenerationInteropProvisionedAtStartup = true;
     this->scalingEngineConfiguredAtStartup =
         this->active_profile->scaling_enabled;
 
@@ -563,30 +566,20 @@ ConfigurationUpdateResult Root::update() {
         : std::nullopt;
     bool profileProcessRestartRequired = false;
     bool gpuSelectionPending = false;
-    bool frameGenerationInteropPending = false;
     bool ultraPerformancePending =
         activeUltraPerformance != requestedUltraPerformance;
     bool scalingEnginePending = false;
     if (runtimeProfile && this->active_profile) {
         auto projection = projectProcessStaticProfileForLiveUpdate(
             *this->active_profile, *runtimeProfile,
-            this->frameGenerationConfiguredAtStartup,
             this->scalingEngineConfiguredAtStartup
         );
         *runtimeProfile = std::move(projection.runtimeProfile);
         gpuSelectionPending = projection.gpuSelectionPending;
-        frameGenerationInteropPending =
-            projection.frameGenerationInteropPending;
         ultraPerformancePending = projection.ultraPerformancePending;
         scalingEnginePending = projection.scalingEnginePending;
         profileProcessRestartRequired = projection.restartRequired();
     } else if (runtimeProfile) {
-        if (runtimeProfile->frame_generation_enabled &&
-                !this->frameGenerationConfiguredAtStartup) {
-            runtimeProfile->frame_generation_enabled = false;
-            frameGenerationInteropPending = true;
-            profileProcessRestartRequired = true;
-        }
         if (runtimeProfile->scaling_enabled !=
                 this->scalingEngineConfiguredAtStartup) {
             runtimeProfile->scaling_enabled =
@@ -621,8 +614,6 @@ ConfigurationUpdateResult Root::update() {
                       << " state_revision=" << this->runtimeStateRevision
                       << " reason=process-static-profile"
                       << " gpu_selection_pending=" << gpuSelectionPending
-                      << " frame_generation_interop_pending="
-                      << frameGenerationInteropPending
                       << " ultra_performance_pending="
                       << ultraPerformancePending
                       << " scaling_engine_pending="
@@ -707,7 +698,7 @@ ConfigurationUpdateResult Root::update() {
 
 void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
         const std::function<void(void)>& finish) const {
-    if (!this->frameGenerationConfigured()) {
+    if (!this->frameGenerationInteropProvisioned()) {
         finish();
         return;
     }
@@ -728,27 +719,32 @@ void Root::modifyInstanceCreateInfo(VkInstanceCreateInfo& createInfo,
 }
 
 void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
+        const char* const swapchainMaintenance1Extension,
         const std::function<void(void)>& finish) const {
-    if (!this->frameGenerationConfigured()) {
+    if (!this->frameGenerationInteropProvisioned()) {
         finish();
         return;
     }
 
+    std::vector<const char*> requiredExtensions{
+        "VK_KHR_external_memory",
+        "VK_KHR_external_memory_fd",
+        "VK_KHR_external_semaphore",
+        "VK_KHR_external_semaphore_fd",
+        "VK_KHR_timeline_semaphore"
+    };
+    if (swapchainMaintenance1Extension)
+        requiredExtensions.push_back(swapchainMaintenance1Extension);
     auto extensions = add_extensions(
         createInfo.ppEnabledExtensionNames,
         createInfo.enabledExtensionCount,
-        {
-            "VK_KHR_external_memory",
-            "VK_KHR_external_memory_fd",
-            "VK_KHR_external_semaphore",
-            "VK_KHR_external_semaphore_fd",
-            "VK_KHR_timeline_semaphore"
-        }
+        requiredExtensions
     );
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
 
     bool timelineFeatureEnabled = false;
+    bool swapchainMaintenance1FeatureEnabled = false;
     auto* featureInfo = reinterpret_cast<VkBaseInStructure*>(const_cast<void*>(createInfo.pNext));
     while (featureInfo) {
         if (featureInfo->sType ==
@@ -761,6 +757,16 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
             auto* features = reinterpret_cast<VkPhysicalDeviceTimelineSemaphoreFeatures*>(featureInfo);
             features->timelineSemaphore = VK_TRUE;
             timelineFeatureEnabled = true;
+        } else if (featureInfo->sType ==
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR) {
+            auto* features = reinterpret_cast<
+                VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR*>(
+                    featureInfo
+                );
+            if (swapchainMaintenance1Extension)
+                features->swapchainMaintenance1 = VK_TRUE;
+            swapchainMaintenance1FeatureEnabled =
+                features->swapchainMaintenance1 == VK_TRUE;
         }
 
         featureInfo = const_cast<VkBaseInStructure*>(featureInfo->pNext);
@@ -773,6 +779,17 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
     };
     if (!timelineFeatureEnabled)
         createInfo.pNext = &timelineFeatures;
+
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance1Features{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,
+        .pNext = const_cast<void*>(createInfo.pNext),
+        .swapchainMaintenance1 = VK_TRUE,
+    };
+    if (swapchainMaintenance1Extension &&
+            !swapchainMaintenance1FeatureEnabled) {
+        createInfo.pNext = &maintenance1Features;
+    }
 
     finish();
 }
@@ -1056,7 +1073,8 @@ Root::modifySurfaceCapabilities(
 }
 
 void Root::createSwapchainContext(const vk::Vulkan& vk,
-        VkSwapchainKHR swapchain, const SwapchainInfo& info) {
+        VkSwapchainKHR swapchain, const SwapchainInfo& info,
+        const bool swapchainMaintenance1Enabled) {
     if (!this->active_profile.has_value())
         throw ls::error("attempted to create swapchain context while layer is inactive");
     const auto& profile = *this->active_profile;
@@ -1130,7 +1148,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
             this->backendProfile = profile;
         } catch (const std::exception& e) {
             backendInitializationError = e.what();
-            if (!info.spatialScalingActive)
+            if (frameGenerationRequested && !info.spatialScalingActive)
                 throw ls::error("failed to create backend instance", e);
         }
     }
@@ -1169,7 +1187,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
             this->gamescopeDetected,
             this->presentationEnvironment.hdrExposureDisabled,
             this->gamescopeRefreshHz,
-            this->runtimeStateRevision)).second;
+            this->runtimeStateRevision,
+            swapchainMaintenance1Enabled)).second;
     const auto insertedContext = this->swapchains.find(swapchain);
     const uint64_t diagnosticsContextId =
         insertedContext != this->swapchains.end()
@@ -1192,17 +1211,25 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << " replacement=" << (info.replacement ? 1 : 0)
                   << " active_contexts=" << this->swapchains.size()
                   << " inserted=" << inserted
+                  << " present_retirement="
+                  << (insertedContext != this->swapchains.end() &&
+                        insertedContext->second.presentRetirementEnabled()
+                        ? "maintenance1-fence" : "natural-only")
                   << " layer_forced_recreation=live-profile-resources-one-shot"
                   << '\n';
     }
 }
 
 void Root::removeSwapchainContext(VkSwapchainKHR swapchain) {
-    const auto context = this->swapchains.find(swapchain);
-    const uint64_t diagnosticsContextId = context != this->swapchains.end()
-        ? context->second.diagnosticsId()
-        : 0;
-    const size_t removed = this->swapchains.erase(swapchain);
+    static_cast<void>(this->takeSwapchainContext(swapchain));
+}
+
+std::optional<Swapchain> Root::takeSwapchainContext(
+        const VkSwapchainKHR swapchain) {
+    auto context = this->swapchains.extract(swapchain);
+    const uint64_t diagnosticsContextId = context.empty()
+        ? 0 : context.mapped().diagnosticsId();
+    const bool removed = !context.empty();
     if (present_diagnostics::enabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-destroy"
                   << " context=" << diagnosticsContextId
@@ -1210,4 +1237,7 @@ void Root::removeSwapchainContext(VkSwapchainKHR swapchain) {
                   << " active_contexts=" << this->swapchains.size()
                   << " removed=" << removed << '\n';
     }
+    if (context.empty())
+        return std::nullopt;
+    return std::optional<Swapchain>{std::move(context.mapped())};
 }

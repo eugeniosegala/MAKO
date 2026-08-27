@@ -1,0 +1,130 @@
+/* SPDX-License-Identifier: GPL-3.0-or-later */
+
+#pragma once
+
+#include <chrono>
+#include <cstring>
+
+#include <vulkan/vulkan_core.h>
+
+namespace mako::layer {
+
+    // The maintenance fence is the Vulkan lifetime proof. The grace interval
+    // additionally lets an upper Gamescope WSI/protocol event loop observe a
+    // replacement presentation before the retired lower WSI is destroyed.
+    inline constexpr auto swapchainRetirementGracePeriod =
+        std::chrono::milliseconds(50);
+
+    /// Prefer the promoted extension name when the driver advertises it, then
+    /// fall back to the EXT predecessor used by current Gamescope/RADV stacks.
+    /// The feature bit is mandatory for either spelling.
+    [[nodiscard]] constexpr const char*
+    selectSwapchainMaintenance1Extension(
+            const bool khrExtensionSupported,
+            const bool extExtensionSupported,
+            const bool featureSupported) noexcept {
+        if (!featureSupported)
+            return nullptr;
+        if (khrExtensionSupported)
+            return VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME;
+        if (extExtensionSupported)
+            return VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME;
+        return nullptr;
+    }
+
+    // Vulkan guarantees that every extensible structure starts with sType and
+    // pNext, but C++ strict-aliasing rules do not make an arbitrary Vulkan
+    // structure a VkBaseInStructure object. Copy the common header so optimized
+    // builds can traverse a caller-owned chain without type-punning UB.
+    [[nodiscard]] inline VkBaseInStructure pNextHeader(
+            const void* node) noexcept {
+        VkBaseInStructure header{};
+        if (node)
+            std::memcpy(&header, node, sizeof(header));
+        return header;
+    }
+
+    /// The Gamescope WSI layer enables swapchain-maintenance1 before calling
+    /// MAKO. Preserve that negotiated device contract explicitly rather than
+    /// inferring support later from the physical device or environment.
+    [[nodiscard]] inline bool swapchainMaintenance1Enabled(
+            const VkDeviceCreateInfo& createInfo) noexcept {
+        if (createInfo.enabledExtensionCount > 0 &&
+                !createInfo.ppEnabledExtensionNames) {
+            return false;
+        }
+        bool extensionEnabled = false;
+        for (uint32_t index = 0;
+                index < createInfo.enabledExtensionCount; ++index) {
+            const char* const extension =
+                createInfo.ppEnabledExtensionNames[index];
+            if (extension &&
+                    (std::strcmp(
+                        extension,
+                        VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
+                    ) == 0 ||
+                     std::strcmp(
+                        extension,
+                        VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
+                    ) == 0)) {
+                extensionEnabled = true;
+                break;
+            }
+        }
+        if (!extensionEnabled)
+            return false;
+
+        for (const void* node = createInfo.pNext; node;) {
+            const auto header = pNextHeader(node);
+            if (header.sType ==
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR) {
+                const auto* features = reinterpret_cast<
+                    const VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR*>(
+                        node
+                    );
+                return features->swapchainMaintenance1 == VK_TRUE;
+            }
+            node = header.pNext;
+        }
+        return false;
+    }
+
+    [[nodiscard]] inline const VkSwapchainPresentFenceInfoKHR*
+    findSwapchainPresentFenceInfo(const void* chain) noexcept {
+        for (const void* node = chain; node;) {
+            const auto header = pNextHeader(node);
+            if (header.sType ==
+                    VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR) {
+                return reinterpret_cast<
+                    const VkSwapchainPresentFenceInfoKHR*>(node);
+            }
+            node = header.pNext;
+        }
+        return nullptr;
+    }
+
+    /// A non-null upstream fence for this swapchain is the caller's Vulkan
+    /// lifetime proof for the final lower present. MAKO never borrows, resets,
+    /// or replaces that fence; it only preserves the chain and records that
+    /// the one-shot recreation result followed a retirement-protected present.
+    [[nodiscard]] inline bool upstreamPresentFenceProtectsSwapchain(
+            const VkSwapchainPresentFenceInfoKHR* const info,
+            const uint32_t swapchainIndex = 0) noexcept {
+        return info && info->pFences &&
+            swapchainIndex < info->swapchainCount &&
+            info->pFences[swapchainIndex] != VK_NULL_HANDLE;
+    }
+
+    /// These results retain the queued present operation, including its
+    /// maintenance1 fence signal. Allocation or device-loss failures do not
+    /// provide that guarantee and must not leave an unsignalable fence tracked.
+    [[nodiscard]] constexpr bool presentFenceWillSignal(
+            const VkResult result) noexcept {
+        return result == VK_SUCCESS ||
+            result == VK_SUBOPTIMAL_KHR ||
+            result == VK_ERROR_OUT_OF_DATE_KHR ||
+            result == VK_ERROR_SURFACE_LOST_KHR ||
+            result == VK_ERROR_FULL_SCREEN_EXCLUSIVE_MODE_LOST_EXT;
+    }
+
+}

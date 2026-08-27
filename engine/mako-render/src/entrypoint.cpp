@@ -5,9 +5,13 @@
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
+#include "present_diagnostics.hpp"
 #include "swapchain.hpp"
+#include "swapchain_retirement.hpp"
 
 #include <algorithm>
+#include <chrono>
+#include <cstring>
 #include <optional>
 #include <cstddef>
 #include <cstdint>
@@ -16,6 +20,7 @@
 #include <mutex>
 #include <string_view>
 #include <string>
+#include <thread>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
@@ -42,6 +47,7 @@ namespace {
 
         std::unordered_map<VkDevice, vk::Vulkan> devices;
         std::unordered_set<VkDevice> nativeDevices;
+        std::unordered_set<VkDevice> presentRetirementDevices;
         struct QueueIdentity {
             VkDevice device{VK_NULL_HANDLE};
             uint32_t familyIndex{UINT32_MAX};
@@ -65,9 +71,111 @@ namespace {
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
         std::unordered_set<VkSwapchainKHR> nativeSwapchains;
+        struct RetiredSwapchain {
+            VkDevice device{VK_NULL_HANDLE};
+            ls::R<vk::Vulkan> vk;
+            std::optional<Swapchain> context;
+            std::chrono::steady_clock::time_point notBefore{};
+        };
+        std::unordered_map<VkSwapchainKHR, RetiredSwapchain>
+            retiredSwapchains;
     }* instance_info; // NOLINT (global variable)
 
     bool initializeLayerInfo();
+
+    bool finalizeRetiredSwapchain(
+            const VkSwapchainKHR swapchain, const uint64_t timeoutNs) {
+        const auto retired = instance_info->retiredSwapchains.find(swapchain);
+        if (retired == instance_info->retiredSwapchains.end())
+            return true;
+        uint64_t remainingTimeoutNs = timeoutNs;
+        const auto now = std::chrono::steady_clock::now();
+        if (now < retired->second.notBefore) {
+            if (timeoutNs == 0)
+                return false;
+            const auto delay = std::chrono::duration_cast<
+                std::chrono::nanoseconds>(
+                    retired->second.notBefore - now
+                );
+            if (timeoutNs != UINT64_MAX &&
+                    static_cast<uint64_t>(delay.count()) > timeoutNs) {
+                return false;
+            }
+            std::this_thread::sleep_for(delay);
+            if (timeoutNs != UINT64_MAX)
+                remainingTimeoutNs -= static_cast<uint64_t>(delay.count());
+        }
+        if (retired->second.context &&
+                !retired->second.context->waitForPresentRetirement(
+                    retired->second.vk.get(), remainingTimeoutNs
+                )) {
+            return false;
+        }
+
+        auto node = instance_info->retiredSwapchains.extract(retired);
+        auto& state = node.mapped();
+        state.context.reset();
+        state.vk.get().df().DestroySwapchainKHR(
+            state.device, swapchain, VK_NULL_HANDLE
+        );
+        if (present_diagnostics::enabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=swapchain-retirement-complete"
+                      << " swapchain=" << swapchain
+                      << " pending="
+                      << instance_info->retiredSwapchains.size() << '\n';
+        }
+        return true;
+    }
+
+    void collectRetiredSwapchains(
+            const VkDevice device, const uint64_t timeoutNs = 0) {
+        const auto started = std::chrono::steady_clock::now();
+        std::vector<VkSwapchainKHR> candidates;
+        candidates.reserve(instance_info->retiredSwapchains.size());
+        for (const auto& [swapchain, retired] :
+                instance_info->retiredSwapchains) {
+            if (retired.device == device)
+                candidates.push_back(swapchain);
+        }
+        for (const auto swapchain : candidates) {
+            uint64_t remainingTimeoutNs = timeoutNs;
+            if (timeoutNs != UINT64_MAX) {
+                const auto elapsed = std::chrono::duration_cast<
+                    std::chrono::nanoseconds>(
+                        std::chrono::steady_clock::now() - started
+                    ).count();
+                remainingTimeoutNs = elapsed >=
+                        static_cast<int64_t>(timeoutNs)
+                    ? 0
+                    : timeoutNs - static_cast<uint64_t>(elapsed);
+            }
+            static_cast<void>(finalizeRetiredSwapchain(
+                swapchain, remainingTimeoutNs
+            ));
+        }
+    }
+
+    void forceFinalizeRetiredSwapchains(const VkDevice device) {
+        std::vector<VkSwapchainKHR> candidates;
+        for (const auto& [swapchain, retired] :
+                instance_info->retiredSwapchains) {
+            if (retired.device == device)
+                candidates.push_back(swapchain);
+        }
+        for (const auto swapchain : candidates) {
+            auto node = instance_info->retiredSwapchains.extract(swapchain);
+            if (node.empty())
+                continue;
+            auto& state = node.mapped();
+            std::cerr << "MAKO Renderer: forcing pending swapchain retirement "
+                         "during device destruction\n";
+            state.context.reset();
+            state.vk.get().df().DestroySwapchainKHR(
+                state.device, swapchain, VK_NULL_HANDLE
+            );
+        }
+    }
 
     std::optional<uint32_t> selectLayerQueueFamily(
             const VkPhysicalDevice physicalDevice,
@@ -95,6 +203,63 @@ namespace {
             }
         }
         return std::nullopt;
+    }
+
+    std::optional<const char*> supportedSwapchainMaintenance1Extension(
+            const VkPhysicalDevice physicalDevice,
+            const bool scalingEngineProvisioned) {
+        if (!scalingEngineProvisioned ||
+                !instance_info->funcs.GetPhysicalDeviceFeatures2) {
+            return std::nullopt;
+        }
+
+        uint32_t extensionCount{};
+        auto result = instance_info->funcs.EnumerateDeviceExtensionProperties(
+            physicalDevice, nullptr, &extensionCount, nullptr
+        );
+        if (result != VK_SUCCESS)
+            return std::nullopt;
+        std::vector<VkExtensionProperties> extensions(extensionCount);
+        result = instance_info->funcs.EnumerateDeviceExtensionProperties(
+            physicalDevice, nullptr, &extensionCount, extensions.data()
+        );
+        if (result != VK_SUCCESS)
+            return std::nullopt;
+
+        const auto hasExtension = [&](const char* const name) {
+            return std::ranges::any_of(
+                extensions,
+                [name](const VkExtensionProperties& extension) {
+                    return std::strcmp(extension.extensionName, name) == 0;
+                }
+            );
+        };
+        const bool hasKhr = hasExtension(
+            VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
+        );
+        const bool hasExt = hasExtension(
+            VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
+        );
+        if (!hasKhr && !hasExt)
+            return std::nullopt;
+
+        VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance1{
+            .sType =
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,
+        };
+        VkPhysicalDeviceFeatures2 features{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+            .pNext = &maintenance1,
+        };
+        instance_info->funcs.GetPhysicalDeviceFeatures2(
+            physicalDevice, &features
+        );
+        const char* const selected = selectSwapchainMaintenance1Extension(
+            hasKhr, hasExt, maintenance1.swapchainMaintenance1 == VK_TRUE
+        );
+        if (!selected)
+            return std::nullopt;
+        return selected;
     }
 
     // create instance
@@ -210,7 +375,6 @@ namespace {
                          "instance initialization\n";
             return VK_ERROR_INITIALIZATION_FAILED;
         }
-
         // apply layer chaining
         auto* layerInfo = reinterpret_cast<VkLayerDeviceCreateInfo*>(const_cast<void*>(info->pNext));
         while (layerInfo && (layerInfo->sType != VK_STRUCTURE_TYPE_LOADER_DEVICE_CREATE_INFO
@@ -257,12 +421,17 @@ namespace {
         }
 
         const bool frameGenerationInteropEnabled =
-            layer_info->root.frameGenerationConfigured();
-        const bool spatialScalingConfigured =
-            layer_info->root.spatialScalingConfigured();
+            layer_info->root.frameGenerationInteropProvisioned();
+        const bool scalingEngineProvisioned =
+            layer_info->root.scalingEngineProvisioned();
+        const auto swapchainMaintenance1Extension =
+            supportedSwapchainMaintenance1Extension(
+                physdev, scalingEngineProvisioned
+            );
         const auto layerQueueFamily = selectLayerQueueFamily(
-            physdev, *info, spatialScalingConfigured
+            physdev, *info, scalingEngineProvisioned
         );
+        bool presentRetirementEnabled = false;
         bool lowerDeviceCreated = false;
         const auto rollbackCreatedDevice = [&]() noexcept {
             if (!lowerDeviceCreated || !device || *device == VK_NULL_HANDLE)
@@ -286,8 +455,12 @@ namespace {
         // create device
         try {
             VkDeviceCreateInfo newInfo = *info;
-            layer_info->root.modifyDeviceCreateInfo(newInfo,
+            layer_info->root.modifyDeviceCreateInfo(
+                newInfo,
+                swapchainMaintenance1Extension.value_or(nullptr),
                 [&, newInfo = &newInfo]() {
+                    presentRetirementEnabled =
+                        swapchainMaintenance1Enabled(*newInfo);
                     auto res = instance_info->funcs.CreateDevice(physdev, newInfo, alloc, device);
                     if (res != VK_SUCCESS)
                         throw ls::vulkan_error(res, "vkCreateDevice() failed");
@@ -306,6 +479,9 @@ namespace {
             std::cerr << "- " << e.what() << '\n';
             return VK_ERROR_INITIALIZATION_FAILED;
         }
+
+        if (presentRetirementEnabled)
+            instance_info->presentRetirementDevices.insert(*device);
 
         // No game profile matched when this device was created. Keep only the
         // layer lifecycle hooks needed to chain and clean up correctly; all
@@ -329,10 +505,11 @@ namespace {
                 instance_info->devices.erase(*device);
                 layerDeviceInserted = false;
             }
+            instance_info->presentRetirementDevices.erase(*device);
         };
         try {
             if (!layerQueueFamily) {
-                throw ls::error(spatialScalingConfigured
+                throw ls::error(scalingEngineProvisioned
                     ? "the application did not create an ordinary queue family "
                       "with graphics and compute support"
                     : "the application did not create an ordinary graphics queue family");
@@ -395,10 +572,10 @@ namespace {
             // VkDevice still exists; only then may rollback destroy the device
             // or native fallback expose it without a stale wrapper.
             discardLayerDevice();
-            if (spatialScalingConfigured) {
+            if (scalingEngineProvisioned) {
                 rollbackCreatedDevice();
                 std::cerr << "MAKO Renderer: device initialization failed for "
-                             "an enabled spatial-scaling profile; refusing "
+                             "a provisioned Scaling Engine profile; refusing "
                              "native fallback after fixed-surface capability "
                              "virtualization:\n"
                           << "- " << e.what() << '\n';
@@ -423,6 +600,9 @@ namespace {
         if (!instance_info)
             return;
 
+        collectRetiredSwapchains(device, 250'000'000);
+        forceFinalizeRetiredSwapchains(device);
+
         // destroy layer instance
         auto it = instance_info->devices.find(device);
         if (it != instance_info->devices.end())
@@ -434,6 +614,7 @@ namespace {
             }
         );
         instance_info->nativeDevices.erase(device);
+        instance_info->presentRetirementDevices.erase(device);
 
         // destroy device
         auto vkDestroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(
@@ -1049,7 +1230,8 @@ namespace {
             // turning an engine failure into a game startup failure.
             try {
                 layer_info->root.createSwapchainContext(
-                    it->second, *swapchain, swapchainInfo
+                    it->second, *swapchain, swapchainInfo,
+                    instance_info->presentRetirementDevices.contains(device)
                 );
             } catch (const std::exception& e) {
                 // The lower image is native-sized when scaling is active,
@@ -1164,7 +1346,7 @@ namespace {
             if (configurationUpdate.recreationRequestedContexts > 0)
                 std::cerr << "MAKO Renderer: live profile-resource changes will request "
                              "game-owned swapchain recreation after the current lower "
-                             "present consumes its wait semaphores; contexts="
+                             "present accepts a maintenance1 retirement fence; contexts="
                           << configurationUpdate.recreationRequestedContexts
                           << '\n';
             if (configurationUpdate.processRestartDeferredContexts > 0 ||
@@ -1243,6 +1425,10 @@ namespace {
                 swapchainOutOfDate = true;
         }
 
+        const auto queueIdentity = instance_info->queueIdentities.find(queue);
+        if (queueIdentity != instance_info->queueIdentities.end())
+            collectRetiredSwapchains(queueIdentity->second.device);
+
         // Preserve a genuine game/driver out-of-date result, or MAKO's guarded
         // one-shot live-scaling recreation request, across the present batch.
         return swapchainOutOfDate ? VK_ERROR_OUT_OF_DATE_KHR : result;
@@ -1256,19 +1442,62 @@ namespace {
         const auto& it = instance_info->devices.find(device);
         if (it == instance_info->devices.end())
             return;
+        if (instance_info->retiredSwapchains.contains(swapchain)) {
+            std::cerr << "MAKO Renderer: duplicate deferred swapchain "
+                         "destruction ignored\n";
+            return;
+        }
 
-        const auto& info_mapping = instance_info->swapchainInfos.find(swapchain);
-        if (info_mapping != instance_info->swapchainInfos.end())
-            instance_info->swapchainInfos.erase(info_mapping);
+        instance_info->swapchainInfos.erase(swapchain);
+        instance_info->swapchains.erase(swapchain);
+        const bool native = instance_info->nativeSwapchains.erase(swapchain) > 0;
+        auto context = layer_info->root.takeSwapchainContext(swapchain);
 
-        const auto& mapping = instance_info->swapchains.find(swapchain);
-        if (mapping != instance_info->swapchains.end())
-            instance_info->swapchains.erase(mapping);
-        instance_info->nativeSwapchains.erase(swapchain);
+        if (!native && context && context->presentRetirementEnabled()) {
+            if (!alloc) {
+                const bool inserted =
+                    instance_info->retiredSwapchains.emplace(
+                        swapchain,
+                        InstanceInfo::RetiredSwapchain{
+                            .device = device,
+                            .vk = ls::R<vk::Vulkan>(it->second),
+                            .context = std::move(context),
+                            .notBefore = std::chrono::steady_clock::now() +
+                                swapchainRetirementGracePeriod,
+                        }
+                    ).second;
+                if (!inserted) {
+                    std::cerr << "MAKO Renderer: duplicate deferred swapchain "
+                                 "retirement ignored\n";
+                    return;
+                }
+                if (present_diagnostics::enabled()) {
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=swapchain-retirement-deferred"
+                              << " swapchain=" << swapchain
+                              << " reason=await-later-present-and-fence"
+                              << " grace_ms="
+                              << swapchainRetirementGracePeriod.count()
+                              << " pending="
+                              << instance_info->retiredSwapchains.size()
+                              << '\n';
+                }
+                return;
+            }
+        }
 
-        layer_info->root.removeSwapchainContext(swapchain);
-
-        // destroy swapchain
+        // A custom allocator cannot be retained because its pUserData lifetime
+        // ends with this call. The same synchronous wait also covers
+        // layer-owned fences recorded before an upstream present-fence owner
+        // was observed. A valid owner has already made this wait immediately
+        // satisfiable before requesting destruction.
+        if (context && !context->waitForPresentRetirement(
+                it->second, UINT64_MAX)) {
+            std::cerr << "MAKO Renderer: synchronous swapchain retirement "
+                         "failed; forwarding lower destruction without a "
+                         "completed layer-owned fence\n";
+        }
+        context.reset();
         it->second.df().DestroySwapchainKHR(device, swapchain, alloc);
     }
 }

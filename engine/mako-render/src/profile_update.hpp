@@ -48,13 +48,11 @@ namespace mako::layer {
     struct ProcessStaticProfileProjection {
         ls::GameConf runtimeProfile;
         bool gpuSelectionPending{false};
-        bool frameGenerationInteropPending{false};
         bool ultraPerformancePending{false};
         bool scalingEnginePending{false};
 
         [[nodiscard]] bool restartRequired() const {
             return this->gpuSelectionPending ||
-                this->frameGenerationInteropPending ||
                 this->ultraPerformancePending ||
                 this->scalingEnginePending;
         }
@@ -67,14 +65,10 @@ namespace mako::layer {
     projectProcessStaticProfileForLiveUpdate(
             const ls::GameConf& current,
             const ls::GameConf& requested,
-            const bool frameGenerationConfiguredAtStartup,
             const bool scalingEngineConfiguredAtStartup) {
         ProcessStaticProfileProjection projection{
             .runtimeProfile = requested,
             .gpuSelectionPending = requested.gpu != current.gpu,
-            .frameGenerationInteropPending =
-                requested.frame_generation_enabled &&
-                !frameGenerationConfiguredAtStartup,
             .ultraPerformancePending = requested.ultra_performance !=
                 current.ultra_performance,
             .scalingEnginePending = requested.scaling_enabled !=
@@ -82,8 +76,6 @@ namespace mako::layer {
         };
         if (projection.gpuSelectionPending)
             projection.runtimeProfile.gpu = current.gpu;
-        if (projection.frameGenerationInteropPending)
-            projection.runtimeProfile.frame_generation_enabled = false;
         if (projection.ultraPerformancePending) {
             projection.runtimeProfile.ultra_performance =
                 current.ultra_performance;
@@ -135,7 +127,7 @@ namespace mako::layer {
 
     struct RecreatedProfileResourceKey {
         bool scalingEnabled{false};
-        ls::ScalingMethod scalingMethod{ls::ScalingMethod::Mako};
+        ls::ScalingMethod scalingMethod{ls::ScalingMethod::Native};
         float scalingFactor{1.0F};
         float scalingSharpness{0.5F};
         float effectiveFlowScale{ls::GameConfDefaults::flowScale};
@@ -181,8 +173,8 @@ namespace mako::layer {
 
     /// Scaling dimensions and frame-generation context construction cannot be
     /// mutated while a swapchain is active. Arm one spec-defined OUT_OF_DATE
-    /// signal after the lower present has consumed the application's wait
-    /// semaphores. Repeated polls of the same requested resources do not
+    /// signal after the final lower present has accepted MAKO's maintenance1
+    /// retirement fence. Repeated polls of the same requested resources do not
     /// signal again, while a distinct request receives one fresh signal.
     class LiveProfileResourceRecreation {
     public:
@@ -249,15 +241,6 @@ namespace mako::layer {
             ((decision.frameGenerationBackendChanged ||
               decision.generatedFrameCapacityExceeded) &&
              frameGenerationResourcesAvailable);
-    }
-
-    /// Normal mode retains idle private resources after a live disable. An
-    /// Ultra Performance process that starts disabled omits them because the
-    /// application device was created without frame-generation interop.
-    [[nodiscard]] inline bool privateGenerationResourcesRequired(
-            const ls::GameConf& profile) {
-        return !profile.ultra_performance ||
-            profile.frame_generation_enabled;
     }
 
     /// A natural swapchain recreation reuses Root's process-wide backend. Keep

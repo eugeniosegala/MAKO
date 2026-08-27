@@ -59,19 +59,19 @@ namespace mako::layer {
         /// @return true if active
         [[nodiscard]] bool active() const { return this->active_profile.has_value(); }
 
-        /// Whether this process selected frame generation at device creation.
-        /// Standalone scaling deliberately avoids negotiating the external
-        /// memory/semaphore feature set used only by the LSFG backend.
-        [[nodiscard]] bool frameGenerationConfigured() const {
-            return this->frameGenerationConfiguredAtStartup;
+        /// Whether this matched MAKO process provisioned frame-generation
+        /// interop at device creation. Provisioning is independent from the
+        /// live Frame Generation switch so Off can become On in place.
+        [[nodiscard]] bool frameGenerationInteropProvisioned() const {
+            return this->frameGenerationInteropProvisionedAtStartup;
         }
-        [[nodiscard]] bool spatialScalingConfigured() const {
+        /// Whether this process started with the Scaling Engine lane. Native
+        /// Resolution is still provisioned: a later live scaler selection
+        /// needs the same compute-capable application queue as an initially
+        /// active scaler.
+        [[nodiscard]] bool scalingEngineProvisioned() const {
             return this->active_profile &&
-                ls::spatialScalingRequested(*this->active_profile) &&
-                std::isfinite(this->active_profile->scaling_factor) &&
-                this->active_profile->scaling_factor > 1.0F &&
-                this->active_profile->scaling_factor <=
-                    ls::GameConfLimits::maximumScalingFactor &&
+                this->active_profile->scaling_enabled &&
                 spatialScalingProcessSupported(
                     this->gamescopeEnvironmentDetected,
                     this->gamescopeDetected,
@@ -90,8 +90,10 @@ namespace mako::layer {
             const std::function<void(void)>& finish) const;
         /// modify device create info
         /// @param createInfo original create info
+        /// @param swapchainMaintenance1Extension optional supported spelling
         /// @param finish function to call after modification
         void modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
+            const char* swapchainMaintenance1Extension,
             const std::function<void(void)>& finish) const;
 
         /// modify swapchain create info
@@ -116,7 +118,8 @@ namespace mako::layer {
         /// @param info swapchain info
         /// @throws ls::error on failure
         void createSwapchainContext(const vk::Vulkan& vk, VkSwapchainKHR swapchain,
-            const SwapchainInfo& info);
+            const SwapchainInfo& info,
+            bool swapchainMaintenance1Enabled);
         /// get swapchain context
         /// @param swapchain swapchain handle
         /// @return swapchain context
@@ -128,6 +131,10 @@ namespace mako::layer {
 
             return it->second;
         }
+        /// Remove a context from live configuration updates while preserving
+        /// its GPU resources for bounded presentation-fence retirement.
+        [[nodiscard]] std::optional<Swapchain> takeSwapchainContext(
+            VkSwapchainKHR swapchain);
         /// remove swapchain context
         /// @param swapchain swapchain handle
         void removeSwapchainContext(VkSwapchainKHR swapchain);
@@ -138,7 +145,7 @@ namespace mako::layer {
 
         ls::WatchedConfig config;
         std::optional<ls::GameConf> active_profile;
-        bool frameGenerationConfiguredAtStartup{false};
+        bool frameGenerationInteropProvisionedAtStartup{false};
         bool scalingEngineConfiguredAtStartup{false};
 
         ls::lazy<backend::Instance> backend;

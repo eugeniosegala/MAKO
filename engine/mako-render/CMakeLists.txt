@@ -102,6 +102,15 @@ if(BUILD_TESTING)
     mako_register_portable_policy_test(
         mako-spatial-scaling-policy-tests spatial-scaling-policy)
 
+    add_executable(mako-swapchain-retirement-tests
+        "tests/swapchain_retirement_tests.cpp")
+    target_include_directories(mako-swapchain-retirement-tests
+        PRIVATE "src")
+    add_test(NAME swapchain-retirement
+        COMMAND mako-swapchain-retirement-tests)
+    mako_register_portable_policy_test(
+        mako-swapchain-retirement-tests swapchain-retirement)
+
     add_executable(mako-generated-frame-plan-tests
         "tests/generated_frame_plan_tests.cpp")
     target_include_directories(mako-generated-frame-plan-tests

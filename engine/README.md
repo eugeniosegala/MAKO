@@ -12,7 +12,7 @@ MAKO Renderer is MAKO's Vulkan layer and standalone renderer component. It bring
 
 The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. LS1 scaling and LSFG frame generation require a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer never bundles, copies, persists, replaces, or modifies that proprietary library; the open MAKO scaler does not require it.
 
-Scaling Engine is a game-start setting. Once it is enabled, compatible scaler and tuning changes use a game-owned swapchain recreation; a game started for scaling only must restart before it can enable Frame Generation. See [runtime transitions](docs/RUNTIME-TRANSITIONS.md) for the exact live and restart boundaries.
+Scaling Engine is a game-start setting. Once it is enabled, compatible scaler and tuning changes use a game-owned swapchain recreation. Frame Generation turns on and off live when the matched process's startup interop/backend resources succeeded, including when it began with generation disabled. See [runtime transitions](docs/RUNTIME-TRANSITIONS.md) for the exact live and restart boundaries.
 
 ## Downloads
 
@@ -61,7 +61,7 @@ Open **MAKO Renderer Configuration** from the application menu, or run:
 ~/.local/bin/mako-ui
 ```
 
-Create a profile, match it to the game's executable or process name, and select the options you want. To use spatial scaling, enable Scaling Engine before launching, choose a lower game rendering resolution, and select Native, MAKO (Open), LS1 Quality, or LS1 Performance. Fixed and Adaptive Frame Generation remain separate options. The configuration guide covers every setting, profile rule, and environment override.
+Create a profile, match it to the game's executable or process name, and select the options you want. To use spatial scaling, enable Scaling Engine before launching, choose a lower game rendering resolution, and select Native Resolution, MAKO Scaler, LS1 Quality, or LS1 Performance. Fixed and Adaptive Frame Generation remain separate options. The configuration guide covers every setting, profile rule, and environment override.
 
 Launch only the selected game through MAKO:
 

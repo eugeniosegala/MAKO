@@ -118,6 +118,7 @@ import {
   SCALING_FACTOR,
   SCALING_METHOD,
   SCALING_METHOD_LS1,
+  SCALING_METHOD_MAKO,
   SCALING_METHOD_NATIVE,
   SCALING_SHARPNESS,
   getDefaults,
@@ -141,14 +142,18 @@ describe("Scaling controls", () => {
     expect(
       screen.queryByRole("button", { name: "Scaling Method" }),
     ).toBeNull();
-    expect(screen.queryByText("MAKO (Open)")).toBeNull();
+    expect(screen.queryByText("MAKO Scaler")).toBeNull();
 
     fireEvent.click(enabled);
     expect(onConfigChange).toHaveBeenCalledWith(SCALING_ENABLED, true);
 
     rerender(
       <ScalingControl
-        config={{ ...getDefaults(), scaling_enabled: true }}
+        config={{
+          ...getDefaults(),
+          scaling_enabled: true,
+          scaling_method: SCALING_METHOD_MAKO,
+        }}
         onConfigChange={onConfigChange}
       />,
     );
@@ -164,18 +169,18 @@ describe("Scaling controls", () => {
     expect(factor.getAttribute("data-step")).toBe("0.1");
     expect(factor.getAttribute("data-notch-count")).toBe("11");
     expect(factor.getAttribute("data-notch-ticks-visible")).toBe("true");
-    expect(screen.getByText("MAKO (Open)")).toBeTruthy();
-    expect(screen.getByText("Native (No MAKO Scaler)")).toBeTruthy();
+    expect(screen.getByText("MAKO Scaler")).toBeTruthy();
+    expect(screen.getByText("Native Resolution")).toBeTruthy();
     expect(screen.getByText("LS1 Quality")).toBeTruthy();
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once the game starts, switch between Native, MAKO, and LS1 methods; model, factor, and sharpness changes recreate the swapchain and may briefly flicker. The engine can run alone or before Frame Generation.",
+        "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once the game starts, switch between Native Resolution, MAKO Scaler, and LS1 models; the game recreates its swapchain and may briefly flicker. Factor and sharpness changes use the same boundary. The engine can run alone or before Frame Generation.",
       ),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Native keeps the Scaling Engine ready but passes the game's image through without a MAKO scaler. MAKO is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO takes over for that swapchain. Method changes use swapchain recreation.",
+        "Native Resolution keeps the Scaling Engine ready without spatial reconstruction. MAKO Scaler is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO Scaler takes over for that swapchain. Model changes apply through game-owned swapchain recreation.",
       ),
     ).toBeTruthy();
 
@@ -203,6 +208,7 @@ describe("Scaling controls", () => {
         config={{
           ...getDefaults(),
           scaling_enabled: true,
+          scaling_method: SCALING_METHOD_MAKO,
           frame_generation_enabled: true,
           adaptive: true,
         }}
@@ -234,7 +240,11 @@ describe("Scaling controls", () => {
 
     render(
       <ScalingControl
-        config={{ ...getDefaults(), scaling_enabled: true }}
+        config={{
+          ...getDefaults(),
+          scaling_enabled: true,
+          scaling_method: SCALING_METHOD_MAKO,
+        }}
         disabled
         onConfigChange={vi.fn(async () => undefined)}
       />,

@@ -46,7 +46,7 @@ int main() {
     staticRequest.performance_mode = true;
     staticRequest.target_fps = 120;
     const auto staticProjection = projectProcessStaticProfileForLiveUpdate(
-        current, staticRequest, true, current.scaling_enabled
+        current, staticRequest, current.scaling_enabled
     );
     expect(staticProjection.restartRequired() &&
             staticProjection.gpuSelectionPending &&
@@ -64,7 +64,7 @@ int main() {
     scalingEngineRequest.scaling_method = ls::ScalingMethod::Native;
     const auto scalingEngineProjection =
         projectProcessStaticProfileForLiveUpdate(
-            current, scalingEngineRequest, true, current.scaling_enabled
+            current, scalingEngineRequest, current.scaling_enabled
         );
     expect(scalingEngineProjection.restartRequired() &&
             scalingEngineProjection.scalingEnginePending &&
@@ -73,28 +73,15 @@ int main() {
             scalingEngineProjection.runtimeProfile.scaling_method ==
                 ls::ScalingMethod::Native,
         "Scaling Engine provisioning must wait for restart while method selection remains live");
-    auto interopRequest = current;
-    interopRequest.frame_generation_enabled = true;
     auto scalingOnlyCurrent = current;
     scalingOnlyCurrent.frame_generation_enabled = false;
-    const auto interopProjection = projectProcessStaticProfileForLiveUpdate(
-        scalingOnlyCurrent, interopRequest, false,
+    const auto liveEnableProjection = projectProcessStaticProfileForLiveUpdate(
+        scalingOnlyCurrent, current,
         scalingOnlyCurrent.scaling_enabled
     );
-    expect(interopProjection.frameGenerationInteropPending &&
-            !interopProjection.runtimeProfile.frame_generation_enabled,
-        "Process-static projection must retain scaling-only device interop");
-    auto ultraReloadProfile = current;
-    ultraReloadProfile.ultra_performance = true;
-    expect(privateGenerationResourcesRequired(current),
-        "Normal mode must retain resources for live generation enable");
-    auto normalDisabled = current;
-    normalDisabled.frame_generation_enabled = false;
-    expect(privateGenerationResourcesRequired(normalDisabled),
-        "Normal live switching lost its retained generation resources");
-    ultraReloadProfile.frame_generation_enabled = false;
-    expect(!privateGenerationResourcesRequired(ultraReloadProfile),
-        "Ultra Performance retained private resources with generation frozen off");
+    expect(!liveEnableProjection.restartRequired() &&
+            liveEnableProjection.runtimeProfile.frame_generation_enabled,
+        "A matched process must preserve live Frame Generation enablement");
 
     auto backendProfile = current;
     backendProfile.gpu = "1002:164e";
@@ -537,7 +524,9 @@ int main() {
     LiveProfileResourceRecreation resourceRecreation;
     const auto resourceChangeStarted =
         LiveProfileResourceRecreation::Clock::time_point{};
-    resourceRecreation.update(current, next, 7, resourceChangeStarted);
+    resourceRecreation.update(
+        nativeScalingEngine, makoScalingEngine, 7, resourceChangeStarted
+    );
     expect(resourceRecreation.pending() && resourceRecreation.armed(),
         "A changed resource profile must arm one live recreation signal");
     expect(resourceRecreation.signalAfterSuccessfulPresent(
@@ -547,19 +536,19 @@ int main() {
             !resourceRecreation.signalAfterSuccessfulPresent(
                 resourceChangeStarted),
         "A resource request must emit only one out-of-date signal");
-    resourceRecreation.update(current, next, 8,
+    resourceRecreation.update(nativeScalingEngine, makoScalingEngine, 8,
         resourceChangeStarted + std::chrono::seconds(1));
     expect(!resourceRecreation.armed(),
         "Polling the same pending resource profile must not rearm its signal");
-    auto differentScalingRequest = next;
+    auto differentScalingRequest = makoScalingEngine;
     differentScalingRequest.scaling_method = ls::ScalingMethod::Ls1;
-    resourceRecreation.update(current, differentScalingRequest, 9,
+    resourceRecreation.update(nativeScalingEngine, differentScalingRequest, 9,
         resourceChangeStarted + std::chrono::seconds(1));
     expect(resourceRecreation.armed() &&
             resourceRecreation.signalAfterSuccessfulPresent(
                 resourceChangeStarted + std::chrono::seconds(1)) == 9,
         "A different scaler method must receive one immediate fresh signal");
-    resourceRecreation.update(current, current, 10,
+    resourceRecreation.update(nativeScalingEngine, nativeScalingEngine, 10,
         resourceChangeStarted + std::chrono::seconds(2));
     expect(!resourceRecreation.pending() && !resourceRecreation.armed(),
         "Returning to the active resource profile must cancel recreation");
@@ -577,6 +566,7 @@ int main() {
 
     auto scalingParameterCurrent = current;
     scalingParameterCurrent.scaling_enabled = true;
+    scalingParameterCurrent.scaling_method = ls::ScalingMethod::Mako;
     auto scalingParameterRequest = scalingParameterCurrent;
     scalingParameterRequest.scaling_factor = 2.0F;
     resourceRecreation.update(
@@ -612,6 +602,7 @@ int main() {
 
     auto scalingCurrent = current;
     scalingCurrent.scaling_enabled = true;
+    scalingCurrent.scaling_method = ls::ScalingMethod::Mako;
     next = scalingCurrent;
     next.scaling_factor = 2.0F;
     decision = classifyProfileUpdate(scalingCurrent, next, 3, true);

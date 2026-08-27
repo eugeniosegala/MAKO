@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "swapchain.hpp"
+#include "swapchain_retirement.hpp"
 #include "adaptive_scheduler.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"
@@ -149,6 +150,114 @@ namespace {
     }
 }
 
+VkResult Swapchain::queuePresentWithRetirementFence(
+        const vk::Vulkan& vk, const VkQueue queue,
+        const VkPresentInfoKHR& presentInfo) {
+    this->lastLowerPresentRetirementProtected = false;
+    if (this->presentRetirementFences.empty() ||
+            presentInfo.swapchainCount != 1 ||
+            !presentInfo.pImageIndices) {
+        return vk.df().QueuePresentKHR(queue, &presentInfo);
+    }
+
+    if (const auto* upstreamFence =
+            findSwapchainPresentFenceInfo(presentInfo.pNext)) {
+        // Exactly one present fence can be associated with each swapchain in
+        // a present operation. Preserve the upstream owner's fence unchanged.
+        // For the final lower present it is already the spec-defined proof
+        // that the caller may destroy this swapchain; MAKO retains only its
+        // own earlier fences and the compositor grace period after destroy.
+        if (!this->externalPresentFenceLogged) {
+            std::cerr << "MAKO Renderer: upstream presentation fence observed; "
+                         "preserving owner and enabling guarded live resource "
+                         "recreation on protected final presents\n";
+            this->externalPresentFenceLogged = true;
+        }
+        const auto result = vk.df().QueuePresentKHR(queue, &presentInfo);
+        this->lastLowerPresentRetirementProtected =
+            upstreamPresentFenceProtectsSwapchain(upstreamFence) &&
+            presentFenceWillSignal(result);
+        return result;
+    }
+
+    const uint32_t imageIndex = presentInfo.pImageIndices[0];
+    if (imageIndex >= this->presentRetirementFences.size())
+        return vk.df().QueuePresentKHR(queue, &presentInfo);
+
+    auto& slot = this->presentRetirementFences.at(imageIndex);
+    try {
+        if (slot.associated) {
+            if (!slot.fence.wait(vk, 0)) {
+                if (!this->presentRetirementBusyLogged) {
+                    std::cerr << "MAKO Renderer: presentation retirement fence "
+                                 "remained busy after image reacquisition; "
+                                 "this present will not trigger live recreation\n";
+                    this->presentRetirementBusyLogged = true;
+                }
+                return vk.df().QueuePresentKHR(queue, &presentInfo);
+            }
+            slot.associated = false;
+        }
+        if (slot.used)
+            slot.fence.reset(vk);
+    } catch (const std::exception& error) {
+        std::cerr << "MAKO Renderer: presentation retirement fence preparation "
+                     "failed; this present will not trigger live recreation: "
+                  << error.what() << '\n';
+        return vk.df().QueuePresentKHR(queue, &presentInfo);
+    }
+
+    const VkFence fence = slot.fence.handle();
+    const VkSwapchainPresentFenceInfoKHR fenceInfo{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR,
+        .pNext = presentInfo.pNext,
+        .swapchainCount = 1,
+        .pFences = &fence,
+    };
+    auto protectedPresentInfo = presentInfo;
+    protectedPresentInfo.pNext = &fenceInfo;
+    const auto result = vk.df().QueuePresentKHR(
+        queue, &protectedPresentInfo
+    );
+    slot.used = true;
+    slot.associated = presentFenceWillSignal(result);
+    this->lastLowerPresentRetirementProtected = slot.associated;
+    if (slot.associated)
+        this->presentRetirementBusyLogged = false;
+    return result;
+}
+
+bool Swapchain::waitForPresentRetirement(
+        const vk::Vulkan& vk, const uint64_t timeoutNs) {
+    const auto started = std::chrono::steady_clock::now();
+    for (auto& slot : this->presentRetirementFences) {
+        if (!slot.associated)
+            continue;
+
+        uint64_t remaining = timeoutNs;
+        if (timeoutNs != UINT64_MAX) {
+            const auto elapsed = std::chrono::duration_cast<
+                std::chrono::nanoseconds>(
+                    std::chrono::steady_clock::now() - started
+                ).count();
+            if (elapsed >= static_cast<int64_t>(timeoutNs))
+                remaining = 0;
+            else
+                remaining = timeoutNs - static_cast<uint64_t>(elapsed);
+        }
+        try {
+            if (!slot.fence.wait(vk, remaining))
+                return false;
+        } catch (const std::exception& error) {
+            std::cerr << "MAKO Renderer: presentation retirement fence wait "
+                         "failed: " << error.what() << '\n';
+            return false;
+        }
+        slot.associated = false;
+    }
+    return true;
+}
+
 VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
         const VkQueue queue, const VkSwapchainKHR swapchain,
         const void* nextChain, const uint32_t originalImageIndex,
@@ -283,8 +392,8 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             .pSwapchains = &swapchain,
             .pImageIndices = &acquiredImageIndex,
         };
-        const auto acquiredResult = vk.df().QueuePresentKHR(
-            queue, &acquiredPresentInfo
+        const auto acquiredResult = this->queuePresentWithRetirementFence(
+            vk, queue, acquiredPresentInfo
         );
         if (acquiredResult != VK_SUCCESS &&
                 acquiredResult != VK_SUBOPTIMAL_KHR) {
@@ -308,7 +417,9 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
         .pSwapchains = &swapchain,
         .pImageIndices = &originalImageIndex,
     };
-    const auto result = vk.df().QueuePresentKHR(queue, &originalPresentInfo);
+    const auto result = this->queuePresentWithRetirementFence(
+        vk, queue, originalPresentInfo
+    );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
 
@@ -421,8 +532,8 @@ VkResult Swapchain::presentSpatiallyScaledFrame(
         .pImageIndices = &invocation.imageIndex,
     };
     const auto originalPresentStarted = startPresentDiagnostic();
-    const auto result = invocation.vk.df().QueuePresentKHR(
-        invocation.queue, &presentInfo
+    const auto result = this->queuePresentWithRetirementFence(
+        invocation.vk, invocation.queue, presentInfo
     );
     const auto originalPresentDuration = finishPresentDiagnostic(
         originalPresentStarted
@@ -465,8 +576,8 @@ VkResult Swapchain::presentNativeFrame(const PresentInvocation& invocation) {
         .pImageIndices = &invocation.imageIndex,
     };
     const auto originalPresentStarted = startPresentDiagnostic();
-    const auto result = invocation.vk.df().QueuePresentKHR(
-        invocation.queue, &presentInfo
+    const auto result = this->queuePresentWithRetirementFence(
+        invocation.vk, invocation.queue, presentInfo
     );
     const PresentPhaseDurations phases{
         .originalPresent = finishPresentDiagnostic(originalPresentStarted),
@@ -503,8 +614,8 @@ VkResult Swapchain::presentOriginalImage(
         .pImageIndices = &invocation.imageIndex,
     };
     const auto originalPresentStarted = startPresentDiagnostic();
-    const auto result = invocation.vk.df().QueuePresentKHR(
-        invocation.queue, &presentInfo
+    const auto result = this->queuePresentWithRetirementFence(
+        invocation.vk, invocation.queue, presentInfo
     );
     if (duration)
         *duration = finishPresentDiagnostic(originalPresentStarted);
@@ -1510,8 +1621,8 @@ VkResult Swapchain::presentGeneratedFrames(
             .pImageIndices = &acquiredImageIndex,
         };
         const auto generatedPresentStarted = startPresentDiagnostic();
-        result = invocation.vk.df().QueuePresentKHR(
-            invocation.queue, &presentInfo
+        result = this->queuePresentWithRetirementFence(
+            invocation.vk, invocation.queue, presentInfo
         );
         const auto oneGeneratedPresentDuration = finishPresentDiagnostic(
             generatedPresentStarted
@@ -1703,8 +1814,9 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         return this->presentNativeFrame(invocation);
 
     // Frame generation is live-disabled; hand the game's own image directly
-    // to the driver without copies, model scheduling, fences or generated
-    // images.
+    // to the driver without copies, model scheduling or generated images. A
+    // scaling-engine process may still attach its preallocated WSI-retirement
+    // fence so natural resolution changes remain safe.
     if (!effectiveFrameGenerationEnabled(
             this->profile, this->gamescopeRefreshHz) ||
             !this->colorPipeline.generationSupported) {

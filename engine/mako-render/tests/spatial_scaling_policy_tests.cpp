@@ -122,6 +122,7 @@ int main() {
 
     ls::GameConf profile{
         .scaling_enabled = true,
+        .scaling_method = ls::ScalingMethod::Mako,
         .scaling_factor = 1.5F,
     };
 

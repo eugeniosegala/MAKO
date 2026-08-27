@@ -177,7 +177,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             const bool gamescopeDetected,
             const bool hdrExposureDisabled,
             const std::optional<uint32_t> gamescopeRefreshHz,
-            const uint64_t runtimeStateRevision) :
+            const uint64_t runtimeStateRevision,
+            const bool swapchainMaintenance1Enabled) :
         instance(backend),
         gamescopeDetected(gamescopeDetected),
         privateOrderedTransport(info.privateOrderedTransport),
@@ -192,6 +193,27 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         this->diagnosticsState.contextId
     );
     const VkExtent2D extent = this->info.extent;
+
+    if (swapchainMaintenance1Enabled && this->profile.scaling_enabled) {
+        try {
+            this->presentRetirementFences.reserve(this->info.images.size());
+            for (size_t index = 0; index < this->info.images.size(); ++index) {
+                static_cast<void>(index);
+                this->presentRetirementFences.emplace_back(
+                    PresentRetirementFence{.fence = vk::Fence(vk)}
+                );
+            }
+            std::cerr << "MAKO Renderer: swapchain presentation retirement: "
+                         "mode=maintenance1-per-image-fence; images="
+                      << this->presentRetirementFences.size() << '\n';
+        } catch (const std::exception& error) {
+            this->presentRetirementFences.clear();
+            std::cerr << "MAKO Renderer: swapchain presentation retirement "
+                         "unavailable; live resource recreation will wait for "
+                         "a natural swapchain boundary: "
+                      << error.what() << '\n';
+        }
+    }
 
     if (this->info.spatialScalingActive) {
         if (!spatialScalingColorSupported(this->colorPipeline))
@@ -335,13 +357,6 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                      "mode=fifo-ordered; source=fork-develop; "
                      "dynamic-mode-switch=filtered\n";
     }
-    if (this->colorPipeline.generationSupported &&
-            !privateGenerationResourcesRequired(this->profile)) {
-        std::cerr << "MAKO Renderer: frame generation is off in Ultra Performance; "
-                     "private generation resources omitted\n";
-        return;
-    }
-
     if (this->colorPipeline.encoding == backend::FrameEncoding::Hdr10Pq ||
             this->colorPipeline.encoding ==
                 backend::FrameEncoding::Hdr10PqPacked) {
@@ -624,8 +639,7 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
         this->recoveryState.historyWarmupRemaining = 0;
         this->recoveryState.orderedAcquireRecovery.reset();
     };
-    if (!this->instance ||
-            !privateGenerationResourcesRequired(this->profile)) {
+    if (!this->instance) {
         retainPassthrough();
         return;
     }
@@ -855,7 +869,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
             decision,
             this->instance && resourcesAvailable &&
                 this->colorPipeline.generationSupported
-        );
+        ) && this->presentRetirementEnabled();
     this->liveProfileResourceRecreation.update(
         this->profile,
         liveRecreationAvailable ? nextProfile : this->profile,
@@ -900,7 +914,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << decision.processRestartDeferred
                   << " action="
                   << (decision.swapchainRecreationRequested
-                        ? "signal-out-of-date-after-successful-present"
+                        ? "signal-out-of-date-after-retirement-fenced-present"
                         : decision.processRestartDeferred
                         ? "wait-for-process-restart"
                         : "wait-for-natural-swapchain-recreation")
@@ -1058,14 +1072,16 @@ bool Swapchain::requestLiveProfileResourceRecreationAfterPresent(
             lowerPresentResult != VK_SUBOPTIMAL_KHR) {
         return false;
     }
+    if (!this->lastLowerPresentRetirementProtected)
+        return false;
     const auto runtimeStateRevision =
         this->liveProfileResourceRecreation.signalAfterSuccessfulPresent();
     if (!runtimeStateRevision)
         return false;
 
     std::cerr << "MAKO Renderer: live profile resource change requested a "
-                 "game-owned swapchain recreation after one successful "
-                 "lower present\n";
+                 "game-owned swapchain recreation after one "
+                 "maintenance1-fenced lower present\n";
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=runtime-transition-recreation-requested"
@@ -1074,7 +1090,7 @@ bool Swapchain::requestLiveProfileResourceRecreationAfterPresent(
                   << " reason=profile-resources"
                   << " lower_present_result=" << lowerPresentResult
                   << " signal=VK_ERROR_OUT_OF_DATE_KHR"
-                  << " delivery=one-shot-after-semaphore-consumption\n";
+                  << " delivery=one-shot-after-retirement-fence-attachment\n";
     }
     return true;
 }
