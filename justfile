@@ -87,7 +87,7 @@ test-engine-gym-runtime-overhead *args:
 test-engine-gym-sync-validation *args:
     ./engine/scripts/run-mako-gym.sh --suite sync-validation {{args}}
 
-# Run selected scripted runtime-recovery rows; no --filter runs all 30 default cases.
+# Run selected scripted runtime-recovery rows; no --filter runs all 31 default cases.
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
 

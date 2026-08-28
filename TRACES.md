@@ -12,7 +12,7 @@ The MAKO trace extractor turns one completed real-game session into a structured
 | `MAKO/TRACES.md` | Public | Extractor behavior, safety contract, and maintainer workflow |
 | `MAKO-Traces` | Private | Controlled traces, external reports, executable schemas, the canonical checksum contract and verification, guarded initialization and refresh, append-only history, archive validation, and comparison policy |
 
-The private repository is a development evidence store, not a runtime dependency or distribution input. MAKO must continue to behave normally when no trace checkout is present.
+The archive is never a runtime or distribution dependency; MAKO must work normally without it.
 
 ## Local setup
 
@@ -82,7 +82,7 @@ Each run is written to `traces/<version-label>/<game-slug>/<run-id>/` in the pri
 - `notes.md`: subjective observations and evidence-backed interpretation; and
 - `checksums.sha256`: integrity record for every other run file.
 
-The extractor does not infer image quality from timing logs. Ghosting, fluidity, and visual artifacts remain tester observations unless supported by repeatable captures or image-quality evidence.
+Timing logs do not prove ghosting, fluidity, or image quality. Keep those as tester observations unless repeatable visual evidence supports them.
 
 ## External user reports
 
@@ -94,7 +94,7 @@ Do not run `capture-trace.sh` against another user's diagnostics. The extractor 
 
 Never capture or upload `Lossless.dll`, game binaries, Vulkan layer binaries, shader caches, crash dumps containing process memory, access tokens, cookies, account data, personal correspondence, or unrelated application logs. Sanitized `$HOME` paths are permitted; user-specific absolute home paths are not. Preserve only the minimum report text needed to understand an external observation.
 
-The archive being private reduces exposure but does not remove the need for minimization and review. Inspect every new run before committing or sharing it.
+Private storage does not replace minimization and review. Inspect every run before committing or sharing it.
 
 ## Validation and contract changes
 
@@ -105,6 +105,6 @@ Validate the private archive after every capture or user-report import from the 
 # or: just check
 ```
 
-The public producer emits the initial controlled-trace manifest. The private schemas are executable field authorities, and its shared validator owns chronology, path identity, the canonical checksum contract and verification, guarded initialization and refresh, privacy, protected inputs, and append-only history. If an intentional notes, derived-events, report, or factual metadata correction changes archived evidence, run `./scripts/refresh-checksums.sh <evidence-directory>` followed by `./scripts/check.sh` from MAKO Traces; `just refresh <evidence-directory>` is the equivalent alias. Raw diagnostic, configuration, clipped source logs, and supplied user artifacts are immutable evidence and cannot be resealed after modification.
+The public producer creates the initial controlled-trace manifest. Private schemas own field shape; the MAKO Traces validator owns chronology, path identity, checksums, initialization/refresh, privacy, protected inputs, and history. Permitted notes, derived-event, report, or factual metadata corrections use `./scripts/refresh-checksums.sh <evidence-directory>` (or `just refresh <evidence-directory>`) followed by `./scripts/check.sh`. Raw diagnostics, configurations, clipped source logs, and supplied user artifacts are immutable and cannot be resealed.
 
 When the capture contract changes, update `scripts/capture-trace.sh`, `scripts/test-capture-trace.sh`, and `TRACES.md` in MAKO together with the schema, format/validation guides, notes template, validator, and mutation tests in MAKO Traces. Historical raw evidence should remain intact; use a compatible reader or factual metadata migration instead of rewriting it.

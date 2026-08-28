@@ -135,7 +135,7 @@ describe("Scaling controls", () => {
       <ScalingControl config={getDefaults()} onConfigChange={onConfigChange} />,
     );
 
-    const enabled = screen.getByText("Enable Scaling");
+    const enabled = screen.getByText("Enable Scaling (Restart)");
     expect(enabled.getAttribute("data-checked")).toBe("false");
     expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
     expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
@@ -180,7 +180,7 @@ describe("Scaling controls", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Keep this on if you want scaling.",
+        "Once enabled at startup, you can change the scaling model while the game is running. Leave Scaling off when you do not need it, because keeping its runtime path provisioned uses additional system resources.",
       ),
     ).toBeTruthy();
     expect(
@@ -256,7 +256,7 @@ describe("Scaling controls", () => {
     );
 
     expect(
-      (screen.getByText("Enable Scaling") as HTMLButtonElement)
+      (screen.getByText("Enable Scaling (Restart)") as HTMLButtonElement)
         .disabled,
     ).toBe(true);
     expect(

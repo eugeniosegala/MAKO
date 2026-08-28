@@ -1,8 +1,8 @@
 {
   "CONTENT_SCALING": "스케일링",
-  "SCALING_ENABLED": "스케일링 활성화",
+  "SCALING_ENABLED": "스케일링 활성화 (재시작)",
   "SCALING_ENABLED_DESC": "게임을 시작하기 전에 활성화하세요. 끄면 스케일링이 완전히 비활성화됩니다.",
-  "SCALING_ENABLED_WARNING": "스케일링을 사용하려면 이 기능을 켜 두세요.",
+  "SCALING_ENABLED_WARNING": "시작할 때 활성화하면 게임 실행 중에도 스케일링 모델을 변경할 수 있습니다. 스케일링 실행 경로를 준비된 상태로 유지하면 추가 시스템 리소스를 사용하므로 필요하지 않을 때는 스케일링을 꺼 두세요.",
   "SCALING_METHOD": "스케일링 방식",
   "SCALING_METHOD_DESC": "스케일링 모델을 선택합니다. 게임 실행 중에도 변경할 수 있습니다.",
   "SCALING_METHOD_NATIVE": "네이티브 해상도",

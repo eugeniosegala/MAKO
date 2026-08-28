@@ -8,11 +8,11 @@
 > [!NOTE]
 > **[LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) is now MAKO Renderer.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
-MAKO Renderer is MAKO's Vulkan layer and standalone renderer component. It brings LS1 spatial scaling, MAKO's built-in open spatial scaler, and LSFG frame generation to Steam Deck, Steam Machine, SteamOS, and Linux. Scaling can run on its own or reconstruct real frames before Fixed or Adaptive Frame Generation.
+MAKO Renderer is MAKO's Vulkan layer and standalone component for Steam Deck, Steam Machine, SteamOS, and Linux. It provides LS1 spatial scaling, MAKO's open spatial scaler, and LSFG Fixed or Adaptive Frame Generation. Scaling can run alone or reconstruct each real frame before generation.
 
 The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. LS1 scaling and LSFG frame generation require a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer never bundles, copies, persists, replaces, or modifies that proprietary library; the open MAKO scaler does not require it.
 
-Scaling is a game-start setting. Once it is enabled, compatible scaler and tuning changes use a game-owned swapchain recreation. Frame Generation turns on and off live when the matched process's startup interop/backend resources succeeded, including when it began with generation disabled. See [runtime transitions](docs/RUNTIME-TRANSITIONS.md) for the exact live and restart boundaries.
+Scaling must be enabled before the game starts. In a provisioned process, scaler-method and sharpness changes rebuild only MAKO's private spatial context; Scale Factor applies at a game-owned recreation, which remains natural on the managed Gamescope path. Frame Generation turns on and off live when startup provisioning succeeded. See [runtime transitions](docs/RUNTIME-TRANSITIONS.md) for every live, deferred, and restart boundary.
 
 ## Downloads
 
@@ -36,7 +36,7 @@ See the [main installation guide](../README.md#install-and-use) for Decky, Heroi
 
 For LS1 scaling or frame generation, first install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. The open MAKO scaler works without `Lossless.dll`.
 
-For the normal standalone workflow, download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then double-click **Install MAKO Renderer** and choose **Execute** if prompted. It verifies and installs the archive below `~/.local`, preserves profiles, and opens **MAKO Renderer Configuration**. Repeat it after extracting a newer archive; use **Uninstall MAKO Renderer** from the application menu to remove the standalone installation.
+Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then run **Install MAKO Renderer**. It verifies and installs the archive below `~/.local`, preserves profiles, and opens **MAKO Renderer Configuration**. Run the installer again after extracting an update; use **Uninstall MAKO Renderer** from the application menu to remove it.
 
 For a manual installation, extract the archive into your user-local prefix:
 
@@ -61,7 +61,7 @@ Open **MAKO Renderer Configuration** from the application menu, or run:
 ~/.local/bin/mako-ui
 ```
 
-Create a profile, match it to the game's executable or process name, and select the options you want. To use spatial scaling, enable Scaling before launching, choose a lower game rendering resolution, and select Native Resolution, MAKO Scaler, LS1 Quality, or LS1 Performance. Fixed and Adaptive Frame Generation remain separate options. The configuration guide covers every setting, profile rule, and environment override.
+Create a profile, match it to the game's executable or process name, and select its settings. For spatial scaling, select **Enable Scaling (Restart)** before launch, choose a lower game resolution, and select Native Resolution, MAKO Scaler, LS1 Quality, or LS1 Performance. Fixed and Adaptive Frame Generation remain independent. See [Configuration](docs/CONFIGURATION.md) for settings, profile matching, and environment overrides.
 
 Launch only the selected game through MAKO:
 
@@ -104,7 +104,7 @@ Run `mako-cli` without a subcommand to see its configuration, benchmark, and lan
 > [!TIP]
 > Try the game's V-Sync setting both on and off. It can make frame delivery steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep the setting that feels best for that game.
 
-Every game, renderer, and display setup behaves differently. Compare scaling, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time. Fullscreen is usually the best starting point for performance and pacing. Change Scaling between game sessions; compatible changes within an enabled scaling path may briefly flicker while the game recreates its swapchain. See [spatial scaling](docs/SCALING.md), [WSI isolation](docs/WSI-ISOLATION.md), and [troubleshooting](docs/TROUBLESHOOTING.md) for compatibility limits and diagnostics.
+Compare scaling, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time; fullscreen is usually the best starting point. Change Scaling between game sessions. Private scaler changes may briefly flicker while MAKO rebuilds its spatial context. See [spatial scaling](docs/SCALING.md), [WSI isolation](docs/WSI-ISOLATION.md), and [troubleshooting](docs/TROUBLESHOOTING.md) for compatibility limits and diagnostics.
 
 ## Build from source
 
@@ -130,7 +130,7 @@ Artifacts are written under `engine/out/`. MAKO Decky packages this engine autom
 ## More documentation
 
 - [Configuration](docs/CONFIGURATION.md): profiles, scaling and frame-generation controls, Adaptive mode, and environment variables.
-- [Spatial scaling architecture](docs/SCALING.md): pipeline order, surface support, formats, resource cost, live recreation, and validation.
+- [Spatial scaling architecture](docs/SCALING.md): pipeline order, surface support, formats, resources, private transitions, and validation.
 - [Runtime configuration transitions](docs/RUNTIME-TRANSITIONS.md): live-safe updates, recreation, and restart boundaries.
 - [Adaptive validation](docs/ADAPTIVE-VALIDATION.md): scheduler behavior, frame plans, benchmarking, and game validation.
 - [WSI isolation](docs/WSI-ISOLATION.md): Vulkan discovery, Gamescope presentation ownership, and diagnostics.

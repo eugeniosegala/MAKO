@@ -1,8 +1,8 @@
 {
   "CONTENT_SCALING": "スケーリング",
-  "SCALING_ENABLED": "スケーリングを有効化",
+  "SCALING_ENABLED": "スケーリングを有効化（再起動）",
   "SCALING_ENABLED_DESC": "ゲームを起動する前に有効にしてください。無効にすると、スケーリングは完全に無効になります。",
-  "SCALING_ENABLED_WARNING": "スケーリングを使う場合は有効のままにしてください。",
+  "SCALING_ENABLED_WARNING": "起動時に有効にすると、ゲームの実行中でもスケーリングモデルを変更できます。スケーリングの実行経路を準備したままにすると追加のシステムリソースを使用するため、必要がない場合は無効にしてください。",
   "SCALING_METHOD": "スケーリング方式",
   "SCALING_METHOD_DESC": "スケーリングモデルを選択します。ゲームの実行中でも変更できます。",
   "SCALING_METHOD_NATIVE": "ネイティブ解像度",

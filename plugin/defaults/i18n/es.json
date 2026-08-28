@@ -1,8 +1,8 @@
 {
   "CONTENT_SCALING": "Escalado",
-  "SCALING_ENABLED": "Activar escalado",
+  "SCALING_ENABLED": "Activar escalado (Reinicio)",
   "SCALING_ENABLED_DESC": "Actívalo antes de iniciar el juego. Si está desactivado, el escalado se desactiva por completo.",
-  "SCALING_ENABLED_WARNING": "Mantén esto activado si quieres usar el escalado.",
+  "SCALING_ENABLED_WARNING": "Una vez activado al iniciar, puedes cambiar el modelo de escalado mientras el juego está en ejecución. Deja el escalado desactivado cuando no lo necesites, ya que mantener preparada su ruta de ejecución consume recursos adicionales del sistema.",
   "SCALING_METHOD": "Método de escalado",
   "SCALING_METHOD_DESC": "Elige el modelo de escalado. Puedes cambiarlo mientras el juego está en ejecución.",
   "SCALING_METHOD_NATIVE": "Resolución nativa",

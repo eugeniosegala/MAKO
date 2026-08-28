@@ -61,7 +61,7 @@ export function ScalingControl({
     <>
       <PanelSectionRow>
         <ToggleField
-          label={t("SCALING_ENABLED", "Enable Scaling")}
+          label={t("SCALING_ENABLED", "Enable Scaling (Restart)")}
           description={
             <>
               <div>
@@ -73,7 +73,7 @@ export function ScalingControl({
               <MakoInlineWarning>
                 {t(
                   "SCALING_ENABLED_WARNING",
-                  "Keep this on if you want scaling.",
+                  "Once enabled at startup, you can change the scaling model while the game is running. Leave Scaling off when you do not need it, because keeping its runtime path provisioned uses additional system resources.",
                 )}
               </MakoInlineWarning>
             </>

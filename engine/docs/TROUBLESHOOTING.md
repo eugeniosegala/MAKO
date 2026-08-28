@@ -38,7 +38,7 @@ For a Flatpak game or emulator, the host layer is not visible inside the sandbox
 
 ## Gamescope WSI, overlays, and HDR
 
-The supported launcher intentionally gives MAKO a private implicit-layer chain, disables Gamescope WSI inside the game process, and keeps HDR exposure off. Gamescope the compositor and the Steam/Game Mode interface remain active. This prevents two presentation policies from throttling the generated/original sequence, but implicit Vulkan overlays, capture layers, or post-processing layers are not admitted automatically. See [WSI isolation](WSI-ISOLATION.md) for expected loader evidence, compatibility tradeoffs, and regression signals.
+The supported launcher gives MAKO a private implicit-layer chain, disables Gamescope WSI inside the game process, and keeps HDR exposure off. Gamescope and Steam/Game Mode remain active, but implicit overlays, capture layers, and post-processing layers are not admitted automatically. See [WSI isolation](WSI-ISOLATION.md) for loader evidence and compatibility tradeoffs.
 
 HDR frame generation is not currently supported. Do not remove the WSI or HDR guards as a general workaround: layer membership is fixed before Vulkan starts, and the experimental HDR lane has a different presentation contract. See [HDR pipeline architecture](HDR-PIPELINE.md) for its implemented fallbacks and the validation required before exposure.
 
@@ -62,7 +62,7 @@ mako-diagnostics --lines 2000 all
 
 For the complete end-to-end workflow, including Steam, direct commands, Heroic or Flatpak setups, creating `MAKO-diagnostics.txt` on the Desktop, restoring normal settings, and using the shared submission form, see [Collect Standalone MAKO Renderer Diagnostics](COLLECT_DIAGNOSTICS.md).
 
-`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` requests one shared deadline for all ordered generated-image acquisitions in an application present so a multi-frame plan cannot multiply the wait and transport recovery can return to native presentation instead of blocking indefinitely. Every generated image receives only the remaining budget. MAKO also measures cumulative elapsed acquire time because a driver can return success after the requested remainder; exhaustion or overrun enters the same recovery path. MAKO Decky managed wrappers request the normal 50 ms application-present budget. Standalone Renderer launches retain the legacy unbounded default when it is unset; for a focused presentation-stall reproduction, set a smaller value such as `25` and include the resulting log with the report.
+`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` sets one shared deadline for all ordered generated-image acquisitions in an application present, so higher multipliers cannot multiply the wait. Exhaustion or elapsed-time overrun enters native recovery. MAKO Decky uses 50 ms; standalone launches retain the unbounded compatibility default when unset. For a focused stall reproduction, try `25` and include the log.
 
 ## Report an issue
 

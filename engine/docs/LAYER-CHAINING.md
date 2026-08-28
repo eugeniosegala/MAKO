@@ -1,8 +1,8 @@
 # Optional graphics integrations
 
-This guide documents deliberate exceptions to MAKO Renderer's managed implicit-layer isolation and the separate boundary for game-local integrations. [WSI isolation](WSI-ISOLATION.md) remains the architectural source of truth: profiles without Scaling, explicit Gamescope WSI compatibility, or a post-process tool use the isolated default, which gives MAKO one deterministic presentation owner and exposes only MAKO's private Vulkan manifests. A native profile launched with Scaling enabled uses the guarded Gamescope WSI exception described below even when its live method is Native; this does not broaden discovery to unrelated host layers.
+This guide covers deliberate exceptions to MAKO's managed implicit-layer isolation and the separate boundary for game-local integrations. [WSI isolation](WSI-ISOLATION.md) owns the default: profiles without Scaling, explicit Gamescope WSI compatibility, or a selected post-process tool expose only MAKO's private manifests. Scaling uses its guarded WSI split even when the live method is Native; it does not admit unrelated host layers.
 
-MAKO Renderer owns this Vulkan compatibility contract, which is why the guide lives with the engine documentation. Every `/home/deck/.local/bin/mako-run` command below is nevertheless a **MAKO Decky** launch workflow: MAKO Decky installs and generates `mako-run`, while a directly installed MAKO Renderer uses `mako-launch`. External-layer chaining through standalone `mako-launch` has not been validated and is not claimed by this guide.
+Commands using `/home/deck/.local/bin/mako-run` are MAKO Decky workflows. Standalone MAKO Renderer uses `mako-launch`; external-layer chaining through it is not validated.
 
 ## Default MAKO Decky managed launch
 
@@ -12,13 +12,13 @@ MAKO Decky normally launches a native Steam or Proton game with:
 /home/deck/.local/bin/mako-run %command%
 ```
 
-For a profile without Scaling, explicit Gamescope WSI compatibility, or a post-process tool, the wrapper selects MAKO's private `VK_IMPLICIT_LAYER_PATH`, removes additive implicit-layer discovery, disables Gamescope WSI and competing frame-generation identities, and keeps Gamescope itself active outside the game's Vulkan chain. Keep this default unless a specific additional layer has its own compatibility evidence.
+The default wrapper exposes only MAKO's private manifests, removes additive discovery, disables Gamescope WSI and competing frame generation, and leaves the Gamescope compositor active. Keep it unless a named exception has evidence.
 
 ## Experimental Gamescope WSI compatibility
 
 MAKO Decky exposes **Experimental Gamescope WSI (Restart)** under **Compatibility Settings**. It exists for reports such as [#7](https://github.com/eugeniosegala/MAKO/issues/7) and [#12](https://github.com/eugeniosegala/MAKO/issues/12), where users observed coloured or pixelated artifacts during camera movement on the default isolated path and reported that older WSI-enabled configurations changed the result.
 
-The explicit compatibility toggle is off by default and stored per profile independently from the post-process selector. Scaling automatically satisfies and locks the same WSI requirement for that profile. The wrapper keeps HDR disabled, verifies the staged 64-bit host Gamescope WSI manifest, and always places MAKO's frame-generation role above WSI so every injected present traverses the WSI pacing policy. Scaling additionally places the role-specific MAKO spatial-scaling manifest below WSI, yielding `Application -> MAKO frame generation -> Gamescope WSI -> MAKO spatial scaling -> Vulkan driver`; an FG-only compatibility launch omits the lower role. If MangoHud or vkBasalt is selected, its managed directory follows the last MAKO role. MAKO never admits the host's complete implicit-layer directory. Missing WSI or lower-role evidence fails closed to the top-only isolated path with scaling suppressed, and every other optional layer fails closed independently.
+The per-profile toggle is off by default and independent from the post-process selector; Scaling automatically locks the same WSI requirement. HDR stays disabled. MAKO places frame generation above WSI, spatial scaling below it when enabled, and a selected MangoHud or vkBasalt layer last. It never admits the complete host directory. Invalid WSI or lower-role evidence fails closed to top-only MAKO with scaling suppressed; other optional layers fail closed independently.
 
 MAKO Decky validates and stages the host manifest during Renderer installation and repairs that managed copy automatically when an existing installation loads after a plugin upgrade. The initial lane is limited to a 64-bit native Vulkan or Proton game launched directly by Steam on a host with the SteamOS-style `VK_LAYER_FROG_gamescope_wsi_x86_64` manifest. It does not apply to Flatpak games and does not enable HDR.
 
@@ -38,13 +38,13 @@ Both controls stage the selected host tool's exact available 64-bit and 32-bit m
 
 ### Customize MangoHud while its toggle is enabled
 
-The MangoHud toggle activates the host layer but does not replace MangoHud's display settings. MangoHud continues to read the user's existing `~/.config/MangoHud/MangoHud.conf`. To override a few options for one Steam game, keep **Enable MangoHud** selected in that game's MAKO profile and use:
+The toggle leaves MangoHud's settings in `~/.config/MangoHud/MangoHud.conf` untouched. To override a few options for one game, keep the toggle enabled and use:
 
 ```text
 /home/deck/.local/bin/mako-run env MANGOHUD_CONFIG=fps,frametime,cpu_stats,gpu_stats,position=top-right %command%
 ```
 
-`MANGOHUD_CONFIG` accepts comma-separated MangoHud options and takes priority over matching config-file settings. See MangoHud's [example configuration](https://github.com/flightlessmango/MangoHud/blob/master/data/MangoHud.conf) for the complete option list. Do not add `MANGOHUD=1`, the Mesa guards, or `VK_IMPLICIT_LAYER_PATH` when the toggle is enabled; MAKO Decky already supplies the guarded activation.
+`MANGOHUD_CONFIG` overrides matching config-file values. See MangoHud's [example configuration](https://github.com/flightlessmango/MangoHud/blob/master/data/MangoHud.conf). Do not add activation or layer-path variables when the Decky toggle is enabled.
 
 ### Configure experimental vkBasalt while its toggle is enabled
 
@@ -52,7 +52,7 @@ The vkBasalt toggle activates the host layer and leaves vkBasalt's effects and s
 
 ## Manual MAKO Decky activation without the toggles
 
-These are still MAKO Decky commands: they use its generated `mako-run` launcher and keep Decky's profile, SDR, Gamescope, frame-generation, and diagnostics policy, but they bypass the **External Tools** selection. Use them for expert diagnosis or loader tracing, and set Experimental Gamescope WSI plus both External Tools controls off first so the selected profile cannot inject a second optional layer. They are not standalone MAKO Renderer commands.
+These expert diagnostic commands keep Decky's profile and launch policy but bypass **External Tools**. Turn Gamescope WSI compatibility and both External Tools controls off first so the profile cannot add a second optional layer.
 
 ### MangoHud through MAKO Decky without its toggle
 
@@ -62,17 +62,11 @@ For a host-installed MangoHud with a 64-bit native Vulkan or Proton game launche
 /home/deck/.local/bin/mako-run env MANGOHUD=1 NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
 ```
 
-For a more detailed overlay with FPS, frametime, CPU and GPU load and temperatures, RAM and VRAM use, and a top-right position, use:
-
-```text
-/home/deck/.local/bin/mako-run env MANGOHUD=1 MANGOHUD_CONFIG=fps,frametime,cpu_stats,cpu_temp,gpu_stats,gpu_temp,ram,vram,position=top-right NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
-```
-
-`MANGOHUD_CONFIG` accepts comma-separated MangoHud options and takes priority over matching config-file settings. See MangoHud's [example configuration](https://github.com/flightlessmango/MangoHud/blob/master/data/MangoHud.conf) for the complete option list. Changing these display options does not change the Vulkan layer order.
+Add `MANGOHUD_CONFIG=...` after `MANGOHUD=1` for per-game display options. This changes the overlay, not layer order.
 
 Use the wrapper path displayed by MAKO Decky on systems whose user home is not `/home/deck`.
 
-The position of `env` is intentional. `mako-run` first establishes MAKO's SDR, Gamescope, frame-generation, profile, and diagnostics policy; the child `env` then replaces only the manifest path and enables MangoHud before Steam Runtime Pressure Vessel constructs the game container.
+The position of `env` is intentional: `mako-run` establishes MAKO policy first, then the child overrides only the candidate manifest path before Pressure Vessel constructs the game container.
 
 The variables have separate responsibilities:
 
@@ -111,7 +105,7 @@ This command exposes vkBasalt without using its MAKO Decky toggle, but the integ
 
 The same narrow manifest-path technique can expose another host Vulkan layer without changing MAKO Renderer. This establishes discovery, not compatibility: the candidate still needs the correct architecture, its own activation condition, a host-visible library, a usable position in the call chain, and real runtime validation. Only the MangoHud lane above is currently validated.
 
-This Deck did not have host-visible vkBasalt, OBS Vulkan Capture, or RenderDoc manifests when this guide was written. Install one candidate at a time and confirm the directory containing its JSON manifest before testing. Do not combine these candidate commands with MangoHud or another unvalidated layer.
+Install and validate one candidate at a time. Confirm its actual manifest directory and do not combine candidates.
 
 For a 64-bit host-visible [OBS Vulkan Capture](https://github.com/nowrep/obs-vkcapture) manifest in `/usr/share/vulkan/implicit_layer.d`, with the matching OBS plugin installed, test:
 
@@ -130,7 +124,7 @@ Application
             -> Vulkan driver
 ```
 
-That position gives the candidate an opportunity to observe every original or generated present sent by MAKO, but it does not guarantee that post-processing or capture will understand MAKO-owned images and synchronization. RenderDoc's useful capture position depends on the debugging question, so record the measured order rather than assuming one.
+That order lets a candidate observe original and generated presents but does not prove it understands MAKO-owned images or synchronization. RenderDoc's useful position depends on the debugging goal, so record the measured order.
 
 Use these candidates for local experiments, not as a support claim:
 
@@ -194,9 +188,7 @@ The game instance and device call stacks must contain `VK_LAYER_MAKO_render` abo
 
 ## Evidence and limits
 
-The current evidence was collected on 2026-08-20 with Resident Evil 4 launched as a 64-bit Proton game through Steam Runtime Pressure Vessel under Gamescope on an AMD Radeon Graphics RADV NAVI33 device. MangoHud was visible, MAKO frame generation remained active, and the Vulkan loader recorded `Application -> MAKO Renderer -> MangoHud -> Vulkan driver` at instance and device creation.
-
-That run proves activation and ordering for this lane, not universal performance or compatibility. The following remain untested:
+Recorded hardware evidence proves the 64-bit Steam/Proton Pressure Vessel order `Application -> MAKO Renderer -> MangoHud -> Vulkan driver`, not universal performance or compatibility. MAKO Gym and retained traces should own dated run details. These boundaries remain separate:
 
 - 32-bit games and complete 32-bit MangoHud runtime dependencies;
 - Heroic, EmuDeck, and other Flatpak applications;

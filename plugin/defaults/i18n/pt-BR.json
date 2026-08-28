@@ -1,8 +1,8 @@
 {
   "CONTENT_SCALING": "Redimensionamento",
-  "SCALING_ENABLED": "Ativar redimensionamento",
+  "SCALING_ENABLED": "Ativar redimensionamento (Reiniciar)",
   "SCALING_ENABLED_DESC": "Ative antes de iniciar o jogo. Quando desativado, o redimensionamento fica completamente desativado.",
-  "SCALING_ENABLED_WARNING": "Mantenha isto ativado se quiser usar o redimensionamento.",
+  "SCALING_ENABLED_WARNING": "Depois de ativar na inicialização, você pode alterar o modelo de redimensionamento enquanto o jogo está em execução. Desative o redimensionamento quando não precisar dele, pois manter o caminho de execução preparado usa recursos adicionais do sistema.",
   "SCALING_METHOD": "Método de redimensionamento",
   "SCALING_METHOD_DESC": "Escolha o modelo de redimensionamento. Você pode alterá-lo enquanto o jogo está em execução.",
   "SCALING_METHOD_NATIVE": "Resolução nativa",

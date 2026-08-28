@@ -1,6 +1,6 @@
 # Procedural image-quality regression
 
-MAKO includes a deterministic procedural renderer and three real-GPU quality commands for image-boundary corruption, temporal trails, fine-detail loss, occlusion, disocclusion, parallax, crowds, traffic, particles, and static HUD composition. Every scene is 321×181 pixels at source so its right and bottom edges do not align with common compute workgroup sizes. Spatial and combined references are vector-rendered directly at presentation resolution.
+MAKO includes a deterministic procedural renderer and three real-GPU commands for detecting boundary corruption, temporal trails, detail loss, occlusion, disocclusion, parallax, crowds, traffic, particles, and HUD errors. Every source scene is 321×181 so its edges do not align with common compute workgroups. Spatial and combined references are rendered directly at presentation resolution.
 
 The five scenes are `motion-boundary`, `traffic`, `crowd`, `camera-pan`, and `hud-disocclusion`. The original AMD motion-boundary regression remains available through its compatibility entry point and retains its original threshold.
 
@@ -59,7 +59,7 @@ Frame-generation artifacts contain `previous.ppm`, `current.ppm`, `reference.ppm
 
 ## MAKO Gym hardware validation
 
-Portable CTest owns deterministic scene generation, masks, extents, scoring policy, invalid-input behavior, and perfect/corrupted reference checks without a GPU or licensed input. The private sibling MAKO Gym repository owns the declarative 74-case AMD visual matrix, DLL discovery, parameter assertions, mandatory execution, PPM evidence validation, sanitization, and retained summaries. Its 20 LSFG cases cover every scene in FP32/FP16 plus Flow Scale, model, and timestamps from 0.05 to 0.95. Its 31 spatial cases cover every scene through every method, 1.01× near-native through 2× factors, MAKO sharpness edges, and all five LS1 variants. Its 23 combined cases cover every scene and spatial method plus representative FP16, lighter-model, lower-flow, near-endpoint, near-native, 2× factor, and sharpness interactions. Gym's separate repeatability lane requires nine cross-pipeline sentinels to remain byte-identical across three independent executions, its spatial-performance lane scores and timestamps 36 exact-resolution production scaler graphs through 5120×2160, and its synchronization-validation lane executes eight canonical quality paths under the active Khronos validation layer.
+Portable CTest owns deterministic scene generation, masks, extents, scoring policy, invalid-input behavior, and perfect/corrupted reference checks without a GPU or licensed input. The private sibling MAKO Gym repository owns the evolving AMD visual inventory, licensed-input discovery, parameter and PPM assertions, sanitization, retained summaries, repeatability sentinels, exact-resolution scaler timing, and synchronization validation. Its documentation is authoritative for current case counts and coverage.
 
 After building `mako-cli`, run the MAKO-side bridge from the repository root:
 
@@ -80,4 +80,4 @@ cmake --build build/quality-policy --target mako-device-feature-tests mako-image
 ctest --test-dir build/quality-policy --output-on-failure -R '^(optional-device-features|procedural-image-quality-scene|cli-i18n-contract)$'
 ```
 
-A skipped GPU test is not image-quality evidence. MAKO Gym's offscreen visual matrix is also not proof of WSI presentation, compositor scanout, subjective game quality, latency, performance, live mutation, another driver or GPU, HDR, DXVK, or VKD3D-Proton. The 48-case live Vulkan matrix and real-game/runtime matrix retain those separate boundaries.
+A skipped GPU test is not image-quality evidence. MAKO Gym's offscreen matrix also does not prove WSI presentation, compositor scanout, subjective quality, latency, power, live mutation, another driver or GPU, HDR, DXVK, or VKD3D-Proton; use the corresponding live Vulkan, compositor, Proton, and real-game lanes.

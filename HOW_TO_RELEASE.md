@@ -1,94 +1,78 @@
 # How to release MAKO
 
-MAKO Renderer and MAKO Decky normally ship as a matched pair with the same `X.Y.Z` release number. Run the release from a clean `main` checkout after committing the changes you want to ship.
+MAKO Renderer and MAKO Decky normally ship as a matched `X.Y.Z` pair. Release from a clean, pushed `main` commit and preserve the enforced order: **Renderer → checksum pin → Decky**.
 
-## Release lifecycle at a glance
+## Release stages
 
-MAKO deliberately separates development, tester packaging, release-candidate validation, and publication:
+| Stage | Command | Result |
+| --- | --- | --- |
+| Focused local iteration | The `dev:*` commands in [MAKO Decky packaging](plugin/docs/PACKAGING.md) | Updates the local development installation; no package or release |
+| Complete tester package | `pnpm --dir plugin run package:local-engine` | Self-contained ZIP for trusted testing; no tag or release |
+| Release-candidate gate | `./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Clean SteamOS/AMD rebuild, complete MAKO Gym validation, retained ZIP/evidence, and optional deployment |
+| Publication | `./scripts/publish-release.sh X.Y.Z` | Publishes Renderer, records immutable checksums, then publishes Decky |
+| Public-asset check | Download the released Decky ZIP and select **Install MAKO Renderer** | Verifies the actual public artifact and installation path |
 
-| Cycle | Purpose | Entry point | Result |
-| --- | --- | --- | --- |
-| Local iteration | Exercise a focused frontend, backend, native Renderer, host, or Flatpak change on the development machine | The `dev:*` commands in [MAKO Decky packaging](plugin/docs/PACKAGING.md) | Directly updates the installed development plugin; creates no release |
-| Tester package | Validate installation and upgrades with a self-contained package | `pnpm --dir plugin run package:local-engine` | Produces a complete local ZIP that can be sent to trusted testers; creates no tag or release |
-| Release candidate | Rebuild the committed, pushed source in a clean checkout on the dedicated SteamOS/AMD host and exercise it through MAKO Gym | `./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Retains the verified ZIP and evidence for 14 days and optionally installs that exact ZIP; publishes nothing |
-| Published release | Publish immutable matched artifacts after the release candidate and manual game matrix pass | `./scripts/publish-release.sh X.Y.Z` | Publishes MAKO Renderer, pins it by checksum, then publishes MAKO Decky |
-| Published-package check | Prove the public asset installs through the user-facing path | Download the new MAKO Decky ZIP and use **Install MAKO Renderer** | Confirms the released asset, not a local or CI copy |
-
-The fast native-only package and direct deployment paths are intentionally incomplete and must not be promoted as release candidates. The hardware gate validates and may deploy a candidate, but only the publisher creates tags, GitHub releases, immutable assets, and the final Renderer pin.
-
-## Recommended release order
-
-For a normal paired release, always use this order:
-
-1. Publish **MAKO Renderer** first so its immutable archives, Flatpak bundles, source commit, and checksums exist.
-2. Pin that exact Renderer release in `plugin/package.json` using the release tooling.
-3. Build and publish **MAKO Decky** from the checksum-verified pin.
-
-Treat **Renderer → pin → Decky** as the strongly recommended release strategy. A deliberate component-only release can be appropriate, so the pairing itself is not an absolute policy requirement. However, never publish MAKO Decky against an unverified, local-only, or stale Renderer payload; the Decky publisher enforces that safety boundary. The top-level publisher follows the recommended paired order automatically and should be preferred for routine releases.
+Fast native-only packages and direct deployments are intentionally incomplete and cannot become release candidates.
 
 ## One-time setup
 
-- Install the normal [renderer build prerequisites](engine/docs/BUILDING-FROM-SOURCE.md).
-- Install and authenticate GitHub CLI with `gh auth login -h github.com`.
-- Confirm `git status` is clean and the `origin` remote points to this repository.
-- Prepare the dedicated SteamOS/AMD test machine described in [Testing](TESTING.md). The release gate launcher creates and removes its `steamos` + `amd-gpu` runner for each job; do not leave a persistent repository runner online.
-- Keep a clean, initialized private `MAKO-Gym` checkout beside MAKO, run its `./scripts/check.sh`, and ensure its contract version matches MAKO before registering the hardware runner. The release launcher enforces these boundaries.
+- Install the [Renderer build prerequisites](engine/docs/BUILDING-FROM-SOURCE.md).
+- Authenticate GitHub CLI with `gh auth login -h github.com`.
+- Confirm `origin` targets this repository and the worktree is clean.
+- Prepare the dedicated SteamOS/AMD host described in [Testing](TESTING.md). The launcher creates a disposable one-job runner; do not leave a persistent public-repository runner online.
+- Keep a clean private `MAKO-Gym` checkout beside MAKO. Its `./scripts/check.sh` and contract version must pass before runner registration.
 
-The renderer packager rejects a `mako-ui` binary that requires a Qt ABI newer than 6.4. A Linux host with Qt 6.2–6.4 needs no container. Non-Linux packaging requires Docker or Podman. When a rolling Linux distribution only provides a newer Qt, either runtime is an optional compatibility fallback: prefix the release command with `MAKO_PORTABLE_PACKAGE=1` to build the UI against Ubuntu 22.04's Qt 6.2 baseline.
+Published host archives must remain compatible with Qt 6.4. Hosts with Qt 6.2–6.4 need no container; non-Linux hosts need Docker or Podman. On a rolling Linux host with newer Qt, set `MAKO_PORTABLE_PACKAGE=1` to build against the Ubuntu 22.04 Qt 6.2 baseline.
 
-## Publish both packages
+## Prepare the release
 
-First, manually write the user-facing “What’s new” copy in both files:
+Write the user-facing “What’s new” copy in:
 
 - [MAKO Renderer release notes](engine/RELEASE_NOTES.md)
 - [MAKO Decky release notes](plugin/RELEASE_NOTES.md)
 
-Give each normal paired release one shared codename without changing its semantic version, tags, or archive names. Store its shared banner in the root `assets/` directory as the lowercase, hyphenated codename alone—for example, `assets/leviathan-rising.png`—and reference the same codename and image from both component release-note files. MAKO Decky reads its version from `plugin/package.json` and its codename from the Decky release notes at build time for the subtle current-release identity at the top of the plugin; the frontend build rejects missing or mismatched release metadata.
+For a paired release, give both files the same codename and root `assets/<lowercase-codename>.png` banner. Update each first heading to the new version and commit both files with the release changes. The publisher rejects missing, empty, stale, or mismatched metadata. These two files are the only manual release copy; versions, pins, asset URLs, checksums, and README/website links are script-owned.
 
-Change the version in each file’s first heading and edit the Markdown beneath it in the tone you want for that release. Commit both files with the changes being released. The publisher rejects a missing, empty, or stale heading before it changes a version or starts a build.
-
-Run the **SteamOS hardware validation** workflow for that commit and require it to pass before publishing:
+Run the hardware gate for that commit:
 
 ```bash
 ./scripts/run-steamos-hardware-validation.sh --deploy-to-decky
 ```
 
-Omit `--deploy-to-decky` when the machine is not the dedicated MAKO Decky test installation. Review the retained GPU comparisons, MAKO Gym's 47-case feature summary and logs, 74-case quality summary, 17-row LSFG-performance summary, 36-row spatial-performance summary, 12-row runtime-overhead summary, eight-row synchronization-validation summary, nine-sentinel repeatability summary, 29-row default recovery summary, recorded Gym commit, and sanitized environment evidence; a green CPU-only pull-request workflow is not a substitute for this gate. The launcher preserves only scoped reusable caches and removes its runner, checkout, credentials, staging, and generated outputs when the job ends.
+Omit `--deploy-to-decky` unless the host is the dedicated MAKO Decky test installation. Review the retained package identity, sanitized environment evidence, and every MAKO Gym summary: 48 feature, 74 quality, 18 LSFG-performance, 36 spatial-performance, 14 runtime-overhead, eight synchronization-validation, nine repeatability, 31 recovery, twelve native Gamescope E2E, twelve Proton E2E, and ten Proton-compatibility cases across at least four runtime families. Complete the applicable manual game matrix as well; portable CI and synthetic hardware workloads are not substitutes for it.
 
-Then, from the repository root, replace `1.2.0` with the new version:
+## Publish
+
+From the repository root, replace `1.2.0` with the release version:
 
 ```bash
 ./scripts/publish-release.sh 1.2.0
 ```
 
-That one command:
+The publisher:
 
-1. Validates both manually curated “What’s new” files for `1.2.0`.
-2. Updates and commits `engine/VERSION`.
-3. Tests and builds the 64-bit and 32-bit host renderer archive plus the 23.08, 24.08, and 25.08 Flatpak bundles.
-4. Publishes `render-v1.2.0`, calculates its checksums, and commits the exact archive URLs, checksums, tag, and source commit to `plugin/package.json`.
-5. Updates and commits the plugin version, tests and verifies its bundled renderer payload, and builds the MAKO Decky ZIP.
-6. Publishes `plugin-v1.2.0` as GitHub's **Latest** release.
-7. Updates all versioned README release links, pushes `main`, triggers the website deployment from the canonical `plugin/package.json` release metadata, and verifies that the remote release-asset checksums, pins, tags, and worktree agree.
-8. After complete verification only, removes the reproducible local release archives, generated frontend/coverage output, and disposable build staging while preserving the reusable compiler, SDK, Flatpak, dependency, and container caches.
+1. validates both release-note files and shared codename;
+2. versions, tests, builds, and publishes the 64-bit/32-bit Renderer host archive and supported Flatpak bundles;
+3. records the exact Renderer tag, source commit, URLs, and checksums in `plugin/package.json`;
+4. versions, tests, packages, and publishes the checksum-pinned MAKO Decky ZIP as GitHub's **Latest** release;
+5. updates release links, pushes `main`, triggers the website deployment from canonical metadata, and verifies remote tags, assets, checksums, and pins; and
+6. removes reproducible release output and disposable staging after verification while preserving reusable caches.
 
-No version, checksum, binary URL, Flatpak pin, README release link, or website release link needs to be edited manually. The website derives its component versions and asset URLs from `plugin/package.json`, and the Pages workflow redeploys when that canonical metadata changes. The two “What’s new” files are intentionally the only manual release content; the stable installation, update, in-game, limitations, and payload sections are assembled by the component publishers.
+Do not manually edit generated version links or pins.
 
-## Resume or publish one component
+## Resume an interrupted release
 
-The top-level command is resumable. If a complete component release already exists, it verifies and skips that component. Fix the reported cause and run the same command again after an interrupted release.
+The top-level command is resumable: it verifies and skips any already-complete component. Fix the reported cause and rerun the same command.
 
-The component publishers are also available when deliberately resuming one stage:
+For a deliberate component-only resume:
 
 ```bash
 ./engine/scripts/publish-package.sh --version 1.2.0
 ./plugin/scripts/publish-package.sh --version 1.2.0
 ```
 
-When resuming a paired release manually, preserve the same **Renderer → pin → Decky** order. The Renderer publisher writes the pin after its assets exist, and the plugin publisher refuses to continue until that checksum-verified Renderer pin matches the requested version.
+Maintain **Renderer → pin → Decky**. Never move an existing tag or replace a published asset; publish a new version when released content must change.
 
-Do not move an existing release tag or replace an asset by hand. If released content must change, publish a new version.
+## Verify the public package
 
-## Final check
-
-The command prints both release pages when verification succeeds. Confirm the MAKO Decky page is marked **Latest**, download its published ZIP rather than reusing the retained release-candidate artifact, then install it on a test SteamOS device and select **Install MAKO Renderer** in the plugin. This last pass validates the actual public download and user-facing installation path.
+After the command reports success, confirm the Decky release is **Latest**, download its published ZIP rather than the retained candidate, install it on a test SteamOS device, and select **Install MAKO Renderer**. This final check validates the public download and normal user-facing installation path.

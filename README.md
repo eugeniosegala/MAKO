@@ -22,7 +22,7 @@
 > [!IMPORTANT]
 > **[Decky LSFG-VK Experimental](https://github.com/eugeniosegala/decky-lsfg-vk-experimental) and [LSFG-VK Experimental](https://github.com/eugeniosegala/lsfg-vk-experimental) are now MAKO.** This repository is their new home and continuation. Future development, releases, documentation, and issue tracking happen here.
 
-> **Independent project:** MAKO is independently developed and maintained for Steam Deck and Steam Machine. **MAKO Decky** provides per-game controls and integration, while **MAKO Renderer** supplies Vulkan spatial scaling and frame generation. The project builds on work by **[PancakeTAS and the lsfg-vk contributors](https://github.com/PancakeTAS/lsfg-vk)** and **[xXJSONDeruloXx, the original Decky LSFG-VK developer](https://github.com/xXJSONDeruloXx/decky-lsfg-vk)**, whom MAKO gratefully thanks. LS1 scaling and LSFG frame generation require `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation; MAKO does not bundle, copy, persist, or modify it, and its built-in open spatial scaler does not require it. Test features per game; MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release.
+> **Independent project:** MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release. LS1 scaling and LSFG frame generation read `Lossless.dll` from the user's licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation; MAKO never bundles, copies, persists, or modifies it. The open MAKO scaler does not require the DLL.
 
 ## Downloads
 
@@ -47,7 +47,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 | :-: | --- | --- |
 | 🖼️ | **Full-quality frame generation** | Uses the Lossless Scaling frame-generation models from the user's licensed installation, with quality and performance controls per profile. |
 | 🔍 | **LS1 + open spatial scaling** | Reconstructs a lower-resolution game frame with LS1 Quality, LS1 Performance, or the open single-pass MAKO method, independently or before Fixed or Adaptive generation. |
-| 👻 | **Significantly reduced ghosting** | The full-quality v2 model with Performance Mode disabled can show noticeably less ghosting than the older layer. Supported AMD GPUs also gain extra protection against ghosting and corrupted moving edges. Results remain game-dependent. |
+| 👻 | **Significantly reduced ghosting** | The full-quality v2 model with Lighter FG Model off can show noticeably less ghosting than the older layer. Supported AMD GPUs also gain extra protection against ghosting and corrupted moving edges. Results remain game-dependent. |
 | 🎯 | **Adaptive Frame Generation** | Optionally targets 30–240 FPS while MAKO Renderer varies generated frames up to a selected 2x–5x ceiling. |
 | 🌈 | **HDR foundation** | MAKO Renderer includes HDR10/PQ and linear-scRGB groundwork. MAKO Decky keeps HDR exposure disabled while activation, presentation, colour, and performance are validated across games. |
 | 🧩 | **64-bit and 32-bit x86 Vulkan** | Ships architecture-matched host and Flatpak layers so Vulkan can select the correct library for each game process. |
@@ -58,7 +58,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 
 ## What MAKO is
 
-MAKO (**Motion-Adaptive Kernel Orchestration**) is a Vulkan-powered graphics project for Linux gaming that brings LS1 spatial scaling, MAKO's built-in open spatial scaler, and LSFG frame generation to Steam Deck, Steam Machine, SteamOS, and Linux more broadly. Scaling can run alone or reconstruct real frames before Fixed or Adaptive Frame Generation.
+MAKO (**Motion-Adaptive Kernel Orchestration**) brings LS1 spatial scaling, MAKO's open spatial scaler, and LSFG frame generation to Linux gaming. Scaling can run alone or reconstruct real frames before Fixed or Adaptive Frame Generation.
 
 The project consists of two closely integrated components:
 
@@ -73,7 +73,7 @@ Choose one launch workflow for each installation: MAKO Decky uses `mako-run`, wh
 > [!TIP]
 > **Try the game's V-Sync setting both on and off.** It can make frame delivery feel steadier, but it may also add input lag or clash with the game's FPS cap, VRR, or compositor. Compare both options and keep the one that feels smoother and more responsive.
 
-Every game, renderer, and display setup behaves differently. Compare scaling, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time. To use spatial scaling in MAKO Decky, enable Scaling Engine before launching the game, choose a lower game rendering resolution, then switch between Native Resolution, MAKO Scaler, LS1 Quality, and LS1 Performance while playing; model changes rebuild MAKO's private scaler without recreating the game's swapchain. Scale Factor applies after the game's next natural resolution change or restart. Change Scaling Engine itself only between game sessions. Frame Generation also turns on and off live when its startup resources are available, including in a session that began with generation disabled. For most games, fullscreen is the best starting point for performance and frame pacing. See the [spatial scaling architecture](engine/docs/SCALING.md) for compatibility requirements and the full pipeline contract.
+Every game and display behaves differently, so compare one setting at a time. For scaling, select **Enable Scaling (Restart)** before launch, choose a lower in-game resolution, then switch methods while playing. The method and sharpness are live; Scale Factor waits for a natural resolution change or restart. Frame Generation normally switches live when startup resources are available. Fullscreen is the best starting point for most games. See the [configuration guide](plugin/docs/CONFIGURATION.md) for control behavior and [spatial scaling architecture](engine/docs/SCALING.md) for the pipeline contract.
 
 ## Install and use
 
@@ -97,7 +97,7 @@ Every game, renderer, and display setup behaves differently. Compare scaling, Fi
 
 ### Optional graphics integrations
 
-MAKO Decky provides an experimental per-profile Gamescope WSI compatibility toggle and supports host-installed MangoHud and experimental vkBasalt under **External Tools**. Gamescope WSI is independent; MangoHud and vkBasalt remain mutually exclusive. See [optional graphics integrations](engine/docs/LAYER-CHAINING.md) for limits, verification, manual activation, and advanced integrations.
+MAKO Decky provides the per-profile **Experimental Gamescope WSI** option and host-installed MangoHud or vkBasalt integrations. The explicit Gamescope WSI and vkBasalt paths are experimental. See [optional graphics integrations](engine/docs/LAYER-CHAINING.md) for ordering, limits, and verification.
 
 ### Heroic and other Flatpak applications
 
@@ -181,10 +181,6 @@ The clean update path avoids Decky retaining an older backend or bundled payload
 3. Restart your Steam Deck or Steam Machine.
 4. Open MAKO Decky and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
 5. If you use Heroic or EmuDeck Flatpak emulators, open **Flatpak Setup** and select **Update** for each prepared application's matching runtime extension shown by MAKO.
-
-<!-- prettier-ignore -->
-> [!IMPORTANT]
-> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **MAKO Decky**, install the newer ZIP, restart your Steam Deck or Steam Machine, then open it and select **Install MAKO Renderer**.
 
 Profiles and Steam launch options are retained. The private native engine and launcher are recreated in step 4; shared Flatpak extensions are retained and then refreshed in step 5.
 

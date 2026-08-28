@@ -1,8 +1,8 @@
 {
   "CONTENT_SCALING": "Spatial Scaling",
-  "SCALING_ENABLED": "Enable Scaling",
+  "SCALING_ENABLED": "Enable Scaling (Restart)",
   "SCALING_ENABLED_DESC": "Enable before starting the game. When off, scaling is fully disabled.",
-  "SCALING_ENABLED_WARNING": "Keep this on if you want scaling.",
+  "SCALING_ENABLED_WARNING": "Once enabled at startup, you can change the scaling model while the game is running. Leave Scaling off when you do not need it, because keeping its runtime path provisioned uses additional system resources.",
   "SCALING_METHOD": "Scaling Method",
   "SCALING_METHOD_DESC": "Choose the scaling model. You can change it while the game is running.",
   "SCALING_METHOD_NATIVE": "Native Resolution",

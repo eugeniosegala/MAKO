@@ -1,8 +1,8 @@
 {
   "CONTENT_SCALING": "图像缩放",
-  "SCALING_ENABLED": "启用缩放",
+  "SCALING_ENABLED": "启用缩放（重启）",
   "SCALING_ENABLED_DESC": "请在启动游戏前启用。关闭后，缩放将完全停用。",
-  "SCALING_ENABLED_WARNING": "如果要使用缩放，请保持开启。",
+  "SCALING_ENABLED_WARNING": "在启动时启用后，你可以在游戏运行期间切换缩放模型。不需要缩放时请将其关闭，因为保持缩放运行路径就绪会占用额外的系统资源。",
   "SCALING_METHOD": "缩放方法",
   "SCALING_METHOD_DESC": "选择缩放模型。可在游戏运行时更改。",
   "SCALING_METHOD_NATIVE": "原生分辨率",

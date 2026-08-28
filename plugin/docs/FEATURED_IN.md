@@ -50,13 +50,4 @@ Community creators have covered, tested, and explained both the earlier Decky LS
 - [GOD OF WAR RAGNAROK Steam Deck: FSR 4.1 + MAKO/LSFG-VK Performance Test](https://www.youtube.com/watch?v=LISVuafx6VY) by [Deck Wizard](https://www.youtube.com/@DeckWizard): a Steam Deck performance test comparing MAKO and LSFG-VK with FSR 4.1.
 - [GHOST OF TSUSHIMA Steam Deck: FSR 4.1 + MAKO/LSFG-VK Performance Test](https://www.youtube.com/watch?v=S1FZkctPEQc) by [Deck Wizard](https://www.youtube.com/@DeckWizard): a Steam Deck performance test comparing MAKO and LSFG-VK with FSR 4.1.
 
-## Coverage includes
-
-- Steam Deck and SteamOS installation walkthroughs
-- v2 frame-generation image-quality comparisons and game testing
-- Adaptive Frame Generation testing
-- Per-game setup guidance
-- FSR and LSFG-VK use together
-- MAKO and earlier LSFG-VK Experimental performance comparisons
-
 Coverage reflects each creator's own hardware, game settings, and conclusions. It is not an endorsement or a guarantee that a particular game will behave the same way on every system.
