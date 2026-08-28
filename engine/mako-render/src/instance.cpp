@@ -47,6 +47,19 @@ namespace {
     constexpr uint64_t spatialScalingEnabledBit = uint64_t{1};
     constexpr uint64_t spatialScalingProcessSupportedBit = uint64_t{2};
 
+    vk::DeviceMemoryTotals memoryDelta(
+            const vk::DeviceMemoryTotals& after,
+            const vk::DeviceMemoryTotals& before) {
+        return {
+            .bytes = after.bytes >= before.bytes
+                ? after.bytes - before.bytes
+                : 0,
+            .allocations = after.allocations >= before.allocations
+                ? after.allocations - before.allocations
+                : 0,
+        };
+    }
+
 #if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
     constexpr char makoBuildIdentity[] =
         "MAKO Renderer: render layer active; identity="
@@ -1207,6 +1220,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
         : profile;
     if (!frameGenerationAvailableOnDevice)
         contextProfile.frame_generation_enabled = false;
+    const auto memoryBefore = vk.deviceMemorySnapshot();
     const bool inserted = this->swapchains.emplace(swapchain,
         Swapchain(vk, frameGenerationBackend, std::move(contextProfile), info,
             std::move(scalingShaderDll),
@@ -1216,11 +1230,41 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
             this->gamescopeRefreshHz,
             this->runtimeStateRevision,
             swapchainMaintenance1Enabled)).second;
+    const auto memoryAfter = vk.deviceMemorySnapshot();
+    const auto contextInternal = memoryDelta(
+        memoryAfter.internal, memoryBefore.internal);
+    const auto contextExported = memoryDelta(
+        memoryAfter.exported, memoryBefore.exported);
+    const auto contextImported = memoryDelta(
+        memoryAfter.imported, memoryBefore.imported);
     const auto insertedContext = this->swapchains.find(swapchain);
     const uint64_t diagnosticsContextId =
         insertedContext != this->swapchains.end()
         ? insertedContext->second.diagnosticsId()
         : 0;
+
+    std::clog << "MAKO Renderer: renderer-memory operation=swapchain-context-create"
+        << " context=" << diagnosticsContextId
+        << " role=" << layerRoleName
+        << " width=" << info.extent.width
+        << " height=" << info.extent.height
+        << " context_internal_bytes=" << contextInternal.bytes
+        << " context_internal_allocations=" << contextInternal.allocations
+        << " context_exported_bytes=" << contextExported.bytes
+        << " context_exported_allocations=" << contextExported.allocations
+        << " context_imported_mapped_bytes=" << contextImported.bytes
+        << " context_imported_allocations=" << contextImported.allocations
+        << " live_internal_bytes=" << memoryAfter.internal.bytes
+        << " live_internal_allocations=" << memoryAfter.internal.allocations
+        << " live_exported_bytes=" << memoryAfter.exported.bytes
+        << " live_exported_allocations=" << memoryAfter.exported.allocations
+        << " peak_internal_bytes=" << memoryAfter.peakInternal.bytes
+        << " peak_internal_allocations="
+        << memoryAfter.peakInternal.allocations
+        << " peak_exported_bytes=" << memoryAfter.peakExported.bytes
+        << " peak_exported_allocations="
+        << memoryAfter.peakExported.allocations
+        << '\n';
 
     if (present_diagnostics::enabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-create"

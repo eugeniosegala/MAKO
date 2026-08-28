@@ -3,11 +3,13 @@
 #pragma once
 
 #include "../helpers/pointers.hpp"
+#include "device_memory_accounting.hpp"
 
 #include <bitset>
 #include <cstdint>
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -269,7 +271,18 @@ namespace vk {
         /// get optional setLoaderData function
         /// @return the setLoaderData function
         [[nodiscard]] const auto& loaderdatafunc() const { return this->setLoaderData; }
+        /// get process-local accounting for device-memory handles created by MAKO
+        [[nodiscard]] const auto& deviceMemoryAccounting() const {
+            return this->memoryAccounting;
+        }
+        /// snapshot MAKO-owned, imported, and exported Vulkan memory handles
+        [[nodiscard]] DeviceMemorySnapshot deviceMemorySnapshot() const noexcept {
+            return this->memoryAccounting->snapshot();
+        }
     private:
+        std::shared_ptr<DeviceMemoryAccounting> memoryAccounting{
+            std::make_shared<DeviceMemoryAccounting>()
+        };
         ls::owned_ptr<VkInstance> instance;
         VulkanInstanceFuncs instance_funcs;
 

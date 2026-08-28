@@ -9,6 +9,7 @@
 #include "mako-common/vulkan/shader.hpp"
 
 #include <cstddef>
+#include <span>
 #include <vector>
 
 #include <vulkan/vulkan_core.h>
@@ -59,6 +60,9 @@ namespace mako::backend {
         /// @param count number of images to add (0 = all)
         [[nodiscard]] ManagedShaderBuilder& sampleds(const std::vector<vk::Image>& images,
             size_t offset = 0, size_t count = 0);
+        /// add an exact non-owning range of sampled images
+        /// @param images images to add
+        [[nodiscard]] ManagedShaderBuilder& sampleds(std::span<const vk::Image> images);
 
         /// add a storage image
         /// @param image image to add
@@ -69,6 +73,9 @@ namespace mako::backend {
         /// @param count number of images to add (0 = all)
         [[nodiscard]] ManagedShaderBuilder& storages(const std::vector<vk::Image>& images,
             size_t offset = 0, size_t count = 0);
+        /// add an exact non-owning range of storage images
+        /// @param images images to add
+        [[nodiscard]] ManagedShaderBuilder& storages(std::span<const vk::Image> images);
 
         /// add a sampler
         /// @param sampler sampler to add

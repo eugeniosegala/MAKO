@@ -53,6 +53,13 @@ int main() {
     expectNear(fourX[1], 0.50F, "4x midpoint changed");
     expectNear(fourX[2], 0.75F, "4x final timestamp changed");
 
+    const auto fiveX = GeneratedFramePlan::evenlySpaced(4);
+    expect(fiveX.size() == 4, "5x plan lost a generated frame");
+    expectNear(fiveX[0], 0.20F, "5x first timestamp changed");
+    expectNear(fiveX[1], 0.40F, "5x second timestamp changed");
+    expectNear(fiveX[2], 0.60F, "5x third timestamp changed");
+    expectNear(fiveX[3], 0.80F, "5x final timestamp changed");
+
     const std::array<float, 3> explicitValues{0.20F, 0.55F, 0.90F};
     const auto explicitPlan = GeneratedFramePlan::fromTimestamps(
         std::span<const float>(explicitValues)
@@ -79,8 +86,8 @@ int main() {
         "zero admission did not produce an empty scheduled plan");
 
     expectInvalid([] {
-        static_cast<void>(GeneratedFramePlan::evenlySpaced(4));
-    }, "a plan larger than the supported 4x capacity was accepted");
+        static_cast<void>(GeneratedFramePlan::evenlySpaced(5));
+    }, "a plan larger than the supported 5x capacity was accepted");
     expectInvalid([] {
         const std::array<float, 2> invalid{0.75F, 0.50F};
         static_cast<void>(GeneratedFramePlan::fromTimestamps(invalid));

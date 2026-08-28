@@ -138,7 +138,7 @@ namespace {
     constexpr double adaptiveTargetClockPlacementDeadbandRatio = 0.05;
     constexpr double adaptiveTargetClockMinimumRepaymentHeadroomOutputs = 0.25;
     constexpr std::array adaptiveOutputCountReciprocals{
-        0.0, 1.0, 0.5, 1.0 / 3.0, 0.25,
+        0.0, 1.0, 0.5, 1.0 / 3.0, 0.25, 0.2,
     };
     static_assert(
         adaptiveOutputCountReciprocals.size() ==

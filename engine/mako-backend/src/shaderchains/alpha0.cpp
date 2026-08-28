@@ -24,13 +24,13 @@ Alpha0::Alpha0(const Ctx& ctx,
     this->tempImages0.reserve(m);
     this->tempImages1.reserve(m);
     for (size_t i = 0; i < m; i++) {
-        this->tempImages0.emplace_back(ctx.vk, halfExtent);
-        this->tempImages1.emplace_back(ctx.vk, halfExtent);
+        this->tempImages0.emplace_back(ctx.vk, halfExtent, ctx.imageMemoryPool);
+        this->tempImages1.emplace_back(ctx.vk, halfExtent, ctx.imageMemoryPool);
     }
 
     this->images.reserve(2 * m);
     for (size_t i = 0; i < (2 * m); i++)
-        this->images.emplace_back(ctx.vk, quarterExtent);
+        this->images.emplace_back(ctx.vk, quarterExtent, ctx.imageMemoryPool);
 
     // create descriptor sets
     const auto& shaders = ctx.perf ? ctx.shaders.get().performance : ctx.shaders.get().quality;

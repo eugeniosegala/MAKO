@@ -21,6 +21,7 @@ import {
   type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
+import { MakoInlineWarning } from "./MakoUi";
 
 interface ScalingControlProps {
   config: ConfigurationData;
@@ -60,11 +61,23 @@ export function ScalingControl({
     <>
       <PanelSectionRow>
         <ToggleField
-          label={t("SCALING_ENABLED", "Enable Scaling Engine (Restart)")}
-          description={t(
-            "SCALING_ENABLED_DESC",
-            "Enable before starting the game. Change the scaling method while playing. It works alone or with Frame Generation, but adds GPU overhead. Leave it off when you do not need scaling.",
-          )}
+          label={t("SCALING_ENABLED", "Enable Scaling")}
+          description={
+            <>
+              <div>
+                {t(
+                  "SCALING_ENABLED_DESC",
+                  "Enable before starting the game. When off, scaling is fully disabled.",
+                )}
+              </div>
+              <MakoInlineWarning>
+                {t(
+                  "SCALING_ENABLED_WARNING",
+                  "Keep this on if you want scaling.",
+                )}
+              </MakoInlineWarning>
+            </>
+          }
           checked={config.scaling_enabled}
           disabled={disabled}
           onChange={(value) => onConfigChange(SCALING_ENABLED, value)}
@@ -78,7 +91,7 @@ export function ScalingControl({
               label={t("SCALING_METHOD", "Scaling Method")}
               description={t(
                 "SCALING_METHOD_DESC",
-                "Native Resolution uses a fast model-free linear baseline at the selected scale factor. MAKO Scaler is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO Scaler takes over. Model changes apply inside MAKO without recreating the game swapchain.",
+                "Choose the scaling model. You can change it while the game is running.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
@@ -97,10 +110,14 @@ export function ScalingControl({
           <PanelSectionRow>
             <SliderField
               label={`${t("SCALING_FACTOR", "Scale Factor")} (${config.scaling_factor.toFixed(1)}x)`}
-              description={t(
-                "SCALING_FACTOR_DESC",
-                "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. Applies on the game's next natural resolution change or restart.",
-              )}
+              description={
+                <span style={{ display: "block", paddingTop: "3px" }}>
+                  {t(
+                    "SCALING_FACTOR_DESC",
+                    "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. Applies on the game's next natural resolution change or restart.",
+                  )}
+                </span>
+              }
               value={config.scaling_factor}
               min={SCALING_FACTOR_MIN}
               max={SCALING_FACTOR_MAX}

@@ -22,7 +22,7 @@ Gamma0::Gamma0(const Ctx& ctx, size_t idx,
     // create output images
     this->images.reserve(3);
     for(size_t i = 0; i < 3; i++)
-        this->images.emplace_back(ctx.vk, extent);
+        this->images.emplace_back(ctx.vk, extent, ctx.imageMemoryPool);
 
     // create descriptor sets
     const auto& shader = (ctx.perf ?

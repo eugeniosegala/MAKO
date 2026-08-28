@@ -14,6 +14,7 @@ from shared_config import (
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX,
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN,
     DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
+    FIXED_MULTIPLIER_UI_MAX,
     FIXED_MULTIPLIER_UI_MIN,
     FLOW_SCALE_MAX,
     FLOW_SCALE_MIN,
@@ -176,6 +177,10 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertGreaterEqual(
             FIXED_MULTIPLIER_UI_MIN,
             renderer_constant("minimumMultiplier"),
+        )
+        self.assertLessEqual(
+            FIXED_MULTIPLIER_UI_MAX,
+            renderer_constant("maximumMultiplier"),
         )
         self.assertEqual(
             CONFIG_SCHEMA_DEF[

@@ -80,4 +80,4 @@ cmake --build build/quality-policy --target mako-device-feature-tests mako-image
 ctest --test-dir build/quality-policy --output-on-failure -R '^(optional-device-features|procedural-image-quality-scene|cli-i18n-contract)$'
 ```
 
-A skipped GPU test is not image-quality evidence. MAKO Gym's offscreen visual matrix is also not proof of WSI presentation, compositor scanout, subjective game quality, latency, performance, live mutation, another driver or GPU, HDR, DXVK, or VKD3D-Proton. The 47-case live Vulkan matrix and real-game/runtime matrix retain those separate boundaries.
+A skipped GPU test is not image-quality evidence. MAKO Gym's offscreen visual matrix is also not proof of WSI presentation, compositor scanout, subjective game quality, latency, performance, live mutation, another driver or GPU, HDR, DXVK, or VKD3D-Proton. The 48-case live Vulkan matrix and real-game/runtime matrix retain those separate boundaries.

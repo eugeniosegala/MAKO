@@ -27,7 +27,7 @@ namespace {
         AdaptiveScheduler scheduler({
             .targetFps = targetFps,
             .maximumMultiplier = maximumMultiplier,
-            .generatedFrameCapacity = 3,
+            .generatedFrameCapacity = GeneratedFramePlan::capacity,
             .stableCadence = stableCadence,
             .nearTargetNativePreference = true,
         });
@@ -91,12 +91,12 @@ namespace {
 }
 
 int main() {
-    constexpr std::array<double, 11> baseRates{
-        30.0, 45.0, 47.0, 60.0, 80.0, 89.0,
+    constexpr std::array<double, 12> baseRates{
+        24.0, 30.0, 45.0, 47.0, 60.0, 80.0, 89.0,
         90.0, 96.0, 100.0, 110.0, 114.0,
     };
     constexpr std::array<uint32_t, 4> targets{60, 90, 100, 120};
-    constexpr std::array<size_t, 3> maximumMultipliers{2, 3, 4};
+    constexpr std::array<size_t, 4> maximumMultipliers{2, 3, 4, 5};
     constexpr std::array<bool, 2> stableCadenceOptions{false, true};
 
     std::cout << "base_fps,target_fps,max_multiplier,smooth_cadence,"

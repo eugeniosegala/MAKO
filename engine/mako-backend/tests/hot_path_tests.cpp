@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+#include "helpers/image_prefix.hpp"
 #include "helpers/timestamp_upload_cache.hpp"
 
 #include <cmath>
@@ -69,12 +70,28 @@ namespace {
         require(writes == 1 && approximatelyEqual(cache.at(0), 0.25F),
             "successful retry did not commit the timestamp");
     }
+
+    void testRequiredImagePrefixIsExactAndFailsClosed() {
+        const std::vector<int> images{10, 20, 30, 40};
+        const auto prefix = mako::backend::requiredPrefix(images, 2, "test");
+        require(prefix.size() == 2 && prefix.front() == 10 && prefix.back() == 20,
+            "required image prefix did not preserve the exact descriptor width");
+
+        try {
+            static_cast<void>(mako::backend::requiredPrefix(images, 5, "test"));
+            throw std::runtime_error("oversized image prefix unexpectedly succeeded");
+        } catch (const std::invalid_argument& error) {
+            require(std::string{error.what()} == "test image set is too small",
+                "required image prefix reported the wrong failure");
+        }
+    }
 }
 
 int main() {
     try {
         testStableAndChangingCounts();
         testFailedWriteDoesNotCommit();
+        testRequiredImagePrefixIsExactAndFailsClosed();
     } catch (const std::exception& error) {
         std::cerr << "Backend hot-path test failed: " << error.what() << '\n';
         return 1;

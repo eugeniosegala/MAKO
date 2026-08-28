@@ -11,6 +11,7 @@
 
 #include <cstddef>
 #include <functional>
+#include <span>
 #include <utility>
 #include <vector>
 
@@ -30,8 +31,13 @@ ManagedShaderBuilder& ManagedShaderBuilder::sampleds(
     if (count == 0 || offset + count > images.size())
         count = images.size() - offset;
 
-    for (size_t i = 0; i < count; ++i)
-        this->sampledImages.push_back(std::ref(images.at(offset + i)));
+    return this->sampleds(std::span<const vk::Image>{images}.subspan(offset, count));
+}
+
+ManagedShaderBuilder& ManagedShaderBuilder::sampleds(
+        const std::span<const vk::Image> images) {
+    for (const auto& image : images)
+        this->sampledImages.push_back(std::ref(image));
     return *this;
 }
 
@@ -47,8 +53,13 @@ ManagedShaderBuilder& ManagedShaderBuilder::storages(
     if (count == 0 || offset + count > images.size())
         count = images.size() - offset;
 
-    for (size_t i = 0; i < count; ++i)
-        this->storageImages.push_back(std::ref(images.at(offset + i)));
+    return this->storages(std::span<const vk::Image>{images}.subspan(offset, count));
+}
+
+ManagedShaderBuilder& ManagedShaderBuilder::storages(
+        const std::span<const vk::Image> images) {
+    for (const auto& image : images)
+        this->storageImages.push_back(std::ref(image));
     return *this;
 }
 

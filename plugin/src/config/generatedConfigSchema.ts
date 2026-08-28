@@ -37,7 +37,7 @@ export const BASE_FPS_CAP_UI_MAX = 120 as const;
 export const TARGET_FPS_MIN = 30 as const;
 export const TARGET_FPS_MAX = 240 as const;
 export const ADAPTIVE_MAX_MULTIPLIER_MIN = 2 as const;
-export const ADAPTIVE_MAX_MULTIPLIER_MAX = 4 as const;
+export const ADAPTIVE_MAX_MULTIPLIER_MAX = 5 as const;
 export const ADAPTIVE_MINIMUM_BASE_FPS = 10 as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.1 as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3 as const;
@@ -72,7 +72,7 @@ export const SCALING_SHARPNESS_MAX = 1.0 as const;
 export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.75 as const;
 export const FIXED_MULTIPLIER_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MIN = 2 as const;
-export const FIXED_MULTIPLIER_UI_MAX = 4 as const;
+export const FIXED_MULTIPLIER_UI_MAX = 5 as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD_MIN = 0 as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD_MAX = 240 as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = 30 as const;
@@ -252,7 +252,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "flow_scale",
     fieldType: ConfigFieldType.FLOAT,
     default: 0.9,
-    description: "change the flow scale through game-owned swapchain recreation"
+    description: "change Frame Generation motion-estimation resolution through game-owned swapchain recreation"
   },
   performance_mode: {
     name: "performance_mode",

@@ -57,6 +57,27 @@ void test_scaling_properties() {
     require_property("maximum_scaling_sharpness", "float", false, true);
 }
 
+void test_multiplier_limits() {
+    static_assert(ls::GameConfLimits::minimumMultiplier == 2);
+    static_assert(ls::GameConfLimits::maximumMultiplier == 5);
+    static_assert(ls::GameConfLimits::minimumAdaptiveMaxMultiplier == 2);
+    static_assert(ls::GameConfLimits::maximumAdaptiveMaxMultiplier == 5);
+
+    require_property("minimum_multiplier", "uint", false, true);
+    require_property("maximum_multiplier", "uint", false, true);
+    require_property("minimum_adaptive_max_multiplier", "uint", false, true);
+    require_property("maximum_adaptive_max_multiplier", "uint", false, true);
+
+    QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
+    require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
+    const QString qml = QString::fromUtf8(file.readAll());
+    require(qml.contains(QStringLiteral("to: backend.maximum_multiplier")),
+        "Fixed multiplier spin box does not expose the Renderer maximum");
+    require(qml.contains(QStringLiteral(
+            "to: backend.maximum_adaptive_max_multiplier")),
+        "Adaptive multiplier spin box does not expose the Renderer maximum");
+}
+
 void test_independent_scaling_group() {
     QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
@@ -101,6 +122,7 @@ void test_independent_scaling_group() {
 int main() {
     try {
         test_scaling_properties();
+        test_multiplier_limits();
         test_independent_scaling_group();
     } catch (const std::exception& error) {
         std::cerr << "mako-ui backend contract test failed: "

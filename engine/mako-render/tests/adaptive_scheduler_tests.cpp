@@ -313,7 +313,7 @@ namespace {
                 AdaptiveSchedulerConfig{
                     .targetFps = targetFps,
                     .maximumMultiplier = maximumMultiplier,
-                    .generatedFrameCapacity = 3,
+                    .generatedFrameCapacity = GeneratedFramePlan::capacity,
                     .stableCadence = stableCadence,
                     .nearTargetNativePreference =
                         nearTargetNativePreference,
@@ -577,7 +577,7 @@ namespace {
         try {
             AdaptiveScheduler scheduler({
                 .targetFps = 120,
-                .maximumMultiplier = 5,
+                .maximumMultiplier = 6,
                 .generatedFrameCapacity = 3,
             });
             static_cast<void>(scheduler);
@@ -591,15 +591,15 @@ namespace {
         try {
             AdaptiveScheduler scheduler({
                 .targetFps = 120,
-                .maximumMultiplier = 4,
-                .generatedFrameCapacity = 4,
+                .maximumMultiplier = 5,
+                .generatedFrameCapacity = 5,
             });
             static_cast<void>(scheduler);
         } catch (const std::invalid_argument&) {
             invalidCapacityRejected = true;
         }
         require(invalidCapacityRejected,
-            "scheduler accepted more than three generated-frame slots");
+            "scheduler accepted more than four generated-frame slots");
     }
 
     void testGeneratedDeliveryWindowContract() {
@@ -1742,6 +1742,33 @@ namespace {
             "second 4x interpolation timestamp changed");
         requireNear(timestamps[2], 0.75F, 0.0001F,
             "third 4x interpolation timestamp changed");
+    }
+
+    void testFiveXPlanUsesEvenInterpolationTimestamps() {
+        Harness harness(120, 5);
+        harness.start();
+        harness.runAtFps(24.0, 15s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 4,
+            "24 FPS toward 120 FPS did not validate the 5x ceiling");
+        AdaptiveFramePlan fullPlan;
+        for (size_t frame = 0; frame < 120; ++frame) {
+            const auto timestamps = harness.frameAtFps(24.0);
+            if (timestamps.size() == 4) {
+                fullPlan = timestamps;
+                break;
+            }
+        }
+        requireValidTimestamps(fullPlan, 4);
+        require(fullPlan.size() == 4,
+            "24 FPS toward 120 FPS did not schedule a 5x frame plan");
+        requireNear(fullPlan[0], 0.20F, 0.0001F,
+            "first 5x interpolation timestamp changed");
+        requireNear(fullPlan[1], 0.40F, 0.0001F,
+            "second 5x interpolation timestamp changed");
+        requireNear(fullPlan[2], 0.60F, 0.0001F,
+            "third 5x interpolation timestamp changed");
+        requireNear(fullPlan[3], 0.80F, 0.0001F,
+            "fourth 5x interpolation timestamp changed");
     }
 
     void testSchedulerCannotReduceAboveTargetCadence() {
@@ -3152,6 +3179,7 @@ int main() {
         {"isolated delivery miss keeps ramp", testIsolatedGeneratedFrameMissDoesNotRejectRamp},
         {"persistent delivery loss rejects ramp", testPersistentGeneratedFrameMissesRejectRamp},
         {"4x timestamps remain evenly spaced", testFourXPlanUsesEvenInterpolationTimestamps},
+        {"5x timestamps remain evenly spaced", testFiveXPlanUsesEvenInterpolationTimestamps},
         {"above-target cadence remains real-only", testSchedulerCannotReduceAboveTargetCadence},
         {"acquire backoff freezes policy", testAcquireBackoffDoesNotAdvancePolicy},
         {"validated 2x survives short hitch", testValidatedTwoXSurvivesShortGameplayHitch},

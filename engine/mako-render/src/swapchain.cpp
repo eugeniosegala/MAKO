@@ -582,7 +582,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                 this->profile.dynamic_cadence_recovery) {
             std::cerr << "MAKO Renderer: Dynamic Cadence Recovery is unavailable "
                          "for Fixed mode without a supported Gamescope refresh "
-                         "signal and 2x-4x multiplier; exact Fixed policy retained\n";
+                         "signal and 2x-5x multiplier; exact Fixed policy retained\n";
         }
     } catch (const std::exception& e) {
         // Swapchain creation belongs to the game. A failure in MAKO's optional

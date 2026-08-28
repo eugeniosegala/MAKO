@@ -59,8 +59,8 @@ namespace vk {
         /// @return the size of the buffer in bytes
         [[nodiscard]] size_t length() const { return this->size; }
     private:
-        ls::owned_ptr<VkBuffer> buffer;
         ls::owned_ptr<VkDeviceMemory> memory;
+        ls::owned_ptr<VkBuffer> buffer;
         size_t size;
     };
 }

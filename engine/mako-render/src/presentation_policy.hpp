@@ -108,7 +108,7 @@ namespace mako::layer {
         return *configuredBudget - consumedNanoseconds;
     }
 
-    /// Ordered 3x/4x presentation can legitimately wait once per generated
+    /// Ordered 3x/4x/5x presentation can legitimately wait once per generated
     /// image. Recovery classifies the longest individual wait; summing healthy
     /// refresh-sized waits would falsely turn a normal multi-image sequence
     /// into starvation. The separately enforced configured budget remains
@@ -235,7 +235,7 @@ namespace mako::layer {
             bool bypassGeneration{false};
             bool beginHistoryWarmup{false};
             // The first generated present after the drain is deliberately a
-            // single-image transport probe, never the normal 3x/4x plan.
+            // single-image transport probe, never the normal 3x/4x/5x plan.
             bool limitGeneratedFrames{false};
             // A recovery probe must not spend the normal bounded acquire wait:
             // the initial guard stays nonblocking, while a post-drain probe

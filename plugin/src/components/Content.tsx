@@ -199,7 +199,7 @@ export function Content() {
             />
 
             <MakoSectionHeader>
-              {t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")}
+              {t("CONTENT_FPS_MULTIPLIER", "Frame Generation")}
             </MakoSectionHeader>
 
             <FpsMultiplierControl

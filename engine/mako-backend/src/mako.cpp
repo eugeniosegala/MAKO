@@ -236,6 +236,19 @@ namespace {
     );
     constexpr size_t maximumRetiredContextCount = 2;
 
+    vk::DeviceMemoryTotals memoryDelta(
+            const vk::DeviceMemoryTotals& after,
+            const vk::DeviceMemoryTotals& before) {
+        return {
+            .bytes = after.bytes >= before.bytes
+                ? after.bytes - before.bytes
+                : 0,
+            .allocations = after.allocations >= before.allocations
+                ? after.allocations - before.allocations
+                : 0,
+        };
+    }
+
     /// find the cache file path
     std::filesystem::path findCacheFilePath() {
         const char* xdgCacheHome = std::getenv("XDG_CACHE_HOME");
@@ -330,10 +343,36 @@ Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<
         );
     }
     const VkExtent2D extent{ width, height };
-    return *this->m_contexts.emplace_back(std::make_unique<ContextImpl>(*this->m_impl,
+    const auto& vulkan = this->m_impl->getVulkan();
+    const auto before = vulkan.deviceMemorySnapshot();
+    auto context = std::make_unique<ContextImpl>(*this->m_impl,
         sourceFds, destFds, syncFd,
         extent, encoding, flow, perf
-    )).get();
+    );
+    const auto after = vulkan.deviceMemorySnapshot();
+    const auto contextInternal = memoryDelta(after.internal, before.internal);
+    const auto contextImported = memoryDelta(after.imported, before.imported);
+    const auto contextExported = memoryDelta(after.exported, before.exported);
+    auto* result = this->m_contexts.emplace_back(std::move(context)).get();
+    std::clog << "MAKO Renderer: backend-memory operation=context-open"
+        << " width=" << width
+        << " height=" << height
+        << " outputs=" << destFds.size()
+        << " precision="
+        << (this->m_impl->getShaderRegistry().is_fp16 ? "fp16" : "fp32")
+        << " model=" << (perf ? "performance" : "quality")
+        << " context_internal_bytes=" << contextInternal.bytes
+        << " context_internal_allocations=" << contextInternal.allocations
+        << " context_imported_mapped_bytes=" << contextImported.bytes
+        << " context_imported_allocations=" << contextImported.allocations
+        << " context_exported_bytes=" << contextExported.bytes
+        << " context_exported_allocations=" << contextExported.allocations
+        << " live_internal_bytes=" << after.internal.bytes
+        << " live_internal_allocations=" << after.internal.allocations
+        << " peak_internal_bytes=" << after.peakInternal.bytes
+        << " peak_internal_allocations=" << after.peakInternal.allocations
+        << '\n';
+    return *result;
 }
 
 namespace {
@@ -520,6 +559,7 @@ namespace {
             return {
                 .vk = std::ref(vk),
                 .shaders = std::ref(shaders),
+                .imageMemoryPool{std::make_shared<vk::ImageMemoryPool>(vk)},
                 .pool{vk, backend::calculateDescriptorPoolLimits(
                     count, perf, requiresPqConversion(encoding)
                 )},
@@ -635,12 +675,15 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
             if (j == 4) { // first special pass has no prior data
                 pass.delta0.emplace_back(ctx, i,
                     this->alpha1.at(6 - j).getImages(),
+                    pass.gamma0.at(j).getImages(),
+                    pass.gamma1.at(j).getTempImages0(),
                     this->blackImage,
                     pass.gamma1.at(j - 1).getImage()
                 );
                 pass.delta1.emplace_back(ctx, i,
-                    pass.delta0.at(j - 4).getImages0(),
-                    pass.delta0.at(j - 4).getImages1(),
+                    pass.gamma0.at(j).getImages(),
+                    pass.gamma1.at(j).getTempImages0(),
+                    pass.gamma1.at(j).getTempImages1(),
                     this->blackImage,
                     this->beta1.getImages().at(6 - j),
                     this->blackImage
@@ -648,12 +691,15 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
             } else if (j > 4) { // further passes do
                 pass.delta0.emplace_back(ctx, i,
                     this->alpha1.at(6 - j).getImages(),
+                    pass.gamma0.at(j).getImages(),
+                    pass.gamma1.at(j).getTempImages0(),
                     pass.delta1.at(j - 5).getImage0(),
                     pass.gamma1.at(j - 1).getImage()
                 );
                 pass.delta1.emplace_back(ctx, i,
-                    pass.delta0.at(j - 4).getImages0(),
-                    pass.delta0.at(j - 4).getImages1(),
+                    pass.gamma0.at(j).getImages(),
+                    pass.gamma1.at(j).getTempImages0(),
+                    pass.gamma1.at(j).getTempImages1(),
                     pass.delta1.at(j - 5).getImage0(),
                     this->beta1.getImages().at(6 - j),
                     pass.delta1.at(j - 5).getImage1()
@@ -698,7 +744,6 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
             pass.gamma1.at(i).prepare(images);
 
             if (i < 4) continue;
-            pass.delta0.at(i - 4).prepare(images);
             pass.delta1.at(i - 4).prepare(images);
         }
     }

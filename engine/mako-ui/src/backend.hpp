@@ -58,6 +58,7 @@ namespace mako::ui {
         Q_PROPERTY(int gpu READ getGPU WRITE gpuUpdated NOTIFY refreshUI)
 
         Q_PROPERTY(uint minimum_multiplier READ getMinimumMultiplier CONSTANT)
+        Q_PROPERTY(uint maximum_multiplier READ getMaximumMultiplier CONSTANT)
         Q_PROPERTY(float minimum_scaling_factor READ getMinimumScalingFactor CONSTANT)
         Q_PROPERTY(float maximum_scaling_factor READ getMaximumScalingFactor CONSTANT)
         Q_PROPERTY(float minimum_scaling_sharpness READ getMinimumScalingSharpness CONSTANT)
@@ -217,6 +218,9 @@ namespace mako::ui {
         [[nodiscard]] uint getMinimumMultiplier() const noexcept {
             return static_cast<uint>(ls::GameConfLimits::minimumMultiplier);
         }
+        [[nodiscard]] uint getMaximumMultiplier() const noexcept {
+            return static_cast<uint>(ls::GameConfLimits::maximumMultiplier);
+        }
         [[nodiscard]] float getMinimumScalingFactor() const noexcept {
             return ls::GameConfLimits::minimumScalingFactor;
         }
@@ -337,7 +341,11 @@ namespace mako::ui {
 
         void multiplierUpdated(size_t multiplier) {
             VALIDATE_AND_GET_PROFILE()
-            conf.multiplier = multiplier;
+            conf.multiplier = std::clamp(
+                multiplier,
+                ls::GameConfLimits::minimumMultiplier,
+                ls::GameConfLimits::maximumMultiplier
+            );
             MARK_DIRTY()
         }
         void frameGenerationEnabledUpdated(bool frame_generation_enabled) {

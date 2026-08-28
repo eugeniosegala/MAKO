@@ -237,8 +237,13 @@ int main() {
     expect(!generationSchedulerPolicy(next, 0),
         "Fixed recovery must reject an unsupported refresh target");
     next.multiplier = 5;
+    const auto fixedFiveXRecoveryPolicy = generationSchedulerPolicy(next, 60);
+    expect(fixedFiveXRecoveryPolicy &&
+            fixedFiveXRecoveryPolicy->maximumMultiplier == 5,
+        "Fixed recovery must support the 5x generated-frame capacity");
+    next.multiplier = 6;
     expect(!generationSchedulerPolicy(next, 60),
-        "Fixed recovery must fail closed beyond scheduler plan capacity");
+        "Fixed recovery must fail closed beyond the supported 5x capacity");
 
     auto fixedWithoutRecovery = current;
     fixedWithoutRecovery.adaptive = false;
@@ -280,6 +285,16 @@ int main() {
         "Adaptive capacity growth must request recreation when images are unavailable");
     expect(!liveProfileResourceRecreationAvailable(decision, false),
         "Adaptive capacity growth must require retained frame-generation resources");
+
+    next = current;
+    next.adaptive_max_multiplier = 5;
+    decision = classifyProfileUpdate(current, next, 4, true);
+    expect(decision.action == ProfileUpdateAction::ApplyLive,
+        "Adaptive 5x must use four reserved generated-frame outputs");
+    decision = classifyProfileUpdate(current, next, 3, true);
+    expect(decision.action == ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+            decision.generatedFrameCapacityExceeded,
+        "Adaptive 5x must recreate when its fourth generated output is unavailable");
 
     next = current;
     next.base_fps_cap = 60;
@@ -821,6 +836,11 @@ int main() {
         "Fixed 4x should reserve its larger Fixed capacity");
     expect(fixedGeneratedFrameCount(4, 3) == 3,
         "Fixed 4x must use three reserved outputs");
+    fixed.multiplier = 5;
+    expect(generatedFrameCapacityForProfile(fixed) == 4,
+        "Fixed 5x should reserve its fourth generated output");
+    expect(fixedGeneratedFrameCount(5, 4) == 4,
+        "Fixed 5x must use four reserved outputs");
 
     std::cout << "profile update tests passed\n";
     return 0;

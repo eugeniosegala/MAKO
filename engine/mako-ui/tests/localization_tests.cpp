@@ -144,14 +144,17 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     localization.set_language(QStringLiteral("en"));
     const QVariantMap english = localization.strings();
     require(english.value(QStringLiteral("scalingEnabled")).toString() ==
-            QStringLiteral("Enable Scaling Engine (Restart)"),
+            QStringLiteral("Enable Scaling"),
         "English scaling enablement has an unexpected label");
     require(english.value(QStringLiteral("scalingMethod")).toString() ==
             QStringLiteral("Scaling Method"),
         "English scaling method has an unexpected label");
     require(english.value(QStringLiteral("scalingEnabledDesc")).toString() ==
-            QStringLiteral("Enable before starting the game. Change the scaling method while playing. It works alone or with Frame Generation, but adds GPU overhead. Leave it off when you do not need scaling."),
+            QStringLiteral("Enable before starting the game. When off, scaling is fully disabled."),
         "English scaling help does not match the Decky guidance");
+    require(english.value(QStringLiteral("scalingMethodDesc")).toString() ==
+            QStringLiteral("Choose the scaling model. You can change it while the game is running."),
+        "English scaling-method help does not match the Decky guidance");
     require(english.value(QStringLiteral("scalingFactor")).toString() ==
             QStringLiteral("Scale Factor"),
         "English scale-factor label does not match Decky");
@@ -161,9 +164,9 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     require(english.value(QStringLiteral("scalingSharpnessDesc")).toString() ==
             QStringLiteral("For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild."),
         "English sharpening help does not describe the MAKO baseline");
-    require(english.value(QStringLiteral("flowScaleDesc")).toString()
-            .contains(QStringLiteral("game-owned swapchain")),
-        "English Flow Scale help omitted its recreation contract");
+    require(english.value(QStringLiteral("flowScaleDesc")).toString() ==
+            QStringLiteral("Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality. Changing it briefly recreates the game-owned swapchain."),
+        "English Flow Scale help does not match the Frame Generation-only guidance");
     require(english.value(QStringLiteral("performanceModeDesc")).toString()
             .contains(QStringLiteral("game-owned swapchain")),
         "English lighter-model help omitted its recreation contract");

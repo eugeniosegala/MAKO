@@ -114,7 +114,7 @@ describe("generated cross-language contracts", () => {
       baseFpsCap: [0, 240],
       baseFpsCapUiMax: 120,
       targetFps: [30, 240],
-      adaptiveMaxMultiplier: [2, 4],
+      adaptiveMaxMultiplier: [2, 5],
       adaptiveMinimumBaseFps: 10,
       dynamicCadenceProbeIntervals: [
         0.1,
@@ -134,7 +134,7 @@ describe("generated cross-language contracts", () => {
       refreshThresholdUiMin: 30,
       refreshThresholdPreset: 60,
       fixedMultiplierMin: 2,
-      fixedMultiplierUi: [2, 4],
+      fixedMultiplierUi: [2, 5],
       externalVulkanLayers: ["", "mangohud", "vkbasalt"],
     });
   });

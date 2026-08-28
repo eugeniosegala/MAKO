@@ -249,7 +249,21 @@ multiplier = 5
 )");
     const ls::ConfigFile fixedMultiplierConfiguration(fixedMultiplierPath);
     expect(fixedMultiplierConfiguration.profiles().front().multiplier == 5,
-        "The fixed multiplier must retain its established open upper range");
+        "The fixed multiplier must accept the supported 5x maximum");
+
+    const auto invalidFixedMultiplierPath = directory / "invalid-fixed-multiplier.toml";
+    writeText(invalidFixedMultiplierPath, R"(version = 2
+[[profile]]
+multiplier = 6
+)");
+    bool invalidFixedMultiplierRejected = false;
+    try {
+        static_cast<void>(ls::ConfigFile(invalidFixedMultiplierPath));
+    } catch (const std::exception&) {
+        invalidFixedMultiplierRejected = true;
+    }
+    expect(invalidFixedMultiplierRejected,
+        "Fixed multipliers above the supported 5x maximum must be rejected");
 
     for (const std::string_view invalidInterval : {"0.09", "4"}) {
         const auto invalidIntervalPath = directory /

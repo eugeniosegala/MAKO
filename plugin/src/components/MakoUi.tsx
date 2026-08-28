@@ -202,7 +202,7 @@ export function MakoSectionHeader({
         <div
           style={{
             paddingBottom: "8px",
-            borderBottom: "1px solid rgba(77, 170, 190, 0.28)",
+            borderBottom: "2px solid rgba(77, 170, 190, 0.48)",
           }}
         >
           {children}

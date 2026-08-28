@@ -3,10 +3,13 @@
 #include "mako-common/vulkan/image.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/pointers.hpp"
+#include "mako-common/vulkan/image_memory_pool.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 
 #include <bitset>
+#include <memory>
 #include <optional>
+#include <stdexcept>
 
 #include <vulkan/vulkan_core.h>
 #include <unistd.h>
@@ -109,10 +112,20 @@ namespace {
             throw ls::vulkan_error(VK_ERROR_OUT_OF_DEVICE_MEMORY,
                 "vkAllocateMemory() succeeded but returned a null handle");
 
+        const auto memoryKind = importFd.has_value()
+            ? DeviceMemoryKind::Imported
+            : exportFd.has_value()
+                ? DeviceMemoryKind::Exported
+                : DeviceMemoryKind::Internal;
+        const auto memoryAccounting = vk.deviceMemoryAccounting();
+        memoryAccounting->recordAllocation(memoryKind, reqs.size);
         auto memory = ls::owned_ptr<VkDeviceMemory>(
             new VkDeviceMemory(handle),
-            [dev = vk.dev(), defunc = vk.df().FreeMemory](VkDeviceMemory& value) {
+            [dev = vk.dev(), defunc = vk.df().FreeMemory,
+             memoryAccounting, memoryKind,
+             allocationSize = reqs.size](VkDeviceMemory& value) {
                 defunc(dev, value, VK_NULL_HANDLE);
+                memoryAccounting->recordFree(memoryKind, allocationSize);
             }
         );
 
@@ -171,18 +184,29 @@ Image::Image(const vk::Vulkan& vk,
             VkFormat format,
             VkImageUsageFlags usage,
             std::optional<int> importFd,
-            std::optional<int*> exportFd) :
+            std::optional<int*> exportFd,
+            std::shared_ptr<ImageMemoryPool> internalPool) :
         image(createImage(vk,
             extent, format, usage,
             importFd, exportFd.has_value()
         )),
-        memory(allocateMemory(vk,
-            *this->image,
-            importFd, exportFd
-        )),
-        view(createImageView(vk,
-            *this->image,
-            format
-        )),
         extent(extent) {
+    if (internalPool && (importFd || exportFd))
+        throw std::invalid_argument(
+            "external Vulkan images cannot use the internal image pool"
+        );
+    if (internalPool) {
+        this->pooledMemory = internalPool->bind(*this->image);
+    } else {
+        this->memory = allocateMemory(vk, *this->image, importFd, exportFd);
+    }
+    this->view = createImageView(vk, *this->image, format);
 }
+
+Image::Image(const vk::Vulkan& vk,
+            const VkExtent2D extent,
+            std::shared_ptr<ImageMemoryPool> internalPool,
+            const VkFormat format,
+            const VkImageUsageFlags usage)
+    : Image(vk, extent, format, usage,
+        std::nullopt, std::nullopt, std::move(internalPool)) {}

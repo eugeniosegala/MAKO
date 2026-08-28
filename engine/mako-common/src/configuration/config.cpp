@@ -157,10 +157,13 @@ namespace {
     }
     /// validate the shared file/environment game-profile contract
     void validateGameConf(const GameConf& conf) {
-        if (conf.multiplier < GameConfLimits::minimumMultiplier)
+        if (conf.multiplier < GameConfLimits::minimumMultiplier ||
+                conf.multiplier > GameConfLimits::maximumMultiplier)
             throw ls::error(
-                "multiplier must be greater than " + std::to_string(
-                    GameConfLimits::minimumMultiplier - 1
+                "multiplier must be between " + std::to_string(
+                    GameConfLimits::minimumMultiplier
+                ) + " and " + std::to_string(
+                    GameConfLimits::maximumMultiplier
                 )
             );
         if (!(conf.scaling_factor >= GameConfLimits::minimumScalingFactor &&

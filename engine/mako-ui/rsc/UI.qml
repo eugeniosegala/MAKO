@@ -345,7 +345,7 @@ ApplicationWindow {
                             Layout.alignment: Qt.AlignRight
 
                             from: backend.minimum_multiplier
-                            to: 100
+                            to: backend.maximum_multiplier
 
                             value: backend.multiplier
                             onValueModified: backend.multiplier = value

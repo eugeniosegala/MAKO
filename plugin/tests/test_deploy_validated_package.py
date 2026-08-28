@@ -39,7 +39,8 @@ class DeployValidatedPackageTests(unittest.TestCase):
         (package_root / "dist").mkdir()
         (package_root / "py_modules/mako_plugin").mkdir(parents=True)
         (package_root / "plugin.json").write_text(
-            json.dumps({"name": "MAKO - Frame Generation"}), encoding="utf-8"
+            json.dumps({"name": "MAKO - Scaling & Frame Generation"}),
+            encoding="utf-8",
         )
         (package_root / "main.py").write_text("new-main\n", encoding="utf-8")
         (package_root / "dist/index.js").write_text("new-ui\n", encoding="utf-8")
@@ -99,6 +100,10 @@ class DeployValidatedPackageTests(unittest.TestCase):
 
             self.assertEqual((plugin_root / "main.py").read_text(), "new-main\n")
             self.assertEqual((plugin_root / "dist/index.js").read_text(), "new-ui\n")
+            self.assertEqual(
+                json.loads((plugin_root / "plugin.json").read_text())["name"],
+                "MAKO - Scaling & Frame Generation",
+            )
             self.assertFalse((plugin_root / "bin/stale.bin").exists())
             self.assertFalse((plugin_root / "dist/stale.js").exists())
             self.assertFalse((plugin_root / "py_modules/stale.py").exists())

@@ -36,7 +36,7 @@ const features = [
     code: 'AF',
     title: 'Adaptive Frame Generation',
     text: 'Target 30–240 FPS while MAKO varies generated frames up to your selected 2×–4× ceiling.',
-    stat: '30—240',
+    stat: '30-240',
     label: 'FPS target',
     tone: 'cyan',
   },
@@ -45,7 +45,7 @@ const features = [
     code: 'SR',
     title: 'LS1 + MAKO spatial scaling',
     text: 'Choose proprietary LS1 Quality or Performance, or the built-in open MAKO scaler, before Fixed or Adaptive generation.',
-    stat: '1—2×',
+    stat: '1-2×',
     label: 'scale factor',
     tone: 'violet',
   },
@@ -72,7 +72,7 @@ const features = [
     code: 'FX',
     title: 'Flatpak ready',
     text: 'Prepare Heroic and EmuDeck Flatpaks through the same private configuration and renderer pipeline.',
-    stat: '23—25',
+    stat: '23-25',
     label: 'runtime matrix',
     tone: 'blue',
   },
@@ -127,7 +127,7 @@ export default function Home() {
           <div className="hero-glow hero-glow-orange" />
           <div className="hero-copy">
             <p className="eyebrow"><span /> Spatial scaling + frame generation / Linux</p>
-            <h1>Scale. Generate.<br /><em>On Linux.</em></h1>
+            <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
             <p className="hero-intro">MAKO brings proprietary Lossless Scaling LS1, a built-in open Vulkan spatial scaler, and LSFG frame generation to Steam Deck, Steam Machine, SteamOS, and Linux through a focused Decky control layer and a purpose-built renderer.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Decky</span></a>
@@ -136,9 +136,9 @@ export default function Home() {
               <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
             <div className="hero-meta">
-              <span><b>1—2×</b> LS1 or MAKO scaling</span>
-              <span><b>30—240</b> adaptive FPS target</span>
-              <span><b>2—4×</b> generation ceiling</span>
+              <span><b>1-2×</b> LS1 or MAKO scaling</span>
+              <span><b>30-240</b> adaptive FPS target</span>
+              <span><b>2-4×</b> generation ceiling</span>
             </div>
           </div>
 
@@ -183,7 +183,7 @@ export default function Home() {
               <div className="panel-topline"><span>CONTROL LAYER</span><i>STEAMOS / DECKY</i></div>
               <img src="assets/mako-logo.webp" alt="MAKO Decky" width="230" height="230" draggable={false} />
               <h3>MAKO Decky</h3>
-              <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration—from one focused interface.</p>
+              <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration, all from one focused interface.</p>
               <ul>
                 <li><span /> Independent scaling &amp; generation controls</li>
                 <li><span /> Steam, Heroic &amp; EmuDeck profiles</li>
@@ -239,7 +239,8 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="adaptive-section section-shell">
+        <div className="generation-scaling-stack section-shell">
+        <section className="adaptive-section">
           <div className="adaptive-copy">
             <p className="section-kicker"><span>03</span> Adaptive intelligence</p>
             <h2>It doesn’t just add frames.<br /><em>It reads the rhythm.</em></h2>
@@ -273,14 +274,48 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="telemetry-foot"><span>INPUT CADENCE 37—60 FPS</span><span>OUTPUT RHYTHM 90 FPS</span></div>
+            <div className="telemetry-foot"><span>INPUT CADENCE 37-60 FPS</span><span>OUTPUT RHYTHM 90 FPS</span></div>
           </div>
         </section>
+
+          <div className="generation-scaling-divider" aria-hidden="true"><span>FRAME GENERATION</span><i /><span>SPATIAL SCALING</span></div>
+
+        <section className="scaling-section" id="scaling">
+          <div className="scaling-copy">
+            <p className="section-kicker"><span>04</span> Spatial scaling</p>
+            <h2>Make each pixel.<br /><em>Count twice.</em></h2>
+            <p>Render fewer source pixels when you need headroom, then reconstruct them for the display you actually play on. Pick the fast Native baseline, MAKO’s open scaler, or the licensed LS1 models, then run scaling by itself or ahead of frame generation.</p>
+            <div className="scaling-modes">
+              <div><span>NATIVE</span><strong>Fast linear baseline</strong></div>
+              <div className="scaling-mode-active"><span>MAKO</span><strong>Open single-pass scaler</strong></div>
+              <div><span>LS1</span><strong>Licensed quality or performance</strong></div>
+            </div>
+          </div>
+
+          <div className="scaling-visual" aria-label="Spatial scaling visual showing a 1280 by 720 render target reconstructed for a 1920 by 1080 display target.">
+            <div className="scaling-visual-head"><span>SPATIAL RECONSTRUCTION</span><span>INPUT → DISPLAY</span></div>
+            <div className="resolution-flow" aria-hidden="true">
+              <div className="resolution-surface resolution-source">
+                <span>RENDER TARGET</span><strong>1280 × 720</strong>
+                <div className="resolution-preview resolution-preview-source"><img src="assets/mako-logo.webp" alt="" width="256" height="256" draggable={false} /></div>
+                <small>COARSE INPUT SAMPLE</small>
+              </div>
+              <div className="scaling-transfer"><span>1.50×</span><i>→</i><small>RECONSTRUCT</small></div>
+              <div className="resolution-surface resolution-output">
+                <span>DISPLAY TARGET</span><strong>1920 × 1080</strong>
+                <div className="resolution-preview resolution-preview-output"><img src="assets/mako-logo.webp" alt="" width="256" height="256" draggable={false} /></div>
+                <small>RECONSTRUCTED DETAIL</small>
+              </div>
+            </div>
+            <div className="scaling-status"><span><i /> MAKO SCALER READY</span><span>1.50× SHOWN <b>·</b> UP TO 2.00×</span></div>
+          </div>
+        </section>
+        </div>
 
         <section className="start-section">
           <div className="section-shell start-inner">
             <header className="start-heading">
-              <p className="section-kicker"><span>04</span> From zero to smoother</p>
+              <p className="section-kicker"><span>05</span> From zero to smoother</p>
               <h2>Three steps.<br /><em>Then dive in.</em></h2>
             </header>
             <ol className="steps">
@@ -303,7 +338,7 @@ export default function Home() {
 
         <section className="downloads-section section-shell" id="downloads">
           <header className="downloads-heading">
-            <p className="section-kicker"><span>05</span> Latest release</p>
+            <p className="section-kicker"><span>06</span> Latest release</p>
             <h2>Choose your<br /><em>entry point.</em></h2>
             <p>Both components are open source and independently versioned. Current packages are MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion}.</p>
           </header>
@@ -351,7 +386,7 @@ export default function Home() {
 
         <section className="faq-section section-shell">
           <header>
-            <p className="section-kicker"><span>06</span> Signal check</p>
+            <p className="section-kicker"><span>07</span> Signal check</p>
             <h2>Before you<br /><em>make the jump.</em></h2>
           </header>
           <div className="faq-list">

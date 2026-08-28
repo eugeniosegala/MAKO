@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "delta0.hpp"
+#include "../helpers/image_prefix.hpp"
 #include "../helpers/utils.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"
@@ -16,18 +17,14 @@ using namespace mako::backend;
 
 Delta0::Delta0(const Ctx& ctx, size_t idx,
         const std::vector<std::vector<vk::Image>>& sourceImages,
+        const std::vector<vk::Image>& outputImages0,
+        const std::vector<vk::Image>& outputImages1,
         const vk::Image& additionalInput0,
         const vk::Image& additionalInput1) {
     const size_t m = ctx.perf ? 1 : 2; // multiplier
-    const VkExtent2D extent = sourceImages.at(0).at(0).getExtent();
-
-    // create output images
-    this->images0.reserve(3);
-    for(size_t i = 0; i < 3; i++)
-        this->images0.emplace_back(ctx.vk, extent);
-    this->images1.reserve(m);
-    for (size_t i = 0; i < m; i++)
-        this->images1.emplace_back(ctx.vk, extent);
+    const auto outputs0 = backend::requiredPrefix(outputImages0, 3, "Delta0 output 0");
+    const auto outputs1 = backend::requiredPrefix(outputImages1, m, "Delta0 output 1");
+    const VkExtent2D extent = outputs0.front().getExtent();
 
     // create descriptor sets
     const auto& shaders = (ctx.perf ?
@@ -39,7 +36,7 @@ Delta0::Delta0(const Ctx& ctx, size_t idx,
             .sampleds(sourceImages.at((i + (sourceImages.size() - 1)) % sourceImages.size()))
             .sampleds(sourceImages.at(i % sourceImages.size()))
             .sampled(additionalInput0)
-            .storages(this->images0)
+            .storages(outputs0)
             .sampler(ctx.bnwSampler)
             .sampler(ctx.eabSampler)
             .buffer(ctx.constantBuffers.at(idx))
@@ -52,7 +49,7 @@ Delta0::Delta0(const Ctx& ctx, size_t idx,
             .sampleds(sourceImages.at(i % sourceImages.size()))
             .sampled(additionalInput1)
             .sampled(additionalInput0)
-            .storages(this->images1)
+            .storages(outputs1)
             .sampler(ctx.bnwSampler)
             .sampler(ctx.eabSampler)
             .buffer(ctx.constantBuffers.at(idx))
@@ -60,13 +57,6 @@ Delta0::Delta0(const Ctx& ctx, size_t idx,
 
     // store dispatch extents
     this->dispatchExtent = backend::add_shift_extent(extent, 7, 3);
-}
-
-void Delta0::prepare(std::vector<VkImage>& images) const {
-    for (const auto& img : this->images0)
-        images.push_back(img.handle());
-    for (const auto& img : this->images1)
-        images.push_back(img.handle());
 }
 
 void Delta0::render(const vk::Vulkan& vk, const vk::CommandBuffer& cmd, size_t idx) const {

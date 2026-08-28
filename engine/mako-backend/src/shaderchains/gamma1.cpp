@@ -23,11 +23,12 @@ Gamma1::Gamma1(const Ctx& ctx, size_t idx,
 
     // create temporary & output images
     for (size_t i = 0; i < (2 * m); i++) {
-        this->tempImages0.emplace_back(ctx.vk, extent);
-        this->tempImages1.emplace_back(ctx.vk, extent);
+        this->tempImages0.emplace_back(ctx.vk, extent, ctx.imageMemoryPool);
+        this->tempImages1.emplace_back(ctx.vk, extent, ctx.imageMemoryPool);
     }
     this->image.emplace(ctx.vk,
         VkExtent2D { extent.width, extent.height },
+        ctx.imageMemoryPool,
         VK_FORMAT_R16G16B16A16_SFLOAT
     );
 

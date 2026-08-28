@@ -12,12 +12,12 @@ namespace mako::layer {
 
     /// Normalized interpolation timestamps for one real-frame interval.
     ///
-    /// MAKO supports at most 4x output, so a plan contains no more than three
+    /// MAKO supports at most 5x output, so a plan contains no more than four
     /// generated frames. Values stay inline because plans cross the scheduling,
     /// admission, and backend-submission boundaries on every generated frame.
     class GeneratedFramePlan {
     public:
-        static constexpr size_t capacity = 3;
+        static constexpr size_t capacity = 4;
         using const_iterator = std::span<const float>::iterator;
 
         /// Construct an evenly-spaced plan containing generatedFrameCount

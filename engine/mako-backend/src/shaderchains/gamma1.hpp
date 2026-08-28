@@ -42,6 +42,14 @@ namespace mako::backend {
         /// get the generated image
         /// @return image
         [[nodiscard]] const auto& getImage() const { return *this->image; }
+
+        /// get the first same-extent temporary image set
+        /// @return temporary images available to the immediately following stage
+        [[nodiscard]] const auto& getTempImages0() const { return this->tempImages0; }
+
+        /// get the second same-extent temporary image set
+        /// @return temporary images available to the immediately following stage
+        [[nodiscard]] const auto& getTempImages1() const { return this->tempImages1; }
     private:
         std::vector<vk::Image> tempImages0;
         std::vector<vk::Image> tempImages1;

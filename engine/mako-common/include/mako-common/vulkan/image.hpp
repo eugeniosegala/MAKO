@@ -5,11 +5,14 @@
 #include "../helpers/pointers.hpp"
 #include "vulkan.hpp"
 
+#include <memory>
 #include <optional>
 
 #include <vulkan/vulkan_core.h>
 
 namespace vk {
+    class ImageMemoryPool;
+
     /// vulkan image
     class Image {
     public:
@@ -26,7 +29,15 @@ namespace vk {
             VkFormat format = VK_FORMAT_R8G8B8A8_UNORM,
             VkImageUsageFlags usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             std::optional<int> importFd = std::nullopt,
-            std::optional<int*> exportFd = std::nullopt);
+            std::optional<int*> exportFd = std::nullopt,
+            std::shared_ptr<ImageMemoryPool> internalPool = nullptr);
+
+        /// create an internal image backed by a context-local non-aliasing pool
+        Image(const vk::Vulkan& vk,
+            VkExtent2D extent,
+            std::shared_ptr<ImageMemoryPool> internalPool,
+            VkFormat format = VK_FORMAT_R8G8B8A8_UNORM,
+            VkImageUsageFlags usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT);
 
         /// get the image handle
         /// @return the image handle
@@ -39,8 +50,9 @@ namespace vk {
         /// @return the extent of the image
         [[nodiscard]] VkExtent2D getExtent() const { return this->extent; }
     private:
-        ls::owned_ptr<VkImage> image;
+        std::shared_ptr<void> pooledMemory;
         ls::owned_ptr<VkDeviceMemory> memory;
+        ls::owned_ptr<VkImage> image;
         ls::owned_ptr<VkImageView> view;
 
         VkExtent2D extent{};

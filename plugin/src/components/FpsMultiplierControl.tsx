@@ -196,7 +196,7 @@ export function FpsMultiplierControl({
               label={`${t("ADAPTIVE_MAX_MULTIPLIER", "Maximum Adaptive Multiplier")} (${adaptiveMaxMultiplier}x)`}
               description={t(
                 "ADAPTIVE_MAX_MULTIPLIER_DESC",
-                "Interpolation ceiling. 3x is balanced; 2x usually looks best, while 4x gives more headroom to reach the target. Test per game.",
+                "Interpolation ceiling. 3x is balanced; 2x usually looks best, 4x gives more headroom, and 5x is for high-refresh displays with substantial GPU and memory headroom. Test per game.",
               )}
               value={adaptiveMaxMultiplier}
               min={ADAPTIVE_MAX_MULTIPLIER_MIN}
@@ -242,7 +242,7 @@ export function FpsMultiplierControl({
               <span style={{ display: "block", paddingTop: "8px" }}>
                 {t(
                   "MULTIPLIER_DESC",
-                  "Sets Fixed mode to 2x–4x. Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. Test both per game. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh; Adaptive manages its own multiplier. MAKO briefly asks the game to rebuild its swapchain only when more generated-frame capacity is needed.",
+                  "Sets Fixed mode to 2x–5x. Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. 5x is a high-cost option for high-refresh displays. Test both per game. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh; Adaptive manages its own multiplier. MAKO briefly asks the game to rebuild its swapchain only when more generated-frame capacity is needed.",
                 )}
               </span>
               {config.adaptive && (

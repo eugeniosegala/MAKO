@@ -364,7 +364,7 @@ class PathAndPackageContractTests(unittest.TestCase):
     def test_decky_slug_listing_and_legacy_aliases_match_independent_tools(self):
         slug = "Mako"
         listing_name = json.loads(_read(PLUGIN_DIR / "plugin.json"))["name"]
-        self.assertEqual(listing_name, "MAKO - Frame Generation")
+        self.assertEqual(listing_name, "MAKO - Scaling & Frame Generation")
 
         package_script = _read(PLUGIN_PACKAGE_SCRIPT)
         package_slug = re.search(
@@ -379,7 +379,12 @@ class PathAndPackageContractTests(unittest.TestCase):
         supported_names = _python_literal_assignment(
             VALIDATED_DEPLOY_SCRIPT, "SUPPORTED_PLUGIN_NAMES"
         )
-        legacy_aliases = {"MAKO Decky", "MAKO", "Mako"}
+        legacy_aliases = {
+            "MAKO Decky",
+            "MAKO",
+            "Mako",
+            "MAKO - Frame Generation",
+        }
         self.assertEqual(validated_slug, slug)
         self.assertEqual(supported_names, legacy_aliases | {listing_name})
 

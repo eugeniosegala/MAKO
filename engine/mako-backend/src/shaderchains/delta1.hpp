@@ -24,12 +24,14 @@ namespace mako::backend {
         /// @param idx generated frame index
         /// @param sourceImages0 source images
         /// @param sourceImages1 source images
+        /// @param temporaryImages0 same-extent temporary scratch from Gamma1
         /// @param additionalInput0 additional input image
         /// @param additionalInput1 additional input image
         /// @param additionalInput2 additional input image
         Delta1(const Ctx& ctx, size_t idx,
             const std::vector<vk::Image>& sourceImages0,
             const std::vector<vk::Image>& sourceImages1,
+            const std::vector<vk::Image>& temporaryImages0,
             const vk::Image& additionalInput0,
             const vk::Image& additionalInput1,
             const vk::Image& additionalInput2);
@@ -51,7 +53,6 @@ namespace mako::backend {
         /// @return image
         [[nodiscard]] const auto& getImage1() const { return *this->image1; }
     private:
-        std::vector<vk::Image> tempImages0;
         std::vector<vk::Image> tempImages1;
         ls::lazy<vk::Image> image0;
         ls::lazy<vk::Image> image1;

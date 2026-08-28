@@ -9,8 +9,10 @@ set(COMMON_SOURCES
     "src/vulkan/command_buffer.cpp"
     "src/vulkan/descriptor_pool.cpp"
     "src/vulkan/descriptor_set.cpp"
+    "src/vulkan/device_memory_accounting.cpp"
     "src/vulkan/fence.cpp"
     "src/vulkan/image.cpp"
+    "src/vulkan/image_memory_pool.cpp"
     "src/vulkan/sampler.cpp"
     "src/vulkan/semaphore.cpp"
     "src/vulkan/shader.cpp"
@@ -46,6 +48,20 @@ if(BUILD_TESTING)
         PRIVATE mako-common)
     add_test(NAME optional-device-features
         COMMAND mako-device-feature-tests)
+
+    add_executable(mako-device-memory-accounting-tests
+        "tests/device_memory_accounting_tests.cpp")
+    target_link_libraries(mako-device-memory-accounting-tests
+        PRIVATE mako-common)
+    add_test(NAME device-memory-accounting
+        COMMAND mako-device-memory-accounting-tests)
+
+    add_executable(mako-image-memory-pool-tests
+        "tests/image_memory_pool_tests.cpp")
+    target_link_libraries(mako-image-memory-pool-tests
+        PRIVATE mako-common)
+    add_test(NAME image-memory-pool
+        COMMAND mako-image-memory-pool-tests)
 
     add_executable(mako-command-buffer-submit-storage-tests
         "tests/command_buffer_submit_storage_tests.cpp")

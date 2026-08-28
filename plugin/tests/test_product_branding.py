@@ -11,11 +11,11 @@ REPOSITORY_ROOT = PLUGIN_DIR.parent
 
 
 class ProductBrandingTests(unittest.TestCase):
-    def test_decky_manifest_preserves_established_listing_identity(self):
+    def test_decky_manifest_uses_scaling_and_frame_generation_listing_identity(self):
         manifest = json.loads(
             (PLUGIN_DIR / "plugin.json").read_text(encoding="utf-8")
         )
-        self.assertEqual(manifest["name"], "MAKO - Frame Generation")
+        self.assertEqual(manifest["name"], "MAKO - Scaling & Frame Generation")
         self.assertEqual(
             manifest["publish"]["description"],
             "MAKO brings Vulkan-powered spatial scaling and Lossless Scaling "
@@ -48,7 +48,7 @@ class ProductBrandingTests(unittest.TestCase):
             PLUGIN_DIR / "scripts/decky-loader-client.mjs"
         ).read_text(encoding="utf-8")
         self.assertIn(
-            'DEFAULT_PLUGIN_NAME = "MAKO - Frame Generation"', decky_client
+            'DEFAULT_PLUGIN_NAME = "MAKO - Scaling & Frame Generation"', decky_client
         )
 
         failure_guide = (

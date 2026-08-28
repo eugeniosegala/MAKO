@@ -61,11 +61,20 @@ namespace {
         auto res = vk.df().AllocateMemory(vk.dev(), &memoryInfo, VK_NULL_HANDLE, &handle);
         if (res != VK_SUCCESS)
             throw ls::vulkan_error(res, "vkAllocateMemory() failed");
+        if (handle == VK_NULL_HANDLE)
+            throw ls::vulkan_error(VK_ERROR_OUT_OF_DEVICE_MEMORY,
+                "vkAllocateMemory() succeeded but returned a null handle");
 
+        const auto memoryAccounting = vk.deviceMemoryAccounting();
+        memoryAccounting->recordAllocation(DeviceMemoryKind::Internal, reqs.size);
         auto memory = ls::owned_ptr<VkDeviceMemory>(
             new VkDeviceMemory(handle),
-            [dev = vk.dev(), defunc = vk.df().FreeMemory](VkDeviceMemory& value) {
+            [dev = vk.dev(), defunc = vk.df().FreeMemory,
+             memoryAccounting,
+             allocationSize = reqs.size](VkDeviceMemory& value) {
                 defunc(dev, value, VK_NULL_HANDLE);
+                memoryAccounting->recordFree(
+                    DeviceMemoryKind::Internal, allocationSize);
             }
         );
 
@@ -96,8 +105,8 @@ namespace {
 
 Buffer::Buffer(const vk::Vulkan& vk, const void* data, size_t size, VkBufferUsageFlags usage) :
         buffer(createBuffer(vk, size, usage)),
-        memory(allocateMemory(vk, *this->buffer)),
         size(size) {
+    this->memory = allocateMemory(vk, *this->buffer);
     copyDataToBuffer(vk, *this->memory, data, size);
 }
 

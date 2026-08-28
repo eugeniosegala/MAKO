@@ -44,8 +44,8 @@ describe("i18n runtime", () => {
   it("uses the selected dictionary and replaces named placeholders", () => {
     setSteamLanguage("japanese");
     expect(getCurrentLanguage()).toBe("ja");
-    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
-      "フレーム生成モード",
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
+      "フレーム生成",
     );
     expect(
       t("FLATPAK_RUNTIME_VERSION", "Runtime {version}", {
@@ -56,35 +56,35 @@ describe("i18n runtime", () => {
 
   it("uses translated regional dictionaries without collapsing their locale", () => {
     setSteamLanguage("brazilian");
-    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
-      "Modo de geração de quadros",
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
+      "Geração de quadros",
     );
 
     setSteamLanguage("portuguese");
-    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
-      "Modo de geração de fotogramas",
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
+      "Geração de fotogramas",
     );
 
     setSteamLanguage("spanish");
-    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
-      "Modo de generación de cuadros",
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
+      "Generación de cuadros",
     );
 
     setSteamLanguage("ukrainian");
-    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
-      "Режим генерації кадрів",
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
+      "Генерація кадрів",
     );
   });
 
   it("uses the caller fallback for English, unknown languages, and unknown keys", () => {
     setSteamLanguage("english");
-    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
-      "Frame Generation Mode",
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
+      "Frame Generation",
     );
 
     setSteamLanguage("german");
-    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation Mode")).toBe(
-      "Frame Generation Mode",
+    expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
+      "Frame Generation",
     );
     expect(t("NOT_A_REAL_KEY", "Safe fallback")).toBe("Safe fallback");
   });

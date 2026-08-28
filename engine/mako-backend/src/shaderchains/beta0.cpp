@@ -21,7 +21,7 @@ Beta0::Beta0(const Ctx& ctx,
     // create output images
     this->images.reserve(2);
     for(size_t i = 0; i < 2; i++)
-        this->images.emplace_back(ctx.vk, extent);
+        this->images.emplace_back(ctx.vk, extent, ctx.imageMemoryPool);
 
     // create descriptor sets
     const auto& shader = (ctx.perf ?

@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "delta1.hpp"
+#include "../helpers/image_prefix.hpp"
 #include "../helpers/utils.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"
@@ -17,23 +18,30 @@ using namespace mako::backend;
 Delta1::Delta1(const Ctx& ctx, size_t idx,
         const std::vector<vk::Image>& sourceImages0,
         const std::vector<vk::Image>& sourceImages1,
+        const std::vector<vk::Image>& temporaryImages0,
         const vk::Image& additionalInput0,
         const vk::Image& additionalInput1,
         const vk::Image& additionalInput2) {
     const size_t m = ctx.perf ? 1 : 2; // multiplier
     const VkExtent2D extent = sourceImages0.at(0).getExtent();
+    const auto source1 = backend::requiredPrefix(sourceImages1, m, "Delta1 source 1");
+    const auto temporary0 = backend::requiredPrefix(
+        temporaryImages0, 2 * m, "Delta1 temporary 0"
+    );
 
-    // create temporary & output images
+    // Reuse the immediately preceding Gamma1 scratch. Gamma1 and Delta1 have
+    // the same extent and execute sequentially in one command buffer.
     for (size_t i = 0; i < (2 * m); i++) {
-        this->tempImages0.emplace_back(ctx.vk, extent);
-        this->tempImages1.emplace_back(ctx.vk, extent);
+        this->tempImages1.emplace_back(ctx.vk, extent, ctx.imageMemoryPool);
     }
     this->image0.emplace(ctx.vk,
         VkExtent2D { extent.width, extent.height },
+        ctx.imageMemoryPool,
         VK_FORMAT_R16G16B16A16_SFLOAT
     );
     this->image1.emplace(ctx.vk,
         VkExtent2D { extent.width, extent.height },
+        ctx.imageMemoryPool,
         VK_FORMAT_R16G16B16A16_SFLOAT
     );
 
@@ -44,21 +52,21 @@ Delta1::Delta1(const Ctx& ctx, size_t idx,
 
     this->sets.emplace_back(ManagedShaderBuilder()
         .sampleds(sourceImages0)
-        .storages(this->tempImages0)
+        .storages(temporary0)
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(1)));
     this->sets.emplace_back(ManagedShaderBuilder()
-        .sampleds(this->tempImages0)
+        .sampleds(temporary0)
         .storages(this->tempImages1)
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(2)));
     this->sets.emplace_back(ManagedShaderBuilder()
         .sampleds(this->tempImages1)
-        .storages(this->tempImages0)
+        .storages(temporary0)
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(3)));
     this->sets.emplace_back(ManagedShaderBuilder()
-        .sampleds(this->tempImages0)
+        .sampleds(temporary0)
         .sampled(additionalInput0)
         .sampled(additionalInput1)
         .storage(*this->image0)
@@ -68,22 +76,22 @@ Delta1::Delta1(const Ctx& ctx, size_t idx,
         .build(ctx.vk, ctx.pool, shaders.at(4)));
 
     this->sets.emplace_back(ManagedShaderBuilder()
-        .sampleds(sourceImages1)
-        .storages(this->tempImages0, 0, m)
+        .sampleds(source1)
+        .storages(temporary0.first(m))
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(6)));
     this->sets.emplace_back(ManagedShaderBuilder()
-        .sampleds(this->tempImages0, 0, m)
+        .sampleds(temporary0.first(m))
         .storages(this->tempImages1, 0, m)
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(7)));
     this->sets.emplace_back(ManagedShaderBuilder()
         .sampleds(this->tempImages1, 0, m)
-        .storages(this->tempImages0, 0, m)
+        .storages(temporary0.first(m))
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(8)));
     this->sets.emplace_back(ManagedShaderBuilder()
-        .sampleds(this->tempImages0, 0, m)
+        .sampleds(temporary0.first(m))
         .sampled(additionalInput2)
         .storage(*this->image1)
         .sampler(ctx.bnbSampler)
@@ -96,8 +104,7 @@ Delta1::Delta1(const Ctx& ctx, size_t idx,
 }
 
 void Delta1::prepare(std::vector<VkImage>& images) const {
-    for (size_t i = 0; i < this->tempImages0.size(); i++) {
-        images.push_back(this->tempImages0.at(i).handle());
+    for (size_t i = 0; i < this->tempImages1.size(); i++) {
         images.push_back(this->tempImages1.at(i).handle());
     }
     images.push_back(this->image0->handle());

@@ -26,7 +26,7 @@ Alpha1::Alpha1(const Ctx& ctx, size_t temporal,
 
         vec.reserve(2 * m);
         for (size_t j = 0; j < (2 * m); j++)
-            vec.emplace_back(ctx.vk, quarterExtent);
+            vec.emplace_back(ctx.vk, quarterExtent, ctx.imageMemoryPool);
     }
 
     // create descriptor sets

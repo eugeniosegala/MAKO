@@ -95,6 +95,7 @@ namespace ls {
     /// ranges accepted by the Renderer configuration parser
     struct GameConfLimits {
         static constexpr size_t minimumMultiplier = 2;
+        static constexpr size_t maximumMultiplier = 5;
         static constexpr float minimumScalingFactor = 1.0F;
         static constexpr float maximumScalingFactor = 2.0F;
         static constexpr float minimumScalingSharpness = 0.0F;
@@ -106,7 +107,7 @@ namespace ls {
         static constexpr uint32_t minimumTargetFps = 10;
         static constexpr uint32_t maximumTargetFps = 1000;
         static constexpr size_t minimumAdaptiveMaxMultiplier = 2;
-        static constexpr size_t maximumAdaptiveMaxMultiplier = 4;
+        static constexpr size_t maximumAdaptiveMaxMultiplier = 5;
         static constexpr float minimumDynamicCadenceProbeIntervalSeconds = 0.1F;
         static constexpr float maximumDynamicCadenceProbeIntervalSeconds = 3.0F;
         static constexpr std::array<float, 9>

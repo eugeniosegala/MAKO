@@ -33,7 +33,7 @@ namespace {
         AdaptiveScheduler scheduler({
             .targetFps = benchmark.targetFps,
             .maximumMultiplier = benchmark.maximumMultiplier,
-            .generatedFrameCapacity = 3,
+            .generatedFrameCapacity = GeneratedFramePlan::capacity,
             .stableCadence = benchmark.stableCadence,
             .nearTargetNativePreference = true,
         });
@@ -108,10 +108,11 @@ namespace {
 
 int main() {
     constexpr size_t iterations = 2'000'000;
-    constexpr std::array<BenchmarkCase, 10> cases{{
+    constexpr std::array<BenchmarkCase, 11> cases{{
         {"above-target-real-only", 144.0, 120, 4, false, 0.0},
         {"strict-2x", 60.0, 120, 3, false, 0.0},
         {"strict-4x", 30.0, 120, 4, false, 0.0},
+        {"strict-5x", 24.0, 120, 5, false, 0.0},
         {"fractional-noisy-placement", 60.0, 90, 2, false, 0.22},
         {"smooth-fractional", 47.0, 90, 2, true, 0.0},
         {"fractional-below-native-boundary", 89.0, 120, 2, false, 0.0},

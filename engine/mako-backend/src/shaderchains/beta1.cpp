@@ -23,14 +23,14 @@ Beta1::Beta1(const Ctx& ctx,
     this->tempImages0.reserve(2);
     this->tempImages1.reserve(2);
     for(uint32_t i = 0; i < 2; i++) {
-        this->tempImages0.emplace_back(ctx.vk, extent);
-        this->tempImages1.emplace_back(ctx.vk, extent);
+        this->tempImages0.emplace_back(ctx.vk, extent, ctx.imageMemoryPool);
+        this->tempImages1.emplace_back(ctx.vk, extent, ctx.imageMemoryPool);
     }
 
     this->images.reserve(6);
     for (uint32_t i = 0; i < 6; i++)
         this->images.emplace_back(ctx.vk,
-            backend::shift_extent(extent, i),
+            backend::shift_extent(extent, i), ctx.imageMemoryPool,
             VK_FORMAT_R8_UNORM);
 
     // create descriptor sets

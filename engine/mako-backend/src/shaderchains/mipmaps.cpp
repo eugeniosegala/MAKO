@@ -22,7 +22,8 @@ Mipmaps::Mipmaps(const Ctx& ctx,
     this->images.reserve(7);
     for (uint32_t i = 0; i < 7; i++)
        this->images.emplace_back(ctx.vk,
-            backend::shift_extent(ctx.flowExtent, i), VK_FORMAT_R8_UNORM);
+            backend::shift_extent(ctx.flowExtent, i), ctx.imageMemoryPool,
+            VK_FORMAT_R8_UNORM);
 
     // create descriptor sets for both input images
     this->sets.reserve(2);

@@ -6,12 +6,14 @@
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/buffer.hpp"
 #include "mako-common/vulkan/descriptor_pool.hpp"
+#include "mako-common/vulkan/image_memory_pool.hpp"
 #include "mako-common/vulkan/sampler.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 
 #include <array>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
 
@@ -23,6 +25,7 @@ namespace mako::backend {
         ls::R<const vk::Vulkan> vk; // safe back reference
         ls::R<const ShaderRegistry> shaders; // safe back reference
 
+        std::shared_ptr<vk::ImageMemoryPool> imageMemoryPool;
         vk::DescriptorPool pool;
 
         vk::Buffer constantBuffer;

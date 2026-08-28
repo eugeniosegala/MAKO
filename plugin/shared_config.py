@@ -43,7 +43,7 @@ BASE_FPS_CAP_UI_MAX = 120
 TARGET_FPS_MIN = 30
 TARGET_FPS_MAX = 240
 ADAPTIVE_MAX_MULTIPLIER_MIN = 2
-ADAPTIVE_MAX_MULTIPLIER_MAX = 4
+ADAPTIVE_MAX_MULTIPLIER_MAX = 5
 ADAPTIVE_MINIMUM_BASE_FPS = 10
 DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.1
 DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3
@@ -77,7 +77,7 @@ SCALING_METHOD_VALUES = (
 )
 FIXED_MULTIPLIER_MIN = 2
 FIXED_MULTIPLIER_UI_MIN = FIXED_MULTIPLIER_MIN
-FIXED_MULTIPLIER_UI_MAX = 4
+FIXED_MULTIPLIER_UI_MAX = 5
 FRAME_GENERATION_REFRESH_THRESHOLD_MIN = 0
 FRAME_GENERATION_REFRESH_THRESHOLD_MAX = 240
 FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = 30
@@ -248,7 +248,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "flow_scale": {
         "fieldType": ConfigFieldType.FLOAT,
         "default": 0.9,
-        "description": "change the flow scale through game-owned swapchain recreation",
+        "description": "change Frame Generation motion-estimation resolution through game-owned swapchain recreation",
         "location": "toml"
     },
 

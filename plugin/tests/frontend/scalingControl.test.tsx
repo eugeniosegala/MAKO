@@ -135,7 +135,7 @@ describe("Scaling controls", () => {
       <ScalingControl config={getDefaults()} onConfigChange={onConfigChange} />,
     );
 
-    const enabled = screen.getByText("Enable Scaling Engine (Restart)");
+    const enabled = screen.getByText("Enable Scaling");
     expect(enabled.getAttribute("data-checked")).toBe("false");
     expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
     expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
@@ -175,12 +175,17 @@ describe("Scaling controls", () => {
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once running, model and sharpness changes rebuild only MAKO's private scaler and do not recreate the game's swapchain. Scale Factor applies after the game's next natural resolution change. The engine can run alone or before Frame Generation.",
+        "Enable before starting the game. When off, scaling is fully disabled.",
       ),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Native Resolution uses a fast model-free linear baseline at the selected scale factor. MAKO Scaler is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO Scaler takes over. Model changes apply inside MAKO without recreating the game swapchain.",
+        "Keep this on if you want scaling.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Choose the scaling model. You can change it while the game is running.",
       ),
     ).toBeTruthy();
 
@@ -251,7 +256,7 @@ describe("Scaling controls", () => {
     );
 
     expect(
-      (screen.getByText("Enable Scaling Engine (Restart)") as HTMLButtonElement)
+      (screen.getByText("Enable Scaling") as HTMLButtonElement)
         .disabled,
     ).toBe(true);
     expect(

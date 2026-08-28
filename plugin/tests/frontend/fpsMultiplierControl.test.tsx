@@ -102,7 +102,7 @@ import { getDefaults } from "../../src/config/configSchema";
 
 afterEach(cleanup);
 
-describe("Frame Generation Mode controls", () => {
+describe("Frame Generation controls", () => {
   test("keeps Adaptive and Fixed Multiplier as standard rows", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
@@ -134,7 +134,7 @@ describe("Frame Generation Mode controls", () => {
       .closest<HTMLElement>('[data-focusable="true"]');
     expect(fixedMultiplierControls?.style.marginTop).toBe("6px");
     const fixedMultiplierDescription = screen.getByText(
-      /Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. Test both per game/,
+      /Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. 5x is a high-cost option for high-refresh displays. Test both per game/,
     );
     expect(fixedMultiplierDescription.style.paddingTop).toBe("8px");
     expect(fixedMultiplierDescription.style.marginBottom).toBe("");

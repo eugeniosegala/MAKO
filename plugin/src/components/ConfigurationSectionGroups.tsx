@@ -203,7 +203,7 @@ export function AdvancedRenderingConfigurationGroup({
               label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
               description={t(
                 "CONFIG_FLOW_SCALE_DESC",
-                "Controls internal motion-estimation resolution. Lower values reduce GPU work; higher values favour quality. Changing it briefly recreates the game-owned swapchain.",
+                "Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality. Changing it briefly recreates the game-owned swapchain.",
               )}
               value={
                 config.ultra_performance
@@ -371,6 +371,19 @@ export function CompatibilityConfigurationGroup({
         <>
           <PanelSectionRow>
             <ToggleField
+              label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR")}
+              description={t(
+                "CONFIG_DISABLE_HDR_EXPOSURE_DESC",
+                "HDR is unavailable in this release. This required setting keeps the stable SDR path active.",
+              )}
+              checked={true}
+              disabled={true}
+              onChange={() => undefined}
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
               label={t("DYNAMIC_CADENCE_RECOVERY", "Dynamic Cadence Recovery")}
               description={
                 <>
@@ -429,19 +442,6 @@ export function CompatibilityConfigurationGroup({
 
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_DISABLE_HDR_EXPOSURE", "Disable HDR")}
-              description={t(
-                "CONFIG_DISABLE_HDR_EXPOSURE_DESC",
-                "HDR is unavailable in this release. This required setting keeps the stable SDR path active.",
-              )}
-              checked={true}
-              disabled={true}
-              onChange={() => undefined}
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <ToggleField
               label={t(
                 "CONFIG_GAMESCOPE_WSI_COMPATIBILITY",
                 "Experimental Gamescope WSI (Restart)",
@@ -451,7 +451,7 @@ export function CompatibilityConfigurationGroup({
                   <div>
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC",
-                      "Provided automatically by Scaling Engine. Enable it separately for FG-only profiles that need the Gamescope WSI presentation path. It can run with Frame Generation and one post-process tool. Restart the game after changing it.",
+                      "Provided automatically when Scaling is enabled. Enable it separately for FG-only profiles that need the Gamescope WSI presentation path. It can run with Frame Generation and one post-process tool. Restart the game after changing it.",
                     )}
                   </div>
                   <MakoInlineWarning tone="warning">
@@ -543,7 +543,7 @@ export function ExternalToolsConfigurationGroup({
           <div>
             {t(
               "CONFIG_EXTERNAL_TOOLS_DESC",
-              "Optional and per profile. MangoHud and vkBasalt are mutually exclusive with each other, but either can run with Gamescope WSI, Scaling Engine, and Frame Generation. Restart the game after changing the tool.",
+              "Optional and per profile. MangoHud and vkBasalt are mutually exclusive with each other, but either can run with Gamescope WSI, Scaling, and Frame Generation. Restart the game after changing the tool.",
             )}
           </div>
           <MakoInlineWarning>
