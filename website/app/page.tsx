@@ -130,8 +130,8 @@ export default function Home() {
             <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
             <p className="hero-intro">MAKO brings Lossless Scaling frame generation to Steam Deck, Steam Machine, SteamOS, and Linux through a focused Decky control layer and a purpose-built Vulkan renderer.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
-              <span className="open-source-sticker-mark" aria-hidden="true">FREE</span>
-              <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Free forever. Fork it. Change it. Make it yours.</span></span>
+              <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
+              <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Fork it. Change it. Make it yours.</span></span>
               <span className="open-source-sticker-arrow" aria-hidden="true">↗</span>
             </a>
             <div className="hero-actions">
@@ -384,7 +384,7 @@ export default function Home() {
           <img src="assets/mako-logo.webp" alt="MAKO shark" width="260" height="260" draggable={false} />
           <div>
             <p className="eyebrow"><span /> Motion-Adaptive Kernel Orchestration</p>
-            <h2>Bring Lossless Scaling<br /><em>to Linux.</em></h2>
+            <h2>Bring Lossless Scaling<br />to Linux.</h2>
             <p>Choose MAKO Decky for the managed SteamOS workflow or MAKO Renderer for a direct Linux installation.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>Download MAKO <span>→</span></a>

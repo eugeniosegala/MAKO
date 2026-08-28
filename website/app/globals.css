@@ -58,7 +58,8 @@ main { min-height: 100vh; background: #020508; }
 h1 { max-width: 780px; margin: 0; font-size: clamp(64px, 6.1vw, 98px); font-weight: 840; line-height: .96; letter-spacing: -.05em; }
 h1 em, h2 em { position: relative; top: 4px; display: inline-block; font-style: normal; color: rgba(3, 10, 16, .96); -webkit-text-stroke: 1.5px #b9d7e5; letter-spacing: -.018em; paint-order: stroke fill; text-shadow: 0 0 34px rgba(0, 217, 255, .15); }
 .hero-intro { max-width: 600px; margin: 34px 0 0; color: #93a7b5; font-size: 17px; line-height: 1.7; }
-.open-source-sticker { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 13px; width: min(100%, 430px); margin-top: 24px; padding: 11px 13px; border: 1px solid rgba(37, 255, 154, .42); border-radius: 6px 14px 6px 14px; color: #d8f8e8; background: linear-gradient(135deg, rgba(37, 255, 154, .12), rgba(7, 27, 21, .84)); box-shadow: 0 10px 30px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(218, 255, 235, .12); }
+.open-source-sticker { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; align-items: center; gap: 13px; width: min(100%, 430px); margin-top: 24px; padding: 11px 13px; border: 1px solid rgba(37, 255, 154, .42); border-radius: 6px 14px 6px 14px; color: #d8f8e8; background: linear-gradient(135deg, rgba(37, 255, 154, .12), rgba(7, 27, 21, .84)); box-shadow: 0 10px 30px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(218, 255, 235, .12); transition: border-color .2s, background .2s, box-shadow .2s; }
+.open-source-sticker:hover { border-color: rgba(103, 255, 178, .82); background: linear-gradient(135deg, rgba(37, 255, 154, .2), rgba(7, 35, 25, .92)); box-shadow: 0 10px 30px rgba(0, 0, 0, .2), 0 0 28px rgba(37, 255, 154, .15), inset 0 1px 0 rgba(218, 255, 235, .2); }
 .open-source-sticker-mark { display: grid; place-items: center; width: 48px; height: 48px; border: 1px dashed rgba(152, 255, 202, .8); border-radius: 50%; color: var(--green); font: 700 9px/1 var(--font-mono), ui-monospace, monospace; letter-spacing: .06em; }
 .open-source-sticker-copy { display: grid; gap: 4px; min-width: 0; }
 .open-source-sticker-copy strong { color: #e4fff0; font-size: 13px; letter-spacing: .015em; }
@@ -274,7 +275,6 @@ code { padding: 2px 5px; border: 1px solid rgba(0, 217, 255, .13); border-radius
 .final-cta > img, .final-cta > div:not(.cta-glow) { position: relative; z-index: 2; }
 .final-cta > img { width: min(100%, 340px); height: auto; border-radius: 30px; mix-blend-mode: screen; filter: drop-shadow(0 0 60px rgba(0, 217, 255, .18)); transform: rotate(-5deg); }
 .final-cta h2 { font-size: clamp(60px, 6.2vw, 96px); line-height: 1.14; }
-.final-cta h2 em { top: 4px; }
 .final-cta > div > p:not(.eyebrow) { margin: 28px 0 0; color: #78909e; }
 .final-cta > .cta-glow { position: absolute; left: 10%; top: 20%; width: 300px; height: 300px; border-radius: 50%; background: linear-gradient(120deg, var(--cyan), var(--orange)); filter: blur(120px); opacity: .18; }
 
