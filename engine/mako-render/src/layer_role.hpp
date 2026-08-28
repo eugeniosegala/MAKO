@@ -46,6 +46,24 @@ namespace mako::layer {
             std::string_view(value) != "0";
     }
 
+    /// Direct Renderer launches retain combined frame-generation and spatial
+    /// ownership. In Decky's split chain, only the dedicated lower role owns
+    /// spatial capability contracts; the upper frame-generation role must
+    /// forward the virtual source extent advertised by that lower role.
+    [[nodiscard]] inline bool spatialScalingOwnedByLayer() {
+        if constexpr (spatialScalingLayer)
+            return true;
+
+        return !splitLayerChainEnabled();
+    }
+
+    [[nodiscard]] inline bool shouldRejectUnmatchedFixedSpatialCreate(
+            const bool fixedVirtualSourceRequest,
+            const bool scalingExtentsSelected) {
+        return spatialScalingOwnedByLayer() && fixedVirtualSourceRequest &&
+            !scalingExtentsSelected;
+    }
+
     /// Project the shared user profile onto one layer's isolated ownership.
     /// The upper layer owns only frame generation; the lower layer owns only
     /// spatial reconstruction. Keeping unrelated settings canonical prevents

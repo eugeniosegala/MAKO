@@ -158,7 +158,7 @@ export function FpsMultiplierControl({
                   label={`${t("ADAPTIVE_TARGET_FPS", "Target FPS")} (${targetFps})`}
                   description={t(
                     "ADAPTIVE_TARGET_FPS_DESC",
-                    "Desired displayed FPS. Fractional Adaptive may mix ratios to reach it; the steady base cap limits real FPS to half the target.",
+                    "Desired displayed FPS. Fractional Adaptive may mix ratios to reach it; Steady Base Cap starts at half the target and can align a validated lower integer rung.",
                   )}
                   value={targetFps}
                   min={TARGET_FPS_MIN}
@@ -175,7 +175,7 @@ export function FpsMultiplierControl({
                       <div>
                         {t(
                           "ADAPTIVE_AUTO_BASE_FPS_CAP_DESC",
-                          "The default Adaptive mode. Caps real FPS at half the target for an even cadence. Pros: usually smoother pacing. Cons: fewer real frames and potentially more input lag and ghosting.",
+                          "The default Adaptive mode. Starts at half the target; with Smooth Cadence it can align a validated 3x–5x rung. Pros: usually smoother pacing. Cons: fewer real frames and potentially more input lag and ghosting.",
                         )}
                       </div>
                       <MakoSettingRelationship>
@@ -228,7 +228,7 @@ export function FpsMultiplierControl({
                   label={t("ADAPTIVE_SMOOTH_CADENCE", "Smooth Cadence")}
                   description={t(
                     "ADAPTIVE_SMOOTH_CADENCE_DESC",
-                    "Uses a validated constant interpolation cadence. It can make displayed motion smoother, but may lower real-frame cadence and increase input lag. Enabled by default; disable it if a game feels more responsive without it.",
+                    "Uses a validated constant interpolation cadence. With Steady Base Cap, it can align proven 3x–5x demand to an exact target rung. It can make motion smoother, but may lower real-frame cadence and increase input lag. Enabled by default; disable it if a game feels more responsive without it.",
                   )}
                   bottomSeparator="none"
                   checked={

@@ -87,6 +87,13 @@ void test_independent_scaling_group() {
         QStringLiteral("name: t.scalingSettings")
     );
     require(group_start >= 0, "independent Scaling group is missing");
+    const qsizetype frame_generation_group_start = qml.indexOf(
+        QStringLiteral("name: t.frameGeneration")
+    );
+    require(frame_generation_group_start >= 0,
+        "Frame Generation group is missing");
+    require(group_start < frame_generation_group_start,
+        "Scaling must precede Frame Generation to match MAKO Decky");
     qsizetype group_end = qml.indexOf(
         QStringLiteral("\n                Group {"), group_start + 1
     );

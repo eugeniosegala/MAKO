@@ -45,6 +45,10 @@ int main() {
         "upper-role interop features are visible on the device");
     expect(splitLayerChainEnabled(),
         "the lower layer is always part of an isolated split chain");
+    expect(spatialScalingOwnedByLayer(),
+        "the lower layer must enforce spatial capability contracts");
+    expect(shouldRejectUnmatchedFixedSpatialCreate(true, false),
+        "the lower layer must reject an unmatched fixed spatial request");
 #else
     unsetenv(splitLayerChainEnvironment.data());
     const auto direct = profileForLayer(exercisedProfile());
@@ -55,6 +59,12 @@ int main() {
         "the upper layer must follow actual device interop availability");
     expect(direct.frame_generation_enabled && direct.scaling_enabled,
         "direct Renderer launches must retain the established combined library");
+    expect(spatialScalingOwnedByLayer(),
+        "the direct combined layer must enforce spatial capability contracts");
+    expect(shouldRejectUnmatchedFixedSpatialCreate(true, false),
+        "the direct combined layer must reject an unmatched fixed request");
+    expect(!shouldRejectUnmatchedFixedSpatialCreate(true, true),
+        "a selected scaling extent must satisfy the fixed contract");
 
     setenv(splitLayerChainEnvironment.data(), "1", 1);
     const auto upper = profileForLayer(exercisedProfile());
@@ -63,11 +73,17 @@ int main() {
     expect(!upper.scaling_enabled &&
             upper.scaling_method == ls::ScalingMethod::Native,
         "the upper split layer must not allocate spatial-scaling resources");
+    expect(!spatialScalingOwnedByLayer(),
+        "the upper split layer must forward lower-role spatial contracts");
+    expect(!shouldRejectUnmatchedFixedSpatialCreate(true, false),
+        "the upper split layer must not reject a lower-role source extent");
 
     setenv(splitLayerChainEnvironment.data(), "0", 1);
     const auto disabledSplit = profileForLayer(exercisedProfile());
     expect(disabledSplit.scaling_enabled,
         "a zero split-chain value must preserve direct Renderer behavior");
+    expect(spatialScalingOwnedByLayer(),
+        "a disabled split chain must retain combined spatial ownership");
     unsetenv(splitLayerChainEnvironment.data());
 #endif
 }

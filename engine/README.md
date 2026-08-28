@@ -36,7 +36,7 @@ See the [main installation guide](../README.md#install-and-use) for Decky, Heroi
 
 For LS1 scaling or frame generation, first install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. The open MAKO scaler works without `Lossless.dll`.
 
-Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then run **Install MAKO Renderer**. It verifies and installs the archive below `~/.local`, preserves profiles, and opens **MAKO Renderer Configuration**. Run the installer again after extracting an update; use **Uninstall MAKO Renderer** from the application menu to remove it.
+Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then run **Install MAKO Renderer**. It verifies and installs the archive below `~/.local`, preserves profiles, and opens **MAKO Renderer Configuration**. To reopen it later, select the **MAKO Renderer Configuration** application-launcher icon (with the MAKO logo), or run `~/.local/bin/mako-ui`. Run the installer again after extracting an update; use **Uninstall MAKO Renderer** from the application menu to remove it.
 
 For a manual installation, extract the archive into your user-local prefix:
 
@@ -55,7 +55,7 @@ For Flatpak games or emulators, install the matching MAKO Vulkan runtime extensi
 
 ## Usage
 
-Open **MAKO Renderer Configuration** from the application menu, or run:
+Open **MAKO Renderer Configuration** from the application launcher (the MAKO-logo icon), or run:
 
 ```bash
 ~/.local/bin/mako-ui

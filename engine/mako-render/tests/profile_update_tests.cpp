@@ -184,6 +184,23 @@ int main() {
     expect(!smoothCadencePacerHandoffActive(
             steadyPacing, true, false, 120, acceptedTwoX),
         "Fractional Adaptive incorrectly bypassed a nonexistent Steady cap");
+    steadyPacing.adaptive_auto_base_fps_cap = true;
+    expect(smoothCadenceBaseCapEligible(
+            steadyPacing, true, false, 120),
+        "target-matched ordered Steady mode did not enable integer-cap qualification");
+    expect(!smoothCadenceBaseCapEligible(
+            steadyPacing, false, false, 120),
+        "non-ordered transport enabled the Steady integer-cap ladder");
+    expect(!smoothCadenceBaseCapEligible(
+            steadyPacing, true, true, 120),
+        "ordered-acquire recovery did not suspend the integer-cap ladder");
+    expect(!smoothCadenceBaseCapEligible(
+            steadyPacing, true, false, 90),
+        "target-mismatched refresh enabled the Steady integer-cap ladder");
+    steadyPacing.adaptive_stable_cadence = false;
+    expect(!smoothCadenceBaseCapEligible(
+            steadyPacing, true, false, 120),
+        "Fractional policy enabled the Steady integer-cap ladder");
 
     auto next = current;
     next.target_fps = 120;

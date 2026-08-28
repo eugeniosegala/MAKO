@@ -210,7 +210,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "adaptive_auto_base_fps_cap",
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
-    description: "automatically cap real FPS at half the target for steadier 2x frame generation"
+    description: "start at a half-target real FPS cap and let Smooth Cadence align validated integer-ratio rungs"
   },
   target_fps: {
     name: "target_fps",

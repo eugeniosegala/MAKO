@@ -620,6 +620,23 @@ namespace {
             );
         }
 
+        void targetConstrained(const uint32_t targetFps,
+                const size_t maximumMultiplier, const double baseFps,
+                const double projectedOutputFps) override {
+            if (!present_diagnostics::enabled())
+                return;
+            std::cerr
+                << "MAKO Renderer: present diagnostics: "
+                << "operation=adaptive-target-constrained"
+                << " context=" << activeContextId
+                << " target_fps=" << targetFps
+                << " maximum_multiplier=" << maximumMultiplier
+                << " base_fps=" << baseFps
+                << " projected_output_fps=" << projectedOutputFps
+                << " reason=multiplier-ceiling"
+                << '\n';
+        }
+
         void recoveryResume(const size_t generationLimit,
                 const Clock::duration higherProbeDelay,
                 const std::string_view reason) override {

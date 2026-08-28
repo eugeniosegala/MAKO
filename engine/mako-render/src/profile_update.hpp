@@ -347,6 +347,26 @@ namespace mako::layer {
                 static_cast<double>(profile.target_fps) * 1.02;
     }
 
+    /// Integer-cadence base-cap refinement is limited to the same ordered,
+    /// target-matched Steady path as the 2x pacer handoff. Fractional Adaptive,
+    /// HDR transport, recovery, and unmatched displays retain their existing
+    /// pacing policy.
+    [[nodiscard]] inline bool smoothCadenceBaseCapEligible(
+            const ls::GameConf& profile,
+            const bool privateOrderedTransport,
+            const bool orderedAcquireRecoveryActive,
+            const std::optional<uint32_t> gamescopeRefreshHz) {
+        return profile.adaptive &&
+            profile.adaptive_auto_base_fps_cap &&
+            profile.adaptive_stable_cadence &&
+            effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
+            privateOrderedTransport &&
+            !orderedAcquireRecoveryActive &&
+            adaptiveTargetMatchesRefresh(
+                profile.target_fps, gamescopeRefreshHz
+            );
+    }
+
     struct GenerationSchedulerPolicy {
         uint32_t targetFps{0};
         size_t maximumMultiplier{0};

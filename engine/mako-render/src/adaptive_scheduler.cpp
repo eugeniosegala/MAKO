@@ -39,7 +39,11 @@ namespace {
     constexpr double adaptiveRampThroughputTolerance = 0.95;
     constexpr double adaptiveRampBaseCollapseRatio = 0.70;
     constexpr double adaptiveRampMarginalGain = 1.15;
-    constexpr double adaptiveRampTargetSatisfiedRatio = 0.95;
+    // Retention and escalation serve different purposes. A proven cadence may
+    // remain healthy inside the established five-percent stability envelope,
+    // but a lower multiplier should still test available headroom until it is
+    // demonstrably close to the requested output target.
+    constexpr double adaptiveRampEscalationTargetRatio = 0.98;
     constexpr double adaptiveStrictLoadCollapseRatio = 0.80;
     constexpr double adaptiveStrictLoadSevereTargetDeficitRatio = 0.75;
     constexpr double adaptiveBridgeMinimumOutputRetention = 0.85;
@@ -62,6 +66,8 @@ namespace {
     constexpr auto adaptiveRecoveryStabilizationDuration = std::chrono::seconds(3);
     constexpr auto adaptiveRampEvaluationDuration = std::chrono::seconds(1);
     constexpr auto adaptiveTargetDeficitDuration = std::chrono::seconds(1);
+    constexpr auto adaptiveTargetConstraintDiagnosticDuration =
+        std::chrono::seconds(2);
     constexpr auto adaptiveNearTargetNativeHoldDuration =
         std::chrono::seconds(1);
     // Opposite evidence decays twice as quickly as qualifying evidence grows.
@@ -2669,17 +2675,34 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         static_cast<double>(this->state.outputPlanner.generationLimit + 1);
     const bool targetSatisfied = validatedOutputFps >=
         static_cast<double>(this->config.targetFps) *
-            adaptiveRampTargetSatisfiedRatio;
+            adaptiveRampEscalationTargetRatio;
     if (targetSatisfied) {
         this->state.ramp.targetDeficitSince.reset();
+        this->state.ramp.targetConstraintSince.reset();
+        this->state.ramp.targetConstraintReported = false;
         this->state.strictLoad.recoverySince.reset();
         return;
     }
 
     if (this->state.outputPlanner.generationLimit >= configuredLimit) {
         this->state.ramp.targetDeficitSince.reset();
+        if (!this->state.ramp.targetConstraintSince) {
+            this->state.ramp.targetConstraintSince = now;
+        } else if (!this->state.ramp.targetConstraintReported &&
+                now - *this->state.ramp.targetConstraintSince >=
+                    adaptiveTargetConstraintDiagnosticDuration) {
+            this->diagnostics->targetConstrained(
+                this->config.targetFps,
+                configuredLimit + 1,
+                baseFps,
+                validatedOutputFps
+            );
+            this->state.ramp.targetConstraintReported = true;
+        }
         return;
     }
+    this->state.ramp.targetConstraintSince.reset();
+    this->state.ramp.targetConstraintReported = false;
     if (!this->state.ramp.targetDeficitSince) {
         this->state.ramp.targetDeficitSince = now;
         return;

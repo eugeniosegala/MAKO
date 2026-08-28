@@ -1014,7 +1014,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         }
     }
 
-    if (fixedVirtualSourceRequest && !scalingExtents) {
+    if (shouldRejectUnmatchedFixedSpatialCreate(
+            fixedVirtualSourceRequest, scalingExtents.has_value())) {
         throw ls::vulkan_error(
             VK_ERROR_INITIALIZATION_FAILED,
             "fixed-surface spatial scaling create request does not match the "

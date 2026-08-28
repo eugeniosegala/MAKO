@@ -467,6 +467,67 @@ int main() {
             fractionalDeadline < pacingStart + 13ms,
         "82.5 FPS pacing did not retain its fractional interval");
 
+    SmoothCadenceBaseCap cadenceBaseCap;
+    SmoothCadenceBaseCap::SchedulerState cadenceSnapshot{
+        .validatedGenerationLimit = 2,
+        .smoothedBaseFps = 45.0,
+    };
+    auto cadenceCap = cadenceBaseCap.update(
+        pacingStart, true, 120, cadenceSnapshot
+    );
+    expect(!cadenceCap.framesPerSecond && !cadenceCap.changed,
+        "Steady integer cadence activated without qualification");
+    cadenceCap = cadenceBaseCap.update(
+        pacingStart + 999ms, true, 120, cadenceSnapshot
+    );
+    expect(!cadenceCap.framesPerSecond,
+        "Steady integer cadence activated before its qualification hold");
+    cadenceCap = cadenceBaseCap.update(
+        pacingStart + SmoothCadenceBaseCap::qualificationDuration(),
+        true, 120, cadenceSnapshot
+    );
+    expect(cadenceCap.framesPerSecond && cadenceCap.changed &&
+            cadenceCap.multiplier == 3 &&
+            std::abs(*cadenceCap.framesPerSecond - 40.0) < 0.001,
+        "Steady Adaptive did not align a proven 3x load to 40 -> 120 FPS");
+    cadenceCap = cadenceBaseCap.update(
+        pacingStart + 2s, true, 120, cadenceSnapshot
+    );
+    expect(cadenceCap.framesPerSecond && !cadenceCap.changed,
+        "retained Steady integer cadence reported a false transition");
+
+    cadenceSnapshot.rampEvaluationActive = true;
+    cadenceCap = cadenceBaseCap.update(
+        pacingStart + 3s, true, 120, cadenceSnapshot
+    );
+    expect(!cadenceCap.framesPerSecond && cadenceCap.changed,
+        "an Adaptive ramp did not restore the conservative target/2 cap");
+    cadenceSnapshot.rampEvaluationActive = false;
+    cadenceSnapshot.validatedGenerationLimit = 1;
+    cadenceSnapshot.smoothedBaseFps = 58.0;
+    cadenceCap = cadenceBaseCap.update(
+        pacingStart + 5s, true, 120, cadenceSnapshot
+    );
+    expect(!cadenceCap.framesPerSecond && !cadenceCap.changed,
+        "the integer ladder altered a healthy near-2x source cadence");
+
+    cadenceSnapshot.validatedGenerationLimit = 3;
+    cadenceSnapshot.smoothedBaseFps = 32.0;
+    cadenceCap = cadenceBaseCap.update(
+        pacingStart + 6s, true, 120, cadenceSnapshot
+    );
+    cadenceCap = cadenceBaseCap.update(
+        pacingStart + 7s, true, 120, cadenceSnapshot
+    );
+    expect(cadenceCap.framesPerSecond && cadenceCap.multiplier == 4 &&
+            std::abs(*cadenceCap.framesPerSecond - 30.0) < 0.001,
+        "Steady Adaptive did not align a proven 4x load to 30 -> 120 FPS");
+    cadenceCap = cadenceBaseCap.update(
+        pacingStart + 8s, false, 120, cadenceSnapshot
+    );
+    expect(!cadenceCap.framesPerSecond && cadenceCap.changed,
+        "losing the ordered target-matched guard did not restore the base cap");
+
     SmoothCadencePacerHandoff pacerHandoff;
     auto handoff = pacerHandoff.update(pacingStart, true);
     expect(handoff.active && handoff.changed,

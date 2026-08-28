@@ -153,6 +153,14 @@ namespace {
             });
         }
 
+        void targetConstrained(uint32_t, size_t maximumMultiplier,
+                double, double) override {
+            this->events.push_back({
+                .operation = "target-constrained",
+                .testedLimit = maximumMultiplier,
+            });
+        }
+
         void fastCadenceBurst(double, double, double, size_t, size_t,
                 std::chrono::steady_clock::duration) override {
             this->events.push_back({
@@ -478,10 +486,10 @@ namespace {
         require(boundary425 == 17868105727514782793ULL,
             "42.5-to-90 characterization changed: " +
                 std::to_string(boundary425));
-        require(boundary4275 == 15981559191712361698ULL,
+        require(boundary4275 == 4184744030236575051ULL,
             "42.75-to-90 characterization changed: " +
                 std::to_string(boundary4275));
-        require(boundary43 == 8557601161360105282ULL,
+        require(boundary43 == 4100649750651905631ULL,
             "43-to-90 characterization changed: " +
                 std::to_string(boundary43));
         require(disruptions == 1580889166940170359ULL,
@@ -1727,6 +1735,34 @@ namespace {
             "persistent compositor admission loss did not reject the ramp");
         require(harness.scheduler.snapshot().validatedGenerationLimit == 0,
             "persistent delivery loss was retained as a validated multiplier");
+    }
+
+    void testEscalationClosesNinetyFivePercentTargetGap() {
+        Harness harness(120, 3, false,
+            AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(58.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "a 116 FPS 2x ceiling was incorrectly accepted for a 120 FPS target");
+        const auto* higherProbe = harness.diagnostics.last("ramp-result");
+        require(higherProbe && higherProbe->testedLimit == 2 &&
+                higherProbe->accepted,
+            "the scheduler did not validate available 3x headroom near target");
+    }
+
+    void testMultiplierCeilingDeficitIsReportedOnce() {
+        Harness harness(120, 2, false,
+            AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(55.0, 12s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "the maximum configured 2x policy was not retained");
+        require(harness.diagnostics.count("target-constrained") == 1,
+            "a sustained multiplier-ceiling deficit was not reported exactly once");
+        const auto* constrained =
+            harness.diagnostics.last("target-constrained");
+        require(constrained && constrained->testedLimit == 2,
+            "the target-constrained diagnostic lost the configured multiplier");
     }
 
     void testFourXPlanUsesEvenInterpolationTimestamps() {
@@ -3178,6 +3214,8 @@ int main() {
         {"pacing diagnostics restart after policy gap", testPacingDiagnosticsRestartAfterPolicyGap},
         {"isolated delivery miss keeps ramp", testIsolatedGeneratedFrameMissDoesNotRejectRamp},
         {"persistent delivery loss rejects ramp", testPersistentGeneratedFrameMissesRejectRamp},
+        {"escalation closes 95-percent target gap", testEscalationClosesNinetyFivePercentTargetGap},
+        {"multiplier ceiling deficit is reported once", testMultiplierCeilingDeficitIsReportedOnce},
         {"4x timestamps remain evenly spaced", testFourXPlanUsesEvenInterpolationTimestamps},
         {"5x timestamps remain evenly spaced", testFiveXPlanUsesEvenInterpolationTimestamps},
         {"above-target cadence remains real-only", testSchedulerCannotReduceAboveTargetCadence},

@@ -763,6 +763,123 @@ namespace mako::layer {
         std::optional<TimePoint> nextFrameAt;
     };
 
+    /// When Steady Adaptive has already proven that it needs at least 3x, a
+    /// target/2 cap can leave the source cadence between integer generation
+    /// ratios (for example 45 -> 120 FPS). Qualify the exact target/N rung for
+    /// one second before lowering the cap. Validated scheduler limits remain
+    /// the authority, so this policy cannot activate a multiplier that has not
+    /// passed delivery and throughput checks.
+    class SmoothCadenceBaseCap {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        struct Decision {
+            std::optional<double> framesPerSecond;
+            size_t multiplier{0};
+            bool changed{false};
+        };
+
+        struct SchedulerState {
+            size_t validatedGenerationLimit{0};
+            double smoothedBaseFps{0.0};
+            bool rampEvaluationActive{false};
+            bool rearmRequired{false};
+            bool discontinuityRecoveryActive{false};
+        };
+
+        [[nodiscard]] Decision update(const TimePoint now,
+                const bool eligible, const uint32_t targetFps,
+                const SchedulerState scheduler) {
+            const auto previousMultiplier = this->activeMultiplier;
+            if (!eligible || targetFps == 0 ||
+                    scheduler.discontinuityRecoveryActive ||
+                    scheduler.rearmRequired || scheduler.rampEvaluationActive) {
+                this->resetCandidate();
+                this->activeMultiplier.reset();
+                return this->decision(previousMultiplier);
+            }
+
+            const size_t desiredMultiplier =
+                scheduler.validatedGenerationLimit + 1;
+            if (desiredMultiplier < 3 || scheduler.smoothedBaseFps <= 0.0) {
+                this->resetCandidate();
+                this->activeMultiplier.reset();
+                return this->decision(previousMultiplier);
+            }
+
+            const double desiredCap = static_cast<double>(targetFps) /
+                static_cast<double>(desiredMultiplier);
+            const double previousRung = static_cast<double>(targetFps) /
+                static_cast<double>(desiredMultiplier - 1);
+            const bool cadenceNeedsRung =
+                scheduler.smoothedBaseFps < previousRung * 0.98;
+            const bool rungSustainable =
+                scheduler.smoothedBaseFps >= desiredCap * 0.95;
+            if (!cadenceNeedsRung || !rungSustainable) {
+                this->resetCandidate();
+                this->activeMultiplier.reset();
+                return this->decision(previousMultiplier);
+            }
+
+            if (this->activeMultiplier == desiredMultiplier) {
+                this->activeTargetFps = static_cast<double>(targetFps);
+                return this->decision(previousMultiplier);
+            }
+
+            if (this->candidateMultiplier != desiredMultiplier) {
+                this->candidateMultiplier = desiredMultiplier;
+                this->candidateSince = now;
+                return this->decision(previousMultiplier);
+            }
+            if (!this->candidateSince ||
+                    now - *this->candidateSince < qualificationDuration()) {
+                return this->decision(previousMultiplier);
+            }
+
+            this->activeMultiplier = desiredMultiplier;
+            this->activeTargetFps = static_cast<double>(targetFps);
+            this->resetCandidate();
+            return this->decision(previousMultiplier);
+        }
+
+        void reset() {
+            this->activeMultiplier.reset();
+            this->resetCandidate();
+        }
+
+        [[nodiscard]] static constexpr std::chrono::seconds
+        qualificationDuration() {
+            return std::chrono::seconds{1};
+        }
+
+    private:
+        [[nodiscard]] Decision decision(
+                const std::optional<size_t> previousMultiplier) const {
+            if (!this->activeMultiplier) {
+                return {
+                    .changed = previousMultiplier.has_value(),
+                };
+            }
+            return {
+                .framesPerSecond = this->activeTargetFps /
+                    static_cast<double>(*this->activeMultiplier),
+                .multiplier = *this->activeMultiplier,
+                .changed = previousMultiplier != this->activeMultiplier,
+            };
+        }
+
+        void resetCandidate() {
+            this->candidateMultiplier.reset();
+            this->candidateSince.reset();
+        }
+
+        std::optional<size_t> activeMultiplier;
+        std::optional<size_t> candidateMultiplier;
+        std::optional<TimePoint> candidateSince;
+        double activeTargetFps{0.0};
+    };
+
     /// Guards the Steady Adaptive handoff from the explicit real-frame pacer
     /// to ordered FIFO. A lost qualification restores the cap immediately and
     /// applies a long retry delay so an unsuitable game cannot receive a

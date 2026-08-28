@@ -189,7 +189,7 @@ Profiles and Steam launch options are retained. The private native engine and la
 Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
 
 1. To use LS1 scaling or frame generation, purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. The open MAKO scaler does not use `Lossless.dll`.
-2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then double-click **Install MAKO Renderer** and choose **Execute** if your file manager asks.
+2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then double-click **Install MAKO Renderer** and choose **Execute** if your file manager asks. The installer opens **MAKO Renderer Configuration** when it finishes. To reopen it later, select the **MAKO Renderer Configuration** application-launcher icon (with the MAKO logo), or run `~/.local/bin/mako-ui`.
 3. Run the installer again after extracting a newer archive. For manual installation, configuration, Flatpak setup, and troubleshooting, see the [MAKO Renderer guide](engine/README.md#direct-linux-installation).
 
 <!-- prettier-ignore -->

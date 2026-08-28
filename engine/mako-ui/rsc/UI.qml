@@ -216,7 +216,72 @@ ApplicationWindow {
                 }
 
                 Group {
-                    name: t.profileSettings
+                    name: t.scalingSettings
+                    enabled: backend.available
+
+                    GroupEntry {
+                        title: t.scalingEnabled
+                        description: t.scalingEnabledDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.scaling_enabled
+                            onToggled: backend.scaling_enabled = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.scalingMethod
+                        description: t.scalingMethodDesc
+                        visible: backend.scaling_enabled
+                        enabled: backend.scaling_enabled
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
+                            currentIndex: backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1
+                            onActivated: index => backend.scaling_method = index === 0 ? "native" : index === 2 ? "ls1" : index === 3 ? "ls1-performance" : "mako"
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.scalingFactor
+                        description: t.scalingFactorDesc
+                        visible: backend.scaling_enabled
+                        enabled: backend.scaling_enabled
+
+                        FlowSlider {
+                            Layout.fillWidth: true
+
+                            from: backend.minimum_scaling_factor
+                            to: backend.maximum_scaling_factor
+
+                            value: backend.scaling_factor
+                            onUpdate: value => backend.scaling_factor = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.scalingSharpness
+                        description: t.scalingSharpnessDesc
+                        visible: backend.scaling_enabled && backend.scaling_method !== "native"
+                        enabled: backend.scaling_enabled && backend.scaling_method !== "native"
+
+                        FlowSlider {
+                            Layout.fillWidth: true
+
+                            from: backend.minimum_scaling_sharpness
+                            to: backend.maximum_scaling_sharpness
+
+                            value: backend.scaling_sharpness
+                            onUpdate: value => backend.scaling_sharpness = value
+                        }
+                    }
+                }
+
+                Group {
+                    name: t.frameGeneration
                     enabled: backend.available
 
                     GroupEntry {
@@ -378,71 +443,6 @@ ApplicationWindow {
                             model: backend.gpus
                             currentIndex: backend.gpu
                             onActivated: index => backend.gpu = index
-                        }
-                    }
-                }
-
-                Group {
-                    name: t.scalingSettings
-                    enabled: backend.available
-
-                    GroupEntry {
-                        title: t.scalingEnabled
-                        description: t.scalingEnabledDesc
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.scaling_enabled
-                            onToggled: backend.scaling_enabled = checked
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.scalingMethod
-                        description: t.scalingMethodDesc
-                        visible: backend.scaling_enabled
-                        enabled: backend.scaling_enabled
-
-                        ComboBox {
-                            Layout.fillWidth: true
-                            model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
-                            currentIndex: backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1
-                            onActivated: index => backend.scaling_method = index === 0 ? "native" : index === 2 ? "ls1" : index === 3 ? "ls1-performance" : "mako"
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.scalingFactor
-                        description: t.scalingFactorDesc
-                        visible: backend.scaling_enabled
-                        enabled: backend.scaling_enabled
-
-                        FlowSlider {
-                            Layout.fillWidth: true
-
-                            from: backend.minimum_scaling_factor
-                            to: backend.maximum_scaling_factor
-
-                            value: backend.scaling_factor
-                            onUpdate: value => backend.scaling_factor = value
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.scalingSharpness
-                        description: t.scalingSharpnessDesc
-                        visible: backend.scaling_enabled && backend.scaling_method !== "native"
-                        enabled: backend.scaling_enabled && backend.scaling_method !== "native"
-
-                        FlowSlider {
-                            Layout.fillWidth: true
-
-                            from: backend.minimum_scaling_sharpness
-                            to: backend.maximum_scaling_sharpness
-
-                            value: backend.scaling_sharpness
-                            onUpdate: value => backend.scaling_sharpness = value
                         }
                     }
                 }

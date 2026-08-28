@@ -154,6 +154,7 @@ namespace mako::layer {
         virtual void rampBackoff(size_t, size_t, double,
             std::chrono::steady_clock::duration) {}
         virtual void rampEarlyRetry(size_t, double, double) {}
+        virtual void targetConstrained(uint32_t, size_t, double, double) {}
         virtual void recoveryResume(size_t,
             std::chrono::steady_clock::duration, std::string_view) {}
         virtual void stableCadence(std::string_view, size_t, double, double,
@@ -592,6 +593,8 @@ namespace mako::layer {
                 std::optional<TimePoint> nextAt;
                 std::optional<TimePoint> evaluationAt;
                 std::optional<TimePoint> targetDeficitSince;
+                std::optional<TimePoint> targetConstraintSince;
+                bool targetConstraintReported{false};
                 GeneratedDeliveryWindow delivery;
                 size_t previousLimit{0};
                 double baselineBaseFps{0.0};

@@ -1784,14 +1784,51 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     const auto limiterArrival = DiagnosticsClock::now();
     AdaptiveSchedulerSnapshot schedulerSnapshot;
     bool handoffEligible = false;
+    bool cadenceBaseCapEligible = false;
     if (this->adaptiveScheduler) {
         schedulerSnapshot = this->adaptiveScheduler->snapshot();
+        cadenceBaseCapEligible = smoothCadenceBaseCapEligible(
+            this->profile,
+            this->privateOrderedTransport,
+            this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz
+        );
         handoffEligible = smoothCadencePacerHandoffActive(
             this->profile,
             this->privateOrderedTransport,
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz,
             schedulerSnapshot
+        );
+    }
+    const auto cadenceBaseCap = this->smoothCadenceBaseCap.update(
+        limiterArrival,
+        cadenceBaseCapEligible,
+        this->profile.target_fps,
+        {
+            .validatedGenerationLimit =
+                schedulerSnapshot.validatedGenerationLimit,
+            .smoothedBaseFps = schedulerSnapshot.smoothedBaseFps,
+            .rampEvaluationActive = schedulerSnapshot.rampEvaluationActive,
+            .rearmRequired = schedulerSnapshot.rearmRequired,
+            .discontinuityRecoveryActive =
+                schedulerSnapshot.discontinuityRecoveryActive,
+        }
+    );
+    if (cadenceBaseCap.changed) {
+        this->realFramePacer.reset();
+        present_diagnostics::adaptiveScheduler().stableCadence(
+            cadenceBaseCap.framesPerSecond
+                ? "adaptive-smooth-cadence-base-cap"
+                : "adaptive-smooth-cadence-base-cap-restored",
+            cadenceBaseCap.multiplier > 0
+                ? cadenceBaseCap.multiplier - 1
+                : 0,
+            schedulerSnapshot.smoothedBaseFps,
+            schedulerSnapshot.smoothedBaseFps,
+            cadenceBaseCap.framesPerSecond
+                ? "steady-integer-ladder-qualified"
+                : "scheduler-or-transport-guard-restored"
         );
     }
     const auto handoff = this->smoothCadencePacerHandoff.update(
@@ -1813,7 +1850,9 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     }
     const double baseFpsCap = handoff.active
         ? 0.0
-        : effectiveBaseFpsCap(this->profile);
+        : cadenceBaseCap.framesPerSecond.value_or(
+            effectiveBaseFpsCap(this->profile)
+        );
     const auto limiterDeadline = this->realFramePacer.schedule(
         limiterArrival, baseFpsCap
     );
