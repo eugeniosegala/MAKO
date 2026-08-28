@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "스케일링",
   "SCALING_ENABLED": "스케일링 엔진 활성화 (재시작)",
-  "SCALING_ENABLED_DESC": "다음 게임 실행 시 Gamescope 기반 MAKO 스케일링 경로를 활성화합니다. 실행 중 모델과 선명도 변경은 MAKO의 전용 스케일러만 다시 구성하며 게임의 스왑체인은 재생성하지 않습니다. 스케일 배율은 게임의 다음 자연스러운 해상도 변경 후 적용됩니다. 엔진은 단독으로 또는 프레임 생성 전에 사용할 수 있습니다.",
+  "SCALING_ENABLED_DESC": "게임을 시작하기 전에 활성화하세요. 플레이 중에 스케일링 방식을 변경할 수 있습니다. 단독으로 또는 프레임 생성과 함께 사용할 수 있지만 GPU 부하가 늘어나므로 스케일링이 필요하지 않으면 꺼 두세요.",
   "SCALING_METHOD": "스케일링 방식",
   "SCALING_METHOD_DESC": "네이티브 해상도는 선택한 배율에서 빠른 모델 없는 선형 기준 경로를 사용합니다. MAKO 스케일러는 오픈 단일 패스 옵션입니다. LS1 Quality와 Performance는 라이선스된 Lossless Scaling 모델을 사용하며, LS1을 시작할 수 없으면 MAKO 스케일러가 대신 작동합니다. 모델 변경은 게임 스왑체인을 재생성하지 않고 MAKO 내부에서 적용됩니다.",
   "SCALING_METHOD_NATIVE": "네이티브 해상도",
@@ -11,7 +11,7 @@
   "SCALING_FACTOR": "스케일 배율",
   "SCALING_FACTOR_DESC": "네이티브 해상도를 포함한 모든 방식의 출력 대 입력 크기 비율을 설정합니다. 값이 높을수록 렌더링되는 원본 픽셀이 줄어듭니다. 게임의 다음 자연스러운 해상도 변경 또는 재시작 후 적용됩니다.",
   "SCALING_SHARPNESS": "스케일링 선명도",
-  "SCALING_SHARPNESS_DESC": "MAKO에서는 연속 가장자리 선명도를 조절하고 LS1에서는 학습된 다섯 가지 선명도 변형 중 하나를 선택합니다. 전용 스케일러 재구성을 통해 적용됩니다.",
+  "SCALING_SHARPNESS_DESC": "MAKO에서는 이 0~100% 배율을 2배 선명도 기준에 적용합니다. LS1에서는 학습된 다섯 가지 선명도 변형 중 하나를 선택합니다. 전용 스케일러 재구성을 통해 적용됩니다.",
   "CONTENT_FPS_MULTIPLIER": "프레임 생성 모드",
   "CONTENT_PERFORMANCE_SETTINGS": "성능 설정",
   "CONTENT_ADVANCED_DETAILS": "상세 정보",

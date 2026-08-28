@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "图像缩放",
   "SCALING_ENABLED": "启用缩放引擎（重启）",
-  "SCALING_ENABLED_DESC": "在下次启动游戏时启用基于 Gamescope 的 MAKO 缩放路径。游戏启动后，更改模型和锐度只会重建 MAKO 的私有缩放器，不会重建游戏交换链。缩放倍率会在游戏下次自然更改分辨率后生效。该引擎既可单独运行，也可在帧生成之前运行。",
+  "SCALING_ENABLED_DESC": "请在启动游戏前启用。可在游戏过程中更改缩放方法。它可单独运行或与帧生成一起使用，但会增加 GPU 负载；不需要缩放时请保持关闭。",
   "SCALING_METHOD": "缩放方法",
   "SCALING_METHOD_DESC": "原生分辨率在所选倍率下使用快速、无模型的线性基线路径。MAKO 缩放器是开放式单通道选项。LS1 Quality 和 Performance 使用获得许可的 Lossless Scaling 模型；如果 LS1 无法启动，则由 MAKO 缩放器接管。更改模型会在 MAKO 内部生效，不会重建游戏交换链。",
   "SCALING_METHOD_NATIVE": "原生分辨率",
@@ -11,7 +11,7 @@
   "SCALING_FACTOR": "缩放倍率",
   "SCALING_FACTOR_DESC": "设置所有方法（包括原生分辨率）的输出与输入尺寸比率。数值越高，渲染的源像素越少。在游戏下次自然更改分辨率或重新启动后生效。",
   "SCALING_SHARPNESS": "缩放锐度",
-  "SCALING_SHARPNESS_DESC": "MAKO 使用连续边缘锐化；LS1 从五个训练好的锐度变体中选择。通过重建私有缩放器生效。",
+  "SCALING_SHARPNESS_DESC": "对于 MAKO，此 0–100% 倍率会应用于其 2 倍锐化基准。对于 LS1，它从五个训练好的锐度变体中选择。通过重建私有缩放器生效。",
   "CONTENT_FPS_MULTIPLIER": "帧生成模式",
   "CONTENT_PERFORMANCE_SETTINGS": "性能设置",
   "CONTENT_ADVANCED_DETAILS": "高级详情",

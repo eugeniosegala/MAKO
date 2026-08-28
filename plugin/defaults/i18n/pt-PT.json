@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "Redimensionamento",
   "SCALING_ENABLED": "Ativar motor de redimensionamento (reinício)",
-  "SCALING_ENABLED_DESC": "Ativa o caminho de redimensionamento do MAKO baseado no Gamescope no próximo arranque do jogo. Depois de iniciado, alterações ao modelo e à nitidez recriam apenas o redimensionador privado do MAKO e não recriam a cadeia de troca do jogo. O fator de escala é aplicado após a próxima alteração natural de resolução do jogo. O motor pode funcionar isoladamente ou antes da geração de fotogramas.",
+  "SCALING_ENABLED_DESC": "Ative o motor antes de iniciar o jogo. Pode alterar o método de redimensionamento enquanto joga. Funciona isoladamente ou com a geração de fotogramas, mas aumenta a carga da GPU; deixe-o desativado se não precisar de redimensionamento.",
   "SCALING_METHOD": "Método de redimensionamento",
   "SCALING_METHOD_DESC": "Resolução nativa usa uma base linear rápida sem modelo no fator selecionado. Redimensionador MAKO é a opção aberta de uma passagem. LS1 Quality e Performance usam os modelos licenciados do Lossless Scaling; se o LS1 não iniciar, o Redimensionador MAKO assume. As alterações de modelo são aplicadas dentro do MAKO sem recriar a cadeia de troca do jogo.",
   "SCALING_METHOD_NATIVE": "Resolução nativa",
@@ -11,7 +11,7 @@
   "SCALING_FACTOR": "Fator de escala",
   "SCALING_FACTOR_DESC": "Define a proporção entre o tamanho de saída e o de entrada para todos os métodos, incluindo Resolução nativa. Valores mais altos renderizam menos píxeis de origem. É aplicado após a próxima alteração natural de resolução do jogo ou reinício.",
   "SCALING_SHARPNESS": "Nitidez do redimensionamento",
-  "SCALING_SHARPNESS_DESC": "No MAKO, controla a nitidez contínua das margens. No LS1, seleciona uma de cinco variantes de nitidez aprendidas. É aplicada através de uma recriação do redimensionador privado.",
+  "SCALING_SHARPNESS_DESC": "No MAKO, aplica este multiplicador de 0 a 100% à sua base de nitidez 2x. No LS1, seleciona uma de cinco variantes de nitidez aprendidas. É aplicada através de uma recriação do redimensionador privado.",
   "CONTENT_FPS_MULTIPLIER": "Modo de geração de fotogramas",
   "CONTENT_PERFORMANCE_SETTINGS": "Definições de desempenho",
   "CONTENT_ADVANCED_DETAILS": "Detalhes avançados",

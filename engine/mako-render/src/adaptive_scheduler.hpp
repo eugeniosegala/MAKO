@@ -518,9 +518,11 @@ namespace mako::layer {
 
             struct OutputPlanner {
                 // Smoothed cadence owns the generated-work budget, preserving
-                // the established load envelope. Raw cadence owns only the
-                // bounded placement phase and may defer one already-budgeted
-                // output from a clearly short interval.
+                // the established long-term load envelope. Its one-time
+                // half-output phase seed rounds prefix demand to the nearest
+                // output instead of always trailing it. Raw cadence owns only
+                // the bounded placement phase and may defer one
+                // already-budgeted output from a clearly short interval.
                 double budgetCreditOutputs{0.0};
                 double targetPhaseErrorOutputs{0.0};
                 bool deferredBudgetOutput{false};

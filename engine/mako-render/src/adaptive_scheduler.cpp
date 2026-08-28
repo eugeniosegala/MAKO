@@ -125,7 +125,17 @@ namespace {
     constexpr auto adaptiveStableRearmDuration = std::chrono::seconds(2);
     constexpr auto adaptivePlanDiagnosticInterval = std::chrono::seconds(1);
     constexpr auto adaptiveFastBurstDiagnosticInterval = std::chrono::seconds(1);
-    constexpr double adaptiveTargetClockPlacementDeadbandRatio = 0.01;
+    // Start Fractional workload at the nearest-output phase rather than the
+    // trailing edge of its first source frame. This keeps cumulative output
+    // demand within half an output of the target from activation, reducing
+    // the chance that an ordered FIFO begins Fractional pacing one frame
+    // short. It changes only the bounded prefix phase, not the long-term rate.
+    constexpr double adaptiveTargetClockInitialBudgetPhaseOutputs = 0.5;
+    // Do not move earned work between almost-equivalent source intervals.
+    // Five percent of one target period filters ordinary high-base cadence
+    // noise while preserving the materially better long-interval placement
+    // used by uneven Fractional traces.
+    constexpr double adaptiveTargetClockPlacementDeadbandRatio = 0.05;
     constexpr double adaptiveTargetClockMinimumRepaymentHeadroomOutputs = 0.25;
     constexpr std::array adaptiveOutputCountReciprocals{
         0.0, 1.0, 0.5, 1.0 / 3.0, 0.25,
@@ -1297,7 +1307,11 @@ MAKO_ADAPTIVE_STAGE_INLINE size_t AdaptiveScheduler::selectGeneratedFrameCount(
     } else if (desiredOutputsPerRealFrame > 1.0 &&
             maximumGeneratedFrameCount > 0) {
         auto& targetClock = this->state.outputPlanner;
-        targetClock.targetClockActive = true;
+        if (!targetClock.targetClockActive) {
+            targetClock.budgetCreditOutputs =
+                adaptiveTargetClockInitialBudgetPhaseOutputs;
+            targetClock.targetClockActive = true;
+        }
         targetClock.budgetCreditOutputs += desiredOutputsPerRealFrame;
         const size_t requestedOutputs = std::max<size_t>(
             1,
@@ -1372,7 +1386,9 @@ MAKO_ADAPTIVE_STAGE_INLINE size_t AdaptiveScheduler::selectGeneratedFrameCount(
             scheduledOutputs++;
             targetClock.deferredBudgetOutput = false;
             targetClock.deferredPlacementBenefit = 0.0;
-        } else if (!targetClock.deferredBudgetOutput &&
+        } else if (this->config.recoveryPolicy !=
+                    AdaptiveRecoveryPolicy::OrderedSdr &&
+                !targetClock.deferredBudgetOutput &&
                 requestedOutputs <= maximumOutputs &&
                 baselineOutputs > 1 &&
                 desiredOutputsPerRealFrame <=

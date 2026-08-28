@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "Spatial Scaling",
   "SCALING_ENABLED": "Enable Scaling Engine (Restart)",
-  "SCALING_ENABLED_DESC": "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once running, model and sharpness changes rebuild only MAKO's private scaler and do not recreate the game's swapchain. Scale Factor applies after the game's next natural resolution change. The engine can run alone or before Frame Generation.",
+  "SCALING_ENABLED_DESC": "Enable before starting the game. Change the scaling method while playing. It works alone or with Frame Generation, but adds GPU overhead. Leave it off when you do not need scaling.",
   "SCALING_METHOD": "Scaling Method",
   "SCALING_METHOD_DESC": "Native Resolution uses a fast model-free linear baseline at the selected scale factor. MAKO Scaler is the open single-pass option. LS1 Quality and Performance use the licensed Lossless Scaling models; if LS1 cannot start, MAKO Scaler takes over. Model changes apply inside MAKO without recreating the game swapchain.",
   "SCALING_METHOD_NATIVE": "Native Resolution",
@@ -11,7 +11,7 @@
   "SCALING_FACTOR": "Scale Factor",
   "SCALING_FACTOR_DESC": "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. Applies on the game's next natural resolution change or restart.",
   "SCALING_SHARPNESS": "Scaling Sharpness",
-  "SCALING_SHARPNESS_DESC": "For MAKO, controls continuous edge sharpening. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild.",
+  "SCALING_SHARPNESS_DESC": "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild.",
   "CONTENT_FPS_MULTIPLIER": "Frame Generation Mode",
   "CONTENT_PERFORMANCE_SETTINGS": "Performance Settings",
   "CONTENT_ADVANCED_DETAILS": "Advanced Details",

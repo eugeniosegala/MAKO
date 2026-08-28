@@ -1,7 +1,7 @@
 {
   "CONTENT_SCALING": "Escalado",
   "SCALING_ENABLED": "Activar motor de escalado (reinicio)",
-  "SCALING_ENABLED_DESC": "Activa la ruta de escalado de MAKO basada en Gamescope para el próximo inicio del juego. Una vez iniciado, los cambios de modelo y nitidez solo reconstruyen el escalador privado de MAKO y no recrean la cadena de intercambio del juego. El factor de escala se aplica tras el siguiente cambio natural de resolución del juego. El motor puede funcionar solo o antes de la generación de fotogramas.",
+  "SCALING_ENABLED_DESC": "Activa el motor antes de iniciar el juego. Puedes cambiar el método de escalado mientras juegas. Funciona solo o con la generación de fotogramas, pero añade carga a la GPU; déjalo desactivado si no necesitas escalado.",
   "SCALING_METHOD": "Método de escalado",
   "SCALING_METHOD_DESC": "Resolución nativa usa una línea base lineal rápida sin modelo con el factor seleccionado. Escalador MAKO es la opción abierta de una sola pasada. LS1 Quality y Performance usan los modelos con licencia de Lossless Scaling; si LS1 no puede iniciarse, Escalador MAKO toma el control. Los cambios de modelo se aplican dentro de MAKO sin recrear la cadena de intercambio del juego.",
   "SCALING_METHOD_NATIVE": "Resolución nativa",
@@ -11,7 +11,7 @@
   "SCALING_FACTOR": "Factor de escala",
   "SCALING_FACTOR_DESC": "Define la relación entre el tamaño de salida y el de entrada para todos los métodos, incluida Resolución nativa. Los valores altos renderizan menos píxeles de origen. Se aplica tras el siguiente cambio natural de resolución del juego o un reinicio.",
   "SCALING_SHARPNESS": "Nitidez del escalado",
-  "SCALING_SHARPNESS_DESC": "En MAKO controla el realce continuo de bordes. En LS1 selecciona una de cinco variantes de nitidez aprendidas. Se aplica mediante una reconstrucción del escalador privado.",
+  "SCALING_SHARPNESS_DESC": "En MAKO, aplica este multiplicador del 0 al 100 % a su base de nitidez 2x. En LS1 selecciona una de cinco variantes de nitidez aprendidas. Se aplica mediante una reconstrucción del escalador privado.",
   "CONTENT_FPS_MULTIPLIER": "Modo de generación de cuadros",
   "CONTENT_PERFORMANCE_SETTINGS": "Configuración de rendimiento",
   "CONTENT_ADVANCED_DETAILS": "Detalles avanzados",

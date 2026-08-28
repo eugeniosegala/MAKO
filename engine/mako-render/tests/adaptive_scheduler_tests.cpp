@@ -472,10 +472,10 @@ namespace {
             disruptionTrace
         );
 
-        require(steady45 == 12777908042654023899ULL,
+        require(steady45 == 17922259728464763653ULL,
             "45-to-90 characterization changed: " +
                 std::to_string(steady45));
-        require(boundary425 == 8941383692458771123ULL,
+        require(boundary425 == 17868105727514782793ULL,
             "42.5-to-90 characterization changed: " +
                 std::to_string(boundary425));
         require(boundary4275 == 15981559191712361698ULL,
@@ -749,6 +749,117 @@ namespace {
         require(pacing.targetPhaseErrorMaximumMilliseconds <=
                 1000.0 / 90.0 / 2.0 + 1e-6,
             "reported target-clock error exceeded half an output interval");
+    }
+
+    void testFractionalTargetClockStartsCenterAligned() {
+        Harness harness(
+            120, 2, false, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+        harness.runAtFps(90.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: centered clock had no generated capacity");
+
+        harness.scheduler.resetTiming(harness.now);
+        constexpr auto sourceInterval = 11'111'111ns;
+        constexpr size_t sourceFrames = 600;
+        size_t scheduledOutputs = 0;
+        double elapsedSeconds = 0.0;
+        double maximumAbsolutePrefixError = 0.0;
+        bool sawRealOnly = false;
+        bool sawGenerated = false;
+
+        for (size_t frame = 0; frame < sourceFrames; ++frame) {
+            const auto plan = harness.frame(sourceInterval);
+            requireValidTimestamps(plan, 1);
+            scheduledOutputs += plan.size() + 1;
+            elapsedSeconds +=
+                std::chrono::duration<double>(sourceInterval).count();
+            const double requestedOutputs =
+                elapsedSeconds * 120.0;
+            maximumAbsolutePrefixError = std::max(
+                maximumAbsolutePrefixError,
+                std::abs(
+                    static_cast<double>(scheduledOutputs) -
+                    requestedOutputs
+                )
+            );
+            sawRealOnly |= plan.empty();
+            sawGenerated |= !plan.empty();
+        }
+
+        require(sawRealOnly && sawGenerated,
+            "centered Fractional clock did not retain its 0/1 cadence");
+        require(maximumAbsolutePrefixError <= 0.5 + 1e-6,
+            "Fractional output demand lagged by more than half an output");
+        require(std::abs(
+                static_cast<double>(scheduledOutputs) / elapsedSeconds - 120.0
+            ) < 0.2,
+            "centered Fractional clock changed the long-term target rate");
+    }
+
+    void testOrderedFractionalClockDoesNotDeferFifoWork() {
+        Harness harness(
+            120, 2, false, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+        harness.runAtFps(90.0, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: ordered clock had no generated capacity");
+
+        harness.scheduler.resetTiming(harness.now);
+        constexpr std::array<std::chrono::nanoseconds, 4> sourceTrace{
+            9ms, 12ms, 10ms, 13ms,
+        };
+        size_t scheduledOutputs = 0;
+        double requestedOutputs = 0.0;
+        double maximumAbsolutePrefixError = 0.0;
+        for (size_t cycle = 0; cycle < 300; ++cycle) {
+            for (const auto interval : sourceTrace) {
+                const auto plan = harness.frame(interval);
+                requireValidTimestamps(plan, 1);
+                scheduledOutputs += plan.size() + 1;
+                const auto snapshot = harness.scheduler.snapshot();
+                require(snapshot.targetOutputClockActive &&
+                        snapshot.smoothedBaseFps > 0.0,
+                    "ordered noisy trace left Fractional scheduling");
+                require(!snapshot.targetOutputDeferredBudgetOutput,
+                    "ordered FIFO moved earned work behind its target queue");
+                requestedOutputs += 120.0 / snapshot.smoothedBaseFps;
+                maximumAbsolutePrefixError = std::max(
+                    maximumAbsolutePrefixError,
+                    std::abs(
+                        static_cast<double>(scheduledOutputs) -
+                        requestedOutputs
+                    )
+                );
+            }
+        }
+        require(maximumAbsolutePrefixError <= 0.5 + 1e-6,
+            "ordered Fractional workload escaped its half-output prefix bound");
+    }
+
+    void testFractionalTargetClockIgnoresMarginalPlacementBenefit() {
+        Harness harness(120, 2);
+        harness.start();
+        harness.runAtFps(90.5, 7s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: marginal-placement clock had no capacity");
+
+        harness.scheduler.resetTiming(harness.now);
+        bool sawRealOnly = false;
+        bool sawGenerated = false;
+        for (size_t frame = 0; frame < 600; ++frame) {
+            const auto plan = harness.frameAtFps(90.5);
+            requireValidTimestamps(plan, 1);
+            sawRealOnly |= plan.empty();
+            sawGenerated |= !plan.empty();
+            require(!harness.scheduler.snapshot().
+                    targetOutputDeferredBudgetOutput,
+                "marginal high-base spacing noise relocated earned work");
+        }
+        require(sawRealOnly && sawGenerated,
+            "marginal-placement guard changed Fractional target delivery");
     }
 
     void testTargetClockCoversSteadyAndNoisyCadenceMatrix() {
@@ -3019,6 +3130,9 @@ int main() {
         {"scheduler characterization corpus", testCharacterizationTraceCorpus},
         {"60 to 120 settles at 2x", testSteadySixtyRampsToTwoXFor120Target},
         {"fractional target clock follows raw intervals", testFractionalTargetClockAssignsWorkToLongIntervals},
+        {"fractional target clock starts center aligned", testFractionalTargetClockStartsCenterAligned},
+        {"ordered fractional clock does not defer FIFO work", testOrderedFractionalClockDoesNotDeferFifoWork},
+        {"fractional target clock ignores marginal placement", testFractionalTargetClockIgnoresMarginalPlacementBenefit},
         {"target clock covers steady and noisy cadence matrix", testTargetClockCoversSteadyAndNoisyCadenceMatrix},
         {"near-target native preference covers steady sweep", testNearTargetNativePreferenceCoversSteadySweep},
         {"near-target native preference scales across targets", testNearTargetNativePreferenceScalesAcrossTargets},

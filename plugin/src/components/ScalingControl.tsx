@@ -63,7 +63,7 @@ export function ScalingControl({
           label={t("SCALING_ENABLED", "Enable Scaling Engine (Restart)")}
           description={t(
             "SCALING_ENABLED_DESC",
-            "Enables MAKO's Gamescope-backed scaling path for the next game launch. Once running, model and sharpness changes rebuild only MAKO's private scaler and do not recreate the game's swapchain. Scale Factor applies after the game's next natural resolution change. The engine can run alone or before Frame Generation.",
+            "Enable before starting the game. Change the scaling method while playing. It works alone or with Frame Generation, but adds GPU overhead. Leave it off when you do not need scaling.",
           )}
           checked={config.scaling_enabled}
           disabled={disabled}
@@ -122,7 +122,7 @@ export function ScalingControl({
                   label={`${t("SCALING_SHARPNESS", "Scaling Sharpness")} (${Math.round(config.scaling_sharpness * 100)}%)`}
                   description={t(
                     "SCALING_SHARPNESS_DESC",
-                    "For MAKO, controls continuous edge sharpening. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild.",
+                    "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild.",
                   )}
                   value={config.scaling_sharpness}
                   min={SCALING_SHARPNESS_MIN}
