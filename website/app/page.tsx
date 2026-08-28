@@ -36,7 +36,7 @@ const features = [
     code: 'AF',
     title: 'Adaptive Frame Generation',
     text: 'Target 30–240 FPS while MAKO varies generated frames up to your selected 2×–4× ceiling.',
-    stat: '30—240',
+    stat: '30-240',
     label: 'FPS target',
     tone: 'cyan',
   },
@@ -72,7 +72,7 @@ const features = [
     code: 'FX',
     title: 'Flatpak ready',
     text: 'Prepare Heroic and EmuDeck Flatpaks through the same private configuration and renderer pipeline.',
-    stat: '23—25',
+    stat: '23-25',
     label: 'runtime matrix',
     tone: 'blue',
   },
@@ -141,8 +141,8 @@ export default function Home() {
               <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
             <div className="hero-meta">
-              <span><b>2—4×</b> generation ceiling</span>
-              <span><b>30—240</b> adaptive FPS target</span>
+              <span><b>2-4×</b> generation ceiling</span>
+              <span><b>30-240</b> adaptive FPS target</span>
               <span><b>32 + 64</b> bit Vulkan layers</span>
             </div>
           </div>
@@ -188,7 +188,7 @@ export default function Home() {
               <div className="panel-topline"><span>CONTROL LAYER</span><i>STEAMOS / DECKY</i></div>
               <img src="assets/mako-logo.webp" alt="MAKO Decky" width="230" height="230" draggable={false} />
               <h3>MAKO Decky</h3>
-              <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration—from one focused interface.</p>
+              <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration through one focused interface.</p>
               <ul>
                 <li><span /> Per-game frame-generation switch</li>
                 <li><span /> Steam, Heroic &amp; EmuDeck profiles</li>
@@ -278,7 +278,7 @@ export default function Home() {
                 </div>
               </div>
             </div>
-            <div className="telemetry-foot"><span>INPUT CADENCE 37—60 FPS</span><span>OUTPUT RHYTHM 90 FPS</span></div>
+            <div className="telemetry-foot"><span>INPUT CADENCE 37-60 FPS</span><span>OUTPUT RHYTHM 90 FPS</span></div>
           </div>
         </section>
 
