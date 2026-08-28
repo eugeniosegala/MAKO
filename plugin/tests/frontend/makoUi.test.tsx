@@ -13,6 +13,7 @@ import {
   MakoButtonTheme,
   MakoInlineTip,
   MakoReleaseIdentity,
+  MakoSectionHeader,
   makoDialogButtonStyle,
 } from "../../src/components/MakoUi";
 
@@ -29,6 +30,18 @@ describe("MAKO release identity", () => {
     );
     expect(identity.style.opacity).toBe("0.5");
     expect(screen.getByText("abyss-ascending")).toBeTruthy();
+  });
+});
+
+describe("MAKO section headers", () => {
+  test("uses the emphasized four-pixel section divider", () => {
+    window.SP_REACT = React;
+
+    render(<MakoSectionHeader>Spatial Scaling</MakoSectionHeader>);
+
+    expect(screen.getByText("Spatial Scaling").style.borderBottom).toBe(
+      "4px solid rgba(77, 170, 190, 0.48)",
+    );
   });
 });
 

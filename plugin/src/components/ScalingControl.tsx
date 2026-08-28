@@ -67,13 +67,13 @@ export function ScalingControl({
               <div>
                 {t(
                   "SCALING_ENABLED_DESC",
-                  "Enable before starting the game. When off, scaling is fully disabled.",
+                  "Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO's own scaler.",
                 )}
               </div>
               <MakoInlineTip tone="warning">
                 {t(
                   "SCALING_ENABLED_WARNING",
-                  "Once enabled at startup, you can change the scaling model while the game is running. Leave Scaling off when you do not need it, because keeping its runtime path provisioned uses additional system resources.",
+                  "Leave scaling off when you do not need it, as it consumes resources.",
                 )}
               </MakoInlineTip>
             </>

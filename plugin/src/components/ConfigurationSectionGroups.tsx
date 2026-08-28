@@ -454,10 +454,10 @@ export function CompatibilityConfigurationGroup({
                       "Provided automatically when Scaling is enabled. Enable it separately for FG-only profiles that need the Gamescope WSI presentation path. It can run with Frame Generation and one post-process tool. Restart the game after changing it.",
                     )}
                   </div>
-                  <MakoInlineTip tone="info">
+                  <MakoInlineTip tone="warning">
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
-                      "The explicit compatibility path is experimental and currently limited to supported 64-bit host launches. Leave it off when the game does not need it.",
+                      "This explicit compatibility path is experimental and limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
                     )}
                   </MakoInlineTip>
                 </>

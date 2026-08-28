@@ -175,12 +175,12 @@ describe("Scaling controls", () => {
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "Enable before starting the game. When off, scaling is fully disabled.",
+        "Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO's own scaler.",
       ),
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Once enabled at startup, you can change the scaling model while the game is running. Leave Scaling off when you do not need it, because keeping its runtime path provisioned uses additional system resources.",
+        "Leave scaling off when you do not need it, as it consumes resources.",
       ).closest('[data-tone="warning"]'),
     ).toBeTruthy();
     expect(

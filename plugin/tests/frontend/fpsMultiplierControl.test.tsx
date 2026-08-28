@@ -53,7 +53,18 @@ vi.mock("@decky/ui", () => ({
       {description}
     </div>
   ),
-  SliderField: ({ label }: { label: React.ReactNode }) => <div>{label}</div>,
+  SliderField: ({
+    label,
+    description,
+  }: {
+    label: React.ReactNode;
+    description?: React.ReactNode;
+  }) => (
+    <div>
+      {description}
+      {label}
+    </div>
+  ),
   Focusable: ({
     children,
     style,
@@ -187,27 +198,59 @@ describe("Frame Generation controls", () => {
         "Unavailable while Adaptive Frame Generation is enabled.",
       ),
     ).toBeTruthy();
+    expect(screen.getByText(/^Interpolation ceiling/).style.paddingBottom).toBe(
+      "2px",
+    );
   });
 
-  test("keeps the saved Fractional selection visible while generation is off", () => {
+  test("collapses mode controls while generation is off without changing saved state", () => {
     window.SP_REACT = React;
+    const config = {
+      ...getDefaults(),
+      frame_generation_enabled: false,
+      adaptive: true,
+      adaptive_auto_base_fps_cap: false,
+    };
+    const onConfigChange = vi.fn(async () => undefined);
+    const onConfigUpdate = vi.fn(async () => undefined);
 
-    render(
+    const { rerender } = render(
       <FpsMultiplierControl
-        config={{
-          ...getDefaults(),
-          frame_generation_enabled: false,
-          adaptive: true,
-          adaptive_auto_base_fps_cap: false,
-        }}
-        onConfigChange={vi.fn(async () => undefined)}
-        onConfigUpdate={vi.fn(async () => undefined)}
+        config={config}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
       />,
     );
 
     expect(
+      screen.getByText("Frame Generation").getAttribute("data-checked"),
+    ).toBe("false");
+    expect(screen.queryByText("Adaptive Frame Generation")).toBeNull();
+    expect(screen.queryByText("Fractional Adaptive")).toBeNull();
+    expect(screen.queryByText(/Target FPS \(90\)$/)).toBeNull();
+    expect(screen.queryByText("Fixed FPS Multiplier")).toBeNull();
+
+    fireEvent.click(screen.getByText("Frame Generation"));
+    expect(onConfigChange).toHaveBeenCalledWith(
+      "frame_generation_enabled",
+      true,
+    );
+    expect(onConfigUpdate).not.toHaveBeenCalled();
+
+    rerender(
+      <FpsMultiplierControl
+        config={{ ...config, frame_generation_enabled: true }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+
+    expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
+    expect(
       screen.getByText("Fractional Adaptive").getAttribute("data-checked"),
     ).toBe("true");
+    expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
+    expect(screen.getByText("Fixed FPS Multiplier")).toBeTruthy();
   });
 
   test("preserves every Adaptive subsetting when the mode is re-enabled", () => {

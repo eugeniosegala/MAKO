@@ -236,7 +236,7 @@ describe("External Tools controls", () => {
     ).toBe(2);
   });
 
-  test("uses the information treatment for Experimental Gamescope WSI", () => {
+  test("uses the warning treatment for Experimental Gamescope WSI", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const { container } = render(
       <ConfigurationSection
@@ -257,10 +257,10 @@ describe("External Tools controls", () => {
     expect(
       screen
         .getByText(
-          "The explicit compatibility path is experimental and currently limited to supported 64-bit host launches. Leave it off when the game does not need it.",
+          "This explicit compatibility path is experimental and limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
         )
         .getAttribute("data-tone"),
-    ).toBe("info");
+    ).toBe("warning");
     fireEvent.click(screen.getByText("Experimental Gamescope WSI (Restart)"));
     expect(onConfigChange).toHaveBeenCalledWith(
       GAMESCOPE_WSI_COMPATIBILITY,
