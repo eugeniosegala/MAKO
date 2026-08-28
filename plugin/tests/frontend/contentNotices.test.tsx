@@ -2,10 +2,6 @@ import React from "react";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
-const navigation = vi.hoisted(() => ({
-  NavigateToExternalWeb: vi.fn(),
-}));
-
 vi.mock("@decky/ui", () => ({
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
@@ -28,14 +24,12 @@ vi.mock("@decky/ui", () => ({
       {children}
     </button>
   ),
-  Navigation: navigation,
 }));
 vi.mock("../../src/components/MakoInstallCountdown", () => ({
   MakoInstallCompletion: () => <span>Install complete</span>,
 }));
 vi.mock("../../src/components/MakoUi", () => ({
   MakoCompactSpinner: () => <span>Working</span>,
-  makoAccentColor: "#83bff0",
   makoPanelDivider: "1px solid",
   makoPanelStyle: {},
 }));
@@ -81,6 +75,7 @@ const baseProps = {
 describe("content status notices", () => {
   beforeEach(() => {
     window.SP_REACT = React;
+    localStorage.clear();
   });
 
   test("retains development identity and reveals deployment details on demand", () => {
@@ -142,17 +137,56 @@ describe("content status notices", () => {
     ).toBe(true);
   });
 
-  test("shows succinct restart guidance and opens the MAKO documentation", () => {
-    render(<ContentNotices {...baseProps} showWelcome={true} />);
-
-    expect(screen.getByText("Hello from the MAKO Team")).toBeTruthy();
-    expect(screen.getByText(/options marked Restart/)).toBeTruthy();
-    expect(screen.getByText(/Every game is different/)).toBeTruthy();
-
-    fireEvent.click(screen.getByText("Read the MAKO documentation"));
-    expect(navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
-      "https://github.com/eugeniosegala/MAKO#documentation",
+  test("shows concise restart guidance and remembers when tips are collapsed", () => {
+    const { unmount } = render(
+      <ContentNotices {...baseProps} showWelcome={true} />,
     );
+
+    expect(screen.getByText("🦈")).toBeTruthy();
+    expect(screen.getByText("Hello from the MAKO Team!")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Here's a few tips to make your experience even better.",
+      ),
+    ).toBeTruthy();
+    const welcome = screen.getByRole("note");
+    expect(welcome.textContent).toContain("Many settings apply live.");
+    expect(welcome.textContent).toContain(
+      "Options marked Restart require a game restart.",
+    );
+    expect(welcome.textContent).toContain(
+      "Game resolution and scaling changes can affect performance.",
+    );
+    expect(welcome.textContent).toContain(
+      "If anything looks or feels wrong after several changes, restart the game for a clean new session.",
+    );
+    const finalTip = screen.getByText(/keep an eye on the release page!$/);
+    const underlinedPhrases = Array.from(welcome.querySelectorAll("span"))
+      .filter((element) => element.style.textDecorationLine === "underline")
+      .map((element) => element.textContent);
+    expect(underlinedPhrases).toEqual([
+      "looks or feels wrong",
+      "several changes",
+      "restart the game for a clean new session.",
+    ]);
+
+    const collapseButton = screen.getByRole("button", { name: "Hide tips" });
+    expect(collapseButton.getAttribute("aria-expanded")).toBe("true");
+    expect(collapseButton.parentElement?.style.justifyContent).toBe("center");
+    expect(
+      finalTip.compareDocumentPosition(collapseButton) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    fireEvent.click(collapseButton);
+
+    expect(localStorage.getItem("mako-welcome-tips-collapsed")).toBe("true");
+    expect(screen.getByRole("button", { name: "Show tips" })).toBeTruthy();
+    expect(screen.queryByText(/Here's a few tips/)).toBeNull();
+    expect(screen.queryByText(/Every game is different/)).toBeNull();
+
+    unmount();
+    render(<ContentNotices {...baseProps} showWelcome={true} />);
+    expect(screen.getByRole("button", { name: "Show tips" })).toBeTruthy();
   });
 
   test("places guidance between development identity and the running game", () => {

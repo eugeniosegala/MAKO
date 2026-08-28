@@ -1,24 +1,16 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import {
   ButtonItem,
   DialogButton,
-  Navigation,
   PanelSectionRow,
   type AppOverview,
 } from "@decky/ui";
 import type { LocalDevelopmentBuildInfo } from "../config/devBuildInfo";
 import { SUPPORTED_FLATPAK_RUNTIMES } from "../config/configSchema";
 import { MakoInstallCompletion } from "./MakoInstallCountdown";
-import {
-  MakoCompactSpinner,
-  makoAccentColor,
-  makoPanelDivider,
-  makoPanelStyle,
-} from "./MakoUi";
+import { MakoCompactSpinner, makoPanelDivider, makoPanelStyle } from "./MakoUi";
+import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
 import t from "../i18n/i18n";
-
-const MAKO_DOCUMENTATION_URL =
-  "https://github.com/eugeniosegala/MAKO#documentation";
 
 const SUPPORTED_FLATPAK_RUNTIME_VERSION_LIST = SUPPORTED_FLATPAK_RUNTIMES.map(
   ({ version }) => version,
@@ -37,7 +29,28 @@ interface ContentNoticesProps {
   onInstall: () => Promise<void>;
 }
 
+function UnderlinedWelcomeText({ children }: { children: ReactNode }) {
+  return (
+    <span
+      style={{
+        textDecorationLine: "underline",
+        textDecorationColor: "rgba(131, 191, 240, 0.8)",
+        textUnderlineOffset: "2px",
+      }}
+    >
+      {children}
+    </span>
+  );
+}
+
 function WelcomeNotice({ separated }: { separated: boolean }) {
+  const [tipsCollapsed, setTipsCollapsed] = usePersistentCollapseState(
+    "mako-welcome-tips-collapsed",
+    false,
+    "welcome tips",
+  );
+  const expanded = !tipsCollapsed;
+
   return (
     <PanelSectionRow>
       <div
@@ -52,65 +65,106 @@ function WelcomeNotice({ separated }: { separated: boolean }) {
       >
         <div
           style={{
-            display: "flex",
-            alignItems: "center",
-            gap: "7px",
             color: "#edf8fb",
             fontSize: "13px",
             fontWeight: 700,
-            lineHeight: 1.25,
+            lineHeight: 1.3,
+            display: "flex",
+            alignItems: "flex-start",
+            gap: "7px",
           }}
         >
-          <span aria-hidden="true" style={{ fontSize: "16px" }}>
-            👋
+          <span aria-hidden="true" style={{ fontSize: "16px", lineHeight: 1 }}>
+            🦈
           </span>
-          {t("WELCOME_TITLE", "Hello from the MAKO Team")}
+          <span style={{ flex: 1, minWidth: 0 }}>
+            {t("WELCOME_TITLE", "Hello from the MAKO Team!")}
+          </span>
         </div>
+        {expanded && (
+          <>
+            <div
+              style={{
+                marginTop: "7px",
+                color: "#c8dce8",
+                fontSize: "11px",
+                lineHeight: 1.42,
+              }}
+            >
+              <div>
+                {t(
+                  "WELCOME_TIPS_INTRO",
+                  "Here's a few tips to make your experience even better.",
+                )}
+              </div>
+              <div style={{ marginTop: "4px" }}>
+                {t("WELCOME_LIVE_UPDATES", "Many settings apply live.")}{" "}
+                {t(
+                  "WELCOME_RESTART_REQUIRED",
+                  "Options marked Restart require a game restart.",
+                )}{" "}
+                {t(
+                  "WELCOME_PERFORMANCE_NOTE",
+                  "Game resolution and scaling changes can affect performance.",
+                )}{" "}
+                {t("WELCOME_CLEAN_SESSION_PREFIX", "If anything ")}
+                <UnderlinedWelcomeText>
+                  {t("WELCOME_CLEAN_SESSION_WRONG", "looks or feels wrong")}
+                </UnderlinedWelcomeText>
+                {t("WELCOME_CLEAN_SESSION_AFTER", " after ")}
+                <UnderlinedWelcomeText>
+                  {t("WELCOME_CLEAN_SESSION_CHANGES", "several changes")}
+                </UnderlinedWelcomeText>
+                {t("WELCOME_CLEAN_SESSION_RESTART_SEPARATOR", ", ")}
+                <UnderlinedWelcomeText>
+                  {t(
+                    "WELCOME_CLEAN_SESSION_RESTART",
+                    "restart the game for a clean new session.",
+                  )}
+                </UnderlinedWelcomeText>
+              </div>
+            </div>
+            <div
+              style={{
+                marginTop: "9px",
+                paddingTop: "8px",
+                borderTop: makoPanelDivider,
+                color: "#9fc1ca",
+                fontSize: "10.5px",
+                lineHeight: 1.4,
+              }}
+            >
+              {t(
+                "WELCOME_ENJOY",
+                "Every game is different. Find the best settings that work for you and enjoy playing. MAKO keeps improving with every release, so keep an eye on the release page!",
+              )}
+            </div>
+          </>
+        )}
         <div
           style={{
-            marginTop: "7px",
-            color: "#c8dce8",
-            fontSize: "11px",
-            lineHeight: 1.42,
+            display: "flex",
+            justifyContent: "center",
+            marginTop: expanded ? "9px" : "8px",
           }}
         >
-          {t(
-            "WELCOME_GUIDANCE",
-            "Many settings apply live, but options marked Restart require a game restart. Resolution and scaling changes can affect performance; if anything looks or feels wrong after several changes, restart the game for a clean session.",
-          )}
+          <DialogButton
+            aria-expanded={expanded}
+            style={{
+              width: "auto",
+              minWidth: "78px",
+              height: "28px",
+              padding: "4px 10px",
+              fontSize: "11px",
+              flexShrink: 0,
+            }}
+            onClick={() => setTipsCollapsed((current) => !current)}
+          >
+            {expanded
+              ? t("WELCOME_TIPS_COLLAPSE", "Hide tips")
+              : t("WELCOME_TIPS_EXPAND", "Show tips")}
+          </DialogButton>
         </div>
-        <div
-          style={{
-            marginTop: "9px",
-            paddingTop: "8px",
-            borderTop: makoPanelDivider,
-            color: "#9fc1ca",
-            fontSize: "10.5px",
-            lineHeight: 1.4,
-          }}
-        >
-          {t(
-            "WELCOME_ENJOY",
-            "Every game is different. Find the settings that work best for you, and enjoy playing—MAKO keeps improving with every release.",
-          )}
-        </div>
-        <DialogButton
-          className="Mako_DialogButton"
-          style={{
-            width: "100%",
-            height: "32px",
-            minHeight: "32px",
-            marginTop: "10px",
-            color: makoAccentColor,
-            fontSize: "11px",
-            fontWeight: 600,
-          }}
-          onClick={() =>
-            Navigation.NavigateToExternalWeb(MAKO_DOCUMENTATION_URL)
-          }
-        >
-          {t("WELCOME_DOCUMENTATION", "Read the MAKO documentation")}
-        </DialogButton>
       </div>
     </PanelSectionRow>
   );
