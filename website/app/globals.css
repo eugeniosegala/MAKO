@@ -83,6 +83,9 @@ h1 em, h2 em { position: relative; top: 4px; display: inline-block; font-style: 
 .hero-copy .hero-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: min(100%, 540px); }
 .hero-copy .button { width: 100%; min-width: 0; }
 .hero-copy .button-primary { justify-content: flex-start; gap: 13px; }
+.hero-download-copy { display: grid; gap: 3px; min-width: 0; }
+.hero-download-copy small { color: #7690a0; font-size: 9px; font-weight: 500; line-height: 1.2; }
+.button-renderer .hero-download-copy small { color: #b78060; }
 .hero-copy .button-secondary { grid-column: 1 / -1; }
 .download-glyph { position: relative; display: inline-block; flex: 0 0 19px; width: 19px; height: 19px; }
 .download-glyph::before { content: ''; position: absolute; top: 1px; left: 8px; width: 2px; height: 10px; border-radius: 2px; background: currentColor; }

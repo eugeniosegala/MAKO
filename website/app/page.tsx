@@ -128,15 +128,21 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow"><span /> Spatial scaling + frame generation / Linux</p>
             <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
-            <p className="hero-intro">MAKO brings proprietary Lossless Scaling LS1, a built-in open Vulkan spatial scaler, and LSFG frame generation to Steam Deck, Steam Machine, SteamOS, and Linux through a focused Decky control layer and a purpose-built renderer.</p>
+            <p className="hero-intro">MAKO brings proprietary Lossless Scaling LS1, a built-in open Vulkan spatial scaler, and LSFG frame generation to Steam Deck, Steam Machine, SteamOS, and Linux.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
               <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Contribute. Fork it. Change it. Make it yours.</span></span>
               <span className="open-source-sticker-arrow" aria-hidden="true">↗</span>
             </a>
             <div className="hero-actions">
-              <a className="button button-primary" href={links.deckyDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Decky</span></a>
-              <a className="button button-primary button-renderer" href={links.rendererDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Renderer</span></a>
+              <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>
+                <span className="download-glyph" aria-hidden="true"><i /></span>
+                <span className="hero-download-copy"><span>Get MAKO Decky</span><small>Includes MAKO Renderer</small></span>
+              </a>
+              <a className="button button-primary button-renderer" href={links.rendererDownload} {...newTabProps}>
+                <span className="download-glyph" aria-hidden="true"><i /></span>
+                <span className="hero-download-copy"><span>Get MAKO Renderer</span><small>Standalone for desktop Linux</small></span>
+              </a>
               <a className="button button-secondary" href={links.docs} {...newTabProps}>Installation Guide <span aria-hidden="true">→</span></a>
               <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
