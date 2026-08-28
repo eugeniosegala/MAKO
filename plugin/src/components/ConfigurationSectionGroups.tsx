@@ -46,7 +46,7 @@ import {
 import { ultraPerformanceChanges } from "../config/ultraPerformancePreset";
 import t from "../i18n/i18n";
 import {
-  MakoInlineWarning,
+  MakoInlineTip,
   MakoSectionHeader,
   MakoSettingRelationship,
 } from "./MakoUi";
@@ -139,12 +139,12 @@ export function PerformanceConfigurationGroup({
                   "May improve frame-generation performance by up to 30% in favourable GPU-limited scenarios. Uses 75% Flow Scale, the Lighter FG Model, and FP16 when supported to reduce GPU work. Increases visual artifacts. Primarily intended for low-power devices such as Steam Deck.",
                 )}
               </div>
-              <MakoInlineWarning tone="warning">
+              <MakoInlineTip tone="info">
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_WARNING",
                   "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
                 )}
-              </MakoInlineWarning>
+              </MakoInlineTip>
             </>
           }
           checked={config.ultra_performance}
@@ -454,12 +454,12 @@ export function CompatibilityConfigurationGroup({
                       "Provided automatically when Scaling is enabled. Enable it separately for FG-only profiles that need the Gamescope WSI presentation path. It can run with Frame Generation and one post-process tool. Restart the game after changing it.",
                     )}
                   </div>
-                  <MakoInlineWarning tone="warning">
+                  <MakoInlineTip tone="info">
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
                       "The explicit compatibility path is experimental and currently limited to supported 64-bit host launches. Leave it off when the game does not need it.",
                     )}
-                  </MakoInlineWarning>
+                  </MakoInlineTip>
                 </>
               }
               checked={
@@ -546,12 +546,12 @@ export function ExternalToolsConfigurationGroup({
               "Optional and per profile. MangoHud and vkBasalt are mutually exclusive with each other, but either can run with Gamescope WSI, Scaling, and Frame Generation. Restart the game after changing the tool.",
             )}
           </div>
-          <MakoInlineWarning>
+          <MakoInlineTip tone="info">
             {t(
               "CONFIG_EXTERNAL_TOOLS_WARNING",
               "External tools may affect performance. Test each game carefully.",
             )}
-          </MakoInlineWarning>
+          </MakoInlineTip>
         </div>
       </PanelSectionRow>
 

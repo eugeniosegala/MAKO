@@ -110,7 +110,7 @@ vi.mock("@decky/ui", () => ({
   }) => <button onClick={onClick}>{children}</button>,
 }));
 vi.mock("../../src/components/MakoUi", () => ({
-  MakoInlineWarning: ({
+  MakoInlineTip: ({
     children,
     tone,
   }: {
@@ -236,7 +236,7 @@ describe("External Tools controls", () => {
     ).toBe(2);
   });
 
-  test("uses the orange warning treatment for Experimental Gamescope WSI", () => {
+  test("uses the information treatment for Experimental Gamescope WSI", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const { container } = render(
       <ConfigurationSection
@@ -254,10 +254,13 @@ describe("External Tools controls", () => {
     expect(screen.getByText("Disable HDR")).toBeTruthy();
     expect(screen.queryByText("Disable HDR (Restart)")).toBeNull();
 
-    const warning = container.querySelector('[data-tone="warning"]');
-    expect(warning?.textContent).toContain(
-      "The explicit compatibility path is experimental and currently limited to supported 64-bit host launches. Leave it off when the game does not need it.",
-    );
+    expect(
+      screen
+        .getByText(
+          "The explicit compatibility path is experimental and currently limited to supported 64-bit host launches. Leave it off when the game does not need it.",
+        )
+        .getAttribute("data-tone"),
+    ).toBe("info");
     fireEvent.click(screen.getByText("Experimental Gamescope WSI (Restart)"));
     expect(onConfigChange).toHaveBeenCalledWith(
       GAMESCOPE_WSI_COMPATIBILITY,
@@ -296,6 +299,11 @@ describe("External Tools controls", () => {
     );
 
     expect(screen.getByText("External Tools")).toBeTruthy();
+    expect(
+      screen
+        .getByText("External tools may affect performance. Test each game carefully.")
+        .getAttribute("data-tone"),
+    ).toBe("info");
     expect(screen.queryByText("Enable MangoHud (Restart)")).toBeNull();
     expect(screen.queryByText("Enable vkBasalt (Restart)")).toBeNull();
 

@@ -85,9 +85,13 @@ vi.mock("../../src/components/MakoUi", () => ({
       {children}
     </div>
   ),
-  MakoInlineWarning: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
-  ),
+  MakoInlineTip: ({
+    children,
+    tone,
+  }: {
+    children: React.ReactNode;
+    tone?: string;
+  }) => <div data-tone={tone}>{children}</div>,
   MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
     <div data-mako-setting-relationship="true">{children}</div>
   ),
@@ -140,6 +144,11 @@ describe("Frame Generation controls", () => {
     expect(fixedMultiplierDescription.style.marginBottom).toBe("");
     expect(screen.getAllByText(/MAKO briefly asks the game/)).toHaveLength(2);
     expect(screen.queryByText(/may require a restart/)).toBeNull();
+    expect(
+      screen
+        .getByText("Keep this on if you want frame generation.")
+        .getAttribute("data-tone"),
+    ).toBe("info");
     expect(screen.getByText("−").className).toBe("Mako_DialogButton");
     expect(screen.getByText("+").className).toBe("Mako_DialogButton");
 

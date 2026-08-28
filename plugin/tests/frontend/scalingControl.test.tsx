@@ -181,7 +181,7 @@ describe("Scaling controls", () => {
     expect(
       screen.getByText(
         "Once enabled at startup, you can change the scaling model while the game is running. Leave Scaling off when you do not need it, because keeping its runtime path provisioned uses additional system resources.",
-      ),
+      ).closest('[data-tone="warning"]'),
     ).toBeTruthy();
     expect(
       screen.getByText(

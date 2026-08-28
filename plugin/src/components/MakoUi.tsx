@@ -56,7 +56,8 @@ export const makoPanelItemStyle: CSSProperties = {
   borderTop: makoPanelDivider,
 };
 
-export function MakoInlineWarning({
+/** Use info for context and potential performance effects; reserve warning for known added runtime cost. */
+export function MakoInlineTip({
   children,
   tone = "info",
 }: {
@@ -69,6 +70,7 @@ export function MakoInlineWarning({
   return (
     <div
       role="note"
+      data-tone={tone}
       style={{
         display: "flex",
         alignItems: "flex-start",

@@ -21,7 +21,7 @@ import {
   type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
-import { MakoInlineWarning } from "./MakoUi";
+import { MakoInlineTip } from "./MakoUi";
 
 interface ScalingControlProps {
   config: ConfigurationData;
@@ -70,12 +70,12 @@ export function ScalingControl({
                   "Enable before starting the game. When off, scaling is fully disabled.",
                 )}
               </div>
-              <MakoInlineWarning>
+              <MakoInlineTip tone="warning">
                 {t(
                   "SCALING_ENABLED_WARNING",
                   "Once enabled at startup, you can change the scaling model while the game is running. Leave Scaling off when you do not need it, because keeping its runtime path provisioned uses additional system resources.",
                 )}
-              </MakoInlineWarning>
+              </MakoInlineTip>
             </>
           }
           checked={config.scaling_enabled}

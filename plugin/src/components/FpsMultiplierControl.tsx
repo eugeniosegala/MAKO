@@ -30,7 +30,7 @@ import {
 } from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
 import {
-  MakoInlineWarning,
+  MakoInlineTip,
   MakoFocusable,
   MakoSettingRelationship,
   makoDialogButtonStyle,
@@ -96,12 +96,12 @@ export function FpsMultiplierControl({
                   "Leave it on to use Fixed or Adaptive Frame Generation. When off, neither mode generates frames; your settings stay saved.",
                 )}
               </div>
-              <MakoInlineWarning>
+              <MakoInlineTip tone="info">
                 {t(
                   "FRAME_GENERATION_ENABLED_WARNING",
                   "Keep this on if you want frame generation.",
                 )}
-              </MakoInlineWarning>
+              </MakoInlineTip>
             </>
           }
           checked={

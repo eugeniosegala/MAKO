@@ -11,7 +11,7 @@ vi.mock("@decky/ui", () => ({
 
 import {
   MakoButtonTheme,
-  MakoInlineWarning,
+  MakoInlineTip,
   MakoReleaseIdentity,
   makoDialogButtonStyle,
 } from "../../src/components/MakoUi";
@@ -53,13 +53,25 @@ describe("MAKO button theme", () => {
   });
 });
 
-describe("MAKO inline warnings", () => {
+describe("MAKO inline tips", () => {
+  test("uses the blue information treatment by default", () => {
+    render(<MakoInlineTip>Performance context</MakoInlineTip>);
+
+    const info = screen.getByRole("note");
+    expect(info.getAttribute("data-tone")).toBe("info");
+    expect(info.style.borderLeft).toContain("131, 191, 240");
+    expect(info.style.background).toContain("24, 67, 94");
+  });
+
   test("uses the orange warning treatment when requested", () => {
     render(
-      <MakoInlineWarning tone="warning">Restart required</MakoInlineWarning>,
+      <MakoInlineTip tone="warning">
+        This option adds runtime overhead
+      </MakoInlineTip>,
     );
 
     const warning = screen.getByRole("note");
+    expect(warning.getAttribute("data-tone")).toBe("warning");
     expect(warning.style.borderLeft).toContain("244, 162, 89");
     expect(warning.style.background).toContain("104, 59, 19");
   });

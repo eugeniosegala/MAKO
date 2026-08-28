@@ -35,7 +35,7 @@ vi.mock("@decky/ui", () => ({
   ),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
-  MakoInlineWarning: ({
+  MakoInlineTip: ({
     children,
     tone,
   }: {
@@ -102,9 +102,9 @@ describe("Performance Settings", () => {
     expect(
       screen.getByText(/Primarily intended for low-power devices such as Steam Deck/),
     ).toBeTruthy();
-    const warning = screen.getByRole("note");
-    expect(warning.getAttribute("data-tone")).toBe("warning");
-    expect(warning.textContent).toContain(
+    const info = screen.getByRole("note");
+    expect(info.getAttribute("data-tone")).toBe("info");
+    expect(info.textContent).toContain(
       "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
     );
 
