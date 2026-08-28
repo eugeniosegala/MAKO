@@ -2,14 +2,23 @@ import { useState } from "react";
 import {
   ButtonItem,
   DialogButton,
+  Navigation,
   PanelSectionRow,
   type AppOverview,
 } from "@decky/ui";
 import type { LocalDevelopmentBuildInfo } from "../config/devBuildInfo";
 import { SUPPORTED_FLATPAK_RUNTIMES } from "../config/configSchema";
 import { MakoInstallCompletion } from "./MakoInstallCountdown";
-import { MakoCompactSpinner } from "./MakoUi";
+import {
+  MakoCompactSpinner,
+  makoAccentColor,
+  makoPanelDivider,
+  makoPanelStyle,
+} from "./MakoUi";
 import t from "../i18n/i18n";
+
+const MAKO_DOCUMENTATION_URL =
+  "https://github.com/eugeniosegala/MAKO#documentation";
 
 const SUPPORTED_FLATPAK_RUNTIME_VERSION_LIST = SUPPORTED_FLATPAK_RUNTIMES.map(
   ({ version }) => version,
@@ -18,6 +27,7 @@ const SUPPORTED_FLATPAK_RUNTIME_VERSION_LIST = SUPPORTED_FLATPAK_RUNTIMES.map(
 interface ContentNoticesProps {
   developmentBuildInfo: LocalDevelopmentBuildInfo | null;
   mainRunningApp?: AppOverview;
+  showWelcome: boolean;
   engineUpdateRequired: boolean;
   installedEngineVersion?: string | null;
   expectedEngineVersion?: string | null;
@@ -27,10 +37,90 @@ interface ContentNoticesProps {
   onInstall: () => Promise<void>;
 }
 
+function WelcomeNotice({ separated }: { separated: boolean }) {
+  return (
+    <PanelSectionRow>
+      <div
+        role="note"
+        style={{
+          ...makoPanelStyle,
+          width: "100%",
+          boxSizing: "border-box",
+          marginTop: separated ? "8px" : undefined,
+          padding: "12px",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "7px",
+            color: "#edf8fb",
+            fontSize: "13px",
+            fontWeight: 700,
+            lineHeight: 1.25,
+          }}
+        >
+          <span aria-hidden="true" style={{ fontSize: "16px" }}>
+            👋
+          </span>
+          {t("WELCOME_TITLE", "Hello from the MAKO Team")}
+        </div>
+        <div
+          style={{
+            marginTop: "7px",
+            color: "#c8dce8",
+            fontSize: "11px",
+            lineHeight: 1.42,
+          }}
+        >
+          {t(
+            "WELCOME_GUIDANCE",
+            "Many settings apply live, but options marked Restart require a game restart. Resolution and scaling changes can affect performance; if anything looks or feels wrong after several changes, restart the game for a clean session.",
+          )}
+        </div>
+        <div
+          style={{
+            marginTop: "9px",
+            paddingTop: "8px",
+            borderTop: makoPanelDivider,
+            color: "#9fc1ca",
+            fontSize: "10.5px",
+            lineHeight: 1.4,
+          }}
+        >
+          {t(
+            "WELCOME_ENJOY",
+            "Every game is different. Find the settings that work best for you, and enjoy playing—MAKO keeps improving with every release.",
+          )}
+        </div>
+        <DialogButton
+          className="Mako_DialogButton"
+          style={{
+            width: "100%",
+            height: "32px",
+            minHeight: "32px",
+            marginTop: "10px",
+            color: makoAccentColor,
+            fontSize: "11px",
+            fontWeight: 600,
+          }}
+          onClick={() =>
+            Navigation.NavigateToExternalWeb(MAKO_DOCUMENTATION_URL)
+          }
+        >
+          {t("WELCOME_DOCUMENTATION", "Read the MAKO documentation")}
+        </DialogButton>
+      </div>
+    </PanelSectionRow>
+  );
+}
+
 /** Purely visual status notices shown above MAKO Decky's controls. */
 export function ContentNotices({
   developmentBuildInfo,
   mainRunningApp,
+  showWelcome,
   engineUpdateRequired,
   installedEngineVersion,
   expectedEngineVersion,
@@ -217,11 +307,14 @@ export function ContentNotices({
         </PanelSectionRow>
       )}
 
+      {showWelcome && <WelcomeNotice separated={hasDevelopmentNotice} />}
+
       {mainRunningApp && (
         <PanelSectionRow>
           <div
             style={{
-              marginTop: hasDevelopmentNotice ? "8px" : undefined,
+              marginTop:
+                hasDevelopmentNotice || showWelcome ? "8px" : undefined,
               padding: "8px 12px",
               width: "100%",
               boxSizing: "border-box",
@@ -247,7 +340,9 @@ export function ContentNotices({
           <div
             style={{
               marginTop:
-                hasDevelopmentNotice || hasRunningAppNotice ? "8px" : undefined,
+                hasDevelopmentNotice || showWelcome || hasRunningAppNotice
+                  ? "8px"
+                  : undefined,
               padding: "12px",
               borderRadius: "8px",
               background: "rgba(255, 152, 0, 0.16)",

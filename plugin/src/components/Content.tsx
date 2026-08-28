@@ -130,7 +130,10 @@ export function Content() {
   const hasRunningAppNotice = Boolean(isInstalled && mainRunningApp);
   const hasEngineUpdateNotice = Boolean(isInstalled && engineUpdateRequired);
   const hasTopNotice =
-    hasDevelopmentNotice || hasRunningAppNotice || hasEngineUpdateNotice;
+    isInstalled ||
+    hasDevelopmentNotice ||
+    hasRunningAppNotice ||
+    hasEngineUpdateNotice;
 
   return (
     <div onFocusCapture={keepFocusedControlVisible}>
@@ -144,6 +147,7 @@ export function Content() {
         <ContentNotices
           developmentBuildInfo={localDevelopmentBuildInfo}
           mainRunningApp={isInstalled ? mainRunningApp : undefined}
+          showWelcome={isInstalled}
           engineUpdateRequired={isInstalled && engineUpdateRequired}
           installedEngineVersion={installedEngineVersion}
           expectedEngineVersion={expectedEngineVersion}

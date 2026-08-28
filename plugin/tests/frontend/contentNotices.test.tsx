@@ -1,6 +1,10 @@
 import React from "react";
-import { fireEvent, render, screen } from "@testing-library/react";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+
+const navigation = vi.hoisted(() => ({
+  NavigateToExternalWeb: vi.fn(),
+}));
 
 vi.mock("@decky/ui", () => ({
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
@@ -24,12 +28,16 @@ vi.mock("@decky/ui", () => ({
       {children}
     </button>
   ),
+  Navigation: navigation,
 }));
 vi.mock("../../src/components/MakoInstallCountdown", () => ({
   MakoInstallCompletion: () => <span>Install complete</span>,
 }));
 vi.mock("../../src/components/MakoUi", () => ({
   MakoCompactSpinner: () => <span>Working</span>,
+  makoAccentColor: "#83bff0",
+  makoPanelDivider: "1px solid",
+  makoPanelStyle: {},
 }));
 vi.mock("../../src/i18n/i18n", () => ({
   default: (_key: string, fallback: string) => fallback,
@@ -37,6 +45,8 @@ vi.mock("../../src/i18n/i18n", () => ({
 
 import { ContentNotices } from "../../src/components/ContentNotices";
 import type { LocalDevelopmentBuildInfo } from "../../src/config/devBuildInfo";
+
+afterEach(cleanup);
 
 const developmentBuildInfo: LocalDevelopmentBuildInfo = {
   generatedAt: "2026-08-21T10:00:00.000Z",
@@ -58,6 +68,7 @@ const developmentBuildInfo: LocalDevelopmentBuildInfo = {
 const baseProps = {
   developmentBuildInfo: null,
   mainRunningApp: undefined,
+  showWelcome: false,
   engineUpdateRequired: false,
   installedEngineVersion: undefined,
   expectedEngineVersion: undefined,
@@ -129,5 +140,44 @@ describe("content status notices", () => {
           .closest("button") as HTMLButtonElement
       ).disabled,
     ).toBe(true);
+  });
+
+  test("shows succinct restart guidance and opens the MAKO documentation", () => {
+    render(<ContentNotices {...baseProps} showWelcome={true} />);
+
+    expect(screen.getByText("Hello from the MAKO Team")).toBeTruthy();
+    expect(screen.getByText(/options marked Restart/)).toBeTruthy();
+    expect(screen.getByText(/Every game is different/)).toBeTruthy();
+
+    fireEvent.click(screen.getByText("Read the MAKO documentation"));
+    expect(navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
+      "https://github.com/eugeniosegala/MAKO#documentation",
+    );
+  });
+
+  test("places guidance between development identity and the running game", () => {
+    render(
+      <ContentNotices
+        {...baseProps}
+        developmentBuildInfo={developmentBuildInfo}
+        mainRunningApp={{ appid: 123, display_name: "Test Game" } as never}
+        showWelcome={true}
+      />,
+    );
+
+    const development = screen.getByText("🧪 Local development deployment");
+    const welcome = screen.getByRole("note");
+    const running = screen.getByText("Test Game").parentElement;
+
+    expect(
+      development.compareDocumentPosition(welcome) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(
+      welcome.compareDocumentPosition(running!) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(welcome.style.marginTop).toBe("8px");
+    expect(running?.style.marginTop).toBe("8px");
   });
 });
