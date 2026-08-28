@@ -5,6 +5,7 @@
   "SCALING_ENABLED_WARNING": "Leave scaling off when you do not need it, as it consumes resources.",
   "SCALING_METHOD": "Scaling Method",
   "SCALING_METHOD_DESC": "Choose the scaling model. You can change it while the game is running.",
+  "SCALING_METHOD_COMPARISON_TIP": "For the clearest comparison, use 2x scaling with a lower source resolution.\nTry 720p → 1440p or 1080p → 2160p.\nAt 1x or near-native resolution, differences can be subtle.",
   "SCALING_METHOD_NATIVE": "Native Resolution",
   "SCALING_METHOD_MAKO": "MAKO Scaler",
   "SCALING_METHOD_LS1": "LS1 Quality",

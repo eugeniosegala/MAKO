@@ -139,9 +139,7 @@ describe("Scaling controls", () => {
     expect(enabled.getAttribute("data-checked")).toBe("false");
     expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
     expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Scaling Method" }),
-    ).toBeNull();
+    expect(screen.queryByRole("button", { name: "Scaling Method" })).toBeNull();
     expect(screen.queryByText("MAKO Scaler")).toBeNull();
 
     fireEvent.click(enabled);
@@ -179,14 +177,23 @@ describe("Scaling controls", () => {
       ),
     ).toBeTruthy();
     expect(
-      screen.getByText(
-        "Leave scaling off when you do not need it, as it consumes resources.",
-      ).closest('[data-tone="warning"]'),
+      screen
+        .getByText(
+          "Leave scaling off when you do not need it, as it consumes resources.",
+        )
+        .closest('[data-tone="warning"]'),
     ).toBeTruthy();
     expect(
       screen.getByText(
         "Choose the scaling model. You can change it while the game is running.",
       ),
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByText(
+          /For the clearest comparison, use 2x scaling with a lower source resolution\./,
+        )
+        .closest('[data-tone="info"]'),
     ).toBeTruthy();
 
     rerender(
@@ -260,15 +267,11 @@ describe("Scaling controls", () => {
         .disabled,
     ).toBe(true);
     expect(
-      (screen.getByText("Scale Factor (1.5x)") as HTMLButtonElement)
-        .disabled,
+      (screen.getByText("Scale Factor (1.5x)") as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(
-      (
-        screen.getByText(
-          "Scaling Sharpness (50%)",
-        ) as HTMLButtonElement
-      ).disabled,
+      (screen.getByText("Scaling Sharpness (50%)") as HTMLButtonElement)
+        .disabled,
     ).toBe(true);
   });
 });

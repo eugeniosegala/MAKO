@@ -46,8 +46,8 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 |  | Highlight | What it brings |
 | :-: | --- | --- |
 | 🖼️ | **Full-quality frame generation** | Uses the Lossless Scaling frame-generation models from the user's licensed installation, with quality and performance controls per profile. |
-| 🔍 | **LS1 + open spatial scaling** | Reconstructs a lower-resolution game frame with LS1 Quality, LS1 Performance, or the open single-pass MAKO method, independently or before Fixed or Adaptive generation. |
 | 👻 | **Significantly reduced ghosting** | The full-quality v2 model with Lighter FG Model off can show noticeably less ghosting than the older layer. Supported AMD GPUs also gain extra protection against ghosting and corrupted moving edges. Results remain game-dependent. |
+| 🔍 | **LS1 + open spatial scaling** | Reconstructs a lower-resolution game frame with LS1 Quality, LS1 Performance, or the open single-pass MAKO method, independently or before Fixed or Adaptive generation. |
 | 🎯 | **Adaptive Frame Generation** | Optionally targets 30–240 FPS while MAKO Renderer varies generated frames up to a selected 2x–5x ceiling. |
 | 🌈 | **HDR foundation** | MAKO Renderer includes HDR10/PQ and linear-scRGB groundwork. MAKO Decky keeps HDR exposure disabled while activation, presentation, colour, and performance are validated across games. |
 | 🧩 | **64-bit and 32-bit x86 Vulkan** | Ships architecture-matched host and Flatpak layers so Vulkan can select the correct library for each game process. |
@@ -189,7 +189,7 @@ Profiles and Steam launch options are retained. The private native engine and la
 Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
 
 1. To use LS1 scaling or frame generation, purchase and install [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) through Steam. The open MAKO scaler does not use `Lossless.dll`.
-2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then double-click **Install MAKO Renderer** and choose **Execute** if your file manager asks. The installer opens **MAKO Renderer Configuration** when it finishes. To reopen it later, select the **MAKO Renderer Configuration** application-launcher icon (with the MAKO logo), or run `~/.local/bin/mako-ui`.
+2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0), then double-click **Install MAKO Renderer** and choose **Execute** if your file manager asks. The installer opens **MAKO Renderer Configuration** when it finishes. To reopen it later, switch to Desktop Mode, open the bottom-left Application Launcher, then select **Settings > MAKO Renderer Configuration** (the MAKO-logo icon), or run `~/.local/bin/mako-ui`.
 3. Run the installer again after extracting a newer archive. For manual installation, configuration, Flatpak setup, and troubleshooting, see the [MAKO Renderer guide](engine/README.md#direct-linux-installation).
 
 <!-- prettier-ignore -->

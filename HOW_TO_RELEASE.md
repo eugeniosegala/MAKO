@@ -39,7 +39,7 @@ Run the hardware gate for that commit:
 ./scripts/run-steamos-hardware-validation.sh --deploy-to-decky
 ```
 
-Omit `--deploy-to-decky` unless the host is the dedicated MAKO Decky test installation. Review the retained package identity, sanitized environment evidence, and every MAKO Gym summary: 48 feature, 74 quality, 18 LSFG-performance, 36 spatial-performance, 14 runtime-overhead, eight synchronization-validation, nine repeatability, 31 recovery, twelve native Gamescope E2E, twelve Proton E2E, and ten Proton-compatibility cases across at least four runtime families. Complete the applicable manual game matrix as well; portable CI and synthetic hardware workloads are not substitutes for it.
+Omit `--deploy-to-decky` unless the host is the dedicated MAKO Decky test installation. Review the retained package identity, sanitized environment evidence, and every MAKO Gym summary: 48 feature, 74 quality, 18 LSFG-performance, 36 spatial-performance, 14 runtime-overhead, eight synchronization-validation, nine repeatability, 31 recovery, fifteen native Gamescope E2E, twelve Proton E2E, and ten Proton-compatibility cases across at least four runtime families. Complete the applicable manual game matrix as well; portable CI and synthetic hardware workloads are not substitutes for it.
 
 ## Publish
 

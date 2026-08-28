@@ -5,6 +5,7 @@
   "SCALING_ENABLED_WARNING": "不需要缩放时请将其关闭，因为它会占用资源。",
   "SCALING_METHOD": "缩放方法",
   "SCALING_METHOD_DESC": "选择缩放模型。可在游戏运行时更改。",
+  "SCALING_METHOD_COMPARISON_TIP": "要获得最直观的对比，请使用较低的源分辨率进行 2x 缩放。\n可尝试 720p → 1440p 或 1080p → 2160p。\n在 1x 或接近原生分辨率时，差异可能并不明显。",
   "SCALING_METHOD_NATIVE": "原生分辨率",
   "SCALING_METHOD_MAKO": "MAKO 缩放器",
   "SCALING_METHOD_LS1": "LS1 Quality",

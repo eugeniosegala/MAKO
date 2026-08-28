@@ -89,10 +89,24 @@ export function ScalingControl({
           <PanelSectionRow>
             <Field
               label={t("SCALING_METHOD", "Scaling Method")}
-              description={t(
-                "SCALING_METHOD_DESC",
-                "Choose the scaling model. You can change it while the game is running.",
-              )}
+              description={
+                <>
+                  <div>
+                    {t(
+                      "SCALING_METHOD_DESC",
+                      "Choose the scaling model. You can change it while the game is running.",
+                    )}
+                  </div>
+                  <MakoInlineTip tone="info">
+                    <span style={{ whiteSpace: "pre-line" }}>
+                      {t(
+                        "SCALING_METHOD_COMPARISON_TIP",
+                        "For the clearest comparison, use 2x scaling with a lower source resolution.\nTry 720p → 1440p or 1080p → 2160p.\nAt 1x or near-native resolution, differences can be subtle.",
+                      )}
+                    </span>
+                  </MakoInlineTip>
+                </>
+              }
               childrenLayout="below"
               childrenContainerWidth="max"
             >
@@ -134,27 +148,24 @@ export function ScalingControl({
           </PanelSectionRow>
 
           {scalerActive && (
-              <PanelSectionRow>
-                <SliderField
-                  label={`${t("SCALING_SHARPNESS", "Scaling Sharpness")} (${Math.round(config.scaling_sharpness * 100)}%)`}
-                  description={t(
-                    "SCALING_SHARPNESS_DESC",
-                    "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild.",
-                  )}
-                  value={config.scaling_sharpness}
-                  min={SCALING_SHARPNESS_MIN}
-                  max={SCALING_SHARPNESS_MAX}
-                  step={0.01}
-                  disabled={disabled}
-                  bottomSeparator="none"
-                  onChange={(value) =>
-                    onConfigChange(
-                      SCALING_SHARPNESS,
-                      Number(value.toFixed(2)),
-                    )
-                  }
-                />
-              </PanelSectionRow>
+            <PanelSectionRow>
+              <SliderField
+                label={`${t("SCALING_SHARPNESS", "Scaling Sharpness")} (${Math.round(config.scaling_sharpness * 100)}%)`}
+                description={t(
+                  "SCALING_SHARPNESS_DESC",
+                  "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild.",
+                )}
+                value={config.scaling_sharpness}
+                min={SCALING_SHARPNESS_MIN}
+                max={SCALING_SHARPNESS_MAX}
+                step={0.01}
+                disabled={disabled}
+                bottomSeparator="none"
+                onChange={(value) =>
+                  onConfigChange(SCALING_SHARPNESS, Number(value.toFixed(2)))
+                }
+              />
+            </PanelSectionRow>
           )}
         </>
       )}

@@ -1237,6 +1237,18 @@ namespace {
 
             layer_info->root.update(); // ensure config is up to date
 
+            if (present_diagnostics::enabled()) {
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=swapchain-create-observed"
+                          << " role=" << layerRoleName
+                          << " surface=" << info->surface
+                          << " requested_old_swapchain="
+                          << info->oldSwapchain
+                          << " requested_width=" << info->imageExtent.width
+                          << " requested_height=" << info->imageExtent.height
+                          << '\n';
+            }
+
             // create swapchain
             VkSwapchainCreateInfoKHR newInfo = *info;
             std::optional<SpatialScalingExtents> previousVariableExtents;
@@ -1553,9 +1565,25 @@ namespace {
                     info->pImageIndices[i],
                     waitSemaphores
                 );
-                if (context.requestLiveProfileResourceRecreationAfterPresent(
-                        result))
+                const bool liveProfileRecreationRequested =
+                    context.requestLiveProfileResourceRecreationAfterPresent(
+                        result
+                    );
+                if (liveProfileRecreationRequested)
                     result = VK_ERROR_OUT_OF_DATE_KHR;
+                if (result == VK_ERROR_OUT_OF_DATE_KHR &&
+                        present_diagnostics::enabled()) {
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=swapchain-recreation-observed"
+                              << " context=" << context.diagnosticsId()
+                              << " role=" << layerRoleName
+                              << " swapchain=" << swapchain
+                              << " source="
+                              << (liveProfileRecreationRequested
+                                    ? "guarded-live-profile-request"
+                                    : "upstream-or-driver")
+                              << '\n';
+                }
             } catch (const ls::vulkan_error& e) {
                 if (e.error() != VK_ERROR_OUT_OF_DATE_KHR) {
                     std::cerr << "MAKO Renderer: swapchain presentation failed:\n";
@@ -1612,6 +1640,15 @@ namespace {
                 instance_info->swapchainInfos.end()
             ? VK_NULL_HANDLE
             : swapchainMetadata->second.surface;
+        if (present_diagnostics::enabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=swapchain-destroy-observed"
+                      << " role=" << layerRoleName
+                      << " swapchain=" << swapchain
+                      << " surface=" << surface
+                      << " allocation_callbacks=" << (alloc ? 1 : 0)
+                      << '\n';
+        }
         instance_info->swapchainInfos.erase(swapchain);
         instance_info->swapchains.erase(swapchain);
         const bool native = instance_info->nativeSwapchains.erase(swapchain) > 0;

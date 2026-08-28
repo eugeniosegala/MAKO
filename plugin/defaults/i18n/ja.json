@@ -5,6 +5,7 @@
   "SCALING_ENABLED_WARNING": "スケーリングが不要な場合は、リソースを消費するためオフにしてください。",
   "SCALING_METHOD": "スケーリング方式",
   "SCALING_METHOD_DESC": "スケーリングモデルを選択します。ゲームの実行中でも変更できます。",
+  "SCALING_METHOD_COMPARISON_TIP": "違いを最も確認しやすくするには、低い入力解像度で 2x スケーリングを使用してください。\n720p → 1440p や 1080p → 2160p を試してください。\n1x やネイティブ解像度に近い場合、違いは控えめになることがあります。",
   "SCALING_METHOD_NATIVE": "ネイティブ解像度",
   "SCALING_METHOD_MAKO": "MAKO スケーラー",
   "SCALING_METHOD_LS1": "LS1 Quality",

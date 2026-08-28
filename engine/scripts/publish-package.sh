@@ -179,7 +179,7 @@ The host archive includes 64-bit and 32-bit Vulkan layers; the CLI and Qt UI are
 
 Start the configuration UI after extraction:
 
-- **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode and open **MAKO Renderer Configuration**.
+- **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode, open the bottom-left Application Launcher, then select **Settings > MAKO Renderer Configuration**.
 - **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
 
 Configure the profile in the UI or \`~/.config/mako-render/conf.toml\`. Select the licensed DLL path when using LS1 scaling or Frame Generation, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO through its private Vulkan layer directory, prevents Steam's Vulkan Fossilize/overlay hooks and competing presentation layers from bypassing its swapchain interception, and keeps Gamescope and the Steam/Game Mode interface active outside that application chain.

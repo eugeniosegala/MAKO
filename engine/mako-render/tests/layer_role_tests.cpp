@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "layer_role.hpp"
+#include "profile_update.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -40,6 +41,8 @@ int main() {
         "the lower layer must retain spatial-scaling configuration");
     expect(!lower.frame_generation_enabled && !lower.adaptive,
         "the lower layer must never own frame generation");
+    expect(generatedFrameCapacityForActivePolicy(lower) == 0,
+        "the lower layer must not report a generated-image capacity request");
     expect(!frameGenerationInteropForLayer(true),
         "the lower layer must not force a second ordered transport even when "
         "upper-role interop features are visible on the device");

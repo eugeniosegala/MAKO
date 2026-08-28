@@ -783,6 +783,19 @@ int main() {
     expect(generatedFrameCapacityForActivePolicy(adaptiveFourX) == 3,
         "Adaptive 4x active capacity was not selected");
 
+    auto generationDisabled = adaptiveFourX;
+    generationDisabled.frame_generation_enabled = false;
+    expect(generatedFrameCapacityForActivePolicy(generationDisabled) == 0,
+        "Frame Generation Off must not claim generated-image capacity");
+    auto disabledCapacityEdit = generationDisabled;
+    disabledCapacityEdit.adaptive_max_multiplier = 5;
+    const auto disabledCapacityPlan = planProfileUpdate(
+        generationDisabled, disabledCapacityEdit, 0, false
+    );
+    expect(!disabledCapacityPlan.decision.generatedFrameCapacityExceeded &&
+            !disabledCapacityPlan.decision.swapchainRecreationDeferred,
+        "Frame Generation Off must not defer a dormant capacity edit");
+
     auto adaptiveFourXWithLiveTarget = adaptiveFourX;
     adaptiveFourXWithLiveTarget.target_fps = 120;
     adaptiveFourXWithLiveTarget.base_fps_cap = 49;

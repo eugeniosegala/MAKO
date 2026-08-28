@@ -5,6 +5,7 @@
   "SCALING_ENABLED_WARNING": "Deixe o redimensionamento desativado quando não precisar dele, pois ele consome recursos.",
   "SCALING_METHOD": "Método de redimensionamento",
   "SCALING_METHOD_DESC": "Escolha o modelo de redimensionamento. Você pode alterá-lo enquanto o jogo está em execução.",
+  "SCALING_METHOD_COMPARISON_TIP": "Para comparar com mais clareza, use redimensionamento de 2x com uma resolução de origem menor.\nTente 720p → 1440p ou 1080p → 2160p.\nEm 1x ou perto da resolução nativa, as diferenças podem ser sutis.",
   "SCALING_METHOD_NATIVE": "Resolução nativa",
   "SCALING_METHOD_MAKO": "Redimensionador MAKO",
   "SCALING_METHOD_LS1": "LS1 Quality",

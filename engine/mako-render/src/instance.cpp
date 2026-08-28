@@ -1288,7 +1288,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << (insertedContext != this->swapchains.end() &&
                         insertedContext->second.presentRetirementEnabled()
                         ? "maintenance1-fence" : "natural-only")
-                  << " layer_forced_recreation=live-profile-resources-one-shot"
+                  << " live_profile_recreation=guarded-non-gamescope-one-shot"
                   << '\n';
     }
 }

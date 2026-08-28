@@ -102,9 +102,15 @@ namespace mako::layer {
 
     /// Private generated outputs are selected by the active Fixed/Adaptive
     /// policy. Initial construction may reserve more for the inactive policy,
-    /// but the active requirement is the boundary used for live updates.
+    /// but the active requirement is the boundary used for live updates. A
+    /// context with Frame Generation Off has no active generated-output
+    /// requirement. This is important for the isolated spatial role: it
+    /// deliberately receives a Frame-Generation-Off profile and must never
+    /// report an impossible generated-image-capacity transition of its own.
     [[nodiscard]] inline size_t generatedFrameCapacityForActivePolicy(
             const ls::GameConf& profile) {
+        if (!profile.frame_generation_enabled)
+            return 0;
         const size_t activeMultiplier = profile.adaptive
             ? profile.adaptive_max_multiplier
             : profile.multiplier;
