@@ -1,0 +1,18 @@
+{
+  "file_format_version": "1.2.1",
+  "layer": {
+    "name": "VK_LAYER_MAKO_spatial_scaling",
+    "description": "MAKO Renderer spatial-scaling layer",
+    "implementation_version": "1",
+    "library_path": "@MAKO_SCALING_LAYER_LIBRARY_PATH@",
+    "library_arch": "@MAKO_LAYER_LIBRARY_ARCH@",
+    "type": "GLOBAL",
+    "api_version": "1.4.328",
+    "enable_environment": {
+      "ENABLE_MAKO_SPATIAL_SCALING": "1"
+    },
+    "disable_environment": {
+      "DISABLE_MAKO_SPATIAL_SCALING": "1"
+    }
+  }
+}

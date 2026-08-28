@@ -28,6 +28,10 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     LIB_FILENAME,
     LOCAL_LIB,
     LOCAL_LIB32,
+    SPATIAL_SCALING_JSON32_FILENAME,
+    SPATIAL_SCALING_JSON_FILENAME,
+    SPATIAL_SCALING_LAYER_DIR,
+    SPATIAL_SCALING_LIB_FILENAME,
 )
 from shared_config import SUPPORTED_FLATPAK_RUNTIME_VERSIONS  # noqa: E402
 
@@ -114,6 +118,11 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
                 LIB_FILENAME,
                 f"{LOCAL_LIB}/{LIB_FILENAME}",
                 f"{LOCAL_LIB32}/{LIB_FILENAME}",
+                SPATIAL_SCALING_LIB_FILENAME,
+                f"{LOCAL_LIB}/{SPATIAL_SCALING_LIB_FILENAME}",
+                f"{LOCAL_LIB32}/{SPATIAL_SCALING_LIB_FILENAME}",
+                f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON_FILENAME}",
+                f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON32_FILENAME}",
             ],
         )
 

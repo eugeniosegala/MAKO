@@ -12,12 +12,15 @@ from .constants import (
     LOCAL_LIB,
     LOCAL_LIB32,
     VULKAN_LAYER_DIR,
+    SPATIAL_SCALING_LAYER_DIR,
     GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR,
     MANGOHUD_LAYER_DIR,
     VKBASALT_LAYER_DIR,
     USER_VULKAN_LAYER_DIR,
     JSON_FILENAME,
     JSON32_FILENAME,
+    SPATIAL_SCALING_JSON_FILENAME,
+    SPATIAL_SCALING_JSON32_FILENAME,
     SCRIPT_NAME,
     DIAGNOSTICS_SCRIPT_NAME,
     CONFIG_DIR,
@@ -64,6 +67,9 @@ class BaseService:
         self.local_lib_dir = self.user_home / LOCAL_LIB
         self.local_lib32_dir = self.user_home / LOCAL_LIB32
         self.local_share_dir = self.user_home / VULKAN_LAYER_DIR
+        self.spatial_scaling_layer_dir = (
+            self.user_home / SPATIAL_SCALING_LAYER_DIR
+        )
         self.gamescope_wsi_compatibility_dir = (
             self.user_home / GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR
         )
@@ -72,6 +78,14 @@ class BaseService:
         self.user_vulkan_layer_dir = self.user_home / USER_VULKAN_LAYER_DIR
         self.registered_json_file = self.user_vulkan_layer_dir / JSON_FILENAME
         self.registered_json32_file = self.user_vulkan_layer_dir / JSON32_FILENAME
+        self.spatial_scaling_json_file = (
+            self.spatial_scaling_layer_dir /
+            SPATIAL_SCALING_JSON_FILENAME
+        )
+        self.spatial_scaling_json32_file = (
+            self.spatial_scaling_layer_dir /
+            SPATIAL_SCALING_JSON32_FILENAME
+        )
         self.mako_script_path = self.user_home / SCRIPT_NAME
         self.diagnostics_script_path = self.user_home / DIAGNOSTICS_SCRIPT_NAME
         self.config_dir = self.user_home / CONFIG_DIR
@@ -93,6 +107,7 @@ class BaseService:
         self.local_lib_dir.mkdir(parents=True, exist_ok=True)
         self.local_lib32_dir.mkdir(parents=True, exist_ok=True)
         self.local_share_dir.mkdir(parents=True, exist_ok=True)
+        self.spatial_scaling_layer_dir.mkdir(parents=True, exist_ok=True)
         self.gamescope_wsi_compatibility_dir.mkdir(parents=True, exist_ok=True)
         self.mangohud_layer_dir.mkdir(parents=True, exist_ok=True)
         self.vkbasalt_layer_dir.mkdir(parents=True, exist_ok=True)
@@ -100,10 +115,11 @@ class BaseService:
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.mako_script_path.parent.mkdir(parents=True, exist_ok=True)
         self.log.info(
-            "Ensured isolated directories exist: %s, %s, %s, %s, %s, %s, %s, %s, %s",
+            "Ensured isolated directories exist: %s, %s, %s, %s, %s, %s, %s, %s, %s, %s",
             self.local_lib_dir,
             self.local_lib32_dir,
             self.local_share_dir,
+            self.spatial_scaling_layer_dir,
             self.gamescope_wsi_compatibility_dir,
             self.mangohud_layer_dir,
             self.vkbasalt_layer_dir,

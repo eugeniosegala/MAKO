@@ -41,6 +41,9 @@ class WrapperEnvironmentTests(unittest.TestCase):
             development_build=False,
         )
         self.service.local_share_dir = Path("/private/mako/implicit_layer.d")
+        self.service.spatial_scaling_layer_dir = Path(
+            "/private/mako/spatial_scaling.d"
+        )
         self.service.gamescope_wsi_compatibility_dir = Path(
             "/private/mako/gamescope_wsi_compatibility.d"
         )
@@ -56,11 +59,14 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "ADD=%s\\n" "${VK_ADD_IMPLICIT_LAYER_PATH:-}"',
             'printf "IMPLICIT=%s\\n" "${VK_IMPLICIT_LAYER_PATH:-}"',
             'printf "ENABLE=%s\\n" "${ENABLE_MAKO:-}"',
+            'printf "SPLIT=%s\\n" "${MAKO_SPLIT_LAYER_CHAIN:-}"',
             'printf "DISABLE_LSFG=%s\\n" "${DISABLE_LSFG:-}"',
             'printf "DISABLE_LSFGVK=%s\\n" "${DISABLE_LSFGVK:-}"',
             'printf "DISABLE_MAKO=%s\\n" "${DISABLE_MAKO:-}"',
             'printf "DISABLE_GAMESCOPE=%s\\n" "${DISABLE_GAMESCOPE_WSI:-}"',
             'printf "ENABLE_GAMESCOPE=%s\\n" "${ENABLE_GAMESCOPE_WSI:-}"',
+            'printf "DISABLE_SCALING=%s\\n" "${DISABLE_MAKO_SPATIAL_SCALING:-}"',
+            'printf "ENABLE_SCALING=%s\\n" "${ENABLE_MAKO_SPATIAL_SCALING:-}"',
             'printf "HDR_EXPOSURE_DISABLED=%s\\n" "${MAKO_DISABLE_HDR_EXPOSURE:-}"',
             'printf "DXVK_HDR=%s\\n" "${DXVK_HDR:-}"',
             'printf "INSTANCE=%s\\n" "${VK_INSTANCE_LAYERS:-}"',
@@ -91,10 +97,13 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["ADD"], "")
         self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
         self.assertEqual(values["ENABLE"], "1")
+        self.assertEqual(values["SPLIT"], "")
         self.assertEqual(values["DISABLE_LSFG"], "1")
         self.assertEqual(values["DISABLE_LSFGVK"], "1")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+        self.assertEqual(values["DISABLE_SCALING"], "1")
+        self.assertEqual(values["ENABLE_SCALING"], "")
         self.assertEqual(values["DXVK_HDR"], "")
         self.assertEqual(values["INSTANCE"], "")
         self.assertEqual(values["EXTERNAL_SELECTOR"], "")
@@ -102,23 +111,35 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["VKBASALT"], "")
 
     def test_scaling_profile_admits_gamescope_presentation_split_at_start(self):
-        with tempfile.TemporaryDirectory() as compatibility_dir:
+        with (
+            tempfile.TemporaryDirectory() as compatibility_dir,
+            tempfile.TemporaryDirectory() as scaling_dir,
+        ):
             compatibility_path = Path(compatibility_dir)
             (
                 compatibility_path /
                 configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
             ).write_text("{}", encoding="utf-8")
             self.service.gamescope_wsi_compatibility_dir = compatibility_path
+            scaling_path = Path(scaling_dir)
+            (
+                scaling_path /
+                configuration_module.SPATIAL_SCALING_JSON_FILENAME
+            ).write_text("{}", encoding="utf-8")
+            self.service.spatial_scaling_layer_dir = scaling_path
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
             values = self._evaluate(config=config)
 
         self.assertEqual(
             values["IMPLICIT"],
-            f"{compatibility_dir}:/private/mako/implicit_layer.d",
+            f"/private/mako/implicit_layer.d:{compatibility_dir}:{scaling_dir}",
         )
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["SPLIT"], "1")
+        self.assertEqual(values["DISABLE_SCALING"], "")
+        self.assertEqual(values["ENABLE_SCALING"], "1")
         self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
         self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
 
@@ -137,10 +158,33 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+        self.assertEqual(values["SPLIT"], "1")
+        self.assertEqual(values["DISABLE_SCALING"], "1")
+        self.assertEqual(values["ENABLE_SCALING"], "")
+
+    def test_scaling_profile_fails_closed_without_spatial_manifest(self):
+        with tempfile.TemporaryDirectory() as compatibility_dir:
+            compatibility_path = Path(compatibility_dir)
+            (
+                compatibility_path /
+                configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            self.service.gamescope_wsi_compatibility_dir = compatibility_path
+            config = ConfigurationManager.get_defaults()
+            config["scaling_enabled"] = True
+            values = self._evaluate(config=config)
+
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+        self.assertEqual(values["SPLIT"], "1")
+        self.assertEqual(values["DISABLE_SCALING"], "1")
+        self.assertEqual(values["ENABLE_SCALING"], "")
 
     def test_scaling_engine_combines_gamescope_wsi_with_mangohud(self):
         with (
             tempfile.TemporaryDirectory() as compatibility_dir,
+            tempfile.TemporaryDirectory() as scaling_dir,
             tempfile.TemporaryDirectory() as system_dir,
         ):
             compatibility_path = Path(compatibility_dir)
@@ -149,6 +193,12 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
             ).write_text("{}", encoding="utf-8")
             self.service.gamescope_wsi_compatibility_dir = compatibility_path
+            scaling_path = Path(scaling_dir)
+            (
+                scaling_path /
+                configuration_module.SPATIAL_SCALING_JSON_FILENAME
+            ).write_text("{}", encoding="utf-8")
+            self.service.spatial_scaling_layer_dir = scaling_path
             self.service.mangohud_layer_dir = Path(system_dir)
             (
                 self.service.mangohud_layer_dir /
@@ -162,11 +212,12 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
         self.assertEqual(
             values["IMPLICIT"],
-            f"{compatibility_dir}:/private/mako/implicit_layer.d:{system_dir}",
+            f"/private/mako/implicit_layer.d:{compatibility_dir}:{scaling_dir}:{system_dir}",
         )
         self.assertEqual(values["MANGOHUD"], "1")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
+        self.assertEqual(values["ENABLE_SCALING"], "1")
 
     def test_explicit_gamescope_wsi_combines_with_vkbasalt(self):
         with (
@@ -191,7 +242,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
         self.assertEqual(
             values["IMPLICIT"],
-            f"{compatibility_dir}:/private/mako/implicit_layer.d:{system_dir}",
+            f"/private/mako/implicit_layer.d:{compatibility_dir}:{system_dir}",
         )
         self.assertEqual(values["VKBASALT"], "1")
         self.assertEqual(values["MANGOHUD"], "")
@@ -312,7 +363,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
         self.assertEqual(
             values["IMPLICIT"],
-            f"{compatibility_dir}:/private/mako/implicit_layer.d",
+            f"/private/mako/implicit_layer.d:{compatibility_dir}",
         )
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "1")
@@ -738,8 +789,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
             )
             self.assertEqual(
                 values["IMPLICIT"],
-                f"{self.service.gamescope_wsi_compatibility_dir}:"
-                f"{self.service.local_share_dir}",
+                f"{self.service.local_share_dir}:"
+                f"{self.service.gamescope_wsi_compatibility_dir}",
             )
             self.assertEqual(values["ENABLE"], "1")
             self.assertEqual(values["DISABLE"], "")

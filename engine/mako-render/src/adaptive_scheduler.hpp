@@ -567,11 +567,13 @@ namespace mako::layer {
             struct NearTargetNativePreference {
                 bool active{false};
                 std::optional<bool> candidateActive;
-                std::optional<TimePoint> candidateSince;
+                Clock::duration candidateEvidence{};
+                std::optional<TimePoint> lastEvaluationAt;
 
                 void resetCandidate() {
                     this->candidateActive.reset();
-                    this->candidateSince.reset();
+                    this->candidateEvidence = Clock::duration{};
+                    this->lastEvaluationAt.reset();
                 }
 
                 void reset() {

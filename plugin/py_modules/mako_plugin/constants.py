@@ -22,6 +22,7 @@ MAKO_ROOT = ".local/share/mako-render"
 LOCAL_LIB = f"{MAKO_ROOT}/lib"
 LOCAL_LIB32 = f"{MAKO_ROOT}/lib32"
 VULKAN_LAYER_DIR = f"{MAKO_ROOT}/vulkan/implicit_layer.d"
+SPATIAL_SCALING_LAYER_DIR = f"{MAKO_ROOT}/vulkan/spatial_scaling.d"
 GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR = (
     f"{MAKO_ROOT}/vulkan/gamescope_wsi_compatibility.d"
 )
@@ -71,9 +72,17 @@ PROFILE_METADATA_FILENAME = "profile-metadata.json"
 # identity from remote_binary; self-contained local packages use
 # bundled_renderer so Decky Loader does not attempt an impossible download.
 LIB_FILENAME = "libmako-render.so"
+SPATIAL_SCALING_LIB_FILENAME = "libmako-render-scaling.so"
 MAKO_LAYER_NAME = "VK_LAYER_MAKO_render"
 MAKO_LAYER_ENABLE_ENV = "ENABLE_MAKO"
 MAKO_LAYER_DISABLE_ENV = "DISABLE_MAKO"
+SPATIAL_SCALING_LAYER_NAME = "VK_LAYER_MAKO_spatial_scaling"
+SPATIAL_SCALING_LAYER_ENABLE_ENV = "ENABLE_MAKO_SPATIAL_SCALING"
+SPATIAL_SCALING_LAYER_DISABLE_ENV = "DISABLE_MAKO_SPATIAL_SCALING"
+# Internal ownership boundary for Decky's split application layer chain. The
+# standalone Renderer keeps its established combined-library behavior unless
+# its launcher deliberately opts into the same topology.
+MAKO_SPLIT_LAYER_CHAIN_ENV = "MAKO_SPLIT_LAYER_CHAIN"
 # Process-start presentation policy. Keep native wrappers and direct Flatpak
 # overrides on the same supported SDR/WSI-isolated boundary.
 GAMESCOPE_WSI_DISABLE_ENV = "DISABLE_GAMESCOPE_WSI"
@@ -107,6 +116,10 @@ EXTERNAL_VULKAN_LAYER_ENV = "MAKO_EXTERNAL_VULKAN_LAYER"
 MAKO_LAYER_BUILD_MARKER = (
     f"MAKO Renderer: render layer active; identity={MAKO_LAYER_NAME}; build="
 ).encode("ascii")
+SPATIAL_SCALING_LAYER_BUILD_MARKER = (
+    "MAKO Renderer: render layer active; "
+    f"identity={SPATIAL_SCALING_LAYER_NAME}; build="
+).encode("ascii")
 # Decky's generated wrapper relies on the renderer understanding this
 # low-priority profile selector. Keep it as a payload compatibility marker so
 # an older same-name renderer cannot be installed alongside a newer wrapper
@@ -114,6 +127,10 @@ MAKO_LAYER_BUILD_MARKER = (
 MAKO_PROFILE_FALLBACK_MARKER = MAKO_PROFILE_FALLBACK_ENV.encode("ascii")
 JSON_FILENAME = "VkLayer_MAKO_render.json"
 JSON32_FILENAME = "VkLayer_MAKO_render.x86.json"
+SPATIAL_SCALING_JSON_FILENAME = "VkLayer_MAKO_spatial_scaling.json"
+SPATIAL_SCALING_JSON32_FILENAME = (
+    "VkLayer_MAKO_spatial_scaling.x86.json"
+)
 CLI_FILENAME = "mako-cli"
 CLI_DIR = f"{MAKO_ROOT}/bin"
 

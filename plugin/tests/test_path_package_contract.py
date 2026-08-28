@@ -18,6 +18,13 @@ from py_modules.mako_plugin.constants import (
     MAKO_LAYER_ENABLE_ENV,
     MAKO_LAYER_NAME,
     MAKO_PROFILE_FALLBACK_MARKER,
+    SPATIAL_SCALING_JSON32_FILENAME,
+    SPATIAL_SCALING_JSON_FILENAME,
+    SPATIAL_SCALING_LAYER_BUILD_MARKER,
+    SPATIAL_SCALING_LAYER_DISABLE_ENV,
+    SPATIAL_SCALING_LAYER_ENABLE_ENV,
+    SPATIAL_SCALING_LAYER_NAME,
+    SPATIAL_SCALING_LIB_FILENAME,
     PLUGIN_ROOT,
     STEAM_COMMON_PATH,
 )
@@ -33,11 +40,16 @@ PLUGIN_DEPLOY_SCRIPT = PLUGIN_DIR / "scripts/deploy-dev.sh"
 VALIDATED_DEPLOY_SCRIPT = PLUGIN_DIR / "scripts/deploy-validated-package.py"
 DECKY_CLIENT_SOURCE = PLUGIN_DIR / "scripts/decky-loader-client.mjs"
 ENGINE_PACKAGE_SCRIPT = REPOSITORY_ROOT / "engine/scripts/package-local.sh"
+ENGINE_DEV_BUILD_SCRIPT = REPOSITORY_ROOT / "engine/scripts/build-steamos-dev.sh"
 ENGINE_LAUNCHER = REPOSITORY_ROOT / "engine/scripts/mako-launch"
 ENGINE_CMAKE = REPOSITORY_ROOT / "engine/CMakeLists.txt"
 RENDERER_CMAKE = REPOSITORY_ROOT / "engine/mako-render/CMakeLists.txt"
 RENDERER_MANIFEST = (
     REPOSITORY_ROOT / "engine/mako-render/VkLayer_MAKO_render.json.in"
+)
+SPATIAL_SCALING_MANIFEST = (
+    REPOSITORY_ROOT /
+    "engine/mako-render/VkLayer_MAKO_spatial_scaling.json.in"
 )
 RENDERER_PATHS_SOURCE = (
     REPOSITORY_ROOT / "engine/mako-common/src/helpers/paths.cpp"
@@ -93,6 +105,9 @@ def _installer_archive_members() -> tuple[set[str], set[str]]:
         "LIB_FILENAME": LIB_FILENAME,
         "JSON_FILENAME": JSON_FILENAME,
         "JSON32_FILENAME": JSON32_FILENAME,
+        "SPATIAL_SCALING_LIB_FILENAME": SPATIAL_SCALING_LIB_FILENAME,
+        "SPATIAL_SCALING_JSON_FILENAME": SPATIAL_SCALING_JSON_FILENAME,
+        "SPATIAL_SCALING_JSON32_FILENAME": SPATIAL_SCALING_JSON32_FILENAME,
     }
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
@@ -137,10 +152,14 @@ class PathAndPackageContractTests(unittest.TestCase):
         expected_required = {
             f"lib/{LIB_FILENAME}",
             f"share/vulkan/implicit_layer.d/{JSON_FILENAME}",
+            f"lib/{SPATIAL_SCALING_LIB_FILENAME}",
+            f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON_FILENAME}",
         }
         expected_optional_32bit = {
             f"lib32/{LIB_FILENAME}",
             f"share/vulkan/implicit_layer.d/{JSON32_FILENAME}",
+            f"lib32/{SPATIAL_SCALING_LIB_FILENAME}",
+            f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON32_FILENAME}",
         }
         self.assertEqual(required, expected_required)
         self.assertEqual(optional_32bit, expected_optional_32bit)
@@ -156,7 +175,49 @@ class PathAndPackageContractTests(unittest.TestCase):
             _read(ENGINE_CMAKE),
         )
         self.assertIn("add_library(mako-render SHARED", _read(RENDERER_CMAKE))
+        self.assertIn(
+            "add_library(mako-render-scaling SHARED", _read(RENDERER_CMAKE)
+        )
         self.assertEqual(LIB_FILENAME, "libmako-render.so")
+        self.assertEqual(
+            SPATIAL_SCALING_LIB_FILENAME, "libmako-render-scaling.so"
+        )
+
+    def test_direct_development_builds_keep_private_layer_paths_resolvable(self):
+        dev_build = _read(ENGINE_DEV_BUILD_SCRIPT)
+        self.assertIn('local install_libdir=lib', dev_build)
+        self.assertIn('install_libdir=lib32', dev_build)
+        self.assertIn(
+            '-DMAKO_LAYER_LIBRARY_PATH="../$install_libdir/'
+            f'{LIB_FILENAME}"',
+            dev_build,
+        )
+        self.assertIn(
+            '-DMAKO_SCALING_LAYER_LIBRARY_PATH="../$install_libdir/'
+            f'{SPATIAL_SCALING_LIB_FILENAME}"',
+            dev_build,
+        )
+
+        deploy = _read(PLUGIN_DEPLOY_SCRIPT)
+        self.assertIn(
+            'built_spatial_manifest_64="$engine_build_dir/mako-render/'
+            'private-scaling-manifest/',
+            deploy,
+        )
+        self.assertIn(
+            'copy_file "$built_spatial_manifest_64" '
+            '"$installed_spatial_manifest_64"',
+            deploy,
+        )
+        self.assertIn("verify_private_layer_manifest()", deploy)
+        self.assertIn(
+            '"$built_spatial_manifest_64" "$installed_spatial_manifest_64"',
+            deploy,
+        )
+        self.assertIn(
+            '"$built_spatial_manifest_32" "$installed_spatial_manifest_32"',
+            deploy,
+        )
 
     def test_private_manifests_share_the_architecture_suffix_contract(self):
         manifest_stem = Path(JSON_FILENAME).stem
@@ -166,6 +227,18 @@ class PathAndPackageContractTests(unittest.TestCase):
         engine_package = _read(ENGINE_PACKAGE_SCRIPT)
         for filename in (JSON_FILENAME, JSON32_FILENAME):
             self.assertIn(f'"{private_manifest_dir}/{filename}"', engine_package)
+
+        private_scaling_manifest_dir = (
+            "share/mako-render/vulkan/spatial_scaling.d"
+        )
+        for filename in (
+            SPATIAL_SCALING_JSON_FILENAME,
+            SPATIAL_SCALING_JSON32_FILENAME,
+        ):
+            self.assertIn(
+                f'"{private_scaling_manifest_dir}/{filename}"',
+                engine_package,
+            )
 
         renderer_cmake = _read(RENDERER_CMAKE)
         self.assertIn(
@@ -178,6 +251,10 @@ class PathAndPackageContractTests(unittest.TestCase):
         )
         self.assertIn(
             '"${CMAKE_INSTALL_DATAROOTDIR}/mako-render/vulkan/implicit_layer.d"',
+            renderer_cmake,
+        )
+        self.assertIn(
+            '"${CMAKE_INSTALL_DATAROOTDIR}/mako-render/vulkan/spatial_scaling.d"',
             renderer_cmake,
         )
         self.assertIn("-DMAKO_LAYER_MANIFEST_SUFFIX=.x86", engine_package)
@@ -196,6 +273,17 @@ class PathAndPackageContractTests(unittest.TestCase):
         self.assertEqual(
             layer["disable_environment"], {MAKO_LAYER_DISABLE_ENV: "1"}
         )
+        scaling_manifest = json.loads(_read(SPATIAL_SCALING_MANIFEST))
+        scaling_layer = scaling_manifest["layer"]
+        self.assertEqual(scaling_layer["name"], SPATIAL_SCALING_LAYER_NAME)
+        self.assertEqual(
+            scaling_layer["enable_environment"],
+            {SPATIAL_SCALING_LAYER_ENABLE_ENV: "1"},
+        )
+        self.assertEqual(
+            scaling_layer["disable_environment"],
+            {SPATIAL_SCALING_LAYER_DISABLE_ENV: "1"},
+        )
 
         identity_fragments = (
             f'"name": "{MAKO_LAYER_NAME}"',
@@ -203,13 +291,34 @@ class PathAndPackageContractTests(unittest.TestCase):
             f'"{MAKO_LAYER_DISABLE_ENV}": "1"',
         )
         marker_prefix = MAKO_LAYER_BUILD_MARKER.decode("ascii")
+        scaling_marker_prefix = SPATIAL_SCALING_LAYER_BUILD_MARKER.decode(
+            "ascii"
+        )
         fallback_marker = MAKO_PROFILE_FALLBACK_MARKER.decode("ascii")
         for path in (ENGINE_PACKAGE_SCRIPT, PLUGIN_PACKAGE_SCRIPT):
             source = _read(path)
             for fragment in identity_fragments:
                 self.assertIn(fragment, source)
-            self.assertIn(marker_prefix, source)
+            if path == ENGINE_PACKAGE_SCRIPT:
+                self.assertIn(
+                    "MAKO Renderer: render layer active; "
+                    "identity=$expected_identity; build=$version",
+                    source,
+                )
+            else:
+                self.assertIn(
+                    "MAKO Renderer: render layer active; "
+                    "identity=$expected_identity; build=$archive_version",
+                    source,
+                )
             self.assertIn(fallback_marker, source)
+
+        self.assertTrue(marker_prefix.startswith(
+            "MAKO Renderer: render layer active; identity="
+        ))
+        self.assertTrue(scaling_marker_prefix.startswith(
+            "MAKO Renderer: render layer active; identity="
+        ))
 
         installation = _read(INSTALLATION_SOURCE)
         for symbol in (
@@ -217,6 +326,7 @@ class PathAndPackageContractTests(unittest.TestCase):
             "MAKO_LAYER_ENABLE_ENV",
             "MAKO_LAYER_DISABLE_ENV",
             "MAKO_LAYER_BUILD_MARKER",
+            "SPATIAL_SCALING_LAYER_BUILD_MARKER",
             "MAKO_PROFILE_FALLBACK_MARKER",
         ):
             self.assertIn(symbol, installation)

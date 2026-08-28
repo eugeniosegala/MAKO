@@ -25,6 +25,13 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     MAKO_LAYER_BUILD_MARKER,
     MAKO_PROFILE_FALLBACK_MARKER,
     MAKO_LAYER_NAME,
+    SPATIAL_SCALING_LAYER_BUILD_MARKER,
+    SPATIAL_SCALING_LAYER_DISABLE_ENV,
+    SPATIAL_SCALING_LAYER_ENABLE_ENV,
+    SPATIAL_SCALING_LAYER_NAME,
+    SPATIAL_SCALING_JSON32_FILENAME,
+    SPATIAL_SCALING_JSON_FILENAME,
+    SPATIAL_SCALING_LIB_FILENAME,
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
     GAMESCOPE_WSI_LAYER_NAME_64,
@@ -58,12 +65,26 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service = InstallationService(logger=_Logger())
         self.service.lib_file = self.root / "lib" / LIB_FILENAME
         self.service.lib32_file = self.root / "lib32" / LIB_FILENAME
+        self.service.spatial_scaling_lib_file = (
+            self.root / "lib" / SPATIAL_SCALING_LIB_FILENAME
+        )
+        self.service.spatial_scaling_lib32_file = (
+            self.root / "lib32" / SPATIAL_SCALING_LIB_FILENAME
+        )
         self.service.local_lib_dir = self.service.lib_file.parent
         self.service.local_lib32_dir = self.service.lib32_file.parent
         manifest_dir = self.root / "share/vulkan/implicit_layer.d"
         self.service.local_share_dir = manifest_dir
         self.service.json_file = manifest_dir / JSON_FILENAME
         self.service.json32_file = manifest_dir / JSON32_FILENAME
+        scaling_manifest_dir = self.root / "share/vulkan/spatial_scaling.d"
+        self.service.spatial_scaling_layer_dir = scaling_manifest_dir
+        self.service.spatial_scaling_json_file = (
+            scaling_manifest_dir / SPATIAL_SCALING_JSON_FILENAME
+        )
+        self.service.spatial_scaling_json32_file = (
+            scaling_manifest_dir / SPATIAL_SCALING_JSON32_FILENAME
+        )
         self.service.gamescope_wsi_compatibility_dir = (
             self.root / "share/vulkan/gamescope_wsi_compatibility.d"
         )
@@ -141,11 +162,14 @@ class DualArchInstallationTests(unittest.TestCase):
             self.assertEqual(merged["global_config"]["dll"], expected_path)
 
     @staticmethod
-    def _manifest(arch: str) -> bytes:
+    def _manifest(arch: str, *, spatial_scaling: bool = False) -> bytes:
         return json.dumps({
             "file_format_version": "1.2.1",
             "layer": {
-                "name": "VK_LAYER_MAKO_frame_generation",
+                "name": (
+                    SPATIAL_SCALING_LAYER_NAME if spatial_scaling
+                    else "VK_LAYER_MAKO_frame_generation"
+                ),
                 "library_path": f"original-{arch}",
                 "library_arch": arch,
             },
@@ -158,6 +182,13 @@ class DualArchInstallationTests(unittest.TestCase):
                 b"ELF64" + MAKO_LAYER_BUILD_MARKER + MAKO_PROFILE_FALLBACK_MARKER
             ),
             f"share/vulkan/implicit_layer.d/{JSON_FILENAME}": self._manifest("64"),
+            f"lib/{SPATIAL_SCALING_LIB_FILENAME}": (
+                b"ELF64" + SPATIAL_SCALING_LAYER_BUILD_MARKER
+                + MAKO_PROFILE_FALLBACK_MARKER
+            ),
+            f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON_FILENAME}": (
+                self._manifest("64", spatial_scaling=True)
+            ),
         }
         if include_32bit:
             members.update({
@@ -166,6 +197,13 @@ class DualArchInstallationTests(unittest.TestCase):
                     + MAKO_PROFILE_FALLBACK_MARKER
                 ),
                 f"share/vulkan/implicit_layer.d/{JSON32_FILENAME}": self._manifest("32"),
+                f"lib32/{SPATIAL_SCALING_LIB_FILENAME}": (
+                    b"ELF32" + SPATIAL_SCALING_LAYER_BUILD_MARKER
+                    + MAKO_PROFILE_FALLBACK_MARKER
+                ),
+                f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON32_FILENAME}": (
+                    self._manifest("32", spatial_scaling=True)
+                ),
             })
 
         with tarfile.open(archive_path, "w:xz") as archive:
@@ -181,6 +219,12 @@ class DualArchInstallationTests(unittest.TestCase):
 
         self.assertTrue(self.service.lib_file.read_bytes().startswith(b"ELF64"))
         self.assertTrue(self.service.lib32_file.read_bytes().startswith(b"ELF32"))
+        self.assertTrue(
+            self.service.spatial_scaling_lib_file.read_bytes().startswith(b"ELF64")
+        )
+        self.assertTrue(
+            self.service.spatial_scaling_lib32_file.read_bytes().startswith(b"ELF32")
+        )
         manifest64 = json.loads(self.service.json_file.read_text(encoding="utf-8"))
         manifest32 = json.loads(self.service.json32_file.read_text(encoding="utf-8"))
         self.assertEqual(manifest64["layer"]["library_arch"], "64")
@@ -196,6 +240,33 @@ class DualArchInstallationTests(unittest.TestCase):
             self.assertEqual(
                 manifest["layer"]["disable_environment"],
                 {MAKO_LAYER_DISABLE_ENV: "1"},
+            )
+
+        scaling_manifest64 = json.loads(
+            self.service.spatial_scaling_json_file.read_text(encoding="utf-8")
+        )
+        scaling_manifest32 = json.loads(
+            self.service.spatial_scaling_json32_file.read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            scaling_manifest64["layer"]["library_path"],
+            "../../lib/libmako-render-scaling.so",
+        )
+        self.assertEqual(
+            scaling_manifest32["layer"]["library_path"],
+            "../../lib32/libmako-render-scaling.so",
+        )
+        for manifest in (scaling_manifest64, scaling_manifest32):
+            self.assertEqual(
+                manifest["layer"]["name"], SPATIAL_SCALING_LAYER_NAME
+            )
+            self.assertEqual(
+                manifest["layer"]["enable_environment"],
+                {SPATIAL_SCALING_LAYER_ENABLE_ENV: "1"},
+            )
+            self.assertEqual(
+                manifest["layer"]["disable_environment"],
+                {SPATIAL_SCALING_LAYER_DISABLE_ENV: "1"},
             )
 
         registered64 = json.loads(
@@ -437,6 +508,13 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.json32_file.write_text("stale", encoding="utf-8")
         self.service.registered_json32_file.parent.mkdir(parents=True, exist_ok=True)
         self.service.registered_json32_file.write_text("stale", encoding="utf-8")
+        self.service.spatial_scaling_lib32_file.write_bytes(b"stale")
+        self.service.spatial_scaling_json32_file.parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        self.service.spatial_scaling_json32_file.write_text(
+            "stale", encoding="utf-8"
+        )
 
         self.service._extract_and_install_files(self._archive(include_32bit=False))
         self.service._register_layer_manifests()
@@ -447,6 +525,8 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertFalse(self.service.lib32_file.exists())
         self.assertFalse(self.service.json32_file.exists())
         self.assertFalse(self.service.registered_json32_file.exists())
+        self.assertFalse(self.service.spatial_scaling_lib32_file.exists())
+        self.assertFalse(self.service.spatial_scaling_json32_file.exists())
 
     def test_rejects_payload_without_build_marker(self):
         archive_path = self._archive()
@@ -611,6 +691,10 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.lib32_file,
             self.service.json_file,
             self.service.json32_file,
+            self.service.spatial_scaling_lib_file,
+            self.service.spatial_scaling_lib32_file,
+            self.service.spatial_scaling_json_file,
+            self.service.spatial_scaling_json32_file,
             self.service.registered_json_file,
             self.service.registered_json32_file,
             self.service.mako_launch_script_path,

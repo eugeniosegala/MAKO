@@ -3,6 +3,7 @@
 #include "instance.hpp"
 
 #include "device_selection.hpp"
+#include "layer_role.hpp"
 #include "pnext_chain.hpp"
 #include "present_diagnostics.hpp"
 #include "spatial_scaling_policy.hpp"
@@ -46,12 +47,23 @@ namespace {
     constexpr uint64_t spatialScalingEnabledBit = uint64_t{1};
     constexpr uint64_t spatialScalingProcessSupportedBit = uint64_t{2};
 
+#if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
+    constexpr char makoBuildIdentity[] =
+        "MAKO Renderer: render layer active; identity="
+        "VK_LAYER_MAKO_spatial_scaling; build="
+        MAKO_BUILD_VERSION
+        "; fingerprint="
+        MAKO_BUILD_FINGERPRINT
+        "; role=spatial-scaling";
+#else
     constexpr char makoBuildIdentity[] =
         "MAKO Renderer: render layer active; identity="
         "VK_LAYER_MAKO_render; build="
         MAKO_BUILD_VERSION
         "; fingerprint="
-        MAKO_BUILD_FINGERPRINT;
+        MAKO_BUILD_FINGERPRINT
+        "; role=frame-generation";
+#endif
 
     std::string diagnosticToken(const std::string_view raw) {
         if (raw.empty())
@@ -435,12 +447,12 @@ Root::Root() :
         return;
     }
 
-    this->active_profile = profile->second;
+    this->active_profile = profileForLayer(profile->second);
     // Every matched MAKO process reserves the application-device interop used
     // by LSFG. The user's Frame Generation switch remains a live execution
     // policy: Off performs no generation work, while On can reuse the retained
     // backend and private resources without reconstructing the Vulkan device.
-    this->frameGenerationInteropProvisionedAtStartup = true;
+    this->frameGenerationInteropProvisionedAtStartup = frameGenerationLayer;
     this->scalingEngineConfiguredAtStartup =
         this->active_profile->scaling_enabled;
 
@@ -548,14 +560,15 @@ ConfigurationUpdateResult Root::update() {
         ? std::optional<std::string>{this->active_profile->name}
         : std::nullopt;
     const auto& profile = findProfile(this->config.get(), ls::identify());
+    auto requestedProfile = profile
+        ? std::optional<ls::GameConf>{profileForLayer(profile->second)}
+        : std::nullopt;
     const bool activeUltraPerformance = this->active_profile &&
         this->active_profile->ultra_performance;
-    const bool requestedUltraPerformance = profile &&
-        profile->second.ultra_performance;
+    const bool requestedUltraPerformance = requestedProfile &&
+        requestedProfile->ultra_performance;
 
-    auto runtimeProfile = profile
-        ? std::optional<ls::GameConf>{profile->second}
-        : std::nullopt;
+    auto runtimeProfile = requestedProfile;
     bool profileProcessRestartRequired = false;
     bool gpuSelectionPending = false;
     bool ultraPerformancePending =
@@ -666,8 +679,8 @@ ConfigurationUpdateResult Root::update() {
         }
         result.processProfileChangeDeferred =
             result.processProfileChangeDeferred ||
-            (profile && backendProfileChangePending(
-                this->backendProfile, profile->second
+            (requestedProfile && backendProfileChangePending(
+                this->backendProfile, *requestedProfile
             ));
         if (result.processProfileChangeDeferred) {
             result.processRestartDeferredContexts = std::max(
@@ -910,7 +923,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     if (this->active_profile->scaling_enabled) {
         const auto advertised = scalingDecision.fixedContract;
         std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
-                  << "requested=" << modification.applicationExtent.width
+                  << "role=" << layerRoleName
+                  << "; requested=" << modification.applicationExtent.width
                   << 'x' << modification.applicationExtent.height
                   << "; surface_current=" << caps.currentExtent.width
                   << 'x' << caps.currentExtent.height
@@ -1025,7 +1039,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         this->gamescopeHdrActive.value_or(false),
         this->gamescopeDetected,
         this->presentationEnvironment,
-        vk.frameGenerationInteropEnabled(),
+        frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled()),
         modification.spatialScalingActive
     );
 
@@ -1096,15 +1110,30 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     const bool frameGenerationRequested =
         profile.frame_generation_enabled;
     const bool frameGenerationAvailableOnDevice =
-        vk.frameGenerationInteropEnabled();
+        frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled());
     if (frameGenerationAvailableOnDevice &&
             !this->backend.has_value()) { // emplace backend late, due to loader bug
         try {
             // The backend owns a separate Vulkan instance. Prevent MAKO
-            // Renderer from entering that internal instance while preserving
-            // caller-provided values for the rest of the game process.
+            // Renderer, Gamescope WSI, or a selected post-process layer from
+            // entering that internal instance while preserving caller values
+            // for the rest of the game process. The split chain has two MAKO
+            // identities, so disabling only the upper identity would let the
+            // lower role intercept the backend device and break construction.
             const ScopedEnvironmentOverride disableMako(
                 "DISABLE_MAKO", "1"
+            );
+            const ScopedEnvironmentOverride disableSpatialMako(
+                "DISABLE_MAKO_SPATIAL_SCALING", "1"
+            );
+            const ScopedEnvironmentOverride disableGamescopeWsi(
+                "DISABLE_GAMESCOPE_WSI", "1"
+            );
+            const ScopedEnvironmentOverride disableMangoHud(
+                "MANGOHUD", "0"
+            );
+            const ScopedEnvironmentOverride disableVkBasalt(
+                "ENABLE_VKBASALT", "0"
             );
             std::string dll{};
             if (global.dll.has_value())
@@ -1197,6 +1226,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
         std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-create"
                   << " context=" << diagnosticsContextId
                   << " pid=" << ::getpid()
+                  << " role=" << layerRoleName
                   << " swapchain=" << swapchain
                   << " width=" << info.extent.width
                   << " height=" << info.extent.height
@@ -1231,6 +1261,7 @@ std::optional<Swapchain> Root::takeSwapchainContext(
     if (present_diagnostics::enabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=swapchain-context-destroy"
                   << " context=" << diagnosticsContextId
+                  << " role=" << layerRoleName
                   << " swapchain=" << swapchain
                   << " active_contexts=" << this->swapchains.size()
                   << " removed=" << removed << '\n';

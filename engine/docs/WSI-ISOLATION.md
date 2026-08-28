@@ -13,19 +13,25 @@ Disabling Gamescope WSI does not disable Gamescope, Steam, or Game Mode. It chan
 
 ## Why MAKO needs one presentation owner
 
-MAKO turns one application present into a sequence of generated presents plus the original frame. When Gamescope WSI is above MAKO, its upper policy sees the single application present, while the lower driver receives every MAKO-injected present. Those injected calls do not re-enter the upper WSI layer individually.
+MAKO turns one application present into a sequence of generated presents plus the original frame. A single combined MAKO layer below Gamescope WSI is unsafe: the upper WSI policy sees only the application's real present while the lower driver receives every injected present, so generated calls never re-enter WSI for pacing. The observed result was repeated lower FIFO stalls, frame generation that appeared inactive, and freezes during live scaler or resolution transitions.
 
-In the observed regression, Gamescope's upper FIFO policy and MAKO's lower generated/original sequence applied backpressure to each other. A nominal 60 FPS game fell to roughly 13 FPS; Fixed and Adaptive modes behaved alike because the conflict was below the scheduler.
-
-The validated SDR solution gives MAKO one ordered lower swapchain and one presentation clock:
+The validated split solution gives frame generation the upper layer, lets every injected present traverse Gamescope WSI, and gives spatial reconstruction an independent lower layer:
 
 ```text
 Game / Proton / DXVK or VKD3D-Proton
                   |
                   v
-        MAKO Vulkan layer only
+    VK_LAYER_MAKO_render
+        frame generation
                   |
       generated frame(s) + original
+                  |
+                  v
+ VK_LAYER_FROG_gamescope_wsi_x86_64
+                  |
+                  v
+VK_LAYER_MAKO_spatial_scaling
+       spatial reconstruction
                   |
                   v
              Vulkan driver
@@ -55,17 +61,17 @@ MAKO Decky uses the equivalent per-user path below `~/.local/share/mako-render/`
 
 `VK_IMPLICIT_LAYER_PATH` must be set before process startup. The Renderer cannot repair layer order after `vkCreateInstance`, so this behavior belongs in launchers, manifests, packaging checks, and Flatpak overrides as well as in C++ policy tests.
 
-The bounded managed scaling exception is selected before process startup: an eligible host profile that already has Scaling Engine enabled stages Gamescope WSI before MAKO. An independently selected MangoHud or vkBasalt post-process layer may follow MAKO without displacing WSI. Other managed launches retain the isolated contract above. This is not a live layer-chain change.
+The bounded managed scaling exception is selected before process startup. An eligible native host profile with Scaling Engine enabled stages the exact `VK_LAYER_MAKO_render -> VK_LAYER_FROG_gamescope_wsi_x86_64 -> VK_LAYER_MAKO_spatial_scaling` chain. The upper MAKO role owns only frame generation; the lower role owns only spatial reconstruction. A selected MangoHud or vkBasalt layer may follow the spatial role. Profiles without Scaling Engine retain the isolated top-only MAKO contract unless the explicit WSI compatibility option is selected. Layer membership itself is not live.
 
 ## Experimental MAKO Decky Gamescope WSI exception
 
 MAKO Decky exposes **Experimental Gamescope WSI (Restart)** under **Compatibility Settings** for FG-only games that need the Gamescope WSI presentation path. It is off by default, stored per profile, and requires a game restart. Scaling Engine automatically provides and locks the same requirement. The WSI switch is independent from the mutually exclusive MangoHud/vkBasalt post-process selector.
 
-MAKO Renderer installation validates the host's `/usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.x86_64.json`: the layer identity, absolute available library, and enable/disable gates must match the expected 64-bit Gamescope WSI contract. A valid manifest is copied into MAKO's managed `~/.local/share/mako-render/vulkan/gamescope_wsi_compatibility.d` directory. The wrapper admits only MAKO's private manifests plus that staged WSI manifest, sets `ENABLE_GAMESCOPE_WSI=1`, removes `DISABLE_GAMESCOPE_WSI`, and keeps the known LSFG-VK, Mesa device-selection, and Mesa anti-lag guards. Missing or invalid host evidence leaves the default isolated path active.
+MAKO Renderer installation validates the host's `/usr/share/vulkan/implicit_layer.d/VkLayer_FROG_gamescope_wsi.x86_64.json`: the layer identity, absolute available library, and enable/disable gates must match the expected 64-bit Gamescope WSI contract. A valid manifest is copied into MAKO's managed `~/.local/share/mako-render/vulkan/gamescope_wsi_compatibility.d` directory. Installation also stages MAKO's role-specific lower manifest in `~/.local/share/mako-render/vulkan/spatial_scaling.d`. The wrapper admits only the exact role-specific MAKO manifests plus that staged WSI manifest, sets their matching enable gates, removes `DISABLE_GAMESCOPE_WSI`, and keeps the known LSFG-VK, Mesa device-selection, and Mesa anti-lag guards. Missing or invalid WSI or lower-scaling evidence fails closed to top-only MAKO with scaling suppressed; it never recreates the unsafe combined chain beneath WSI.
 
-This exception remains SDR-only: `MAKO_DISABLE_HDR_EXPOSURE=1` stays set and inherited `DXVK_HDR` is removed. It is implemented only for direct host launches; Flatpak, Heroic/UMU, 32-bit presentation, non-SteamOS layouts, HDR, real-game pacing, and every Gamescope limiter state remain outside the current evidence. The exact staged directory order and one headless native-Vulkan scaling-plus-Fixed probe are now verified below, but loader discovery alone is not a compatibility result. Verify the actual instance and device order, final generated FPS, image quality, and pacing before expanding this lane.
+This exception remains SDR-only: `MAKO_DISABLE_HDR_EXPOSURE=1` stays set and inherited `DXVK_HDR` is removed. It is implemented for direct native-host launch contracts, including the validated 64-bit Steam/Proton path where Proton runs inside its matching Steam Linux Runtime Pressure Vessel. MAKO Gym's Proton E2E lane asserts from inside that container that Pressure Vessel imported all three role manifests before accepting the exact instance/device order, translated-scene completion, selected scaler, generated delivery, and clean shutdown. Flatpak, Heroic/UMU, 32-bit presentation, non-SteamOS layouts, HDR, commercial-title pacing, and every Gamescope limiter state remain outside the current evidence. Loader discovery alone is not a compatibility result; verify final generated FPS, image quality, and pacing before expanding this lane.
 
-Manifest order is decisive for the verified spatial-scaling compatibility lane. MAKO Gym's release-only `gamescope-e2e` suite automatically validates the installed 64-bit manifests and libraries, constructs the positive and deliberately reversed layer paths, and runs both through a real headless Gamescope compositor. With Gamescope WSI before MAKO, MAKO observes variable `currentExtent=UINT32_MAX` capabilities and safely activates a 640×360 source to 960×540 presentation split through its existing variable-surface policy. The reverse directory order produces `Application -> MAKO -> Gamescope WSI`; MAKO observes a fixed 640×360 surface and correctly remains inactive rather than forcing a hidden split. The suite must also prove Fixed and Adaptive generated delivery, private Native/MAKO/LS1 transitions with no application-visible swapchain recreation, FG Off/On, maintenance1-fenced natural retirement, 1080p→4K followed by retained-envelope 1440p→4K replacement, correct 89 FPS fractional-to-100 FPS near-target behavior across that replacement, a single-process journey combining every scaler with that resize and FG Off/On, and clean shutdown. This evidence supports only the narrow, process-start SDR lane: managed launch may stage WSI before MAKO when the profile starts with Scaling Engine enabled, with an optional post-process manifest directory after MAKO. Changing Scaling Engine inside a running process cannot insert or remove WSI; after the process starts with the ordered lane provisioned, Native/MAKO/LS1 method and sharpness changes reuse the immutable source/presentation contract and rebuild only MAKO's private scaler. Scale Factor waits for natural game-owned recreation. Native logs an active source/presentation split and uses its model-free linear transfer graph. If MAKO instead observes a fixed native extent and the application or upper layer requests that native extent, the policy reports `inactive_reason=application-extent-override-no-source-presentation-split` and remains inactive.
+Manifest order and role isolation are decisive. MAKO Gym's release-only `gamescope-e2e` suite validates both MAKO libraries and all three staged manifests, then runs the complete split chain, the scaling-disabled top-only chain, and the missing-dependency fail-closed chain through a real headless Gamescope compositor. The lower spatial role observes WSI's variable `currentExtent=UINT32_MAX` capabilities and activates a 640×360 source to 960×540 presentation split, while every frame generated by the upper role re-enters WSI before reaching the lower role. The suite proves Fixed and Adaptive delivery, noisy 82/106 FPS excursions followed by a sustained 82 FPS recovery, private Native/MAKO/LS1 transitions with no application-visible swapchain recreation, FG Off/On, maintenance1-fenced natural retirement, 1080p→4K followed by retained-envelope 1440p→4K replacement, the 89→100 FPS boundary across that replacement, a compound single-process journey, transport health, and clean shutdown. Changing Scaling Engine inside a running process cannot insert or remove these roles; after launch, Native/MAKO/LS1 method and sharpness changes rebuild only the lower role's private scaler. Scale Factor waits for natural game-owned recreation. Native logs an active source/presentation split and uses its model-free linear transfer graph.
 
 Deferred lower-swapchain retirement normally completes only after a later replacement presentation, its maintenance1 fence, and the 50 ms compositor grace. An upper WSI may destroy its application-visible object before replacement and pass a null lower `oldSwapchain`; if the exact same-device, same-surface lower object is still retained by MAKO, the lower create receives that handle once so Vulkan retires it rather than rejecting the occupied native window. The handoff changes neither application-visible ownership nor MAKO's fence/grace destruction boundary, and a failed create consumes it because the Vulkan call has already retired the old handle. Terminal application teardown has no guaranteed later present, especially in D3D12/VKD3D-Proton. MAKO records the creating surface with each deferred lower swapchain, and `vkDestroySurfaceKHR` is the explicit terminal boundary at which no replacement on that surface can follow: MAKO synchronously drains the same maintenance1 fence and releases that lower swapchain before forwarding surface destruction. This adds no background thread or steady-state polling, does not bypass an unsignaled fence, and leaves device destruction's existing bounded collection plus guarded force-finalization fallback intact for applications that destroy the device before the surface. MAKO Gym's Proton E2E lane requires bounded workload completion, Gamescope primary-child shutdown, completed deferred retirement, and the absence of forced pending retirement so this terminal path cannot regress into a process hang.
 
@@ -77,10 +83,11 @@ Observed compatibility evidence now includes Helldivers 2 on Steam Deck: the rep
 
 | Component | Default managed launch result | Reason |
 | --- | --- | --- |
-| MAKO Renderer | Included and gated by `ENABLE_MAKO=1` | Owns the swapchain sequence |
+| MAKO Renderer frame-generation role | Included and gated by `ENABLE_MAKO=1` | Owns generated-frame scheduling and injects every generated present above WSI |
 | Gamescope compositor | Active | It is outside the application's implicit-layer chain |
 | Steam/Game Mode interface | Active | Compositor UI is not the Vulkan WSI layer |
-| Gamescope WSI Vulkan layer | Excluded by default; ordered before MAKO only for the bounded scaling-at-start or explicit compatibility lane | Avoids competing presentation policy while preserving the verified variable-surface scaling split where selected |
+| Gamescope WSI Vulkan layer | Excluded by default; ordered below the frame-generation role and above the spatial role for the bounded scaling-at-start lane or below the frame-generation role for the explicit FG-only compatibility lane | Paces every generated and original present while exposing the validated variable surface to the lower scaler |
+| MAKO Renderer spatial-scaling role | Included only by a complete split Scaling Engine launch and gated by `ENABLE_MAKO_SPATIAL_SCALING=1` | Owns source-to-presentation reconstruction below WSI and cannot schedule frame generation |
 | Steam Fossilize/implicit overlay hooks | Excluded | Prevents dispatch-chain bypass and ordering changes |
 | System-wide implicit layers | Excluded | Makes swapchain ownership deterministic; MAKO Decky copies only the validated architecture-specific MangoHud or vkBasalt manifests for the selected tool into one dedicated managed directory rather than admitting the host directory |
 | Known LSFG-VK frame-generation layers | Disabled | Two frame generators cannot own one swapchain |
@@ -165,7 +172,7 @@ Expected Renderer evidence includes:
 - `Gamescope SDR presentation transport: mode=fifo-ordered` when Gamescope is detected; and
 - generated/original delivery records when presentation diagnostics are explicitly enabled.
 
-For the explicit compatibility exception or automatic native scaling lane, the process policy must instead report `gamescope_wsi=allowed` while `hdr_exposure=disabled`, and loader diagnostics must show `VK_LAYER_FROG_gamescope_wsi_x86_64` above `VK_LAYER_MAKO_render`. That policy record proves only that MAKO did not set its isolation guard. Positive spatial-scaling evidence additionally requires `surface_extent_mode=variable`, `inactive_reason=none`, `source_presentation_split=1`, differing selected source/presentation extents, and a matching `spatial scaling active` record. A selected method or recreation request without those records is not evidence that a scaler ran.
+For the explicit compatibility exception, loader diagnostics must show `VK_LAYER_MAKO_render` above `VK_LAYER_FROG_gamescope_wsi_x86_64`, and the frame-generation role must report `gamescope_wsi=allowed` while `hdr_exposure=disabled`. For automatic native scaling, diagnostics must additionally show `VK_LAYER_MAKO_spatial_scaling` below WSI, a `role=spatial-scaling` build marker, and `spatial scaling active ... pipeline=post-frame-generation`. Positive spatial-scaling evidence also requires `surface_extent_mode=variable`, `inactive_reason=none`, `source_presentation_split=1`, and differing selected source/presentation extents. A selected method or recreation request without those records is not evidence that a scaler ran.
 
 Use `VK_LOADER_DEBUG=layer` only for a focused reproduction because loader logs are verbose. Presentation diagnostics are also opt-in; synchronous logging can distort the timing problem under investigation. Follow [Collect diagnostics](COLLECT_DIAGNOSTICS.md) and retain the `layers`, `startup`, `performance`, and `recovery` presets.
 
@@ -178,7 +185,7 @@ Any change to private discovery, Gamescope variables, present modes, pNext filte
 - 64-bit and 32-bit manifest/package validation;
 - Vulkan loader instance/device activation and finite `vkcube` presentation;
 - Fixed and Adaptive frame generation;
-- the focused MAKO Gym `gamescope-e2e` rows for layer order, private live transition, retained resolution envelope, high-base Adaptive policy, and natural recreation changes, with all eleven required before release;
+- the focused MAKO Gym `gamescope-e2e` rows for split-layer order and isolation, private live transition, retained resolution envelope, noisy high-base Adaptive policy, fail-closed dependency handling, and natural recreation changes, with all twelve required before release;
 - the focused MAKO Gym `proton-e2e` rows for deterministic D3D11/DXVK and D3D12/VKD3D-Proton scenes, with all twelve required before release;
 - the MAKO Gym `proton-compatibility` core/fast tier only for focused runtime-version work, with extended/extended across at least four families required before release;
 - real-game traces for native Vulkan, DXVK, and VKD3D-Proton as the final compatibility evidence;

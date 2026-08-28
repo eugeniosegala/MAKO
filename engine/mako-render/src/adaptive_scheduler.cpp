@@ -64,15 +64,24 @@ namespace {
     constexpr auto adaptiveTargetDeficitDuration = std::chrono::seconds(1);
     constexpr auto adaptiveNearTargetNativeHoldDuration =
         std::chrono::seconds(1);
-    // Once native cadence has won the ideal interval-RMS comparison, require
-    // Fractional placement to become materially better before leaving the
-    // native preference. This quality margin supplies hysteresis without an
-    // absolute FPS boundary and scales with every configured target.
-    constexpr double adaptiveNearTargetFractionalExitRmsRatio = 0.85;
-    // The prediction is exactly tied at 75 percent of target, but measured
-    // cadence naturally wanders around that boundary. Admit a half-percent
-    // target-interval RMS tolerance so a nominal boundary cadence cannot
-    // chatter back into the equally irregular sparse Fractional sequence.
+    // Opposite evidence decays twice as quickly as qualifying evidence grows.
+    // A one-frame boundary excursion therefore cannot reset a real cadence
+    // drop, while evenly oscillating measurements cannot accumulate enough
+    // one-sided evidence to chatter the policy.
+    constexpr int adaptiveNearTargetOppositeEvidenceDecay = 2;
+    constexpr auto adaptiveNearTargetMaximumEvidenceSample =
+        std::chrono::milliseconds(100);
+    // Fractional Adaptive promises to approach the requested output target.
+    // Native preference is therefore only eligible when the real cadence is
+    // already within Adaptive's established 95% retention envelope. The
+    // interval-quality comparison still avoids sparse generated work at a
+    // genuinely near-target cadence, without stranding a 95-110 FPS source
+    // below a 120 FPS target indefinitely.
+    constexpr double adaptiveNearTargetNativeMinimumOutputRatio = 0.95;
+    // Inside the final five-percent output envelope, measured cadence can
+    // naturally wander around a close quality decision. Admit a half-percent
+    // target-interval RMS tolerance so a nominal near-target cadence cannot
+    // chatter back into an equally irregular sparse Fractional sequence.
     // Expressing the margin as target time keeps it proportional at 60, 90,
     // 120, 144 Hz, and other configured targets.
     constexpr double adaptiveNearTargetEntryTargetIntervalTolerance = 0.005;
@@ -1559,7 +1568,11 @@ AdaptiveScheduler::advanceNearTargetNativePreference(
     }
 
     const double targetFps = static_cast<double>(this->config.targetFps);
-    const bool couldPreferNative = baseFps > targetFps * 0.5 &&
+    const bool nativeOutputMeetsTarget =
+        baseFps >= targetFps * adaptiveNearTargetNativeMinimumOutputRatio;
+    const bool nativeOutputBelowRetentionFloor =
+        preference.active && !nativeOutputMeetsTarget;
+    const bool couldPreferNative = nativeOutputMeetsTarget &&
         baseFps < targetFps;
     const auto quality = preference.active || couldPreferNative
         ? predictNearTargetCadenceQuality(baseFps, this->config.targetFps)
@@ -1568,12 +1581,16 @@ AdaptiveScheduler::advanceNearTargetNativePreference(
     if (preference.active) {
         if (baseFps >= targetFps) {
             requestedActive = true;
+        } else if (!nativeOutputMeetsTarget) {
+            requestedActive = false;
         } else if (quality.valid) {
+            const double exitToleranceMilliseconds =
+                1000.0 / targetFps *
+                adaptiveNearTargetEntryTargetIntervalTolerance;
             requestedActive =
-                quality.fractionalIntervalSquaredErrorMilliseconds >
-                quality.nativeIntervalSquaredErrorMilliseconds *
-                    adaptiveNearTargetFractionalExitRmsRatio *
-                    adaptiveNearTargetFractionalExitRmsRatio;
+                quality.fractionalIntervalRmsMilliseconds() +
+                    exitToleranceMilliseconds >=
+                quality.nativeIntervalRmsMilliseconds();
         }
     } else if (baseFps >= targetFps &&
             preference.candidateActive.value_or(false)) {
@@ -1583,10 +1600,10 @@ AdaptiveScheduler::advanceNearTargetNativePreference(
         // mandatory and no preference transition is needed.
         requestedActive = true;
     } else if (quality.valid) {
-        // The ideal constant-source prediction crosses at exactly 75 percent
-        // of target. Compare the two derived RMS values with a small
-        // target-interval tolerance so measurement noise around an equal-
-        // quality boundary does not retain sparse Fractional placement.
+        // The output-retention floor has already rejected material target
+        // deficits. Compare the two derived RMS values with a small target-
+        // interval tolerance so measurement noise inside the final five
+        // percent does not retain sparse Fractional placement unnecessarily.
         const double entryToleranceMilliseconds =
             1000.0 / targetFps *
             adaptiveNearTargetEntryTargetIntervalTolerance;
@@ -1596,20 +1613,35 @@ AdaptiveScheduler::advanceNearTargetNativePreference(
             quality.nativeIntervalRmsMilliseconds();
     }
 
+    auto evidenceSample = AdaptiveScheduler::Clock::duration{};
+    if (preference.lastEvaluationAt) {
+        evidenceSample = std::clamp(
+            now - *preference.lastEvaluationAt,
+            AdaptiveScheduler::Clock::duration{},
+            std::chrono::duration_cast<AdaptiveScheduler::Clock::duration>(
+                adaptiveNearTargetMaximumEvidenceSample
+            )
+        );
+    }
+    preference.lastEvaluationAt = now;
+
     if (requestedActive == preference.active) {
-        preference.resetCandidate();
+        const auto decay = evidenceSample *
+            adaptiveNearTargetOppositeEvidenceDecay;
+        preference.candidateEvidence = decay >= preference.candidateEvidence
+            ? AdaptiveScheduler::Clock::duration{}
+            : preference.candidateEvidence - decay;
+        if (preference.candidateEvidence ==
+                AdaptiveScheduler::Clock::duration{})
+            preference.candidateActive.reset();
         return preference.active;
     }
     if (preference.candidateActive != requestedActive) {
         preference.candidateActive = requestedActive;
-        preference.candidateSince = now;
-        // Qualification observes the current policy; it does not own it.
-        // Keep Fractional updates active until the held transition commits.
-        return preference.active;
+        preference.candidateEvidence = AdaptiveScheduler::Clock::duration{};
     }
-    if (!preference.candidateSince ||
-            now - *preference.candidateSince <
-                adaptiveNearTargetNativeHoldDuration) {
+    preference.candidateEvidence += evidenceSample;
+    if (preference.candidateEvidence < adaptiveNearTargetNativeHoldDuration) {
         return preference.active;
     }
 
@@ -1652,7 +1684,9 @@ AdaptiveScheduler::advanceNearTargetNativePreference(
         adaptiveNearTargetNativeHoldDuration,
         preference.active
             ? "native-predicted-rms-not-worse"
-            : "fractional-predicted-rms-advantage"
+            : (nativeOutputBelowRetentionFloor
+                ? "native-output-below-retention-floor"
+                : "fractional-predicted-rms-advantage")
     );
     return preference.active;
 }

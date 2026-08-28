@@ -857,7 +857,7 @@ namespace {
             harness.runAtFps(static_cast<double>(baseFps), 8s);
             const auto snapshot = harness.scheduler.snapshot();
 
-            if (baseFps >= 90) {
+            if (baseFps >= 114) {
                 require(snapshot.nearTargetNativePreference,
                     "steady near-target cadence did not prefer native at " +
                         std::to_string(baseFps) + " FPS");
@@ -909,11 +909,11 @@ namespace {
             double fractionalPreferredBaseFps;
         };
         constexpr std::array cases{
-            RatioCase{60, 45.0, 44.0},
-            RatioCase{90, 67.5, 66.0},
-            RatioCase{100, 75.0, 73.0},
-            RatioCase{120, 90.0, 88.0},
-            RatioCase{144, 108.0, 105.0},
+            RatioCase{60, 57.0, 56.0},
+            RatioCase{90, 86.0, 84.0},
+            RatioCase{100, 95.0, 94.0},
+            RatioCase{120, 114.0, 113.0},
+            RatioCase{144, 137.0, 136.0},
         };
 
         for (const auto& ratioCase : cases) {
@@ -924,7 +924,7 @@ namespace {
                     nearTargetNativePreference &&
                     nativeHarness.scheduler.snapshot().
                         validatedGenerationLimit == 0,
-                "derived native-preference crossover did not scale at target " +
+                "native-preference output floor did not scale at target " +
                     std::to_string(ratioCase.targetFps));
 
             Harness fractionalHarness(ratioCase.targetFps, 2);
@@ -936,7 +936,7 @@ namespace {
                     nearTargetNativePreference &&
                     fractionalHarness.scheduler.snapshot().
                         validatedGenerationLimit == 1,
-                "derived Fractional side of crossover did not scale at target " +
+                "Fractional side of output floor did not scale at target " +
                     std::to_string(ratioCase.targetFps));
         }
     }
@@ -944,16 +944,16 @@ namespace {
     void testNearTargetNativePreferenceToleratesBoundaryMeasurementNoise() {
         Harness nominalBoundary(120, 2);
         nominalBoundary.start();
-        nominalBoundary.runAtFps(89.8, 8s);
+        nominalBoundary.runAtFps(114.0, 8s);
         require(nominalBoundary.scheduler.snapshot().
                     nearTargetNativePreference &&
                 nominalBoundary.scheduler.snapshot().
                     validatedGenerationLimit == 0,
-            "minor cadence drift below the equal-quality crossover retained sparse Fractional placement");
+            "native-retention boundary did not prefer a target-near real cadence");
 
         Harness usefulFractional(120, 2);
         usefulFractional.start();
-        usefulFractional.runAtFps(89.0, 8s);
+        usefulFractional.runAtFps(113.0, 8s);
         require(!usefulFractional.scheduler.snapshot().
                     nearTargetNativePreference &&
                 usefulFractional.scheduler.snapshot().
@@ -992,14 +992,14 @@ namespace {
             require(enabled + disabled <= 1,
                 "noisy sweep caused near-target preference chatter at " +
                     std::to_string(baseFps) + " FPS");
-            if (baseFps <= 85) {
+            if (baseFps <= 110) {
                 require(!harness.scheduler.snapshot().
                         nearTargetNativePreference &&
                         harness.scheduler.snapshot().
                             validatedGenerationLimit == 1,
                     "clearly Fractional-favourable noisy cadence chose native at " +
                         std::to_string(baseFps) + " FPS");
-            } else if (baseFps >= 95) {
+            } else if (baseFps >= 116) {
                 require(harness.scheduler.snapshot().
                         nearTargetNativePreference &&
                         harness.scheduler.snapshot().
@@ -1020,7 +1020,7 @@ namespace {
 
         bool generatedDuringEntryHold = false;
         for (size_t frame = 0; frame < 50; ++frame) {
-            const auto plan = harness.frameAtFps(100.0);
+            const auto plan = harness.frameAtFps(119.0);
             requireValidTimestamps(plan, 1);
             generatedDuringEntryHold = generatedDuringEntryHold ||
                 !plan.empty();
@@ -1031,12 +1031,12 @@ namespace {
                 harness.diagnostics.count(
                     "adaptive-near-target-native-enabled") == 0,
             "cadence rise changed Fractional policy before the native-preference hold completed");
-        harness.runAtFps(100.0, 2500ms);
+        harness.runAtFps(119.0, 2500ms);
         require(harness.scheduler.snapshot().nearTargetNativePreference &&
                 harness.scheduler.snapshot().validatedGenerationLimit == 0,
             "cadence rise did not enter near-target native preference");
 
-        constexpr std::array boundaryCadence{85.0, 95.0};
+        constexpr std::array boundaryCadence{116.0, 120.0};
         for (size_t frame = 0; frame < 1200; ++frame)
             harness.frameAtFps(boundaryCadence[frame & 1U]);
         require(harness.scheduler.snapshot().nearTargetNativePreference &&
@@ -1056,7 +1056,7 @@ namespace {
                     "adaptive-near-target-native-disabled") == 1,
             "sustained Fractional advantage did not resume generation");
 
-        harness.runAtFps(100.0, 3s);
+        harness.runAtFps(119.0, 3s);
         require(harness.scheduler.snapshot().nearTargetNativePreference &&
             harness.scheduler.snapshot().validatedGenerationLimit == 0 &&
                 harness.diagnostics.count(
@@ -1071,10 +1071,55 @@ namespace {
             "native preference took ownership from cadence stabilization");
     }
 
+    void testNearTargetNativePreferenceResumesAcrossNoisyHighExcursions() {
+        Harness harness(120, 2);
+        harness.start();
+        harness.runAtFps(119.0, 8s);
+        require(harness.scheduler.snapshot().nearTargetNativePreference &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 0,
+            "precondition failed: high-base cadence did not prefer native");
+
+        // Reproduce the RE4 resolution-change failure shape: native cadence
+        // previously remained latched while the game fluctuated around
+        // 95-110 FPS against a 120 FPS target. That policy made Adaptive look
+        // inactive even though Fixed 2x continued to generate successfully.
+        constexpr std::array noisyCadence{96.0, 105.0, 100.0, 110.0};
+        bool resumed = false;
+        size_t resumedAt = 0;
+        for (size_t frame = 0; frame < 420; ++frame) {
+            const auto plan = harness.frameAtFps(
+                noisyCadence[frame % noisyCadence.size()]
+            );
+            if (!plan.empty() && !resumed) {
+                resumed = true;
+                resumedAt = frame;
+            }
+        }
+
+        require(resumed && resumedAt < 320 &&
+                !harness.scheduler.snapshot().nearTargetNativePreference &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1 &&
+                harness.diagnostics.count(
+                    "adaptive-near-target-native-disabled") == 1,
+            "noisy sustained cadence drop did not resume Fractional FG within its bounded evidence window");
+        const auto transition = std::find_if(
+            harness.diagnostics.events.cbegin(),
+            harness.diagnostics.events.cend(),
+            [](const RecordingDiagnostics::Event& event) {
+                return event.operation ==
+                    "adaptive-near-target-native-disabled";
+            }
+        );
+        require(transition != harness.diagnostics.events.cend() &&
+                transition->reason ==
+                    "native-output-below-retention-floor",
+            "resolution-change recovery did not identify its target-output deficit");
+    }
+
     void testNearTargetNativePreferenceBypassesOnlyMarginalRamp() {
         Harness nearTarget(120, 2);
         nearTarget.start();
-        nearTarget.runAtFps(100.0, 8s);
+        nearTarget.runAtFps(119.0, 8s);
         require(nearTarget.scheduler.snapshot().nearTargetNativePreference &&
                 nearTarget.diagnostics.count("ramp") == 0 &&
                 nearTarget.diagnostics.count("ramp-result") == 0,
@@ -1082,7 +1127,7 @@ namespace {
 
         Harness fractional(120, 2);
         fractional.start();
-        fractional.runAtFps(89.0, 8s);
+        fractional.runAtFps(100.0, 8s);
         require(!fractional.scheduler.snapshot().nearTargetNativePreference &&
                 fractional.scheduler.snapshot().validatedGenerationLimit == 1 &&
                 fractional.diagnostics.count("ramp") == 1 &&
@@ -2980,6 +3025,7 @@ int main() {
         {"near-target native preference tolerates boundary measurement noise", testNearTargetNativePreferenceToleratesBoundaryMeasurementNoise},
         {"near-target native preference covers noisy sweep", testNearTargetNativePreferenceCoversNoisySweep},
         {"near-target native preference has hysteresis", testNearTargetNativePreferenceHasHysteresisAndNoChatter},
+        {"near-target native preference resumes across noisy high excursions", testNearTargetNativePreferenceResumesAcrossNoisyHighExcursions},
         {"near-target native preference bypasses marginal ramp", testNearTargetNativePreferenceBypassesOnlyMarginalRamp},
         {"near-target native preference preserves Fixed recovery", testNearTargetNativePreferenceDoesNotChangeFixedRecoveryPolicy},
         {"target clock handles multi-level fractional cadence", testTargetClockHandlesMultiLevelFractionalCadence},

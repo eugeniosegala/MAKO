@@ -24,6 +24,7 @@ from .constants import (
     ARMADA_GAME_LAUNCH,
     FLATPAK_IMPLICIT_LAYER_DIR,
     GAMESCOPE_WSI_MANIFEST_FILENAME_64,
+    SPATIAL_SCALING_JSON_FILENAME,
     MANGOHUD_MANIFEST_FILENAME_64,
     MANGOHUD_MANIFEST_FILENAME_32,
     VKBASALT_MANIFEST_FILENAME_64,
@@ -78,6 +79,7 @@ class ConfigurationService(BaseService):
             config_dir=self.config_dir,
             config_file_path=self.config_file_path,
             local_share_dir=self.local_share_dir,
+            spatial_scaling_layer_dir=self.spatial_scaling_layer_dir,
             gamescope_wsi_compatibility_dir=(
                 self.gamescope_wsi_compatibility_dir
             ),
@@ -86,6 +88,9 @@ class ConfigurationService(BaseService):
             flatpak_implicit_layer_dir=FLATPAK_IMPLICIT_LAYER_DIR,
             gamescope_wsi_manifest_filename_64=(
                 GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ),
+            spatial_scaling_manifest_filename_64=(
+                SPATIAL_SCALING_JSON_FILENAME
             ),
             mangohud_manifest_filename_64=MANGOHUD_MANIFEST_FILENAME_64,
             mangohud_manifest_filename_32=MANGOHUD_MANIFEST_FILENAME_32,

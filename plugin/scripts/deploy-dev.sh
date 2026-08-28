@@ -30,13 +30,18 @@ if ((${#flatpak_runtime_versions[@]} == 0 ||
   echo "The shared Flatpak runtime contract is empty or inconsistent." >&2
   exit 1
 fi
-if ((${#renderer_paths[@]} != 3)); then
+if ((${#renderer_paths[@]} != 8)); then
   echo "The shared Renderer path contract is incomplete." >&2
   exit 1
 fi
 renderer_library_filename="${renderer_paths[0]}"
 renderer_library_relative_path="${renderer_paths[1]}"
 renderer_library32_relative_path="${renderer_paths[2]}"
+spatial_library_filename="${renderer_paths[3]}"
+spatial_library_relative_path="${renderer_paths[4]}"
+spatial_library32_relative_path="${renderer_paths[5]}"
+spatial_manifest_relative_path="${renderer_paths[6]}"
+spatial_manifest32_relative_path="${renderer_paths[7]}"
 flatpak_runtime_summary="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" summary
 )"
@@ -238,10 +243,57 @@ copy_file() {
   fi
 }
 
+verify_private_layer_manifest() {
+  local manifest_path="$1"
+  local installed_manifest_path="$2"
+  local installed_library_path="$3"
+  local expected_identity="$4"
+  python3 - "$manifest_path" "$installed_manifest_path" \
+      "$installed_library_path" "$expected_identity" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+manifest_path = Path(sys.argv[1])
+installed_manifest_path = Path(sys.argv[2])
+installed_library_path = Path(sys.argv[3]).resolve()
+expected_identity = sys.argv[4]
+try:
+    layer = json.loads(manifest_path.read_text(encoding="utf-8"))["layer"]
+    identity = layer["name"]
+    library_path = Path(layer["library_path"])
+except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+    raise SystemExit(f"Invalid development layer manifest {manifest_path}: {error}")
+if identity != expected_identity:
+    raise SystemExit(
+        f"Development layer manifest identifies {identity!r}, "
+        f"expected {expected_identity!r}"
+    )
+resolved = (
+    library_path.resolve()
+    if library_path.is_absolute()
+    else (installed_manifest_path.parent / library_path).resolve()
+)
+if resolved != installed_library_path:
+    raise SystemExit(
+        f"Development layer manifest resolves {resolved}, "
+        f"expected {installed_library_path}"
+    )
+PY
+}
+
 built_layer_64=""
 built_layer_32=""
+built_spatial_layer_64=""
+built_spatial_layer_32=""
+built_spatial_manifest_64=""
+built_spatial_manifest_32=""
 installed_layer_64=""
 installed_layer_32=""
+installed_spatial_layer_64=""
+installed_spatial_layer_32=""
+installed_spatial_manifest_64=""
+installed_spatial_manifest_32=""
 flatpak_archive=""
 flatpak_unpack_dir=""
 cleanup() {
@@ -271,7 +323,11 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   fi
   if [[ "$deploy_engine" == true ]]; then
     built_layer_64="$engine_build_dir/mako-render/$renderer_library_filename"
+    built_spatial_layer_64="$engine_build_dir/mako-render/$spatial_library_filename"
+    built_spatial_manifest_64="$engine_build_dir/mako-render/private-scaling-manifest/${spatial_manifest_relative_path##*/}"
     installed_layer_64="$HOME/$renderer_library_relative_path"
+    installed_spatial_layer_64="$HOME/$spatial_library_relative_path"
+    installed_spatial_manifest_64="$HOME/$spatial_manifest_relative_path"
   fi
   if [[ "$deploy_engine_32" == true ]]; then
     engine_build_32_dir="${MAKO_BUILD_32_DIR:-${engine_build_dir}-32}"
@@ -279,9 +335,16 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
       engine_build_32_dir="$engine_repo/$engine_build_32_dir"
     fi
     built_layer_32="$engine_build_32_dir/mako-render/$renderer_library_filename"
+    built_spatial_layer_32="$engine_build_32_dir/mako-render/$spatial_library_filename"
+    built_spatial_manifest_32="$engine_build_32_dir/mako-render/private-scaling-manifest/${spatial_manifest32_relative_path##*/}"
     installed_layer_32="$HOME/$renderer_library32_relative_path"
+    installed_spatial_layer_32="$HOME/$spatial_library32_relative_path"
+    installed_spatial_manifest_32="$HOME/$spatial_manifest32_relative_path"
   fi
-  for layer_path in "$built_layer_64" "$built_layer_32"; do
+  for layer_path in \
+      "$built_layer_64" "$built_layer_32" \
+      "$built_spatial_layer_64" "$built_spatial_layer_32" \
+      "$built_spatial_manifest_64" "$built_spatial_manifest_32"; do
     if [[ -n "$layer_path" && ! -f "$layer_path" ]]; then
       echo "Incremental engine build did not produce: $layer_path" >&2
       exit 1
@@ -294,6 +357,16 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
       exit 1
     fi
   done
+  if [[ -n "$built_spatial_manifest_64" ]]; then
+    verify_private_layer_manifest \
+      "$built_spatial_manifest_64" "$installed_spatial_manifest_64" \
+      "$installed_spatial_layer_64" "VK_LAYER_MAKO_spatial_scaling"
+  fi
+  if [[ -n "$built_spatial_manifest_32" ]]; then
+    verify_private_layer_manifest \
+      "$built_spatial_manifest_32" "$installed_spatial_manifest_32" \
+      "$installed_spatial_layer_32" "VK_LAYER_MAKO_spatial_scaling"
+  fi
 fi
 
 if [[ "$deploy_flatpaks" == true ]]; then
@@ -402,11 +475,15 @@ fi
 
 if [[ -n "$built_layer_64" ]]; then
   copy_file "$built_layer_64" "$installed_layer_64"
-  echo "Deployed incremental 64-bit engine layer."
+  copy_file "$built_spatial_layer_64" "$installed_spatial_layer_64"
+  copy_file "$built_spatial_manifest_64" "$installed_spatial_manifest_64"
+  echo "Deployed incremental 64-bit frame-generation and spatial-scaling layers."
 fi
 if [[ -n "$built_layer_32" ]]; then
   copy_file "$built_layer_32" "$installed_layer_32"
-  echo "Deployed incremental 32-bit engine layer."
+  copy_file "$built_spatial_layer_32" "$installed_spatial_layer_32"
+  copy_file "$built_spatial_manifest_32" "$installed_spatial_manifest_32"
+  echo "Deployed incremental 32-bit frame-generation and spatial-scaling layers."
 fi
 if [[ -n "$flatpak_archive" ]]; then
   for flatpak_bundle in "${flatpak_runtime_bundles[@]}"; do

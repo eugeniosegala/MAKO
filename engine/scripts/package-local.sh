@@ -261,7 +261,8 @@ cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
     -DMAKO_BUILD_UI=ON \
     -DMAKO_BUILD_CLI=ON \
     -DMAKO_INSTALL_XDG_FILES=ON \
-    -DMAKO_LAYER_LIBRARY_PATH="../../../lib/libmako-render.so"
+    -DMAKO_LAYER_LIBRARY_PATH="../../../lib/libmako-render.so" \
+    -DMAKO_SCALING_LAYER_LIBRARY_PATH="../../../lib/libmako-render-scaling.so"
 
 # Build the complete configured tree before CTest so CMake remains the single
 # authority for every registered test executable and production dependency.
@@ -289,9 +290,10 @@ if [[ "$build_32_bit" == true ]]; then
         -DMAKO_BUILD_CLI=OFF \
         -DMAKO_INSTALL_XDG_FILES=OFF \
         -DMAKO_LAYER_MANIFEST_SUFFIX=.x86 \
-        -DMAKO_LAYER_LIBRARY_PATH="../../../lib32/libmako-render.so"
+        -DMAKO_LAYER_LIBRARY_PATH="../../../lib32/libmako-render.so" \
+        -DMAKO_SCALING_LAYER_LIBRARY_PATH="../../../lib32/libmako-render-scaling.so"
 
-    cmake --build "$build32_dir" --target mako-render
+    cmake --build "$build32_dir" --target mako-render mako-render-scaling
     cmake --install "$build32_dir" --strip
 fi
 
@@ -302,15 +304,21 @@ required_paths=(
     "bin/mako-launch" \
     "bin/mako-ui" \
     "lib/libmako-render.so" \
+    "lib/libmako-render-scaling.so" \
     "share/doc/mako-render/LICENSE.md" \
     "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
+    "share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json" \
+    "share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json" \
     "share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
 )
 if [[ "$build_32_bit" == true ]]; then
     required_paths+=(
         "lib32/libmako-render.so"
+        "lib32/libmako-render-scaling.so"
         "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
         "share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+        "share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json"
+        "share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
     )
 fi
 for required_path in "${required_paths[@]}"; do
@@ -369,8 +377,27 @@ verify_elf_class() {
 }
 
 verify_elf_class "$install_dir/lib/libmako-render.so" 2
+verify_elf_class "$install_dir/lib/libmako-render-scaling.so" 2
 if [[ "$build_32_bit" == true ]]; then
     verify_elf_class "$install_dir/lib32/libmako-render.so" 1
+    verify_elf_class "$install_dir/lib32/libmako-render-scaling.so" 1
+fi
+
+scaling_manifest64="$install_dir/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"
+private_scaling_manifest64="$install_dir/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json"
+if ! grep -Fq '"library_arch": "64"' "$scaling_manifest64" ||
+        ! grep -Fq '../../../lib/libmako-render-scaling.so' "$scaling_manifest64" ||
+        ! grep -Fq '"name": "VK_LAYER_MAKO_spatial_scaling"' "$scaling_manifest64" ||
+        ! grep -Fq '"ENABLE_MAKO_SPATIAL_SCALING": "1"' "$scaling_manifest64" ||
+        ! grep -Fq '"DISABLE_MAKO_SPATIAL_SCALING": "1"' "$scaling_manifest64"; then
+    echo "Packaging failed: 64-bit spatial Vulkan manifest is incorrect" >&2
+    exit 1
+fi
+if ! grep -Fq '"library_arch": "64"' "$private_scaling_manifest64" ||
+        ! grep -Fq '../../../../lib/libmako-render-scaling.so' "$private_scaling_manifest64" ||
+        ! grep -Fq '"name": "VK_LAYER_MAKO_spatial_scaling"' "$private_scaling_manifest64"; then
+    echo "Packaging failed: private 64-bit spatial Vulkan manifest is incorrect" >&2
+    exit 1
 fi
 
 # Qt promises backwards binary compatibility, not forwards compatibility.
@@ -410,6 +437,8 @@ fi
 if [[ "$build_32_bit" == true ]]; then
     manifest32="$install_dir/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
     private_manifest32="$install_dir/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+    scaling_manifest32="$install_dir/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
+    private_scaling_manifest32="$install_dir/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json"
     if ! grep -Fq '"library_arch": "32"' "$manifest32" ||
             ! grep -Fq '../../../lib32/libmako-render.so' "$manifest32" ||
             ! grep -Fq '"name": "VK_LAYER_MAKO_render"' "$manifest32" ||
@@ -424,11 +453,27 @@ if [[ "$build_32_bit" == true ]]; then
         echo "Packaging failed: private 32-bit Vulkan manifest is incorrect" >&2
         exit 1
     fi
+    if ! grep -Fq '"library_arch": "32"' "$scaling_manifest32" ||
+            ! grep -Fq '../../../lib32/libmako-render-scaling.so' "$scaling_manifest32" ||
+            ! grep -Fq '"name": "VK_LAYER_MAKO_spatial_scaling"' "$scaling_manifest32" ||
+            ! grep -Fq '"ENABLE_MAKO_SPATIAL_SCALING": "1"' "$scaling_manifest32" ||
+            ! grep -Fq '"DISABLE_MAKO_SPATIAL_SCALING": "1"' "$scaling_manifest32"; then
+        echo "Packaging failed: 32-bit spatial Vulkan manifest is incorrect" >&2
+        exit 1
+    fi
+    if ! grep -Fq '"library_arch": "32"' "$private_scaling_manifest32" ||
+            ! grep -Fq '../../../../lib32/libmako-render-scaling.so' "$private_scaling_manifest32" ||
+            ! grep -Fq '"name": "VK_LAYER_MAKO_spatial_scaling"' "$private_scaling_manifest32"; then
+        echo "Packaging failed: private 32-bit spatial Vulkan manifest is incorrect" >&2
+        exit 1
+    fi
 fi
 
 layer_binaries=("$install_dir/lib/libmako-render.so")
+layer_binaries+=("$install_dir/lib/libmako-render-scaling.so")
 if [[ "$build_32_bit" == true ]]; then
     layer_binaries+=("$install_dir/lib32/libmako-render.so")
+    layer_binaries+=("$install_dir/lib32/libmako-render-scaling.so")
 fi
 for layer_binary in "${layer_binaries[@]}"; do
     dynamic_dependencies="$(readelf -d "$layer_binary")"
@@ -448,8 +493,12 @@ for layer_binary in "${layer_binaries[@]}"; do
             exit 1
         fi
     done
+    expected_identity="VK_LAYER_MAKO_render"
+    if [[ "$layer_binary" == *libmako-render-scaling.so ]]; then
+        expected_identity="VK_LAYER_MAKO_spatial_scaling"
+    fi
     if ! strings "$layer_binary" |
-            grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
+            grep -F "MAKO Renderer: render layer active; identity=$expected_identity; build=$version" >/dev/null; then
         echo "Packaging failed: layer build identity diagnostic is missing from $layer_binary" >&2
         exit 1
     fi

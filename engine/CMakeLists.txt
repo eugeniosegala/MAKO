@@ -68,6 +68,7 @@ option(MAKO_INSTALL_DEVELOP    "Install development libraries and headers"      
 option(MAKO_INSTALL_XDG_FILES  "Install the application icon and desktop files" OFF)
 option(MAKO_ENABLE_SANITIZERS  "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 set(MAKO_LAYER_LIBRARY_PATH libmako-render.so CACHE STRING "Change where Vulkan searches for the layer library")
+set(MAKO_SCALING_LAYER_LIBRARY_PATH libmako-render-scaling.so CACHE STRING "Change where Vulkan searches for the isolated spatial-scaling layer library")
 set(MAKO_LAYER_MANIFEST_SUFFIX "" CACHE STRING "Suffix for the installed Vulkan layer manifest filename")
 option(MAKO_TESTING_RENDERDOC  "Enable RenderDoc integration for testing purposes" OFF)
 # === READ HERE FOR BUILD OPTIONS ===

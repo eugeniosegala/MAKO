@@ -496,6 +496,49 @@ void Swapchain::recordPresentCadence(const DiagnosticsClock::time_point presentN
     }
 }
 
+void Swapchain::observeLowerPresentHealth(
+        const DiagnosticsClock::duration presentDuration,
+        const std::string_view source,
+        const size_t requestedGenerated,
+        const size_t presentedGenerated) {
+    if (!this->privateOrderedTransport ||
+            this->recoveryState.lowerPresentStallRecovery.active()) {
+        return;
+    }
+    const auto stall = this->recoveryState.lowerPresentStallRecovery.observe(
+        DiagnosticsClock::now(), presentDuration, this->gamescopeRefreshHz
+    );
+    if (!stall.quarantined)
+        return;
+
+    this->fixedRefreshBudget.reset();
+    if (!presentDiagnosticsEnabled())
+        return;
+    std::cerr << "MAKO Renderer: present diagnostics: "
+                 "operation=lower-present-stall-quarantine"
+              << " context=" << this->diagnosticsState.contextId
+              << " phase=native-stabilization"
+              << " source=" << source
+              << " present_max_ms="
+              << std::chrono::duration<double, std::milli>(
+                     stall.presentDuration
+                 ).count()
+              << " threshold_ms="
+              << std::chrono::duration<double, std::milli>(
+                     stall.threshold
+                 ).count()
+              << " consecutive_stalls=" << stall.consecutiveStalls
+              << " stabilization_ms="
+              << std::chrono::duration<double, std::milli>(
+                     stall.stabilizationDuration
+                 ).count()
+              << " requested_generated=" << requestedGenerated
+              << " presented_generated=" << presentedGenerated
+              << " frame=" << this->frameState.realFrameIndex
+              << " sequence=" << this->frameState.sequenceIndex
+              << " action=native-only\n";
+}
+
 VkResult Swapchain::presentSpatiallyScaledFrame(
         const PresentInvocation& invocation) {
     auto& pass = this->spatialScalingPasses.at(invocation.imageIndex);
@@ -540,6 +583,9 @@ VkResult Swapchain::presentSpatiallyScaledFrame(
     );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
+    this->observeLowerPresentHealth(
+        originalPresentDuration, "scaled-native"
+    );
 
     const auto presentWorkDuration = finishPresentDiagnostic(
         invocation.started
@@ -587,6 +633,9 @@ VkResult Swapchain::presentNativeFrame(const PresentInvocation& invocation) {
     );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
+    this->observeLowerPresentHealth(
+        phases.originalPresent, "native"
+    );
 
     logSlowPresentOperation(
         "present-total", this->frameState.realFrameIndex,
@@ -1671,49 +1720,14 @@ VkResult Swapchain::presentGeneratedFrames(
     this->reportAdaptiveDelivery(
         plan, plan.scheduledGeneratedFrames.size()
     );
-    if (this->privateOrderedTransport) {
-        const auto lowerPresentWorkDuration =
-            generatedPresentDuration + originalPresentDuration;
-        const auto stall =
-            this->recoveryState.lowerPresentStallRecovery.observe(
-                DiagnosticsClock::now(),
-                std::max(
-                    maximumLowerPresentDuration,
-                    lowerPresentWorkDuration
-                ),
-                this->gamescopeRefreshHz
-            );
-        if (stall.quarantined) {
-            this->fixedRefreshBudget.reset();
-            if (presentDiagnosticsEnabled()) {
-                std::cerr << "MAKO Renderer: present diagnostics: "
-                             "operation=lower-present-stall-quarantine"
-                          << " context=" << this->diagnosticsState.contextId
-                          << " phase=native-stabilization"
-                          << " present_max_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 stall.presentDuration
-                             ).count()
-                          << " threshold_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 stall.threshold
-                             ).count()
-                          << " consecutive_stalls="
-                          << stall.consecutiveStalls
-                          << " stabilization_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 stall.stabilizationDuration
-                             ).count()
-                          << " requested_generated="
-                          << plan.requestedGeneratedFrames.size()
-                          << " presented_generated="
-                          << plan.scheduledGeneratedFrames.size()
-                          << " frame=" << this->frameState.realFrameIndex
-                          << " sequence=" << this->frameState.sequenceIndex
-                          << " action=native-only\n";
-            }
-        }
-    }
+    const auto lowerPresentWorkDuration =
+        generatedPresentDuration + originalPresentDuration;
+    this->observeLowerPresentHealth(
+        std::max(maximumLowerPresentDuration, lowerPresentWorkDuration),
+        "generated-batch",
+        plan.requestedGeneratedFrames.size(),
+        plan.scheduledGeneratedFrames.size()
+    );
     logSlowPresentBreakdown(
         this->diagnosticsState.contextId, this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, presentWorkDuration,

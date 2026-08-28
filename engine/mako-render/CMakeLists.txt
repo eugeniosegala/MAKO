@@ -41,26 +41,37 @@ if(MAKO_BUILD_VK_LAYER)
         CXX_VISIBILITY_PRESET hidden
         VISIBILITY_INLINES_HIDDEN ON)
 
+    function(mako_configure_renderer_layer target)
+        target_link_libraries(${target}
+            PRIVATE mako-adaptive
+            PRIVATE mako-color
+            PRIVATE mako-spatial-scaler
+            PRIVATE Threads::Threads
+            PUBLIC mako-common
+            PUBLIC mako-backend)
+
+        target_compile_options(${target} PRIVATE
+            -Wno-unknown-warning-option
+            -Wno-unsafe-buffer-usage) # Array indexing
+
+        target_compile_definitions(${target} PRIVATE
+            MAKO_BUILD_VERSION="${MAKO_VERSION}"
+            MAKO_BUILD_FINGERPRINT="${MAKO_BUILD_FINGERPRINT}")
+
+        set_target_properties(${target} PROPERTIES
+            CXX_VISIBILITY_PRESET hidden)
+    endfunction()
+
     add_library(mako-render SHARED ${LAYER_SOURCES})
+    mako_configure_renderer_layer(mako-render)
 
-    target_link_libraries(mako-render
-        PRIVATE mako-adaptive
-        PRIVATE mako-color
-        PRIVATE mako-spatial-scaler
-        PRIVATE Threads::Threads
-        PUBLIC mako-common
-        PUBLIC mako-backend)
-
-    target_compile_options(mako-render PRIVATE
-        -Wno-unknown-warning-option
-        -Wno-unsafe-buffer-usage) # Array indexing
-
-    target_compile_definitions(mako-render PRIVATE
-        MAKO_BUILD_VERSION="${MAKO_VERSION}"
-        MAKO_BUILD_FINGERPRINT="${MAKO_BUILD_FINGERPRINT}")
-
-    set_target_properties(mako-render PROPERTIES
-        CXX_VISIBILITY_PRESET hidden)
+    # Scaling and frame generation occupy opposite sides of Gamescope WSI.
+    # Build a second isolated copy so the loader can form the only chain that
+    # preserves both contracts: FG -> Gamescope WSI -> spatial scaling.
+    add_library(mako-render-scaling SHARED ${LAYER_SOURCES})
+    target_compile_definitions(mako-render-scaling PRIVATE
+        MAKO_LAYER_ROLE_SPATIAL_SCALING=1)
+    mako_configure_renderer_layer(mako-render-scaling)
 endif()
 
 if(BUILD_TESTING)
@@ -129,6 +140,28 @@ if(BUILD_TESTING)
     mako_register_portable_policy_test(
         mako-runtime-transition-tests runtime-transition)
 
+    add_executable(mako-layer-role-tests
+        "tests/layer_role_tests.cpp")
+    target_include_directories(mako-layer-role-tests
+        PRIVATE "src"
+        PRIVATE "../mako-common/include")
+    add_test(NAME layer-role
+        COMMAND mako-layer-role-tests)
+    mako_register_portable_policy_test(
+        mako-layer-role-tests layer-role)
+
+    add_executable(mako-spatial-layer-role-tests
+        "tests/layer_role_tests.cpp")
+    target_compile_definitions(mako-spatial-layer-role-tests PRIVATE
+        MAKO_LAYER_ROLE_SPATIAL_SCALING=1)
+    target_include_directories(mako-spatial-layer-role-tests
+        PRIVATE "src"
+        PRIVATE "../mako-common/include")
+    add_test(NAME spatial-layer-role
+        COMMAND mako-spatial-layer-role-tests)
+    mako_register_portable_policy_test(
+        mako-spatial-layer-role-tests spatial-layer-role)
+
     add_executable(mako-presentation-policy-tests
         "tests/presentation_policy_tests.cpp")
     target_include_directories(mako-presentation-policy-tests
@@ -195,28 +228,56 @@ if(MAKO_BUILD_VK_LAYER)
 
     set(MAKO_LAYER_MANIFEST_FILE
         "VkLayer_MAKO_render${MAKO_LAYER_MANIFEST_SUFFIX}.json")
+    set(MAKO_SCALING_LAYER_MANIFEST_FILE
+        "VkLayer_MAKO_spatial_scaling${MAKO_LAYER_MANIFEST_SUFFIX}.json")
     configure_file(
         "VkLayer_MAKO_render.json.in"
         "${MAKO_LAYER_MANIFEST_FILE}"
+        @ONLY)
+    configure_file(
+        "VkLayer_MAKO_spatial_scaling.json.in"
+        "${MAKO_SCALING_LAYER_MANIFEST_FILE}"
         @ONLY)
 
     # MAKO-managed SDR launches use a private manifest directory, matching the
     # proven v2 Decky boundary. Relative paths containing a directory need one
     # more parent traversal; a bare loader name remains valid as-is.
     set(MAKO_PUBLIC_LAYER_LIBRARY_PATH "${MAKO_LAYER_LIBRARY_PATH}")
-    if(MAKO_PUBLIC_LAYER_LIBRARY_PATH MATCHES "/")
+    set(MAKO_PUBLIC_SCALING_LAYER_LIBRARY_PATH
+        "${MAKO_SCALING_LAYER_LIBRARY_PATH}")
+    if(IS_ABSOLUTE "${MAKO_PUBLIC_LAYER_LIBRARY_PATH}")
+        set(MAKO_LAYER_LIBRARY_PATH "${MAKO_PUBLIC_LAYER_LIBRARY_PATH}")
+    elseif(MAKO_PUBLIC_LAYER_LIBRARY_PATH MATCHES "/")
         set(MAKO_LAYER_LIBRARY_PATH "../${MAKO_PUBLIC_LAYER_LIBRARY_PATH}")
     else()
         set(MAKO_LAYER_LIBRARY_PATH "${MAKO_PUBLIC_LAYER_LIBRARY_PATH}")
+    endif()
+    if(IS_ABSOLUTE "${MAKO_PUBLIC_SCALING_LAYER_LIBRARY_PATH}")
+        set(MAKO_SCALING_LAYER_LIBRARY_PATH
+            "${MAKO_PUBLIC_SCALING_LAYER_LIBRARY_PATH}")
+    elseif(MAKO_PUBLIC_SCALING_LAYER_LIBRARY_PATH MATCHES "/")
+        set(MAKO_SCALING_LAYER_LIBRARY_PATH
+            "../${MAKO_PUBLIC_SCALING_LAYER_LIBRARY_PATH}")
+    else()
+        set(MAKO_SCALING_LAYER_LIBRARY_PATH
+            "${MAKO_PUBLIC_SCALING_LAYER_LIBRARY_PATH}")
     endif()
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/private-manifest")
     configure_file(
         "VkLayer_MAKO_render.json.in"
         "${CMAKE_CURRENT_BINARY_DIR}/private-manifest/${MAKO_LAYER_MANIFEST_FILE}"
         @ONLY)
+    file(MAKE_DIRECTORY
+        "${CMAKE_CURRENT_BINARY_DIR}/private-scaling-manifest")
+    configure_file(
+        "VkLayer_MAKO_spatial_scaling.json.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/private-scaling-manifest/${MAKO_SCALING_LAYER_MANIFEST_FILE}"
+        @ONLY)
     set(MAKO_LAYER_LIBRARY_PATH "${MAKO_PUBLIC_LAYER_LIBRARY_PATH}")
+    set(MAKO_SCALING_LAYER_LIBRARY_PATH
+        "${MAKO_PUBLIC_SCALING_LAYER_LIBRARY_PATH}")
 
-    install(TARGETS mako-render
+    install(TARGETS mako-render mako-render-scaling
         LIBRARY DESTINATION "${CMAKE_INSTALL_LIBDIR}")
     install(FILES "${CMAKE_CURRENT_BINARY_DIR}/${MAKO_LAYER_MANIFEST_FILE}"
         DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/vulkan/implicit_layer.d")
@@ -224,4 +285,11 @@ if(MAKO_BUILD_VK_LAYER)
         "${CMAKE_CURRENT_BINARY_DIR}/private-manifest/${MAKO_LAYER_MANIFEST_FILE}"
         DESTINATION
             "${CMAKE_INSTALL_DATAROOTDIR}/mako-render/vulkan/implicit_layer.d")
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/${MAKO_SCALING_LAYER_MANIFEST_FILE}"
+        DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/vulkan/implicit_layer.d")
+    install(FILES
+        "${CMAKE_CURRENT_BINARY_DIR}/private-scaling-manifest/${MAKO_SCALING_LAYER_MANIFEST_FILE}"
+        DESTINATION
+            "${CMAKE_INSTALL_DATAROOTDIR}/mako-render/vulkan/spatial_scaling.d")
 endif()

@@ -2,6 +2,7 @@
 
 #include "instance.hpp"
 #include "color_pipeline.hpp"
+#include "layer_role.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
@@ -133,6 +134,7 @@ namespace {
         if (present_diagnostics::enabled()) {
             std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=swapchain-retirement-complete"
+                      << " role=" << layerRoleName
                       << " swapchain=" << swapchain
                       << " trigger=" << trigger
                       << " pending="
@@ -1280,6 +1282,7 @@ namespace {
                             if (present_diagnostics::enabled()) {
                                 std::cerr << "MAKO Renderer: present diagnostics: "
                                              "operation=swapchain-retirement-handoff"
+                                          << " role=" << layerRoleName
                                           << " swapchain="
                                           << *retainedOldSwapchain
                                           << " surface=" << newInfo->surface
@@ -1649,6 +1652,7 @@ namespace {
                 if (present_diagnostics::enabled()) {
                     std::cerr << "MAKO Renderer: present diagnostics: "
                                  "operation=swapchain-retirement-deferred"
+                              << " role=" << layerRoleName
                               << " swapchain=" << swapchain
                               << " reason=await-later-present-and-fence"
                               << " grace_ms="

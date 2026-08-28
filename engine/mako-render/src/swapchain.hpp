@@ -288,6 +288,11 @@ namespace mako::layer {
             std::string_view reason);
         void recordPresentCadence(
             std::chrono::steady_clock::time_point presentNow);
+        void observeLowerPresentHealth(
+            std::chrono::steady_clock::duration presentDuration,
+            std::string_view source,
+            size_t requestedGenerated = 0,
+            size_t presentedGenerated = 0);
         [[nodiscard]] VkResult presentNativeFrame(
             const PresentInvocation& invocation);
         [[nodiscard]] VkResult presentSpatiallyScaledFrame(

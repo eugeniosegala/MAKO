@@ -8,6 +8,7 @@
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/image.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
+#include "layer_role.hpp"
 #include "present_diagnostics.hpp"
 #include "spatial_scaling_policy.hpp"
 #include "swapchain_create_policy.hpp"
@@ -36,7 +37,10 @@ namespace {
     using DiagnosticsContextScope = present_diagnostics::ContextScope;
 
     uint64_t allocateDiagnosticsContextId() {
-        return present_diagnostics::allocateContextId();
+        const auto contextId = present_diagnostics::allocateContextId();
+        if constexpr (spatialScalingLayer)
+            return contextId | uint64_t{0x80000000};
+        return contextId;
     }
 
     bool presentDiagnosticsEnabled() {
@@ -272,7 +276,12 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                       ? "none" : this->spatialScaler->ls1Translator())
                   << "; working_format="
                   << static_cast<int>(this->colorPipeline.exchangeFormat)
-                  << "; pipeline=pre-frame-generation\n";
+                  << "; role=" << layerRoleName
+                  << "; pipeline="
+                  << (spatialScalingLayer
+                        ? "post-frame-generation"
+                        : "pre-frame-generation")
+                  << '\n';
         if (!this->spatialScaler->fallbackReason().empty()) {
             std::cerr << "MAKO Renderer: LS1 scaling unavailable; using MAKO "
                          "fallback: "
@@ -303,6 +312,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-state-applied"
                   << " context=" << this->diagnosticsState.contextId
+                  << " role=" << layerRoleName
                   << " state_revision=" << runtimeStateRevision
                   << " frame_generation_enabled="
                   << this->profile.frame_generation_enabled
@@ -1145,6 +1155,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=runtime-state-applied"
                   << " context=" << this->diagnosticsState.contextId
+                  << " role=" << layerRoleName
                   << " state_revision=" << runtimeStateRevision
                   << " transition=live"
                   << " frame_generation_enabled="

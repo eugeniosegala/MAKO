@@ -137,11 +137,14 @@ build_layer() {
     local target_build_dir="$2"
     shift 2
     local build_cli=OFF
-    local build_targets=(mako-render)
+    local install_libdir=lib
+    local build_targets=(mako-render mako-render-scaling)
 
     if [[ "$architecture" == "64-bit" ]]; then
         build_cli=ON
         build_targets+=(mako-cli)
+    else
+        install_libdir=lib32
     fi
 
     # Reconfiguring a persistent Ninja tree is cheap and picks up CMake/source
@@ -156,13 +159,20 @@ build_layer() {
         -DMAKO_BUILD_UI=OFF \
         -DMAKO_BUILD_CLI="$build_cli" \
         -DMAKO_INSTALL_XDG_FILES=OFF \
+        -DMAKO_LAYER_LIBRARY_PATH="../$install_libdir/libmako-render.so" \
+        -DMAKO_SCALING_LAYER_LIBRARY_PATH="../$install_libdir/libmako-render-scaling.so" \
         "$@"
 
     cmake --build "$target_build_dir" --parallel "$jobs" --target "${build_targets[@]}"
 
     local layer_path="$target_build_dir/mako-render/libmako-render.so"
+    local scaling_layer_path="$target_build_dir/mako-render/libmako-render-scaling.so"
     if [[ ! -f "$layer_path" ]]; then
         echo "Expected $architecture layer output is missing: $layer_path" >&2
+        exit 1
+    fi
+    if [[ ! -f "$scaling_layer_path" ]]; then
+        echo "Expected $architecture spatial layer output is missing: $scaling_layer_path" >&2
         exit 1
     fi
     echo "Incremental $architecture layer build ready: $layer_path"

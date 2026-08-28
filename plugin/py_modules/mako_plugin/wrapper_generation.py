@@ -29,8 +29,11 @@ from .constants import (
     MAKO_CONFIG_ENV,
     MAKO_LAYER_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
+    MAKO_SPLIT_LAYER_CHAIN_ENV,
     MAKO_PROFILE_ENV,
     MAKO_PROFILE_FALLBACK_ENV,
+    SPATIAL_SCALING_LAYER_DISABLE_ENV,
+    SPATIAL_SCALING_LAYER_ENABLE_ENV,
     STEAM_APP_ID_ENV_KEYS,
     PRESENT_ACQUIRE_TIMEOUT_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
@@ -49,7 +52,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 47
+WRAPPER_FORMAT_VERSION = 49
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -59,10 +62,15 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"export {PRESENT_ACQUIRE_TIMEOUT_ENV}=",
     f"export {PRESENT_DIAGNOSTICS_ENV}=",
     f"export {MAKO_LAYER_ENABLE_ENV}=1",
+    f"unset {MAKO_SPLIT_LAYER_CHAIN_ENV}",
+    f"export {MAKO_SPLIT_LAYER_CHAIN_ENV}=1",
     *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
     f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
     f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
     "mako_gamescope_wsi_required=",
+    f"export {SPATIAL_SCALING_LAYER_DISABLE_ENV}=1",
+    f"unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
+    "mako_spatial_scaling_required=",
     f"export {EXTERNAL_VULKAN_LAYER_ENV}=",
     f"export {VK_IMPLICIT_LAYER_PATH_ENV}=",
     f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
@@ -106,11 +114,13 @@ class WrapperGenerationContext:
     config_dir: Path
     config_file_path: Path
     local_share_dir: Path
+    spatial_scaling_layer_dir: Path
     gamescope_wsi_compatibility_dir: Path
     mangohud_layer_dir: Path
     vkbasalt_layer_dir: Path
     flatpak_implicit_layer_dir: str
     gamescope_wsi_manifest_filename_64: str
+    spatial_scaling_manifest_filename_64: str
     mangohud_manifest_filename_64: str
     mangohud_manifest_filename_32: str
     vkbasalt_manifest_filename_64: str
@@ -177,6 +187,10 @@ def script_configuration_lines(
     lines.append(
         "mako_gamescope_wsi_required="
         f"{1 if (config.get('scaling_enabled', False) or config.get('gamescope_wsi_compatibility', False)) else 0}"
+    )
+    lines.append(
+        "mako_spatial_scaling_required="
+        f"{1 if config.get('scaling_enabled', False) else 0}"
     )
     for line in hdr_lines(config):
         if line not in lines:
@@ -246,6 +260,13 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
     gamescope_wsi_layer_dir = shlex.quote(str(
         context.gamescope_wsi_compatibility_dir
     ))
+    spatial_scaling_manifest = shlex.quote(str(
+        context.spatial_scaling_layer_dir /
+        context.spatial_scaling_manifest_filename_64
+    ))
+    spatial_scaling_layer_dir = shlex.quote(str(
+        context.spatial_scaling_layer_dir
+    ))
     mangohud_manifest = shlex.quote(str(
         context.mangohud_layer_dir / context.mangohud_manifest_filename_64
     ))
@@ -267,12 +288,16 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         # being measured when a compositor is already congested.
         f'export {PRESENT_DIAGNOSTICS_ENV}="${{{PRESENT_DIAGNOSTICS_ENV}:-0}}"',
         f"export {MAKO_LAYER_ENABLE_ENV}=1",
+        f"unset {MAKO_SPLIT_LAYER_CHAIN_ENV}",
         *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
         f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
         f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
+        f"export {SPATIAL_SCALING_LAYER_DISABLE_ENV}=1",
+        f"unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
         f'mako_external_vulkan_layer="${{{EXTERNAL_VULKAN_LAYER_ENV}:-}}"',
         f"unset {EXTERNAL_VULKAN_LAYER_ENV}",
         f"mako_gamescope_wsi_layer_dir={gamescope_wsi_layer_dir}",
+        f"mako_spatial_scaling_layer_dir={spatial_scaling_layer_dir}",
         f"mako_mangohud_layer_dir={mangohud_layer_dir}",
         f"mako_vkbasalt_layer_dir={vkbasalt_layer_dir}",
         "unset MANGOHUD",
@@ -281,23 +306,28 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"    mako_implicit_layer_path={shlex.quote(context.flatpak_implicit_layer_dir)}",
         "else",
         f"    mako_implicit_layer_path={shlex.quote(str(context.local_share_dir))}",
-        # Gamescope WSI runs above MAKO. Its internal Wayland surface gives
-        # MAKO a variable lower surface while the game keeps its render extent.
-        # Scaling Engine and explicit WSI compatibility own this independent
-        # presentation boundary; MangoHud or vkBasalt may be admitted below
-        # MAKO as a separate, mutually exclusive post-process choice.
+        '    if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
+        f"        export {MAKO_SPLIT_LAYER_CHAIN_ENV}=1",
+        "    fi",
+        # Frame generation and spatial scaling deliberately occupy opposite
+        # sides of Gamescope WSI. Every synthetic present therefore passes
+        # through Gamescope's pacing implementation, while the lower spatial
+        # layer still receives its variable Wayland surface and can own a
+        # larger presentation extent.
         '    if [ "${mako_gamescope_wsi_required:-0}" = 1 ] && [ -r '
-        f"{gamescope_wsi_manifest} ]; then",
+        f"{gamescope_wsi_manifest} ] && "
+        '( [ "${mako_spatial_scaling_required:-0}" != 1 ] || [ -r '
+        f"{spatial_scaling_manifest} ] ); then",
         f"        unset {GAMESCOPE_WSI_DISABLE_ENV}",
         f"        export {GAMESCOPE_WSI_ENABLE_ENV}=1",
         "        export NODEVICE_SELECT=1",
         "        export DISABLE_LAYER_MESA_ANTI_LAG=1",
-        # Search order is dispatch order for these staged implicit manifests:
-        # Gamescope WSI must intercept the application surface first and call
-        # down into MAKO with its internal variable Wayland surface. Reversing
-        # these directories leaves MAKO on the fixed X11 surface and scaling
-        # cannot obtain a distinct presentation extent.
-        '        mako_implicit_layer_path="$mako_gamescope_wsi_layer_dir:$mako_implicit_layer_path"',
+        '        mako_implicit_layer_path="$mako_implicit_layer_path:$mako_gamescope_wsi_layer_dir"',
+        '        if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
+        f"            unset {SPATIAL_SCALING_LAYER_DISABLE_ENV}",
+        f"            export {SPATIAL_SCALING_LAYER_ENABLE_ENV}=1",
+        '            mako_implicit_layer_path="$mako_implicit_layer_path:$mako_spatial_scaling_layer_dir"',
+        "        fi",
         "    fi",
         '    case "$mako_external_vulkan_layer" in',
         f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
@@ -321,8 +351,10 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "    esac",
         "fi",
         "unset mako_gamescope_wsi_required",
+        "unset mako_spatial_scaling_required",
         "unset mako_external_vulkan_layer",
         "unset mako_gamescope_wsi_layer_dir",
+        "unset mako_spatial_scaling_layer_dir",
         "unset mako_mangohud_layer_dir",
         "unset mako_vkbasalt_layer_dir",
         f'export {VK_IMPLICIT_LAYER_PATH_ENV}="$mako_implicit_layer_path"',

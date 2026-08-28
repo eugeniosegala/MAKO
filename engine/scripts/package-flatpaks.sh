@@ -150,9 +150,17 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
     for required_path in \
         "files/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
         "files/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json" \
+        "files/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json" \
+        "files/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json" \
+        "files/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
+        "files/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json" \
+        "files/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json" \
+        "files/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json" \
         "files/share/doc/mako-render/LICENSE.md" \
         "files/lib64/libmako-render.so" \
-        "files/lib/i386-linux-gnu/libmako-render.so"; do
+        "files/lib64/libmako-render-scaling.so" \
+        "files/lib/i386-linux-gnu/libmako-render.so" \
+        "files/lib/i386-linux-gnu/libmako-render-scaling.so"; do
         if [[ ! -f "$build_dir/$required_path" ]]; then
             echo "Flatpak packaging failed: missing $required_path for $runtime_version" >&2
             exit 1
@@ -160,13 +168,21 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
     done
 
     verify_elf_class "$build_dir/files/lib64/libmako-render.so" 2
+    verify_elf_class "$build_dir/files/lib64/libmako-render-scaling.so" 2
     verify_elf_class "$build_dir/files/lib/i386-linux-gnu/libmako-render.so" 1
+    verify_elf_class "$build_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so" 1
 
     for layer_binary in \
             "$build_dir/files/lib64/libmako-render.so" \
-            "$build_dir/files/lib/i386-linux-gnu/libmako-render.so"; do
+            "$build_dir/files/lib64/libmako-render-scaling.so" \
+            "$build_dir/files/lib/i386-linux-gnu/libmako-render.so" \
+            "$build_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so"; do
+        expected_identity="VK_LAYER_MAKO_render"
+        if [[ "$layer_binary" == *libmako-render-scaling.so ]]; then
+            expected_identity="VK_LAYER_MAKO_spatial_scaling"
+        fi
         if ! strings "$layer_binary" |
-                grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
+                grep -F "MAKO Renderer: render layer active; identity=$expected_identity; build=$version" >/dev/null; then
             echo "Flatpak packaging failed: layer build identity is missing for $runtime_version" >&2
             exit 1
         fi
@@ -178,6 +194,8 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
 
     manifest64="$build_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
     manifest32="$build_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+    scaling_manifest64="$build_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"
+    scaling_manifest32="$build_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
 
     if ! grep -Fq "/usr/lib/extensions/vulkan/makorender/lib64/libmako-render.so" \
         "$manifest64"; then
@@ -207,6 +225,26 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
             exit 1
         fi
     done
+    if ! grep -Fq "/usr/lib/extensions/vulkan/makorender/lib64/libmako-render-scaling.so" \
+            "$scaling_manifest64" ||
+            ! grep -Fq '"library_arch": "64"' "$scaling_manifest64"; then
+        echo "Flatpak packaging failed: 64-bit spatial manifest is incorrect for $runtime_version" >&2
+        exit 1
+    fi
+    if ! grep -Fq "/usr/lib/extensions/vulkan/makorender/lib/i386-linux-gnu/libmako-render-scaling.so" \
+            "$scaling_manifest32" ||
+            ! grep -Fq '"library_arch": "32"' "$scaling_manifest32"; then
+        echo "Flatpak packaging failed: 32-bit spatial manifest is incorrect for $runtime_version" >&2
+        exit 1
+    fi
+    for manifest in "$scaling_manifest64" "$scaling_manifest32"; do
+        if ! grep -Fq '"name": "VK_LAYER_MAKO_spatial_scaling"' "$manifest" ||
+                ! grep -Fq '"ENABLE_MAKO_SPATIAL_SCALING": "1"' "$manifest" ||
+                ! grep -Fq '"DISABLE_MAKO_SPATIAL_SCALING": "1"' "$manifest"; then
+            echo "Flatpak packaging failed: spatial-layer gating is incorrect for $runtime_version" >&2
+            exit 1
+        fi
+    done
 
     flatpak build-bundle "$repo_dir" "$bundle" "$extension_id" "$runtime_version" --runtime
 
@@ -223,6 +261,8 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
     deployed_dir="$(flatpak info --user --show-location "$extension_id//$runtime_version")"
     deployed_manifest64="$deployed_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
     deployed_manifest32="$deployed_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+    deployed_scaling_manifest64="$deployed_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"
+    deployed_scaling_manifest32="$deployed_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
 
     if [[ ! -f "$deployed_dir/files/lib64/libmako-render.so" ]]; then
         echo "Flatpak packaging failed: deployed 64-bit library is missing for $runtime_version" >&2
@@ -232,19 +272,32 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
         echo "Flatpak packaging failed: deployed 32-bit library is missing for $runtime_version" >&2
         exit 1
     fi
+    if [[ ! -f "$deployed_dir/files/lib64/libmako-render-scaling.so" ||
+          ! -f "$deployed_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so" ]]; then
+        echo "Flatpak packaging failed: deployed spatial-layer library is missing for $runtime_version" >&2
+        exit 1
+    fi
     if [[ ! -f "$deployed_dir/files/share/doc/mako-render/LICENSE.md" ]]; then
         echo "Flatpak packaging failed: deployed license is missing for $runtime_version" >&2
         exit 1
     fi
 
     verify_elf_class "$deployed_dir/files/lib64/libmako-render.so" 2
+    verify_elf_class "$deployed_dir/files/lib64/libmako-render-scaling.so" 2
     verify_elf_class "$deployed_dir/files/lib/i386-linux-gnu/libmako-render.so" 1
+    verify_elf_class "$deployed_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so" 1
 
     for layer_binary in \
             "$deployed_dir/files/lib64/libmako-render.so" \
-            "$deployed_dir/files/lib/i386-linux-gnu/libmako-render.so"; do
+            "$deployed_dir/files/lib64/libmako-render-scaling.so" \
+            "$deployed_dir/files/lib/i386-linux-gnu/libmako-render.so" \
+            "$deployed_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so"; do
+        expected_identity="VK_LAYER_MAKO_render"
+        if [[ "$layer_binary" == *libmako-render-scaling.so ]]; then
+            expected_identity="VK_LAYER_MAKO_spatial_scaling"
+        fi
         if ! strings "$layer_binary" |
-                grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$version" >/dev/null; then
+                grep -F "MAKO Renderer: render layer active; identity=$expected_identity; build=$version" >/dev/null; then
             echo "Flatpak packaging failed: deployed layer build identity is missing for $runtime_version" >&2
             exit 1
         fi
@@ -270,6 +323,20 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
     fi
     if ! grep -Fq '"library_arch": "32"' "$deployed_manifest32"; then
         echo "Flatpak packaging failed: deployed 32-bit manifest architecture is incorrect for $runtime_version" >&2
+        exit 1
+    fi
+    if ! grep -Fq "/usr/lib/extensions/vulkan/makorender/lib64/libmako-render-scaling.so" \
+            "$deployed_scaling_manifest64" ||
+            ! grep -Fq '"library_arch": "64"' "$deployed_scaling_manifest64" ||
+            ! grep -Fq '"name": "VK_LAYER_MAKO_spatial_scaling"' "$deployed_scaling_manifest64"; then
+        echo "Flatpak packaging failed: deployed 64-bit spatial manifest is incorrect for $runtime_version" >&2
+        exit 1
+    fi
+    if ! grep -Fq "/usr/lib/extensions/vulkan/makorender/lib/i386-linux-gnu/libmako-render-scaling.so" \
+            "$deployed_scaling_manifest32" ||
+            ! grep -Fq '"library_arch": "32"' "$deployed_scaling_manifest32" ||
+            ! grep -Fq '"name": "VK_LAYER_MAKO_spatial_scaling"' "$deployed_scaling_manifest32"; then
+        echo "Flatpak packaging failed: deployed 32-bit spatial manifest is incorrect for $runtime_version" >&2
         exit 1
     fi
 done < "$runtime_versions_file"

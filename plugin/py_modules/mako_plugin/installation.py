@@ -13,10 +13,17 @@ from typing import Any, Dict, Optional, TypedDict, cast
 
 from .base_service import BaseService
 from .constants import (
-    LIB_FILENAME, JSON_FILENAME, JSON32_FILENAME, CLI_FILENAME, CLI_DIR, BIN_DIR,
+    LIB_FILENAME, JSON_FILENAME, JSON32_FILENAME,
+    SPATIAL_SCALING_LIB_FILENAME,
+    SPATIAL_SCALING_JSON_FILENAME, SPATIAL_SCALING_JSON32_FILENAME,
+    CLI_FILENAME, CLI_DIR, BIN_DIR,
     DIAGNOSTICS_HELPER_FILENAME, MAKO_LAYER_NAME,
     MAKO_LAYER_ENABLE_ENV, MAKO_LAYER_DISABLE_ENV,
-    MAKO_LAYER_BUILD_MARKER, MAKO_PROFILE_FALLBACK_MARKER,
+    SPATIAL_SCALING_LAYER_NAME,
+    SPATIAL_SCALING_LAYER_ENABLE_ENV,
+    SPATIAL_SCALING_LAYER_DISABLE_ENV,
+    MAKO_LAYER_BUILD_MARKER, SPATIAL_SCALING_LAYER_BUILD_MARKER,
+    MAKO_PROFILE_FALLBACK_MARKER,
     GAMESCOPE_WSI_DISABLE_ENV, GAMESCOPE_WSI_ENABLE_ENV,
     GAMESCOPE_WSI_LAYER_NAME_64, GAMESCOPE_WSI_MANIFEST_FILENAME_64,
     MANGOHUD_LAYER_NAME_64, MANGOHUD_MANIFEST_FILENAME_64,
@@ -71,6 +78,12 @@ class InstallationService(BaseService):
 
         self.lib_file = self.local_lib_dir / LIB_FILENAME
         self.lib32_file = self.local_lib32_dir / LIB_FILENAME
+        self.spatial_scaling_lib_file = (
+            self.local_lib_dir / SPATIAL_SCALING_LIB_FILENAME
+        )
+        self.spatial_scaling_lib32_file = (
+            self.local_lib32_dir / SPATIAL_SCALING_LIB_FILENAME
+        )
         self.json_file = self.local_share_dir / JSON_FILENAME
         self.json32_file = self.local_share_dir / JSON32_FILENAME
         self.gamescope_wsi_compatibility_manifest = (
@@ -317,10 +330,18 @@ class InstallationService(BaseService):
         required_destinations = {
             f"lib/{LIB_FILENAME}": self.lib_file,
             f"share/vulkan/implicit_layer.d/{JSON_FILENAME}": self.json_file,
+            f"lib/{SPATIAL_SCALING_LIB_FILENAME}":
+                self.spatial_scaling_lib_file,
+            f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON_FILENAME}":
+                self.spatial_scaling_json_file,
         }
         optional_32bit_destinations = {
             f"lib32/{LIB_FILENAME}": self.lib32_file,
             f"share/vulkan/implicit_layer.d/{JSON32_FILENAME}": self.json32_file,
+            f"lib32/{SPATIAL_SCALING_LIB_FILENAME}":
+                self.spatial_scaling_lib32_file,
+            f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON32_FILENAME}":
+                self.spatial_scaling_json32_file,
         }
         destinations = {**required_destinations, **optional_32bit_destinations}
         # Keep staging in MAKO's user-owned data directory. Armada currently
@@ -366,15 +387,41 @@ class InstallationService(BaseService):
 
                 has_32bit_library = self.lib32_file in staged_files
                 has_32bit_manifest = self.json32_file in staged_files
-                if has_32bit_library != has_32bit_manifest:
+                has_32bit_scaling_library = (
+                    self.spatial_scaling_lib32_file in staged_files
+                )
+                has_32bit_scaling_manifest = (
+                    self.spatial_scaling_json32_file in staged_files
+                )
+                if (
+                    has_32bit_library != has_32bit_manifest or
+                    has_32bit_scaling_library !=
+                        has_32bit_scaling_manifest or
+                    has_32bit_library != has_32bit_scaling_library
+                ):
                     raise OSError(
-                        "Archive contained an incomplete 32-bit Vulkan layer pair"
+                        "Archive contained an incomplete 32-bit MAKO layer chain"
                     )
 
-                layer_binaries = [staged_files[self.lib_file][0]]
+                frame_generation_binaries = [staged_files[self.lib_file][0]]
                 if has_32bit_library:
-                    layer_binaries.append(staged_files[self.lib32_file][0])
-                self._validate_layer_binary_identity(*layer_binaries)
+                    frame_generation_binaries.append(
+                        staged_files[self.lib32_file][0]
+                    )
+                scaling_binaries = [
+                    staged_files[self.spatial_scaling_lib_file][0]
+                ]
+                if has_32bit_scaling_library:
+                    scaling_binaries.append(
+                        staged_files[self.spatial_scaling_lib32_file][0]
+                    )
+                self._validate_layer_binary_identity(
+                    MAKO_LAYER_BUILD_MARKER, *frame_generation_binaries
+                )
+                self._validate_layer_binary_identity(
+                    SPATIAL_SCALING_LAYER_BUILD_MARKER,
+                    *scaling_binaries,
+                )
 
                 for destination, (temp_file, filename) in staged_files.items():
                     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -385,6 +432,32 @@ class InstallationService(BaseService):
                     elif filename == JSON32_FILENAME:
                         self._copy_and_fix_json_file(
                             temp_file, destination, f"../../lib32/{LIB_FILENAME}", "32"
+                        )
+                    elif filename == SPATIAL_SCALING_JSON_FILENAME:
+                        self._copy_and_fix_json_file(
+                            temp_file, destination,
+                            f"../../lib/{SPATIAL_SCALING_LIB_FILENAME}", "64",
+                            layer_name=SPATIAL_SCALING_LAYER_NAME,
+                            description="MAKO Renderer spatial-scaling layer",
+                            enable_environment={
+                                SPATIAL_SCALING_LAYER_ENABLE_ENV: "1"
+                            },
+                            disable_environment={
+                                SPATIAL_SCALING_LAYER_DISABLE_ENV: "1"
+                            },
+                        )
+                    elif filename == SPATIAL_SCALING_JSON32_FILENAME:
+                        self._copy_and_fix_json_file(
+                            temp_file, destination,
+                            f"../../lib32/{SPATIAL_SCALING_LIB_FILENAME}", "32",
+                            layer_name=SPATIAL_SCALING_LAYER_NAME,
+                            description="MAKO Renderer spatial-scaling layer",
+                            enable_environment={
+                                SPATIAL_SCALING_LAYER_ENABLE_ENV: "1"
+                            },
+                            disable_environment={
+                                SPATIAL_SCALING_LAYER_DISABLE_ENV: "1"
+                            },
                         )
                     else:
                         # Replace the entry only after the complete file and its
@@ -403,13 +476,16 @@ class InstallationService(BaseService):
                     # 32-bit layer from an older install discoverable.
                     self._remove_if_exists(self.lib32_file)
                     self._remove_if_exists(self.json32_file)
+                    self._remove_if_exists(self.spatial_scaling_lib32_file)
+                    self._remove_if_exists(self.spatial_scaling_json32_file)
 
     @staticmethod
-    def _validate_layer_binary_identity(*layer_binaries: Path) -> None:
+    def _validate_layer_binary_identity(
+            build_marker: bytes, *layer_binaries: Path) -> None:
         """Reject payloads incompatible with this plugin's generated wrapper."""
         for layer_binary in layer_binaries:
             content = layer_binary.read_bytes()
-            if MAKO_LAYER_BUILD_MARKER not in content:
+            if build_marker not in content:
                 raise OSError(
                     f"MAKO layer build marker is missing from {layer_binary}"
                 )
@@ -421,7 +497,13 @@ class InstallationService(BaseService):
 
     def _copy_and_fix_json_file(
             self, src_file: Path, dst_file: Path,
-            library_path: str, library_arch: str) -> None:
+            library_path: str, library_arch: str,
+            *,
+            layer_name: str = MAKO_LAYER_NAME,
+            description: str = "MAKO Renderer graphics layer",
+            enable_environment: Optional[Dict[str, str]] = None,
+            disable_environment: Optional[Dict[str, str]] = None,
+    ) -> None:
         """Copy a JSON manifest and point it at the private architecture path.
 
         Args:
@@ -435,14 +517,14 @@ class InstallationService(BaseService):
             if not isinstance(layer, dict) or not isinstance(layer.get("library_path"), str):
                 raise ValueError("missing layer.library_path")
 
-            layer["name"] = MAKO_LAYER_NAME
-            layer["description"] = "MAKO Renderer graphics layer"
+            layer["name"] = layer_name
+            layer["description"] = description
             layer["library_path"] = library_path
             layer["library_arch"] = library_arch
-            layer["enable_environment"] = {
+            layer["enable_environment"] = enable_environment or {
                 MAKO_LAYER_ENABLE_ENV: "1",
             }
-            layer["disable_environment"] = {
+            layer["disable_environment"] = disable_environment or {
                 MAKO_LAYER_DISABLE_ENV: "1",
             }
             write_managed_text_atomically(
@@ -742,6 +824,9 @@ class InstallationService(BaseService):
         config_service = ConfigurationService(logger=self.log)
         config_service.user_home = self.user_home
         config_service.local_share_dir = self.local_share_dir
+        config_service.spatial_scaling_layer_dir = (
+            self.spatial_scaling_layer_dir
+        )
         config_service.gamescope_wsi_compatibility_dir = (
             self.gamescope_wsi_compatibility_dir
         )
@@ -822,12 +907,16 @@ class InstallationService(BaseService):
             lib32_exists = self.lib32_file.exists()
             json_exists = self.json_file.exists()
             json32_exists = self.json32_file.exists()
+            scaling_lib_exists = self.spatial_scaling_lib_file.exists()
+            scaling_lib32_exists = self.spatial_scaling_lib32_file.exists()
+            scaling_json_exists = self.spatial_scaling_json_file.exists()
+            scaling_json32_exists = self.spatial_scaling_json32_file.exists()
             registered_json_exists = self.registered_json_file.exists()
             registered_json32_exists = self.registered_json32_file.exists()
             script_exists = self.mako_script_path.exists()
             installed = (
-                lib_exists and json_exists and registered_json_exists
-                and script_exists
+                lib_exists and json_exists and registered_json_exists and
+                scaling_lib_exists and scaling_json_exists and script_exists
             )
             expected = self._bundled_archive_metadata(PLUGIN_ROOT)
             host_architecture, host_supported, host_error = (
@@ -836,7 +925,11 @@ class InstallationService(BaseService):
             expects_32bit = "32" in expected.get("architectures", ["64", "32"])
             installed = installed and (
                 not expects_32bit
-                or (lib32_exists and json32_exists and registered_json32_exists)
+                or (
+                    lib32_exists and json32_exists and
+                    registered_json32_exists and scaling_lib32_exists and
+                    scaling_json32_exists
+                )
             )
             # Files left by a pre-boundary build do not make an incompatible
             # native host supported. Keep their presence observable for manual
@@ -853,9 +946,12 @@ class InstallationService(BaseService):
 
             self.log.info(
                 "Installation check: lib64=%s, lib32=%s, private-json64=%s, "
-                "private-json32=%s, registered-json64=%s, registered-json32=%s, "
-                "script=%s",
+                "private-json32=%s, scaling-lib64=%s, scaling-lib32=%s, "
+                "scaling-json64=%s, scaling-json32=%s, "
+                "registered-json64=%s, registered-json32=%s, script=%s",
                 lib_exists, lib32_exists, json_exists, json32_exists,
+                scaling_lib_exists, scaling_lib32_exists,
+                scaling_json_exists, scaling_json32_exists,
                 registered_json_exists, registered_json32_exists,
                 script_exists,
             )
@@ -910,6 +1006,10 @@ class InstallationService(BaseService):
             # Remove core MAKO Renderer files, but preserve config file to maintain user's custom profiles
             files_to_remove = [
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
+                self.spatial_scaling_lib_file,
+                self.spatial_scaling_lib32_file,
+                self.spatial_scaling_json_file,
+                self.spatial_scaling_json32_file,
                 self.registered_json_file, self.registered_json32_file,
                 self.gamescope_wsi_compatibility_manifest,
                 self.mangohud_manifest, self.mangohud_manifest32,
@@ -960,6 +1060,10 @@ class InstallationService(BaseService):
             # Remove core MAKO Renderer files, but preserve config file to maintain user's custom profiles
             files_to_remove = [
                 self.lib_file, self.lib32_file, self.json_file, self.json32_file,
+                self.spatial_scaling_lib_file,
+                self.spatial_scaling_lib32_file,
+                self.spatial_scaling_json_file,
+                self.spatial_scaling_json32_file,
                 self.registered_json_file, self.registered_json32_file,
                 self.gamescope_wsi_compatibility_manifest,
                 self.mangohud_manifest, self.mangohud_manifest32,

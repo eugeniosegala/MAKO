@@ -412,10 +412,12 @@ fi
 
 manifest_paths=(
   "./share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
+  "./share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"
 )
 if [[ "$build_64_only" != true ]]; then
   manifest_paths+=(
     "./share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+    "./share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
   )
 fi
 for manifest_path in "${manifest_paths[@]}"; do
@@ -424,23 +426,41 @@ for manifest_path in "${manifest_paths[@]}"; do
     exit 1
   fi
   manifest_content="$(tar -xJOf "$package_dir/bin/$archive_name" "$manifest_path")"
-  if [[ "$manifest_content" != *'"name": "VK_LAYER_MAKO_render"'* ||
-        "$manifest_content" != *'"ENABLE_MAKO": "1"'* ||
-        "$manifest_content" != *'"DISABLE_MAKO": "1"'* ]]; then
+  expected_manifest_identity='"name": "VK_LAYER_MAKO_render"'
+  expected_manifest_enable='"ENABLE_MAKO": "1"'
+  expected_manifest_disable='"DISABLE_MAKO": "1"'
+  if [[ "$manifest_path" == *VkLayer_MAKO_spatial_scaling* ]]; then
+    expected_manifest_identity='"name": "VK_LAYER_MAKO_spatial_scaling"'
+    expected_manifest_enable='"ENABLE_MAKO_SPATIAL_SCALING": "1"'
+    expected_manifest_disable='"DISABLE_MAKO_SPATIAL_SCALING": "1"'
+  fi
+  if [[ "$manifest_content" != *"$expected_manifest_identity"* ||
+        "$manifest_content" != *"$expected_manifest_enable"* ||
+        "$manifest_content" != *"$expected_manifest_disable"* ]]; then
     echo "Engine archive has invalid MAKO Renderer layer gating in $manifest_path" >&2
     exit 1
   fi
 done
 
-layer_binary_paths=("./lib/libmako-render.so")
+layer_binary_paths=(
+  "./lib/libmako-render.so"
+  "./lib/libmako-render-scaling.so"
+)
 if [[ "$build_64_only" != true ]]; then
-  layer_binary_paths+=("./lib32/libmako-render.so")
+  layer_binary_paths+=(
+    "./lib32/libmako-render.so"
+    "./lib32/libmako-render-scaling.so"
+  )
 fi
 for layer_binary_path in "${layer_binary_paths[@]}"; do
   verification_binary="$staging_dir/$(basename "$(dirname "$layer_binary_path")")-libmako-render.so"
   tar -xJOf "$package_dir/bin/$archive_name" "$layer_binary_path" > "$verification_binary"
+  expected_identity="VK_LAYER_MAKO_render"
+  if [[ "$layer_binary_path" == *libmako-render-scaling.so ]]; then
+    expected_identity="VK_LAYER_MAKO_spatial_scaling"
+  fi
   if ! strings "$verification_binary" |
-      grep -F "MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=$archive_version" >/dev/null; then
+      grep -F "MAKO Renderer: render layer active; identity=$expected_identity; build=$archive_version" >/dev/null; then
     echo "Engine archive has no matching MAKO Renderer build marker in $layer_binary_path" >&2
     exit 1
   fi

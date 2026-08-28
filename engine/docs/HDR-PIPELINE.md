@@ -141,7 +141,7 @@ Game / Proton / DXVK or VKD3D-Proton
              Vulkan driver
 ```
 
-Gamescope WSI must remain above MAKO. It exposes HDR formats to the application, translates Wine/Proton WSI handles, consumes the application's HDR colour space, and forwards a normalized swapchain to lower layers. MAKO then combines the normalized format with confirmed application-owned Gamescope feedback to recover HDR10/PQ or scRGB semantics. The [Gamescope source](https://github.com/ValveSoftware/gamescope/blob/master/src/main.cpp#L2538) describes WSI as required for HDR client support.
+This diagram records the earlier single-layer HDR exploration, not a supported launch topology. Gamescope WSI must remain visible to the application-facing HDR contract because it exposes HDR formats, translates Wine/Proton WSI handles, consumes the application's HDR colour space, and forwards a normalized swapchain to lower layers. The supported SDR scaling chain now splits MAKO into an upper frame-generation role and a lower spatial role around WSI; a future HDR implementation must preserve both WSI's application-facing metadata semantics and generated-present pacing across those roles. The [Gamescope source](https://github.com/ValveSoftware/gamescope/blob/master/src/main.cpp#L2538) describes WSI as required for HDR client support.
 
 ### What the Gamescope source proves
 

@@ -129,10 +129,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         defaults = ConfigurationManager.get_defaults()
         content = self.service._generate_script_content(defaults)
 
-        self.assertEqual(len(content.encode("utf-8")), 4922)
+        self.assertEqual(len(content.encode("utf-8")), 5752)
         self.assertEqual(
             _sha256(content),
-            "c7f04d18f0f78aad3ae3e85e1bbf9bc59db01e40fbdc130f51c0937d398b391f",
+            "0049f9b9b48f3dde7d5f0be871d4e6b77a608fb2105427aeeb6aeda67c61cd78",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -199,10 +199,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
                 profile_data
             )
 
-        self.assertEqual(len(content.encode("utf-8")), 7006)
+        self.assertEqual(len(content.encode("utf-8")), 7924)
         self.assertEqual(
             _sha256(content),
-            "3d686ee885394668f106e911f6aa226f3b3712d66f947c0d7158dc0f222ba717",
+            "e7f4495044a64820a9f122b8ae8ffa9cacee89db9956214185353f36e324cb86",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -282,7 +282,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "d7254bf2fd2c7b265db59f27a3192090a88184a86f034accbdeb5d0d5415a8aa",
+            "3190e325a2dbe80410f78c97eeeb5026b0c4619040bcd1c519a10fbc798d9f81",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):
