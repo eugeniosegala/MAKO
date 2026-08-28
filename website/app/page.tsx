@@ -35,7 +35,7 @@ const features = [
     index: '01',
     code: 'AF',
     title: 'Adaptive Frame Generation',
-    text: 'Target 30–240 FPS while MAKO varies generated frames up to your selected 2×–4× ceiling.',
+    text: 'Target 30–240 FPS while MAKO varies generated frames up to your selected 2×–5× ceiling.',
     stat: '30-240',
     label: 'FPS target',
     tone: 'cyan',
@@ -129,6 +129,11 @@ export default function Home() {
             <p className="eyebrow"><span /> Spatial scaling + frame generation / Linux</p>
             <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
             <p className="hero-intro">MAKO brings proprietary Lossless Scaling LS1, a built-in open Vulkan spatial scaler, and LSFG frame generation to Steam Deck, Steam Machine, SteamOS, and Linux through a focused Decky control layer and a purpose-built renderer.</p>
+            <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
+              <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
+              <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Contribute. Fork it. Change it. Make it yours.</span></span>
+              <span className="open-source-sticker-arrow" aria-hidden="true">↗</span>
+            </a>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Decky</span></a>
               <a className="button button-primary button-renderer" href={links.rendererDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Renderer</span></a>
@@ -138,7 +143,7 @@ export default function Home() {
             <div className="hero-meta">
               <span><b>1-2×</b> LS1 or MAKO scaling</span>
               <span><b>30-240</b> adaptive FPS target</span>
-              <span><b>2-4×</b> generation ceiling</span>
+              <span><b>2-5×</b> generation ceiling</span>
             </div>
           </div>
 
@@ -183,7 +188,7 @@ export default function Home() {
               <div className="panel-topline"><span>CONTROL LAYER</span><i>STEAMOS / DECKY</i></div>
               <img src="assets/mako-logo.webp" alt="MAKO Decky" width="230" height="230" draggable={false} />
               <h3>MAKO Decky</h3>
-              <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration, all from one focused interface.</p>
+              <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration through one focused interface.</p>
               <ul>
                 <li><span /> Independent scaling &amp; generation controls</li>
                 <li><span /> Steam, Heroic &amp; EmuDeck profiles</li>
