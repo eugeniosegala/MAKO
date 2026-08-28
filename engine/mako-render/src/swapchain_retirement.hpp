@@ -9,6 +9,32 @@
 
 namespace mako::layer {
 
+    // VK_KHR_swapchain_maintenance1 promoted the EXT extension without
+    // changing its structure layouts or sType values. Freedesktop 23.08's
+    // Vulkan headers predate the KHR spelling, so keep the ABI-facing types on
+    // the EXT names while still negotiating the promoted runtime name.
+    inline constexpr char khrSwapchainMaintenance1ExtensionName[] =
+        "VK_KHR_swapchain_maintenance1";
+
+#ifdef VK_KHR_swapchain_maintenance1
+    static_assert(
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT ==
+        VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR
+    );
+    static_assert(
+        VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT ==
+        VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR
+    );
+    static_assert(
+        sizeof(VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT) ==
+        sizeof(VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR)
+    );
+    static_assert(
+        sizeof(VkSwapchainPresentFenceInfoEXT) ==
+        sizeof(VkSwapchainPresentFenceInfoKHR)
+    );
+#endif
+
     // The maintenance fence is the Vulkan lifetime proof. The grace interval
     // additionally lets an upper Gamescope WSI/protocol event loop observe a
     // replacement presentation before the retired lower WSI is destroyed.
@@ -57,7 +83,7 @@ namespace mako::layer {
         if (!featureSupported)
             return nullptr;
         if (khrExtensionSupported)
-            return VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME;
+            return khrSwapchainMaintenance1ExtensionName;
         if (extExtensionSupported)
             return VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME;
         return nullptr;
@@ -96,7 +122,7 @@ namespace mako::layer {
                     ) == 0 ||
                      std::strcmp(
                         extension,
-                        VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
+                        khrSwapchainMaintenance1ExtensionName
                     ) == 0)) {
                 extensionEnabled = true;
                 break;
@@ -108,9 +134,9 @@ namespace mako::layer {
         for (const void* node = createInfo.pNext; node;) {
             const auto header = pNextHeader(node);
             if (header.sType ==
-                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR) {
+                    VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT) {
                 const auto* features = reinterpret_cast<
-                    const VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR*>(
+                    const VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT*>(
                         node
                     );
                 return features->swapchainMaintenance1 == VK_TRUE;
@@ -120,14 +146,14 @@ namespace mako::layer {
         return false;
     }
 
-    [[nodiscard]] inline const VkSwapchainPresentFenceInfoKHR*
+    [[nodiscard]] inline const VkSwapchainPresentFenceInfoEXT*
     findSwapchainPresentFenceInfo(const void* chain) noexcept {
         for (const void* node = chain; node;) {
             const auto header = pNextHeader(node);
             if (header.sType ==
-                    VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR) {
+                    VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT) {
                 return reinterpret_cast<
-                    const VkSwapchainPresentFenceInfoKHR*>(node);
+                    const VkSwapchainPresentFenceInfoEXT*>(node);
             }
             node = header.pNext;
         }
@@ -139,7 +165,7 @@ namespace mako::layer {
     /// or replaces that fence; it only preserves the chain and records that
     /// the one-shot recreation result followed a retirement-protected present.
     [[nodiscard]] inline bool upstreamPresentFenceProtectsSwapchain(
-            const VkSwapchainPresentFenceInfoKHR* const info,
+            const VkSwapchainPresentFenceInfoEXT* const info,
             const uint32_t swapchainIndex = 0) noexcept {
         return info && info->pFences &&
             swapchainIndex < info->swapchainCount &&

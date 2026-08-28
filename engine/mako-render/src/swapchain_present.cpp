@@ -208,8 +208,8 @@ VkResult Swapchain::queuePresentWithRetirementFence(
     }
 
     const VkFence fence = slot.fence.handle();
-    const VkSwapchainPresentFenceInfoKHR fenceInfo{
-        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR,
+    const VkSwapchainPresentFenceInfoEXT fenceInfo{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT,
         .pNext = presentInfo.pNext,
         .swapchainCount = 1,
         .pFences = &fence,

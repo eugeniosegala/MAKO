@@ -776,9 +776,9 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
             features->timelineSemaphore = VK_TRUE;
             timelineFeatureEnabled = true;
         } else if (featureInfo->sType ==
-                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR) {
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT) {
             auto* features = reinterpret_cast<
-                VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR*>(
+                VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT*>(
                     featureInfo
                 );
             if (swapchainMaintenance1Extension)
@@ -798,9 +798,9 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
     if (!timelineFeatureEnabled)
         createInfo.pNext = &timelineFeatures;
 
-    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance1Features{
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT maintenance1Features{
         .sType =
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
         .pNext = const_cast<void*>(createInfo.pNext),
         .swapchainMaintenance1 = VK_TRUE,
     };

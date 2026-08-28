@@ -358,7 +358,7 @@ namespace {
             );
         };
         const bool hasKhr = hasExtension(
-            VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
+            khrSwapchainMaintenance1ExtensionName
         );
         const bool hasExt = hasExtension(
             VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME
@@ -366,9 +366,9 @@ namespace {
         if (!hasKhr && !hasExt)
             return std::nullopt;
 
-        VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance1{
+        VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT maintenance1{
             .sType =
-                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,
+                VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
         };
         VkPhysicalDeviceFeatures2 features{
             .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,

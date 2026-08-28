@@ -7,6 +7,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 using namespace mako::layer;
 
@@ -20,19 +21,21 @@ namespace {
 }
 
 int main() {
-    expect(selectSwapchainMaintenance1Extension(true, true, true) ==
-            VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+    expect(std::string_view(
+            selectSwapchainMaintenance1Extension(true, true, true)
+        ) == khrSwapchainMaintenance1ExtensionName,
         "the promoted maintenance1 extension was not preferred");
-    expect(selectSwapchainMaintenance1Extension(false, true, true) ==
-            VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+    expect(std::string_view(
+            selectSwapchainMaintenance1Extension(false, true, true)
+        ) == VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
         "the EXT maintenance1 fallback was not selected");
     expect(!selectSwapchainMaintenance1Extension(true, true, false) &&
             !selectSwapchainMaintenance1Extension(false, false, true),
         "maintenance1 was selected without both extension and feature support");
 
-    VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR maintenance{
+    VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT maintenance{
         .sType =
-            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR,
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,
         .swapchainMaintenance1 = VK_TRUE,
     };
     const std::array<const char*, 1> extensions{
@@ -68,7 +71,7 @@ int main() {
         "a malformed extension list was dereferenced or accepted");
 
     const std::array<const char*, 1> khrExtensions{
-        VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME,
+        khrSwapchainMaintenance1ExtensionName,
     };
     const VkDeviceCreateInfo khrEnabled{
         .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
@@ -80,8 +83,8 @@ int main() {
         "the promoted KHR maintenance1 extension was not recognized");
 
     VkFence fence = VK_NULL_HANDLE;
-    const VkSwapchainPresentFenceInfoKHR presentFence{
-        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_KHR,
+    const VkSwapchainPresentFenceInfoEXT presentFence{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT,
         .swapchainCount = 1,
         .pFences = &fence,
     };
