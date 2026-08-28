@@ -129,6 +129,11 @@ export default function Home() {
             <p className="eyebrow"><span /> Lossless Scaling frame generation / Linux</p>
             <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
             <p className="hero-intro">MAKO brings Lossless Scaling frame generation to Steam Deck, Steam Machine, SteamOS, and Linux through a focused Decky control layer and a purpose-built Vulkan renderer.</p>
+            <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
+              <span className="open-source-sticker-mark" aria-hidden="true">FREE</span>
+              <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Free forever. Fork it. Change it. Make it yours.</span></span>
+              <span className="open-source-sticker-arrow" aria-hidden="true">↗</span>
+            </a>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Decky</span></a>
               <a className="button button-primary button-renderer" href={links.rendererDownload} {...newTabProps}><span className="download-glyph" aria-hidden="true"><i /></span><span>Get MAKO Renderer</span></a>
