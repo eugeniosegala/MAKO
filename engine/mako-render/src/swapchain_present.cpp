@@ -1685,6 +1685,45 @@ VkResult Swapchain::presentGeneratedFrames(
             this->frameState.sequenceIndex,
             generatedPresentStarted, result, i, acquiredImageIndex
         );
+        if (result == VK_ERROR_OUT_OF_DATE_KHR) {
+            // The generated image belongs to MAKO, but the application's real
+            // image is still acquired and its copy submission has already
+            // consumed the application's wait semaphores. Return that real
+            // image through the normal lower present path before propagating
+            // OUT_OF_DATE, otherwise a game can block while tearing down an
+            // acquired image that never reached the presentation engine.
+            const auto originalResult = this->presentOriginalImage(
+                invocation, postCopy.second.handle(),
+                this->gamescopeDetected ? invocation.nextChain : nullptr,
+                &originalPresentDuration
+            );
+            if (presentDiagnosticsEnabled()) {
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=generated-present-recreation-drain"
+                          << " context=" << this->diagnosticsState.contextId
+                          << " frame=" << this->frameState.realFrameIndex
+                          << " sequence=" << this->frameState.sequenceIndex
+                          << " pass=" << i
+                          << " generated_result=" << result
+                          << " original_result=" << originalResult
+                          << " action=return-application-image-before-recreation\n";
+            }
+            if (originalResult != VK_SUCCESS &&
+                    originalResult != VK_SUBOPTIMAL_KHR &&
+                    originalResult != VK_ERROR_OUT_OF_DATE_KHR) {
+                throw ls::vulkan_error(
+                    originalResult, "vkQueuePresentKHR() failed"
+                );
+            }
+            if (this->adaptiveScheduler)
+                this->reportAdaptiveDelivery(plan, i);
+            else
+                this->diagnosticsState.fixedSkippedFrames +=
+                    plan.scheduledGeneratedFrames.size() - i;
+            this->frameState.sequenceIndex++;
+            this->frameState.realFrameIndex++;
+            return VK_ERROR_OUT_OF_DATE_KHR;
+        }
         if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
             throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
         if (!this->adaptiveScheduler)
