@@ -5,7 +5,7 @@
   "SCALING_ENABLED_WARNING": "不需要缩放时请将其关闭，因为它会占用资源。",
   "SCALING_METHOD": "缩放方法",
   "SCALING_METHOD_DESC": "选择缩放模型。可在游戏运行时更改。",
-  "SCALING_METHOD_COMPARISON_TIP": "缩放如何工作：\n1. 在 Steam 中，将游戏分辨率设为显示器的原生或最高分辨率。Steam Deck 使用 1280 × 800。Steam Machine 将最大游戏分辨率设为电视或显示器的原生分辨率，例如 4K 为 3840 × 2160。\n2. 在游戏内选择较低分辨率，例如 720p 或更低。渲染更少的像素可以提升性能。\n3. 使用大于 1x 的缩放系数。MAKO 会为显示器放大画面，以部分图像细节换取这项性能。",
+  "SCALING_METHOD_COMPARISON_TIP": "缩放如何工作：\n1. 在 Steam 中，将游戏分辨率设为显示器的最高分辨率（Steam Deck：1280 × 800；Steam Machine：3840 × 2160 / 4K）。\n2. 在游戏内选择较低分辨率，例如 480p 或 720p。\n3. 使用缩放系数放大画面；2x 是很好的起点。\n\n这会降低游戏的渲染分辨率，再将其放大回显示器分辨率。它可以显著提升性能，但会牺牲一些图像质量。或者，如果显示器支持，可以使用 MAKO 从 2K 缩放到 4K。",
   "SCALING_METHOD_NATIVE": "原生分辨率",
   "SCALING_METHOD_MAKO": "MAKO 缩放器",
   "SCALING_METHOD_LS1": "LS1 Quality",

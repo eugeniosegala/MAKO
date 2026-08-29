@@ -475,6 +475,7 @@ if [[ "$build_32_bit" == true ]]; then
     layer_binaries+=("$install_dir/lib32/libmako-render.so")
     layer_binaries+=("$install_dir/lib32/libmako-render-scaling.so")
 fi
+relay_contract_symbol="makoSpatialScalingLookupFixedContract"
 for layer_binary in "${layer_binaries[@]}"; do
     dynamic_dependencies="$(readelf -d "$layer_binary")"
     if ! grep -Fq 'Shared library: [libstdc++.so.6]' <<< "$dynamic_dependencies"; then
@@ -496,6 +497,13 @@ for layer_binary in "${layer_binaries[@]}"; do
     expected_identity="VK_LAYER_MAKO_render"
     if [[ "$layer_binary" == *libmako-render-scaling.so ]]; then
         expected_identity="VK_LAYER_MAKO_spatial_scaling"
+        if ! grep -Fxq "$relay_contract_symbol" <<< "$exported_symbols"; then
+            echo "Packaging failed: spatial capability relay entrypoint is missing from $layer_binary" >&2
+            exit 1
+        fi
+    elif grep -Fxq "$relay_contract_symbol" <<< "$exported_symbols"; then
+        echo "Packaging failed: spatial capability relay entrypoint leaked into $layer_binary" >&2
+        exit 1
     fi
     if ! strings "$layer_binary" |
             grep -F "MAKO Renderer: render layer active; identity=$expected_identity; build=$version" >/dev/null; then

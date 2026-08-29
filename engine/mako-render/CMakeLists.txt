@@ -47,6 +47,7 @@ if(MAKO_BUILD_VK_LAYER)
             PRIVATE mako-color
             PRIVATE mako-spatial-scaler
             PRIVATE Threads::Threads
+            PRIVATE ${CMAKE_DL_LIBS}
             PUBLIC mako-common
             PUBLIC mako-backend)
 

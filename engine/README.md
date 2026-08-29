@@ -93,10 +93,11 @@ Validate the configuration or run the built-in benchmark with:
 
 ```bash
 ~/.local/bin/mako-cli validate
+~/.local/bin/mako-cli inspect-dll --dll "/path/to/Lossless.dll"
 ~/.local/bin/mako-cli benchmark
 ```
 
-Run `mako-cli` without a subcommand to see its configuration, benchmark, and language options. Use `mako-diagnostics` to collect a focused standalone report when troubleshooting.
+`inspect-dll` fingerprints the user-owned file and resource layout, checks LSFG FP32/FP16 and Quality/Performance independently, and translates every LS1 variant to prove the runtime contract. Fingerprints are diagnostic identities rather than version allowlists, so harmless vendor additions remain compatible. Run `mako-cli` without a subcommand to see its configuration, benchmark, and language options. Use `mako-diagnostics` to collect a focused standalone report when troubleshooting.
 
 ## In-game considerations
 

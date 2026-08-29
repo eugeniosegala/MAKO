@@ -73,11 +73,18 @@ int main() {
     const auto upper = profileForLayer(exercisedProfile());
     expect(upper.frame_generation_enabled && upper.adaptive,
         "the upper split layer must retain frame-generation configuration");
-    expect(!upper.scaling_enabled &&
-            upper.scaling_method == ls::ScalingMethod::Native,
-        "the upper split layer must not allocate spatial-scaling resources");
+    expect(upper.scaling_enabled &&
+            upper.scaling_method == ls::ScalingMethod::Mako,
+        "the upper split layer must retain scaling configuration for the "
+        "fixed-surface capability relay");
     expect(!spatialScalingOwnedByLayer(),
         "the upper split layer must forward lower-role spatial contracts");
+    expect(spatialScalingCapabilityRelayByLayer(),
+        "the upper split layer must relay virtual capabilities through WSI");
+    const auto upperContext = profileForLayerContext(upper);
+    expect(!upperContext.scaling_enabled &&
+            upperContext.scaling_method == ls::ScalingMethod::Native,
+        "the upper split layer must not allocate spatial-scaling resources");
     expect(!shouldRejectUnmatchedFixedSpatialCreate(true, false),
         "the upper split layer must not reject a lower-role source extent");
 
@@ -87,6 +94,8 @@ int main() {
         "a zero split-chain value must preserve direct Renderer behavior");
     expect(spatialScalingOwnedByLayer(),
         "a disabled split chain must retain combined spatial ownership");
+    expect(!spatialScalingCapabilityRelayByLayer(),
+        "a disabled split chain must not enable the capability relay");
     unsetenv(splitLayerChainEnvironment.data());
 #endif
 }

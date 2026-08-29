@@ -4,6 +4,7 @@
 
 #include "dll_reader.hpp"
 #include "ls1_spirv_patch.hpp"
+#include "model_resource_validation.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <algorithm>
@@ -334,10 +335,9 @@ namespace {
             const bool constantBuffer,
             const uint32_t storageImageFormat,
             const std::string& sourceName) {
-        if (dxbc.size() < 4 || !std::equal(
-                dxbc.begin(), dxbc.begin() + 4, "DXBC")) {
-            throw ls::error("LS1 resource " + sourceName + " is not DXBC");
-        }
+        mako::backend::detail::validateDxbcComputeShader(
+            dxbc, "LS1 resource " + sourceName
+        );
 
         const auto bindings = bindingsFor(
             sampledImages, sampler, constantBuffer
@@ -381,6 +381,16 @@ namespace {
         mako::backend::detail::patchLs1StorageImageFormat(
             spirv, storageImageFormat
         );
+        mako::backend::detail::validateSpirvComputeShader(
+            spirv,
+            {
+                .sampledImages = sampledImages,
+                .storageImages = 1,
+                .uniformBuffers = constantBuffer ? 1U : 0U,
+                .samplers = sampler ? 1U : 0U,
+            },
+            "translated LS1 resource " + sourceName
+        );
         return spirv;
     }
 
@@ -395,49 +405,28 @@ namespace {
     }
 
     std::string shaderCacheKey(
-            const std::filesystem::path& shaderDllPath,
+            const mako::backend::DllResourceArchive& archive,
             const mako::backend::Ls1Mode mode,
             const uint32_t variant) {
-        std::error_code error;
-        auto normalized = std::filesystem::weakly_canonical(
-            shaderDllPath, error
-        );
-        if (error) {
-            error.clear();
-            normalized = std::filesystem::absolute(shaderDllPath, error);
-            if (error)
-                normalized = shaderDllPath;
-        }
-
-        error.clear();
-        const auto size = std::filesystem::file_size(shaderDllPath, error);
-        const auto stableSize = error ? uintmax_t{0} : size;
-        error.clear();
-        const auto modified = std::filesystem::last_write_time(
-            shaderDllPath, error
-        );
-        const auto stableModified = error
-            ? int64_t{0}
-            : static_cast<int64_t>(modified.time_since_epoch().count());
-        return normalized.string() + '|' +
+        return archive.fileSha256 + '|' +
             std::to_string(static_cast<uint8_t>(mode)) + '|' +
-            std::to_string(variant) + '|' + std::to_string(stableSize) + '|' +
-            std::to_string(stableModified);
+            std::to_string(variant);
     }
 
     mako::backend::Ls1ShaderSet loadUncached(
             const std::filesystem::path& shaderDllPath,
+            const mako::backend::DllResourceArchive& archive,
             const mako::backend::Ls1Mode mode,
             const uint32_t variant) {
-        const auto resources = mako::backend::extractResourcesFromDLL(
-            shaderDllPath
-        );
+        const auto& resources = archive.resources;
         const auto translator = loadTranslator(shaderDllPath);
 
         mako::backend::Ls1ShaderSet result{
             .mode = mode,
             .modelVariant = variant,
             .translator = translator.path,
+            .dllSha256 = archive.fileSha256,
+            .resourceLayoutSha256 = archive.resourceLayoutSha256,
         };
         if (mode == mako::backend::Ls1Mode::Performance) {
             const uint32_t stage1Id = 141 + variant;
@@ -476,20 +465,22 @@ mako::backend::Ls1ShaderSet mako::backend::loadLs1ShaderSet(
         throw ls::error("LS1 sharpness must be between zero and one");
 
     const uint32_t variant = static_cast<uint32_t>(std::lround(sharpness * 4.0F));
-    const auto key = shaderCacheKey(shaderDllPath, mode, variant);
+    const auto archive = loadDllResourceArchive(shaderDllPath);
+    const auto key = shaderCacheKey(*archive, mode, variant);
 
     // Translation is a swapchain-setup operation, never a frame-path
     // operation. Cache the Vulkan-ready payloads in process memory so
     // swapchain recreation and multiple swapchains do not repeatedly parse
     // the licensed DLL or invoke the translator. File identity remains in the
-    // key so a replaced DLL cannot reuse stale shaders.
+    // key so a replaced DLL cannot reuse stale shaders. The archive cache also
+    // tracks inode, size, mtime, and ctime, while the shader key uses content.
     static std::mutex cacheMutex;
     static std::unordered_map<std::string, Ls1ShaderSet> cache;
     const std::scoped_lock lock(cacheMutex);
     if (const auto found = cache.find(key); found != cache.end())
         return found->second;
 
-    auto result = loadUncached(shaderDllPath, mode, variant);
+    auto result = loadUncached(shaderDllPath, *archive, mode, variant);
     cache.emplace(key, result);
     return result;
 }

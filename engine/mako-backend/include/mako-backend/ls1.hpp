@@ -25,6 +25,8 @@ namespace mako::backend {
         std::vector<uint8_t> stage3;
         std::vector<uint8_t> reconstruction;
         std::string translator;
+        std::string dllSha256;
+        std::string resourceLayoutSha256;
     };
 
     /// Extract one LS1 model from a user-supplied Lossless.dll and translate

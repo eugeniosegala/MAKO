@@ -5,7 +5,7 @@
   "SCALING_ENABLED_WARNING": "Deixe o redimensionamento desativado quando não precisar dele, pois ele consome recursos.",
   "SCALING_METHOD": "Método de redimensionamento",
   "SCALING_METHOD_DESC": "Escolha o modelo de redimensionamento. Você pode alterá-lo enquanto o jogo está em execução.",
-  "SCALING_METHOD_COMPARISON_TIP": "Como a escala funciona:\n1. No Steam, defina a resolução do jogo para a resolução nativa ou mais alta da sua tela. No Steam Deck, use 1280 × 800. No Steam Machine, defina a resolução máxima do jogo para a resolução nativa da sua TV ou monitor, por exemplo 3840 × 2160 para 4K.\n2. No jogo, escolha uma resolução menor, como 720p ou menos. Menos pixels podem melhorar o desempenho.\n3. Use um fator de escala acima de 1x. O MAKO amplia a imagem para a sua tela, sacrificando alguns detalhes por esse desempenho.",
+  "SCALING_METHOD_COMPARISON_TIP": "Como a escala funciona:\n1. No Steam, defina a resolução do jogo para a resolução máxima da tela (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. No jogo, escolha uma resolução menor, como 480p ou 720p.\n3. Use um fator de escala para ampliar a imagem; 2x é um bom ponto de partida.\n\nIsso reduz a resolução que o jogo renderiza e depois a amplia para a resolução da tela. Pode melhorar muito o desempenho, com uma troca na qualidade da imagem. Como alternativa, se a tela oferecer suporte, use o MAKO para escalar de 2K para 4K.",
   "SCALING_METHOD_NATIVE": "Resolução nativa",
   "SCALING_METHOD_MAKO": "Redimensionador MAKO",
   "SCALING_METHOD_LS1": "LS1 Quality",

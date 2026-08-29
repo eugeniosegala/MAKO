@@ -195,9 +195,10 @@ describe("Scaling controls", () => {
         )
         .closest('[data-tone="info"]'),
     ).toBeTruthy();
-    expect(
-      screen.getByText(/Steam Machine, set Maximum Game Resolution/),
-    ).toBeTruthy();
+    expect(screen.getByText(/Steam Machine: 3840 × 2160 \/ 4K/)).toBeTruthy();
+    expect(screen.getByText(/480p or 720p/)).toBeTruthy();
+    expect(screen.getByText(/2x is a good starting point/)).toBeTruthy();
+    expect(screen.getByText(/scale from 2K to 4K/)).toBeTruthy();
 
     rerender(
       <ScalingControl

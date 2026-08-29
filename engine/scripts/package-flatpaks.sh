@@ -67,7 +67,7 @@ if [[ "$(uname -s)" != "Linux" ]]; then
         '
 fi
 
-for command in flatpak flatpak-builder strings tar; do
+for command in flatpak flatpak-builder nm strings tar; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         exit 1
@@ -81,6 +81,22 @@ verify_elf_class() {
     actual="$(od -An -t u1 -j 4 -N 1 "$path" | tr -d '[:space:]')"
     if [[ "$actual" != "$expected" ]]; then
         echo "Flatpak packaging failed: $path has unexpected ELF class byte $actual" >&2
+        exit 1
+    fi
+}
+
+verify_relay_contract() {
+    local layer_binary="$1"
+    local relay_contract_symbol="makoSpatialScalingLookupFixedContract"
+    local exported_symbols
+    exported_symbols="$(nm -D --defined-only "$layer_binary" | awk '{print $3}')"
+    if [[ "$layer_binary" == *libmako-render-scaling.so ]]; then
+        if ! grep -Fxq "$relay_contract_symbol" <<< "$exported_symbols"; then
+            echo "Flatpak packaging failed: spatial capability relay entrypoint is missing from $layer_binary" >&2
+            exit 1
+        fi
+    elif grep -Fxq "$relay_contract_symbol" <<< "$exported_symbols"; then
+        echo "Flatpak packaging failed: spatial capability relay entrypoint leaked into $layer_binary" >&2
         exit 1
     fi
 }
@@ -177,6 +193,7 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
             "$build_dir/files/lib64/libmako-render-scaling.so" \
             "$build_dir/files/lib/i386-linux-gnu/libmako-render.so" \
             "$build_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so"; do
+        verify_relay_contract "$layer_binary"
         expected_identity="VK_LAYER_MAKO_render"
         if [[ "$layer_binary" == *libmako-render-scaling.so ]]; then
             expected_identity="VK_LAYER_MAKO_spatial_scaling"
@@ -292,6 +309,7 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
             "$deployed_dir/files/lib64/libmako-render-scaling.so" \
             "$deployed_dir/files/lib/i386-linux-gnu/libmako-render.so" \
             "$deployed_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so"; do
+        verify_relay_contract "$layer_binary"
         expected_identity="VK_LAYER_MAKO_render"
         if [[ "$layer_binary" == *libmako-render-scaling.so ]]; then
             expected_identity="VK_LAYER_MAKO_spatial_scaling"

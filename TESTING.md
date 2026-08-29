@@ -32,6 +32,7 @@ The `Tests` workflow runs on every pull request and push to `main`:
 - MAKO Decky Python tests, frontend behavior and coverage, type checking, localization/configuration freshness, and production bundle;
 - MAKO Renderer CTest with GCC and Clang, including the optional Qt UI and localization contract;
 - portable Renderer scheduling, frame-plan, presentation, scaling, transition, profile, and colour boundaries under ASan and UBSan;
+- synthetic unlicensed PE/DXBC/SPIR-V inspection, fingerprint invalidation, per-model capability isolation, and harmless-extension acceptance;
 - trace-producer staging, sanitization, metadata, checksums, containment, rollback, and no-clobber behavior on Linux and macOS;
 - protected-input rejection for licensed model content and disguised binary, shader, dump, or archive payloads; and
 - Markdown formatting.

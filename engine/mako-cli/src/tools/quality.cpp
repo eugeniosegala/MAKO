@@ -829,7 +829,10 @@ int quality::runSpatial(const SpatialOptions& opts) {
             << "  GPU: " << selectedGpu << '\n';
         if (ls::licensedScalingModelRequested(*method)) {
             std::cout << "  LS1 model variant: " << scaler.ls1ModelVariant() << '\n'
-                << "  LS1 translator: " << scaler.ls1Translator() << '\n';
+                << "  LS1 translator: " << scaler.ls1Translator() << '\n'
+                << "  DLL SHA-256: " << scaler.ls1DllSha256() << '\n'
+                << "  resource-layout SHA-256: "
+                << scaler.ls1ResourceLayoutSha256() << '\n';
         }
         printMetrics(metrics, thresholds);
 
@@ -996,7 +999,10 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         std::cout << '\n';
         if (ls::licensedScalingModelRequested(*method)) {
             std::cout << "  LS1 model variant: " << scaler.ls1ModelVariant() << '\n'
-                << "  LS1 translator: " << scaler.ls1Translator() << '\n';
+                << "  LS1 translator: " << scaler.ls1Translator() << '\n'
+                << "  DLL SHA-256: " << scaler.ls1DllSha256() << '\n'
+                << "  resource-layout SHA-256: "
+                << scaler.ls1ResourceLayoutSha256() << '\n';
         }
         return EXIT_SUCCESS;
     } catch (const std::exception& error) {
@@ -1209,7 +1215,10 @@ int quality::runCombined(const CombinedOptions& opts) {
             << "  GPU: " << selectedGpu << '\n';
         if (ls::licensedScalingModelRequested(*method)) {
             std::cout << "  LS1 model variant: " << scaler.ls1ModelVariant() << '\n'
-                << "  LS1 translator: " << scaler.ls1Translator() << '\n';
+                << "  LS1 translator: " << scaler.ls1Translator() << '\n'
+                << "  DLL SHA-256: " << scaler.ls1DllSha256() << '\n'
+                << "  resource-layout SHA-256: "
+                << scaler.ls1ResourceLayoutSha256() << '\n';
         }
         printMetrics(metrics, thresholds);
 

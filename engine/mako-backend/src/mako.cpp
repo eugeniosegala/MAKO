@@ -279,19 +279,27 @@ namespace {
     ShaderRegistry createShaderRegistry(vk::Vulkan& vk,
             const std::filesystem::path& shaderDllPath,
             bool allowLowPrecision) {
-        std::unordered_map<uint32_t, std::vector<uint8_t>> resources{};
+        std::shared_ptr<const backend::DllResourceArchive> archive;
 
         try {
-            resources = backend::extractResourcesFromDLL(shaderDllPath);
+            archive = backend::loadDllResourceArchive(shaderDllPath);
         } catch (const std::exception& e) {
             throw backend::error("Unable to parse Lossless Scaling DLL", e);
         }
 
         try {
-            return backend::buildShaderRegistry(
-                vk, allowLowPrecision && vk.supportsFP16(),
-                resources
+            const bool fp16 = allowLowPrecision && vk.supportsFP16();
+            auto registry = backend::buildShaderRegistry(
+                vk, fp16, archive->resources
             );
+            std::clog << "MAKO Renderer: model DLL inspected: component=lsfg"
+                      << "; dll_sha256=" << archive->fileSha256
+                      << "; resource_layout_sha256="
+                      << archive->resourceLayoutSha256
+                      << "; resource_count=" << archive->resources.size()
+                      << "; precision=" << (fp16 ? "fp16" : "fp32")
+                      << "; compatibility=structural-and-vulkan" << '\n';
+            return registry;
         } catch (const std::exception& e) {
             throw backend::error("Unable to build shader registry", e);
         }

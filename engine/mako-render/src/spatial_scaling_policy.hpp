@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstdint>
 #include <optional>
+#include <utility>
 
 #include <vulkan/vulkan_core.h>
 
@@ -57,6 +58,51 @@ namespace mako::layer {
         float factor{1.0F};
         uint64_t policyRevision{0};
         uint64_t queryGeneration{0};
+    };
+
+    /// One capability contract published by the lower spatial-scaling DSO
+    /// while an upper split-role query is on the same thread. Gamescope WSI
+    /// may replace VkSurfaceKHR between the two layers, so the cross-DSO relay
+    /// deliberately records (but does not match on) the lower surface. Exact
+    /// surface matching remains mandatory in the lower role's create-time
+    /// contract map.
+    struct FixedSurfaceCapabilityRelayRecord {
+        VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+        VkSurfaceKHR lowerSurface{VK_NULL_HANDLE};
+        FixedSurfaceScalingContract contract{};
+    };
+
+    /// Same-thread, one-shot slot used only to hand a capability-query result
+    /// from the lower split-role DSO back to the upper DSO that bracketed that
+    /// query. Beginning a query clears stale state, and every consume attempt
+    /// clears the slot even when the physical device does not match.
+    class FixedSurfaceCapabilityRelaySlot {
+    public:
+        void begin() noexcept {
+            record_.reset();
+        }
+
+        void publish(
+                const VkPhysicalDevice physicalDevice,
+                const VkSurfaceKHR lowerSurface,
+                const FixedSurfaceScalingContract& contract) noexcept {
+            record_ = FixedSurfaceCapabilityRelayRecord{
+                .physicalDevice = physicalDevice,
+                .lowerSurface = lowerSurface,
+                .contract = contract,
+            };
+        }
+
+        [[nodiscard]] std::optional<FixedSurfaceCapabilityRelayRecord> consume(
+                const VkPhysicalDevice physicalDevice) noexcept {
+            auto record = std::exchange(record_, std::nullopt);
+            if (!record || record->physicalDevice != physicalDevice)
+                return std::nullopt;
+            return record;
+        }
+
+    private:
+        std::optional<FixedSurfaceCapabilityRelayRecord> record_;
     };
 
     enum class SpatialScalingInactiveReason {
@@ -145,6 +191,29 @@ namespace mako::layer {
     [[nodiscard]] constexpr bool sameExtent(
             const VkExtent2D left, const VkExtent2D right) noexcept {
         return left.width == right.width && left.height == right.height;
+    }
+
+    /// The upper role in a split chain may receive either the lower role's
+    /// virtual source extent or a native extent restored by the intervening
+    /// WSI layer. Normalize the former back to the lower contract's
+    /// presentation extent before applying the upper relay policy; this keeps
+    /// a shared capability from being scaled twice while still restoring a
+    /// source extent that WSI replaced with native dimensions.
+    [[nodiscard]] constexpr bool prepareFixedSurfaceCapabilityRelay(
+            VkSurfaceCapabilitiesKHR& capabilities,
+            const FixedSurfaceScalingContract& lowerContract) noexcept {
+        if (sameExtent(
+                capabilities.currentExtent, lowerContract.extents.presentation
+            )) {
+            return true;
+        }
+        if (!sameExtent(
+                capabilities.currentExtent, lowerContract.extents.source
+            )) {
+            return false;
+        }
+        capabilities.currentExtent = lowerContract.extents.presentation;
+        return true;
     }
 
     [[nodiscard]] constexpr bool fixedSurfaceExtent(

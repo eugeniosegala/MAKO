@@ -2,6 +2,7 @@
 
 #include "spatial_scaler.hpp"
 
+#include "mako-backend/dll_inspection.hpp"
 #include "mako-backend/ls1.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/pointers.hpp"
@@ -595,6 +596,20 @@ public:
         presentationSize(presentationExtent),
         requested(requested),
         active(requested) {
+        // The spatial role is constructed at the scaling-engine startup
+        // boundary, while model selection remains live. Prime the immutable
+        // DLL archive here so the first later LS1 selection does not place
+        // file hashing and structural inspection inside vkQueuePresentKHR.
+        // Native Resolution and MAKO do not depend on the licensed input, so
+        // a missing or incompatible DLL must not prevent their construction.
+        if (shaderDllPath && !ls::licensedScalingModelRequested(requested)) {
+            try {
+                static_cast<void>(
+                    mako::backend::inspectLosslessDll(*shaderDllPath)
+                );
+            } catch (const std::exception&) {
+            }
+        }
         if (requested == ls::ScalingMethod::Native) {
             this->pipeline = std::make_unique<NativeResolutionPipeline>(
                 vk, sourceExtent, presentationExtent, workingFormat
@@ -614,6 +629,8 @@ public:
                     *shaderDllPath, mode, sharpness
                 );
                 this->translatorPath = payloads.translator;
+                this->dllSha256 = payloads.dllSha256;
+                this->resourceLayoutSha256 = payloads.resourceLayoutSha256;
                 this->pipeline = std::make_unique<Ls1Pipeline>(
                     vk, sourceExtent, presentationExtent, payloads
                 );
@@ -634,6 +651,8 @@ public:
     ls::ScalingMethod active{ls::ScalingMethod::Mako};
     std::string fallback;
     std::string translatorPath;
+    std::string dllSha256;
+    std::string resourceLayoutSha256;
     std::unique_ptr<Pipeline> pipeline;
 };
 
@@ -679,6 +698,14 @@ uint32_t SpatialScaler::ls1ModelVariant() const {
 
 std::string_view SpatialScaler::ls1Translator() const {
     return this->implementation->translatorPath;
+}
+
+std::string_view SpatialScaler::ls1DllSha256() const {
+    return this->implementation->dllSha256;
+}
+
+std::string_view SpatialScaler::ls1ResourceLayoutSha256() const {
+    return this->implementation->resourceLayoutSha256;
 }
 
 void SpatialScaler::record(const vk::Vulkan& vk,

@@ -676,10 +676,12 @@ ConfigurationUpdateResult Root::update() {
     }
 
     if (this->active_profile) {
+        const auto contextProfile =
+            profileForLayerContext(*this->active_profile);
         for (auto& [swapchain, context] : this->swapchains) {
             static_cast<void>(swapchain);
             const auto update = context.updateProfile(
-                *this->active_profile, this->runtimeStateRevision
+                contextProfile, this->runtimeStateRevision
             );
             if (update.action == ProfileUpdateAction::ApplyLive)
                 result.liveContextsUpdated++;
@@ -843,7 +845,16 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     const uint64_t presentationPixelBudget =
         variablePresentationPixelBudget(memoryProperties);
 
-    const auto policySnapshot = this->surfaceScalingPolicySnapshot();
+    auto policySnapshot = this->surfaceScalingPolicySnapshot();
+    const bool spatialCapabilityRelay =
+        spatialScalingCapabilityRelayByLayer();
+    if (spatialCapabilityRelay) {
+        // The upper role returns a virtual fixed extent to the application,
+        // but only the lower role may turn that source request back into a
+        // presentation-sized swapchain and allocate a scaler. Forward the
+        // application's request through Gamescope WSI unchanged.
+        policySnapshot.policy.enabled = false;
+    }
     const auto scalingDecision = scalingDecisionForCreate(
         policySnapshot.policy,
         policySnapshot.processSupported,
@@ -933,7 +944,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                     ? SpatialScalingInactiveReason::QueueCommandsUnsupported
                     : SpatialScalingInactiveReason::SwapchainFormatUnsupported));
     }
-    if (this->active_profile->scaling_enabled) {
+    if (this->active_profile->scaling_enabled &&
+            spatialScalingOwnedByLayer()) {
         const auto advertised = scalingDecision.fixedContract;
         std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
                   << "role=" << layerRoleName
@@ -1014,6 +1026,16 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         }
     }
 
+    if (spatialCapabilityRelay &&
+            ls::spatialScalingRequested(*this->active_profile)) {
+        std::cerr << "MAKO Renderer: spatial scaling capability relay: "
+                  << "role=" << layerRoleName
+                  << "; requested=" << modification.applicationExtent.width
+                  << 'x' << modification.applicationExtent.height
+                  << "; action=forward-unchanged"
+                  << "; ownership=lower-spatial-role\n";
+    }
+
     if (shouldRejectUnmatchedFixedSpatialCreate(
             fixedVirtualSourceRequest, scalingExtents.has_value())) {
         throw ls::vulkan_error(
@@ -1046,8 +1068,9 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         );
     }
 
+    const auto contextProfile = profileForLayerContext(*this->active_profile);
     modification.privateOrderedTransport = context_ModifySwapchainCreateInfo(
-        *this->active_profile,
+        contextProfile,
         caps.maxImageCount,
         createInfo,
         this->gamescopeHdrActive.value_or(false),
@@ -1099,7 +1122,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
         const bool swapchainMaintenance1Enabled) {
     if (!this->active_profile.has_value())
         throw ls::error("attempted to create swapchain context while layer is inactive");
-    const auto& profile = *this->active_profile;
+    const auto profile = profileForLayerContext(*this->active_profile);
     const auto& global = this->config.get().global();
 
     std::optional<std::filesystem::path> scalingShaderDll;

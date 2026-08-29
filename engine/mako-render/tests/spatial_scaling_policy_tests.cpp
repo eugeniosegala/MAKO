@@ -216,6 +216,62 @@ int main() {
         .policyRevision = 7,
         .queryGeneration = 11,
     };
+    FixedSurfaceCapabilityRelaySlot capabilityRelay;
+    const auto lowerPhysicalDevice = reinterpret_cast<VkPhysicalDevice>(0x1);
+    const auto otherPhysicalDevice = reinterpret_cast<VkPhysicalDevice>(0x2);
+    const auto lowerSurface = reinterpret_cast<VkSurfaceKHR>(0x10);
+    const auto aliasedUpperSurface = reinterpret_cast<VkSurfaceKHR>(0x20);
+    static_cast<void>(aliasedUpperSurface);
+    capabilityRelay.begin();
+    capabilityRelay.publish(
+        lowerPhysicalDevice, lowerSurface, fixedContract
+    );
+    const auto relayedAcrossAliasedSurface = capabilityRelay.consume(
+        lowerPhysicalDevice
+    );
+    expect(relayedAcrossAliasedSurface &&
+            lowerSurface != aliasedUpperSurface &&
+            relayedAcrossAliasedSurface->lowerSurface == lowerSurface &&
+            relayedAcrossAliasedSurface->contract.queryGeneration == 11,
+        "A bracketed capability relay must preserve the lower contract when Gamescope aliases the upper surface handle");
+    expect(!capabilityRelay.consume(lowerPhysicalDevice),
+        "A capability relay contract must be consumable exactly once");
+    capabilityRelay.publish(
+        lowerPhysicalDevice, lowerSurface, fixedContract
+    );
+    expect(!capabilityRelay.consume(otherPhysicalDevice) &&
+            !capabilityRelay.consume(lowerPhysicalDevice),
+        "A physical-device mismatch must fail closed and clear the capability relay");
+    capabilityRelay.publish(
+        lowerPhysicalDevice, lowerSurface, fixedContract
+    );
+    capabilityRelay.begin();
+    expect(!capabilityRelay.consume(lowerPhysicalDevice),
+        "Beginning a capability query must clear any stale relay contract");
+    auto relayedSourceCapabilities = real;
+    relayedSourceCapabilities.currentExtent = fixedContract.extents.source;
+    expect(prepareFixedSurfaceCapabilityRelay(
+            relayedSourceCapabilities, fixedContract
+        ) && sameExtent(
+            relayedSourceCapabilities.currentExtent,
+            fixedContract.extents.presentation
+        ),
+        "a split relay must restore an already-virtualized capability only "
+        "for its upper policy calculation");
+    auto restoredNativeCapabilities = real;
+    expect(prepareFixedSurfaceCapabilityRelay(
+            restoredNativeCapabilities, fixedContract
+        ) && sameExtent(
+            restoredNativeCapabilities.currentExtent,
+            fixedContract.extents.presentation
+        ),
+        "a split relay must preserve a WSI-restored native capability");
+    auto unrelatedRelayCapabilities = real;
+    unrelatedRelayCapabilities.currentExtent = {1600, 900};
+    expect(!prepareFixedSurfaceCapabilityRelay(
+            unrelatedRelayCapabilities, fixedContract
+        ),
+        "a split relay must fail closed for an extent outside the lower contract");
     const auto matchingFixed = scalingDecisionForCreate(
         profile, true, 7, real, {1280, 720}, std::nullopt, fixedContract
     );

@@ -7,6 +7,7 @@ target_include_directories(mako-cli-support
 set(CLI_SOURCES
     "src/tools/benchmark.cpp"
     "src/tools/debug.cpp"
+    "src/tools/inspect_dll.cpp"
     "src/tools/quality.cpp"
     "src/tools/validate.cpp"
     "src/main.cpp")

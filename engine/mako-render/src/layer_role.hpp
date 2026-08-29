@@ -48,13 +48,25 @@ namespace mako::layer {
 
     /// Direct Renderer launches retain combined frame-generation and spatial
     /// ownership. In Decky's split chain, only the dedicated lower role owns
-    /// spatial capability contracts; the upper frame-generation role must
-    /// forward the virtual source extent advertised by that lower role.
+    /// spatial reconstruction and create-time contracts. The upper
+    /// frame-generation role relays fixed-surface capability virtualization
+    /// back through Gamescope WSI, which may otherwise restore the native
+    /// extent before Proton or a game observes it.
     [[nodiscard]] inline bool spatialScalingOwnedByLayer() {
         if constexpr (spatialScalingLayer)
             return true;
 
         return !splitLayerChainEnabled();
+    }
+
+    /// The upper split role needs scaling configuration only to relay the
+    /// lower role's virtual source extent. It must not create a scaler, alter
+    /// a swapchain, or reserve spatial retirement resources itself.
+    [[nodiscard]] inline bool spatialScalingCapabilityRelayByLayer() {
+        if constexpr (spatialScalingLayer)
+            return false;
+
+        return splitLayerChainEnabled();
     }
 
     [[nodiscard]] inline bool shouldRejectUnmatchedFixedSpatialCreate(
@@ -64,11 +76,10 @@ namespace mako::layer {
             !scalingExtentsSelected;
     }
 
-    /// Project the shared user profile onto one layer's isolated ownership.
-    /// The upper layer owns only frame generation; the lower layer owns only
-    /// spatial reconstruction. Keeping unrelated settings canonical prevents
-    /// either copy from allocating resources or reacting to live changes that
-    /// belong to the other side of Gamescope WSI.
+    /// Preserve the process profile used for capability queries and
+    /// process-static policy. The upper split role retains scaling fields
+    /// solely for its capability relay; its swapchain contexts receive the
+    /// masked projection below.
     [[nodiscard]] inline ls::GameConf profileForLayer(
             ls::GameConf profile) {
         if constexpr (spatialScalingLayer) {
@@ -94,7 +105,17 @@ namespace mako::layer {
             profile.flow_scale = ls::GameConfDefaults::flowScale;
             profile.performance_mode = ls::GameConfDefaults::performanceMode;
             profile.pacing = ls::GameConfDefaults::pacing;
-        } else if (splitLayerChainEnabled()) {
+        }
+        return profile;
+    }
+
+    /// Project a process profile onto the resources that this role is allowed
+    /// to own. This keeps the upper split role's capability relay allocation
+    /// free while the lower role remains the sole owner of spatial resources
+    /// and private live-scaler transitions.
+    [[nodiscard]] inline ls::GameConf profileForLayerContext(
+            ls::GameConf profile) {
+        if (spatialScalingCapabilityRelayByLayer()) {
             profile.scaling_enabled = false;
             profile.scaling_method = ls::ScalingMethod::Native;
             profile.scaling_factor = ls::GameConfDefaults::scalingFactor;

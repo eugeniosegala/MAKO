@@ -274,6 +274,13 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         std::cerr << "; ls1_translator="
                   << (this->spatialScaler->ls1Translator().empty()
                       ? "none" : this->spatialScaler->ls1Translator())
+                  << "; ls1_dll_sha256="
+                  << (this->spatialScaler->ls1DllSha256().empty()
+                      ? "none" : this->spatialScaler->ls1DllSha256())
+                  << "; ls1_resource_layout_sha256="
+                  << (this->spatialScaler->ls1ResourceLayoutSha256().empty()
+                      ? "none"
+                      : this->spatialScaler->ls1ResourceLayoutSha256())
                   << "; working_format="
                   << static_cast<int>(this->colorPipeline.exchangeFormat)
                   << "; role=" << layerRoleName

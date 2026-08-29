@@ -14,6 +14,8 @@
 #include <atomic>
 #include <chrono>
 #include <cstring>
+#include <dlfcn.h>
+#include <link.h>
 #include <optional>
 #include <cstddef>
 #include <cstdint>
@@ -89,6 +91,15 @@ namespace {
         std::unordered_map<VkSwapchainKHR, RetiredSwapchain>
             retiredSwapchains;
     }* instance_info; // NOLINT (global variable)
+
+    enum class FixedSurfaceCapabilityRelayOperation : uint32_t {
+        Begin,
+        Consume,
+    };
+
+#if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
+    thread_local FixedSurfaceCapabilityRelaySlot fixedSurfaceCapabilityRelay;
+#endif
 
     bool initializeLayerInfo();
 
@@ -864,7 +875,172 @@ namespace {
     }
 }
 
+#if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
+// The split roles are separate DSOs, and Gamescope WSI may replace the surface
+// handle between them. Export only a same-thread, one-shot capability relay
+// from the lower spatial role. The upper role brackets one downstream query
+// and never gains resource or swapchain ownership.
+extern "C" __attribute__((visibility("default"))) VkBool32
+makoSpatialScalingLookupFixedContract(
+        const uint32_t rawOperation,
+        const VkPhysicalDevice physicalDevice,
+        VkSurfaceKHR* const lowerSurface,
+        VkExtent2D* const source,
+        VkExtent2D* const presentation,
+        float* const factor,
+        uint64_t* const policyRevision,
+        uint64_t* const queryGeneration) noexcept {
+    const auto operation = static_cast<FixedSurfaceCapabilityRelayOperation>(
+        rawOperation
+    );
+    if (operation == FixedSurfaceCapabilityRelayOperation::Begin) {
+        fixedSurfaceCapabilityRelay.begin();
+        return VK_TRUE;
+    }
+    if (operation != FixedSurfaceCapabilityRelayOperation::Consume ||
+            !lowerSurface || !source || !presentation || !factor ||
+            !policyRevision || !queryGeneration) {
+        fixedSurfaceCapabilityRelay.begin();
+        return VK_FALSE;
+    }
+
+    const auto record = fixedSurfaceCapabilityRelay.consume(physicalDevice);
+    if (!record)
+        return VK_FALSE;
+
+    *lowerSurface = record->lowerSurface;
+    *source = record->contract.extents.source;
+    *presentation = record->contract.extents.presentation;
+    *factor = record->contract.factor;
+    *policyRevision = record->contract.policyRevision;
+    *queryGeneration = record->contract.queryGeneration;
+    return VK_TRUE;
+}
+#endif
+
 namespace {
+    using LowerFixedSurfaceContractLookup = VkBool32 (*) (
+        uint32_t, VkPhysicalDevice, VkSurfaceKHR*, VkExtent2D*, VkExtent2D*,
+        float*, uint64_t*, uint64_t*
+    );
+
+    constexpr std::string_view lowerFixedSurfaceContractSymbol =
+        "makoSpatialScalingLookupFixedContract";
+    constexpr std::string_view lowerSpatialLayerLibrary =
+        "libmako-render-scaling.so";
+
+    struct LowerFixedSurfaceContractLookupState {
+        void* handle{nullptr};
+        LowerFixedSurfaceContractLookup lookup{nullptr};
+        VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+        bool armed{false};
+
+        LowerFixedSurfaceContractLookupState() = default;
+        LowerFixedSurfaceContractLookupState(
+            const LowerFixedSurfaceContractLookupState&
+        ) = delete;
+        LowerFixedSurfaceContractLookupState& operator=(
+            const LowerFixedSurfaceContractLookupState&
+        ) = delete;
+
+        ~LowerFixedSurfaceContractLookupState() {
+            reset();
+            if (handle)
+                dlclose(handle);
+        }
+
+        void reset() noexcept {
+            if (armed && lookup) {
+                static_cast<void>(lookup(
+                    static_cast<uint32_t>(
+                        FixedSurfaceCapabilityRelayOperation::Begin
+                    ),
+                    physicalDevice, nullptr, nullptr, nullptr, nullptr,
+                    nullptr, nullptr
+                ));
+            }
+            armed = false;
+        }
+
+        void begin(const VkPhysicalDevice requestedPhysicalDevice) noexcept {
+            physicalDevice = requestedPhysicalDevice;
+            if (!lookup)
+                return;
+            armed = lookup(
+                static_cast<uint32_t>(
+                    FixedSurfaceCapabilityRelayOperation::Begin
+                ),
+                physicalDevice, nullptr, nullptr, nullptr, nullptr, nullptr,
+                nullptr
+            ) == VK_TRUE;
+        }
+
+        [[nodiscard]] std::optional<FixedSurfaceCapabilityRelayRecord>
+        consume() noexcept {
+            if (!armed || !lookup)
+                return std::nullopt;
+
+            FixedSurfaceCapabilityRelayRecord record{
+                .physicalDevice = physicalDevice,
+            };
+            const VkBool32 found = lookup(
+                static_cast<uint32_t>(
+                    FixedSurfaceCapabilityRelayOperation::Consume
+                ),
+                physicalDevice, &record.lowerSurface,
+                &record.contract.extents.source,
+                &record.contract.extents.presentation,
+                &record.contract.factor, &record.contract.policyRevision,
+                &record.contract.queryGeneration
+            );
+            armed = false;
+            if (found != VK_TRUE)
+                return std::nullopt;
+            return record;
+        }
+    };
+
+    int findLowerFixedSurfaceContractLookup(
+            struct dl_phdr_info* const info, const size_t,
+            void* const rawState) {
+        auto& state = *static_cast<LowerFixedSurfaceContractLookupState*>(
+            rawState
+        );
+        const std::string_view libraryPath(
+            info && info->dlpi_name ? info->dlpi_name : ""
+        );
+        if (!libraryPath.ends_with(lowerSpatialLayerLibrary))
+            return 0;
+
+        void* const handle = dlopen(
+            libraryPath.data(), RTLD_NOW | RTLD_LOCAL | RTLD_NOLOAD
+        );
+        if (!handle)
+            return 0;
+        const auto lookup = reinterpret_cast<LowerFixedSurfaceContractLookup>(
+            dlsym(handle, lowerFixedSurfaceContractSymbol.data())
+        );
+        if (!lookup) {
+            dlclose(handle);
+            return 0;
+        }
+        state.handle = handle;
+        state.lookup = lookup;
+        return 1;
+    }
+
+    void beginLowerFixedSurfaceCapabilityRelay(
+            LowerFixedSurfaceContractLookupState& state,
+            const VkPhysicalDevice physicalDevice) {
+        if (!spatialScalingCapabilityRelayByLayer())
+            return;
+
+        dl_iterate_phdr(findLowerFixedSurfaceContractLookup, &state);
+        if (!state.lookup)
+            return;
+        state.begin(physicalDevice);
+    }
+
     struct SurfaceScalingEligibilityResult {
         bool supported{false};
         bool firstObservation{false};
@@ -1076,16 +1252,41 @@ namespace {
     void maybeVirtualizeSurfaceCapabilities(
             const VkPhysicalDevice physicalDevice,
             const VkSurfaceKHR surface,
-            VkSurfaceCapabilitiesKHR& capabilities) {
+            VkSurfaceCapabilitiesKHR& capabilities,
+            const std::optional<FixedSurfaceCapabilityRelayRecord>&
+                lowerRelay) {
         if (!layer_info || !instance_info) {
             return;
         }
         try {
             auto candidate = capabilities;
+            const auto relayInput = capabilities.currentExtent;
+            const FixedSurfaceScalingContract* const lowerContract =
+                lowerRelay ? &lowerRelay->contract : nullptr;
+            if (spatialScalingCapabilityRelayByLayer() &&
+                    (!lowerContract || !prepareFixedSurfaceCapabilityRelay(
+                        candidate, *lowerContract
+                    ))) {
+                clearFixedSurfaceScalingContract(physicalDevice, surface);
+                return;
+            }
             const auto selection =
                 layer_info->root.modifySurfaceCapabilities(candidate);
             if (!selection) {
                 clearFixedSurfaceScalingContract(physicalDevice, surface);
+                return;
+            }
+            if (lowerContract &&
+                    (!sameExtent(
+                        selection->extents.source,
+                        lowerContract->extents.source
+                    ) || !sameExtent(
+                        selection->extents.presentation,
+                        lowerContract->extents.presentation
+                    ) || selection->factor != lowerContract->factor)) {
+                clearFixedSurfaceScalingContract(physicalDevice, surface);
+                std::cerr << "MAKO Renderer: spatial scaling capability relay "
+                             "failed closed: reason=lower-contract-mismatch\n";
                 return;
             }
             const auto eligibility = supportsSpatialScalingSurface(
@@ -1110,30 +1311,35 @@ namespace {
                 return;
             }
             uint64_t queryGeneration{};
+            FixedSurfaceScalingContract publishedContract;
             {
                 const std::lock_guard lock(
                     instance_info->surfaceScalingMutex
                 );
                 queryGeneration =
                     instance_info->nextSurfaceScalingQueryGeneration++;
+                publishedContract = FixedSurfaceScalingContract{
+                    .extents = selection->extents,
+                    .factor = selection->factor,
+                    .policyRevision = selection->policyRevision,
+                    .queryGeneration = queryGeneration,
+                };
                 instance_info->fixedSurfaceScalingContracts[physicalDevice]
-                    .insert_or_assign(
-                        surface,
-                        FixedSurfaceScalingContract{
-                            .extents = selection->extents,
-                            .factor = selection->factor,
-                            .policyRevision = selection->policyRevision,
-                            .queryGeneration = queryGeneration,
-                        }
-                    );
+                    .insert_or_assign(surface, publishedContract);
             }
+#if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
+            fixedSurfaceCapabilityRelay.publish(
+                physicalDevice, surface, publishedContract
+            );
+#endif
             if (eligibility.firstObservation) {
                 std::cerr << "MAKO Renderer: spatial scaling surface virtualized: "
-                          << "source=" << candidate.currentExtent.width << 'x'
+                          << "role=" << layerRoleName
+                          << "; source=" << candidate.currentExtent.width << 'x'
                           << candidate.currentExtent.height
                           << "; presentation="
-                          << capabilities.currentExtent.width << 'x'
-                          << capabilities.currentExtent.height
+                          << selection->extents.presentation.width << 'x'
+                          << selection->extents.presentation.height
                           << "; policy_revision="
                           << selection->policyRevision
                           << "; query_generation=" << queryGeneration
@@ -1142,8 +1348,23 @@ namespace {
                           << "; advertised_formats="
                           << eligibility.advertisedFormatCount
                           << "; compatible_formats="
-                          << eligibility.compatibleFormatCount
-                          << '\n';
+                          << eligibility.compatibleFormatCount;
+                if (lowerContract) {
+                    std::cerr << "; relay_input=" << relayInput.width << 'x'
+                              << relayInput.height
+                              << "; relay_mode="
+                              << (sameExtent(
+                                      relayInput,
+                                      lowerContract->extents.source
+                                  )
+                                      ? "source-normalized"
+                                      : "presentation-preserved")
+                              << "; relay_surface_mode="
+                              << (lowerRelay->lowerSurface == surface
+                                      ? "shared"
+                                      : "aliased");
+                }
+                std::cerr << '\n';
             }
             capabilities = candidate;
         } catch (const std::exception& error) {
@@ -1160,13 +1381,18 @@ namespace {
         if (!instance_info ||
                 !instance_info->funcs.GetPhysicalDeviceSurfaceCapabilitiesKHR)
             return VK_ERROR_INITIALIZATION_FAILED;
+        LowerFixedSurfaceContractLookupState lowerRelayState;
+        beginLowerFixedSurfaceCapabilityRelay(
+            lowerRelayState, physicalDevice
+        );
         const auto result =
             instance_info->funcs.GetPhysicalDeviceSurfaceCapabilitiesKHR(
                 physicalDevice, surface, capabilities
             );
+        const auto lowerRelay = lowerRelayState.consume();
         if (result == VK_SUCCESS && capabilities) {
             maybeVirtualizeSurfaceCapabilities(
-                physicalDevice, surface, *capabilities
+                physicalDevice, surface, *capabilities, lowerRelay
             );
         } else {
             clearFixedSurfaceScalingContract(physicalDevice, surface);
@@ -1193,11 +1419,16 @@ namespace {
             );
             return VK_ERROR_EXTENSION_NOT_PRESENT;
         }
+        LowerFixedSurfaceContractLookupState lowerRelayState;
+        beginLowerFixedSurfaceCapabilityRelay(
+            lowerRelayState, physicalDevice
+        );
         const auto result = lower(physicalDevice, surfaceInfo, capabilities);
+        const auto lowerRelay = lowerRelayState.consume();
         if (result == VK_SUCCESS) {
             maybeVirtualizeSurfaceCapabilities(
                 physicalDevice, surfaceInfo->surface,
-                capabilities->surfaceCapabilities
+                capabilities->surfaceCapabilities, lowerRelay
             );
         } else {
             clearFixedSurfaceScalingContract(

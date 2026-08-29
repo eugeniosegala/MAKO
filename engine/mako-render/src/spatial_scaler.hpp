@@ -53,6 +53,8 @@ namespace mako::layer {
         [[nodiscard]] std::string_view fallbackReason() const;
         [[nodiscard]] uint32_t ls1ModelVariant() const;
         [[nodiscard]] std::string_view ls1Translator() const;
+        [[nodiscard]] std::string_view ls1DllSha256() const;
+        [[nodiscard]] std::string_view ls1ResourceLayoutSha256() const;
 
     private:
         class Implementation;

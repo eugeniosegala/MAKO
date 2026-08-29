@@ -2,10 +2,12 @@
 
 #include "shader_registry.hpp"
 #include "../shaders/color_conversion_spirv.hpp"
+#include "model_resource_validation.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/vulkan/shader.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <span>
@@ -20,17 +22,32 @@ namespace {
     /// get the source code for a shader
     const std::vector<uint8_t>& getShaderSource(uint32_t id, bool fp16, bool perf,
             const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources) {
-        const size_t BASE_OFFSET = 49;
-        const size_t OFFSET_PERF = 23;
-        const size_t OFFSET_FP32 = 49;
+        return mako::backend::detail::validatedLsfgResource(
+            resources, id, fp16, perf
+        );
+    }
 
-        auto it = resources.find(BASE_OFFSET + id +
-            (perf ? OFFSET_PERF : 0) +
-            (fp16 ? 0 : OFFSET_FP32));
-        if (it == resources.end())
-            throw ls::error("unable to find shader with id: " + std::to_string(id));
+    [[nodiscard]] const mako::backend::detail::LsfgShaderSpec& shaderSpec(
+            const uint32_t id, const bool perf) {
+        const auto specs = mako::backend::detail::lsfgShaderSpecs(perf);
+        const auto found = std::ranges::find(
+            specs, id, &mako::backend::detail::LsfgShaderSpec::logicalId
+        );
+        if (found == specs.end())
+            throw ls::error("unknown LSFG shader contract: " + std::to_string(id));
+        return *found;
+    }
 
-        return it->second;
+    [[nodiscard]] vk::Shader makeShader(
+            const vk::Vulkan& vk, const uint32_t id,
+            const bool fp16, const bool perf,
+            const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources) {
+        const auto& contract = shaderSpec(id, perf).contract;
+        return vk::Shader(
+            vk, getShaderSource(id, fp16, perf, resources),
+            contract.sampledImages, contract.storageImages,
+            contract.uniformBuffers, contract.samplers
+        );
     }
     /// patch the generate shader
     void patchGenerateShader(std::vector<uint8_t>& data, bool hdr) {
@@ -85,15 +102,21 @@ ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
     patchGenerateShader(generate_data_hdr, true);
 
     // load all other shaders
-#define SHADER(id, p1, p2, p3, p4) \
-    vk::Shader(vk, getShaderSource(id, fp16, PERF, resources), \
-        p1, p2, p3, p4)
+#define SHADER(id) makeShader(vk, id, fp16, PERF, resources)
 
     return {
 #define PERF false
-        .mipmaps = SHADER(255, 1, 7, 1, 1),
-        .generate = vk::Shader(vk, generate_data, 5, 1, 1, 2),
-        .generate_hdr = vk::Shader(vk, generate_data_hdr, 5, 1, 1, 2),
+        .mipmaps = SHADER(255),
+        .generate = vk::Shader(vk, generate_data,
+            shaderSpec(256, PERF).contract.sampledImages,
+            shaderSpec(256, PERF).contract.storageImages,
+            shaderSpec(256, PERF).contract.uniformBuffers,
+            shaderSpec(256, PERF).contract.samplers),
+        .generate_hdr = vk::Shader(vk, generate_data_hdr,
+            shaderSpec(256, PERF).contract.sampledImages,
+            shaderSpec(256, PERF).contract.storageImages,
+            shaderSpec(256, PERF).contract.uniformBuffers,
+            shaderSpec(256, PERF).contract.samplers),
         .hdr10_pq_to_scrgb = vk::Shader(
             vk, embedded::hdr10PqToScRgbSpirv, 1, 1, 0, 1
         ),
@@ -107,72 +130,40 @@ ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
                 : std::nullopt,
         .quality = {
             .alpha = {
-                SHADER(267, 1, 2, 0, 1),
-                SHADER(268, 2, 2, 0, 1),
-                SHADER(269, 2, 4, 0, 1),
-                SHADER(270, 4, 4, 0, 1)
+                SHADER(267), SHADER(268), SHADER(269), SHADER(270)
             },
             .beta = {
-                SHADER(275, 12, 2, 0, 1),
-                SHADER(276, 2, 2, 0, 1),
-                SHADER(277, 2, 2, 0, 1),
-                SHADER(278, 2, 2, 0, 1),
-                SHADER(279, 2, 6, 1, 1)
+                SHADER(275), SHADER(276), SHADER(277), SHADER(278),
+                SHADER(279)
             },
             .gamma = {
-                SHADER(257, 9, 3, 1, 2),
-                SHADER(259, 3, 4, 0, 1),
-                SHADER(260, 4, 4, 0, 1),
-                SHADER(261, 4, 4, 0, 1),
-                SHADER(262, 6, 1, 1, 2)
+                SHADER(257), SHADER(259), SHADER(260), SHADER(261),
+                SHADER(262)
             },
             .delta = {
-                SHADER(257, 9, 3, 1, 2),
-                SHADER(263, 3, 4, 0, 1),
-                SHADER(264, 4, 4, 0, 1),
-                SHADER(265, 4, 4, 0, 1),
-                SHADER(266, 6, 1, 1, 2),
-                SHADER(258, 10, 2, 1, 2),
-                SHADER(271, 2, 2, 0, 1),
-                SHADER(272, 2, 2, 0, 1),
-                SHADER(273, 2, 2, 0, 1),
-                SHADER(274, 3, 1, 1, 2)
+                SHADER(257), SHADER(263), SHADER(264), SHADER(265),
+                SHADER(266), SHADER(258), SHADER(271), SHADER(272),
+                SHADER(273), SHADER(274)
             }
         },
 #undef PERF
 #define PERF true
         .performance = {
             .alpha = {
-                SHADER(267, 1, 1, 0, 1),
-                SHADER(268, 1, 1, 0, 1),
-                SHADER(269, 1, 2, 0, 1),
-                SHADER(270, 2, 2, 0, 1)
+                SHADER(267), SHADER(268), SHADER(269), SHADER(270)
             },
             .beta = {
-                SHADER(275, 6, 2, 0, 1),
-                SHADER(276, 2, 2, 0, 1),
-                SHADER(277, 2, 2, 0, 1),
-                SHADER(278, 2, 2, 0, 1),
-                SHADER(279, 2, 6, 1, 1)
+                SHADER(275), SHADER(276), SHADER(277), SHADER(278),
+                SHADER(279)
             },
             .gamma = {
-                SHADER(257, 5, 3, 1, 2),
-                SHADER(259, 3, 2, 0, 1),
-                SHADER(260, 2, 2, 0, 1),
-                SHADER(261, 2, 2, 0, 1),
-                SHADER(262, 4, 1, 1, 2)
+                SHADER(257), SHADER(259), SHADER(260), SHADER(261),
+                SHADER(262)
             },
             .delta = {
-                SHADER(257, 5, 3, 1, 2),
-                SHADER(263, 3, 2, 0, 1),
-                SHADER(264, 2, 2, 0, 1),
-                SHADER(265, 2, 2, 0, 1),
-                SHADER(266, 4, 1, 1, 2),
-                SHADER(258, 6, 1, 1, 2),
-                SHADER(271, 1, 1, 0, 1),
-                SHADER(272, 1, 1, 0, 1),
-                SHADER(273, 1, 1, 0, 1),
-                SHADER(274, 2, 1, 1, 2)
+                SHADER(257), SHADER(263), SHADER(264), SHADER(265),
+                SHADER(266), SHADER(258), SHADER(271), SHADER(272),
+                SHADER(273), SHADER(274)
             }
         },
 #undef PERF

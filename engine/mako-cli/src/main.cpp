@@ -4,6 +4,7 @@
 #include "i18n.hpp"
 #include "tools/benchmark.hpp"
 #include "tools/debug.hpp"
+#include "tools/inspect_dll.hpp"
 #include "tools/quality.hpp"
 #include "tools/validate.hpp"
 
@@ -63,6 +64,7 @@ COMMANDS:
     validate    Validate a configuration file
     benchmark   Run a benchmark
     debug       Run mako on a set of images
+    inspect-dll Inspect and fingerprint licensed model-resource compatibility
     quality-regression
                 Run a procedural LSFG image-quality regression
     spatial-quality-regression
@@ -88,6 +90,9 @@ SUBCOMMAND OPTIONS:
         -m, --multiplier <INT>          Multiplier
         -p, --performance-mode          Use performance mode
         -g, --gpu <STRING>              GPU to use
+
+    inspect-dll
+        -d, --dll <PATH>                Path to Lossless.dll
 
     benchmark
         -t, --duration <SECONDS>        Benchmark duration in seconds
@@ -178,6 +183,33 @@ SUBCOMMAND OPTIONS:
         }
 
         std::exit(validate::run(opts, language));
+    }
+
+    [[noreturn]] void on_inspect_dll(
+            int argc, char** argv, const std::string& program) {
+        inspect_dll::Options opts{};
+        const std::array<option, 2> GETOPT {{
+            { "dll", required_argument, nullptr, 'd' },
+            { nullptr, no_argument, nullptr, 0 }
+        }};
+        int option{0};
+        while ((option = getopt_long(
+                argc, argv, "d:", GETOPT.data(), nullptr)) != -1) {
+            switch (option) {
+                case 'd':
+                    opts.dll = optarg;
+                    break;
+                case '?':
+                default:
+                    usage(program);
+                    std::exit(EXIT_FAILURE);
+            }
+        }
+        if (optind < argc || opts.dll.empty()) {
+            usage(program);
+            std::exit(EXIT_FAILURE);
+        }
+        std::exit(inspect_dll::run(opts));
     }
 
     /// parse the benchmark command options
@@ -653,6 +685,8 @@ int main(int argc, char** argv) {
 
     if (command == "validate")
         on_validate(command_argc, command_argv, global.language, program);
+    else if (command == "inspect-dll")
+        on_inspect_dll(command_argc, command_argv, program);
     else if (command == "benchmark")
         on_benchmark(command_argc, command_argv, global.language, program);
     else if (command == "debug")

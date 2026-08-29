@@ -101,7 +101,7 @@ export function ScalingControl({
                     <span style={{ whiteSpace: "pre-line" }}>
                       {t(
                         "SCALING_METHOD_COMPARISON_TIP",
-                        "How scaling works:\n1. In Steam, set Game Resolution to your display's native or highest resolution. On Steam Deck, use 1280 × 800. On Steam Machine, set Maximum Game Resolution to your TV or monitor's native resolution, for example 3840 × 2160 for 4K.\n2. Inside the game, choose a lower resolution, such as 720p or lower. Fewer pixels can improve performance.\n3. Use a Scale Factor above 1x. MAKO enlarges the image for your display, trading some detail for that performance.",
+                        "How scaling works:\n1. In Steam, set Game Resolution to your display's maximum resolution (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. In the game, choose a lower resolution, such as 480p or 720p.\n3. Use a Scale Factor to enlarge the image—2x is a good starting point.\n\nThis reduces the resolution the game renders, then scales it back to your display resolution. It can substantially improve performance, with an image-quality trade-off. Alternatively, if your display supports it, use MAKO to scale from 2K to 4K.",
                       )}
                     </span>
                   </MakoInlineTip>
