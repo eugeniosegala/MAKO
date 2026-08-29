@@ -195,6 +195,9 @@ describe("Scaling controls", () => {
         )
         .closest('[data-tone="info"]'),
     ).toBeTruthy();
+    expect(
+      screen.getByText(/Steam Machine, set Maximum Game Resolution/),
+    ).toBeTruthy();
 
     rerender(
       <ScalingControl

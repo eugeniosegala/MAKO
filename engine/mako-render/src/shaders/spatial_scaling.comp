@@ -3,7 +3,7 @@
 #version 450
 
 // MAKO's spatial reconstruction pass is deliberately independent from the
-// proprietary LS1 resources. It combines a clamped Catmull-Rom reconstruction
+// proprietary LS1 resources. It combines a clamped sharpened-cubic reconstruction
 // with contrast-aware anti-ringing and a bounded local sharpening term at a
 // twofold baseline, scaled by the profile multiplier, in one output-resolution
 // pass.
@@ -39,14 +39,18 @@ vec4 filteredSource(vec2 coordinate) {
     );
 }
 
-vec4 catmullRomWeights(float fraction) {
+vec4 sharpenedCubicWeights(float fraction) {
     float f2 = fraction * fraction;
     float f3 = f2 * fraction;
+    // Catmull-Rom uses a tension of 0.5. A higher tension establishes a
+    // crisper reconstruction before the separately configurable sharpening
+    // pass while the local clamp and anti-ringing logic below bound halos.
+    const float reconstructionTension = 0.8;
     return vec4(
-        -0.5 * fraction + f2 - 0.5 * f3,
-        1.0 - 2.5 * f2 + 1.5 * f3,
-        0.5 * fraction + 2.0 * f2 - 1.5 * f3,
-        -0.5 * f2 + 0.5 * f3
+        reconstructionTension * (-fraction + 2.0 * f2 - f3),
+        1.0 + (reconstructionTension - 3.0) * f2 + (2.0 - reconstructionTension) * f3,
+        reconstructionTension * fraction + (3.0 - 2.0 * reconstructionTension) * f2 + (reconstructionTension - 2.0) * f3,
+        reconstructionTension * (-f2 + f3)
     );
 }
 
@@ -61,10 +65,10 @@ void main() {
         parameters.sizes.xy / parameters.sizes.zw - vec2(0.5);
     ivec2 sourceBase = ivec2(floor(sourcePosition));
     vec2 fraction = fract(sourcePosition);
-    vec4 horizontalWeights = catmullRomWeights(fraction.x);
-    vec4 verticalWeights = catmullRomWeights(fraction.y);
+    vec4 horizontalWeights = sharpenedCubicWeights(fraction.x);
+    vec4 verticalWeights = sharpenedCubicWeights(fraction.y);
 
-    // The two positive inner Catmull-Rom lobes can be folded into one linear
+    // The two positive inner sharpened-cubic lobes can be folded into one linear
     // sample. The three resulting positions per axis produce the same
     // separable 4x4 reconstruction with nine filtered samples, without a
     // private vec4[16], dynamic indexing, or shader loops.

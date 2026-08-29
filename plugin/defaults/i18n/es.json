@@ -5,7 +5,7 @@
   "SCALING_ENABLED_WARNING": "Deja el escalado desactivado cuando no lo necesites, ya que consume recursos.",
   "SCALING_METHOD": "Método de escalado",
   "SCALING_METHOD_DESC": "Elige el modelo de escalado. Puedes cambiarlo mientras el juego está en ejecución.",
-  "SCALING_METHOD_COMPARISON_TIP": "Cómo funciona el escalado:\n1. En Steam, establece la resolución del juego en la resolución nativa o más alta de tu pantalla (Steam Deck: 1280 × 800).\n2. Dentro del juego, elige una resolución menor, como 720p o menos. Menos píxeles pueden mejorar el rendimiento.\n3. Usa un factor de escala superior a 1x. MAKO amplía la imagen para tu pantalla, intercambiando algo de detalle por ese rendimiento.",
+  "SCALING_METHOD_COMPARISON_TIP": "Cómo funciona el escalado:\n1. En Steam, establece la resolución del juego en la resolución nativa o más alta de tu pantalla. En Steam Deck, usa 1280 × 800. En Steam Machine, establece la resolución máxima del juego en la resolución nativa de tu TV o monitor, por ejemplo 3840 × 2160 para 4K.\n2. Dentro del juego, elige una resolución menor, como 720p o menos. Menos píxeles pueden mejorar el rendimiento.\n3. Usa un factor de escala superior a 1x. MAKO amplía la imagen para tu pantalla, intercambiando algo de detalle por ese rendimiento.",
   "SCALING_METHOD_NATIVE": "Resolución nativa",
   "SCALING_METHOD_MAKO": "Escalador MAKO",
   "SCALING_METHOD_LS1": "LS1 Quality",
