@@ -557,17 +557,21 @@ namespace {
             return VK_ERROR_INITIALIZATION_FAILED;
         }
 
-        const bool frameGenerationInteropEnabled =
+        const bool presentationDevice =
+            swapchainPresentationEnabled(*info);
+        const bool frameGenerationInteropEnabled = presentationDevice &&
             layer_info->root.frameGenerationInteropProvisioned();
-        const bool scalingEngineProvisioned =
+        const bool scalingEngineProvisioned = presentationDevice &&
             layer_info->root.scalingEngineProvisioned();
         const auto swapchainMaintenance1Extension =
             supportedSwapchainMaintenance1Extension(
                 physdev, scalingEngineProvisioned
             );
-        const auto layerQueueFamily = selectLayerQueueFamily(
-            physdev, *info, scalingEngineProvisioned
-        );
+        const auto layerQueueFamily = presentationDevice
+            ? selectLayerQueueFamily(
+                physdev, *info, scalingEngineProvisioned
+            )
+            : std::nullopt;
         bool presentRetirementEnabled = false;
         bool lowerDeviceCreated = false;
         const auto rollbackCreatedDevice = [&]() noexcept {
@@ -623,7 +627,7 @@ namespace {
         // No game profile matched when this device was created. Keep only the
         // layer lifecycle hooks needed to chain and clean up correctly; all
         // presentation entrypoints are forwarded directly by the GPA paths.
-        if (!layer_info->root.active()) {
+        if (!layer_info->root.active() || !presentationDevice) {
             instance_info->nativeDevices.insert(*device);
             lowerDeviceCreated = false;
             return VK_SUCCESS;

@@ -33,6 +33,31 @@ int main() {
             !selectSwapchainMaintenance1Extension(false, false, true),
         "maintenance1 was selected without both extension and feature support");
 
+    const std::array<const char*, 1> swapchainExtensions{
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    };
+    const VkDeviceCreateInfo presentationDevice{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .enabledExtensionCount =
+            static_cast<uint32_t>(swapchainExtensions.size()),
+        .ppEnabledExtensionNames = swapchainExtensions.data(),
+    };
+    expect(swapchainPresentationEnabled(presentationDevice),
+        "a swapchain presentation device was not recognized");
+
+    const VkDeviceCreateInfo computeOnlyDevice{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+    };
+    expect(!swapchainPresentationEnabled(computeOnlyDevice),
+        "a compute-only device was treated as a presentation device");
+
+    const VkDeviceCreateInfo malformedPresentationDevice{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO,
+        .enabledExtensionCount = 1,
+    };
+    expect(!swapchainPresentationEnabled(malformedPresentationDevice),
+        "a malformed presentation extension list was accepted");
+
     VkPhysicalDeviceSwapchainMaintenance1FeaturesEXT maintenance{
         .sType =
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_EXT,

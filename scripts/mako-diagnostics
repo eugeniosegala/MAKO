@@ -209,6 +209,10 @@ add_pattern "$renderer_prefix render layer active; identity=VK_LAYER_MAKO_render
 # swapchain metadata in every focused report so policy and slow-operation
 # records can be attributed without expanding the report to unrelated output.
 add_pattern "$renderer_prefix present diagnostics: operation=(process-identity|swapchain-context-create)"
+# Wrapper session admission failures are deliberately log-only. Retain this
+# line in every focused report so a Desktop-session fallback remains visible
+# without reproducing Gamescope WSI's modal error path.
+add_pattern 'MAKO Decky: Gamescope WSI skipped:'
 # Spatial-scaling and live resource policy records are low-frequency
 # swapchain/startup metadata. Keep them in every focused report so combined
 # Fixed/Adaptive failures cannot be misread as frame-generation-only sessions.

@@ -101,6 +101,29 @@ namespace mako::layer {
         return header;
     }
 
+    /// MAKO owns presentation only on application devices that enabled the
+    /// swapchain extension. Frame generation creates a private compute-only
+    /// device in the same process; in a split chain that device still passes
+    /// through the lower WSI and spatial roles, but neither role may attach
+    /// swapchain hooks or spatial resources to it.
+    [[nodiscard]] inline bool swapchainPresentationEnabled(
+            const VkDeviceCreateInfo& createInfo) noexcept {
+        if (createInfo.enabledExtensionCount > 0 &&
+                !createInfo.ppEnabledExtensionNames) {
+            return false;
+        }
+        for (uint32_t index = 0;
+                index < createInfo.enabledExtensionCount; ++index) {
+            const char* const extension =
+                createInfo.ppEnabledExtensionNames[index];
+            if (extension && std::strcmp(
+                    extension, VK_KHR_SWAPCHAIN_EXTENSION_NAME) == 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// The Gamescope WSI layer enables swapchain-maintenance1 before calling
     /// MAKO. Preserve that negotiated device contract explicitly rather than
     /// inferring support later from the physical device or environment.

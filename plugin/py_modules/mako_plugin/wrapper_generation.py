@@ -25,24 +25,32 @@ from .constants import (
     EXTERNAL_VULKAN_LAYER_VKBASALT,
     GAMESCOPE_WSI_DISABLE_ENV,
     GAMESCOPE_WSI_ENABLE_ENV,
+    GAMESCOPE_WSI_LAYER_NAME_64,
+    GAMESCOPE_WAYLAND_DISPLAY_ENV,
     HDR_EXPOSURE_DISABLE_ENV,
     MAKO_CONFIG_ENV,
     MAKO_LAYER_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
-    MAKO_SPLIT_LAYER_CHAIN_ENV,
+    MAKO_LAYER_NAME,
     MAKO_PROFILE_ENV,
     MAKO_PROFILE_FALLBACK_ENV,
-    SPATIAL_SCALING_LAYER_DISABLE_ENV,
-    SPATIAL_SCALING_LAYER_ENABLE_ENV,
-    STEAM_APP_ID_ENV_KEYS,
+    MAKO_SPLIT_LAYER_CHAIN_ENV,
+    MANGOHUD_LAYER_NAME_64,
     PRESENT_ACQUIRE_TIMEOUT_ENV,
     PRESENT_ACQUIRE_TIMEOUT_MS,
     PRESENT_DIAGNOSTICS_ENV,
     PRESENT_DIAGNOSTICS_LOG_ENV,
     PRESENT_DIAGNOSTICS_LOG_FILENAME,
     PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT,
+    SPATIAL_SCALING_LAYER_DISABLE_ENV,
+    SPATIAL_SCALING_LAYER_ENABLE_ENV,
+    SPATIAL_SCALING_LAYER_NAME,
+    STEAM_APP_ID_ENV_KEYS,
     VK_ADD_IMPLICIT_LAYER_PATH_ENV,
     VK_IMPLICIT_LAYER_PATH_ENV,
+    VK_INSTANCE_LAYERS_ENV,
+    VKBASALT_LAYER_NAME_64,
+    WAYLAND_DISPLAY_ENV,
 )
 from .profile_storage import (
     ProfileMetadata,
@@ -52,7 +60,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 49
+WRAPPER_FORMAT_VERSION = 51
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -68,10 +76,14 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
     f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
     "mako_gamescope_wsi_required=",
+    "mako_gamescope_wsi_session=",
+    "mako_gamescope_wsi_skip_log=",
     f"export {SPATIAL_SCALING_LAYER_DISABLE_ENV}=1",
     f"unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
     "mako_spatial_scaling_required=",
     f"export {EXTERNAL_VULKAN_LAYER_ENV}=",
+    "mako_managed_instance_layers=",
+    f"export {VK_INSTANCE_LAYERS_ENV}=",
     f"export {VK_IMPLICIT_LAYER_PATH_ENV}=",
     f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
     f"export {MAKO_PROFILE_FALLBACK_ENV}=",
@@ -82,7 +94,6 @@ OBSOLETE_WRAPPER_EXPORTS = (
     "PROTON_USE_WOW64",
     "MAKO_PRESENT_RECOVERY_RECREATE",
     "MAKO_EXPERIMENTAL_HDR",
-    "VK_INSTANCE_LAYERS",
 )
 
 
@@ -294,6 +305,16 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
         f"export {SPATIAL_SCALING_LAYER_DISABLE_ENV}=1",
         f"unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
+        f'mako_existing_instance_layers="${{{VK_INSTANCE_LAYERS_ENV}:-}}"',
+        "mako_managed_instance_layers=",
+        "mako_managed_external_layer=",
+        "mako_gamescope_wsi_session=0",
+        "mako_gamescope_wsi_skip_log=",
+        f'if [ -n "${{{GAMESCOPE_WAYLAND_DISPLAY_ENV}:-}}" ] && '
+        f'{{ [ -z "${{{WAYLAND_DISPLAY_ENV}:-}}" ] || '
+        f'[ "${{{WAYLAND_DISPLAY_ENV}}}" = "${{{GAMESCOPE_WAYLAND_DISPLAY_ENV}}}" ]; }}; then',
+        "    mako_gamescope_wsi_session=1",
+        "fi",
         f'mako_external_vulkan_layer="${{{EXTERNAL_VULKAN_LAYER_ENV}:-}}"',
         f"unset {EXTERNAL_VULKAN_LAYER_ENV}",
         f"mako_gamescope_wsi_layer_dir={gamescope_wsi_layer_dir}",
@@ -314,20 +335,26 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         # through Gamescope's pacing implementation, while the lower spatial
         # layer still receives its variable Wayland surface and can own a
         # larger presentation extent.
-        '    if [ "${mako_gamescope_wsi_required:-0}" = 1 ] && [ -r '
+        '    if [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
+        '[ "$mako_gamescope_wsi_session" = 1 ] && [ -r '
         f"{gamescope_wsi_manifest} ] && "
         '( [ "${mako_spatial_scaling_required:-0}" != 1 ] || [ -r '
-        f"{spatial_scaling_manifest} ] ); then",
+        f"{spatial_scaling_manifest} ] ) && [ \"${{{MAKO_LAYER_DISABLE_ENV}:-0}}\" != 1 ]; then",
         f"        unset {GAMESCOPE_WSI_DISABLE_ENV}",
         f"        export {GAMESCOPE_WSI_ENABLE_ENV}=1",
         "        export NODEVICE_SELECT=1",
         "        export DISABLE_LAYER_MESA_ANTI_LAG=1",
+        f"        mako_managed_instance_layers={MAKO_LAYER_NAME}:{GAMESCOPE_WSI_LAYER_NAME_64}",
         '        mako_implicit_layer_path="$mako_implicit_layer_path:$mako_gamescope_wsi_layer_dir"',
         '        if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
         f"            unset {SPATIAL_SCALING_LAYER_DISABLE_ENV}",
         f"            export {SPATIAL_SCALING_LAYER_ENABLE_ENV}=1",
+        f'            mako_managed_instance_layers="$mako_managed_instance_layers:{SPATIAL_SCALING_LAYER_NAME}"',
         '            mako_implicit_layer_path="$mako_implicit_layer_path:$mako_spatial_scaling_layer_dir"',
         "        fi",
+        '    elif [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
+        '[ "$mako_gamescope_wsi_session" != 1 ]; then',
+        '        mako_gamescope_wsi_skip_log="MAKO Decky: Gamescope WSI skipped: no active Gamescope session; continuing with the managed WSI and spatial chain disabled."',
         "    fi",
         '    case "$mako_external_vulkan_layer" in',
         f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
@@ -337,6 +364,9 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "                export NODEVICE_SELECT=1",
         "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
         '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_mangohud_layer_dir"',
+        f"                if [ -r {mangohud_manifest} ]; then",
+        f"                    mako_managed_external_layer={MANGOHUD_LAYER_NAME_64}",
+        "                fi",
         "            fi",
         "            ;;",
         f"        {EXTERNAL_VULKAN_LAYER_VKBASALT})",
@@ -346,17 +376,47 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "                export NODEVICE_SELECT=1",
         "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
         '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_vkbasalt_layer_dir"',
+        f"                if [ -r {vkbasalt_manifest} ]; then",
+        f"                    mako_managed_external_layer={VKBASALT_LAYER_NAME_64}",
+        "                fi",
         "            fi",
         "            ;;",
         "    esac",
         "fi",
+        'if [ -n "$mako_managed_instance_layers" ]; then',
+        '    if [ -n "$mako_managed_external_layer" ]; then',
+        '        mako_managed_instance_layers="$mako_managed_instance_layers:$mako_managed_external_layer"',
+        "    fi",
+        '    if [ -n "$mako_existing_instance_layers" ]; then',
+        f'        export {VK_INSTANCE_LAYERS_ENV}="$mako_managed_instance_layers:$mako_existing_instance_layers"',
+        "    else",
+        f'        export {VK_INSTANCE_LAYERS_ENV}="$mako_managed_instance_layers"',
+        "    fi",
+        # Prevent the same manifests from joining first through their implicit
+        # activation gates. The explicit list above is the only owner of the
+        # managed WSI/scaling order on this supported 64-bit path.
+        f"    unset {MAKO_LAYER_ENABLE_ENV}",
+        f"    unset {GAMESCOPE_WSI_ENABLE_ENV}",
+        f"    unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
+        '    if [ "$mako_managed_external_layer" = "'
+        f'{MANGOHUD_LAYER_NAME_64}" ]; then',
+        "        unset MANGOHUD",
+        '    elif [ "$mako_managed_external_layer" = "'
+        f'{VKBASALT_LAYER_NAME_64}" ]; then',
+        "        unset ENABLE_VKBASALT",
+        "    fi",
+        "fi",
         "unset mako_gamescope_wsi_required",
+        "unset mako_gamescope_wsi_session",
         "unset mako_spatial_scaling_required",
         "unset mako_external_vulkan_layer",
         "unset mako_gamescope_wsi_layer_dir",
         "unset mako_spatial_scaling_layer_dir",
         "unset mako_mangohud_layer_dir",
         "unset mako_vkbasalt_layer_dir",
+        "unset mako_existing_instance_layers",
+        "unset mako_managed_instance_layers",
+        "unset mako_managed_external_layer",
         f'export {VK_IMPLICIT_LAYER_PATH_ENV}="$mako_implicit_layer_path"',
         f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
         f"export {MAKO_CONFIG_ENV}={shlex.quote(str(context.config_file_path))}",
@@ -390,6 +450,10 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         '        exec 2>> "$mako_diagnostics_log"',
         "    fi",
         "fi",
+        'if [ -n "${mako_gamescope_wsi_skip_log:-}" ]; then',
+        '    printf "%s\\n" "$mako_gamescope_wsi_skip_log" >&2',
+        "fi",
+        "unset mako_gamescope_wsi_skip_log",
     ]
 
 

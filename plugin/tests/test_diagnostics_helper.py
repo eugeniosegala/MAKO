@@ -27,6 +27,7 @@ FIXTURE = """\
 [Vulkan Loader] Loading VK_LAYER_MAKO_frame_generation
 [Vulkan Loader] Loading VK_LAYER_MAKO_render
 [Gamescope WSI] HDR output available
+MAKO Decky: Gamescope WSI skipped: no active Gamescope session; continuing with the managed WSI and spatial chain disabled.
 MAKO Renderer: render layer active; identity=VK_LAYER_MAKO_render; build=1.0.0; fingerprint=abc123.dirty.12345678
 MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executable=game.exe wine_executable=game.exe process_name=GameThread profile=mako identification=fallback build=1.0.0 fingerprint=abc123.dirty.12345678
 MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
@@ -244,6 +245,9 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("fingerprint=abc123.dirty.12345678", result.stdout)
                     self.assertIn("operation=process-identity", result.stdout)
                     self.assertIn("operation=swapchain-context-create", result.stdout)
+                    self.assertIn(
+                        "MAKO Decky: Gamescope WSI skipped:", result.stdout
+                    )
                     self.assertIn("spatial scaling active", result.stdout)
                     self.assertIn("action=native-feedback-guard", result.stdout)
 
