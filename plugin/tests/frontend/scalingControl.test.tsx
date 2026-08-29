@@ -191,7 +191,7 @@ describe("Scaling controls", () => {
     expect(
       screen
         .getByText(
-          /For the clearest comparison, use 2x scaling with a lower source resolution\./,
+          /How scaling works:/,
         )
         .closest('[data-tone="info"]'),
     ).toBeTruthy();

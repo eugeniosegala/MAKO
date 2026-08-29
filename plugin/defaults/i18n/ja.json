@@ -5,7 +5,7 @@
   "SCALING_ENABLED_WARNING": "スケーリングが不要な場合は、リソースを消費するためオフにしてください。",
   "SCALING_METHOD": "スケーリング方式",
   "SCALING_METHOD_DESC": "スケーリングモデルを選択します。ゲームの実行中でも変更できます。",
-  "SCALING_METHOD_COMPARISON_TIP": "違いを最も確認しやすくするには、低い入力解像度で 2x スケーリングを使用してください。\n720p → 1440p や 1080p → 2160p を試してください。\n1x やネイティブ解像度に近い場合、違いは控えめになることがあります。",
+  "SCALING_METHOD_COMPARISON_TIP": "スケーリングの仕組み:\n1. Steam でゲーム解像度をディスプレイのネイティブ解像度または最大解像度に設定します（Steam Deck: 1280 × 800）。\n2. ゲーム内では 720p 以下など、より低い解像度を選びます。描画するピクセルが減るとパフォーマンスが向上することがあります。\n3. 1x を超えるスケール係数を使います。MAKO がディスプレイ向けに画像を拡大し、その性能のために一部の画質を引き換えます。",
   "SCALING_METHOD_NATIVE": "ネイティブ解像度",
   "SCALING_METHOD_MAKO": "MAKO スケーラー",
   "SCALING_METHOD_LS1": "LS1 Quality",

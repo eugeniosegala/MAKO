@@ -110,9 +110,15 @@ namespace {
     constexpr auto adaptiveEfficiencyProbeEvaluationDuration = std::chrono::milliseconds(250);
     constexpr auto adaptiveEfficiencyProbeSettlingGraceDuration =
         std::chrono::milliseconds(250);
-    constexpr auto adaptiveEfficiencyProbeRetryDelay = std::chrono::seconds(60);
+    constexpr auto adaptiveEfficiencyProbeNearTargetRetryDelay =
+        std::chrono::seconds(60);
+    constexpr auto adaptiveEfficiencyProbeModerateDeficitRetryDelay =
+        std::chrono::seconds(120);
+    constexpr auto adaptiveEfficiencyProbeSevereDeficitRetryDelay =
+        std::chrono::seconds(300);
     constexpr double adaptiveEfficiencyProbeMinimumTargetRatio = 0.98;
     constexpr double adaptiveEfficiencyProbeSettlingMinimumTargetRatio = 0.90;
+    constexpr double adaptiveEfficiencyProbeSevereDeficitTargetRatio = 0.75;
     constexpr double adaptiveEfficiencyProbeSettlingMinimumBaseRiseRatio = 1.20;
     constexpr double adaptiveRescueBaseCollapseRatio = 0.78;
     constexpr double adaptiveRescueOutputCollapseRatio = 0.80;
@@ -297,10 +303,20 @@ void AdaptiveScheduler::consumeHistoryWarmupFrame(const TimePoint now) {
     if (this->state.historyWarmup.remaining == 0)
         return;
 
+    // Transport recovery invalidates cadence samples but does not invalidate
+    // evidence that a lower Smooth Cadence multiplier was insufficient. Keep
+    // that retry deadline so an unrelated acquire/present recovery cannot
+    // turn a five-minute backoff into a new probe five seconds later. Ordinary
+    // non-recovery warm-up still clears it because a cadence or lifecycle
+    // change may represent a genuinely different performance regime.
+    const auto retainedEfficiencyRetryAt = this->state.historyWarmup.recovery
+        ? this->state.efficiencyProbe.retryAt : std::nullopt;
     this->state.historyWarmup.remaining--;
     if (this->state.historyWarmup.remaining == 0)
         this->state.historyWarmup.recovery = false;
     this->resetTiming(now);
+    if (retainedEfficiencyRetryAt)
+        this->state.efficiencyProbe.retryAt = retainedEfficiencyRetryAt;
 }
 
 void AdaptiveScheduler::reportGeneratedFrameDelivery(
@@ -1232,9 +1248,25 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::advanceEfficiencyProbe(
             probe.retryAt.reset();
         } else {
             // Resume the retained qualified multiplier on this same decision
-            // and keep failed probes rare enough that an unreachable lower
-            // cadence cannot create periodic gameplay stutter.
-            probe.retryAt = now + adaptiveEfficiencyProbeRetryDelay;
+            // and scale the retry interval with the measured deficit. A near
+            // miss or delivery-pressure event may be transient, while a
+            // lower level that cannot reach even 75% of target should not
+            // create a minute-period pacing disturbance in steady gameplay.
+            auto retryDelay = adaptiveEfficiencyProbeNearTargetRetryDelay;
+            if (deliveryHealthy) {
+                const double projectedTargetRatio = targetFps > 0.0
+                    ? projectedOutputFps / targetFps : 0.0;
+                if (projectedTargetRatio <
+                        adaptiveEfficiencyProbeSevereDeficitTargetRatio) {
+                    retryDelay =
+                        adaptiveEfficiencyProbeSevereDeficitRetryDelay;
+                } else if (projectedTargetRatio <
+                        adaptiveEfficiencyProbeSettlingMinimumTargetRatio) {
+                    retryDelay =
+                        adaptiveEfficiencyProbeModerateDeficitRetryDelay;
+                }
+            }
+            probe.retryAt = now + retryDelay;
         }
         probe.testedLimit = 0;
         probe.baselineBaseFps = 0.0;

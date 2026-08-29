@@ -101,7 +101,7 @@ export function ScalingControl({
                     <span style={{ whiteSpace: "pre-line" }}>
                       {t(
                         "SCALING_METHOD_COMPARISON_TIP",
-                        "For the clearest comparison, use 2x scaling with a lower source resolution.\nTry 720p → 1440p or 1080p → 2160p.\nAt 1x or near-native resolution, differences can be subtle.",
+                        "How scaling works:\n1. In Steam, set Game Resolution to your display's native or highest resolution (Steam Deck: 1280 × 800).\n2. Inside the game, choose a lower resolution, such as 720p or lower. Fewer pixels can improve performance.\n3. Use a Scale Factor above 1x. MAKO enlarges the image for your display, trading some detail for that performance.",
                       )}
                     </span>
                   </MakoInlineTip>

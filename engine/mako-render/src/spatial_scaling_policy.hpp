@@ -168,6 +168,22 @@ namespace mako::layer {
                 VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR) != 0;
     }
 
+    /// Fixed-surface virtualization needs one presentation-capable
+    /// graphics/compute queue and at least one advertised SDR format that can
+    /// execute the spatial graph. Gamescope may advertise additional HDR or
+    /// otherwise unsupported formats even when the managed launch is SDR;
+    /// those unrelated choices must not disable a supported SDR path. The
+    /// application's selected format is checked again at swapchain creation
+    /// and an unsupported fixed-surface selection is rejected fail-closed.
+    [[nodiscard]] constexpr bool spatialScalingFixedSurfacePreflightSupported(
+            const bool queueSupported,
+            const uint32_t advertisedFormatCount,
+            const uint32_t compatibleFormatCount) noexcept {
+        return queueSupported && advertisedFormatCount != 0 &&
+            compatibleFormatCount != 0 &&
+            compatibleFormatCount <= advertisedFormatCount;
+    }
+
     [[nodiscard]] inline bool validSpatialScalingFactor(
             const float factor) noexcept {
         return std::isfinite(factor) &&

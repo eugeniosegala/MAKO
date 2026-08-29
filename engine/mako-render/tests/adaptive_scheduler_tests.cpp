@@ -2489,9 +2489,61 @@ namespace {
         const size_t probes = harness.diagnostics.count(
             "adaptive-efficiency-probe"
         );
-        harness.runAtFps(40.0, 30s);
+        harness.scheduler.beginHistoryWarmup(3, true);
+        for (size_t frame = 0; frame < 3; ++frame) {
+            harness.now += 33ms;
+            harness.scheduler.consumeHistoryWarmupFrame(harness.now);
+        }
+        require(!harness.scheduler.historyWarmupActive(),
+            "recovery history warm-up did not complete");
+        harness.runAtFps(40.0, 299s);
         require(harness.diagnostics.count("adaptive-efficiency-probe") == probes,
-            "failed efficiency probe retried before its long backoff elapsed");
+            "recovery warm-up discarded the severe five-minute backoff");
+        harness.runAtFps(40.0, 7s);
+        require(harness.diagnostics.count("adaptive-efficiency-probe") > probes,
+            "severe efficiency deficit did not retry after five-minute backoff");
+    }
+
+    void testSmoothCadenceModerateDownshiftDeficitBacksOffTwoMinutes() {
+        Harness harness(
+            120, 5, true, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+
+        for (size_t frame = 0; frame < 2400; ++frame) {
+            harness.frameAtFps(24.0);
+            if (harness.diagnostics.contains("adaptive-efficiency-probe"))
+                break;
+        }
+        require(harness.diagnostics.contains("adaptive-efficiency-probe"),
+            "precondition failed: moderate-deficit probe did not begin");
+
+        for (size_t frame = 0; frame < 120; ++frame) {
+            const auto plan = harness.frameAtFps(24.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = plan.size(),
+            });
+            if (harness.diagnostics.contains(
+                    "adaptive-efficiency-probe-rejected")) {
+                break;
+            }
+        }
+        const auto* rejected = harness.diagnostics.last(
+            "adaptive-efficiency-probe-rejected"
+        );
+        require(rejected && rejected->reason == "target-deficit",
+            "moderate 4x target deficit was not rejected");
+
+        const size_t probes = harness.diagnostics.count(
+            "adaptive-efficiency-probe"
+        );
+        harness.runAtFps(24.0, 119s);
+        require(harness.diagnostics.count("adaptive-efficiency-probe") == probes,
+            "moderate efficiency deficit retried before two-minute backoff");
+        harness.runAtFps(24.0, 7s);
+        require(harness.diagnostics.count("adaptive-efficiency-probe") > probes,
+            "moderate efficiency deficit did not retry after two-minute backoff");
     }
 
     void testSmoothCadenceDownshiftRejectsDeliveryPressure() {
@@ -2528,6 +2580,16 @@ namespace {
         require(harness.scheduler.snapshot().stableCadenceLimit == 2 &&
                 plan.size() == 2,
             "delivery-pressure rejection did not restore qualified 3x");
+
+        const size_t probes = harness.diagnostics.count(
+            "adaptive-efficiency-probe"
+        );
+        harness.runAtFps(40.0, 59s);
+        require(harness.diagnostics.count("adaptive-efficiency-probe") == probes,
+            "delivery-pressure probe retried before one-minute backoff");
+        harness.runAtFps(40.0, 7s);
+        require(harness.diagnostics.count("adaptive-efficiency-probe") > probes,
+            "delivery-pressure probe did not retry after one-minute backoff");
     }
 
     void testSmoothCadenceDownshiftPausesDuringAcquireBackoff() {
@@ -3241,6 +3303,7 @@ int main() {
         {"Smooth Cadence accepts target-preserving downshift", testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget},
         {"Smooth Cadence lets promising downshift recovery settle", testSmoothCadenceDownshiftAllowsPromisingRecoveryToSettle},
         {"Smooth Cadence rejects insufficient downshift", testSmoothCadenceRejectsInsufficientDownshiftAndBacksOff},
+        {"Smooth Cadence moderate downshift deficit backs off", testSmoothCadenceModerateDownshiftDeficitBacksOffTwoMinutes},
         {"Smooth Cadence downshift rejects delivery pressure", testSmoothCadenceDownshiftRejectsDeliveryPressure},
         {"Smooth Cadence downshift pauses during acquire backoff", testSmoothCadenceDownshiftPausesDuringAcquireBackoff},
         {"Smooth Cadence downshift is ordered-SDR only", testSmoothCadenceDownshiftProbeIsOrderedSdrOnly},

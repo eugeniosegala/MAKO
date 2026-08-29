@@ -76,6 +76,15 @@ int main() {
     expect(!spatialScalingSurfaceCapabilitiesSupported(surfaceCapabilities),
         "A surface without bidirectional transfer usage must fail scaling preflight");
 
+    expect(spatialScalingFixedSurfacePreflightSupported(true, 4, 2),
+        "A fixed Gamescope surface with compatible SDR and unrelated HDR formats must remain scalable");
+    expect(!spatialScalingFixedSurfacePreflightSupported(true, 4, 0),
+        "A fixed surface without any compatible advertised format must fail closed");
+    expect(!spatialScalingFixedSurfacePreflightSupported(false, 4, 4),
+        "Compatible formats must not bypass the presentation-queue requirement");
+    expect(!spatialScalingFixedSurfacePreflightSupported(true, 0, 0),
+        "An empty surface-format enumeration must fail closed");
+
     const VkSwapchainCreateInfoKHR ordinarySwapchain{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
         .flags = 0,

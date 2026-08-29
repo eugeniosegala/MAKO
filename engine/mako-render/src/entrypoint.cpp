@@ -57,6 +57,9 @@ namespace {
         std::unordered_map<VkQueue, QueueIdentity> queueIdentities;
         struct SurfaceScalingEligibility {
             bool supported{false};
+            bool queueSupported{false};
+            uint32_t advertisedFormatCount{0};
+            uint32_t compatibleFormatCount{0};
         };
         std::mutex surfaceScalingMutex;
         std::unordered_map<
@@ -865,6 +868,9 @@ namespace {
     struct SurfaceScalingEligibilityResult {
         bool supported{false};
         bool firstObservation{false};
+        bool queueSupported{false};
+        uint32_t advertisedFormatCount{0};
+        uint32_t compatibleFormatCount{0};
     };
 
     SurfaceScalingEligibilityResult supportsSpatialScalingSurface(
@@ -887,6 +893,11 @@ namespace {
                     return {
                         .supported = cached->second.supported,
                         .firstObservation = false,
+                        .queueSupported = cached->second.queueSupported,
+                        .advertisedFormatCount =
+                            cached->second.advertisedFormatCount,
+                        .compatibleFormatCount =
+                            cached->second.compatibleFormatCount,
                     };
                 }
             }
@@ -972,38 +983,44 @@ namespace {
         constexpr VkFormatFeatureFlags swapchainFeatures =
             VK_FORMAT_FEATURE_BLIT_SRC_BIT |
             VK_FORMAT_FEATURE_BLIT_DST_BIT;
+        uint32_t compatibleFormatCount = 0;
         if (supported) {
-            supported = std::ranges::all_of(
-                formats.begin(), formats.begin() + formatCount,
-                [&](const VkSurfaceFormatKHR& format) {
-                if (format.format == VK_FORMAT_UNDEFINED)
-                    return false;
-                const auto pipeline = classifySwapchainColor(
-                    format.format, format.colorSpace, false
-                );
-                if (!spatialScalingColorSupported(pipeline)) {
-                    return false;
-                }
+            compatibleFormatCount = static_cast<uint32_t>(
+                std::ranges::count_if(
+                    formats.begin(), formats.begin() + formatCount,
+                    [&](const VkSurfaceFormatKHR& format) {
+                    if (format.format == VK_FORMAT_UNDEFINED)
+                        return false;
+                    const auto pipeline = classifySwapchainColor(
+                        format.format, format.colorSpace, false
+                    );
+                    if (!spatialScalingColorSupported(pipeline)) {
+                        return false;
+                    }
 
-                VkFormatProperties surfaceProperties{};
-                instance_info->funcs.GetPhysicalDeviceFormatProperties(
-                    physicalDevice, format.format, &surfaceProperties
-                );
-                if ((surfaceProperties.optimalTilingFeatures &
-                        swapchainFeatures) != swapchainFeatures) {
-                    return false;
-                }
+                    VkFormatProperties surfaceProperties{};
+                    instance_info->funcs.GetPhysicalDeviceFormatProperties(
+                        physicalDevice, format.format, &surfaceProperties
+                    );
+                    if ((surfaceProperties.optimalTilingFeatures &
+                            swapchainFeatures) != swapchainFeatures) {
+                        return false;
+                    }
 
-                VkFormatProperties workingProperties{};
-                instance_info->funcs.GetPhysicalDeviceFormatProperties(
-                    physicalDevice, pipeline.exchangeFormat,
-                    &workingProperties
-                );
-                return (workingProperties.optimalTilingFeatures &
-                    scalerFeatures) == scalerFeatures;
-                }
+                    VkFormatProperties workingProperties{};
+                    instance_info->funcs.GetPhysicalDeviceFormatProperties(
+                        physicalDevice, pipeline.exchangeFormat,
+                        &workingProperties
+                    );
+                    return (workingProperties.optimalTilingFeatures &
+                        scalerFeatures) == scalerFeatures;
+                    }
+                )
             );
         }
+        supported = spatialScalingFixedSurfacePreflightSupported(
+            queueSupported, formatCount, compatibleFormatCount
+        );
 
         bool firstObservation = false;
         {
@@ -1016,14 +1033,23 @@ namespace {
                 surface,
                 InstanceInfo::SurfaceScalingEligibility{
                     .supported = supported,
+                    .queueSupported = queueSupported,
+                    .advertisedFormatCount = formatCount,
+                    .compatibleFormatCount = compatibleFormatCount,
                 }
             );
             supported = cached->second.supported;
+            queueSupported = cached->second.queueSupported;
+            formatCount = cached->second.advertisedFormatCount;
+            compatibleFormatCount = cached->second.compatibleFormatCount;
             firstObservation = inserted;
         }
         return {
             .supported = supported,
             .firstObservation = firstObservation,
+            .queueSupported = queueSupported,
+            .advertisedFormatCount = formatCount,
+            .compatibleFormatCount = compatibleFormatCount,
         };
     }
 
@@ -1069,9 +1095,17 @@ namespace {
                 clearFixedSurfaceScalingContract(physicalDevice, surface);
                 if (eligibility.firstObservation) {
                     std::cerr << "MAKO Renderer: spatial scaling capability "
-                             "virtualization unavailable: not every advertised "
-                             "surface format and presentation queue has the "
-                             "required SDR blit/compute support\n";
+                             "virtualization unavailable: reason="
+                          << (eligibility.queueSupported
+                                ? "no-compatible-sdr-format"
+                                : "no-presentation-capable-graphics-compute-queue")
+                          << "; queue_supported="
+                          << eligibility.queueSupported
+                          << "; advertised_formats="
+                          << eligibility.advertisedFormatCount
+                          << "; compatible_formats="
+                          << eligibility.compatibleFormatCount
+                          << '\n';
                 }
                 return;
             }
@@ -1103,6 +1137,12 @@ namespace {
                           << "; policy_revision="
                           << selection->policyRevision
                           << "; query_generation=" << queryGeneration
+                          << "; queue_supported="
+                          << eligibility.queueSupported
+                          << "; advertised_formats="
+                          << eligibility.advertisedFormatCount
+                          << "; compatible_formats="
+                          << eligibility.compatibleFormatCount
                           << '\n';
             }
             capabilities = candidate;
