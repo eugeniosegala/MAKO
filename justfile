@@ -99,6 +99,10 @@ test-engine-gym-recovery *args:
 test-engine-gym-gamescope-e2e *args:
     ./engine/scripts/run-mako-gym.sh --suite gamescope-e2e {{args}}
 
+# Run focused private-resource memory and sustained thermal/performance health soaks.
+test-engine-gym-sustained-health *args:
+    ./engine/scripts/run-mako-gym.sh --suite sustained-health {{args}}
+
 # Run the high-cost D3D11/DXVK and D3D12/VKD3D-Proton end-to-end lane.
 test-engine-gym-proton-e2e *args:
     ./engine/scripts/run-mako-gym.sh --suite proton-e2e {{args}}

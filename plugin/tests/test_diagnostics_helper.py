@@ -37,8 +37,10 @@ MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources spatial_scaling_pending=1 frame_generation_backend_pending=1 flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 available_generated_capacity=1 requested_generated_capacity=3 process_restart_required=0 action=signal-out-of-date-after-successful-present
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=2 state_revision=4 reason=frame-generation-resources flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 active_generated_capacity=1 requested_generated_capacity=4 action=prepare-private-context
 MAKO Renderer: present diagnostics: operation=runtime-transition-prepared context=2 state_revision=4 reason=frame-generation-resources requested_generated_capacity=4 requested_flow_scale=0.75 requested_lighter_model=1 action=drain-private-work
+MAKO Renderer: renderer-memory operation=private-context-prepared context=2 state_revision=4 live_internal_bytes=41951424 live_internal_allocations=16 live_exported_bytes=41287680 live_exported_allocations=9 peak_internal_bytes=41951424 peak_internal_allocations=16 peak_exported_bytes=41287680 peak_exported_allocations=9
 MAKO Renderer: present diagnostics: operation=runtime-transition-failed context=3 state_revision=4 reason=frame-generation-resources retry_ms=5000 active_generated_capacity=1 action=retain-active-resources
 MAKO Renderer: present diagnostics: operation=runtime-transition-applied context=2 state_revision=4 reason=frame-generation-resources transition=private-context effective_flow_scale=0.75 lighter_model=1 generated_frame_capacity=4 history_warmup_frames=3
+MAKO Renderer: renderer-memory operation=private-context-applied context=2 state_revision=4 live_internal_bytes=20975712 live_internal_allocations=8 live_exported_bytes=27525120 live_exported_allocations=6 peak_internal_bytes=41951424 peak_internal_allocations=16 peak_exported_bytes=41287680 peak_exported_allocations=9
 MAKO Renderer: process-static configuration changes remain pending until game restart; contexts=1
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=3 reason=process-static-profile gpu_selection_pending=1 pacing_pending=0 frame_generation_interop_pending=0 ultra_performance_pending=0 action=wait-for-process-restart
 MAKO Renderer: live profile resource change requested a game-owned swapchain recreation after one successful lower present
@@ -270,6 +272,9 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("action=drain-private-work", result.stdout)
         self.assertIn("action=retain-active-resources", result.stdout)
         self.assertIn("history_warmup_frames=3", result.stdout)
+        self.assertIn("renderer-memory operation=private-context-prepared", result.stdout)
+        self.assertIn("renderer-memory operation=private-context-applied", result.stdout)
+        self.assertIn("live_exported_allocations=6", result.stdout)
         self.assertIn(
             "signal-out-of-date-after-successful-present", result.stdout
         )
@@ -300,6 +305,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("pipeline-busy-bypass", result.stdout)
         self.assertIn("pipeline-busy-recovered", result.stdout)
         self.assertIn("operation=present-breakdown", result.stdout)
+        self.assertIn("renderer-memory operation=private-context-prepared", result.stdout)
+        self.assertIn("renderer-memory operation=private-context-applied", result.stdout)
         self.assertNotIn("adaptive-ramp", result.stdout)
 
     def test_startup_includes_loader_gamescope_context_and_hdr(self):

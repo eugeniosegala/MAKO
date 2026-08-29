@@ -274,6 +274,7 @@ jobs:
           run_packaged_suite vulkan mako-gym
           run_packaged_suite recovery mako-gym-recovery
           run_packaged_suite gamescope-e2e mako-gym-gamescope-e2e
+          run_packaged_suite sustained-health mako-gym-sustained-health
           run_packaged_suite proton-e2e mako-gym-proton-e2e
           run_packaged_suite proton-compatibility mako-gym-proton-compatibility \
             --runtime-tier extended --case-tier extended --minimum-runtimes 4
@@ -304,6 +305,7 @@ jobs:
             engine/out/mako-gym
             engine/out/mako-gym-recovery
             engine/out/mako-gym-gamescope-e2e
+            engine/out/mako-gym-sustained-health
             engine/out/mako-gym-proton-e2e
             engine/out/mako-gym-proton-compatibility
             plugin/out/*.zip

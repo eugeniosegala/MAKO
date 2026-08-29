@@ -54,6 +54,27 @@ namespace {
         return present_diagnostics::thresholdMilliseconds();
     }
 
+    void logPrivateFrameGenerationMemory(const vk::Vulkan& vk,
+            const uint64_t contextId, const uint64_t stateRevision,
+            const std::string_view operation) {
+        const auto memory = vk.deviceMemorySnapshot();
+        std::clog << "MAKO Renderer: renderer-memory operation=" << operation
+                  << " context=" << contextId
+                  << " state_revision=" << stateRevision
+                  << " live_internal_bytes=" << memory.internal.bytes
+                  << " live_internal_allocations="
+                  << memory.internal.allocations
+                  << " live_exported_bytes=" << memory.exported.bytes
+                  << " live_exported_allocations="
+                  << memory.exported.allocations
+                  << " peak_internal_bytes=" << memory.peakInternal.bytes
+                  << " peak_internal_allocations="
+                  << memory.peakInternal.allocations
+                  << " peak_exported_bytes=" << memory.peakExported.bytes
+                  << " peak_exported_allocations="
+                  << memory.peakExported.allocations << '\n';
+    }
+
     size_t generatedFrameCapacity(const ls::GameConf& profile) {
         return generatedFrameCapacityForProfile(profile);
     }
@@ -966,6 +987,11 @@ bool Swapchain::applyPendingFrameGenerationResources(
                     this->frameGenerationTransition.value().profile
                 );
             this->frameGenerationTransition.prepared();
+            logPrivateFrameGenerationMemory(
+                vk, this->diagnosticsState.contextId,
+                this->frameGenerationTransition.stateRevision(),
+                "private-context-prepared"
+            );
             this->publishRuntimeStatus("frame-generation-resources");
             if (presentDiagnosticsEnabled()) {
                 const auto& requested =
@@ -1041,6 +1067,10 @@ bool Swapchain::applyPendingFrameGenerationResources(
     );
     const auto committedRevision =
         this->frameGenerationTransition.committed();
+    logPrivateFrameGenerationMemory(
+        vk, this->diagnosticsState.contextId,
+        committedRevision.value_or(0), "private-context-applied"
+    );
     this->runtimeStatusState.error.reset();
     this->publishRuntimeStatus("frame-generation-resources");
 
