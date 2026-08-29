@@ -676,6 +676,19 @@ VkResult Swapchain::presentOriginalImage(
         "present-original-image", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
         originalPresentStarted, result, std::nullopt, invocation.imageIndex
     );
+    if (result == VK_ERROR_OUT_OF_DATE_KHR && presentDiagnosticsEnabled()) {
+        // Every direct original-image path has already submitted the
+        // application's acquired image to the lower presentation role. Keep
+        // that fact explicit so callers may safely propagate OUT_OF_DATE
+        // without attempting a duplicate present during recreation.
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=original-present-recreation-propagate"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " frame=" << this->frameState.realFrameIndex
+                  << " sequence=" << this->frameState.sequenceIndex
+                  << " result=" << result
+                  << " action=application-image-submitted-before-recreation\n";
+    }
     return result;
 }
 
@@ -1757,7 +1770,10 @@ VkResult Swapchain::presentGeneratedFrames(
         this->gamescopeDetected ? invocation.nextChain : nullptr,
         &originalPresentDuration
     );
-    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
+    const bool originalPresentRequestedRecreation =
+        result == VK_ERROR_OUT_OF_DATE_KHR;
+    if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR &&
+            !originalPresentRequestedRecreation)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
     maximumLowerPresentDuration = std::max(
         maximumLowerPresentDuration, originalPresentDuration

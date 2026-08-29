@@ -33,7 +33,7 @@ MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executab
 MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
 MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
 MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
-MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 live_profile_recreation=guarded-non-gamescope-one-shot
+MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 live_profile_recreation=guarded-maintenance1-one-shot
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources spatial_scaling_pending=1 frame_generation_backend_pending=1 flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 available_generated_capacity=1 requested_generated_capacity=3 process_restart_required=0 action=signal-out-of-date-after-successful-present
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=2 state_revision=4 reason=frame-generation-resources flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 active_generated_capacity=1 requested_generated_capacity=4 action=prepare-private-context
 MAKO Renderer: present diagnostics: operation=runtime-transition-prepared context=2 state_revision=4 reason=frame-generation-resources requested_generated_capacity=4 requested_flow_scale=0.75 requested_lighter_model=1 action=drain-private-work
@@ -45,6 +45,8 @@ MAKO Renderer: process-static configuration changes remain pending until game re
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=3 reason=process-static-profile gpu_selection_pending=1 pacing_pending=0 frame_generation_interop_pending=0 ultra_performance_pending=0 action=wait-for-process-restart
 MAKO Renderer: live profile resource change requested a game-owned swapchain recreation after one successful lower present
 MAKO Renderer: present diagnostics: operation=runtime-transition-recreation-requested context=1 state_revision=2 reason=profile-resources lower_present_result=0 signal=VK_ERROR_OUT_OF_DATE_KHR delivery=one-shot-after-semaphore-consumption
+MAKO Renderer: present diagnostics: operation=original-present-recreation-propagate context=2 frame=10 sequence=20 result=-1000001004 action=application-image-submitted-before-recreation
+MAKO Renderer: present diagnostics: operation=swapchain-recreation-observed context=2 role=frame-generation swapchain=1234 source=upstream-or-driver
 MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 effective_flow_scale=0.75 lighter_model=1 generated_frame_capacity=3 hdr=1
 MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
 MAKO Renderer: spatial scaling swapchain policy: requested=854x532; surface_current=1280x800; surface_extent_mode=fixed; advertised_source=854x532; advertised_presentation=1280x800; actual_source=854x532; actual_presentation=1280x800; policy_revision=4; contract_policy_revision=4; query_generation=9; selected_source=854x532; selected_presentation=1280x800; format=44; format_supported=1; shape_supported=1; queue_presentation_support=supported; queue_commands_supported=1; variable_feedback_suppressed=0; inactive_reason=none; source_presentation_split=1; active=1
@@ -290,6 +292,9 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("action=wait-for-process-restart", result.stdout)
         self.assertIn("runtime-transition-recreation-requested", result.stdout)
         self.assertIn("one-shot-after-semaphore-consumption", result.stdout)
+        self.assertIn("original-present-recreation-propagate", result.stdout)
+        self.assertIn("application-image-submitted-before-recreation", result.stdout)
+        self.assertIn("swapchain-recreation-observed", result.stdout)
         self.assertNotIn("adaptive-ramp", result.stdout)
 
     def test_performance_preset_includes_fixed_multiplier_telemetry(self):

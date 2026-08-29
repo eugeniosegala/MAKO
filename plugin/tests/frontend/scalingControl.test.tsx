@@ -137,8 +137,8 @@ describe("Scaling controls", () => {
 
     const enabled = screen.getByText("Enable Scaling (Restart)");
     expect(enabled.getAttribute("data-checked")).toBe("false");
-    expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
-    expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
+    expect(screen.queryByText("Scale Factor (2.0x)")).toBeNull();
+    expect(screen.queryByText("Scaling Sharpness (90%)")).toBeNull();
     expect(screen.queryByRole("button", { name: "Scaling Method" })).toBeNull();
     expect(screen.queryByText("MAKO Scaler")).toBeNull();
 
@@ -156,8 +156,8 @@ describe("Scaling controls", () => {
       />,
     );
 
-    const factor = screen.getByText("Scale Factor (1.5x)");
-    const sharpness = screen.getByText("Scaling Sharpness (50%)");
+    const factor = screen.getByText("Scale Factor (2.0x)");
+    const sharpness = screen.getByText("Scaling Sharpness (90%)");
     const method = screen.getByRole("button", { name: "Scaling Method" });
     expect((factor as HTMLButtonElement).disabled).toBe(false);
     expect((sharpness as HTMLButtonElement).disabled).toBe(false);
@@ -211,8 +211,8 @@ describe("Scaling controls", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Scaling Method" })).toBeTruthy();
-    expect(screen.getByText("Scale Factor (1.5x)")).toBeTruthy();
-    expect(screen.queryByText("Scaling Sharpness (50%)")).toBeNull();
+    expect(screen.getByText("Scale Factor (2.0x)")).toBeTruthy();
+    expect(screen.queryByText("Scaling Sharpness (90%)")).toBeNull();
   });
 
   test("writes only the selected scaling field when combined with frame generation", () => {
@@ -225,6 +225,8 @@ describe("Scaling controls", () => {
           ...getDefaults(),
           scaling_enabled: true,
           scaling_method: SCALING_METHOD_MAKO,
+          scaling_factor: 1.5,
+          scaling_sharpness: 0.5,
           frame_generation_enabled: true,
           adaptive: true,
         }}
@@ -271,10 +273,10 @@ describe("Scaling controls", () => {
         .disabled,
     ).toBe(true);
     expect(
-      (screen.getByText("Scale Factor (1.5x)") as HTMLButtonElement).disabled,
+      (screen.getByText("Scale Factor (2.0x)") as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(
-      (screen.getByText("Scaling Sharpness (50%)") as HTMLButtonElement)
+      (screen.getByText("Scaling Sharpness (90%)") as HTMLButtonElement)
         .disabled,
     ).toBe(true);
   });

@@ -40,8 +40,8 @@ void test_scaling_properties() {
     static_assert(!ls::GameConfDefaults::scalingEnabled);
     static_assert(ls::GameConfDefaults::scalingMethod ==
         ls::ScalingMethod::Native);
-    static_assert(ls::GameConfDefaults::scalingFactor == 1.5F);
-    static_assert(ls::GameConfDefaults::scalingSharpness == 0.5F);
+    static_assert(ls::GameConfDefaults::scalingFactor == 2.0F);
+    static_assert(ls::GameConfDefaults::scalingSharpness == 0.9F);
     static_assert(ls::GameConfLimits::minimumScalingFactor == 1.0F);
     static_assert(ls::GameConfLimits::maximumScalingFactor == 2.0F);
     static_assert(ls::GameConfLimits::minimumScalingSharpness == 0.0F);

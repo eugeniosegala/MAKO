@@ -526,6 +526,7 @@ int main() {
     auto nativeScalingEngine = current;
     nativeScalingEngine.scaling_enabled = true;
     nativeScalingEngine.scaling_method = ls::ScalingMethod::Native;
+    nativeScalingEngine.scaling_factor = 1.5F;
     decision = classifyProfileUpdate(current, nativeScalingEngine, 3, true);
     expect(decision.action ==
             ProfileUpdateAction::DeferUntilProcessRestart &&
@@ -594,6 +595,104 @@ int main() {
     expect(!resourceRecreation.pending() && !resourceRecreation.armed(),
         "Returning to the active resource profile must cancel recreation");
 
+    auto gamescopeFactorRequest = nativeScalingEngine;
+    gamescopeFactorRequest.scaling_factor = 2.0F;
+    const auto gamescopeFactorDecision = planProfileUpdate(
+        nativeScalingEngine, gamescopeFactorRequest, 3, true, true
+    ).decision;
+    expect(guardedLiveProfileResourceRecreationAvailable(
+            gamescopeFactorDecision, true, true, true, true
+        ),
+        "A maintenance1-fenced Gamescope spatial role must request recreation for an extent change");
+    expect(!guardedLiveProfileResourceRecreationAvailable(
+            gamescopeFactorDecision, true, true, true, false
+        ),
+        "The upper Gamescope role must not request recreation for an extent change");
+    expect(!guardedLiveProfileResourceRecreationAvailable(
+            gamescopeFactorDecision, true, false, true, true
+        ),
+        "A Gamescope extent change must remain deferred without retirement proof");
+
+    auto combinedFixedCurrent = nativeScalingEngine;
+    combinedFixedCurrent.scaling_method = ls::ScalingMethod::Mako;
+    combinedFixedCurrent.adaptive = false;
+    combinedFixedCurrent.multiplier = 2;
+    combinedFixedCurrent.adaptive_max_multiplier = 2;
+    auto combinedFixedRequest = combinedFixedCurrent;
+    combinedFixedRequest.scaling_factor = 2.0F;
+    combinedFixedRequest.multiplier = 3;
+    const auto combinedFixedPlan = planProfileUpdate(
+        combinedFixedCurrent, combinedFixedRequest, 1, true, true, true
+    );
+    expect(combinedFixedPlan.decision.action ==
+                ProfileUpdateAction::ApplyLive &&
+            combinedFixedPlan.decision.spatialScalingChanged &&
+            combinedFixedPlan.decision.generatedFrameCapacityExceeded &&
+            combinedFixedPlan.decision.frameGenerationPrivateRebuild &&
+            combinedFixedPlan.decision.swapchainRecreationDeferred &&
+            combinedFixedPlan.appliedProfile.scaling_factor ==
+                combinedFixedCurrent.scaling_factor &&
+            combinedFixedPlan.appliedProfile.multiplier ==
+                combinedFixedCurrent.multiplier &&
+            generatedFrameCapacityForProfile(combinedFixedRequest) == 2,
+        "A combined factor and Fixed 3x update must retain both old active shapes until their safe transitions");
+    expect(guardedLiveProfileResourceRecreationAvailable(
+            combinedFixedPlan.decision, true, true, true, true
+        ) && !guardedLiveProfileResourceRecreationAvailable(
+            combinedFixedPlan.decision, true, true, true, false
+        ),
+        "Only the lower Gamescope role may request recreation for a combined factor and Fixed update");
+
+    auto combinedAdaptiveRequest = combinedFixedRequest;
+    combinedAdaptiveRequest.scaling_factor = 1.5F;
+    combinedAdaptiveRequest.adaptive = true;
+    combinedAdaptiveRequest.adaptive_max_multiplier = 4;
+    const auto combinedAdaptivePlan = planProfileUpdate(
+        combinedFixedRequest, combinedAdaptiveRequest, 2, true, true, true
+    );
+    expect(combinedAdaptivePlan.decision.action ==
+                ProfileUpdateAction::ApplyLive &&
+            combinedAdaptivePlan.decision.spatialScalingChanged &&
+            combinedAdaptivePlan.decision.generatedFrameCapacityExceeded &&
+            combinedAdaptivePlan.decision.frameGenerationPrivateRebuild &&
+            combinedAdaptivePlan.decision.swapchainRecreationDeferred &&
+            !combinedAdaptivePlan.appliedProfile.adaptive &&
+            combinedAdaptivePlan.appliedProfile.scaling_factor == 2.0F &&
+            generatedFrameCapacityForProfile(combinedAdaptiveRequest) == 3,
+        "A combined factor and Fixed-to-Adaptive 4x update must wait atomically for the required resource shapes");
+    expect(guardedLiveProfileResourceRecreationAvailable(
+            combinedAdaptivePlan.decision, true, true, true, true
+        ) && !guardedLiveProfileResourceRecreationAvailable(
+            combinedAdaptivePlan.decision, true, true, true, false
+        ),
+        "A combined Adaptive capacity change must not add a second upper-role recreation request");
+
+    auto fixedCapacityOnlyRequest = combinedFixedCurrent;
+    fixedCapacityOnlyRequest.multiplier = 3;
+    const auto fixedCapacityOnlyPlan = planProfileUpdate(
+        combinedFixedCurrent, fixedCapacityOnlyRequest, 1, true, true, true
+    );
+    expect(fixedCapacityOnlyPlan.decision.frameGenerationPrivateRebuild &&
+            !fixedCapacityOnlyPlan.decision.spatialScalingChanged &&
+            !guardedLiveProfileResourceRecreationAvailable(
+                fixedCapacityOnlyPlan.decision, true, true, true, true
+            ),
+        "A Fixed capacity-only change must remain private and never request game-owned recreation");
+
+    auto gamescopeFrameGenerationRequest = current;
+    gamescopeFrameGenerationRequest.flow_scale = 0.75F;
+    const auto gamescopeFrameGenerationDecision = planProfileUpdate(
+        current, gamescopeFrameGenerationRequest, 2, true, false, false
+    ).decision;
+    expect(!guardedLiveProfileResourceRecreationAvailable(
+            gamescopeFrameGenerationDecision, true, true, true, true
+        ),
+        "Gamescope frame-generation resources must not provoke an application-visible recreation");
+    expect(guardedLiveProfileResourceRecreationAvailable(
+            gamescopeFrameGenerationDecision, true, true, false, false
+        ),
+        "A compatible non-Gamescope context must retain the guarded fallback recreation path");
+
     auto frameGenerationBackendRequest = current;
     frameGenerationBackendRequest.flow_scale = 0.75F;
     frameGenerationBackendRequest.performance_mode = true;
@@ -621,6 +720,7 @@ int main() {
     auto scalingParameterCurrent = current;
     scalingParameterCurrent.scaling_enabled = true;
     scalingParameterCurrent.scaling_method = ls::ScalingMethod::Mako;
+    scalingParameterCurrent.scaling_factor = 1.5F;
     auto scalingParameterRequest = scalingParameterCurrent;
     scalingParameterRequest.scaling_factor = 2.0F;
     resourceRecreation.update(
@@ -657,6 +757,7 @@ int main() {
     auto scalingCurrent = current;
     scalingCurrent.scaling_enabled = true;
     scalingCurrent.scaling_method = ls::ScalingMethod::Mako;
+    scalingCurrent.scaling_factor = 1.5F;
     next = scalingCurrent;
     next.scaling_factor = 2.0F;
     decision = classifyProfileUpdate(scalingCurrent, next, 3, true);

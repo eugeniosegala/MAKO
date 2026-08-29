@@ -220,6 +220,8 @@ add_pattern 'MAKO Decky: Gamescope WSI skipped:'
 # generic swapchain failures.
 spatial_scaling_record="$renderer_prefix (spatial scaling|live spatial scaling change|live profile resource change|LS1 scaling unavailable|standalone spatial scaling|multi-swapchain spatial-scaling|frame generation was enabled after the application device was created without external interop|frame-generation backend initialization failed; independent spatial scaling retained)"
 add_pattern "$spatial_scaling_record"
+live_recreation_record="$renderer_prefix present diagnostics: operation=(generated-present-recreation-drain|original-present-recreation-propagate|swapchain-recreation-observed|swapchain-create-observed)"
+add_pattern "$live_recreation_record"
 
 for preset in "${presets[@]}"; do
   case "$preset" in

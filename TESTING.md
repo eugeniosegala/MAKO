@@ -126,7 +126,7 @@ The manifests and guides in MAKO Gym are authoritative for row semantics, thresh
 | `sync-validation` | 8 | Khronos synchronization validation on canonical quality paths | `docs/SYNCHRONIZATION-VALIDATION.md` |
 | `repeatability` | 9 | Byte-identical output across three independent initializations | `docs/QUALITY-REPEATABILITY.md` |
 | `recovery` | 31 | Scripted cadence, hitch, stall, live-scaling, and swapchain lifecycle | `docs/RUNTIME-RECOVERY-MATRIX.md` |
-| `gamescope-e2e` | 28 | Native Gamescope WSI, fixed/variable surfaces, live controls and private FG resource replacement, resolution transitions, and Adaptive efficiency-backoff endurance | `docs/GAMESCOPE-END-TO-END.md` |
+| `gamescope-e2e` | 30 | Native Gamescope WSI, fixed/variable surfaces, live controls, guarded Scale Factor recreation alone and combined with Fixed/Adaptive FG policy and capacity changes, private FG resource replacement, resolution transitions, and Adaptive efficiency-backoff endurance | `docs/GAMESCOPE-END-TO-END.md` |
 | `sustained-health` | 3 | Repeated private-resource RSS/allocation plateaus plus Deck and opt-in docked thermal/performance soaks | `docs/SUSTAINED-HEALTH.md` |
 | `proton-e2e` | 12 | Six deterministic scenes through both DXVK and VKD3D-Proton | `docs/PROTON-END-TO-END.md` |
 | `proton-compatibility` | 10 | Stratified sentinels across provenance-checked Proton families | `docs/PROTON-COMPATIBILITY.md` |

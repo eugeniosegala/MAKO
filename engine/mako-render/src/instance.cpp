@@ -1313,7 +1313,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << (insertedContext != this->swapchains.end() &&
                         insertedContext->second.presentRetirementEnabled()
                         ? "maintenance1-fence" : "natural-only")
-                  << " live_profile_recreation=guarded-non-gamescope-one-shot"
+                  << " live_profile_recreation=guarded-maintenance1-one-shot"
                   << '\n';
     }
 }

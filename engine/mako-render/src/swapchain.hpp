@@ -108,10 +108,11 @@ namespace mako::layer {
 
         /// Apply configuration that is safe for an already-created context.
         /// Spatial model and sharpness changes rebuild MAKO's private scaler
-        /// at the next presentation boundary. Extent and other resource-shape
-        /// changes remain pending for a natural recreation, while process-wide
-        /// backend changes wait for restart. The decision reports live
-        /// application and every still-pending boundary.
+        /// at the next presentation boundary. The lower managed spatial role
+        /// may request one game-owned recreation for an extent change after a
+        /// retirement-fenced present; unsupported resource-shape changes wait
+        /// for a natural recreation. Process-wide backend changes wait for
+        /// restart. The decision reports every applied and pending boundary.
         [[nodiscard]] ProfileUpdateDecision updateProfile(
             const ls::GameConf& profile, uint64_t runtimeStateRevision,
             const ls::GameConf* requestedProfile = nullptr,

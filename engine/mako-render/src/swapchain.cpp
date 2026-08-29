@@ -1318,11 +1318,13 @@ ProfileUpdateDecision Swapchain::updateProfile(
         this->preparedSpatialScaler.reset();
     }
     const bool liveRecreationAvailable =
-        liveProfileResourceRecreationAvailable(
+        guardedLiveProfileResourceRecreationAvailable(
             decision,
             this->instance && resourcesAvailable &&
-                this->colorPipeline.generationSupported
-        ) && this->presentRetirementEnabled() && !this->gamescopeDetected;
+                this->colorPipeline.generationSupported,
+            this->presentRetirementEnabled(), this->gamescopeDetected,
+            spatialScalingLayer
+        );
     this->liveProfileResourceRecreation.update(
         this->profile,
         liveRecreationAvailable ? nextProfile : this->profile,

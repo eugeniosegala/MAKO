@@ -262,6 +262,27 @@ namespace mako::layer {
              frameGenerationResourcesAvailable);
     }
 
+    /// A recreation request is safe only when the lower present is protected
+    /// by swapchain-maintenance1 retirement proof. Managed Gamescope may use
+    /// that path only for the lower spatial role's extent change; frame-
+    /// generation resources remain private-context transitions and must not
+    /// provoke an application-visible recreation through the upper role.
+    [[nodiscard]] inline bool guardedLiveProfileResourceRecreationAvailable(
+            const ProfileUpdateDecision& decision,
+            const bool frameGenerationResourcesAvailable,
+            const bool presentRetirementEnabled,
+            const bool gamescopeDetected,
+            const bool lowerSpatialRole) {
+        if (!presentRetirementEnabled ||
+                !liveProfileResourceRecreationAvailable(
+                    decision, frameGenerationResourcesAvailable
+                )) {
+            return false;
+        }
+        return !gamescopeDetected ||
+            (lowerSpatialRole && decision.spatialScalingChanged);
+    }
+
     /// A natural swapchain recreation reuses Root's process-wide backend. Keep
     /// its actual GPU identity in the context profile so a requested GPU change
     /// remains visibly pending until the process restarts.

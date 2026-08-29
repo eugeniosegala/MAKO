@@ -167,13 +167,13 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   scaling_factor: {
     name: "scaling_factor",
     fieldType: ConfigFieldType.FLOAT,
-    default: 1.5,
+    default: 2.0,
     description: "output scaling factor from 1.0x to 2.0x"
   },
   scaling_sharpness: {
     name: "scaling_sharpness",
     fieldType: ConfigFieldType.FLOAT,
-    default: 0.5,
+    default: 0.9,
     description: "scaling sharpness from zero to one"
   },
   frame_generation_enabled: {
@@ -370,8 +370,8 @@ export function getDefaults(): ConfigurationData {
     allow_fp16: true,
     scaling_enabled: false,
     scaling_method: "native",
-    scaling_factor: 1.5,
-    scaling_sharpness: 0.5,
+    scaling_factor: 2.0,
+    scaling_sharpness: 0.9,
     frame_generation_enabled: true,
     frame_generation_refresh_threshold: 0,
     base_fps_cap: 0,

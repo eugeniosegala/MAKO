@@ -159,7 +159,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
             QStringLiteral("Scale Factor"),
         "English scale-factor label does not match Decky");
     require(english.value(QStringLiteral("scalingFactorDesc")).toString() ==
-            QStringLiteral("Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. Applies on the game's next natural resolution change or restart."),
+            QStringLiteral("Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. After the control settles, MAKO requests one guarded game-owned recreation when supported; otherwise it applies on the next natural resolution change or restart."),
         "English scale-factor help does not match Decky");
     require(english.value(QStringLiteral("scalingSharpnessDesc")).toString() ==
             QStringLiteral("For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild."),

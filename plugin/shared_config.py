@@ -149,14 +149,14 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
 
     "scaling_factor": {
         "fieldType": ConfigFieldType.FLOAT,
-        "default": 1.5,
+        "default": 2.0,
         "description": "output scaling factor from 1.0x to 2.0x",
         "location": "toml"
     },
 
     "scaling_sharpness": {
         "fieldType": ConfigFieldType.FLOAT,
-        "default": 0.5,
+        "default": 0.9,
         "description": "scaling sharpness from zero to one",
         "location": "toml"
     },

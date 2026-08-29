@@ -128,7 +128,7 @@ export function ScalingControl({
                 <span style={{ display: "block", paddingTop: "3px" }}>
                   {t(
                     "SCALING_FACTOR_DESC",
-                    "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. Applies on the game's next natural resolution change or restart.",
+                    "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. After the control settles, MAKO requests one guarded game-owned recreation when supported; otherwise it applies on the next natural resolution change or restart.",
                   )}
                 </span>
               }

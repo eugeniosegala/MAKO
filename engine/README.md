@@ -12,7 +12,7 @@ MAKO Renderer is MAKO's Vulkan layer and standalone component for Steam Deck, St
 
 The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. LS1 scaling and LSFG frame generation require a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer never bundles, copies, persists, replaces, or modifies that proprietary library; the open MAKO scaler does not require it.
 
-Scaling must be enabled before the game starts. In a provisioned process, scaler-method and sharpness changes rebuild only MAKO's private spatial context; Scale Factor applies at a game-owned recreation, which remains natural on the managed Gamescope path. Frame Generation turns on and off live when startup provisioning succeeded. See [runtime transitions](docs/RUNTIME-TRANSITIONS.md) for every live, deferred, and restart boundary.
+Scaling must be enabled before the game starts. In a provisioned process, scaler-method and sharpness changes rebuild only MAKO's private spatial context. Scale Factor applies at a game-owned recreation; the managed Gamescope lower spatial role requests one after a maintenance1-fenced present, while unsupported paths wait for a natural boundary. Frame Generation turns on and off live when startup provisioning succeeded. See [runtime transitions](docs/RUNTIME-TRANSITIONS.md) for every live, deferred, and restart boundary.
 
 ## Downloads
 

@@ -144,8 +144,8 @@ describe("MAKO configuration persistence", () => {
 
     await waitFor(() => expect(result.current.config.multiplier).toBe(3));
     expect(result.current.config.scaling_enabled).toBe(false);
-    expect(result.current.config.scaling_factor).toBe(1.5);
-    expect(result.current.config.scaling_sharpness).toBe(0.5);
+    expect(result.current.config.scaling_factor).toBe(2);
+    expect(result.current.config.scaling_sharpness).toBe(0.9);
     expect(result.current.config.frame_generation_enabled).toBe(true);
   });
 });

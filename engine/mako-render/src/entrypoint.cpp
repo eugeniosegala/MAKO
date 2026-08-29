@@ -1808,6 +1808,7 @@ namespace {
             if (it == instance_info->swapchains.end())
                 return VK_ERROR_INITIALIZATION_FAILED;
 
+            std::optional<uint64_t> presentingContextId;
             try {
                 const auto metadata =
                     instance_info->swapchainInfos.find(swapchain);
@@ -1834,6 +1835,7 @@ namespace {
                     : std::span<const VkSemaphore>{};
 
                 auto& context = layer_info->root.getSwapchainContext(swapchain);
+                presentingContextId = context.diagnosticsId();
                 result = context.present(it->second,
                     queue, swapchain,
                     const_cast<void*>(info->pNext),
@@ -1863,7 +1865,20 @@ namespace {
                 if (e.error() != VK_ERROR_OUT_OF_DATE_KHR) {
                     std::cerr << "MAKO Renderer: swapchain presentation failed:\n";
                     std::cerr << "- " << e.what() << '\n';
-                } // silently swallow out-of-date errors
+                } else if (presentingContextId &&
+                        present_diagnostics::enabled()) {
+                    // Some direct original-image paths report OUT_OF_DATE by
+                    // exception after the application image has already
+                    // traversed the lower role. Preserve the same upper-role
+                    // recreation observation as the normal returned-result
+                    // path so the game receives one coherent signal.
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=swapchain-recreation-observed"
+                              << " context=" << *presentingContextId
+                              << " role=" << layerRoleName
+                              << " swapchain=" << swapchain
+                              << " source=upstream-or-driver\n";
+                }
 
                 result = e.error();
             } catch (const std::exception& e) {
