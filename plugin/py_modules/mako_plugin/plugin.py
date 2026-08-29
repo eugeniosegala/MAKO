@@ -17,6 +17,7 @@ import decky
 from .installation import InstallationService
 from .dll_detection import DllDetectionService
 from .configuration import ConfigurationService
+from .runtime_state import RuntimeStateService
 from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
 from .config_schema_generated import ConfigurationPatch
 from .flatpak_service import (
@@ -37,6 +38,7 @@ from .types import (
     LaunchOptionResponse,
     ProfileResponse,
     ProfilesResponse,
+    RuntimeStatusResponse,
 )
 
 
@@ -54,6 +56,7 @@ class Plugin:
         self.installation_service = InstallationService()
         self.dll_detection_service = DllDetectionService()
         self.configuration_service = ConfigurationService()
+        self.runtime_state_service = RuntimeStateService()
         self.flatpak_service = FlatpakService()
 
     async def install_mako(self) -> InstallationResult:
@@ -183,6 +186,12 @@ class Plugin:
     ) -> ConfigurationResponse:
         """Read a saved profile without making it the runtime profile."""
         return self.configuration_service.get_profile_config(profile_name)
+
+    async def get_runtime_status(
+            self, profile_name: str = ""
+    ) -> RuntimeStatusResponse:
+        """Return validated requested-versus-applied Renderer state."""
+        return self.runtime_state_service.get_status(profile_name)
 
     async def get_config_schema(self) -> ConfigSchemaResponse:
         """Get configuration schema information for frontend

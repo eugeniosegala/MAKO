@@ -36,6 +36,7 @@ namespace mako::layer {
         bool spatialScalingLiveRebuild{false};
         bool frameGenerationBackendChanged{false};
         bool generatedFrameCapacityExceeded{false};
+        bool frameGenerationPrivateRebuild{false};
         bool swapchainRecreationDeferred{false};
         bool processRestartDeferred{false};
         bool swapchainRecreationRequested{false};
@@ -257,6 +258,7 @@ namespace mako::layer {
                 !decision.spatialScalingLiveRebuild) ||
             ((decision.frameGenerationBackendChanged ||
               decision.generatedFrameCapacityExceeded) &&
+             !decision.frameGenerationPrivateRebuild &&
              frameGenerationResourcesAvailable);
     }
 
@@ -426,8 +428,8 @@ namespace mako::layer {
 
     /// Reserve one private output set that can serve both Fixed and Adaptive.
     /// Ultra Performance deliberately keeps only the active policy. A live
-    /// mode or multiplier change that needs a different capacity uses the
-    /// game-owned recreation boundary before the new policy is selected.
+    /// mode or multiplier change that needs a different capacity prepares and
+    /// atomically replaces MAKO's private frame-generation context.
     [[nodiscard]] inline size_t generatedFrameCapacityForProfile(
             const ls::GameConf& profile) {
         if (profile.ultra_performance) {
@@ -452,7 +454,8 @@ namespace mako::layer {
             const ls::GameConf& current, const ls::GameConf& next,
             const size_t generatedFrameCapacity,
             const bool frameGenerationResourcesAvailable,
-            const bool spatialScalerLiveRebuildAvailable = false) {
+            const bool spatialScalerLiveRebuildAvailable = false,
+            const bool frameGenerationPrivateRebuildAvailable = false) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
@@ -475,6 +478,20 @@ namespace mako::layer {
             applied.scaling_enabled = current.scaling_enabled;
             processRestartDeferred = true;
         }
+
+        const bool frameGenerationBackendChanged =
+            current.ultra_performance == next.ultra_performance && (
+            ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||
+            ls::effectivePerformanceMode(current) !=
+                ls::effectivePerformanceMode(next));
+        const bool generatedCapacityExceeded =
+            generatedFrameCapacityForActivePolicy(next) >
+                generatedFrameCapacity;
+        const bool frameGenerationPrivateRebuild =
+            frameGenerationPrivateRebuildAvailable &&
+            frameGenerationResourcesAvailable &&
+            !processRestartDeferred &&
+            (frameGenerationBackendChanged || generatedCapacityExceeded);
 
         // Scaler selection/tuning, Flow Scale, and model selection shape
         // private resources, while pacing shapes the game-owned swapchain.
@@ -506,12 +523,12 @@ namespace mako::layer {
         if (ls::effectiveFlowScale(current) !=
                 ls::effectiveFlowScale(applied)) {
             applied.flow_scale = current.flow_scale;
-            swapchainRecreationDeferred = true;
+            swapchainRecreationDeferred |= !frameGenerationPrivateRebuild;
         }
         if (ls::effectivePerformanceMode(current) !=
                 ls::effectivePerformanceMode(applied)) {
             applied.performance_mode = current.performance_mode;
-            swapchainRecreationDeferred = true;
+            swapchainRecreationDeferred |= !frameGenerationPrivateRebuild;
         }
         if (current.pacing != next.pacing) {
             applied.pacing = current.pacing;
@@ -529,7 +546,7 @@ namespace mako::layer {
                     current.adaptive_max_multiplier;
             else
                 applied.multiplier = current.multiplier;
-            swapchainRecreationDeferred = true;
+            swapchainRecreationDeferred |= !frameGenerationPrivateRebuild;
         }
 
         if (!current.frame_generation_enabled &&
@@ -569,20 +586,12 @@ namespace mako::layer {
         const bool spatialScalingChanged =
             current.scaling_enabled != next.scaling_enabled ||
             spatialScalingResourcesChanged;
-        const bool frameGenerationBackendChanged =
-            current.ultra_performance == next.ultra_performance && (
-            ls::effectiveFlowScale(current) != ls::effectiveFlowScale(next) ||
-            ls::effectivePerformanceMode(current) !=
-                ls::effectivePerformanceMode(next));
-        const bool generatedCapacityExceeded =
-            generatedFrameCapacityForActivePolicy(next) >
-                generatedFrameCapacity;
         const bool liveChange = frameGenerationChanged ||
             refreshRateThresholdChanged ||
                 generationPolicyChanged ||
                 generationModeChanged || fixedMultiplierChanged ||
                 baseFpsCapChanged || dynamicCadenceProbeIntervalChanged ||
-                spatialScalingLiveRebuild;
+                spatialScalingLiveRebuild || frameGenerationPrivateRebuild;
 
         ProfileUpdateAction action = ProfileUpdateAction::NoRuntimeChange;
         if (liveChange)
@@ -611,6 +620,8 @@ namespace mako::layer {
                     frameGenerationBackendChanged,
                 .generatedFrameCapacityExceeded =
                     generatedCapacityExceeded,
+                .frameGenerationPrivateRebuild =
+                    frameGenerationPrivateRebuild,
                 .swapchainRecreationDeferred =
                     swapchainRecreationDeferred,
                 .processRestartDeferred = processRestartDeferred,

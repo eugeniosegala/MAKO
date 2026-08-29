@@ -158,6 +158,74 @@ export interface ProfileResult {
   error: Nullable<string>;
 }
 
+export type RuntimeApplicationPhase =
+  | "inactive"
+  | "active"
+  | "debouncing"
+  | "preparing"
+  | "draining"
+  | "failed"
+  | "swapchain-recreation"
+  | "process-restart";
+
+export interface RuntimeProfileSnapshot {
+  name: string;
+  gpu: Nullable<string>;
+  multiplier: number;
+  frame_generation_enabled: boolean;
+  scaling_enabled: boolean;
+  scaling_method: string;
+  scaling_factor: number;
+  scaling_sharpness: number;
+  frame_generation_refresh_threshold: number;
+  base_fps_cap: number;
+  adaptive: boolean;
+  adaptive_auto_base_fps_cap: boolean;
+  target_fps: number;
+  adaptive_max_multiplier: number;
+  adaptive_stable_cadence: boolean;
+  dynamic_cadence_recovery: boolean;
+  dynamic_cadence_probe_interval_seconds: number;
+  ultra_performance: boolean;
+  flow_scale: number;
+  effective_flow_scale: number;
+  performance_mode: boolean;
+  effective_performance_mode: boolean;
+  pacing: string;
+  required_generated_capacity: number;
+}
+
+export interface RuntimePendingState {
+  frame_generation_private: boolean;
+  spatial_private: boolean;
+  swapchain_recreation: boolean;
+  process_restart: boolean;
+}
+
+export interface RuntimeContextState {
+  pid: number;
+  process_start_ticks: number;
+  context: number;
+  role: "frame-generation" | "spatial-scaling";
+  updated_unix_ms: number;
+  state_revision: number;
+  phase: RuntimeApplicationPhase;
+  reason: string;
+  pending: RuntimePendingState;
+  applied_generated_capacity: number;
+  requested: RuntimeProfileSnapshot;
+  applied: RuntimeProfileSnapshot;
+  error: Nullable<string>;
+}
+
+export interface RuntimeStatusResult {
+  success: boolean;
+  phase: RuntimeApplicationPhase;
+  contexts: RuntimeContextState[];
+  message: string;
+  error: Nullable<string>;
+}
+
 export function configFailureResult(error: string): ConfigResult {
   return { success: false, config: null, message: "", error };
 }
@@ -193,6 +261,9 @@ export const getDllStats = callable<[], DllStatsResult>("get_dll_stats");
 export const getMakoConfig = callable<[], ConfigResult>("get_mako_config");
 export const getProfileConfig = callable<[string], ConfigResult>(
   "get_profile_config",
+);
+export const getRuntimeStatus = callable<[string?], RuntimeStatusResult>(
+  "get_runtime_status",
 );
 export const getConfigSchema = callable<[], ConfigSchemaResult>(
   "get_config_schema",

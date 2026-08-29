@@ -15,6 +15,8 @@
 #include "color_pipeline.hpp"
 #include "profile_update.hpp"
 #include "presentation_policy.hpp"
+#include "runtime_status.hpp"
+#include "runtime_transition.hpp"
 #include "spatial_scaler.hpp"
 
 #include <array>
@@ -111,7 +113,9 @@ namespace mako::layer {
         /// backend changes wait for restart. The decision reports live
         /// application and every still-pending boundary.
         [[nodiscard]] ProfileUpdateDecision updateProfile(
-            const ls::GameConf& profile, uint64_t runtimeStateRevision);
+            const ls::GameConf& profile, uint64_t runtimeStateRevision,
+            const ls::GameConf* requestedProfile = nullptr,
+            bool processRestartPending = false);
 
         /// After the lower WSI has consumed this present's wait semaphores,
         /// convert one successful result into VK_ERROR_OUT_OF_DATE_KHR for a
@@ -180,6 +184,10 @@ namespace mako::layer {
 
         struct FrameState {
             size_t sequenceIndex{1};
+            // The backend timeline is reset only when MAKO commits a new
+            // private context. Diagnostics and binary-semaphore ring indices
+            // remain monotonic across that transition.
+            size_t backendTimelineIndex{1};
             size_t realFrameIndex{0};
             size_t backendFrameIndex{0};
             bool renderFenceInFlight{false};
@@ -214,12 +222,48 @@ namespace mako::layer {
             std::optional<std::chrono::steady_clock::time_point> retryAt;
         };
 
-        struct SpatialTransitionState {
-            std::optional<ls::ScalingMethod> pendingMethod;
-            float pendingSharpness{0.5F};
-            uint64_t pendingStateRevision{0};
-            std::optional<std::chrono::steady_clock::time_point> applyAfter;
-            std::optional<std::chrono::steady_clock::time_point> retryAt;
+        struct SpatialResourceRequest {
+            ls::ScalingMethod method{ls::ScalingMethod::Native};
+            float sharpness{0.5F};
+
+            friend bool operator==(
+                    const SpatialResourceRequest& left,
+                    const SpatialResourceRequest& right) {
+                return left.method == right.method &&
+                    left.sharpness == right.sharpness;
+            }
+        };
+
+        struct FrameGenerationResourceRequest {
+            ls::GameConf profile;
+
+            friend bool operator==(
+                    const FrameGenerationResourceRequest& left,
+                    const FrameGenerationResourceRequest& right) {
+                return ls::effectiveFlowScale(left.profile) ==
+                        ls::effectiveFlowScale(right.profile) &&
+                    ls::effectivePerformanceMode(left.profile) ==
+                        ls::effectivePerformanceMode(right.profile) &&
+                    generatedFrameCapacityForProfile(left.profile) ==
+                        generatedFrameCapacityForProfile(right.profile);
+            }
+        };
+
+        struct FrameGenerationResources {
+            // Context must be destroyed before the exported Vulkan resources
+            // it imports. Members are destroyed in reverse declaration order.
+            std::vector<vk::Image> sourceImages;
+            std::vector<vk::Image> destinationImages;
+            ls::lazy<vk::TimelineSemaphore> syncSemaphore;
+            ls::owned_ptr<ls::R<backend::Context>> context;
+        };
+
+        struct RuntimeStatusState {
+            ls::GameConf requestedProfile;
+            uint64_t stateRevision{0};
+            bool swapchainRecreationPending{false};
+            bool processRestartPending{false};
+            std::optional<std::string> error;
         };
 
         std::vector<vk::Image> sourceImages;
@@ -238,6 +282,8 @@ namespace mako::layer {
         struct SpatialScalingPass {
             vk::CommandBuffer commandBuffer;
             vk::Semaphore readySemaphore;
+            vk::Fence completionFence;
+            bool completionInFlight{false};
         };
         std::optional<SpatialScaler> spatialScaler;
         std::vector<SpatialScalingPass> spatialScalingPasses;
@@ -258,7 +304,14 @@ namespace mako::layer {
         RecoveryState recoveryState;
         DiagnosticsState diagnosticsState;
         ColorTransitionState colorTransitionState;
-        SpatialTransitionState spatialTransitionState;
+        PrivateResourceTransition<SpatialResourceRequest> spatialTransition;
+        std::optional<SpatialScaler> preparedSpatialScaler;
+        PrivateResourceTransition<FrameGenerationResourceRequest>
+            frameGenerationTransition;
+        std::optional<FrameGenerationResources>
+            preparedFrameGenerationResources;
+        RuntimeStatusPublisher runtimeStatusPublisher;
+        RuntimeStatusState runtimeStatusState;
         LiveProfileResourceRecreation liveProfileResourceRecreation;
         std::optional<AdaptiveScheduler> adaptiveScheduler;
         size_t configuredFixedGeneratedFrames{0};
@@ -279,11 +332,27 @@ namespace mako::layer {
         SwapchainInfo info;
 
         [[nodiscard]] bool applyPendingColorPipeline(const vk::Vulkan& vk);
+        [[nodiscard]] bool applyPendingFrameGenerationResources(
+            const vk::Vulkan& vk);
         void applyPendingSpatialScaler(const vk::Vulkan& vk);
+        void prepareSpatialScalingPass(const vk::Vulkan& vk,
+            SpatialScalingPass& pass);
+        [[nodiscard]] bool spatialScalingPassesReady(
+            const vk::Vulkan& vk);
+        void publishRuntimeStatus(std::string_view reason) noexcept;
         [[nodiscard]] static std::optional<uint64_t>
             generatedImageAcquireTimeoutNs();
+        void ensureFrameGenerationExecutionResources(const vk::Vulkan& vk);
+        [[nodiscard]] FrameGenerationResources buildFrameGenerationResources(
+            const vk::Vulkan& vk, const SwapchainColorPipeline& pipeline,
+            const ls::GameConf& resourceProfile);
+        void commitFrameGenerationResources(
+            FrameGenerationResources resources,
+            const ls::GameConf& resourceProfile,
+            std::string_view reason);
         void rebuildPrivateResources(const vk::Vulkan& vk,
-            SwapchainColorPipeline pipeline);
+            SwapchainColorPipeline pipeline,
+            const ls::GameConf& resourceProfile);
         [[nodiscard]] bool resetGenerationScheduler(
             std::chrono::steady_clock::time_point now,
             std::string_view reason);

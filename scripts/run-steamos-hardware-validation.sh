@@ -6,6 +6,11 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 workflow="steamos-hardware-validation.yml"
 branch=""
 deploy_to_decky=false
+gym_selection=""
+gym_reason=""
+gym_suites=()
+all_gym_suites=false
+no_gym_suites=false
 minimum_free_gib="${MAKO_HARDWARE_MIN_FREE_GIB:-30}"
 ci_root="${MAKO_HARDWARE_CI_ROOT:-$repo_root/engine/build/cache}"
 runner_root=""
@@ -23,10 +28,17 @@ dispatches the hardware-validation workflow for a clean remote-synchronized
 branch, waits for the result, and removes the runner and its complete checkout.
 
 Options:
-  --branch NAME       Branch to validate (default: current branch).
-  --deploy-to-decky   Deploy the verified ZIP to an existing MAKO Decky test
-                      installation and reload the plugin.
-  -h, --help          Show this help.
+  --branch NAME          Branch to validate (default: current branch).
+  --gym-suite NAME      Run one affected MAKO Gym hardware suite. Repeat to
+                        select multiple suites.
+  --all-gym-suites      Run every Gym hardware suite after an explicit broad
+                        validation decision.
+  --no-gym-suites       Run no new Gym hardware suite when no boundary changed
+                        or matching retained evidence is being reused.
+  --gym-reason TEXT     Record why this hardware selection is appropriate.
+  --deploy-to-decky     Deploy the verified ZIP to an existing MAKO Decky test
+                        installation and reload the plugin.
+  -h, --help             Show this help.
 
 Reusable compiler, Flatpak, pnpm, and tool caches share the repository's
 ignored engine/build/cache tree by default. Runner credentials, source, work
@@ -48,6 +60,28 @@ while (($#)); do
     --deploy-to-decky)
       deploy_to_decky=true
       ;;
+    --gym-suite)
+      if (($# < 2)); then
+        echo "--gym-suite requires a name" >&2
+        exit 2
+      fi
+      gym_suites+=("$2")
+      shift
+      ;;
+    --all-gym-suites)
+      all_gym_suites=true
+      ;;
+    --no-gym-suites)
+      no_gym_suites=true
+      ;;
+    --gym-reason)
+      if (($# < 2)); then
+        echo "--gym-reason requires text" >&2
+        exit 2
+      fi
+      gym_reason="$2"
+      shift
+      ;;
     -h|--help)
       usage
       exit 0
@@ -60,6 +94,29 @@ while (($#)); do
   esac
   shift
 done
+
+selection_modes=0
+if ((${#gym_suites[@]} > 0)); then
+  ((selection_modes += 1))
+fi
+if [[ "$all_gym_suites" == true ]]; then
+  ((selection_modes += 1))
+fi
+if [[ "$no_gym_suites" == true ]]; then
+  ((selection_modes += 1))
+fi
+if ((selection_modes != 1)); then
+  echo "Select named suites, --all-gym-suites, or --no-gym-suites exactly once." >&2
+  exit 2
+fi
+if [[ "$all_gym_suites" == true ]]; then
+  gym_selection=all
+elif [[ "$no_gym_suites" == true ]]; then
+  gym_selection=none
+else
+  gym_selection="$(IFS=,; printf '%s' "${gym_suites[*]}")"
+fi
+"$repo_root/scripts/validate-gym-selection.sh" "$gym_selection" "$gym_reason"
 
 cleanup() {
   local runner_id=""
@@ -258,6 +315,8 @@ runner_pid=$!
 
 echo "Dispatching $workflow for $repository@$branch on $runner_name..."
 gh workflow run "$workflow" --repo "$repository" --ref "$branch" \
+  -f "gym_suites=$gym_selection" \
+  -f "gym_reason=$gym_reason" \
   -f "deploy_to_decky=$deploy_to_decky"
 
 run_id=""

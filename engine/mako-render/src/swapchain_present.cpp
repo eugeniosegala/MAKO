@@ -272,6 +272,7 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
         auto& scalingPass = this->spatialScalingPasses.at(
             originalImageIndex
         );
+        this->prepareSpatialScalingPass(vk, scalingPass);
         scalingPass.commandBuffer.begin(vk);
         this->spatialScaler->record(
             vk, scalingPass.commandBuffer, originalImage
@@ -280,8 +281,9 @@ VkResult Swapchain::retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
         scalingPass.commandBuffer.submit(
             vk, applicationWaitSemaphores, VK_NULL_HANDLE, 0,
             std::array{scalingPass.readySemaphore.handle()},
-            VK_NULL_HANDLE, 0, VK_NULL_HANDLE, queue
+            VK_NULL_HANDLE, 0, scalingPass.completionFence.handle(), queue
         );
+        scalingPass.completionInFlight = true;
         spatialScalingReady = scalingPass.readySemaphore.handle();
     }
 
@@ -542,6 +544,7 @@ void Swapchain::observeLowerPresentHealth(
 VkResult Swapchain::presentSpatiallyScaledFrame(
         const PresentInvocation& invocation) {
     auto& pass = this->spatialScalingPasses.at(invocation.imageIndex);
+    this->prepareSpatialScalingPass(invocation.vk, pass);
     const VkImage applicationImage = this->info.images.at(
         invocation.imageIndex
     );
@@ -555,8 +558,9 @@ VkResult Swapchain::presentSpatiallyScaledFrame(
         invocation.vk,
         invocation.waitSemaphores, VK_NULL_HANDLE, 0,
         std::array{pass.readySemaphore.handle()},
-        VK_NULL_HANDLE, 0, VK_NULL_HANDLE, invocation.queue
+        VK_NULL_HANDLE, 0, pass.completionFence.handle(), invocation.queue
     );
+    pass.completionInFlight = true;
     const auto scalingDuration = finishPresentDiagnostic(scalingStarted);
     logSlowPresentOperation(
         "submit-spatial-scaling", this->frameState.realFrameIndex,
@@ -983,6 +987,7 @@ void Swapchain::submitSourceCopy(const PresentInvocation& invocation,
         const VkImage swapchainImage, const vk::Image& sourceImage) {
     if (this->spatialScaler) {
         auto& pass = this->spatialScalingPasses.at(invocation.imageIndex);
+        this->prepareSpatialScalingPass(invocation.vk, pass);
         pass.commandBuffer.begin(invocation.vk);
         this->spatialScaler->record(
             invocation.vk, pass.commandBuffer,
@@ -991,13 +996,17 @@ void Swapchain::submitSourceCopy(const PresentInvocation& invocation,
         pass.commandBuffer.end(invocation.vk);
 
         const auto sourceSubmitStarted = startPresentDiagnostic();
+        const auto sourceTimelineValue =
+            this->frameState.backendTimelineIndex++;
+        this->frameState.sequenceIndex++;
         pass.commandBuffer.submit(
             invocation.vk,
             invocation.waitSemaphores, VK_NULL_HANDLE, 0,
             {}, this->syncSemaphore->handle(),
-            this->frameState.sequenceIndex++,
-            VK_NULL_HANDLE, invocation.queue
+            sourceTimelineValue,
+            pass.completionFence.handle(), invocation.queue
         );
+        pass.completionInFlight = true;
         logSlowPresentOperation(
             "submit-spatial-source", this->frameState.realFrameIndex,
             this->frameState.sequenceIndex, sourceSubmitStarted,
@@ -1039,9 +1048,12 @@ void Swapchain::submitSourceCopy(const PresentInvocation& invocation,
     commandBuffer.end(invocation.vk);
 
     const auto sourceSubmitStarted = startPresentDiagnostic();
+    const auto sourceTimelineValue =
+        this->frameState.backendTimelineIndex++;
+    this->frameState.sequenceIndex++;
     commandBuffer.submit(invocation.vk,
         invocation.waitSemaphores, VK_NULL_HANDLE, 0,
-        {}, this->syncSemaphore->handle(), this->frameState.sequenceIndex++
+        {}, this->syncSemaphore->handle(), sourceTimelineValue
     );
     logSlowPresentOperation(
         "submit-source-copy", this->frameState.realFrameIndex,
@@ -1056,7 +1068,8 @@ VkResult Swapchain::presentHistoryOnly(
         .renderFence = plan.renderFenceWaitDuration,
         .sourceCopy = plan.submitSourceCopyDuration,
     };
-    const uint64_t sourceTimelineValue = this->frameState.sequenceIndex - 1;
+    const uint64_t sourceTimelineValue =
+        this->frameState.backendTimelineIndex - 1;
     auto& fallbackPass = this->passes.front();
     auto& fallbackSemaphores = this->postCopySemaphores.at(
         this->frameState.sequenceIndex % this->postCopySemaphores.size()
@@ -1507,7 +1520,7 @@ VkResult Swapchain::presentGeneratedFrames(
             if (!this->adaptiveScheduler)
                 this->diagnosticsState.fixedSkippedFrames += skippedFrames;
             const uint64_t finalGeneratedTimelineValue =
-                this->frameState.sequenceIndex + skippedFrames - 1;
+                this->frameState.backendTimelineIndex + skippedFrames - 1;
             auto& fallbackSemaphore = postCopy.second;
             if (this->adaptiveScheduler) {
                 this->reportAdaptiveDelivery(plan, i);
@@ -1533,6 +1546,7 @@ VkResult Swapchain::presentGeneratedFrames(
                 finalGeneratedTimelineValue, "initial-timeout", "scheduled"
             );
             this->frameState.sequenceIndex += skippedFrames;
+            this->frameState.backendTimelineIndex += skippedFrames;
 
             result = this->presentOriginalImage(
                 invocation, fallbackSemaphore.handle(),
@@ -1643,7 +1657,8 @@ VkResult Swapchain::presentGeneratedFrames(
         const auto generatedSubmitStarted = startPresentDiagnostic();
         commandBuffer.submit(invocation.vk,
             std::span{waitSemaphores}.first(waitSemaphoreCount),
-            this->syncSemaphore->handle(), this->frameState.sequenceIndex,
+            this->syncSemaphore->handle(),
+            this->frameState.backendTimelineIndex,
             signalSemaphores, VK_NULL_HANDLE, 0,
             i == plan.scheduledGeneratedFrames.size() - 1
                 ? this->renderFence->handle() : VK_NULL_HANDLE
@@ -1721,6 +1736,7 @@ VkResult Swapchain::presentGeneratedFrames(
                 this->diagnosticsState.fixedSkippedFrames +=
                     plan.scheduledGeneratedFrames.size() - i;
             this->frameState.sequenceIndex++;
+            this->frameState.backendTimelineIndex++;
             this->frameState.realFrameIndex++;
             return VK_ERROR_OUT_OF_DATE_KHR;
         }
@@ -1730,6 +1746,7 @@ VkResult Swapchain::presentGeneratedFrames(
             this->diagnosticsState.fixedGeneratedFrames++;
 
         this->frameState.sequenceIndex++;
+        this->frameState.backendTimelineIndex++;
     }
 
     auto& lastPostCopy = this->postCopySemaphores.at(
@@ -1911,6 +1928,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     this->recordPresentCadence(presentNow);
 
     if (!this->applyPendingColorPipeline(vk))
+        return this->presentNativeFrame(invocation);
+    if (!this->applyPendingFrameGenerationResources(vk))
         return this->presentNativeFrame(invocation);
 
     // Frame generation is live-disabled; hand the game's own image directly

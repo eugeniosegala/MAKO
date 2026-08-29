@@ -165,16 +165,16 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
             QStringLiteral("For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild."),
         "English sharpening help does not describe the MAKO baseline");
     require(english.value(QStringLiteral("flowScaleDesc")).toString() ==
-            QStringLiteral("Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality. Changing it briefly recreates the game-owned swapchain."),
+            QStringLiteral("Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality. Changing it rebuilds MAKO's private frame-generation context live; the previous context remains active until handoff."),
         "English Flow Scale help does not match the Frame Generation-only guidance");
     require(english.value(QStringLiteral("performanceModeDesc")).toString()
-            .contains(QStringLiteral("game-owned swapchain")),
-        "English lighter-model help omitted its recreation contract");
+            .contains(QStringLiteral("private frame-generation context")),
+        "English lighter-model help omitted its private replacement contract");
     require(english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
-            .contains(QStringLiteral("swapchain rebuild")),
+            .contains(QStringLiteral("swaps private resources live")),
         "English Adaptive ceiling help omitted its capacity contract");
     require(english.value(QStringLiteral("multiplierDesc")).toString()
-            .contains(QStringLiteral("swapchain rebuild")),
+            .contains(QStringLiteral("swaps private resources live")),
         "English Fixed multiplier help omitted its capacity contract");
     require(english.value(QStringLiteral("ultraPerformanceDesc")).toString()
             .contains(QStringLiteral("compatible controls remain available")),

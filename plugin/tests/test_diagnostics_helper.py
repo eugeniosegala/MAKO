@@ -35,6 +35,10 @@ MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nomi
 MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
 MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 live_profile_recreation=guarded-non-gamescope-one-shot
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources spatial_scaling_pending=1 frame_generation_backend_pending=1 flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 available_generated_capacity=1 requested_generated_capacity=3 process_restart_required=0 action=signal-out-of-date-after-successful-present
+MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=2 state_revision=4 reason=frame-generation-resources flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 active_generated_capacity=1 requested_generated_capacity=4 action=prepare-private-context
+MAKO Renderer: present diagnostics: operation=runtime-transition-prepared context=2 state_revision=4 reason=frame-generation-resources requested_generated_capacity=4 requested_flow_scale=0.75 requested_lighter_model=1 action=drain-private-work
+MAKO Renderer: present diagnostics: operation=runtime-transition-failed context=3 state_revision=4 reason=frame-generation-resources retry_ms=5000 active_generated_capacity=1 action=retain-active-resources
+MAKO Renderer: present diagnostics: operation=runtime-transition-applied context=2 state_revision=4 reason=frame-generation-resources transition=private-context effective_flow_scale=0.75 lighter_model=1 generated_frame_capacity=4 history_warmup_frames=3
 MAKO Renderer: process-static configuration changes remain pending until game restart; contexts=1
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=3 reason=process-static-profile gpu_selection_pending=1 pacing_pending=0 frame_generation_interop_pending=0 ultra_performance_pending=0 action=wait-for-process-restart
 MAKO Renderer: live profile resource change requested a game-owned swapchain recreation after one successful lower present
@@ -225,6 +229,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "render-fence-budget-missed",
             "history-warmup",
             "runtime-transition-pending",
+            "runtime-transition-prepared",
+            "runtime-transition-failed",
             "runtime-transition-applied",
         }
         for operation in current_operations:
@@ -257,6 +263,13 @@ class DiagnosticsHelperTests(unittest.TestCase):
             result = self._run("--log", str(path), "config")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("runtime-transition-pending", result.stdout)
+        self.assertIn("runtime-transition-prepared", result.stdout)
+        self.assertIn("runtime-transition-failed", result.stdout)
+        self.assertIn("runtime-transition-applied", result.stdout)
+        self.assertIn("action=prepare-private-context", result.stdout)
+        self.assertIn("action=drain-private-work", result.stdout)
+        self.assertIn("action=retain-active-resources", result.stdout)
+        self.assertIn("history_warmup_frames=3", result.stdout)
         self.assertIn(
             "signal-out-of-date-after-successful-present", result.stdout
         )

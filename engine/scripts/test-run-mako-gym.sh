@@ -7,6 +7,17 @@ expected_version="$(tr -d '[:space:]' < "$bridge_dir/mako-gym-contract-version.t
 temporary_root="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_root"' EXIT
 
+listed_suites="$($bridge --list-suites)"
+expected_suites=$'vulkan\nquality\nrepeatability\nperformance\nspatial-performance\nruntime-overhead\nsync-validation\nrecovery\ngamescope-e2e\nproton-e2e\nproton-compatibility'
+if [[ "$listed_suites" != "$expected_suites" ]]; then
+    echo "Gym bridge suite inventory is not canonical." >&2
+    exit 1
+fi
+if "$bridge" --list-suites --suite quality >/dev/null 2>&1; then
+    echo "Conflicting Gym suite-list request unexpectedly succeeded." >&2
+    exit 1
+fi
+
 absent="$temporary_root/absent"
 optional_output="$($bridge --gym-repo "$absent" --list)"
 if [[ "$optional_output" != *'MAKO Gym: SKIP checkout absent:'* ]]; then

@@ -252,13 +252,13 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "flow_scale",
     fieldType: ConfigFieldType.FLOAT,
     default: 0.9,
-    description: "change Frame Generation motion-estimation resolution through game-owned swapchain recreation"
+    description: "change Frame Generation motion-estimation resolution through a live private-context replacement that retains the previous context until handoff"
   },
   performance_mode: {
     name: "performance_mode",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "select a lighter FG model through game-owned swapchain recreation, reducing GPU overhead at the cost of more visual artifacts"
+    description: "select a lighter FG model through a live private-context replacement that retains the previous context until handoff, reducing GPU overhead at the cost of more visual artifacts"
   },
   pacing: {
     name: "pacing",

@@ -20,7 +20,7 @@ Select **Enable Scaling (Restart)** before starting the game, choose an in-game 
 - **Scale Factor:** Sets the output-to-input dimension ratio from 1.0x to 2.0x (default 1.5x). It applies at the next natural game resolution change or restart.
 - **Scaling Sharpness:** Uses a 0–100% multiplier (default 50%). MAKO applies it to its bounded local-sharpening baseline; LS1 selects the nearest of five learned variants. Changes rebuild the private scaler after controls settle.
 
-Native Resolution uses transfer images but no MAKO compute model or licensed spatial resource; the process still carries the provisioned scaling/WSI path so another method can be selected live. Method and sharpness changes never recreate the game swapchain. In MAKO Decky's managed Gamescope lane, Scale Factor waits for a natural resolution change or restart. Flow Scale, Lighter FG Model, and capacity changes retain the current value until their documented game-owned boundary: a compatible direct-Renderer non-Gamescope maintenance1 context may request a coalesced recreation, while managed Gamescope waits for natural resolution or surface recreation.
+Native Resolution uses transfer images but no MAKO compute model or licensed spatial resource; the process still carries the provisioned scaling/WSI path so another method can be selected live. Method and sharpness changes never recreate the game swapchain. In MAKO Decky's managed Gamescope lane, Scale Factor waits for a natural resolution change or restart. Flow Scale, Lighter FG Model, and generated-capacity changes retain their old applied value while MAKO prepares a complete private FG replacement, then switch atomically without recreating the game swapchain.
 
 Use MAKO's fixed-extent Gamescope/X11 path for a stable source/presentation split. A variable Wayland compositor may echo the enlarged output extent during recreation; MAKO then stays native-sized to prevent recursive scaling. Requests beyond the conservative device-memory envelope also stay native and report `inactive_reason=variable-surface-memory-budget`.
 
@@ -37,7 +37,7 @@ Use MAKO's fixed-extent Gamescope/X11 path for a stable source/presentation spli
 - **Base FPS Cap:** Caps real application frames before generation. It is disabled while Steady Base Cap owns the cap.
 - **Auto-disable Frame Generation by Refresh Rate:** Pauses generation at or below a selected 30–240 Hz Gamescope threshold and resumes it above the threshold. It does nothing without refresh feedback and never enables a profile whose main switch is off.
 
-Frame Generation, Fixed/Adaptive mode, multiplier, target, refresh guard, and mode-independent recovery changes normally apply while a game runs. Matched processes reserve the interop, backend, images, and synchronization needed for Off→On; while off, MAKO schedules, copies, and presents no generated frames. If startup resources were unavailable, enabling remains pending for restart. Capacity growth may request one debounced recreation on a compatible non-Gamescope maintenance1 context; managed Gamescope retains the available capacity until the next natural recreation.
+Frame Generation, Fixed/Adaptive mode, multiplier, target, refresh guard, and mode-independent recovery changes normally apply while a game runs. Matched processes reserve the interop, backend, images, and synchronization needed for Off→On; while off, MAKO schedules, copies, and presents no generated frames. If startup resources were unavailable, enabling remains pending for restart. Capacity growth, Flow Scale, and Lighter FG Model use a 500 ms last-value-wins private FG replacement: MAKO prepares the new images, timeline, and backend context, briefly presents only real frames while old private work drains, then atomically switches and warms history. The temporary allocation can cause a brief one-time hitch and uses additional memory until handoff; failure keeps the previous context active and retries.
 
 ## Runtime boundaries
 
@@ -47,13 +47,13 @@ Frame Generation, Fixed/Adaptive mode, multiplier, target, refresh guard, and mo
 | Scaling Method | Live private scaler rebuild |
 | Scaling Sharpness | Live, debounced private scaler rebuild |
 | Scale Factor | Next natural resolution change or restart |
-| Frame Generation, Fixed/Adaptive, target, multiplier, refresh guard, recovery | Live when startup resources are available and the selected policy fits reserved capacity; growth follows the next row |
-| Flow Scale, Lighter FG Model, generated capacity | Compatible non-Gamescope maintenance1: debounced game-owned recreation; managed Gamescope: next natural recreation |
+| Frame Generation, Fixed/Adaptive, target, multiplier, refresh guard, recovery | Live when startup resources are available; generated-capacity growth follows the next row |
+| Flow Scale, Lighter FG Model, generated capacity | Live, debounced private FG replacement with atomic handoff and rollback-safe retry |
 | Ultra Performance | Game restart |
 | Lossless.dll Path, Allow FP16, GPU selection | Game restart |
 | Gamescope WSI compatibility, MangoHud, vkBasalt, Steam Deck Mode, Zink, Force ALSA, and other launcher compatibility | Game restart |
 
-A restart-bound or resource-growth edit does not block unrelated compatible controls: MAKO applies the safe subset and retains the rest for its required boundary.
+A restart-bound or private-resource edit does not block unrelated compatible controls: MAKO applies the safe subset and reports requested versus active values while the remaining boundary is pending. During a running game, MAKO Decky polls Renderer-owned status records and shows Applying, Active, Failed-with-rollback, swapchain-recreation, or restart state instead of treating a saved profile as proof that every field is active.
 
 ## Game and process profiles
 

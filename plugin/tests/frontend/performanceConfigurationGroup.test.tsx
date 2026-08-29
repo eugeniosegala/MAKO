@@ -97,7 +97,7 @@ describe("Performance Settings", () => {
       screen.getByText(/less aggressive performance option than Ultra Performance/),
     ).toBeTruthy();
     expect(
-      screen.getByText(/Changing it briefly recreates the game-owned swapchain/),
+      screen.getByText(/rebuilds MAKO's private frame-generation context live/),
     ).toBeTruthy();
     expect(
       screen.getByText(/Primarily intended for low-power devices such as Steam Deck/),

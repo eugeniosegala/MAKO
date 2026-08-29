@@ -33,6 +33,8 @@ jobs:
         run: ./scripts/test-protected-inputs.sh
       - name: Exercise safe capture staging and sanitization
         run: ./scripts/test-capture-trace.sh
+      - name: Validate explicit MAKO Gym hardware selections
+        run: ./scripts/test-gym-selection.sh
 
   decky:
     name: MAKO Decky

@@ -605,6 +605,19 @@ int main() {
                     LiveProfileResourceRecreation::quietPeriod) == 11,
         "Flow-scale and model changes must share the live recreation boundary");
 
+    const auto privateBackendPlan = planProfileUpdate(
+        current, frameGenerationBackendRequest, 2, true, false, true
+    );
+    expect(privateBackendPlan.decision.action ==
+                ProfileUpdateAction::ApplyLive &&
+            privateBackendPlan.decision.frameGenerationPrivateRebuild &&
+            !privateBackendPlan.decision.swapchainRecreationDeferred &&
+            privateBackendPlan.appliedProfile.flow_scale ==
+                current.flow_scale &&
+            privateBackendPlan.appliedProfile.performance_mode ==
+                current.performance_mode,
+        "Flow Scale and model changes must prepare private resources without marking them active early");
+
     auto scalingParameterCurrent = current;
     scalingParameterCurrent.scaling_enabled = true;
     scalingParameterCurrent.scaling_method = ls::ScalingMethod::Mako;
@@ -780,6 +793,16 @@ int main() {
             fixedWithDormantFourX, adaptiveFourX, 3, true).action ==
             ProfileUpdateAction::ApplyLive,
         "Fixed-to-Adaptive 4x must apply when active capacity is available");
+    const auto privateCapacityPlan = planProfileUpdate(
+        fixedWithDormantFourX, adaptiveFourX, 2, true, false, true
+    );
+    expect(privateCapacityPlan.decision.action ==
+                ProfileUpdateAction::ApplyLive &&
+            privateCapacityPlan.decision.frameGenerationPrivateRebuild &&
+            privateCapacityPlan.decision.generatedFrameCapacityExceeded &&
+            !privateCapacityPlan.decision.swapchainRecreationDeferred &&
+            !privateCapacityPlan.appliedProfile.adaptive,
+        "Generated-capacity growth must use a private rebuild while the old policy remains active");
     expect(generatedFrameCapacityForActivePolicy(adaptiveFourX) == 3,
         "Adaptive 4x active capacity was not selected");
 

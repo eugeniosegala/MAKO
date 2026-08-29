@@ -4,9 +4,11 @@ import {
   checkLosslessScalingDll,
   getMakoConfig,
   getProfileConfig,
+  getRuntimeStatus,
   updateMakoConfigFromObject,
   type ConfigUpdateResult,
   configFailureResult,
+  type RuntimeStatusResult,
 } from "../api/makoApi";
 import {
   ConfigurationData,
@@ -209,4 +211,47 @@ export function useMakoConfig() {
     updateConfig,
     updateField,
   };
+}
+
+const RUNTIME_STATUS_POLL_INTERVAL_MS = 750;
+
+export function useRuntimeStatus(
+  enabled: boolean,
+  profileName: string,
+): RuntimeStatusResult | null {
+  const [status, setStatus] = useState<RuntimeStatusResult | null>(null);
+
+  useEffect(() => {
+    if (!enabled) {
+      setStatus(null);
+      return;
+    }
+
+    let cancelled = false;
+    let requestInFlight = false;
+    const poll = async () => {
+      if (requestInFlight) return;
+      requestInFlight = true;
+      try {
+        const result = await getRuntimeStatus(profileName);
+        if (!cancelled) setStatus(result);
+      } catch (error) {
+        if (!cancelled) setStatus(null);
+      } finally {
+        requestInFlight = false;
+      }
+    };
+
+    void poll();
+    const interval = setInterval(
+      () => void poll(),
+      RUNTIME_STATUS_POLL_INTERVAL_MS,
+    );
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [enabled, profileName]);
+
+  return status;
 }

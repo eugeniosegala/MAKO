@@ -9,6 +9,7 @@ import {
   useInstallationStatus,
   useDllDetection,
   useMakoConfig,
+  useRuntimeStatus,
 } from "../hooks/useMakoHooks";
 import { useProfileManagement } from "../hooks/useProfileManagement";
 import { useInstallationActions } from "../hooks/useInstallationActions";
@@ -25,6 +26,7 @@ import { FpsMultiplierControl } from "./FpsMultiplierControl";
 import { ScalingControl } from "./ScalingControl";
 import { PerformanceConfigurationGroup } from "./ConfigurationSectionGroups";
 import { ContentNotices } from "./ContentNotices";
+import { RuntimeStatusNotice } from "./RuntimeStatusNotice";
 import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
@@ -75,6 +77,10 @@ export function Content() {
     loadProfileConfig: loadMakoConfig,
     syncCurrentProfile,
   });
+  const runtimeStatus = useRuntimeStatus(
+    Boolean(isInstalled && mainRunningApp),
+    editingProfile,
+  );
 
   const {
     saveConfigChanges: handleConfigChanges,
@@ -188,6 +194,10 @@ export function Content() {
               await loadMakoConfig(profileName);
             }}
           />
+        )}
+
+        {isInstalled && mainRunningApp && (
+          <RuntimeStatusNotice status={runtimeStatus} />
         )}
 
         {isInstalled && (

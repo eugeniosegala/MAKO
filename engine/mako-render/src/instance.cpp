@@ -681,7 +681,9 @@ ConfigurationUpdateResult Root::update() {
         for (auto& [swapchain, context] : this->swapchains) {
             static_cast<void>(swapchain);
             const auto update = context.updateProfile(
-                contextProfile, this->runtimeStateRevision
+                contextProfile, this->runtimeStateRevision,
+                requestedProfile ? &*requestedProfile : nullptr,
+                profileProcessRestartRequired
             );
             if (update.action == ProfileUpdateAction::ApplyLive)
                 result.liveContextsUpdated++;

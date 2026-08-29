@@ -3,6 +3,7 @@ set(LAYER_SOURCES
     "src/gamescope_hdr_feedback.cpp"
     "src/instance.cpp"
     "src/present_diagnostics.cpp"
+    "src/runtime_status.cpp"
     "src/swapchain.cpp"
     "src/swapchain_present.cpp")
 
@@ -140,6 +141,19 @@ if(BUILD_TESTING)
         COMMAND mako-runtime-transition-tests)
     mako_register_portable_policy_test(
         mako-runtime-transition-tests runtime-transition)
+
+    add_executable(mako-runtime-status-tests
+        "tests/runtime_status_tests.cpp"
+        "src/runtime_status.cpp")
+    target_include_directories(mako-runtime-status-tests
+        PRIVATE "src"
+        PRIVATE "../mako-common/include")
+    target_link_libraries(mako-runtime-status-tests
+        PRIVATE mako-common)
+    add_test(NAME runtime-status
+        COMMAND mako-runtime-status-tests)
+    mako_register_portable_policy_test(
+        mako-runtime-status-tests runtime-status)
 
     add_executable(mako-layer-role-tests
         "tests/layer_role_tests.cpp")

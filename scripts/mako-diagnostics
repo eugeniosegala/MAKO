@@ -226,38 +226,38 @@ for preset in "${presets[@]}"; do
     hdr)
       add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       add_pattern "$renderer_prefix Gamescope application HDR feedback"
-      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)"
       ;;
     config)
       add_pattern "$renderer_prefix (updated configuration in place|updated mako configuration in place|configuration changes requiring GPU resource reconstruction|process-static configuration changes|global backend construction changed)"
-      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-recreation-requested|runtime-state-applied)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-transition-recreation-requested|runtime-state-applied)"
       ;;
     scaling)
       add_pattern "$renderer_prefix (swapchain colour pipeline|swapchain creation failed|swapchain presentation failed)"
       add_pattern "$renderer_prefix Gamescope application HDR feedback"
-      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-recreation-requested|runtime-transition-applied|runtime-state-applied|gamescope-refresh-rate-applied)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-transition-recreation-requested|runtime-state-applied|gamescope-refresh-rate-applied)"
       add_pattern '(fixed-surface )?spatial scaling (context initialization failed|requires|source and presentation extents are identical)'
       ;;
     adaptive)
       add_pattern "$renderer_prefix present diagnostics: operation=adaptive-"
-      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)"
       ;;
     recovery)
-      add_pattern "$renderer_prefix present diagnostics: operation=(skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|ordered-acquire-policy|ordered-acquire-classification-split|ordered-acquire-budget-exhausted|ordered-acquire-guard|ordered-acquire-guard-bypass|ordered-acquire-quarantine|ordered-acquire-retry|ordered-acquire-recovered|ordered-acquire-stabilized|pipeline-busy-bypass|pipeline-busy-recovered|render-fence-budget-missed|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-applied)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|ordered-acquire-policy|ordered-acquire-classification-split|ordered-acquire-budget-exhausted|ordered-acquire-guard|ordered-acquire-guard-bypass|ordered-acquire-quarantine|ordered-acquire-retry|ordered-acquire-recovered|ordered-acquire-stabilized|pipeline-busy-bypass|pipeline-busy-recovered|render-fence-budget-missed|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied)"
       ;;
     performance)
-      add_pattern "$renderer_prefix present diagnostics: operation=(fixed-plan|runtime-transition-pending|runtime-transition-recreation-requested|runtime-state-applied|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|ordered-acquire-policy|ordered-acquire-classification-split|ordered-acquire-budget-exhausted|ordered-acquire-guard|ordered-acquire-guard-bypass|ordered-acquire-quarantine|ordered-acquire-retry|ordered-acquire-recovered|ordered-acquire-stabilized|pipeline-busy-recovered|pipeline-busy-bypass|gamescope-refresh-rate-applied|present-|schedule-|submit-|acquire-|wait-|copy-|render-)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(fixed-plan|runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-transition-recreation-requested|runtime-state-applied|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|ordered-acquire-policy|ordered-acquire-classification-split|ordered-acquire-budget-exhausted|ordered-acquire-guard|ordered-acquire-guard-bypass|ordered-acquire-quarantine|ordered-acquire-retry|ordered-acquire-recovered|ordered-acquire-stabilized|pipeline-busy-recovered|pipeline-busy-bypass|gamescope-refresh-rate-applied|present-|schedule-|submit-|acquire-|wait-|copy-|render-)"
       ;;
     lifecycle)
       add_pattern "$renderer_prefix present diagnostics: operation=swapchain-context-(create|destroy)"
-      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied)"
       add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       ;;
     startup)
       add_pattern '(VK_LAYER_MAKO_render|VkLayer_MAKO_render|Gamescope WSI|Vulkan Loader|<Loader>|<Device>)'
       add_pattern "$renderer_prefix present diagnostics: operation=swapchain-context-create"
       add_pattern "$renderer_prefix Gamescope application HDR feedback"
-      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-state-applied)"
+      add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied)"
       add_pattern "$renderer_prefix (swapchain colour pipeline|HDR10 transport|frame generation disabled for this swapchain|frame generation is off for this swapchain|frame-generation initialization failed|MAKO frame-generation initialization failed)"
       ;;
     layers)

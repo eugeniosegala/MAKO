@@ -2,7 +2,7 @@
 Type definitions for MAKO Decky responses.
 """
 
-from typing import TypedDict, Optional, List
+from typing import Literal, TypedDict, Optional, List
 from .config_schema import ConfigurationData
 
 
@@ -156,3 +156,78 @@ class ProfileResponse(ServiceResponse, total=False):
     profile: Optional[ProfileDetails]
     changed: Optional[bool]
     game_running: Optional[bool]
+
+
+RuntimeApplicationPhase = Literal[
+    "inactive",
+    "active",
+    "debouncing",
+    "preparing",
+    "draining",
+    "failed",
+    "swapchain-recreation",
+    "process-restart",
+]
+
+
+class RuntimeProfileSnapshot(TypedDict):
+    """Renderer-owned requested or applied profile state."""
+
+    name: str
+    gpu: Optional[str]
+    multiplier: int
+    frame_generation_enabled: bool
+    scaling_enabled: bool
+    scaling_method: str
+    scaling_factor: float
+    scaling_sharpness: float
+    frame_generation_refresh_threshold: int
+    base_fps_cap: int
+    adaptive: bool
+    adaptive_auto_base_fps_cap: bool
+    target_fps: int
+    adaptive_max_multiplier: int
+    adaptive_stable_cadence: bool
+    dynamic_cadence_recovery: bool
+    dynamic_cadence_probe_interval_seconds: float
+    ultra_performance: bool
+    flow_scale: float
+    effective_flow_scale: float
+    performance_mode: bool
+    effective_performance_mode: bool
+    pacing: str
+    required_generated_capacity: int
+
+
+class RuntimePendingState(TypedDict):
+    """Outstanding runtime boundaries for one Renderer context."""
+
+    frame_generation_private: bool
+    spatial_private: bool
+    swapchain_recreation: bool
+    process_restart: bool
+
+
+class RuntimeContextState(TypedDict):
+    """One validated active Renderer context status record."""
+
+    pid: int
+    process_start_ticks: int
+    context: int
+    role: str
+    updated_unix_ms: int
+    state_revision: int
+    phase: RuntimeApplicationPhase
+    reason: str
+    pending: RuntimePendingState
+    applied_generated_capacity: int
+    requested: RuntimeProfileSnapshot
+    applied: RuntimeProfileSnapshot
+    error: Optional[str]
+
+
+class RuntimeStatusResponse(ServiceResponse):
+    """Aggregate requested-versus-applied state for active contexts."""
+
+    phase: RuntimeApplicationPhase
+    contexts: List[RuntimeContextState]

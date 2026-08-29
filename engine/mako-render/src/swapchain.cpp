@@ -36,6 +36,9 @@ namespace {
     using DiagnosticsClock = present_diagnostics::Clock;
     using DiagnosticsContextScope = present_diagnostics::ContextScope;
 
+    constexpr auto privateResourceDrainBudget =
+        std::chrono::milliseconds(50);
+
     uint64_t allocateDiagnosticsContextId() {
         const auto contextId = present_diagnostics::allocateContextId();
         if constexpr (spatialScalingLayer)
@@ -194,6 +197,11 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         scalingShaderDll(scalingShaderDll),
         profile(std::move(profile)), info(std::move(info)) {
     this->diagnosticsState.contextId = allocateDiagnosticsContextId();
+    this->runtimeStatusPublisher = RuntimeStatusPublisher(
+        this->diagnosticsState.contextId, layerRoleName
+    );
+    this->runtimeStatusState.requestedProfile = this->profile;
+    this->runtimeStatusState.stateRevision = runtimeStateRevision;
     const DiagnosticsContextScope diagnosticsContext(
         this->diagnosticsState.contextId
     );
@@ -243,6 +251,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             this->spatialScalingPasses.emplace_back(SpatialScalingPass{
                 .commandBuffer = vk::CommandBuffer(vk),
                 .readySemaphore = vk::Semaphore(vk),
+                .completionFence = vk::Fence(vk),
             });
         }
         const auto activeScalingMethod = this->spatialScaler->activeMethod();
@@ -409,6 +418,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
     if (!this->colorPipeline.generationSupported) {
         std::cerr << "MAKO Renderer: frame generation disabled for this swapchain: "
                   << this->colorPipeline.reason << '\n';
+        this->publishRuntimeStatus("swapchain-create");
         return;
     }
     try {
@@ -455,14 +465,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             throw ls::error("failed to create swapchain context", e);
         }
 
-        this->renderCommandBuffer.emplace(vk);
-        this->renderFence.emplace(vk);
-        for (size_t i = 0; i < this->destinationImages.size(); i++) {
-            this->passes.emplace_back(RenderPass {
-                .commandBuffer = vk::CommandBuffer(vk),
-                .acquireSemaphore = vk::Semaphore(vk)
-            });
-        }
+        this->ensureFrameGenerationExecutionResources(vk);
 
         this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
             this->profile.multiplier, this->destinationImages.size()
@@ -471,16 +474,6 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         if (!initialFrameGenerationEnabled)
             std::cerr << "MAKO Renderer: frame generation is off; retained private "
                          "resources permit a live enable\n";
-
-        const size_t frames = std::max(
-            this->info.images.size(), this->destinationImages.size() + 2
-        );
-        for (size_t i = 0; i < frames; i++) {
-            this->postCopySemaphores.emplace_back(
-                vk::Semaphore(vk),
-                vk::Semaphore(vk)
-            );
-        }
 
         const auto configuredAcquireTimeout =
             generatedImageAcquireTimeoutNs();
@@ -609,7 +602,50 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             "frame-generation initialization failed; native presentation retained";
         std::cerr << "MAKO Renderer: " << this->colorPipeline.reason
                   << ": " << e.what() << '\n';
+        this->runtimeStatusState.error = e.what();
     }
+    this->publishRuntimeStatus("swapchain-create");
+}
+
+void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
+    const auto frameGenerationPhase = this->frameGenerationTransition.phase();
+    const auto spatialPhase = this->spatialTransition.phase();
+    const auto eitherPhase = [&](const PrivateResourceTransitionPhase phase) {
+        return frameGenerationPhase == phase || spatialPhase == phase;
+    };
+
+    RuntimeApplicationPhase phase = RuntimeApplicationPhase::Active;
+    if (this->runtimeStatusState.error ||
+            eitherPhase(PrivateResourceTransitionPhase::Failed)) {
+        phase = RuntimeApplicationPhase::Failed;
+    } else if (this->runtimeStatusState.processRestartPending) {
+        phase = RuntimeApplicationPhase::ProcessRestart;
+    } else if (this->runtimeStatusState.swapchainRecreationPending) {
+        phase = RuntimeApplicationPhase::SwapchainRecreation;
+    } else if (eitherPhase(PrivateResourceTransitionPhase::Draining)) {
+        phase = RuntimeApplicationPhase::Draining;
+    } else if (eitherPhase(PrivateResourceTransitionPhase::Preparing)) {
+        phase = RuntimeApplicationPhase::Preparing;
+    } else if (eitherPhase(PrivateResourceTransitionPhase::Debouncing)) {
+        phase = RuntimeApplicationPhase::Debouncing;
+    }
+
+    this->runtimeStatusPublisher.publish(RuntimeStatusRecord{
+        .phase = phase,
+        .reason = std::string(reason),
+        .stateRevision = this->runtimeStatusState.stateRevision,
+        .requestedProfile = this->runtimeStatusState.requestedProfile,
+        .appliedProfile = this->profile,
+        .appliedGeneratedCapacity = this->destinationImages.size(),
+        .frameGenerationPrivatePending =
+            this->frameGenerationTransition.pendingRequest(),
+        .spatialPrivatePending = this->spatialTransition.pendingRequest(),
+        .swapchainRecreationPending =
+            this->runtimeStatusState.swapchainRecreationPending,
+        .processRestartPending =
+            this->runtimeStatusState.processRestartPending,
+        .error = this->runtimeStatusState.error,
+    });
 }
 
 bool Swapchain::resetGenerationScheduler(
@@ -648,125 +684,118 @@ bool Swapchain::resetGenerationScheduler(
     return true;
 }
 
-void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
-        SwapchainColorPipeline pipeline) {
-    const auto retainPassthrough = [&]() {
-        this->ctx = {};
-        this->sourceImages.clear();
-        this->destinationImages.clear();
-        this->syncSemaphore = {};
-        this->renderCommandBuffer = {};
-        this->renderFence = {};
-        this->passes.clear();
-        this->postCopySemaphores.clear();
-        this->adaptiveScheduler.reset();
-        this->colorPipeline = std::move(pipeline);
-        this->recoveryState.historyWarmupRemaining = 0;
-        this->recoveryState.orderedAcquireRecovery.reset();
-    };
-    if (!this->instance) {
-        retainPassthrough();
-        return;
+void Swapchain::ensureFrameGenerationExecutionResources(
+        const vk::Vulkan& vk) {
+    if (!this->renderCommandBuffer.has_value())
+        this->renderCommandBuffer.emplace(vk);
+    if (!this->renderFence.has_value())
+        this->renderFence.emplace(vk);
+
+    // These objects are WSI-facing and intentionally remain stable while the
+    // full-resolution images and backend context are replaced. Preallocating
+    // four pass slots avoids retiring binary semaphores that may still be
+    // referenced by a previously queued presentation.
+    while (this->passes.size() < GeneratedFramePlan::capacity) {
+        this->passes.emplace_back(RenderPass{
+            .commandBuffer = vk::CommandBuffer(vk),
+            .acquireSemaphore = vk::Semaphore(vk),
+        });
     }
+    const size_t semaphoreFrames = std::max(
+        this->info.images.size(), GeneratedFramePlan::capacity + 2
+    );
+    while (this->postCopySemaphores.size() < semaphoreFrames) {
+        this->postCopySemaphores.emplace_back(
+            vk::Semaphore(vk), vk::Semaphore(vk)
+        );
+    }
+}
+
+Swapchain::FrameGenerationResources
+Swapchain::buildFrameGenerationResources(const vk::Vulkan& vk,
+        const SwapchainColorPipeline& pipeline,
+        const ls::GameConf& resourceProfile) {
+    if (!this->instance)
+        throw ls::error("the frame-generation backend is unavailable");
+    if (!pipeline.generationSupported)
+        throw ls::error("the colour pipeline does not support frame generation");
 
     auto& backendInstance = *this->instance;
-    bool applicationPackedHdr10Supported = false;
-    bool backendPackedHdr10Supported = false;
-    selectPackedHdr10Transport(
-        vk, backendInstance, pipeline,
-        applicationPackedHdr10Supported, backendPackedHdr10Supported
-    );
-
-    if (!pipeline.generationSupported) {
-        retainPassthrough();
-        return;
-    }
-
     const VkExtent2D extent = this->info.extent;
     std::vector<int> sourceFds(2);
-    std::vector<int> destinationFds(generatedFrameCapacity(this->profile));
-    std::vector<vk::Image> newSourceImages;
-    std::vector<vk::Image> newDestinationImages;
-    newSourceImages.reserve(sourceFds.size());
-    newDestinationImages.reserve(destinationFds.size());
+    std::vector<int> destinationFds(
+        generatedFrameCapacity(resourceProfile)
+    );
+    FrameGenerationResources resources;
+    resources.sourceImages.reserve(sourceFds.size());
+    resources.destinationImages.reserve(destinationFds.size());
     for (int& fd : sourceFds) {
-        newSourceImages.emplace_back(vk,
+        resources.sourceImages.emplace_back(vk,
             extent, pipeline.exchangeFormat,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             std::nullopt, &fd);
     }
     for (int& fd : destinationFds) {
-        newDestinationImages.emplace_back(vk,
+        resources.destinationImages.emplace_back(vk,
             extent, pipeline.exchangeFormat,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             std::nullopt, &fd);
     }
 
-    ls::lazy<vk::TimelineSemaphore> newSyncSemaphore;
     int syncFd{};
-    newSyncSemaphore.emplace(vk, 0, std::nullopt, &syncFd);
-
-    ls::lazy<vk::CommandBuffer> newRenderCommandBuffer;
-    ls::lazy<vk::Fence> newRenderFence;
-    newRenderCommandBuffer.emplace(vk);
-    newRenderFence.emplace(vk);
-    std::vector<RenderPass> newPasses;
-    newPasses.reserve(newDestinationImages.size());
-    for (size_t i = 0; i < newDestinationImages.size(); ++i) {
-        static_cast<void>(i);
-        newPasses.emplace_back(RenderPass{
-            .commandBuffer = vk::CommandBuffer(vk),
-            .acquireSemaphore = vk::Semaphore(vk),
-        });
-    }
-    std::vector<std::pair<vk::Semaphore, vk::Semaphore>> newPostCopySemaphores;
-    const size_t semaphoreFrames = std::max(
-        this->info.images.size(), newDestinationImages.size() + 2
-    );
-    newPostCopySemaphores.reserve(semaphoreFrames);
-    for (size_t i = 0; i < semaphoreFrames; ++i) {
-        static_cast<void>(i);
-        newPostCopySemaphores.emplace_back(
-            vk::Semaphore(vk), vk::Semaphore(vk)
-        );
-    }
-
-    ls::owned_ptr<ls::R<backend::Context>> newContext(
+    resources.syncSemaphore.emplace(vk, 0, std::nullopt, &syncFd);
+    resources.context = ls::owned_ptr<ls::R<backend::Context>>(
         new ls::R<backend::Context>(backendInstance.openContext(
             {sourceFds.at(0), sourceFds.at(1)}, destinationFds, syncFd,
             extent.width, extent.height, pipeline.encoding,
-            1.0F / ls::effectiveFlowScale(this->profile),
-            ls::effectivePerformanceMode(this->profile)
+            1.0F / ls::effectiveFlowScale(resourceProfile),
+            ls::effectivePerformanceMode(resourceProfile)
         )),
         [backend = &backendInstance](ls::R<backend::Context>& context) {
             backend->closeContext(context);
         }
     );
-    // Match initial context construction: the private backend device follows
-    // the documented process-lifetime loader workaround.
     backend::makeLeaking();
+    return resources;
+}
 
-    // Everything above is constructed before the active resources are
-    // touched. Moving the context first retires the old backend imports while
-    // their Vulkan images are still alive.
-    this->ctx = std::move(newContext);
-    this->sourceImages = std::move(newSourceImages);
-    this->destinationImages = std::move(newDestinationImages);
-    this->syncSemaphore = std::move(newSyncSemaphore);
-    this->renderCommandBuffer = std::move(newRenderCommandBuffer);
-    this->renderFence = std::move(newRenderFence);
-    this->passes = std::move(newPasses);
-    this->postCopySemaphores = std::move(newPostCopySemaphores);
-    this->colorPipeline = std::move(pipeline);
+void Swapchain::commitFrameGenerationResources(
+        FrameGenerationResources resources,
+        const ls::GameConf& resourceProfile,
+        const std::string_view reason) {
+    // Old backend work and application-device copies are proven idle by the
+    // caller. The context is declared last in this aggregate and therefore
+    // closes before its imported images and shared timeline are destroyed.
+    FrameGenerationResources retiring;
+    retiring.sourceImages = std::move(this->sourceImages);
+    retiring.destinationImages = std::move(this->destinationImages);
+    retiring.syncSemaphore = std::move(this->syncSemaphore);
+    retiring.context = std::move(this->ctx);
 
-    this->frameState.sequenceIndex = 1;
+    this->sourceImages = std::move(resources.sourceImages);
+    this->destinationImages = std::move(resources.destinationImages);
+    this->syncSemaphore = std::move(resources.syncSemaphore);
+    this->ctx = std::move(resources.context);
+
+    this->profile.flow_scale = resourceProfile.flow_scale;
+    this->profile.performance_mode = resourceProfile.performance_mode;
+    this->profile.adaptive = resourceProfile.adaptive;
+    this->profile.multiplier = resourceProfile.multiplier;
+    this->profile.adaptive_max_multiplier =
+        resourceProfile.adaptive_max_multiplier;
+
+    this->frameState.backendTimelineIndex = 1;
     this->frameState.backendFrameIndex = 0;
     this->frameState.renderFenceInFlight = false;
     this->recoveryState.backendPending = false;
     this->recoveryState.generatedImageAdmission.reset();
     this->recoveryState.orderedAcquireRecovery.reset();
     this->recoveryState.pipelineBusyRecovery.reset();
+    this->recoveryState.lowerPresentStallRecovery.reset();
     this->fixedRefreshBudget.reset();
+    this->realFramePacer.reset();
+    this->smoothCadenceBaseCap.reset();
+    this->smoothCadencePacerHandoff.reset();
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
     );
@@ -776,10 +805,36 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
     this->diagnosticsState.fixedSkippedFrames = 0;
 
     if (!this->resetGenerationScheduler(
-            DiagnosticsClock::now(), "hdr-private-transition")) {
+            DiagnosticsClock::now(), reason)) {
         this->recoveryState.historyWarmupRemaining =
             AdaptiveScheduler::historyWarmupFrameCount();
     }
+    this->ensureHistoryWarmup();
+}
+
+void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
+        SwapchainColorPipeline pipeline,
+        const ls::GameConf& resourceProfile) {
+    bool applicationPackedHdr10Supported = false;
+    bool backendPackedHdr10Supported = false;
+    if (this->instance) {
+        selectPackedHdr10Transport(
+            vk, *this->instance, pipeline,
+            applicationPackedHdr10Supported, backendPackedHdr10Supported
+        );
+    }
+
+    this->ensureFrameGenerationExecutionResources(vk);
+    FrameGenerationResources replacement;
+    if (this->instance && pipeline.generationSupported) {
+        replacement = this->buildFrameGenerationResources(
+            vk, pipeline, resourceProfile
+        );
+    }
+    this->colorPipeline = std::move(pipeline);
+    this->commitFrameGenerationResources(
+        std::move(replacement), resourceProfile, "hdr-private-transition"
+    );
 
     std::cerr << "MAKO Renderer: swapchain colour pipeline transitioned in place: mode="
               << this->colorPipeline.name
@@ -795,8 +850,9 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
     if (this->colorPipeline.encoding == backend::FrameEncoding::Hdr10Pq ||
             this->colorPipeline.encoding ==
                 backend::FrameEncoding::Hdr10PqPacked) {
+        const VkExtent2D extent = this->info.extent;
         const uint64_t transportImageCount = 2 +
-            generatedFrameCapacity(this->profile);
+            generatedFrameCapacity(resourceProfile);
         const uint64_t floatTransportBytes =
             static_cast<uint64_t>(extent.width) * extent.height *
             transportImageCount * 8;
@@ -856,7 +912,9 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
         *this->colorTransitionState.pendingGamescopeHdrActive
     );
     try {
-        this->rebuildPrivateResources(vk, std::move(desiredPipeline));
+        this->rebuildPrivateResources(
+            vk, std::move(desiredPipeline), this->profile
+        );
     } catch (const std::exception& error) {
         std::cerr << "MAKO Renderer: private colour transition failed; real-frame "
                      "passthrough retained and retry scheduled: "
@@ -864,6 +922,19 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
         this->colorTransitionState.retryAt = now + std::chrono::seconds(5);
         return false;
     }
+
+    // A prepared frame-generation context encodes the colour transport that
+    // was active when it was built. If HDR reclassification commits first,
+    // discard that private candidate and prepare the same last-value-wins
+    // request again against the newly active transport.
+    if (this->frameGenerationTransition.pendingRequest()) {
+        this->preparedFrameGenerationResources.reset();
+        this->frameGenerationTransition.restartPreparation(
+            std::chrono::milliseconds(500), now
+        );
+    }
+    this->runtimeStatusState.error.reset();
+    this->publishRuntimeStatus("hdr-mode");
 
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: "
@@ -880,47 +951,177 @@ bool Swapchain::applyPendingColorPipeline(const vk::Vulkan& vk) {
     return true;
 }
 
+bool Swapchain::applyPendingFrameGenerationResources(
+        const vk::Vulkan& vk) {
+    if (!this->frameGenerationTransition.pendingRequest())
+        return true;
+
+    const auto now = DiagnosticsClock::now();
+    if (this->frameGenerationTransition.beginPreparation(now)) {
+        try {
+            this->ensureFrameGenerationExecutionResources(vk);
+            this->preparedFrameGenerationResources =
+                this->buildFrameGenerationResources(
+                    vk, this->colorPipeline,
+                    this->frameGenerationTransition.value().profile
+                );
+            this->frameGenerationTransition.prepared();
+            this->publishRuntimeStatus("frame-generation-resources");
+            if (presentDiagnosticsEnabled()) {
+                const auto& requested =
+                    this->frameGenerationTransition.value().profile;
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=runtime-transition-prepared"
+                          << " context=" << this->diagnosticsState.contextId
+                          << " state_revision="
+                          << this->frameGenerationTransition.stateRevision()
+                          << " reason=frame-generation-resources"
+                          << " requested_generated_capacity="
+                          << generatedFrameCapacity(requested)
+                          << " requested_flow_scale="
+                          << ls::effectiveFlowScale(requested)
+                          << " requested_lighter_model="
+                          << ls::effectivePerformanceMode(requested)
+                          << " action=drain-private-work\n";
+            }
+        } catch (const std::exception& error) {
+            this->preparedFrameGenerationResources.reset();
+            this->frameGenerationTransition.failed(
+                std::chrono::seconds(5), now
+            );
+            this->runtimeStatusState.error = error.what();
+            this->publishRuntimeStatus("frame-generation-resources");
+            std::cerr << "MAKO Renderer: private frame-generation resource "
+                         "transition failed; the previous resources remain "
+                         "active and retry is scheduled: "
+                      << error.what() << '\n';
+            if (presentDiagnosticsEnabled()) {
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=runtime-transition-failed"
+                          << " context=" << this->diagnosticsState.contextId
+                          << " state_revision="
+                          << this->frameGenerationTransition.stateRevision()
+                          << " reason=frame-generation-resources"
+                          << " retry_ms=5000"
+                          << " active_generated_capacity="
+                          << this->destinationImages.size()
+                          << " action=retain-active-resources\n";
+            }
+            return true;
+        }
+    }
+
+    if (!this->frameGenerationTransition.draining())
+        return true;
+    if (!this->preparedFrameGenerationResources)
+        return true;
+
+    try {
+        if (!this->instance || !this->instance->contextReady(this->ctx.get()))
+            return false;
+        if (this->frameState.renderFenceInFlight) {
+            if (!this->renderFence->wait(vk, 0))
+                return false;
+            this->frameState.renderFenceInFlight = false;
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "MAKO Renderer: private frame-generation drain poll failed; "
+                     "native presentation retained: "
+                  << error.what() << '\n';
+        return false;
+    }
+
+    const auto committedProfile =
+        this->frameGenerationTransition.value().profile;
+    auto replacement = std::move(*this->preparedFrameGenerationResources);
+    this->preparedFrameGenerationResources.reset();
+    this->commitFrameGenerationResources(
+        std::move(replacement), committedProfile,
+        "private-resource-transition"
+    );
+    const auto committedRevision =
+        this->frameGenerationTransition.committed();
+    this->runtimeStatusState.error.reset();
+    this->publishRuntimeStatus("frame-generation-resources");
+
+    std::cerr << "MAKO Renderer: frame-generation resources changed live: "
+              << "generated_capacity=" << this->destinationImages.size()
+              << "; flow_scale=" << ls::effectiveFlowScale(this->profile)
+              << "; lighter_model="
+              << ls::effectivePerformanceMode(this->profile)
+              << "; transition=private-context\n";
+    if (presentDiagnosticsEnabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=runtime-transition-applied"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " state_revision=" << committedRevision.value_or(0)
+                  << " reason=frame-generation-resources"
+                  << " transition=private-context"
+                  << " effective_flow_scale="
+                  << ls::effectiveFlowScale(this->profile)
+                  << " lighter_model="
+                  << ls::effectivePerformanceMode(this->profile)
+                  << " generated_frame_capacity="
+                  << this->destinationImages.size()
+                  << " history_warmup_frames="
+                  << AdaptiveScheduler::historyWarmupFrameCount()
+                  << '\n';
+    }
+    return true;
+}
+
 void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
-    if (!this->spatialTransitionState.pendingMethod || !this->spatialScaler)
+    if (!this->spatialTransition.pendingRequest() || !this->spatialScaler)
         return;
 
     const auto now = DiagnosticsClock::now();
-    if (this->spatialTransitionState.applyAfter &&
-            now < *this->spatialTransitionState.applyAfter) {
-        return;
-    }
-    if (this->spatialTransitionState.retryAt &&
-            now < *this->spatialTransitionState.retryAt) {
-        return;
-    }
-
-    const auto requestedMethod =
-        *this->spatialTransitionState.pendingMethod;
-    const float requestedSharpness =
-        this->spatialTransitionState.pendingSharpness;
-    try {
-        SpatialScaler replacement(
-            vk, this->info.applicationExtent, this->info.extent,
-            this->colorPipeline.exchangeFormat, requestedMethod,
-            requestedSharpness, this->scalingShaderDll
-        );
-
-        // Spatial submissions use reusable per-image command buffers without
-        // private completion fences. This transition is infrequent and
-        // user-driven, so one device-idle boundary is the only safe point to
-        // destroy the previous pipeline without involving the application's
-        // WSI lifecycle. Normal presents never take this path.
-        const auto idleResult = vk.df().DeviceWaitIdle(vk.dev());
-        if (idleResult != VK_SUCCESS) {
-            throw ls::vulkan_error(
-                idleResult,
-                "vkDeviceWaitIdle() failed during spatial model transition"
+    if (this->spatialTransition.beginPreparation(now)) {
+        try {
+            const auto& requested = this->spatialTransition.value();
+            this->preparedSpatialScaler.emplace(
+                vk, this->info.applicationExtent, this->info.extent,
+                this->colorPipeline.exchangeFormat, requested.method,
+                requested.sharpness, this->scalingShaderDll
             );
+            this->spatialTransition.prepared();
+            this->publishRuntimeStatus("spatial-scaler");
+        } catch (const std::exception& error) {
+            std::cerr << "MAKO Renderer: spatial scaling model transition "
+                         "failed; the previous model remains active and retry "
+                         "is scheduled: "
+                      << error.what() << '\n';
+            this->preparedSpatialScaler.reset();
+            this->spatialTransition.failed(std::chrono::seconds(5), now);
+            this->runtimeStatusState.error = error.what();
+            this->publishRuntimeStatus("spatial-scaler");
+            if (presentDiagnosticsEnabled()) {
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=runtime-transition-failed"
+                          << " context=" << this->diagnosticsState.contextId
+                          << " state_revision="
+                          << this->spatialTransition.stateRevision()
+                          << " reason=spatial-scaler"
+                          << " retry_ms=5000"
+                          << " action=retain-active-resources\n";
+            }
+            return;
         }
+    }
+    if (!this->spatialTransition.draining() ||
+            !this->preparedSpatialScaler ||
+            !this->spatialScalingPassesReady(vk)) {
+        return;
+    }
 
-        *this->spatialScaler = std::move(replacement);
-        this->profile.scaling_method = requestedMethod;
-        this->profile.scaling_sharpness = requestedSharpness;
+    const auto requested = this->spatialTransition.value();
+    *this->spatialScaler = std::move(*this->preparedSpatialScaler);
+    this->preparedSpatialScaler.reset();
+    this->profile.scaling_method = requested.method;
+    this->profile.scaling_sharpness = requested.sharpness;
+    const auto committedRevision = this->spatialTransition.committed();
+    this->runtimeStatusState.error.reset();
+    this->publishRuntimeStatus("spatial-scaler");
+    try {
         this->ensureHistoryWarmup();
         this->fixedRefreshBudget.reset();
         this->recoveryState.lowerPresentStallRecovery.reset();
@@ -928,10 +1129,10 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
         const auto activeMethod = this->spatialScaler->activeMethod();
         std::cerr << "MAKO Renderer: spatial scaling model changed live: "
                   << "requested_method="
-                  << ls::scalingMethodName(requestedMethod)
+                  << ls::scalingMethodName(requested.method)
                   << "; active_method="
                   << ls::scalingMethodName(activeMethod)
-                  << "; sharpness=" << requestedSharpness
+                  << "; sharpness=" << requested.sharpness
                   << "; transition=private-scaler\n";
         if (!this->spatialScaler->fallbackReason().empty()) {
             std::cerr << "MAKO Renderer: LS1 scaling unavailable; using MAKO "
@@ -943,49 +1144,131 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
                          "operation=runtime-transition-applied"
                       << " context=" << this->diagnosticsState.contextId
                       << " state_revision="
-                      << this->spatialTransitionState.pendingStateRevision
+                      << committedRevision.value_or(0)
                       << " reason=spatial-scaler"
                       << " transition=private-context"
                       << " requested_method="
-                      << ls::scalingMethodName(requestedMethod)
+                      << ls::scalingMethodName(requested.method)
                       << " active_method="
                       << ls::scalingMethodName(activeMethod)
-                      << " sharpness=" << requestedSharpness << '\n';
+                      << " sharpness=" << requested.sharpness << '\n';
         }
-        this->spatialTransitionState.pendingMethod.reset();
-        this->spatialTransitionState.pendingStateRevision = 0;
-        this->spatialTransitionState.applyAfter.reset();
-        this->spatialTransitionState.retryAt.reset();
     } catch (const std::exception& error) {
-        std::cerr << "MAKO Renderer: spatial scaling model transition failed; "
-                     "the previous model remains active and retry is scheduled: "
+        // Resource construction and the atomic model swap have completed.
+        // Post-commit scheduler housekeeping must not roll the active model
+        // back or leave the transition permanently pending.
+        std::cerr << "MAKO Renderer: spatial scaling model changed live, but "
+                     "post-transition housekeeping reported: "
                   << error.what() << '\n';
-        this->spatialTransitionState.retryAt = now + std::chrono::seconds(5);
     }
+}
+
+void Swapchain::prepareSpatialScalingPass(const vk::Vulkan& vk,
+        SpatialScalingPass& pass) {
+    if (pass.completionInFlight) {
+        // Reacquiring the same WSI image means the lower present has already
+        // consumed the ready semaphore. Its private compute submission should
+        // therefore be complete; the fence makes that ownership explicit.
+        static_cast<void>(pass.completionFence.wait(vk));
+        pass.completionInFlight = false;
+    }
+    pass.completionFence.reset(vk);
+}
+
+bool Swapchain::spatialScalingPassesReady(const vk::Vulkan& vk) {
+    const auto deadline = DiagnosticsClock::now() +
+        privateResourceDrainBudget;
+    for (auto& pass : this->spatialScalingPasses) {
+        if (!pass.completionInFlight)
+            continue;
+        const auto now = DiagnosticsClock::now();
+        if (now >= deadline)
+            return false;
+        const auto remaining = std::chrono::duration_cast<
+            std::chrono::nanoseconds>(deadline - now);
+        if (!pass.completionFence.wait(
+                vk, static_cast<uint64_t>(remaining.count()))) {
+            return false;
+        }
+        pass.completionInFlight = false;
+    }
+    return true;
 }
 
 ProfileUpdateDecision Swapchain::updateProfile(
         const ls::GameConf& nextProfile,
-        const uint64_t runtimeStateRevision) {
+        const uint64_t runtimeStateRevision,
+        const ls::GameConf* requestedProfile,
+        const bool processRestartPending) {
+    this->runtimeStatusState.requestedProfile = requestedProfile
+        ? *requestedProfile : nextProfile;
+    this->runtimeStatusState.stateRevision = runtimeStateRevision;
+    this->runtimeStatusState.processRestartPending = processRestartPending;
+    this->runtimeStatusState.error.reset();
     const bool resourcesAvailable = this->sourceImages.size() == 2 &&
         !this->destinationImages.empty() && this->syncSemaphore.has_value();
+    const bool privateFrameGenerationRebuildAvailable =
+        this->instance && resourcesAvailable &&
+        this->colorPipeline.generationSupported;
     auto plan = planProfileUpdate(
         this->profile, nextProfile, this->destinationImages.size(),
-        resourcesAvailable, this->spatialScaler.has_value()
+        resourcesAvailable, this->spatialScaler.has_value(),
+        privateFrameGenerationRebuildAvailable
     );
     auto decision = plan.decision;
+    if (decision.frameGenerationPrivateRebuild) {
+        const FrameGenerationResourceRequest request{
+            .profile = nextProfile,
+        };
+        if (this->frameGenerationTransition.pendingRequest() &&
+                !(this->frameGenerationTransition.value() == request)) {
+            this->preparedFrameGenerationResources.reset();
+        }
+        this->frameGenerationTransition.request(
+            request, runtimeStateRevision, std::chrono::milliseconds(500)
+        );
+        if (presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=runtime-transition-pending"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " state_revision=" << runtimeStateRevision
+                      << " reason=frame-generation-resources"
+                      << " flow_scale_pending="
+                      << (ls::effectiveFlowScale(this->profile) !=
+                            ls::effectiveFlowScale(nextProfile))
+                      << " lighter_model_pending="
+                      << (ls::effectivePerformanceMode(this->profile) !=
+                            ls::effectivePerformanceMode(nextProfile))
+                      << " generated_capacity_pending="
+                      << decision.generatedFrameCapacityExceeded
+                      << " active_generated_capacity="
+                      << this->destinationImages.size()
+                      << " requested_generated_capacity="
+                      << generatedFrameCapacity(nextProfile)
+                      << " action=prepare-private-context\n";
+        }
+    } else if (ls::effectiveFlowScale(this->profile) ==
+                ls::effectiveFlowScale(nextProfile) &&
+            ls::effectivePerformanceMode(this->profile) ==
+                ls::effectivePerformanceMode(nextProfile) &&
+            generatedFrameCapacityForActivePolicy(nextProfile) <=
+                this->destinationImages.size()) {
+        this->frameGenerationTransition.cancel();
+        this->preparedFrameGenerationResources.reset();
+    }
     if (decision.spatialScalingLiveRebuild) {
-        this->spatialTransitionState.pendingMethod =
-            nextProfile.scaling_method;
-        this->spatialTransitionState.pendingSharpness =
-            nextProfile.scaling_sharpness;
-        this->spatialTransitionState.pendingStateRevision =
-            runtimeStateRevision;
-        this->spatialTransitionState.applyAfter =
-            DiagnosticsClock::now() + spatialScalerRebuildQuietPeriod(
-                this->profile, nextProfile
-            );
-        this->spatialTransitionState.retryAt.reset();
+        const SpatialResourceRequest request{
+            .method = nextProfile.scaling_method,
+            .sharpness = nextProfile.scaling_sharpness,
+        };
+        if (this->spatialTransition.pendingRequest() &&
+                !(this->spatialTransition.value() == request)) {
+            this->preparedSpatialScaler.reset();
+        }
+        this->spatialTransition.request(
+            request, runtimeStateRevision,
+            spatialScalerRebuildQuietPeriod(this->profile, nextProfile)
+        );
         if (presentDiagnosticsEnabled()) {
             std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=runtime-transition-pending"
@@ -1001,9 +1284,8 @@ ProfileUpdateDecision Swapchain::updateProfile(
     } else if (nextProfile.scaling_method == this->profile.scaling_method &&
             nextProfile.scaling_sharpness ==
                 this->profile.scaling_sharpness) {
-        this->spatialTransitionState.pendingMethod.reset();
-        this->spatialTransitionState.applyAfter.reset();
-        this->spatialTransitionState.retryAt.reset();
+        this->spatialTransition.cancel();
+        this->preparedSpatialScaler.reset();
     }
     const bool liveRecreationAvailable =
         liveProfileResourceRecreationAvailable(
@@ -1062,10 +1344,13 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << '\n';
     };
     logPendingRecreation();
+    this->runtimeStatusState.swapchainRecreationPending =
+        decision.swapchainRecreationDeferred;
 
     if (!this->colorPipeline.generationSupported || !this->instance ||
             !resourcesAvailable) {
         this->profile = std::move(plan.appliedProfile);
+        this->publishRuntimeStatus("configuration-update");
         return decision;
     }
 
@@ -1077,6 +1362,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
         // Keep harmless metadata and dormant-policy values current even when
         // the active policy itself must wait for a documented boundary.
         this->profile = std::move(plan.appliedProfile);
+        this->publishRuntimeStatus("configuration-update");
         return decision;
     }
 
@@ -1206,6 +1492,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << '\n';
     }
 
+    this->publishRuntimeStatus("configuration-update");
     return decision;
 }
 

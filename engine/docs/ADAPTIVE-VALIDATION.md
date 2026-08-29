@@ -108,7 +108,7 @@ Deterministic tests sweep steady and noisy source cadence across target-scaled c
 
 ## Runtime compatibility matrix
 
-Deterministic tests cannot validate Vulkan synchronization, generated-image availability, compositor pacing, model quality, or game behavior during a swapchain rebuild. Record those results separately and retain the diagnostic trace for every failure.
+Deterministic tests cannot validate Vulkan synchronization, generated-image availability, compositor pacing, model quality, or game behavior during private FG context replacement or game-owned swapchain recreation. Record those results separately and retain the diagnostic trace for every failure.
 
 Use `scripts/run-mako-gym.sh` with the private sibling MAKO Gym checkout between deterministic policy tests and commercial-game validation. Gym owns finite-cube construction, scripted recovery, native Gamescope WSI, Proton E2E, and multi-family Proton compatibility. Its manifests and docs are authoritative for current rows, cadence traces, resolutions, scalers, multipliers, and assertions. These lanes prove only their recorded host/runtime contracts, not subjective pacing, scanout timing, commercial-title compatibility, device-loss recovery, or another GPU.
 
@@ -116,7 +116,7 @@ A cold process start retains the three-second stabilization guard because launch
 
 For a ghosting-sensitive comparison, capture the same repeatable scene with Fixed 2x, Adaptive capped at 2x, and Adaptive at the intended higher ceiling. Compare moving edges after startup, overlay recovery, and a short hitch. A higher target is not a quality win if it increases generated share, cadence switches, or interpolation distance enough to worsen visible trails. The three-frame history warm-up and history-only fallback should remain enabled; they are correctness work, not optional performance overhead.
 
-Use this minimum matrix for a release candidate:
+When Adaptive or its runtime integration changed, use this minimum release-candidate matrix. A release with no affected Adaptive boundary does not select it automatically:
 
 | Platform | API path | Required scenarios |
 | --- | --- | --- |

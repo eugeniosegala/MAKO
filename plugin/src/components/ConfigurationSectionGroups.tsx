@@ -157,7 +157,7 @@ export function PerformanceConfigurationGroup({
           label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model")}
           description={t(
             "CONFIG_PERFORMANCE_MODE_DESC",
-            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. It is a less aggressive performance option than Ultra Performance. Changing it briefly recreates the game-owned swapchain. Ultra Performance locks this on.",
+            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. It is a less aggressive performance option than Ultra Performance. Changing it rebuilds MAKO's private frame-generation context live; the previous context remains active until the atomic handoff. Ultra Performance locks this on.",
           )}
           checked={config.ultra_performance || config.performance_mode}
           disabled={config.ultra_performance}
@@ -203,7 +203,7 @@ export function AdvancedRenderingConfigurationGroup({
               label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
               description={t(
                 "CONFIG_FLOW_SCALE_DESC",
-                "Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality. Changing it briefly recreates the game-owned swapchain.",
+                "Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality. Changing it rebuilds MAKO's private frame-generation context live; the previous context remains active until the atomic handoff.",
               )}
               value={
                 config.ultra_performance

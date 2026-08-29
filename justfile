@@ -23,8 +23,8 @@ check-markdown-format:
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 
-# Run the protected-input, engine, plugin, and trace-producer test suites.
-test: test-protected-inputs test-engine test-plugin test-trace-producer
+# Run the protected-input, Gym-selection, engine, plugin, and trace-producer test suites.
+test: test-protected-inputs test-gym-selection test-engine test-plugin test-trace-producer
 
 # Reject licensed inputs and disguised binary/model/archive payloads from Git.
 test-protected-inputs:
@@ -33,6 +33,10 @@ test-protected-inputs:
 # Exercise the private-archive producer without requiring private evidence.
 test-trace-producer:
     ./scripts/test-capture-trace.sh
+
+# Validate the explicit risk-based MAKO Gym hardware-selection contract.
+test-gym-selection:
+    ./scripts/test-gym-selection.sh
 
 # Configure and build MAKO Renderer in release mode.
 build-engine:
@@ -91,11 +95,11 @@ test-engine-gym-sync-validation *args:
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
 
-# Run the release-only real Gamescope compositor + WSI + MAKO end-to-end lane.
+# Run the high-cost real Gamescope compositor + WSI + MAKO end-to-end lane.
 test-engine-gym-gamescope-e2e *args:
     ./engine/scripts/run-mako-gym.sh --suite gamescope-e2e {{args}}
 
-# Run the release-only D3D11/DXVK and D3D12/VKD3D-Proton end-to-end lane.
+# Run the high-cost D3D11/DXVK and D3D12/VKD3D-Proton end-to-end lane.
 test-engine-gym-proton-e2e *args:
     ./engine/scripts/run-mako-gym.sh --suite proton-e2e {{args}}
 
@@ -127,9 +131,9 @@ package-plugin:
 package-plugin-fast:
     pnpm --dir plugin run package:local-engine-fast
 
-# Run the release gate on a verified one-job SteamOS/AMD runner.
-validate-steamos-hardware:
-    ./scripts/run-steamos-hardware-validation.sh
+# Run the release gate on a verified one-job SteamOS/AMD runner with an explicit Gym selection.
+validate-steamos-hardware *args:
+    ./scripts/run-steamos-hardware-validation.sh {{args}}
 
 # Inspect the scoped caches retained between SteamOS hardware jobs.
 inspect-hardware-cache:

@@ -12,6 +12,7 @@ import type {
   InstallationStatus,
   ProfileResult,
   ProfilesResult,
+  RuntimeStatusResult,
 } from "../../src/api/makoApi";
 
 const nullableResponseFixtures = {
@@ -106,6 +107,13 @@ const nullableResponseFixtures = {
     message: "",
     error: null,
   } satisfies ProfileResult,
+  runtimeStatus: {
+    success: true,
+    phase: "inactive",
+    contexts: [],
+    message: "No active MAKO Renderer context",
+    error: null,
+  } satisfies RuntimeStatusResult,
 };
 
 describe("Decky RPC response contracts", () => {

@@ -59,7 +59,7 @@ The release packager builds the normal 64-bit application, CLI, UI, launcher, an
 | Incremental native Renderer work on SteamOS | `engine/scripts/build-steamos-dev.sh` | Reuses a development tree and builds the 64-bit layer and CLI; no distributable archive |
 | Standalone Renderer archive | `engine/scripts/package-local.sh` | Tests and packages the host Renderer payload; does not build MAKO Decky or publish |
 | Complete MAKO Decky tester package from current Renderer source | `pnpm --dir plugin run package:local-engine` from the repository root | Builds and embeds the native and Flatpak Renderer payloads in a self-contained local ZIP |
-| SteamOS/AMD release candidate | `scripts/run-steamos-hardware-validation.sh --deploy-to-decky` from the repository root | Rebuilds a clean, pushed commit and optionally deploys the already-verified ZIP; publishes nothing |
+| SteamOS/AMD release candidate | `scripts/run-steamos-hardware-validation.sh --gym-suite <affected-suite> --gym-reason '<why>' --deploy-to-decky` from the repository root | Rebuilds a clean, pushed commit, runs explicitly selected Gym hardware coverage, and optionally deploys the already-verified ZIP; publishes nothing |
 | Matched public release | `scripts/publish-release.sh X.Y.Z` from the repository root | Publishes MAKO Renderer first, pins it by checksum, then publishes MAKO Decky |
 
 Use the fast paths for iteration, the complete local package for testers, and the dedicated hardware workflow for the release candidate. Publication is a separate, explicitly invoked cycle described in [How to release MAKO](../../HOW_TO_RELEASE.md).
@@ -80,7 +80,7 @@ For native Steam-game iteration, use the persistent incremental build instead of
 ./scripts/build-steamos-dev.sh
 ```
 
-It builds the 64-bit Vulkan layer and CLI and keeps `build/steamos-dev` between runs. When the private sibling MAKO Gym checkout is available, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli` from `engine/` for real AMD validation. MAKO Gym owns its current quality, performance, synchronization, repeatability, and resolution matrices; the SteamOS release workflow requires those documented release lanes. To retain a second incremental tree for genuine 32-bit games, run:
+It builds the 64-bit Vulkan layer and CLI and keeps `build/steamos-dev` between runs. When the private sibling MAKO Gym checkout is available, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli` from `engine/` for real AMD validation. MAKO Gym owns its current quality, performance, synchronization, repeatability, and resolution matrices; the SteamOS release workflow runs only the lanes selected for the changed boundaries or by an explicit maintainer request. To retain a second incremental tree for genuine 32-bit games, run:
 
 ```bash
 ./scripts/build-steamos-dev.sh --with-32-bit

@@ -7,7 +7,7 @@ Run plugin commands from `plugin/`; run the hardware gate and publisher from the
 | Frontend/backend/Renderer iteration | `pnpm run dev:frontend`, `dev:backend`, `dev:engine`, or another `dev:*` scope | Mutates only the local development installation; no ZIP |
 | Fast native tester ZIP | `pnpm run package:local-engine-fast` | Verified native 64-bit package without 32-bit or Flatpak payloads; never publish |
 | Complete tester ZIP | `pnpm run package:local-engine` | Self-contained native 64/32-bit and Flatpak package |
-| Release candidate | `cd .. && ./scripts/run-steamos-hardware-validation.sh --deploy-to-decky` | Clean SteamOS/AMD rebuild, hardware validation, retained ZIP, optional exact-package deployment |
+| Release candidate | `cd .. && ./scripts/run-steamos-hardware-validation.sh --gym-suite <affected-suite> --gym-reason '<why>' --deploy-to-decky` | Clean SteamOS/AMD rebuild, selected hardware validation, retained ZIP, optional exact-package deployment |
 | Release | `cd .. && ./scripts/publish-release.sh X.Y.Z` | Renderer publication and checksum pin followed by Decky publication |
 
 Local and retained CI ZIPs are not published releases. After publishing, download and install the public Decky asset once. [Testing](../../TESTING.md) defines the evidence for each cycle; [How to release MAKO](../../HOW_TO_RELEASE.md) owns publication.

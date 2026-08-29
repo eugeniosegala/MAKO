@@ -30,6 +30,7 @@ MANGOHUD_LAYER_DIR = f"{MAKO_ROOT}/vulkan/mangohud.d"
 VKBASALT_LAYER_DIR = f"{MAKO_ROOT}/vulkan/vkbasalt.d"
 USER_VULKAN_LAYER_DIR = ".local/share/vulkan/implicit_layer.d"
 CONFIG_DIR = ".config/mako-render"
+RUNTIME_STATE_DIRNAME = "runtime-state"
 
 SCRIPT_NAME = MAKO_WRAPPER_RELATIVE_PATH
 DIAGNOSTICS_SCRIPT_NAME = ".local/bin/mako-diagnostics"

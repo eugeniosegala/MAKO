@@ -1,0 +1,306 @@
+"""Read MAKO Renderer's atomic requested-versus-applied runtime records."""
+
+from __future__ import annotations
+
+import json
+import os
+from pathlib import Path
+import stat
+from typing import Any, Optional, cast
+
+from .base_service import BaseService
+from .types import (
+    RuntimeApplicationPhase,
+    RuntimeContextState,
+    RuntimePendingState,
+    RuntimeProfileSnapshot,
+    RuntimeStatusResponse,
+)
+
+
+_SCHEMA_VERSION = 1
+_MAXIMUM_STATUS_BYTES = 64 * 1024
+_VALID_ROLES = frozenset(("frame-generation", "spatial-scaling"))
+_VALID_PHASES = frozenset((
+    "active",
+    "debouncing",
+    "preparing",
+    "draining",
+    "failed",
+    "swapchain-recreation",
+    "process-restart",
+))
+_PHASE_PRIORITY = {
+    "inactive": 0,
+    "active": 1,
+    "debouncing": 2,
+    "preparing": 3,
+    "draining": 4,
+    "swapchain-recreation": 5,
+    "process-restart": 6,
+    "failed": 7,
+}
+
+
+def _integer(value: object, field: str) -> int:
+    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+        raise ValueError(f"{field} must be a non-negative integer")
+    return value
+
+
+def _number(value: object, field: str) -> float:
+    if not isinstance(value, (int, float)) or isinstance(value, bool):
+        raise ValueError(f"{field} must be numeric")
+    return float(value)
+
+
+def _boolean(value: object, field: str) -> bool:
+    if not isinstance(value, bool):
+        raise ValueError(f"{field} must be boolean")
+    return value
+
+
+def _string(value: object, field: str) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{field} must be a string")
+    return value
+
+
+def _profile(value: object, field: str) -> RuntimeProfileSnapshot:
+    if not isinstance(value, dict):
+        raise ValueError(f"{field} must be an object")
+    gpu_value = value.get("gpu")
+    if gpu_value is not None and not isinstance(gpu_value, str):
+        raise ValueError(f"{field}.gpu must be a string or null")
+    return {
+        "name": _string(value.get("name"), f"{field}.name"),
+        "gpu": gpu_value,
+        "multiplier": _integer(value.get("multiplier"), f"{field}.multiplier"),
+        "frame_generation_enabled": _boolean(
+            value.get("frame_generation_enabled"),
+            f"{field}.frame_generation_enabled",
+        ),
+        "scaling_enabled": _boolean(
+            value.get("scaling_enabled"), f"{field}.scaling_enabled"
+        ),
+        "scaling_method": _string(
+            value.get("scaling_method"), f"{field}.scaling_method"
+        ),
+        "scaling_factor": _number(
+            value.get("scaling_factor"), f"{field}.scaling_factor"
+        ),
+        "scaling_sharpness": _number(
+            value.get("scaling_sharpness"), f"{field}.scaling_sharpness"
+        ),
+        "frame_generation_refresh_threshold": _integer(
+            value.get("frame_generation_refresh_threshold"),
+            f"{field}.frame_generation_refresh_threshold",
+        ),
+        "base_fps_cap": _integer(
+            value.get("base_fps_cap"), f"{field}.base_fps_cap"
+        ),
+        "adaptive": _boolean(value.get("adaptive"), f"{field}.adaptive"),
+        "adaptive_auto_base_fps_cap": _boolean(
+            value.get("adaptive_auto_base_fps_cap"),
+            f"{field}.adaptive_auto_base_fps_cap",
+        ),
+        "target_fps": _integer(value.get("target_fps"), f"{field}.target_fps"),
+        "adaptive_max_multiplier": _integer(
+            value.get("adaptive_max_multiplier"),
+            f"{field}.adaptive_max_multiplier",
+        ),
+        "adaptive_stable_cadence": _boolean(
+            value.get("adaptive_stable_cadence"),
+            f"{field}.adaptive_stable_cadence",
+        ),
+        "dynamic_cadence_recovery": _boolean(
+            value.get("dynamic_cadence_recovery"),
+            f"{field}.dynamic_cadence_recovery",
+        ),
+        "dynamic_cadence_probe_interval_seconds": _number(
+            value.get("dynamic_cadence_probe_interval_seconds"),
+            f"{field}.dynamic_cadence_probe_interval_seconds",
+        ),
+        "ultra_performance": _boolean(
+            value.get("ultra_performance"), f"{field}.ultra_performance"
+        ),
+        "flow_scale": _number(value.get("flow_scale"), f"{field}.flow_scale"),
+        "effective_flow_scale": _number(
+            value.get("effective_flow_scale"), f"{field}.effective_flow_scale"
+        ),
+        "performance_mode": _boolean(
+            value.get("performance_mode"), f"{field}.performance_mode"
+        ),
+        "effective_performance_mode": _boolean(
+            value.get("effective_performance_mode"),
+            f"{field}.effective_performance_mode",
+        ),
+        "pacing": _string(value.get("pacing"), f"{field}.pacing"),
+        "required_generated_capacity": _integer(
+            value.get("required_generated_capacity"),
+            f"{field}.required_generated_capacity",
+        ),
+    }
+
+
+def _pending(value: object) -> RuntimePendingState:
+    if not isinstance(value, dict):
+        raise ValueError("pending must be an object")
+    return {
+        "frame_generation_private": _boolean(
+            value.get("frame_generation_private"),
+            "pending.frame_generation_private",
+        ),
+        "spatial_private": _boolean(
+            value.get("spatial_private"), "pending.spatial_private"
+        ),
+        "swapchain_recreation": _boolean(
+            value.get("swapchain_recreation"),
+            "pending.swapchain_recreation",
+        ),
+        "process_restart": _boolean(
+            value.get("process_restart"), "pending.process_restart"
+        ),
+    }
+
+
+def _context(value: object) -> RuntimeContextState:
+    if not isinstance(value, dict):
+        raise ValueError("runtime record must be an object")
+    if value.get("schema_version") != _SCHEMA_VERSION:
+        raise ValueError("unsupported runtime status schema")
+    role = _string(value.get("role"), "role")
+    if role not in _VALID_ROLES:
+        raise ValueError("unsupported runtime role")
+    phase_value = _string(value.get("phase"), "phase")
+    if phase_value not in _VALID_PHASES:
+        raise ValueError("unsupported runtime phase")
+    error_value = value.get("error")
+    if error_value is not None and not isinstance(error_value, str):
+        raise ValueError("error must be a string or null")
+    return {
+        "pid": _integer(value.get("pid"), "pid"),
+        "process_start_ticks": _integer(
+            value.get("process_start_ticks"), "process_start_ticks"
+        ),
+        "context": _integer(value.get("context"), "context"),
+        "role": role,
+        "updated_unix_ms": _integer(
+            value.get("updated_unix_ms"), "updated_unix_ms"
+        ),
+        "state_revision": _integer(
+            value.get("state_revision"), "state_revision"
+        ),
+        "phase": cast(RuntimeApplicationPhase, phase_value),
+        "reason": _string(value.get("reason"), "reason"),
+        "pending": _pending(value.get("pending")),
+        "applied_generated_capacity": _integer(
+            value.get("applied_generated_capacity"),
+            "applied_generated_capacity",
+        ),
+        "requested": _profile(value.get("requested"), "requested"),
+        "applied": _profile(value.get("applied"), "applied"),
+        "error": error_value,
+    }
+
+
+class RuntimeStateService(BaseService):
+    """Validate and aggregate active Renderer context state."""
+
+    def _process_start_ticks(self, process_id: int) -> Optional[int]:
+        try:
+            line = (Path("/proc") / str(process_id) / "stat").read_text(
+                encoding="utf-8"
+            )
+            command_end = line.rfind(")")
+            if command_end < 0:
+                return None
+            fields = line[command_end + 2:].split()
+            # The remaining list begins at proc field 3; starttime is field 22.
+            if len(fields) < 20:
+                return None
+            return int(fields[19])
+        except (OSError, UnicodeError, ValueError):
+            return None
+
+    def _read_file_without_following_links(self, path: Path) -> bytes:
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        try:
+            file_status = os.fstat(descriptor)
+            if not stat.S_ISREG(file_status.st_mode):
+                raise ValueError("runtime status is not a regular file")
+            if file_status.st_size > _MAXIMUM_STATUS_BYTES:
+                raise ValueError("runtime status exceeds the size limit")
+            payload = os.read(descriptor, _MAXIMUM_STATUS_BYTES + 1)
+            if len(payload) > _MAXIMUM_STATUS_BYTES:
+                raise ValueError("runtime status exceeds the size limit")
+            return payload
+        finally:
+            os.close(descriptor)
+
+    def _read_context(self, path: Path) -> Optional[RuntimeContextState]:
+        try:
+            raw: Any = json.loads(
+                self._read_file_without_following_links(path).decode("utf-8")
+            )
+            context = _context(raw)
+            if self._process_start_ticks(context["pid"]) != (
+                context["process_start_ticks"]
+            ):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+                return None
+            return context
+        except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
+            return None
+
+    def get_status(self, profile_name: str = "") -> RuntimeStatusResponse:
+        contexts: list[RuntimeContextState] = []
+        try:
+            if self.runtime_state_dir.is_dir():
+                for path in self.runtime_state_dir.glob("*.json"):
+                    context = self._read_context(path)
+                    if context is None:
+                        continue
+                    if profile_name and profile_name not in {
+                        context["requested"]["name"],
+                        context["applied"]["name"],
+                    }:
+                        continue
+                    contexts.append(context)
+            contexts.sort(
+                key=lambda context: (
+                    context["updated_unix_ms"],
+                    context["state_revision"],
+                    context["context"],
+                ),
+                reverse=True,
+            )
+            aggregate: RuntimeApplicationPhase = "inactive"
+            for context in contexts:
+                if _PHASE_PRIORITY[context["phase"]] > _PHASE_PRIORITY[aggregate]:
+                    aggregate = context["phase"]
+            return {
+                "success": True,
+                "phase": aggregate,
+                "contexts": contexts,
+                "message": (
+                    "No active MAKO Renderer context"
+                    if not contexts
+                    else f"{len(contexts)} active MAKO Renderer context(s)"
+                ),
+                "error": None,
+            }
+        except OSError as error:
+            self.log.warning("Could not read MAKO Renderer runtime state: %s", error)
+            return {
+                "success": False,
+                "phase": "inactive",
+                "contexts": [],
+                "message": "Runtime state is unavailable",
+                "error": str(error),
+            }

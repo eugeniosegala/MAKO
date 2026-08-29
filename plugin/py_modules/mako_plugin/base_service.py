@@ -25,6 +25,7 @@ from .constants import (
     DIAGNOSTICS_SCRIPT_NAME,
     CONFIG_DIR,
     CONFIG_FILENAME,
+    RUNTIME_STATE_DIRNAME,
     WRAPPER_PROFILE_SETTINGS_FILENAME,
     PROFILE_METADATA_FILENAME,
 )
@@ -90,6 +91,7 @@ class BaseService:
         self.diagnostics_script_path = self.user_home / DIAGNOSTICS_SCRIPT_NAME
         self.config_dir = self.user_home / CONFIG_DIR
         self.config_file_path = self.config_dir / CONFIG_FILENAME
+        self.runtime_state_dir = self.config_dir / RUNTIME_STATE_DIRNAME
         self.wrapper_profile_settings_path = self.config_dir / WRAPPER_PROFILE_SETTINGS_FILENAME
         self.profile_metadata_path = self.config_dir / PROFILE_METADATA_FILENAME
 

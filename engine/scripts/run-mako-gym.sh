@@ -8,7 +8,21 @@ required=false
 suite=vulkan
 suite_selected=false
 all_suites=false
+list_suites=false
 arguments=()
+suite_names=(
+    vulkan
+    quality
+    repeatability
+    performance
+    spatial-performance
+    runtime-overhead
+    sync-validation
+    recovery
+    gamescope-e2e
+    proton-e2e
+    proton-compatibility
+)
 
 usage() {
     cat <<'EOF'
@@ -21,6 +35,7 @@ Bridge options:
                    spatial-performance, runtime-overhead, sync-validation, recovery,
                    gamescope-e2e, proton-e2e, or proton-compatibility.
   --all-suites     Run all eleven suites sequentially with the forwarded Gym options.
+  --list-suites    Print the canonical bridge suite names without requiring Gym.
   -h, --help       Show this bridge help.
 
 Every other argument is forwarded unchanged to the selected MAKO Gym runner.
@@ -53,6 +68,9 @@ while (($#)); do
         --all-suites)
             all_suites=true
             ;;
+        --list-suites)
+            list_suites=true
+            ;;
         -h|--help)
             usage
             exit 0
@@ -68,6 +86,15 @@ while (($#)); do
     esac
     shift
 done
+
+if [[ "$list_suites" == true ]]; then
+    if [[ "$all_suites" == true || "$suite_selected" == true || ${#arguments[@]} -ne 0 ]]; then
+        echo "--list-suites cannot be combined with suite selections or Gym options" >&2
+        exit 2
+    fi
+    printf '%s\n' "${suite_names[@]}"
+    exit 0
+fi
 
 if [[ "$all_suites" == true && "$suite_selected" == true ]]; then
     echo "--all-suites cannot be combined with --suite" >&2
@@ -94,20 +121,6 @@ if [[ "$actual_version" != "$expected_version" ]]; then
     echo "MAKO Gym contract mismatch: MAKO expects $expected_version, Gym provides $actual_version" >&2
     exit 1
 fi
-
-suite_names=(
-    vulkan
-    quality
-    repeatability
-    performance
-    spatial-performance
-    runtime-overhead
-    sync-validation
-    recovery
-    gamescope-e2e
-    proton-e2e
-    proton-compatibility
-)
 
 resolve_runner() {
     case "$1" in

@@ -3,6 +3,14 @@ name: SteamOS hardware validation
 on:
   workflow_dispatch:
     inputs:
+      gym_suites:
+        description: Comma-separated affected MAKO Gym suites, or the explicit value none or all
+        required: true
+        type: string
+      gym_reason:
+        description: Short rationale for the selected and omitted MAKO Gym hardware coverage
+        required: true
+        type: string
       deploy_to_decky:
         description: Deploy the verified ZIP to an existing MAKO Decky test installation and reload it
         required: true
@@ -23,6 +31,8 @@ jobs:
     timeout-minutes: 120
     env:
       MAKO_STEAM_MACHINE: 1
+      MAKO_GYM_SUITES: ${{ inputs.gym_suites }}
+      MAKO_GYM_REASON: ${{ inputs.gym_reason }}
     steps:
       - name: Check out source
         uses: actions/checkout@v6
@@ -88,6 +98,13 @@ jobs:
             echo "MAKO_GYM_COMMIT=$(git -C "$gym_repo" rev-parse HEAD)"
           } >> "$GITHUB_ENV"
 
+      - name: Record selected MAKO Gym hardware coverage
+        run: >-
+          ./scripts/validate-gym-selection.sh
+          "$MAKO_GYM_SUITES"
+          "$MAKO_GYM_REASON"
+          engine/out/mako-gym-selection.txt
+
       - name: Install locked Decky dependencies
         working-directory: plugin
         run: >-
@@ -106,6 +123,10 @@ jobs:
       - name: Run MAKO Gym procedural render-quality matrix
         working-directory: engine
         run: |
+          if [[ "$MAKO_GYM_SUITES" != all && ",${MAKO_GYM_SUITES}," != *",quality,"* ]]; then
+            echo "MAKO Gym quality: not selected."
+            exit 0
+          fi
           ./scripts/run-mako-gym.sh --require --suite quality \
             --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
             --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-quality"
@@ -121,6 +142,10 @@ jobs:
       - name: Run MAKO Gym render-performance budgets
         working-directory: engine
         run: |
+          if [[ "$MAKO_GYM_SUITES" != all && ",${MAKO_GYM_SUITES}," != *",performance,"* ]]; then
+            echo "MAKO Gym performance: not selected."
+            exit 0
+          fi
           ./scripts/run-mako-gym.sh --require --suite performance \
             --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
             --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-performance"
@@ -136,6 +161,10 @@ jobs:
       - name: Run MAKO Gym spatial GPU-time budgets
         working-directory: engine
         run: |
+          if [[ "$MAKO_GYM_SUITES" != all && ",${MAKO_GYM_SUITES}," != *",spatial-performance,"* ]]; then
+            echo "MAKO Gym spatial-performance: not selected."
+            exit 0
+          fi
           ./scripts/run-mako-gym.sh --require --suite spatial-performance \
             --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
             --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-spatial-performance"
@@ -151,6 +180,10 @@ jobs:
       - name: Run MAKO Gym Vulkan synchronization validation
         working-directory: engine
         run: |
+          if [[ "$MAKO_GYM_SUITES" != all && ",${MAKO_GYM_SUITES}," != *",sync-validation,"* ]]; then
+            echo "MAKO Gym sync-validation: not selected."
+            exit 0
+          fi
           ./scripts/run-mako-gym.sh --require --suite sync-validation \
             --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
             --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-sync-validation"
@@ -166,6 +199,10 @@ jobs:
       - name: Run MAKO Gym quality-repeatability sentinels
         working-directory: engine
         run: |
+          if [[ "$MAKO_GYM_SUITES" != all && ",${MAKO_GYM_SUITES}," != *",repeatability,"* ]]; then
+            echo "MAKO Gym repeatability: not selected."
+            exit 0
+          fi
           ./scripts/run-mako-gym.sh --require --suite repeatability \
             --cli "$GITHUB_WORKSPACE/engine/build/hardware-validation/mako-cli/mako-cli" \
             --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-repeatability"
@@ -208,75 +245,39 @@ jobs:
           matrix_prefix="$smoke_root/matrix-prefix"
           mkdir -p "$matrix_prefix"
           tar -xJf "${renderer_archives[0]}" -C "$matrix_prefix"
-          ./scripts/run-mako-gym.sh --require \
-            --launcher "$matrix_prefix/bin/mako-launch" \
-            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym"
-          mapfile -t gym_markers < <(
-            find "$GITHUB_WORKSPACE/engine/out/mako-gym" \
-              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
-          )
-          if (( ${#gym_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO Gym result." >&2
-            exit 1
-          fi
-          ./scripts/run-mako-gym.sh --require --suite recovery \
-            --launcher "$matrix_prefix/bin/mako-launch" \
-            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-recovery"
-          mapfile -t recovery_markers < <(
-            find "$GITHUB_WORKSPACE/engine/out/mako-gym-recovery" \
-              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
-          )
-          if (( ${#recovery_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO Gym recovery result." >&2
-            exit 1
-          fi
-          ./scripts/run-mako-gym.sh --require --suite gamescope-e2e \
-            --launcher "$matrix_prefix/bin/mako-launch" \
-            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-gamescope-e2e"
-          mapfile -t gamescope_e2e_markers < <(
-            find "$GITHUB_WORKSPACE/engine/out/mako-gym-gamescope-e2e" \
-              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
-          )
-          if (( ${#gamescope_e2e_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO Gym Gamescope E2E result." >&2
-            exit 1
-          fi
-          ./scripts/run-mako-gym.sh --require --suite proton-e2e \
-            --launcher "$matrix_prefix/bin/mako-launch" \
-            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-proton-e2e"
-          mapfile -t proton_e2e_markers < <(
-            find "$GITHUB_WORKSPACE/engine/out/mako-gym-proton-e2e" \
-              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
-          )
-          if (( ${#proton_e2e_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO Gym Proton E2E result." >&2
-            exit 1
-          fi
-          ./scripts/run-mako-gym.sh --require --suite proton-compatibility \
-            --runtime-tier extended \
-            --case-tier extended \
-            --minimum-runtimes 4 \
-            --launcher "$matrix_prefix/bin/mako-launch" \
-            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-proton-compatibility"
-          mapfile -t proton_compatibility_markers < <(
-            find "$GITHUB_WORKSPACE/engine/out/mako-gym-proton-compatibility" \
-              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
-          )
-          if (( ${#proton_compatibility_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO Gym Proton compatibility result." >&2
-            exit 1
-          fi
-          ./scripts/run-mako-gym.sh --require --suite runtime-overhead \
-            --launcher "$matrix_prefix/bin/mako-launch" \
-            --output-root "$GITHUB_WORKSPACE/engine/out/mako-gym-runtime-overhead"
-          mapfile -t runtime_overhead_markers < <(
-            find "$GITHUB_WORKSPACE/engine/out/mako-gym-runtime-overhead" \
-              -mindepth 2 -maxdepth 2 -type f -name .sanitized -print
-          )
-          if (( ${#runtime_overhead_markers[@]} != 1 )); then
-            echo "Expected exactly one sanitized MAKO Gym runtime-overhead result." >&2
-            exit 1
-          fi
+
+          gym_selected() {
+            [[ "$MAKO_GYM_SUITES" == all || ",${MAKO_GYM_SUITES}," == *",$1,"* ]]
+          }
+          run_packaged_suite() {
+            local suite="$1"
+            local output_name="$2"
+            shift 2
+            if ! gym_selected "$suite"; then
+              echo "MAKO Gym $suite: not selected."
+              return 0
+            fi
+            local output_root="$GITHUB_WORKSPACE/engine/out/$output_name"
+            ./scripts/run-mako-gym.sh --require --suite "$suite" \
+              --launcher "$matrix_prefix/bin/mako-launch" \
+              --output-root "$output_root" "$@"
+            mapfile -t suite_markers < <(
+              find "$output_root" -mindepth 2 -maxdepth 2 \
+                -type f -name .sanitized -print
+            )
+            if (( ${#suite_markers[@]} != 1 )); then
+              echo "Expected exactly one sanitized MAKO Gym $suite result." >&2
+              exit 1
+            fi
+          }
+
+          run_packaged_suite vulkan mako-gym
+          run_packaged_suite recovery mako-gym-recovery
+          run_packaged_suite gamescope-e2e mako-gym-gamescope-e2e
+          run_packaged_suite proton-e2e mako-gym-proton-e2e
+          run_packaged_suite proton-compatibility mako-gym-proton-compatibility \
+            --runtime-tier extended --case-tier extended --minimum-runtimes 4
+          run_packaged_suite runtime-overhead mako-gym-runtime-overhead
 
       - name: Deploy to the dedicated Decky test installation
         if: inputs.deploy_to_decky
@@ -293,6 +294,7 @@ jobs:
           name: steamos-hardware-validation-${{ github.sha }}
           path: |
             engine/out/hardware-validation.txt
+            engine/out/mako-gym-selection.txt
             engine/out/mako-gym-quality
             engine/out/mako-gym-performance
             engine/out/mako-gym-spatial-performance
