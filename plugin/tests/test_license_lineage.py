@@ -28,24 +28,18 @@ class LicenseLineageTests(unittest.TestCase):
             license_text,
         )
 
-    def test_public_docs_do_not_describe_the_renderer_lineage_as_mit(self):
-        public_docs = (
+    def test_public_lineage_docs_identify_the_renderer_as_gpl(self):
+        public_lineage_docs = (
             REPOSITORY_ROOT / "LICENSE.md",
             REPOSITORY_ROOT / "README.md",
             REPOSITORY_ROOT / "THIRD_PARTY_NOTICES.md",
             REPOSITORY_ROOT / "engine/README.md",
         )
-        forbidden_claims = (
-            "earlier MIT-licensed revision",
-            "before upstream adopted GPLv3",
-            "later GPLv3-licensed lsfg-vk revisions",
-        )
 
-        for path in public_docs:
+        for path in public_lineage_docs:
             text = path.read_text(encoding="utf-8")
-            for claim in forbidden_claims:
-                with self.subTest(path=path, claim=claim):
-                    self.assertNotIn(claim, text)
+            with self.subTest(path=path):
+                self.assertIn("GPL-3.0-or-later", text)
 
 
 if __name__ == "__main__":
