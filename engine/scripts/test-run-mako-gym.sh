@@ -8,7 +8,7 @@ temporary_root="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_root"' EXIT
 
 listed_suites="$($bridge --list-suites)"
-expected_suites=$'vulkan\nquality\nrepeatability\nperformance\nspatial-performance\nruntime-overhead\nsync-validation\nrecovery\ngamescope-e2e\nsustained-health\nproton-e2e\nproton-compatibility'
+expected_suites=$'vulkan\nquality\nrepeatability\nperformance\nspatial-performance\nruntime-overhead\nsync-validation\nrecovery\nexternal-recovery\ngamescope-e2e\nsustained-health\nproton-e2e\nproton-compatibility'
 if [[ "$listed_suites" != "$expected_suites" ]]; then
     echo "Gym bridge suite inventory is not canonical." >&2
     exit 1
@@ -56,6 +56,9 @@ chmod +x "$fake_gym/scripts/run-synchronization-validation.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "recovery:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-runtime-recovery-matrix.sh"
 chmod +x "$fake_gym/scripts/run-runtime-recovery-matrix.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "external-recovery:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-external-recovery.sh"
+chmod +x "$fake_gym/scripts/run-external-recovery.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "gamescope-e2e:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-gamescope-end-to-end.sh"
 chmod +x "$fake_gym/scripts/run-gamescope-end-to-end.sh"
@@ -118,6 +121,12 @@ if [[ "$recovery_forwarded" != "$recovery_expected" ]]; then
     echo "Gym recovery-suite arguments were not forwarded exactly." >&2
     exit 1
 fi
+external_recovery_forwarded="$($bridge --gym-repo "$fake_gym" --suite external-recovery --filter '^external-pause-')"
+external_recovery_expected=$'external-recovery:--filter\nexternal-recovery:^external-pause-'
+if [[ "$external_recovery_forwarded" != "$external_recovery_expected" ]]; then
+    echo "Gym external-recovery arguments were not forwarded exactly." >&2
+    exit 1
+fi
 gamescope_e2e_forwarded="$($bridge --gym-repo "$fake_gym" --suite gamescope-e2e --filter '^gamescope-live-')"
 gamescope_e2e_expected=$'gamescope-e2e:--filter\ngamescope-e2e:^gamescope-live-'
 if [[ "$gamescope_e2e_forwarded" != "$gamescope_e2e_expected" ]]; then
@@ -143,9 +152,9 @@ if [[ "$proton_compatibility_forwarded" != "$proton_compatibility_expected" ]]; 
     exit 1
 fi
 all_suites_forwarded="$($bridge --gym-repo "$fake_gym" --all-suites --validate)"
-all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate\ngamescope-e2e:--validate\nsustained-health:--validate\nproton-e2e:--validate\nproton-compatibility:--validate'
+all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate\nexternal-recovery:--validate\ngamescope-e2e:--validate\nsustained-health:--validate\nproton-e2e:--validate\nproton-compatibility:--validate'
 if [[ "$all_suites_forwarded" != "$all_suites_expected" ]]; then
-    echo "Gym all-suites validation did not invoke all twelve runners exactly once." >&2
+    echo "Gym all-suites validation did not invoke all thirteen runners exactly once." >&2
     exit 1
 fi
 if "$bridge" --gym-repo "$fake_gym" --all-suites --suite quality --validate >/dev/null 2>&1; then

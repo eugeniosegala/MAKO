@@ -19,6 +19,7 @@ suite_names=(
     runtime-overhead
     sync-validation
     recovery
+    external-recovery
     gamescope-e2e
     sustained-health
     proton-e2e
@@ -34,9 +35,9 @@ Bridge options:
   --require        Fail when MAKO Gym is absent; intended for release gates.
   --suite NAME     Select vulkan (default), quality, repeatability, performance,
                    spatial-performance, runtime-overhead, sync-validation, recovery,
-                   gamescope-e2e, sustained-health, proton-e2e, or
+                   external-recovery, gamescope-e2e, sustained-health, proton-e2e, or
                    proton-compatibility.
-  --all-suites     Run all twelve suites sequentially with the forwarded Gym options.
+  --all-suites     Run all thirteen suites sequentially with the forwarded Gym options.
   --list-suites    Print the canonical bridge suite names without requiring Gym.
   -h, --help       Show this bridge help.
 
@@ -134,6 +135,7 @@ resolve_runner() {
         runtime-overhead) runner="$gym_repo/scripts/run-runtime-overhead.sh" ;;
         sync-validation) runner="$gym_repo/scripts/run-synchronization-validation.sh" ;;
         recovery) runner="$gym_repo/scripts/run-runtime-recovery-matrix.sh" ;;
+        external-recovery) runner="$gym_repo/scripts/run-external-recovery.sh" ;;
         gamescope-e2e) runner="$gym_repo/scripts/run-gamescope-end-to-end.sh" ;;
         sustained-health) runner="$gym_repo/scripts/run-sustained-health.sh" ;;
         proton-e2e) runner="$gym_repo/scripts/run-proton-end-to-end.sh" ;;

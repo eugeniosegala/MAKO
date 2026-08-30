@@ -104,6 +104,7 @@ Common commands:
 ./engine/scripts/run-mako-gym.sh --suite sync-validation --cli "$PWD/engine/build/mako-cli/mako-cli"
 ./engine/scripts/run-mako-gym.sh --suite repeatability --cli "$PWD/engine/build/mako-cli/mako-cli"
 ./engine/scripts/run-mako-gym.sh --suite recovery --filter '(stall|cadence-drop|recreate)$'
+./engine/scripts/run-mako-gym.sh --suite external-recovery --filter '^external-pause-adaptive-mako$'
 ./engine/scripts/run-mako-gym.sh --suite gamescope-e2e --filter '^gamescope-live-'
 ./engine/scripts/run-mako-gym.sh --suite sustained-health --filter '^sustained-deck-'
 ./engine/scripts/run-mako-gym.sh --suite proton-e2e --filter '^proton-vkd3d-hud-'
@@ -126,6 +127,7 @@ The manifests and guides in MAKO Gym are authoritative for row semantics, thresh
 | `sync-validation` | 8 | Khronos synchronization validation on canonical quality paths | `docs/SYNCHRONIZATION-VALIDATION.md` |
 | `repeatability` | 9 | Byte-identical output across three independent initializations | `docs/QUALITY-REPEATABILITY.md` |
 | `recovery` | 31 | Scripted cadence, hitch, stall, live-scaling, and swapchain lifecycle | `docs/RUNTIME-RECOVERY-MATRIX.md` |
+| `external-recovery` | 4 | Focused full-cover overlay pause/throttle, workload-proven source return, and bounded 120 FPS recovery through Gamescope WSI | `docs/EXTERNAL-RECOVERY.md` |
 | `gamescope-e2e` | 30 | Native Gamescope WSI, fixed/variable surfaces, live controls, guarded Scale Factor recreation alone and combined with Fixed/Adaptive FG policy and capacity changes, private FG resource replacement, resolution transitions, and Adaptive efficiency-backoff endurance | `docs/GAMESCOPE-END-TO-END.md` |
 | `sustained-health` | 3 | Repeated private-resource RSS/allocation plateaus plus Deck and opt-in docked thermal/performance soaks | `docs/SUSTAINED-HEALTH.md` |
 | `proton-e2e` | 12 | Six deterministic scenes through both DXVK and VKD3D-Proton | `docs/PROTON-END-TO-END.md` |
@@ -148,7 +150,7 @@ Before publishing, choose the affected Gym suites from the table above and run t
 
 The launcher requires exactly one explicit selection mode: repeat `--gym-suite`, pass `--no-gym-suites` when no Renderer-facing hardware boundary changed or exact matching evidence is being reused, or pass `--all-gym-suites` for a genuinely cross-cutting or explicitly requested broad audit. `--gym-reason` is always required and must identify reused evidence. The workflow validates every Gym manifest and runner portably, but executes only the selected hardware suites; portable validation is not hardware evidence. The normal host/Flatpak build prerequisites, `vulkaninfo`, `vkcube`, Gamescope, local licensed `Lossless.dll`, and a clean compatible MAKO Gym checkout remain required.
 
-The gate creates a disposable one-job GitHub Actions runner, verifies the official runner archive, and rebuilds the complete dual-bitness/Flatpak package regardless of Gym selection. Selected quality, LSFG/spatial performance, synchronization, and repeatability suites run against the clean source-built `mako-cli`; selected feature, runtime-overhead, recovery, Gamescope, sustained-health, Proton E2E, and Proton-compatibility suites use the exact extracted Renderer package. It records selected and omitted suites, the rationale, Gym commit, and contract version; retains sanitized evidence and the verified ZIP for 14 days; and removes runner credentials and staging afterward.
+The gate creates a disposable one-job GitHub Actions runner, verifies the official runner archive, and rebuilds the complete dual-bitness/Flatpak package regardless of Gym selection. Selected quality, LSFG/spatial performance, synchronization, and repeatability suites run against the clean source-built `mako-cli`; selected feature, runtime-overhead, recovery, external recovery, Gamescope, sustained-health, Proton E2E, and Proton-compatibility suites use the exact extracted Renderer package. It records selected and omitted suites, the rationale, Gym commit, and contract version; retains sanitized evidence and the verified ZIP for 14 days; and removes runner credentials and staging afterward.
 
 Pass `--deploy-to-decky` only on the dedicated MAKO Decky test installation. It deploys the already-verified ZIP and invokes the production installer; it does not rebuild through a separate CI path. The hardware gate does not replace the manual DXVK, VKD3D-Proton, Gamescope, focus, overlay, hitch, recreation, and supported desktop matrix in the Renderer guides, nor the final published-package installation check.
 

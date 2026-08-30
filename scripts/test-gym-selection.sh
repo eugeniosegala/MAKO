@@ -18,7 +18,7 @@ expect_failure() {
 "$validator" recovery "Adaptive recovery changed" "$test_root/selected.txt" >/dev/null
 grep -Fxq 'selection=recovery' "$test_root/selected.txt"
 grep -Fxq 'selected=recovery' "$test_root/selected.txt"
-grep -Fxq 'omitted=vulkan,quality,repeatability,performance,spatial-performance,runtime-overhead,sync-validation,gamescope-e2e,sustained-health,proton-e2e,proton-compatibility' "$test_root/selected.txt"
+grep -Fxq 'omitted=vulkan,quality,repeatability,performance,spatial-performance,runtime-overhead,sync-validation,external-recovery,gamescope-e2e,sustained-health,proton-e2e,proton-compatibility' "$test_root/selected.txt"
 grep -Fxq 'reason=Adaptive recovery changed' "$test_root/selected.txt"
 
 "$validator" quality,gamescope-e2e "Pixels and WSI changed" >/dev/null

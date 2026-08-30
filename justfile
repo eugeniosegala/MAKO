@@ -95,6 +95,10 @@ test-engine-gym-sync-validation *args:
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
 
+# Exercise full-cover overlay pause/throttle recovery after workload-proven source return.
+test-engine-gym-external-recovery *args:
+    ./engine/scripts/run-mako-gym.sh --suite external-recovery {{args}}
+
 # Run the high-cost real Gamescope compositor + WSI + MAKO end-to-end lane.
 test-engine-gym-gamescope-e2e *args:
     ./engine/scripts/run-mako-gym.sh --suite gamescope-e2e {{args}}
