@@ -135,7 +135,9 @@ describe("Scaling controls", () => {
       <ScalingControl config={getDefaults()} onConfigChange={onConfigChange} />,
     );
 
-    const enabled = screen.getByText("Enable Scaling (Restart)");
+    const enabled = screen.getByRole("button", {
+      name: "Enable Scaling (Restart)",
+    });
     expect(enabled.getAttribute("data-checked")).toBe("false");
     expect(screen.queryByText("Scale Factor (2.0x)")).toBeNull();
     expect(screen.queryByText("Scaling Sharpness (90%)")).toBeNull();
@@ -189,15 +191,16 @@ describe("Scaling controls", () => {
       ),
     ).toBeTruthy();
     expect(
-      screen
-        .getByText(
-          /How scaling works:/,
-        )
-        .closest('[data-tone="info"]'),
+      screen.getByText(/How scaling works:/).closest('[data-tone="info"]'),
     ).toBeTruthy();
     expect(screen.getByText(/Steam Machine: 3840 × 2160 \/ 4K/)).toBeTruthy();
     expect(screen.getByText(/480p or 720p/)).toBeTruthy();
-    expect(screen.getByText(/2x is a good starting point/)).toBeTruthy();
+    expect(screen.getByText(/2x doubles your resolution/)).toBeTruthy();
+    expect(
+      screen.getByText(
+        /Reducing the resolution of the game and scaling it back can substantially increase performance/,
+      ),
+    ).toBeTruthy();
     expect(screen.getByText(/scale from 2K to 4K/)).toBeTruthy();
 
     rerender(
@@ -269,8 +272,11 @@ describe("Scaling controls", () => {
     );
 
     expect(
-      (screen.getByText("Enable Scaling (Restart)") as HTMLButtonElement)
-        .disabled,
+      (
+        screen.getByRole("button", {
+          name: "Enable Scaling (Restart)",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
     expect(
       (screen.getByText("Scale Factor (2.0x)") as HTMLButtonElement).disabled,

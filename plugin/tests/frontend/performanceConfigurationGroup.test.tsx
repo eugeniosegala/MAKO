@@ -35,6 +35,7 @@ vi.mock("@decky/ui", () => ({
   ),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
+  MakoRestartLabel: ({ label }: { label: string }) => label,
   MakoInlineTip: ({
     children,
     tone,
@@ -46,11 +47,9 @@ vi.mock("../../src/components/MakoUi", () => ({
       {children}
     </div>
   ),
-  MakoSettingRelationship: ({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) => <div data-mako-setting-relationship="true">{children}</div>,
+  MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
+    <div data-mako-setting-relationship="true">{children}</div>
+  ),
   MakoSectionHeader: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -94,13 +93,17 @@ describe("Performance Settings", () => {
     expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
     expect((lighterModel as HTMLButtonElement).disabled).toBe(true);
     expect(
-      screen.getByText(/less aggressive performance option than Ultra Performance/),
+      screen.getByText(
+        /less aggressive performance option than Ultra Performance/,
+      ),
     ).toBeTruthy();
     expect(
       screen.getByText(/rebuilds MAKO's private frame-generation context live/),
     ).toBeTruthy();
     expect(
-      screen.getByText(/Primarily intended for low-power devices such as Steam Deck/),
+      screen.getByText(
+        /Primarily intended for low-power devices such as Steam Deck/,
+      ),
     ).toBeTruthy();
     const info = screen.getByRole("note");
     expect(info.getAttribute("data-tone")).toBe("info");

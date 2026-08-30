@@ -124,6 +124,24 @@ void test_independent_scaling_group() {
         "Scaling group is coupled to Frame Generation");
 }
 
+void test_compact_restart_markers() {
+    QFile ui_file(QString::fromUtf8(MAKO_UI_QML_FILE));
+    require(ui_file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
+    const QString ui_qml = QString::fromUtf8(ui_file.readAll());
+    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 7,
+        "Every restart-bound Renderer control must opt into the compact marker");
+
+    QFile entry_file(QString::fromUtf8(MAKO_UI_GROUP_ENTRY_QML_FILE));
+    require(entry_file.open(QIODevice::ReadOnly),
+        "MAKO GroupEntry QML could not be opened");
+    const QString entry_qml = QString::fromUtf8(entry_file.readAll());
+    require(entry_qml.contains(QStringLiteral(
+            "property bool compactRestartMarker: false")),
+        "GroupEntry does not expose the compact restart-marker contract");
+    require(entry_qml.contains(QStringLiteral("font-size: 72%")),
+        "Restart marker is not rendered at the compact size");
+}
+
 } // namespace
 
 int main() {
@@ -131,6 +149,7 @@ int main() {
         test_scaling_properties();
         test_multiplier_limits();
         test_independent_scaling_group();
+        test_compact_restart_markers();
     } catch (const std::exception& error) {
         std::cerr << "mako-ui backend contract test failed: "
                   << error.what() << '\n';

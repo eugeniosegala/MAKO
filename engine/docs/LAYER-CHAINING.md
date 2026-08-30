@@ -14,9 +14,9 @@ MAKO Decky normally launches a native Steam or Proton game with:
 
 The default wrapper exposes only MAKO's private manifests, removes additive discovery, disables Gamescope WSI and competing frame generation, and leaves the Gamescope compositor active. Keep it unless a named exception has evidence.
 
-## Experimental Gamescope WSI compatibility
+## Gamescope WSI compatibility
 
-MAKO Decky exposes **Experimental Gamescope WSI (Restart)** under **Compatibility Settings**. It exists for reports such as [#7](https://github.com/eugeniosegala/MAKO/issues/7) and [#12](https://github.com/eugeniosegala/MAKO/issues/12), where users observed coloured or pixelated artifacts during camera movement on the default isolated path and reported that older WSI-enabled configurations changed the result.
+MAKO Decky exposes **Gamescope WSI (Restart)** under **Compatibility Settings**. The independently enabled FG-only lane is limited to supported 64-bit host launches and exists for reports such as [#7](https://github.com/eugeniosegala/MAKO/issues/7) and [#12](https://github.com/eugeniosegala/MAKO/issues/12), where users observed coloured or pixelated artifacts during camera movement on the default isolated path and reported that older WSI-enabled configurations changed the result. Scaling instead requires and locks its validated managed WSI path.
 
 The per-profile toggle is off by default and independent from the post-process selector; Scaling automatically locks the same WSI requirement. HDR stays disabled. Inside an active Gamescope session, MAKO places frame generation above WSI, spatial scaling below it when enabled, and a selected 64-bit MangoHud or vkBasalt layer last by exporting that exact managed prefix through `VK_INSTANCE_LAYERS`. It never admits the complete host directory. Desktop Mode, a mismatched nested Wayland session, invalid WSI evidence, or invalid lower-role evidence fails closed to top-only MAKO with scaling suppressed; session fallback is written to stderr without loading the external WSI layer or showing its modal hooking-error dialog, and other optional layers fail closed independently.
 
@@ -26,7 +26,7 @@ Gamescope WSI remains a compatibility boundary even in the split chain. The real
 
 ## Recommended setup: MAKO Decky External Tools
 
-MAKO Decky exposes mutually exclusive **Enable MangoHud** and **Enable vkBasalt** controls under **External Tools**. This post-process selection is independent from **Experimental Gamescope WSI** and Scaling, so either tool can run after the last active MAKO role while WSI remains between frame generation and spatial scaling. This is the recommended way to use either external tool because MAKO generates the guarded activation and ordered layer path automatically.
+MAKO Decky exposes mutually exclusive **Enable MangoHud** and **Enable vkBasalt** controls under **External Tools**. This post-process selection is independent from **Gamescope WSI** and Scaling, so either tool can run after the last active MAKO role while WSI remains between frame generation and spatial scaling. This is the recommended way to use either external tool because MAKO generates the guarded activation and ordered layer path automatically.
 
 1. Install MangoHud or vkBasalt on the SteamOS host.
 2. Keep the normal Steam launch option: `/home/deck/.local/bin/mako-run %command%`.

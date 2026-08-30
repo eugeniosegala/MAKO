@@ -7,7 +7,7 @@ This document defines MAKO Renderer's Vulkan-layer isolation and presentation ow
 Gamescope the compositor and Gamescope's Vulkan WSI layer are different components:
 
 - **Gamescope compositor:** owns the display session, scanout, Game Mode UI, focus, refresh information, and final composition. It remains active.
-- **Gamescope WSI Vulkan layer:** joins the game's Vulkan dispatch chain and applies swapchain/presentation policy. Managed MAKO launches exclude it from the game process by default; MAKO Decky can admit it through one per-profile experimental compatibility lane or the narrowly ordered scaling-at-process-start lane documented below.
+- **Gamescope WSI Vulkan layer:** joins the game's Vulkan dispatch chain and applies swapchain/presentation policy. Managed MAKO launches exclude it from the game process by default; MAKO Decky can admit it through one supported 64-bit per-profile compatibility lane or the narrowly ordered scaling-at-process-start lane documented below.
 
 Disabling Gamescope WSI does not disable Gamescope, Steam, or Game Mode. It changes only the implicit Vulkan layers visible inside the launched application.
 
@@ -65,9 +65,9 @@ The bounded managed scaling exception is selected before process startup. An eli
 
 The explicit list also appears on MAKO's private frame-generation Vulkan instance. Both split roles therefore classify each created `VkDevice` by its enabled extensions: only a device with `VK_KHR_swapchain` receives presentation hooks and spatial resources, while the backend's compute-only device remains a native pass-through. This keeps the auxiliary device inside the loader chain without recursively treating it as another game swapchain owner.
 
-## Experimental MAKO Decky Gamescope WSI exception
+## MAKO Decky Gamescope WSI exception
 
-MAKO Decky exposes **Experimental Gamescope WSI (Restart)** under **Compatibility Settings** for FG-only games that need the Gamescope WSI presentation path. It is off by default, stored per profile, and requires a game restart. Scaling automatically provides and locks the same requirement. The WSI switch is independent from the mutually exclusive MangoHud/vkBasalt post-process selector.
+MAKO Decky exposes **Gamescope WSI (Restart)** under **Compatibility Settings** for supported 64-bit FG-only host games that need the Gamescope WSI presentation path. This independent lane is off by default, stored per profile, and requires a game restart. Scaling automatically provides and locks its validated managed WSI requirement. The WSI switch is independent from the mutually exclusive MangoHud/vkBasalt post-process selector.
 
 Installation validates the host's 64-bit Gamescope WSI manifest, including identity, absolute available library, and activation gates, then copies it into MAKO's managed compatibility directory. It also stages MAKO's lower spatial-role manifest. The wrapper admits only those exact role manifests, retains competing-FG and Mesa guards, and fails closed to top-only MAKO with scaling suppressed when WSI or lower-role evidence is invalid or the process is not inside the active Gamescope session.
 

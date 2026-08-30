@@ -56,6 +56,33 @@ export const makoPanelItemStyle: CSSProperties = {
   borderTop: makoPanelDivider,
 };
 
+const trailingParentheticalPattern = /(\s*)(\([^()]+\)|（[^（）]+）)\s*$/u;
+
+/** Render a translated restart-bound label while keeping its qualifier visually secondary. */
+export function MakoRestartLabel({ label }: { label: string }) {
+  const match = trailingParentheticalPattern.exec(label);
+  if (!match || match.index === undefined) return <span>{label}</span>;
+
+  return (
+    <span>
+      {label.slice(0, match.index)}
+      {match[1]}
+      <span
+        data-mako-restart-marker="true"
+        style={{
+          fontSize: "0.72em",
+          fontWeight: 500,
+          opacity: 0.72,
+          verticalAlign: "0.08em",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {match[2]}
+      </span>
+    </span>
+  );
+}
+
 /** Use info for context and potential performance effects; reserve warning for known added runtime cost. */
 export function MakoInlineTip({
   children,

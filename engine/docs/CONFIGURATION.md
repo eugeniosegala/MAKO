@@ -85,7 +85,7 @@ The profile value must exactly match a configured `name`; quote names containing
 
 ### Standalone launch compatibility
 
-`mako-ui` stores two off-by-default process-start switches in `~/.config/mako-render/launcher.conf`. They apply globally to games started through standalone `mako-launch`, are separate from profiles, and require restart: **Enable Zink for OpenGL** selects Mesa's Vulkan-backed OpenGL path; **Force ALSA Audio** selects native SDL ALSA and makes Wine/Proton prefer `winealsa.drv` over `winepulse.drv`. Change one at a time and leave them off unless required.
+`mako-ui` stores two off-by-default process-start switches in `~/.config/mako-render/launcher.conf`. They apply globally to games started through standalone `mako-launch`, are separate from profiles, and require restart: **Enable Zink for OpenGL (Restart)** selects Mesa's Vulkan-backed OpenGL path; **Force ALSA Audio (Restart)** selects native SDL ALSA and makes Wine/Proton prefer `winealsa.drv` over `winepulse.drv`. Change one at a time and leave them off unless required.
 
 The launcher reads only a strict versioned key/value allowlist and never sources or evaluates the file. An invalid version, unknown key, duplicate key, or non-boolean value makes every stored compatibility option inert for that launch. `MAKO_LAUNCH_CONFIG=/path/to/launcher.conf` selects an alternate file for a controlled standalone test; the variable is removed before the child starts.
 

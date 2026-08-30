@@ -60,7 +60,8 @@ if(BUILD_TESTING)
         PRIVATE mako-backend
         PRIVATE Qt6::Core)
     target_compile_definitions(mako-ui-backend-contract-tests PRIVATE
-        MAKO_UI_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/UI.qml")
+        MAKO_UI_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/UI.qml"
+        MAKO_UI_GROUP_ENTRY_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/panes/GroupEntry.qml")
     add_test(NAME ui-backend-contract COMMAND mako-ui-backend-contract-tests)
 
     add_executable(mako-ui-localization-tests

@@ -97,7 +97,7 @@ Every game and display behaves differently, so compare one setting at a time. Fo
 
 ### Optional graphics integrations
 
-MAKO Decky provides the per-profile **Experimental Gamescope WSI** option and host-installed MangoHud or vkBasalt integrations. The explicit Gamescope WSI and vkBasalt paths are experimental. See [optional graphics integrations](engine/docs/LAYER-CHAINING.md) for ordering, limits, and verification.
+MAKO Decky provides the per-profile **Gamescope WSI** option and host-installed MangoHud or vkBasalt integrations. Scaling requires and locks its validated managed WSI path; independently enabling WSI for an FG-only profile remains limited to supported 64-bit host launches, while the vkBasalt path remains experimental. See [optional graphics integrations](engine/docs/LAYER-CHAINING.md) for ordering, limits, and verification.
 
 ### Heroic and other Flatpak applications
 

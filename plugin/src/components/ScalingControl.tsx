@@ -21,7 +21,7 @@ import {
   type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
-import { MakoInlineTip } from "./MakoUi";
+import { MakoInlineTip, MakoRestartLabel } from "./MakoUi";
 
 interface ScalingControlProps {
   config: ConfigurationData;
@@ -61,7 +61,11 @@ export function ScalingControl({
     <>
       <PanelSectionRow>
         <ToggleField
-          label={t("SCALING_ENABLED", "Enable Scaling (Restart)")}
+          label={
+            <MakoRestartLabel
+              label={t("SCALING_ENABLED", "Enable Scaling (Restart)")}
+            />
+          }
           description={
             <>
               <div>
@@ -101,7 +105,7 @@ export function ScalingControl({
                     <span style={{ whiteSpace: "pre-line" }}>
                       {t(
                         "SCALING_METHOD_COMPARISON_TIP",
-                        "How scaling works:\n1. In Steam, set Game Resolution to your display's maximum resolution (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. In the game, choose a lower resolution, such as 480p or 720p.\n3. Use a Scale Factor to enlarge the image—2x is a good starting point.\n\nThis reduces the resolution the game renders, then scales it back to your display resolution. It can substantially improve performance, with an image-quality trade-off. Alternatively, if your display supports it, use MAKO to scale from 2K to 4K.",
+                        "How scaling works:\n1. In Steam, set Game Resolution to your display's maximum resolution (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. In the game, choose a lower resolution, such as 480p or 720p.\n3. Use a Scale Factor to enlarge the image. 2x doubles your resolution.\n\nReducing the resolution of the game and scaling it back can substantially increase performance, with an image-quality trade-off. If your display supports it, use MAKO to scale from 2K to 4K.",
                       )}
                     </span>
                   </MakoInlineTip>

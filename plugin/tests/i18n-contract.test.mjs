@@ -2,8 +2,14 @@ import assert from "node:assert/strict";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import { auditI18n } from "../scripts/i18n-contract.mjs";
+
+const pluginDirectory = path.resolve(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+);
 
 const validSources = {
   "template.json": {
@@ -84,10 +90,7 @@ test("accepts canonical regional language codes and Steam aliases", async () => 
     },
     async (projectDirectory) => {
       const result = await auditI18n(projectDirectory);
-      assert.equal(
-        result.translations.steam_language_map.brazilian,
-        "pt-BR",
-      );
+      assert.equal(result.translations.steam_language_map.brazilian, "pt-BR");
     },
   );
 });
@@ -165,4 +168,62 @@ test("rejects call-site fallback and replacement drift", async () => {
     },
     validCallSites.replace('{ name: "MAKO" }', '{ profile: "MAKO" }'),
   );
+});
+
+test("uses localized restart markers only for process-start controls", async () => {
+  const { translations } = await auditI18n(pluginDirectory);
+  const restartMarkers = {
+    template: "(Restart)",
+    es: "(Reiniciar)",
+    ja: "（再起動）",
+    ko: "(재시작)",
+    "pt-BR": "(Reiniciar)",
+    "pt-PT": "(Reiniciar)",
+    uk: "(перезапуск)",
+    zh: "（重启）",
+  };
+  const processStartKeys = [
+    "SCALING_ENABLED",
+    "CONFIG_ULTRA_PERFORMANCE",
+    "CONFIG_DISABLE_STEAMDECK_MODE",
+    "CONFIG_ENABLE_ZINK",
+    "CONFIG_FORCE_ALSA_AUDIO",
+    "CONFIG_ENABLE_MANGOHUD",
+    "CONFIG_ENABLE_VKBASALT",
+    "CONFIG_DLL_PATH",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY",
+    "CONFIG_ALLOW_FP16",
+    "CONFIG_GPU",
+  ];
+  const labelsWithoutRestartMarker = [
+    "SCALING_METHOD",
+    "SCALING_FACTOR",
+    "SCALING_SHARPNESS",
+    "CONFIG_FLOW_SCALE",
+    "CONFIG_BASE_FPS_CAP",
+    "CONFIG_FRAME_GENERATION_REFRESH_GUARD",
+    "CONFIG_PERFORMANCE_MODE",
+    "CONFIG_DISABLE_MAKO_NEXT_LAUNCH",
+    "CONFIG_DISABLE_HDR_EXPOSURE",
+    "FRAME_GENERATION_ENABLED",
+    "MULTIPLIER_TITLE",
+    "ADAPTIVE_TITLE",
+    "ADAPTIVE_TARGET_FPS",
+    "ADAPTIVE_MAX_MULTIPLIER",
+  ];
+
+  for (const [language, marker] of Object.entries(restartMarkers)) {
+    for (const key of processStartKeys) {
+      assert.ok(
+        translations[language][key].includes(marker),
+        `${language}.${key} is missing ${marker}`,
+      );
+    }
+    for (const key of labelsWithoutRestartMarker) {
+      assert.ok(
+        !translations[language][key].includes(marker),
+        `${language}.${key} incorrectly includes ${marker}`,
+      );
+    }
+  }
 });

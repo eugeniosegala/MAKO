@@ -676,7 +676,7 @@ class ConfigurationService(BaseService):
         intercept Wine's swapchain without Gamescope WSI, Steam's Vulkan
         Fossilize/overlay layers, or system-wide ordering changing the dispatch
         chain. A profile may admit the guarded host system directory for exactly
-        one selected external tool, or an experimental Gamescope WSI
+        one selected external tool, or the bounded Gamescope WSI
         compatibility lane. The Gamescope compositor and Steam/Game Mode UI
         remain outside the default application layer chain. The explicit LSFG,
         Gamescope, Mesa, and HDR guards provide defence in depth.

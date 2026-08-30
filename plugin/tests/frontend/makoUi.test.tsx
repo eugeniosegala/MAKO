@@ -13,6 +13,7 @@ import {
   MakoButtonTheme,
   MakoInlineTip,
   MakoReleaseIdentity,
+  MakoRestartLabel,
   MakoSectionHeader,
   makoDialogButtonStyle,
 } from "../../src/components/MakoUi";
@@ -42,6 +43,32 @@ describe("MAKO section headers", () => {
     expect(screen.getByText("Spatial Scaling").style.borderBottom).toBe(
       "4px solid rgba(77, 170, 190, 0.48)",
     );
+  });
+});
+
+describe("MAKO restart labels", () => {
+  test("renders only the translated parenthetical marker at a smaller size", () => {
+    const { container, rerender } = render(
+      <MakoRestartLabel label="Enable Scaling (Restart)" />,
+    );
+
+    const marker = screen.getByText("(Restart)");
+    expect(marker.getAttribute("data-mako-restart-marker")).toBe("true");
+    expect(marker.style.fontSize).toBe("0.72em");
+    expect(container.textContent).toBe("Enable Scaling (Restart)");
+
+    rerender(<MakoRestartLabel label="スケーリングを有効化（再起動）" />);
+    expect(screen.getByText("（再起動）").style.fontSize).toBe("0.72em");
+    expect(container.textContent).toBe("スケーリングを有効化（再起動）");
+  });
+
+  test("leaves a label without a trailing marker unchanged", () => {
+    const { container } = render(<MakoRestartLabel label="Flow Scale" />);
+
+    expect(container.textContent).toBe("Flow Scale");
+    expect(
+      container.querySelector('[data-mako-restart-marker="true"]'),
+    ).toBeNull();
   });
 });
 

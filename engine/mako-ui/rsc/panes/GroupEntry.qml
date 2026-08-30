@@ -5,7 +5,29 @@ import QtQuick.Layouts
 RowLayout {
     property string title
     property string description
+    property bool compactRestartMarker: false
     default property alias content: inner.children
+
+    function escapeRichText(value) {
+        return value
+            .replace(/&/g, "&amp;")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;")
+            .replace(/\"/g, "&quot;");
+    }
+
+    function formattedTitle(value) {
+        const match = /^(.*?)(\s*)(\([^()]+\)|（[^（）]+）)$/.exec(value);
+        if (!match)
+            return escapeRichText(value);
+
+        const separator = match[2].length > 0 ? "&nbsp;" : "";
+        return escapeRichText(match[1])
+            + separator
+            + '<span style="font-size: 72%; font-weight: normal;">'
+            + escapeRichText(match[3])
+            + "</span>";
+    }
 
     id: root
     Layout.fillWidth: true
@@ -17,7 +39,10 @@ RowLayout {
 
         Label {
             Layout.fillWidth: true
-            text: root.title
+            text: root.compactRestartMarker
+                ? root.formattedTitle(root.title)
+                : root.title
+            textFormat: root.compactRestartMarker ? Text.RichText : Text.PlainText
             font.bold: true
             wrapMode: Text.Wrap
         }

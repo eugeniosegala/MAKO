@@ -47,6 +47,7 @@ import { ultraPerformanceChanges } from "../config/ultraPerformancePreset";
 import t from "../i18n/i18n";
 import {
   MakoInlineTip,
+  MakoRestartLabel,
   MakoSectionHeader,
   MakoSettingRelationship,
 } from "./MakoUi";
@@ -126,9 +127,12 @@ export function PerformanceConfigurationGroup({
               }}
             >
               <MdBolt aria-hidden="true" size={16} color="#f4a259" />
-              <span>
-                {t("CONFIG_ULTRA_PERFORMANCE", "Ultra Performance (Restart)")}
-              </span>
+              <MakoRestartLabel
+                label={t(
+                  "CONFIG_ULTRA_PERFORMANCE",
+                  "Ultra Performance (Restart)",
+                )}
+              />
             </span>
           }
           description={
@@ -258,10 +262,14 @@ export function AdvancedRenderingConfigurationGroup({
 
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_ALLOW_FP16", "Allow FP16")}
+              label={
+                <MakoRestartLabel
+                  label={t("CONFIG_ALLOW_FP16", "Allow FP16 (Restart)")}
+                />
+              }
               description={t(
                 "CONFIG_ALLOW_FP16_DESC",
-                "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs.",
+                "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs. Restart the game after changing it.",
               )}
               checked={config.ultra_performance || config.allow_fp16}
               disabled={config.ultra_performance}
@@ -344,13 +352,15 @@ export function CompatibilityConfigurationGroup({
   onToggle,
 }: ConfigurationUpdateGroupProps) {
   const cadenceProbeInterval = config.dynamic_cadence_probe_interval_seconds;
-  const cadenceProbeIntervalValues = DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES.includes(
-    cadenceProbeInterval as (typeof DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES)[number],
-  )
-    ? [...DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES]
-    : [...DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES, cadenceProbeInterval].sort(
-        (left, right) => left - right,
-      );
+  const cadenceProbeIntervalValues =
+    DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES.includes(
+      cadenceProbeInterval as (typeof DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES)[number],
+    )
+      ? [...DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES]
+      : [
+          ...DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES,
+          cadenceProbeInterval,
+        ].sort((left, right) => left - right);
   const cadenceProbeIntervalOptions = cadenceProbeIntervalValues.map(
     (value) => ({ data: value, label: `${value}s` }),
   );
@@ -442,10 +452,14 @@ export function CompatibilityConfigurationGroup({
 
           <PanelSectionRow>
             <ToggleField
-              label={t(
-                "CONFIG_GAMESCOPE_WSI_COMPATIBILITY",
-                "Experimental Gamescope WSI (Restart)",
-              )}
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY",
+                    "Gamescope WSI (Restart)",
+                  )}
+                />
+              }
               description={
                 <>
                   <div>
@@ -454,12 +468,14 @@ export function CompatibilityConfigurationGroup({
                       "Provided automatically when Scaling is enabled. Enable it separately for FG-only profiles that need the Gamescope WSI presentation path. It can run with Frame Generation and one post-process tool. Restart the game after changing it.",
                     )}
                   </div>
-                  <MakoInlineTip tone="warning">
-                    {t(
-                      "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
-                      "This explicit compatibility path is experimental and limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
-                    )}
-                  </MakoInlineTip>
+                  {!config.scaling_enabled && (
+                    <MakoInlineTip tone="warning">
+                      {t(
+                        "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
+                        "This compatibility path is limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
+                      )}
+                    </MakoInlineTip>
+                  )}
                 </>
               }
               checked={
@@ -474,13 +490,17 @@ export function CompatibilityConfigurationGroup({
 
           <PanelSectionRow>
             <ToggleField
-              label={t(
-                "CONFIG_DISABLE_STEAMDECK_MODE",
-                "Disable Steam Deck Mode",
-              )}
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_DISABLE_STEAMDECK_MODE",
+                    "Disable Steam Deck Mode (Restart)",
+                  )}
+                />
+              }
               description={t(
                 "CONFIG_DISABLE_STEAMDECK_MODE_DESC",
-                "Disables Steam Deck mode. Unlocks hidden settings in some games.",
+                "Disables Steam Deck mode. Unlocks hidden settings in some games. Restart the game after changing it.",
               )}
               checked={config.disable_steamdeck_mode}
               onChange={(value) =>
@@ -491,10 +511,17 @@ export function CompatibilityConfigurationGroup({
 
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_ENABLE_ZINK", "Enable Zink for OpenGL Games")}
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_ENABLE_ZINK",
+                    "Enable Zink for OpenGL Games (Restart)",
+                  )}
+                />
+              }
               description={t(
                 "CONFIG_ENABLE_ZINK_DESC",
-                "Uses the Vulkan-based OpenGL implementation for OpenGL games. May cause crashes or freezes in some games.",
+                "Uses the Vulkan-based OpenGL implementation for OpenGL games. May cause crashes or freezes in some games. Restart the game after changing it.",
               )}
               checked={config.enable_zink}
               onChange={(value) => onConfigChange(ENABLE_ZINK, value)}
@@ -503,7 +530,14 @@ export function CompatibilityConfigurationGroup({
 
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_FORCE_ALSA_AUDIO", "Force ALSA Audio (Restart)")}
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_FORCE_ALSA_AUDIO",
+                    "Force ALSA Audio (Restart)",
+                  )}
+                />
+              }
               description={t(
                 "CONFIG_FORCE_ALSA_AUDIO_DESC",
                 "May improve compatibility with modes such as Zink and reduce audio stuttering or sudden loud sounds. Disable to restore normal audio defaults.",
@@ -565,7 +599,14 @@ export function ExternalToolsConfigurationGroup({
         <>
           <PanelSectionRow>
             <ToggleField
-              label={t("CONFIG_ENABLE_MANGOHUD", "Enable MangoHud (Restart)")}
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_ENABLE_MANGOHUD",
+                    "Enable MangoHud (Restart)",
+                  )}
+                />
+              }
               description={t(
                 "CONFIG_ENABLE_MANGOHUD_DESC",
                 "Uses the host-installed MangoHud and your existing MangoHud configuration. See the expert guide for per-game environment overrides.",
@@ -586,10 +627,14 @@ export function ExternalToolsConfigurationGroup({
 
           <PanelSectionRow>
             <ToggleField
-              label={t(
-                "CONFIG_ENABLE_VKBASALT",
-                "Enable vkBasalt (Restart)",
-              )}
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_ENABLE_VKBASALT",
+                    "Enable vkBasalt (Restart)",
+                  )}
+                />
+              }
               description={t(
                 "CONFIG_ENABLE_VKBASALT_DESC",
                 "Experimental. Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
@@ -652,10 +697,14 @@ export function ManualOverridesConfigurationGroup({
         <PanelSectionRow>
           <div className="MAKO_ManualOverrideFields">
             <TextField
-              label={t("CONFIG_DLL_PATH", "Lossless.dll Path")}
+              label={
+                <MakoRestartLabel
+                  label={t("CONFIG_DLL_PATH", "Lossless.dll Path (Restart)")}
+                />
+              }
               description={t(
                 "CONFIG_DLL_PATH_DESC",
-                "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.",
+                "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery. Restart the game after changing it.",
               )}
               value={config.dll}
               onChange={(event) =>
@@ -664,7 +713,9 @@ export function ManualOverridesConfigurationGroup({
             />
 
             <TextField
-              label={t("CONFIG_GPU", "GPU (Restart)")}
+              label={
+                <MakoRestartLabel label={t("CONFIG_GPU", "GPU (Restart)")} />
+              }
               description={t(
                 "CONFIG_GPU_DESC",
                 "Optional GPU name, vendor:device ID, or PCI bus ID. Restart the game after changing it.",

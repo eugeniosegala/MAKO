@@ -110,6 +110,7 @@ vi.mock("@decky/ui", () => ({
   }) => <button onClick={onClick}>{children}</button>,
 }));
 vi.mock("../../src/components/MakoUi", () => ({
+  MakoRestartLabel: ({ label }: { label: string }) => label,
   MakoInlineTip: ({
     children,
     tone,
@@ -117,11 +118,9 @@ vi.mock("../../src/components/MakoUi", () => ({
     children: React.ReactNode;
     tone?: string;
   }) => <div data-tone={tone}>{children}</div>,
-  MakoSettingRelationship: ({
-    children,
-  }: {
-    children: React.ReactNode;
-  }) => <div data-mako-setting-relationship="true">{children}</div>,
+  MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
+    <div data-mako-setting-relationship="true">{children}</div>
+  ),
   MakoSectionHeader: ({
     children,
     topMargin,
@@ -137,8 +136,7 @@ vi.mock("../../src/i18n/i18n", () => ({
     replacements: Record<string, string | number> = {},
   ) =>
     Object.entries(replacements).reduce(
-      (text, [name, value]) =>
-        text.split(`{${name}}`).join(String(value)),
+      (text, [name, value]) => text.split(`{${name}}`).join(String(value)),
       fallback,
     ),
 }));
@@ -193,10 +191,44 @@ describe("External Tools controls", () => {
     );
 
     const flowScale = screen.getByText("Flow Scale (75%)");
-    const allowFp16 = screen.getByText("Allow FP16");
+    const allowFp16 = screen.getByText("Allow FP16 (Restart)");
     expect((flowScale as HTMLButtonElement).disabled).toBe(true);
     expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
     expect(allowFp16.getAttribute("data-checked")).toBe("true");
+  });
+
+  test("marks process-start controls as Restart without marking live controls", () => {
+    const { container } = render(
+      <ConfigurationSection
+        config={getDefaults()}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(screen.getByText("Allow FP16 (Restart)")).toBeTruthy();
+    expect(screen.queryByText("Flow Scale (Restart)")).toBeNull();
+    expect(screen.queryByText("Lighter FG Model (Restart)")).toBeNull();
+
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>(
+        ".MAKO_WorkaroundsCollapseButton_Container button",
+      )!,
+    );
+    expect(screen.getByText("Gamescope WSI (Restart)")).toBeTruthy();
+    expect(screen.getByText("Disable Steam Deck Mode (Restart)")).toBeTruthy();
+    expect(
+      screen.getByText("Enable Zink for OpenGL Games (Restart)"),
+    ).toBeTruthy();
+    expect(screen.queryByText("Disable HDR (Restart)")).toBeNull();
+
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>(
+        ".MAKO_ManualOverridesCollapseButton_Container button",
+      )!,
+    );
+    expect(screen.getByText("Lossless.dll Path (Restart)")).toBeTruthy();
+    expect(screen.getByText("GPU (Restart)")).toBeTruthy();
   });
 
   test("explains setting ownership with quiet relationship hints", () => {
@@ -236,7 +268,7 @@ describe("External Tools controls", () => {
     ).toBe(2);
   });
 
-  test("uses the warning treatment for Experimental Gamescope WSI", () => {
+  test("warns when Gamescope WSI is enabled independently", () => {
     const onConfigChange = vi.fn(async () => undefined);
     const { container } = render(
       <ConfigurationSection
@@ -257,11 +289,11 @@ describe("External Tools controls", () => {
     expect(
       screen
         .getByText(
-          "This explicit compatibility path is experimental and limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
+          "This compatibility path is limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
         )
         .getAttribute("data-tone"),
     ).toBe("warning");
-    fireEvent.click(screen.getByText("Experimental Gamescope WSI (Restart)"));
+    fireEvent.click(screen.getByText("Gamescope WSI (Restart)"));
     expect(onConfigChange).toHaveBeenCalledWith(
       GAMESCOPE_WSI_COMPATIBILITY,
       true,
@@ -283,10 +315,15 @@ describe("External Tools controls", () => {
       )!,
     );
     const compatibility = screen.getByText(
-      "Experimental Gamescope WSI (Restart)",
+      "Gamescope WSI (Restart)",
     ) as HTMLButtonElement;
     expect(compatibility.getAttribute("data-checked")).toBe("true");
     expect(compatibility.disabled).toBe(true);
+    expect(
+      screen.queryByText(
+        "This compatibility path is limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
+      ),
+    ).toBeNull();
   });
 
   test("starts collapsed and remembers when it is expanded", () => {
@@ -301,7 +338,9 @@ describe("External Tools controls", () => {
     expect(screen.getByText("External Tools")).toBeTruthy();
     expect(
       screen
-        .getByText("External tools may affect performance. Test each game carefully.")
+        .getByText(
+          "External tools may affect performance. Test each game carefully.",
+        )
         .getAttribute("data-tone"),
     ).toBe("info");
     expect(screen.queryByText("Enable MangoHud (Restart)")).toBeNull();
@@ -387,15 +426,7 @@ describe("External Tools controls", () => {
     expect(screen.getByText("Cadence Probe Interval")).toBeTruthy();
     const dropdown = screen.getByTestId("cadence-probe-interval-dropdown");
     expect(JSON.parse(dropdown.getAttribute("data-options") || "[]")).toEqual([
-      0.1,
-      0.2,
-      0.25,
-      0.5,
-      0.75,
-      1,
-      1.5,
-      2,
-      3,
+      0.1, 0.2, 0.25, 0.5, 0.75, 1, 1.5, 2, 3,
     ]);
     expect(dropdown.textContent).toBe("2s");
     expect(

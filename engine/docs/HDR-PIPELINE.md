@@ -100,7 +100,7 @@ This optimization compresses only the application/backend boundary from eight to
 `selectPresentationTransport()` makes an immutable create-time choice:
 
 - `OrderedSdr` forces the lower swapchain to FIFO and filters Gamescope's dynamic MAILBOX override. This is the supported release transport.
-- `GamescopeHdr` preserves the experimental Gamescope WSI contract, uses nonblocking generated-image admission, and always lets a real frame win over unfinished private work.
+- `GamescopeHdr` preserves the experimental Gamescope HDR bridge contract, uses nonblocking generated-image admission, and always lets a real frame win over unfinished private work.
 
 The HDR transport is selectable only when Gamescope is detected, the swapchain is HDR-capable, WSI is present, and HDR exposure is allowed. The current managed launchers intentionally make those conditions false.
 

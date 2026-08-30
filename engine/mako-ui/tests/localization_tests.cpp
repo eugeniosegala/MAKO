@@ -111,6 +111,16 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("uk"),
         QStringLiteral("zh"),
     };
+    const QStringList restart_markers{
+        QStringLiteral("(Restart)"),
+        QStringLiteral("(Reiniciar)"),
+        QStringLiteral("(Reiniciar)"),
+        QStringLiteral("(Reiniciar)"),
+        QStringLiteral("(재시작)"),
+        QStringLiteral("（再起動）"),
+        QStringLiteral("(перезапуск)"),
+        QStringLiteral("（重启）"),
+    };
     const QStringList scaling_keys{
         QStringLiteral("scalingSettings"),
         QStringLiteral("scalingEnabled"),
@@ -127,7 +137,30 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("scalingSharpnessDesc"),
     };
 
-    for (const QString& language_code : language_codes) {
+    const QStringList process_restart_labels{
+        QStringLiteral("allowFp16"),
+        QStringLiteral("gpu"),
+        QStringLiteral("losslessDllPath"),
+        QStringLiteral("scalingEnabled"),
+        QStringLiteral("ultraPerformance"),
+        QStringLiteral("enableZink"),
+        QStringLiteral("forceAlsaAudio"),
+    };
+    const QStringList live_or_recreation_labels{
+        QStringLiteral("frameGeneration"),
+        QStringLiteral("adaptiveFrameGen"),
+        QStringLiteral("multiplier"),
+        QStringLiteral("baseFpsCap"),
+        QStringLiteral("flowScale"),
+        QStringLiteral("performanceMode"),
+        QStringLiteral("scalingMethod"),
+        QStringLiteral("scalingFactor"),
+        QStringLiteral("scalingSharpness"),
+    };
+
+    for (qsizetype index = 0; index < language_codes.size(); ++index) {
+        const QString& language_code = language_codes.at(index);
+        const QString& restart_marker = restart_markers.at(index);
         localization.set_language(language_code);
         const QVariantMap strings = localization.strings();
         for (const QString& key : scaling_keys) {
@@ -139,18 +172,26 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
                 );
             }
         }
+        for (const QString& key : process_restart_labels) {
+            require(strings.value(key).toString().contains(restart_marker),
+                "Process-start control is missing its localized restart marker");
+        }
+        for (const QString& key : live_or_recreation_labels) {
+            require(!strings.value(key).toString().contains(restart_marker),
+                "Live or recreation-bound control has a localized restart marker");
+        }
     }
 
     localization.set_language(QStringLiteral("en"));
     const QVariantMap english = localization.strings();
     require(english.value(QStringLiteral("scalingEnabled")).toString() ==
-            QStringLiteral("Enable Scaling"),
+            QStringLiteral("Enable Scaling (Restart)"),
         "English scaling enablement has an unexpected label");
     require(english.value(QStringLiteral("scalingMethod")).toString() ==
             QStringLiteral("Scaling Method"),
         "English scaling method has an unexpected label");
     require(english.value(QStringLiteral("scalingEnabledDesc")).toString() ==
-            QStringLiteral("Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO's own scaler."),
+            QStringLiteral("Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO's own scaler. Restart the game after changing it."),
         "English scaling help does not match the Decky guidance");
     require(english.value(QStringLiteral("scalingMethodDesc")).toString() ==
             QStringLiteral("Choose the scaling model. You can change it while the game is running."),

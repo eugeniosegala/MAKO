@@ -160,6 +160,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.losslessDllPath
                         description: t.losslessDllDesc
+                        compactRestartMarker: true
 
                         FileEdit {
                             Layout.fillWidth: true
@@ -175,6 +176,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.allowFp16
                         description: t.allowFp16Desc
+                        compactRestartMarker: true
                         enabled: !backend.ultra_performance
 
                         CheckBox {
@@ -222,6 +224,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.scalingEnabled
                         description: t.scalingEnabledDesc
+                        compactRestartMarker: true
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -436,6 +439,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.gpu
                         description: t.gpuDesc
+                        compactRestartMarker: true
 
                         ComboBox {
                             Layout.fillWidth: true
@@ -454,6 +458,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.ultraPerformance
                         description: t.ultraPerformanceDesc
+                        compactRestartMarker: true
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -571,6 +576,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.enableZink
                         description: t.enableZinkDesc
+                        compactRestartMarker: true
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -582,6 +588,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.forceAlsaAudio
                         description: t.forceAlsaAudioDesc
+                        compactRestartMarker: true
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight

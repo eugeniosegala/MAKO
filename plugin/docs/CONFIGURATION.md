@@ -72,17 +72,17 @@ Decky sends typed field patches through one 250 ms, last-value-wins writer with 
 - **Ultra Performance (Restart):** Per-profile preset that uses 75% Flow Scale, Lighter FG Model, FP16 where supported, and active-policy resource allocation. It can improve frame-generation performance by up to 30% in favorable GPU-limited cases but increases artifacts. Other compatible settings remain available after startup.
 - **Flow Scale:** Frame Generation only, from 0.25–1.0. Lower values reduce GPU work; higher values favor optical-flow quality. Ultra Performance locks it to 0.75 and otherwise restores 0.90.
 - **Lighter FG Model:** Selects a lower-cost model with more visible artifacts. Ultra Performance locks it on.
-- **Allow FP16:** Global permission used by every profile and applied at the next game start. It normally improves AMD performance; older NVIDIA GPUs may perform better with it disabled. Ultra Performance forces effective permission on supported hardware.
-- **Lossless.dll Path:** Optional process-start override for LS1 and LSFG discovery. Leave empty for normal Steam-library discovery; restart the game after changing it.
+- **Allow FP16 (Restart):** Global permission used by every profile and applied at the next game start. It normally improves AMD performance; older NVIDIA GPUs may perform better with it disabled. Ultra Performance forces effective permission on supported hardware.
+- **Lossless.dll Path (Restart):** Optional process-start override for LS1 and LSFG discovery. Leave empty for normal Steam-library discovery; restart the game after changing it.
 - **GPU (Restart):** Optional name, vendor/device ID, or PCI bus ID for the GPU used by the game. Dual-GPU frame generation is unsupported.
 
 ## Compatibility and external tools
 
 - **Dynamic Cadence Recovery:** Opt-in for games and emulators that change native rate, such as 30 FPS gameplay and 60 FPS menus. It periodically exposes the real cadence and recalibrates Fixed or Adaptive behavior. Enabling it disables Steady Base Cap and Base FPS Cap; in Adaptive mode it enables Fractional. The 0.1–3 second interval defaults to 2 seconds, with shorter intervals reacting faster but probing more often.
 - **Disable MAKO Renderer on Next Launch:** One-launch troubleshooting bypass for the complete layer.
-- **Experimental Gamescope WSI (Restart):** Adds the guarded MAKO → Gamescope WSI path for FG-only native profiles inside the active Gamescope session. Scaling supplies and locks this requirement automatically. It fails closed for missing host manifests, Flatpak runtimes, Desktop Mode, and nested Wayland sessions whose `WAYLAND_DISPLAY` does not match `GAMESCOPE_WAYLAND_DISPLAY`; those session fallbacks are logged without opening an interactive error dialog.
-- **Steam Deck Mode:** Per-game launch compatibility path; changes apply at the next game start.
-- **Zink:** Vulkan-based OpenGL launch path; changes apply at the next game start.
+- **Gamescope WSI (Restart):** Adds the guarded MAKO → Gamescope WSI path for FG-only native profiles inside the active Gamescope session. Scaling requires and locks its validated managed WSI path automatically; independently enabled FG-only compatibility is limited to supported 64-bit host launches. It fails closed for missing host manifests, Flatpak runtimes, Desktop Mode, and nested Wayland sessions whose `WAYLAND_DISPLAY` does not match `GAMESCOPE_WAYLAND_DISPLAY`; those session fallbacks are logged without opening an interactive error dialog.
+- **Disable Steam Deck Mode (Restart):** Per-game launch compatibility path; changes apply at the next game start.
+- **Enable Zink for OpenGL Games (Restart):** Vulkan-based OpenGL launch path; changes apply at the next game start.
 - **Force ALSA Audio (Restart):** Replaces MAKO's Pulse/Wine audio path with SDL ALSA for the selected profile. Disable it to restore normal defaults.
 
 **Enable MangoHud (Restart)** and **Enable vkBasalt (Restart)** are mutually exclusive per-profile controls under **External Tools**. Either can follow MAKO's Gamescope WSI/scaling chain; appearance remains controlled by the tool's own configuration. Current runtime evidence covers 64-bit native Vulkan or Proton launched directly by Steam on SteamOS. Flatpak and 32-bit compatibility remain separate validation boundaries. See [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md).

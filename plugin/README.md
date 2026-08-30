@@ -25,7 +25,7 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 - Installs the private MAKO Renderer Vulkan layer for the current user.
 - Creates a per-game `mako-run` launcher and profile-based configuration.
 - Provides spatial scaling plus Fixed and Adaptive Frame Generation, separately or together. Select **Enable Scaling (Restart)** before launch; methods and sharpness remain live, while Scale Factor requests one guarded game-owned recreation on the managed Gamescope path and otherwise waits for a natural resolution change.
-- Provides an experimental per-profile Gamescope WSI compatibility toggle plus host-installed MangoHud or experimental vkBasalt under **External Tools**.
+- Provides a per-profile Gamescope WSI compatibility toggle plus host-installed MangoHud or experimental vkBasalt under **External Tools**. Scaling requires and locks its managed WSI path; independently enabling WSI for an FG-only profile is limited to supported 64-bit host launches.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Keeps MAKO activation limited to the selected game process.
 
