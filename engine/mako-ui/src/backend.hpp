@@ -45,6 +45,7 @@ namespace mako::ui {
         Q_PROPERTY(uint frame_generation_refresh_threshold READ getFrameGenerationRefreshThreshold WRITE frameGenerationRefreshThresholdUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint base_fps_cap READ getBaseFPSCap WRITE baseFPSCapUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive READ getAdaptive WRITE adaptiveUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool fractional_adaptive READ getFractionalAdaptive WRITE fractionalAdaptiveUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive_auto_base_fps_cap READ getAdaptiveAutoBaseFPSCap WRITE adaptiveAutoBaseFPSCapUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint target_fps READ getTargetFPS WRITE targetFPSUpdated NOTIFY refreshUI)
         Q_PROPERTY(size_t adaptive_max_multiplier READ getAdaptiveMaxMultiplier WRITE adaptiveMaxMultiplierUpdated NOTIFY refreshUI)
@@ -79,6 +80,21 @@ namespace mako::ui {
 
     public:
         explicit Backend();
+
+        [[nodiscard]] static bool isFractionalAdaptivePresetEnabled(
+                const ls::GameConf& conf) noexcept {
+            return conf.adaptive && !conf.adaptive_auto_base_fps_cap;
+        }
+
+        static void applyFractionalAdaptivePreset(
+                ls::GameConf& conf, bool enabled) noexcept {
+            conf.dynamic_cadence_recovery = false;
+            conf.adaptive_auto_base_fps_cap = !enabled;
+            if (enabled) {
+                conf.frame_generation_enabled = true;
+                conf.adaptive = true;
+            }
+        }
 
     getters:
         [[nodiscard]] QStringListModel* calculateProfileListModel() const {
@@ -167,6 +183,10 @@ namespace mako::ui {
         [[nodiscard]] bool getAdaptive() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptive)
             return conf.adaptive;
+        }
+        [[nodiscard]] bool getFractionalAdaptive() const {
+            VALIDATE_AND_GET_PROFILE(false)
+            return isFractionalAdaptivePresetEnabled(conf);
         }
         [[nodiscard]] bool getAdaptiveAutoBaseFPSCap() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptiveAutoBaseFpsCap)
@@ -409,6 +429,11 @@ namespace mako::ui {
         void adaptiveUpdated(bool adaptive) {
             VALIDATE_AND_GET_PROFILE()
             conf.adaptive = adaptive;
+            MARK_DIRTY()
+        }
+        void fractionalAdaptiveUpdated(bool fractional_adaptive) {
+            VALIDATE_AND_GET_PROFILE()
+            applyFractionalAdaptivePreset(conf, fractional_adaptive);
             MARK_DIRTY()
         }
         void adaptiveAutoBaseFPSCapUpdated(bool adaptive_auto_base_fps_cap) {

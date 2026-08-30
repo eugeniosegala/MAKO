@@ -78,6 +78,47 @@ void test_multiplier_limits() {
         "Adaptive multiplier spin box does not expose the Renderer maximum");
 }
 
+void test_fractional_adaptive_preset() {
+    require_property("fractional_adaptive", "bool", true, false);
+
+    ls::GameConf configuration;
+    configuration.frame_generation_enabled = false;
+    configuration.adaptive = false;
+    configuration.adaptive_auto_base_fps_cap = true;
+    configuration.dynamic_cadence_recovery = true;
+    mako::ui::Backend::applyFractionalAdaptivePreset(configuration, true);
+    require(configuration.frame_generation_enabled,
+        "Fractional Adaptive did not enable Frame Generation");
+    require(configuration.adaptive,
+        "Fractional Adaptive did not enable Adaptive Frame Generation");
+    require(!configuration.adaptive_auto_base_fps_cap,
+        "Fractional Adaptive did not disable Steady Base Cap");
+    require(!configuration.dynamic_cadence_recovery,
+        "Fractional Adaptive did not disable Dynamic Cadence Recovery");
+    require(mako::ui::Backend::isFractionalAdaptivePresetEnabled(configuration),
+        "Fractional Adaptive state was not recognized after enabling it");
+
+    configuration.dynamic_cadence_recovery = true;
+    mako::ui::Backend::applyFractionalAdaptivePreset(configuration, false);
+    require(configuration.adaptive_auto_base_fps_cap,
+        "Disabling Fractional Adaptive did not restore Steady Base Cap");
+    require(!configuration.dynamic_cadence_recovery,
+        "Disabling Fractional Adaptive did not disable Dynamic Cadence Recovery");
+    require(!mako::ui::Backend::isFractionalAdaptivePresetEnabled(configuration),
+        "Fractional Adaptive state remained enabled after disabling it");
+
+    QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
+    require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
+    const QString qml = QString::fromUtf8(file.readAll());
+    require(qml.contains(QStringLiteral("title: t.fractionalAdaptive")),
+        "Fractional Adaptive control is missing from the Renderer UI");
+    require(qml.contains(QStringLiteral("checked: backend.fractional_adaptive")),
+        "Fractional Adaptive control does not read the atomic preset property");
+    require(qml.contains(QStringLiteral(
+            "onToggled: backend.fractional_adaptive = checked")),
+        "Fractional Adaptive control does not update the atomic preset property");
+}
+
 void test_independent_scaling_group() {
     QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
@@ -148,6 +189,7 @@ int main() {
     try {
         test_scaling_properties();
         test_multiplier_limits();
+        test_fractional_adaptive_preset();
         test_independent_scaling_group();
         test_compact_restart_markers();
     } catch (const std::exception& error) {

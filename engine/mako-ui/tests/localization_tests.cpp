@@ -135,6 +135,8 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("scalingFactorDesc"),
         QStringLiteral("scalingSharpness"),
         QStringLiteral("scalingSharpnessDesc"),
+        QStringLiteral("fractionalAdaptive"),
+        QStringLiteral("fractionalAdaptiveDesc"),
     };
 
     const QStringList process_restart_labels{
@@ -149,6 +151,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     const QStringList live_or_recreation_labels{
         QStringLiteral("frameGeneration"),
         QStringLiteral("adaptiveFrameGen"),
+        QStringLiteral("fractionalAdaptive"),
         QStringLiteral("multiplier"),
         QStringLiteral("baseFpsCap"),
         QStringLiteral("flowScale"),
@@ -208,6 +211,12 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     require(english.value(QStringLiteral("flowScaleDesc")).toString() ==
             QStringLiteral("Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality."),
         "English Flow Scale help does not match the Frame Generation-only guidance");
+    require(english.value(QStringLiteral("fractionalAdaptive")).toString() ==
+            QStringLiteral("Fractional Adaptive"),
+        "English Fractional Adaptive label does not match Decky");
+    require(english.value(QStringLiteral("fractionalAdaptiveDesc")).toString()
+            .contains(QStringLiteral("60 real FPS → 90 displayed FPS")),
+        "English Fractional Adaptive help does not explain fractional output");
     require(!english.value(QStringLiteral("performanceModeDesc")).toString()
             .contains(QStringLiteral("private frame-generation context")),
         "English lighter-model help exposes an implementation detail");

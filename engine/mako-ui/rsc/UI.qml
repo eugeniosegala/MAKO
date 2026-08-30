@@ -341,6 +341,19 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
+                        title: t.fractionalAdaptive
+                        description: t.fractionalAdaptiveDesc
+                        enabled: backend.adaptive
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.fractional_adaptive
+                            onToggled: backend.fractional_adaptive = checked
+                        }
+                    }
+
+                    GroupEntry {
                         title: t.targetFps
                         description: t.targetFpsDesc
                         enabled: backend.adaptive
