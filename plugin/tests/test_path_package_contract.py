@@ -361,12 +361,23 @@ class PathAndPackageContractTests(unittest.TestCase):
             renderer_paths,
         )
 
-    def test_decky_slug_listing_and_legacy_aliases_match_independent_tools(self):
+    def test_decky_slug_listing_and_developer_aliases_match_independent_tools(self):
         slug = "Mako"
         listing_name = json.loads(_read(PLUGIN_DIR / "plugin.json"))["name"]
-        self.assertEqual(listing_name, "MAKO - Scaling & Frame Generation")
+        self.assertEqual(listing_name, "MAKO - Frame Generation")
 
         package_script = _read(PLUGIN_PACKAGE_SCRIPT)
+        established_identity = re.search(
+            r'^established_decky_identity="([^"]+)"$',
+            package_script,
+            re.MULTILINE,
+        )
+        self.assertIsNotNone(established_identity)
+        self.assertEqual(established_identity.group(1), listing_name)
+        self.assertIn(
+            'manifest_decky_identity" != "$established_decky_identity',
+            package_script,
+        )
         package_slug = re.search(
             r'^package_name="([^"]+)"$', package_script, re.MULTILINE
         )
@@ -379,14 +390,14 @@ class PathAndPackageContractTests(unittest.TestCase):
         supported_names = _python_literal_assignment(
             VALIDATED_DEPLOY_SCRIPT, "SUPPORTED_PLUGIN_NAMES"
         )
-        legacy_aliases = {
+        developer_aliases = {
             "MAKO Decky",
             "MAKO",
             "Mako",
-            "MAKO - Frame Generation",
+            "MAKO - Scaling & Frame Generation",
         }
         self.assertEqual(validated_slug, slug)
-        self.assertEqual(supported_names, legacy_aliases | {listing_name})
+        self.assertEqual(supported_names, developer_aliases | {listing_name})
 
         deploy_script = _read(PLUGIN_DEPLOY_SCRIPT)
         self.assertIn(f"homebrew/plugins/{slug}", deploy_script)

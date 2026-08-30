@@ -29,6 +29,7 @@ local_engine_dirty=false
 local_engine_label=""
 local_plugin_label=""
 local_release_version=""
+established_decky_identity="MAKO - Frame Generation"
 
 usage() {
   cat <<'EOF'
@@ -172,6 +173,22 @@ elif command -v shasum >/dev/null 2>&1; then
   checksum_command=(shasum -a 256)
 else
   echo "Required command not found: sha256sum or shasum" >&2
+  exit 1
+fi
+
+manifest_decky_identity="$(
+  python3 -c '
+import json
+import sys
+with open(sys.argv[1], encoding="utf-8") as source:
+    print(json.load(source).get("name", ""))
+' "$project_dir/plugin.json"
+)"
+if [[ "$manifest_decky_identity" != "$established_decky_identity" ]]; then
+  echo "Decky manifest identity changed from the established listing name." >&2
+  echo "Expected: $established_decky_identity" >&2
+  echo "Actual:   $manifest_decky_identity" >&2
+  echo "Changing plugin.json.name creates a second Decky installation instead of an upgrade." >&2
   exit 1
 fi
 

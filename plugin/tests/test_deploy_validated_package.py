@@ -39,7 +39,7 @@ class DeployValidatedPackageTests(unittest.TestCase):
         (package_root / "dist").mkdir()
         (package_root / "py_modules/mako_plugin").mkdir(parents=True)
         (package_root / "plugin.json").write_text(
-            json.dumps({"name": "MAKO - Scaling & Frame Generation"}),
+            json.dumps({"name": "MAKO - Frame Generation"}),
             encoding="utf-8",
         )
         (package_root / "main.py").write_text("new-main\n", encoding="utf-8")
@@ -75,13 +75,15 @@ class DeployValidatedPackageTests(unittest.TestCase):
                     archive.write(source, source.relative_to(package_root.parent))
         return archive_path
 
-    def _create_installation(self, root: Path) -> Path:
+    def _create_installation(
+        self, root: Path, name: str = "MAKO - Frame Generation"
+    ) -> Path:
         plugin_root = root / "homebrew/plugins/Mako"
         (plugin_root / "bin").mkdir(parents=True)
         (plugin_root / "dist").mkdir()
         (plugin_root / "py_modules").mkdir()
         (plugin_root / "plugin.json").write_text(
-            json.dumps({"name": "MAKO - Frame Generation"}), encoding="utf-8"
+            json.dumps({"name": name}), encoding="utf-8"
         )
         (plugin_root / "main.py").write_text("old-main\n", encoding="utf-8")
         (plugin_root / "bin/stale.bin").write_text("stale\n", encoding="utf-8")
@@ -102,13 +104,28 @@ class DeployValidatedPackageTests(unittest.TestCase):
             self.assertEqual((plugin_root / "dist/index.js").read_text(), "new-ui\n")
             self.assertEqual(
                 json.loads((plugin_root / "plugin.json").read_text())["name"],
-                "MAKO - Scaling & Frame Generation",
+                "MAKO - Frame Generation",
             )
             self.assertFalse((plugin_root / "bin/stale.bin").exists())
             self.assertFalse((plugin_root / "dist/stale.js").exists())
             self.assertFalse((plugin_root / "py_modules/stale.py").exists())
             self.assertTrue(
                 (plugin_root / "bin/MAKO-Renderer-test-linux.tar.xz").is_file()
+            )
+
+    def test_deploy_restores_identity_from_unreleased_preview_name(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            archive = self._create_package(root)
+            plugin_root = self._create_installation(
+                root, "MAKO - Scaling & Frame Generation"
+            )
+
+            DEPLOY_MODULE.deploy(archive, plugin_root)
+
+            self.assertEqual(
+                json.loads((plugin_root / "plugin.json").read_text())["name"],
+                "MAKO - Frame Generation",
             )
 
     def test_rejects_zip_path_traversal_before_changing_installation(self):

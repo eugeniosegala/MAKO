@@ -58,14 +58,14 @@ describe("Decky Loader script client", () => {
     const { callDeckyRoute } = await import("../../scripts/decky-loader-client.mjs");
 
     await callDeckyRoute("loader/call_plugin_method", [
-      "MAKO - Scaling & Frame Generation",
+      "MAKO - Frame Generation",
       "install_mako",
     ]);
 
     expect(FakeWebSocket.requests).toEqual([
       {
         route: "loader/call_plugin_method",
-        args: ["MAKO - Scaling & Frame Generation", "install_mako"],
+        args: ["MAKO - Frame Generation", "install_mako"],
       },
     ]);
   });
