@@ -100,7 +100,7 @@ export function useDllDetection() {
         setDllDetectionStatus(
           t(
             "STATUS_LOSSLESS_NOT_INSTALLED",
-            "Lossless Scaling not installed — required for LS1 and Frame Generation; MAKO scaling remains available",
+            "Lossless Scaling not installed — required for Frame Generation and LS1; MAKO Scaler remains available",
           ),
         );
       }
@@ -108,7 +108,7 @@ export function useDllDetection() {
       setDllDetectionStatus(
         t(
           "STATUS_LOSSLESS_NOT_INSTALLED",
-          "Lossless Scaling not installed — required for LS1 and Frame Generation; MAKO scaling remains available",
+          "Lossless Scaling not installed — required for Frame Generation and LS1; MAKO Scaler remains available",
         ),
       );
     }

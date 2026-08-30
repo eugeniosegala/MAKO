@@ -227,3 +227,17 @@ test("uses localized restart markers only for process-start controls", async () 
     }
   }
 });
+
+test("keeps MAKO Scaler as an untranslated product name", async () => {
+  const { translations } = await auditI18n(pluginDirectory);
+  for (const [language, catalog] of Object.entries(translations)) {
+    if (language === "language_metadata" || language === "steam_language_map") {
+      continue;
+    }
+    assert.equal(
+      catalog.SCALING_METHOD_MAKO,
+      "MAKO Scaler",
+      `${language}.SCALING_METHOD_MAKO changed the product name`,
+    );
+  }
+});

@@ -255,7 +255,7 @@ printf '%s\n' \
   '> [!TIP]' \
   '> **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.' \
   '' \
-  'Every game, renderer, and display setup behaves differently. Compare scaling-only, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time. For scaling, choose the intended lower game resolution. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling models, Flow Scale, and Lighter FG Model use rollback-safe private context replacement. On the managed Gamescope path, a settled Scale Factor edit requests one guarded game-owned recreation and simultaneous compatible FG edits remain live; unsupported paths defer only the factor until the next natural game resolution change or restart. Restart before changing Scaling enablement or another process-start setting. For most games, fullscreen is the best starting point for performance and frame pacing.' \
+  'Every game, renderer, and display setup behaves differently. Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling-only operation one setting at a time. For scaling, choose the intended lower game resolution. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling models, Flow Scale, and Lighter FG Model use rollback-safe private context replacement. On the managed Gamescope path, a settled Scale Factor edit requests one guarded game-owned recreation and simultaneous compatible FG edits remain live; unsupported paths defer only the factor until the next natural game resolution change or restart. Restart before changing Scaling enablement or another process-start setting. For most games, fullscreen is the best starting point for performance and frame pacing.' \
   '' \
   '- **Scaling quality and cost:** Higher factors render fewer source pixels but require more reconstruction. Compare text, UI edges, motion, GPU time, and frame pacing against native resolution, then tune sharpening conservatively.' \
   '- **Adaptive target behaviour:** Adaptive varies the generated-frame count toward an average target. It cannot reduce a native frame rate already above that target, and the result still depends on the selected multiplier plus available GPU and compositor capacity.' \
@@ -264,7 +264,7 @@ printf '%s\n' \
   'See the [Configuration guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/CONFIGURATION.md) and [Troubleshooting guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/TROUBLESHOOTING.md) for complete behaviour and per-game controls.' \
   '' \
   '> [!IMPORTANT]' \
-  '> MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LS1 scaling and Frame Generation read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. The open MAKO scaling method does not use it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.' \
+  '> MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. Frame Generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. The open MAKO Scaler does not use it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.' \
   '' \
   '> ⚠️ **Required MAKO Renderer update:** Installing the ZIP updates MAKO Decky, but does **not** replace its private Vulkan layer. Open the plugin and select **Install MAKO Renderer** afterwards.' \
   '' \
@@ -306,11 +306,11 @@ printf '%s\n' \
   '' \
   '## Known limitation' \
   '' \
-  '- **HDR scaling and frame generation are unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
+  '- **HDR frame generation and scaling are unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
   '' \
   '## Before you play' \
   '' \
-  '- If you use LS1 scaling or Frame Generation, confirm that MAKO can discover `Lossless.dll` or select its path explicitly. The open MAKO scaling method does not need it.' \
+  '- If you use Frame Generation or LS1 scaling, confirm that MAKO can discover `Lossless.dll` or select its path explicitly. The open MAKO Scaler does not need it.' \
   '- Do not combine `mako-run` with another frame-generation or swapchain-scaling Vulkan wrapper for the same game.' \
   '' \
   "## Bundled MAKO Renderer \`$engine_version\`" \

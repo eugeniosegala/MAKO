@@ -223,7 +223,7 @@ int main() {
                 combined.reference == combinedRepeated.reference &&
                 combined.focusMask == combinedRepeated.focusMask &&
                 combined.detailMask == combinedRepeated.detailMask,
-            "combined scaling and frame-generation scenes must be deterministic");
+            "combined frame-generation and scaling scenes must be deterministic");
         expect(combined.previous != combined.current &&
                 std::ranges::count(combined.focusMask, uint8_t{1}) > 500 &&
                 std::ranges::count(combined.detailMask, uint8_t{1}) > 50,

@@ -577,7 +577,7 @@ export function ExternalToolsConfigurationGroup({
           <div>
             {t(
               "CONFIG_EXTERNAL_TOOLS_DESC",
-              "Optional and per profile. MangoHud and vkBasalt are mutually exclusive with each other, but either can run with Gamescope WSI, Scaling, and Frame Generation. Restart the game after changing the tool.",
+              "Optional and per profile. MangoHud and vkBasalt are mutually exclusive with each other, but either can run with Gamescope WSI, Frame Generation, and Scaling. Restart the game after changing the tool.",
             )}
           </div>
           <MakoInlineTip tone="info">

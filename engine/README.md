@@ -8,9 +8,9 @@
 > [!NOTE]
 > **<a href="https://github.com/eugeniosegala/lsfg-vk-experimental" target="_blank" rel="noopener noreferrer">LSFG-VK Experimental</a> is now MAKO Renderer.** The <a href="https://github.com/eugeniosegala/MAKO" target="_blank" rel="noopener noreferrer">MAKO repository</a> is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
-MAKO Renderer is MAKO's Vulkan layer and standalone component for Steam Deck, Steam Machine, SteamOS, and Linux. It provides LS1 spatial scaling, MAKO's open spatial scaler, and LSFG Fixed or Adaptive Frame Generation. Scaling can run alone or reconstruct each real frame before generation.
+MAKO Renderer is MAKO's Vulkan layer and standalone component for Steam Deck, Steam Machine, SteamOS, and Linux. It provides LSFG Fixed or Adaptive Frame Generation, LS1 spatial scaling, and the open MAKO Scaler. Scaling can run alone or reconstruct each real frame before generation.
 
-The layer descends from an earlier MIT-licensed revision of <a href="https://github.com/PancakeTAS/lsfg-vk" target="_blank" rel="noopener noreferrer">lsfg-vk</a>, before upstream adopted GPLv3 for later development, and retains its open-source attribution and license obligations. MAKO Renderer does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LS1 scaling and LSFG frame generation read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO scaler does not require it. MAKO Renderer does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="../THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
+The layer descends from an earlier MIT-licensed revision of <a href="https://github.com/PancakeTAS/lsfg-vk" target="_blank" rel="noopener noreferrer">lsfg-vk</a>, before upstream adopted GPLv3 for later development, and retains its open-source attribution and license obligations. MAKO Renderer does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LSFG frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO Scaler does not require it. MAKO Renderer does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="../THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
 
 Scaling must be enabled before the game starts. In a provisioned process, scaler-method and sharpness changes rebuild only MAKO's private spatial context. Scale Factor applies at a game-owned recreation; the managed Gamescope lower spatial role requests one after a maintenance1-fenced present, while unsupported paths wait for a natural boundary. Frame Generation turns on and off live when startup provisioning succeeded. See <a href="docs/RUNTIME-TRANSITIONS.md" target="_blank" rel="noopener noreferrer">runtime transitions</a> for every live, deferred, and restart boundary.
 
@@ -34,7 +34,7 @@ See the <a href="../README.md#install-and-use" target="_blank" rel="noopener nor
 
 ### Direct Linux installation
 
-For LS1 scaling or frame generation, first install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO scaler works without `Lossless.dll`.
+For frame generation or LS1 scaling, first install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO Scaler works without `Lossless.dll`.
 
 Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0" target="_blank" rel="noopener noreferrer">latest Renderer release</a>, then run **Install MAKO Renderer**. It verifies and installs the archive below `~/.local`, preserves profiles, and opens **MAKO Renderer Configuration**. To reopen it later, switch to Desktop Mode, open the bottom-left Application Launcher, search for **MAKO Renderer Configuration**, and click the MAKO-logo app icon. You can also run `~/.local/bin/mako-ui`. Run the installer again after extracting an update; use **Uninstall MAKO Renderer** from the application menu to remove it.
 
@@ -105,7 +105,7 @@ Validate the configuration or run the built-in benchmark with:
 > [!TIP]
 > Try the game's V-Sync setting both on and off. It can make frame delivery steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep the setting that feels best for that game.
 
-Compare scaling, Fixed Frame Generation, and Adaptive Frame Generation one setting at a time; fullscreen is usually the best starting point. Change Scaling between game sessions. Private scaler changes may briefly flicker while MAKO rebuilds its spatial context. See <a href="docs/SCALING.md" target="_blank" rel="noopener noreferrer">spatial scaling</a>, <a href="docs/WSI-ISOLATION.md" target="_blank" rel="noopener noreferrer">WSI isolation</a>, and <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">troubleshooting</a> for compatibility limits and diagnostics.
+Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling one setting at a time; fullscreen is usually the best starting point. Change Scaling between game sessions. Private scaler changes may briefly flicker while MAKO rebuilds its spatial context. See <a href="docs/SCALING.md" target="_blank" rel="noopener noreferrer">spatial scaling</a>, <a href="docs/WSI-ISOLATION.md" target="_blank" rel="noopener noreferrer">WSI isolation</a>, and <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">troubleshooting</a> for compatibility limits and diagnostics.
 
 ## Build from source
 
@@ -130,7 +130,7 @@ Artifacts are written under `engine/out/`. MAKO Decky packages this engine autom
 
 ## More documentation
 
-- <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>: profiles, scaling and frame-generation controls, Adaptive mode, and environment variables.
+- <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>: profiles, frame-generation and scaling controls, Adaptive mode, and environment variables.
 - <a href="docs/SCALING.md" target="_blank" rel="noopener noreferrer">Spatial scaling architecture</a>: pipeline order, surface support, formats, resources, private transitions, and validation.
 - <a href="docs/RUNTIME-TRANSITIONS.md" target="_blank" rel="noopener noreferrer">Runtime configuration transitions</a>: live-safe updates, recreation, and restart boundaries.
 - <a href="docs/ADAPTIVE-VALIDATION.md" target="_blank" rel="noopener noreferrer">Adaptive validation</a>: scheduler behavior, frame plans, benchmarking, and game validation.

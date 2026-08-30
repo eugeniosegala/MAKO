@@ -6,7 +6,7 @@ Test one change at a time. Games, displays, VRR, and compositors differ, so comp
 
 ## Spatial Scaling
 
-Select **Enable Scaling (Restart)** before starting the game, choose an in-game resolution below the display resolution, then switch methods while playing. Scaling and Frame Generation are independent and can run alone or together.
+Select **Enable Scaling (Restart)** before starting the game, choose an in-game resolution below the display resolution, then switch methods while playing. Frame Generation and Scaling are independent and can run alone or together.
 
 | Method | Behavior | Requirement |
 | --- | --- | --- |

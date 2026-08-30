@@ -175,6 +175,9 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
                 );
             }
         }
+        require(strings.value(QStringLiteral("scalingMethodMako")).toString() ==
+                QStringLiteral("MAKO Scaler"),
+            "MAKO Scaler product name was translated or changed");
         for (const QString& key : process_restart_labels) {
             require(strings.value(key).toString().contains(restart_marker),
                 "Process-start control is missing its localized restart marker");
@@ -194,7 +197,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
             QStringLiteral("Scaling Method"),
         "English scaling method has an unexpected label");
     require(english.value(QStringLiteral("scalingEnabledDesc")).toString() ==
-            QStringLiteral("Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO's own scaler. Restart the game after changing it."),
+            QStringLiteral("Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO Scaler. Restart the game after changing it."),
         "English scaling help does not match the Decky guidance");
     require(english.value(QStringLiteral("scalingMethodDesc")).toString() ==
             QStringLiteral("Choose the scaling model. You can change it while the game is running."),

@@ -10,7 +10,7 @@
 
 MAKO Decky is the Decky Loader component of MAKO. It provides per-game controls, installation, updates, Flatpak preparation, and game launch integration for MAKO Renderer on Steam Deck, Steam Machine, SteamOS, and Linux more broadly.
 
-MAKO is an independent community project bringing LS1 scaling, LSFG frame generation, and MAKO's built-in open spatial scaler to Linux. MAKO Decky does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LS1 and LSFG read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO scaler does not require it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="../THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
+MAKO is an independent community project bringing LSFG frame generation, LS1 scaling, and the built-in open MAKO Scaler to Linux. MAKO Decky does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LSFG and LS1 read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO Scaler does not require it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="../THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
 
 ## Download
 
@@ -24,7 +24,7 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 
 - Installs the private MAKO Renderer Vulkan layer for the current user.
 - Creates a per-game `mako-run` launcher and profile-based configuration.
-- Provides spatial scaling plus Fixed and Adaptive Frame Generation, separately or together. Select **Enable Scaling (Restart)** before launch; methods and sharpness remain live, while Scale Factor requests one guarded game-owned recreation on the managed Gamescope path and otherwise waits for a natural resolution change.
+- Provides Fixed and Adaptive Frame Generation plus spatial scaling, separately or together. Select **Enable Scaling (Restart)** before launch; methods and sharpness remain live, while Scale Factor requests one guarded game-owned recreation on the managed Gamescope path and otherwise waits for a natural resolution change.
 - Provides a per-profile Gamescope WSI compatibility toggle plus host-installed MangoHud or experimental vkBasalt under **External Tools**. Scaling requires and locks its managed WSI path; independently enabling WSI for an FG-only profile is limited to supported 64-bit host launches.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Keeps MAKO activation limited to the selected game process.

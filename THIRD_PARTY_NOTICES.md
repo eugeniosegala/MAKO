@@ -6,7 +6,7 @@ This document supplements [LICENSE.md](LICENSE.md). It identifies third-party ma
 
 MAKO is an independent open-source project. MAKO source archives, MAKO Renderer packages, MAKO Decky packages, Flatpak extensions, and the MAKO website do not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted LS1 or LSFG model and shader payloads.
 
-The open MAKO spatial scaler works without Lossless Scaling. A user who chooses LS1 scaling or LSFG frame generation must independently obtain a lawful copy of Lossless Scaling and select or permit discovery of its locally installed `Lossless.dll`. The user is responsible for complying with the terms and law applicable to that copy. MAKO grants no license or other rights in Lossless Scaling or its proprietary resources.
+The open MAKO Scaler works without Lossless Scaling. A user who chooses LSFG frame generation or LS1 scaling must independently obtain a lawful copy of Lossless Scaling and select or permit discovery of its locally installed `Lossless.dll`. The user is responsible for complying with the terms and law applicable to that copy. MAKO grants no license or other rights in Lossless Scaling or its proprietary resources.
 
 When a licensed model is selected, MAKO Renderer reads only the required resources from the user-supplied local DLL at runtime. Translated GPU representations remain process-local. MAKO does not install, upload, include in packages, or persist the DLL or extracted proprietary payloads, and it does not alter the user's DLL file. Repository and release gates reject DLLs, extracted models, raw shaders, and disguised protected binary payloads.
 

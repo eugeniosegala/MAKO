@@ -67,7 +67,7 @@ if(MAKO_BUILD_VK_LAYER)
     add_library(mako-render SHARED ${LAYER_SOURCES})
     mako_configure_renderer_layer(mako-render)
 
-    # Scaling and frame generation occupy opposite sides of Gamescope WSI.
+    # Frame generation and scaling occupy opposite sides of Gamescope WSI.
     # Build a second isolated copy so the loader can form the only chain that
     # preserves both contracts: FG -> Gamescope WSI -> spatial scaling.
     add_library(mako-render-scaling SHARED ${LAYER_SOURCES})

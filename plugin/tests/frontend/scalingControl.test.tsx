@@ -187,7 +187,7 @@ describe("Scaling controls", () => {
     expect(screen.queryByText(/private scaler rebuild/)).toBeNull();
     expect(
       screen.getByText(
-        "Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO's own scaler.",
+        "Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO Scaler.",
       ),
     ).toBeTruthy();
     expect(

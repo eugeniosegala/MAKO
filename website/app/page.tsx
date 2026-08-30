@@ -44,7 +44,7 @@ const features = [
     index: '02',
     code: 'SR',
     title: 'LS1 + MAKO spatial scaling',
-    text: 'Choose proprietary LS1 Quality or Performance, or the built-in open MAKO scaler, before Fixed or Adaptive generation.',
+    text: 'Choose proprietary LS1 Quality or Performance, or the built-in open MAKO Scaler, before Fixed or Adaptive generation.',
     stat: '1-2×',
     label: 'scale factor',
     tone: 'violet',
@@ -126,9 +126,9 @@ export default function Home() {
           <div className="hero-glow hero-glow-cyan" />
           <div className="hero-glow hero-glow-orange" />
           <div className="hero-copy">
-            <p className="eyebrow"><span /> Spatial scaling + frame generation / Linux</p>
+            <p className="eyebrow"><span /> Frame generation + spatial scaling / Linux</p>
             <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
-            <p className="hero-intro">MAKO brings proprietary Lossless Scaling LS1, a built-in open Vulkan spatial scaler, and LSFG frame generation to Steam Deck, Steam Machine, SteamOS, and Linux.</p>
+            <p className="hero-intro">MAKO brings LSFG frame generation, proprietary Lossless Scaling LS1, and the built-in open MAKO Scaler to Steam Deck, Steam Machine, SteamOS, and Linux.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
               <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Contribute. Fork it. Change it. Make it yours.</span></span>
@@ -147,7 +147,7 @@ export default function Home() {
               <a className="button button-secondary" href="#system">Explore the system <span aria-hidden="true">↓</span></a>
             </div>
             <div className="hero-meta">
-              <span><b>1-2×</b> LS1 or MAKO scaling</span>
+              <span><b>1-2×</b> LS1 or MAKO Scaler</span>
               <span><b>30-240</b> adaptive FPS target</span>
               <span><b>2-5×</b> generation ceiling</span>
             </div>
@@ -184,7 +184,7 @@ export default function Home() {
             <p className="section-kicker"><span>01</span> One system. Two precision layers.</p>
             <div>
               <h2>Controls above.<br /><em>Vulkan below.</em></h2>
-              <p>MAKO Decky manages the game. MAKO Renderer runs the frame pipeline. Together, they bring LS1 and open MAKO spatial scaling plus Lossless Scaling frame generation into Linux gaming.</p>
+              <p>MAKO Decky manages the game. MAKO Renderer runs the frame pipeline. Together, they bring Lossless Scaling frame generation plus LS1 and open MAKO spatial scaling into Linux gaming.</p>
             </div>
           </header>
 
@@ -218,7 +218,7 @@ export default function Home() {
               <h3>MAKO Renderer</h3>
               <p>A private Vulkan pipeline for selectable spatial reconstruction, frame synthesis, deterministic scheduling, and presentation recovery.</p>
               <ul>
-                <li><span /> Proprietary LS1 or built-in open MAKO scaling</li>
+                <li><span /> Proprietary LS1 or built-in open MAKO Scaler</li>
                 <li><span /> Lossless Scaling frame-generation models</li>
                 <li><span /> Adaptive generated-frame planning</li>
               </ul>
@@ -295,7 +295,7 @@ export default function Home() {
           <div className="scaling-copy">
             <p className="section-kicker"><span>04</span> Spatial scaling</p>
             <h2>Make each pixel.<br /><em>Count twice.</em></h2>
-            <p>Render fewer source pixels when you need headroom, then reconstruct them for the display you actually play on. Pick the fast Native baseline, MAKO’s open scaler, or the licensed LS1 models, then run scaling by itself or ahead of frame generation.</p>
+            <p>Render fewer source pixels when you need headroom, then reconstruct them for the display you actually play on. Pick the fast Native baseline, the open MAKO Scaler, or the licensed LS1 models, then run scaling by itself or ahead of frame generation.</p>
             <div className="scaling-modes">
               <div><span>NATIVE</span><strong>Fast linear baseline</strong></div>
               <div className="scaling-mode-active"><span>MAKO</span><strong>Open single-pass scaler</strong></div>
@@ -318,7 +318,7 @@ export default function Home() {
                 <small>RECONSTRUCTED DETAIL</small>
               </div>
             </div>
-            <div className="scaling-status"><span><i /> MAKO SCALER READY</span><span>1.50× SHOWN <b>·</b> UP TO 2.00×</span></div>
+            <div className="scaling-status"><span><i /> MAKO Scaler READY</span><span>1.50× SHOWN <b>·</b> UP TO 2.00×</span></div>
           </div>
         </section>
         </div>
@@ -332,7 +332,7 @@ export default function Home() {
             <ol className="steps">
               <li>
                 <span>01</span>
-                <div><strong>Choose your pipeline</strong><p>The open MAKO scaler runs independently. For LS1 scaling or frame generation, install Lossless Scaling through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
+                <div><strong>Choose your pipeline</strong><p>The open MAKO Scaler runs independently. For frame generation or LS1 scaling, install Lossless Scaling through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
               </li>
               <li>
                 <span>02</span>
@@ -391,7 +391,7 @@ export default function Home() {
 
           <div className="requirement-note">
             <span>IMPORTANT / LICENSED INPUT</span>
-            <p>MAKO is an independent project and does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. LS1 scaling and frame generation read selected resources at runtime from a lawful, user-supplied <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO scaler does not require it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.</p>
+            <p>MAKO is an independent project and does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO Scaler does not require it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.</p>
           </div>
         </section>
 
@@ -407,11 +407,11 @@ export default function Home() {
             </details>
             <details>
               <summary><span>02</span> Does MAKO include Lossless Scaling?<i>+</i></summary>
-              <p>No. MAKO does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. LS1 scaling and frame generation require your own lawful Lossless Scaling installation from Steam, then MAKO discovers or lets you select its local DLL. The open MAKO scaling method does not need it.</p>
+              <p>No. MAKO does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling require your own lawful Lossless Scaling installation from Steam, then MAKO discovers or lets you select its local DLL. The open MAKO Scaler does not need it.</p>
             </details>
             <details>
-              <summary><span>03</span> Can scaling and frame generation run together?<i>+</i></summary>
-              <p>Yes. Choose LS1 Quality, LS1 Performance, or the open MAKO method, then run scaling alone or feed each reconstructed real frame into Fixed or Adaptive frame generation. The downloads above track MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion} from canonical release metadata.</p>
+              <summary><span>03</span> Can frame generation and scaling run together?<i>+</i></summary>
+              <p>Yes. Choose LS1 Quality, LS1 Performance, or the open MAKO Scaler, then run scaling alone or feed each reconstructed real frame into Fixed or Adaptive frame generation. The downloads above track MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion} from canonical release metadata.</p>
             </details>
             <details>
               <summary><span>04</span> What hardware is published today?<i>+</i></summary>
@@ -425,7 +425,7 @@ export default function Home() {
           <img src="assets/mako-logo.webp" alt="MAKO shark" width="260" height="260" draggable={false} />
           <div>
             <p className="eyebrow"><span /> Motion-Adaptive Kernel Orchestration</p>
-            <h2>Bring scaling and synthesis<br /><em>to Linux.</em></h2>
+            <h2>Bring frame generation and scaling<br /><em>to Linux.</em></h2>
             <p>Choose MAKO Decky for the managed SteamOS workflow or MAKO Renderer for a direct Linux installation.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>Download MAKO <span>→</span></a>
@@ -439,7 +439,7 @@ export default function Home() {
       <footer className="site-footer">
         <div className="footer-brand">
           <a className="brand" href="#top"><img src="assets/mako-discord-icon.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
-          <p>LS1 and open MAKO spatial scaling plus Lossless Scaling frame generation for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
+          <p>Lossless Scaling frame generation plus LS1 and the open MAKO Scaler for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
         </div>
         <div className="footer-links">
           <div><span>PROJECT</span><a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a><a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a><a href={links.docs} {...newTabProps}>Installation Guide</a><a href="third-party-notices.txt">Third-party notices</a><a href={links.issues} {...newTabProps}>Issues</a></div>

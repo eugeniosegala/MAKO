@@ -81,7 +81,7 @@ Application wait semaphores belong to an entire `VkPresentInfoKHR` batch and can
 
 The application renders into the source-sized top-left rectangle of a real presentation-sized WSI image. At present time, MAKO waits on the application's semaphores and copies that rectangle into the selected method's private source image.
 
-The MAKO method then records this work:
+MAKO Scaler then records this work:
 
 1. Dispatch one 8-by-8-workgroup compute pass over the presentation extent.
 2. Sample a clamped 4-by-4 neighbourhood for each output pixel, reconstruct with separable Catmull-Rom weights, and clamp the result to the local colour envelope.
@@ -174,7 +174,7 @@ Every spatial-scaling change also needs proportionate real-Vulkan evidence. Use 
 | Boundary | Required cases |
 | --- | --- |
 | Surface ownership | Fixed Gamescope surface with HDR exposure disabled and variable desktop surface; source and presentation extents must match the policy logs, an echoed variable presentation extent must fall back without recursive enlargement, and a variable candidate beyond the device-memory envelope must either reuse a safe proven presentation envelope or remain native. Cover Vulkan-maximum clamping, 4:3 or 5:4 preservation, ultrawide, cold 5K rejection plus 1080p→4K→1440p retained-4K transition on an 8 GiB tier, and an admitted 8K row on a 24 GiB tier. |
-| Operation mode | Scaling with Frame Generation Off must perform no per-frame generation work while retaining successfully provisioned resources for live enablement. Also cover startup where backend/interop is unavailable but independent MAKO scaling remains usable, LS1 DLL translation, every method with Fixed 2x and Adaptive, and restart-pending enablement after failed provisioning. |
+| Operation mode | Scaling with Frame Generation Off must perform no per-frame generation work while retaining successfully provisioned resources for live enablement. Also cover startup where backend/interop is unavailable but MAKO Scaler remains independently usable, LS1 DLL translation, every method with Fixed 2x and Adaptive, and restart-pending enablement after failed provisioning. |
 | Swapchain shape | Opaque single-array-layer ordinary swapchain plus fail-closed non-opaque, array-layer, protected, shared-demand, and shared-continuous cases. |
 | Queue ownership | Ordinary queue 0 from the application-created graphics-and-compute family that presents to the surface; wrong family, wrong index, and protected queue must fail closed. |
 | Present batching | One scaled swapchain succeeds; a multi-swapchain batch containing scaling returns before any application wait semaphore is consumed. |
