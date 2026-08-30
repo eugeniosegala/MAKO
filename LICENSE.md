@@ -277,21 +277,11 @@ Redistribution and use in source and binary forms, with or without modification,
 
 THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-## lsfg-vk components
+## lsfg-vk renderer lineage
 
-The original implementation from which MAKO Renderer descends incorporated portions of an earlier lsfg-vk revision that the upstream project published under the MIT License reproduced below. The upstream project subsequently adopted the GNU General Public License version 3 for its later development. This notice applies only to the source incorporated under the earlier MIT terms and its descendants in MAKO; it does not assert that later lsfg-vk revisions are MIT-licensed.
+MAKO Renderer descends from the `GPL-3.0-or-later` lsfg-vk version 2 development tree published by PancakeTAS. The last upstream revision in the direct ancestry of MAKO's experimental predecessor is [`8b0da2661c6f3473a7fccc8ba643880050e71642`](https://github.com/PancakeTAS/lsfg-vk/commit/8b0da2661c6f3473a7fccc8ba643880050e71642), and the Renderer source files at that revision identify themselves as `GPL-3.0-or-later`.
 
-MAKO Renderer has since undergone substantial independent architectural and implementation changes. As a project provenance policy, MAKO does not copy, merge, port, or otherwise incorporate source code from later GPLv3-licensed lsfg-vk revisions. Future MAKO development proceeds from MAKO's own codebase and project history. This statement records provenance and development policy only; it does not add any restriction to the GPL-3.0-or-later rights granted for MAKO.
-
-MIT License
-
-Copyright (c) 2025 lsfg-vk
-
-Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+MAKO's public experimental predecessor immediately before the monorepo migration was `v2.0.0-dev28-experimental.25` at [`276030d4925c40038a61ecd66bd49ce777faec8c`](https://github.com/eugeniosegala/lsfg-vk-experimental/commit/276030d4925c40038a61ecd66bd49ce777faec8c), which descends directly from that upstream baseline. Its Renderer lineage entered this repository in [`8ed1cdbe7f5496fade8ad01d85ac3d671957fcac`](https://github.com/eugeniosegala/MAKO/commit/8ed1cdbe7f5496fade8ad01d85ac3d671957fcac). Copyright in the incorporated portions remains with the respective lsfg-vk copyright holders. The GNU GPL text above applies to that lineage; the MIT License that applied to lsfg-vk version 1 does not describe MAKO Renderer.
 
 ## toml++
 

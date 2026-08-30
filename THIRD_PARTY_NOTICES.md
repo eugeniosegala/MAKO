@@ -14,13 +14,13 @@ Lossless Scaling, LS1, and LSFG are used descriptively and remain the property o
 
 ## Incorporated Renderer and Decky source
 
-The complete notices for the original Decky LSFG-VK plugin, lsfg-vk components, toml++, Bjoern Hoehrmann's UTF-8 decoder, and Steam Deck Homebrew components are reproduced in [LICENSE.md](LICENSE.md).
+The complete notices for the original Decky LSFG-VK plugin, the GPL-3.0-or-later lsfg-vk version 2 Renderer lineage, toml++, Bjoern Hoehrmann's UTF-8 decoder, and Steam Deck Homebrew components are reproduced in [LICENSE.md](LICENSE.md).
 
-### lsfg-vk provenance boundary
+### lsfg-vk Renderer provenance
 
-The original implementation from which MAKO Renderer descends incorporated portions of an earlier lsfg-vk revision published under the MIT License. The upstream project subsequently adopted the GNU General Public License version 3 for its later development. MAKO preserves the historical MIT notice and attribution in [LICENSE.md](LICENSE.md); they apply only to source incorporated under those earlier terms and its descendants in MAKO, not to later upstream releases.
+MAKO Renderer descends directly from PancakeTAS's GPL-3.0-or-later lsfg-vk version 2 tree at upstream commit [`8b0da2661c6f3473a7fccc8ba643880050e71642`](https://github.com/PancakeTAS/lsfg-vk/commit/8b0da2661c6f3473a7fccc8ba643880050e71642). MAKO's experimental predecessor carried that baseline to `v2.0.0-dev28-experimental.25` at [`276030d4925c40038a61ecd66bd49ce777faec8c`](https://github.com/eugeniosegala/lsfg-vk-experimental/commit/276030d4925c40038a61ecd66bd49ce777faec8c), and that Renderer lineage entered this monorepo in [`8ed1cdbe7f5496fade8ad01d85ac3d671957fcac`](https://github.com/eugeniosegala/MAKO/commit/8ed1cdbe7f5496fade8ad01d85ac3d671957fcac).
 
-MAKO Renderer is now substantially different in architecture and implementation. As a project provenance policy, MAKO does not copy, merge, port, or otherwise import source from later GPLv3-licensed lsfg-vk revisions. Further development proceeds from MAKO's own codebase and project history. This statement is informational and does not impose an additional condition on MAKO recipients beyond the licenses otherwise identified in these documents.
+Copyright in the incorporated portions remains with the respective lsfg-vk copyright holders. The incorporated source files identify themselves as `GPL-3.0-or-later`, and MAKO remains distributed under that license. The MIT License used for lsfg-vk version 1 does not describe MAKO Renderer's version 2 lineage.
 
 ## MAKO Decky frontend
 
