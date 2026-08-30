@@ -175,6 +175,18 @@ describe("Scaling controls", () => {
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
+        "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/guarded game-owned recreation/)).toBeNull();
+    expect(
+      screen.getByText(
+        "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/private scaler rebuild/)).toBeNull();
+    expect(
+      screen.getByText(
         "Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO's own scaler.",
       ),
     ).toBeTruthy();

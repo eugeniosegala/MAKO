@@ -209,6 +209,12 @@ describe("External Tools controls", () => {
     expect(screen.getByText("Allow FP16 (Restart)")).toBeTruthy();
     expect(screen.queryByText("Flow Scale (Restart)")).toBeNull();
     expect(screen.queryByText("Lighter FG Model (Restart)")).toBeNull();
+    expect(
+      screen.getByText(
+        /Controls the internal motion-estimation resolution used only for Frame Generation/,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/atomic handoff/)).toBeNull();
 
     fireEvent.click(
       container.querySelector<HTMLButtonElement>(

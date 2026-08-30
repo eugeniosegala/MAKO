@@ -132,7 +132,7 @@ export function ScalingControl({
                 <span style={{ display: "block", paddingTop: "3px" }}>
                   {t(
                     "SCALING_FACTOR_DESC",
-                    "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. After the control settles, MAKO requests one guarded game-owned recreation when supported; otherwise it applies on the next natural resolution change or restart.",
+                    "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels.",
                   )}
                 </span>
               }
@@ -157,7 +157,7 @@ export function ScalingControl({
                 label={`${t("SCALING_SHARPNESS", "Scaling Sharpness")} (${Math.round(config.scaling_sharpness * 100)}%)`}
                 description={t(
                   "SCALING_SHARPNESS_DESC",
-                  "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild.",
+                  "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants.",
                 )}
                 value={config.scaling_sharpness}
                 min={SCALING_SHARPNESS_MIN}

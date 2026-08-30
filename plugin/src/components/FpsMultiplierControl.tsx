@@ -119,7 +119,7 @@ export function FpsMultiplierControl({
               label={t("ADAPTIVE_TITLE", "Adaptive Frame Generation")}
               description={t(
                 "ADAPTIVE_DESC",
-                "Adjusts frame generation to reach Target FPS. The steady base cap is the default for smoother pacing. Enable Fractional Adaptive to keep more real frames, but test it per game. When more generated-frame capacity is needed, MAKO prepares and swaps private resources live; a brief one-time hitch is possible.",
+                "Adjusts frame generation to reach Target FPS. The steady base cap is the default for smoother pacing. Enable Fractional Adaptive to keep more real frames, but test it per game.",
               )}
               checked={config.adaptive}
               onChange={(value) => onConfigUpdate(adaptiveModeChanges(value))}
@@ -252,7 +252,7 @@ export function FpsMultiplierControl({
                   <span style={{ display: "block", paddingTop: "8px" }}>
                     {t(
                       "MULTIPLIER_DESC",
-                      "Sets Fixed mode to 2x–5x. Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. 5x is a high-cost option for high-refresh displays. Test both per game. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh; Adaptive manages its own multiplier. When more generated-frame capacity is needed, MAKO prepares and swaps private resources live; a brief one-time hitch is possible.",
+                      "Sets Fixed mode to 2x–5x. Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. 5x is a high-cost option for high-refresh displays. Test both per game. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh; Adaptive manages its own multiplier.",
                     )}
                   </span>
                   {config.adaptive && (

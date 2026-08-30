@@ -200,23 +200,23 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
             QStringLiteral("Scale Factor"),
         "English scale-factor label does not match Decky");
     require(english.value(QStringLiteral("scalingFactorDesc")).toString() ==
-            QStringLiteral("Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels. After the control settles, MAKO requests one guarded game-owned recreation when supported; otherwise it applies on the next natural resolution change or restart."),
+            QStringLiteral("Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels."),
         "English scale-factor help does not match Decky");
     require(english.value(QStringLiteral("scalingSharpnessDesc")).toString() ==
-            QStringLiteral("For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants. Applies through a private scaler rebuild."),
+            QStringLiteral("For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants."),
         "English sharpening help does not describe the MAKO baseline");
     require(english.value(QStringLiteral("flowScaleDesc")).toString() ==
-            QStringLiteral("Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality. Changing it rebuilds MAKO's private frame-generation context live; the previous context remains active until handoff."),
+            QStringLiteral("Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality."),
         "English Flow Scale help does not match the Frame Generation-only guidance");
-    require(english.value(QStringLiteral("performanceModeDesc")).toString()
+    require(!english.value(QStringLiteral("performanceModeDesc")).toString()
             .contains(QStringLiteral("private frame-generation context")),
-        "English lighter-model help omitted its private replacement contract");
-    require(english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
+        "English lighter-model help exposes an implementation detail");
+    require(!english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
             .contains(QStringLiteral("swaps private resources live")),
-        "English Adaptive ceiling help omitted its capacity contract");
-    require(english.value(QStringLiteral("multiplierDesc")).toString()
+        "English Adaptive ceiling help exposes its capacity contract");
+    require(!english.value(QStringLiteral("multiplierDesc")).toString()
             .contains(QStringLiteral("swaps private resources live")),
-        "English Fixed multiplier help omitted its capacity contract");
+        "English Fixed multiplier help exposes its capacity contract");
     require(english.value(QStringLiteral("ultraPerformanceDesc")).toString()
             .contains(QStringLiteral("compatible controls remain available")),
         "English Ultra Performance help overstates its restart boundary");

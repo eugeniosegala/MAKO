@@ -97,9 +97,7 @@ describe("Performance Settings", () => {
         /less aggressive performance option than Ultra Performance/,
       ),
     ).toBeTruthy();
-    expect(
-      screen.getByText(/rebuilds MAKO's private frame-generation context live/),
-    ).toBeTruthy();
+    expect(screen.queryByText(/private frame-generation context live/)).toBeNull();
     expect(
       screen.getByText(
         /Primarily intended for low-power devices such as Steam Deck/,

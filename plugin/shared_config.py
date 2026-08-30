@@ -248,14 +248,14 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "flow_scale": {
         "fieldType": ConfigFieldType.FLOAT,
         "default": 0.9,
-        "description": "change Frame Generation motion-estimation resolution through a live private-context replacement that retains the previous context until handoff",
+        "description": "adjust Frame Generation motion-estimation resolution; lower values reduce GPU work and higher values favour quality",
         "location": "toml"
     },
 
     "performance_mode": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "select a lighter FG model through a live private-context replacement that retains the previous context until handoff, reducing GPU overhead at the cost of more visual artifacts",
+        "description": "use a lighter Frame Generation model to reduce GPU work at the cost of more visual artifacts",
         "location": "toml"
     },
 

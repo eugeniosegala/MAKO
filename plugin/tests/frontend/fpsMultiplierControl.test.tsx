@@ -154,8 +154,11 @@ describe("Frame Generation controls", () => {
     expect(fixedMultiplierDescription.style.paddingTop).toBe("8px");
     expect(fixedMultiplierDescription.style.marginBottom).toBe("");
     expect(
-      screen.getAllByText(/MAKO prepares and swaps private resources live/),
-    ).toHaveLength(2);
+      screen.getByText(
+        /Enable Fractional Adaptive to keep more real frames, but test it per game/,
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText(/MAKO prepares and swaps private resources live/)).toBeNull();
     expect(screen.queryByText(/may require a restart/)).toBeNull();
     expect(
       screen
@@ -174,9 +177,7 @@ describe("Frame Generation controls", () => {
     );
 
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
-    expect(
-      screen.getAllByText(/MAKO prepares and swaps private resources live/),
-    ).toHaveLength(2);
+    expect(screen.queryByText(/MAKO prepares and swaps private resources live/)).toBeNull();
     expect(
       screen
         .getByText("Adaptive Frame Generation")
