@@ -66,6 +66,8 @@ Use the fast paths for iteration, the complete local package for testers, and th
 
 Distributable Renderer archives and Flatpak extensions carry the project license, third-party notices, and asset-provenance record. The packaging scripts fail closed when those files are absent from the source tree or final payload.
 
+The standalone host installer rewrites the configuration and uninstall desktop entries to the absolute executables under the selected installation prefix, so KDE launchers do not depend on `~/.local/bin` being present in their inherited `PATH`. Flatpak exports retain their runtime-owned command names.
+
 ## Reusable SteamOS release-build SDK
 
 `scripts/package-local.sh` normally uses the host Qt development installation. On a Pacman-based SteamOS host where Qt appears installed but its headers or CMake files are missing, the packager automatically downloads the exact `qt6-base`, `qt6-declarative`, and `libglvnd` packages selected by Pacman into `engine/build/cache/native-sdk/`. It extracts and reuses that isolated SDK on later release builds, without Docker, Podman, root access, or changes to the SteamOS installation. The first fallback build needs network access; later builds reuse the cached files.

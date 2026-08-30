@@ -10,6 +10,8 @@ config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/mako-render"
 payload_manifest="$script_dir/MAKO-Renderer-install-manifest.txt"
 version_file="$script_dir/MAKO-Renderer-version.txt"
 decky_plugin_manifest="$HOME/homebrew/plugins/Mako/plugin.json"
+configuration_desktop_path="share/applications/io.github.eugeniosegala.mako.desktop"
+uninstaller_desktop_path="share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
 
 fail() {
     local message="$1"
@@ -108,6 +110,61 @@ hash_file() {
     sha256sum -- "$1" | awk '{print $1}'
 }
 
+quote_desktop_exec_path() {
+    local value="$1"
+    [[ "$value" != *$'\n'* && "$value" != *$'\r'* ]] ||
+        fail "The MAKO installation path cannot contain a line break."
+    value="${value//\\/\\\\}"
+    value="${value//\"/\\\"}"
+    value="${value//\`/\\\`}"
+    value="${value//\$/\\\$}"
+    value="${value//%/%%}"
+    printf '"%s"' "$value"
+}
+
+rewrite_desktop_exec() {
+    local relative_path="$1"
+    local executable="$2"
+    local arguments="$3"
+    local desktop_path="$install_prefix/$relative_path"
+    local temporary_path="${desktop_path}.mako-install.$$"
+    local quoted_executable line
+    local exec_lines=0
+
+    manifest_contains_path "$payload_manifest" "$relative_path" || return 0
+    [[ -f "$desktop_path" ]] || fail "The installed payload is missing $relative_path."
+    quoted_executable="$(quote_desktop_exec_path "$executable")"
+    : > "$temporary_path"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" == Exec=* ]]; then
+            printf 'Exec=%s %s\n' "$quoted_executable" "$arguments" >> "$temporary_path"
+            exec_lines=$((exec_lines + 1))
+        else
+            printf '%s\n' "$line" >> "$temporary_path"
+        fi
+    done < "$desktop_path"
+    if ((exec_lines != 1)); then
+        rm -f -- "$temporary_path"
+        fail "The packaged desktop entry $relative_path must contain exactly one Exec line."
+    fi
+    chmod --reference="$desktop_path" "$temporary_path"
+    mv -f -- "$temporary_path" "$desktop_path"
+}
+
+write_installed_state_manifest() {
+    local temporary_path="$state_manifest.mako-install.$$"
+    local line installed_path installed_hash
+    : > "$temporary_path"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        parse_manifest_line "$line"
+        installed_path="$install_prefix/$manifest_path"
+        [[ -f "$installed_path" ]] || fail "The installed payload is missing $manifest_path."
+        installed_hash="$(hash_file "$installed_path")"
+        printf '%s  %s\n' "$installed_hash" "$manifest_path" >> "$temporary_path"
+    done < "$payload_manifest"
+    mv -f -- "$temporary_path" "$state_manifest"
+}
+
 remove_if_managed() {
     local path="$1"
     local expected_hash="$2"
@@ -162,6 +219,9 @@ install_payload() {
         mv -f -- "$temporary_path" "$destination_path"
     done < "$payload_manifest"
 
+    rewrite_desktop_exec "$configuration_desktop_path" "$install_prefix/bin/mako-ui" "%U"
+    rewrite_desktop_exec "$uninstaller_desktop_path" "$install_prefix/bin/mako-installer" "--uninstall"
+
     if [[ -f "$state_manifest" ]]; then
         while IFS= read -r line || [[ -n "$line" ]]; do
             parse_manifest_line "$line"
@@ -174,9 +234,7 @@ install_payload() {
     fi
 
     mkdir -p -- "$state_dir"
-    temporary_path="$state_manifest.mako-install.$$"
-    cp -- "$payload_manifest" "$temporary_path"
-    mv -f -- "$temporary_path" "$state_manifest"
+    write_installed_state_manifest
 
     notice "MAKO Renderer $version is installed. MAKO Renderer Configuration will open now."
     if [[ "${MAKO_INSTALLER_NO_LAUNCH:-0}" != "1" ]]; then

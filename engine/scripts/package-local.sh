@@ -308,6 +308,8 @@ required_paths=(
     "share/doc/mako-render/ASSET_PROVENANCE.md" \
     "share/doc/mako-render/LICENSE.md" \
     "share/doc/mako-render/THIRD_PARTY_NOTICES.md" \
+    "share/applications/io.github.eugeniosegala.mako.desktop" \
+    "share/applications/io.github.eugeniosegala.mako.uninstaller.desktop" \
     "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
     "share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json" \
     "share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json" \

@@ -15,7 +15,7 @@ bash -n "$installer"
 test_root="$(mktemp -d /tmp/mako-installer-contract.XXXXXX)"
 trap 'rm -rf -- "$test_root"' EXIT
 package_root="$test_root/package"
-install_prefix="$test_root/installed"
+install_prefix="$test_root/installed prefix"
 config_home="$test_root/config"
 mkdir -p "$package_root/bin" "$package_root/share/applications"
 cp "$installer" "$package_root/Install MAKO Renderer"
@@ -23,7 +23,8 @@ cp "$installer" "$package_root/bin/mako-installer"
 chmod 0755 "$package_root/Install MAKO Renderer" "$package_root/bin/mako-installer"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$package_root/bin/mako-ui"
 chmod 0755 "$package_root/bin/mako-ui"
-printf '%s\n' '[Desktop Entry]' 'Name=MAKO Renderer Configuration' > "$package_root/share/applications/io.github.eugeniosegala.mako.desktop"
+printf '%s\n' '[Desktop Entry]' 'Name=MAKO Renderer Configuration' 'Exec=mako-ui %U' > "$package_root/share/applications/io.github.eugeniosegala.mako.desktop"
+printf '%s\n' '[Desktop Entry]' 'Name=Uninstall MAKO Renderer' 'Exec=mako-installer --uninstall' > "$package_root/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
 printf '%s\n' 'test-version' > "$package_root/MAKO-Renderer-version.txt"
 (
     cd "$package_root"
@@ -39,6 +40,16 @@ MAKO_INSTALLER_NO_LAUNCH=1 \
 [[ -x "$install_prefix/bin/mako-ui" ]] || fail "UI was not installed"
 [[ -f "$install_prefix/share/mako-render/installer/installed-files.sha256" ]] ||
     fail "installer state was not written"
+grep -Fxq "Exec=\"$install_prefix/bin/mako-ui\" %U" \
+    "$install_prefix/share/applications/io.github.eugeniosegala.mako.desktop" ||
+    fail "configuration launcher does not use the absolute installed UI path"
+grep -Fxq "Exec=\"$install_prefix/bin/mako-installer\" --uninstall" \
+    "$install_prefix/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop" ||
+    fail "uninstaller launcher does not use the absolute installed command path"
+(
+    cd "$install_prefix"
+    sha256sum --check --status share/mako-render/installer/installed-files.sha256
+) || fail "installed state does not describe the rewritten desktop entries"
 
 printf '%s\n' '#!/usr/bin/env bash' 'exit 42' > "$package_root/bin/mako-ui"
 chmod 0755 "$package_root/bin/mako-ui"

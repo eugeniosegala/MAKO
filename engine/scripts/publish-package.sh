@@ -168,18 +168,13 @@ Every game, renderer, and display setup behaves differently. Compare scaling-onl
 
 ### Host archive
 
-Download \`$(basename "$archive")\` and extract it to your local prefix:
-
-\`\`\`bash
-mkdir -p ~/.local
-tar -xJf $(basename "$archive") -C ~/.local
-\`\`\`
+Download \`$(basename "$archive")\`, extract it into a new folder, then double-click **Install MAKO Renderer** and choose **Execute** if your file manager asks. The installer verifies the payload, installs it under \`~/.local\`, and opens the configuration UI.
 
 The host archive includes 64-bit and 32-bit Vulkan layers; the CLI and Qt UI are 64-bit.
 
-Start the configuration UI after extraction:
+Reopen the configuration UI after installation:
 
-- **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode, open the bottom-left Application Launcher, then select **Settings > MAKO Renderer Configuration**.
+- **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode, open the bottom-left Application Launcher, search for **MAKO Renderer Configuration**, and click the MAKO-logo app icon.
 - **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
 
 Configure the profile in the UI or \`~/.config/mako-render/conf.toml\`. Select the licensed DLL path when using LS1 scaling or Frame Generation, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO through its private Vulkan layer directory, prevents Steam's Vulkan Fossilize/overlay hooks and competing presentation layers from bypassing its swapchain interception, and keeps Gamescope and the Steam/Game Mode interface active outside that application chain.
