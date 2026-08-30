@@ -23,6 +23,7 @@ class LicenseLineageTests(unittest.TestCase):
             "Copyright in the incorporated portions remains with the respective lsfg-vk copyright holders",
             license_text,
         )
+        self.assertIn("Bjoern Hoehrmann UTF-8 decoder", license_text)
         self.assertIn(
             "the MIT License that applied to lsfg-vk version 1 does not describe MAKO Renderer",
             license_text,
@@ -32,12 +33,14 @@ class LicenseLineageTests(unittest.TestCase):
         public_docs = (
             REPOSITORY_ROOT / "LICENSE.md",
             REPOSITORY_ROOT / "README.md",
+            REPOSITORY_ROOT / "THIRD_PARTY_NOTICES.md",
             REPOSITORY_ROOT / "engine/README.md",
         )
         forbidden_claims = (
             "earlier MIT-licensed revision",
             "before upstream adopted GPLv3",
             "later GPLv3-licensed lsfg-vk revisions",
+            "5a293c428409a866bbe91be9eb54b49e71521e14",
         )
 
         for path in public_docs:

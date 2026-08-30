@@ -482,7 +482,22 @@ if [[ -n "$flatpak_archive_name" ]]; then
 fi
 
 echo "Assembling Decky archive..."
-cp "$repository_root/LICENSE.md" "$package_dir/LICENSE.md"
+cp "$repository_root/LICENSE.md" "$repository_root/THIRD_PARTY_NOTICES.md" "$package_dir/"
+mkdir -p "$package_dir/third_party_licenses"
+dependency_license_sources=(
+  "$project_dir/node_modules/@decky/api/LICENSE:@decky-api-LGPL-2.1.txt"
+  "$project_dir/node_modules/react-icons/LICENSE:react-icons-LICENSE.txt"
+  "$project_dir/node_modules/tslib/LICENSE.txt:tslib-0BSD.txt"
+)
+for dependency_license in "${dependency_license_sources[@]}"; do
+  source_path="${dependency_license%%:*}"
+  output_name="${dependency_license#*:}"
+  if [[ ! -s "$source_path" ]]; then
+    echo "Required production dependency license is missing: $source_path" >&2
+    exit 1
+  fi
+  cp "$source_path" "$package_dir/third_party_licenses/$output_name"
+done
 cp "$project_dir/README.md" "$project_dir/main.py" \
   "$project_dir/package.json" "$project_dir/plugin.json" "$project_dir/shared_config.py" \
   "$package_dir/"

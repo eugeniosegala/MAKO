@@ -232,11 +232,11 @@ MAKO is built on the work of two open-source projects and their communities:
 
 MAKO also thanks the **Lossless Scaling developers** for the frame-generation and scaling technology accessed through each user's licensed installation, and the **Decky Loader team**, community contributors, testers, guide authors, and creators who helped make the project possible.
 
-The original copyright and license notices are preserved in [LICENSE.md](LICENSE.md). MAKO is an independent community project and is not affiliated with or endorsed by Lossless Scaling, Decky Loader, or either upstream project.
+The original copyright and license notices are preserved in [LICENSE.md](LICENSE.md), with additional distribution details in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). MAKO is an independent community project and is not affiliated with or endorsed by Lossless Scaling, Decky Loader, or either upstream project.
 
 ## License
 
-MAKO is distributed under [GPL-3.0-or-later](LICENSE.md). The root license also preserves the BSD-3-Clause and MIT notices required by incorporated upstream code.
+MAKO is distributed under [GPL-3.0-or-later](LICENSE.md). The root license preserves the BSD-3-Clause and MIT notices required by incorporated upstream code, and [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) records additional packaged dependencies and proprietary-component boundaries.
 
 ## AI-assisted development
 

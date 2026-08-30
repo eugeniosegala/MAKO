@@ -17,6 +17,25 @@ const manifestPath = path.join(packageDirectory, "package.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const owns = (name) => Object.prototype.hasOwnProperty.call(manifest, name);
 
+for (const legalPath of [
+    "LICENSE.md",
+    "THIRD_PARTY_NOTICES.md",
+    "third_party_licenses/@decky-api-LGPL-2.1.txt",
+    "third_party_licenses/react-icons-LICENSE.txt",
+    "third_party_licenses/tslib-0BSD.txt",
+]) {
+    const absolutePath = path.join(packageDirectory, legalPath);
+    let contents;
+    try {
+        contents = readFileSync(absolutePath, "utf8");
+    } catch {
+        throw new Error(`Required legal file is missing: ${legalPath}`);
+    }
+    if (!contents.trim()) {
+        throw new Error(`Required legal file is empty: ${legalPath}`);
+    }
+}
+
 function validateRendererMetadata(renderer, metadataName) {
     if (!renderer || typeof renderer !== "object" || Array.isArray(renderer)) {
         throw new Error(`${metadataName} must be an object`);
