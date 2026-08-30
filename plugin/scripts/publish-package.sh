@@ -263,6 +263,9 @@ printf '%s\n' \
   '' \
   'See the [Configuration guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/CONFIGURATION.md) and [Troubleshooting guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/TROUBLESHOOTING.md) for complete behaviour and per-game controls.' \
   '' \
+  '> [!IMPORTANT]' \
+  '> MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LS1 scaling and Frame Generation read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. The open MAKO scaling method does not use it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.' \
+  '' \
   '> ⚠️ **Required MAKO Renderer update:** Installing the ZIP updates MAKO Decky, but does **not** replace its private Vulkan layer. Open the plugin and select **Install MAKO Renderer** afterwards.' \
   '' \
   '> [!IMPORTANT]' \
@@ -313,6 +316,8 @@ printf '%s\n' \
   "## Bundled MAKO Renderer \`$engine_version\`" \
   '' \
   "- Includes checksum-verified \`$archive_name\`." \
+  "- Corresponding MAKO Decky source: [\`$plugin_release_tag\`](https://github.com/$github_repository/tree/$plugin_release_tag)." \
+  "- Corresponding MAKO Renderer source: [\`$engine_release_tag\`](https://github.com/$github_repository/tree/$engine_release_tag), pinned by commit and checksum in the ZIP metadata." \
   '- Installing the ZIP does not replace the private renderer by itself; complete the required in-plugin installation step above.' \
   '' \
   >> "$notes_file"

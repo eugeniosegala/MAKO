@@ -64,6 +64,8 @@ The release packager builds the normal 64-bit application, CLI, UI, launcher, an
 
 Use the fast paths for iteration, the complete local package for testers, and the dedicated hardware workflow for the release candidate. Publication is a separate, explicitly invoked cycle described in [How to release MAKO](../../HOW_TO_RELEASE.md).
 
+Distributable Renderer archives and Flatpak extensions carry the project license, third-party notices, and asset-provenance record. The packaging scripts fail closed when those files are absent from the source tree or final payload.
+
 ## Reusable SteamOS release-build SDK
 
 `scripts/package-local.sh` normally uses the host Qt development installation. On a Pacman-based SteamOS host where Qt appears installed but its headers or CMake files are missing, the packager automatically downloads the exact `qt6-base`, `qt6-declarative`, and `libglvnd` packages selected by Pacman into `engine/build/cache/native-sdk/`. It extracts and reuses that isolated SDK on later release builds, without Docker, Podman, root access, or changes to the SteamOS installation. The first fallback build needs network access; later builds reuse the cached files.

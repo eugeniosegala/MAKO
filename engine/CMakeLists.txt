@@ -4,10 +4,18 @@ include(GNUInstallDirs)
 include(CTest)
 
 set(MAKO_REPOSITORY_LICENSE "${CMAKE_CURRENT_SOURCE_DIR}/../LICENSE.md")
+set(MAKO_THIRD_PARTY_NOTICES "${CMAKE_CURRENT_SOURCE_DIR}/../THIRD_PARTY_NOTICES.md")
+set(MAKO_ASSET_PROVENANCE "${CMAKE_CURRENT_SOURCE_DIR}/../ASSET_PROVENANCE.md")
 if(NOT EXISTS "${MAKO_REPOSITORY_LICENSE}")
     message(FATAL_ERROR "The monorepo license is missing: ${MAKO_REPOSITORY_LICENSE}")
 endif()
-install(FILES "${MAKO_REPOSITORY_LICENSE}"
+if(NOT EXISTS "${MAKO_THIRD_PARTY_NOTICES}")
+    message(FATAL_ERROR "The monorepo third-party notices are missing: ${MAKO_THIRD_PARTY_NOTICES}")
+endif()
+if(NOT EXISTS "${MAKO_ASSET_PROVENANCE}")
+    message(FATAL_ERROR "The monorepo asset provenance record is missing: ${MAKO_ASSET_PROVENANCE}")
+endif()
+install(FILES "${MAKO_REPOSITORY_LICENSE}" "${MAKO_THIRD_PARTY_NOTICES}" "${MAKO_ASSET_PROVENANCE}"
     DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/doc/mako-render")
 install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/mako-diagnostics"
     DESTINATION "${CMAKE_INSTALL_BINDIR}")

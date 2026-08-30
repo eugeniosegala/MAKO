@@ -29,7 +29,7 @@ Use [MAKO Decky packaging](plugin/docs/PACKAGING.md) for development and tester 
 
 The `Tests` workflow runs on every pull request and push to `main`:
 
-- MAKO Decky Python tests, frontend behavior and coverage, type checking, localization/configuration freshness, and production bundle;
+- MAKO Decky Python tests, frontend behavior and coverage, type checking, localization/configuration freshness, production bundle, package notices, dependency-license payloads, and bundled-dependency source-map coverage;
 - MAKO Renderer CTest with GCC and Clang, including the optional Qt UI and localization contract;
 - portable Renderer scheduling, frame-plan, presentation, scaling, transition, profile, and colour boundaries under ASan and UBSan;
 - synthetic unlicensed PE/DXBC/SPIR-V inspection, fingerprint invalidation, per-model capability isolation, and harmless-extension acceptance;

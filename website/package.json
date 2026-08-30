@@ -2,15 +2,17 @@
   "name": "mako-website",
   "version": "0.1.0",
   "private": true,
+  "license": "GPL-3.0-or-later",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
     "dev": "vinext dev",
+    "check:legal": "node scripts/check-legal-notices.mjs",
     "check:release-contract": "node scripts/check-release-contract.mjs",
-    "build": "npm run check:release-contract && vinext build",
+    "build": "npm run check:release-contract && npm run check:legal && vinext build",
     "dev:pages": "vite --config vite.pages.config.ts",
-    "build:pages": "npm run check:release-contract && vite build --config vite.pages.config.ts",
+    "build:pages": "npm run check:release-contract && npm run check:legal && vite build --config vite.pages.config.ts",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },

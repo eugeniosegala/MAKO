@@ -172,7 +172,9 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
         "files/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json" \
         "files/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json" \
         "files/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json" \
+        "files/share/doc/mako-render/ASSET_PROVENANCE.md" \
         "files/share/doc/mako-render/LICENSE.md" \
+        "files/share/doc/mako-render/THIRD_PARTY_NOTICES.md" \
         "files/lib64/libmako-render.so" \
         "files/lib64/libmako-render-scaling.so" \
         "files/lib/i386-linux-gnu/libmako-render.so" \
@@ -294,10 +296,12 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
         echo "Flatpak packaging failed: deployed spatial-layer library is missing for $runtime_version" >&2
         exit 1
     fi
-    if [[ ! -f "$deployed_dir/files/share/doc/mako-render/LICENSE.md" ]]; then
-        echo "Flatpak packaging failed: deployed license is missing for $runtime_version" >&2
-        exit 1
-    fi
+    for legal_file in ASSET_PROVENANCE.md LICENSE.md THIRD_PARTY_NOTICES.md; do
+        if [[ ! -f "$deployed_dir/files/share/doc/mako-render/$legal_file" ]]; then
+            echo "Flatpak packaging failed: deployed legal file $legal_file is missing for $runtime_version" >&2
+            exit 1
+        fi
+    done
 
     verify_elf_class "$deployed_dir/files/lib64/libmako-render.so" 2
     verify_elf_class "$deployed_dir/files/lib64/libmako-render-scaling.so" 2

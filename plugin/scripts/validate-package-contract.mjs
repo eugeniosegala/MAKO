@@ -17,6 +17,55 @@ const manifestPath = path.join(packageDirectory, "package.json");
 const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
 const owns = (name) => Object.prototype.hasOwnProperty.call(manifest, name);
 
+for (const legalPath of [
+    "ASSET_PROVENANCE.md",
+    "LICENSE.md",
+    "THIRD_PARTY_NOTICES.md",
+    "third_party_licenses/@decky-api-LGPL-2.1.txt",
+    "third_party_licenses/react-icons-LICENSE.txt",
+    "third_party_licenses/tslib-0BSD.txt",
+]) {
+    const absolutePath = path.join(packageDirectory, legalPath);
+    let contents;
+    try {
+        contents = readFileSync(absolutePath, "utf8");
+    } catch {
+        throw new Error(`Required legal file is missing: ${legalPath}`);
+    }
+    if (!contents.trim()) {
+        throw new Error(`Required legal file is empty: ${legalPath}`);
+    }
+}
+
+const sourceMapPath = path.join(packageDirectory, "dist", "index.js.map");
+let sourceMap;
+try {
+    sourceMap = JSON.parse(readFileSync(sourceMapPath, "utf8"));
+} catch {
+    throw new Error("The packaged frontend source map is missing or invalid");
+}
+if (
+    !Array.isArray(sourceMap.sources) ||
+    !Array.isArray(sourceMap.sourcesContent) ||
+    sourceMap.sources.length !== sourceMap.sourcesContent.length
+) {
+    throw new Error("The packaged frontend source map has no aligned source content");
+}
+for (const bundledSource of ["@decky/api/dist/index.js", "react-icons/"]) {
+    const sourceIndex = sourceMap.sources.findIndex((source) =>
+        source.includes(bundledSource),
+    );
+    if (
+        sourceIndex < 0 ||
+        typeof sourceMap.sourcesContent[sourceIndex] !== "string" ||
+        !sourceMap.sourcesContent[sourceIndex].trim()
+    ) {
+        throw new Error(
+            `The packaged frontend source map is missing bundled source: ${bundledSource}`,
+        );
+    }
+}
+
 function validateRendererMetadata(renderer, metadataName) {
     if (!renderer || typeof renderer !== "object" || Array.isArray(renderer)) {
         throw new Error(`${metadataName} must be an object`);

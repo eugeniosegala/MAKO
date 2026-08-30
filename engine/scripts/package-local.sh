@@ -305,7 +305,9 @@ required_paths=(
     "bin/mako-ui" \
     "lib/libmako-render.so" \
     "lib/libmako-render-scaling.so" \
+    "share/doc/mako-render/ASSET_PROVENANCE.md" \
     "share/doc/mako-render/LICENSE.md" \
+    "share/doc/mako-render/THIRD_PARTY_NOTICES.md" \
     "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
     "share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json" \
     "share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json" \

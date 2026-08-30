@@ -391,7 +391,7 @@ export default function Home() {
 
           <div className="requirement-note">
             <span>IMPORTANT / LICENSED INPUT</span>
-            <p>MAKO is an independent project, not an official Lossless Scaling release. LS1 scaling and frame generation require <code>Lossless.dll</code> from a licensed <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO scaler does not. MAKO never bundles, copies, or modifies that library.</p>
+            <p>MAKO is an independent project and does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. LS1 scaling and frame generation read selected resources at runtime from a lawful, user-supplied <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO scaler does not require it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.</p>
           </div>
         </section>
 
@@ -407,7 +407,7 @@ export default function Home() {
             </details>
             <details>
               <summary><span>02</span> Does MAKO include Lossless Scaling?<i>+</i></summary>
-              <p>No. MAKO is an independent project. LS1 scaling and frame generation need your own licensed Lossless Scaling installation from Steam, then MAKO discovers or lets you select its <code>Lossless.dll</code>. The open MAKO scaling method does not need the DLL.</p>
+              <p>No. MAKO does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. LS1 scaling and frame generation require your own lawful Lossless Scaling installation from Steam, then MAKO discovers or lets you select its local DLL. The open MAKO scaling method does not need it.</p>
             </details>
             <details>
               <summary><span>03</span> Can scaling and frame generation run together?<i>+</i></summary>
@@ -442,7 +442,7 @@ export default function Home() {
           <p>LS1 and open MAKO spatial scaling plus Lossless Scaling frame generation for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
         </div>
         <div className="footer-links">
-          <div><span>PROJECT</span><a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a><a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a><a href={links.docs} {...newTabProps}>Installation Guide</a><a href={links.issues} {...newTabProps}>Issues</a></div>
+          <div><span>PROJECT</span><a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a><a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a><a href={links.docs} {...newTabProps}>Installation Guide</a><a href="third-party-notices.txt">Third-party notices</a><a href={links.issues} {...newTabProps}>Issues</a></div>
           <div><span>DOWNLOAD</span><a href={links.deckyRelease} {...newTabProps}>MAKO Decky</a><a href={links.rendererRelease} {...newTabProps}>MAKO Renderer</a><a href={links.allReleases} {...newTabProps}>All releases</a></div>
         </div>
         <div className="footer-bottom"><span>GPL-3.0-OR-LATER</span><span>INDEPENDENT COMMUNITY PROJECT</span><span>© 2026 MAKO</span></div>

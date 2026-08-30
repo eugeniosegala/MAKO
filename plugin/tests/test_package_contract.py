@@ -18,6 +18,29 @@ class PackageContractTests(unittest.TestCase):
         self.package_dir = Path(self.temp_dir.name) / "Mako"
         self.bin_dir = self.package_dir / "bin"
         self.bin_dir.mkdir(parents=True)
+        legal_files = {
+            "ASSET_PROVENANCE.md": "MAKO asset provenance\n",
+            "LICENSE.md": "GPL-3.0-or-later\n",
+            "THIRD_PARTY_NOTICES.md": "MAKO third-party notices\n",
+            "third_party_licenses/@decky-api-LGPL-2.1.txt": "LGPL-2.1\n",
+            "third_party_licenses/react-icons-LICENSE.txt": "React Icons MIT\n",
+            "third_party_licenses/tslib-0BSD.txt": "tslib 0BSD\n",
+        }
+        for relative_path, contents in legal_files.items():
+            destination = self.package_dir / relative_path
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_text(contents, encoding="utf-8")
+        source_map = {
+            "version": 3,
+            "sources": [
+                "node_modules/@decky/api/dist/index.js",
+                "node_modules/react-icons/fi/index.mjs",
+            ],
+            "sourcesContent": ["export const api = {};", "export const Icon = {};"],
+        }
+        source_map_path = self.package_dir / "dist" / "index.js.map"
+        source_map_path.parent.mkdir(parents=True)
+        source_map_path.write_text(json.dumps(source_map), encoding="utf-8")
         self.archive_name = "MAKO-Renderer-v2.0.0-test-linux.tar.xz"
         self.archive = self.bin_dir / self.archive_name
         self.archive.write_bytes(b"verified-renderer-archive")
@@ -114,6 +137,28 @@ class PackageContractTests(unittest.TestCase):
 
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("checksum does not match", result.stderr)
+
+    def test_rejects_package_without_third_party_notices(self):
+        (self.package_dir / "THIRD_PARTY_NOTICES.md").unlink()
+
+        result = self._validate(
+            {"version": "2.1.0.local.test", "bundled_renderer": self._renderer()},
+            "local",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Required legal file is missing", result.stderr)
+
+    def test_rejects_package_without_bundled_dependency_source(self):
+        (self.package_dir / "dist" / "index.js.map").unlink()
+
+        result = self._validate(
+            {"version": "2.1.0.local.test", "bundled_renderer": self._renderer()},
+            "local",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("frontend source map is missing", result.stderr)
 
 
 if __name__ == "__main__":

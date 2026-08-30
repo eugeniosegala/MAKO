@@ -6,19 +6,19 @@
 
 <!-- prettier-ignore -->
 > [!NOTE]
-> **[Decky LSFG-VK Experimental](https://github.com/eugeniosegala/decky-lsfg-vk-experimental) is now MAKO Decky.** The [MAKO repository](https://github.com/eugeniosegala/MAKO) is its new home and continuation, including future development, releases, documentation, and issue tracking.
+> **<a href="https://github.com/eugeniosegala/decky-lsfg-vk-experimental" target="_blank" rel="noopener noreferrer">Decky LSFG-VK Experimental</a> is now MAKO Decky.** The <a href="https://github.com/eugeniosegala/MAKO" target="_blank" rel="noopener noreferrer">MAKO repository</a> is its new home and continuation, including future development, releases, documentation, and issue tracking.
 
 MAKO Decky is the Decky Loader component of MAKO. It provides per-game controls, installation, updates, Flatpak preparation, and game launch integration for MAKO Renderer on Steam Deck, Steam Machine, SteamOS, and Linux more broadly.
 
-MAKO is an independent community project bringing LS1 scaling, LSFG frame generation, and MAKO's built-in open spatial scaler to Linux. LS1 and LSFG require a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation; the open MAKO scaler does not. MAKO Decky never bundles, copies, persists, or modifies that proprietary library.
+MAKO is an independent community project bringing LS1 scaling, LSFG frame generation, and MAKO's built-in open spatial scaler to Linux. MAKO Decky does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LS1 and LSFG read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO scaler does not require it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="../THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
 
 ## Download
 
-Open the [latest MAKO Decky release](https://github.com/eugeniosegala/MAKO/releases/latest) and download the ZIP under **Assets**. Previous Decky releases are available on the [MAKO releases page](https://github.com/eugeniosegala/MAKO/releases).
+Open the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a> and download the ZIP under **Assets**. Previous Decky releases are available on the <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer">MAKO releases page</a>.
 
-For direct Vulkan-layer installation without Decky, open the [latest MAKO Renderer release](https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0) and download the Linux archive under **Assets**.
+For direct Vulkan-layer installation without Decky, open the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a> and download the Linux archive under **Assets**.
 
-Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-bit x86 game-process layers. MAKO Decky safely refuses incompatible native AArch64/Armada installation; see [Armada and native AArch64 support](docs/ARMADA.md) for that boundary.
+Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-bit x86 game-process layers. MAKO Decky safely refuses incompatible native AArch64/Armada installation; see <a href="docs/ARMADA.md" target="_blank" rel="noopener noreferrer">Armada and native AArch64 support</a> for that boundary.
 
 ## What it manages
 
@@ -42,7 +42,7 @@ pnpm run package:local-engine
 
 `pnpm run package:local-engine` builds and bundles the sibling MAKO Renderer checkout. Use `pnpm run package:local-engine-fast` for a native, 64-bit development package without Flatpak extensions.
 
-The resulting ZIP is written under `plugin/out/`; local commands never publish. Use direct `dev:*` deployment for iteration, `package:local-engine` for a tester ZIP, and the documented release workflow only for a release candidate. See [Packaging](docs/PACKAGING.md) and [Testing](../TESTING.md) for the exact commands and validation gates.
+The resulting ZIP is written under `plugin/out/`; local commands never publish. Use direct `dev:*` deployment for iteration, `package:local-engine` for a tester ZIP, and the documented release workflow only for a release candidate. See <a href="docs/PACKAGING.md" target="_blank" rel="noopener noreferrer">Packaging</a> and <a href="../TESTING.md" target="_blank" rel="noopener noreferrer">Testing</a> for the exact commands and validation gates.
 
 ## Using a local build
 
@@ -54,4 +54,4 @@ After installing the ZIP through Decky developer settings, open MAKO Decky and i
 
 MAKO Decky's wrapper activates `VK_LAYER_MAKO_render` only for the selected game process.
 
-See [Configuration](docs/CONFIGURATION.md), [Armada and native AArch64 support](docs/ARMADA.md), [Troubleshooting](docs/TROUBLESHOOTING.md), [Collect MAKO Decky Diagnostics](docs/COLLECT_DIAGNOSTICS.md), and [Packaging](docs/PACKAGING.md) for detailed workflows.
+See <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>, <a href="docs/ARMADA.md" target="_blank" rel="noopener noreferrer">Armada and native AArch64 support</a>, <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">Troubleshooting</a>, <a href="docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect MAKO Decky Diagnostics</a>, and <a href="docs/PACKAGING.md" target="_blank" rel="noopener noreferrer">Packaging</a> for detailed workflows.

@@ -162,7 +162,7 @@ Every game, renderer, and display setup behaves differently. Compare scaling-onl
 - **Quality and latency tuning:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness, so compare the available choices per game.
 
 > [!IMPORTANT]
-> LS1 scaling and Fixed or Adaptive Frame Generation require \`Lossless.dll\` from a licensed Lossless Scaling installation. The open MAKO scaling method does not use it. Neither release archive bundles, copies, or modifies that proprietary library.
+> MAKO does not contain or distribute Lossless Scaling, \`Lossless.dll\`, or extracted proprietary model payloads. LS1 scaling and Fixed or Adaptive Frame Generation read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. The open MAKO scaling method does not use it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.
 
 ## Installation
 
@@ -217,7 +217,7 @@ Keep the previous archives until the new version has been tested with your games
 - Includes checksum-verified host archive \`$(basename "$archive")\` (SHA-256: \`$checksum\`).
 - Includes checksum-verified Flatpak runtime archive \`$(basename "$flatpak_archive")\` (SHA-256: \`$flatpak_checksum\`).
 - The host archive contains the 64-bit and 32-bit Vulkan layers, CLI, Qt configuration UI, standalone \`mako-launch\` launcher, and desktop integration.
-- Built from source commit \`$source_commit\`.
+- Corresponding source: [commit \`$source_commit\`](https://github.com/$release_repository/tree/$source_commit), also available from the release tag's source archives.
 EOF
 
 if [[ "$tag_exists" == false ]]; then
