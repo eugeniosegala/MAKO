@@ -657,11 +657,41 @@ VkResult Swapchain::presentOriginalImage(
         const PresentInvocation& invocation,
         const VkSemaphore waitSemaphore, const void* nextChain,
         DiagnosticsClock::duration* const duration) {
+    VkSemaphore presentWaitSemaphore = waitSemaphore;
+    if (this->spatialScaler &&
+            this->spatialFramePipelinePlacement ==
+                SpatialFramePipelinePlacement::PostFrameGeneration) {
+        auto& pass = this->spatialScalingPasses.at(invocation.imageIndex);
+        this->prepareSpatialScalingPass(invocation.vk, pass);
+        const VkImage applicationImage = this->info.images.at(
+            invocation.imageIndex
+        );
+        const auto scalingStarted = startPresentDiagnostic();
+        pass.commandBuffer.begin(invocation.vk);
+        this->spatialScaler->record(
+            invocation.vk, pass.commandBuffer, applicationImage
+        );
+        pass.commandBuffer.end(invocation.vk);
+        pass.commandBuffer.submit(
+            invocation.vk,
+            std::array{waitSemaphore}, VK_NULL_HANDLE, 0,
+            std::array{pass.readySemaphore.handle()},
+            VK_NULL_HANDLE, 0, pass.completionFence.handle(), invocation.queue
+        );
+        pass.completionInFlight = true;
+        presentWaitSemaphore = pass.readySemaphore.handle();
+        logSlowPresentOperation(
+            "submit-post-frame-spatial-original",
+            this->frameState.realFrameIndex,
+            this->frameState.sequenceIndex, scalingStarted,
+            std::nullopt, std::nullopt, invocation.imageIndex
+        );
+    }
     const VkPresentInfoKHR presentInfo{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext = nextChain,
         .waitSemaphoreCount = 1,
-        .pWaitSemaphores = &waitSemaphore,
+        .pWaitSemaphores = &presentWaitSemaphore,
         .swapchainCount = 1,
         .pSwapchains = &invocation.swapchain,
         .pImageIndices = &invocation.imageIndex,
@@ -998,7 +1028,9 @@ void Swapchain::preacquireGeneratedImages(
 
 void Swapchain::submitSourceCopy(const PresentInvocation& invocation,
         const VkImage swapchainImage, const vk::Image& sourceImage) {
-    if (this->spatialScaler) {
+    if (this->spatialScaler &&
+            this->spatialFramePipelinePlacement ==
+                SpatialFramePipelinePlacement::PreFrameGeneration) {
         auto& pass = this->spatialScalingPasses.at(invocation.imageIndex);
         this->prepareSpatialScalingPass(invocation.vk, pass);
         pass.commandBuffer.begin(invocation.vk);
@@ -1267,6 +1299,13 @@ VkResult Swapchain::presentGeneratedFrames(
                 acquireDeadlineExceeded,
                 plan.boundedOrderedAcquireProbe
             );
+        if (observation.stabilizing && this->adaptiveScheduler) {
+            // The probe proves that lower transport traversal is possible,
+            // not that the pre-timeout Adaptive cadence is still valid. Clear
+            // stable-cadence/FIFO handoff state now, concurrently with the
+            // short transport guard, before generated frames may resume.
+            this->adaptiveScheduler->beginTransportRecovery(observedAt);
+        }
         if (observation.quarantined) {
             this->fixedRefreshBudget.reset();
             if (presentDiagnosticsEnabled()) {
@@ -1456,8 +1495,9 @@ VkResult Swapchain::presentGeneratedFrames(
                 );
             acquireBudgetExhausted = remainingAcquireBudget &&
                 *remainingAcquireBudget == 0;
-            const uint64_t acquireTimeout = generatedImageAcquireTimeout(
-                false, remainingAcquireBudget
+            const uint64_t acquireTimeout =
+                orderedGeneratedImageAcquireTimeout(
+                    this->gamescopeRefreshHz, remainingAcquireBudget
             );
             if (acquireBudgetExhausted) {
                 result = VK_TIMEOUT;
@@ -1621,35 +1661,44 @@ VkResult Swapchain::presentGeneratedFrames(
             acquiredImageIndex
         );
         auto& commandBuffer = pass.commandBuffer;
-        const std::array preBarriers{
-            barrierHelper(destinationImage.handle(),
-                VK_ACCESS_NONE,
-                VK_ACCESS_TRANSFER_READ_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
-            ),
-            barrierHelper(acquiredSwapchainImage,
-                VK_ACCESS_NONE,
-                VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
-            ),
-        };
-        const std::array postBarriers{
-            barrierHelper(acquiredSwapchainImage,
-                VK_ACCESS_TRANSFER_WRITE_BIT,
-                VK_ACCESS_MEMORY_READ_BIT,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
-            ),
-        };
         commandBuffer.begin(invocation.vk);
-        commandBuffer.blitImage(invocation.vk,
-            preBarriers,
-            {destinationImage.handle(), acquiredSwapchainImage},
-            destinationImage.getExtent(),
-            postBarriers
-        );
+        if (this->spatialScaler &&
+                this->spatialFramePipelinePlacement ==
+                    SpatialFramePipelinePlacement::PostFrameGeneration) {
+            this->spatialScaler->recordSourceToPresentation(
+                invocation.vk, commandBuffer,
+                destinationImage.handle(), acquiredSwapchainImage
+            );
+        } else {
+            const std::array preBarriers{
+                barrierHelper(destinationImage.handle(),
+                    VK_ACCESS_NONE,
+                    VK_ACCESS_TRANSFER_READ_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+                    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+                ),
+                barrierHelper(acquiredSwapchainImage,
+                    VK_ACCESS_NONE,
+                    VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_IMAGE_LAYOUT_UNDEFINED,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+                ),
+            };
+            const std::array postBarriers{
+                barrierHelper(acquiredSwapchainImage,
+                    VK_ACCESS_TRANSFER_WRITE_BIT,
+                    VK_ACCESS_MEMORY_READ_BIT,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                    VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+                ),
+            };
+            commandBuffer.blitImage(invocation.vk,
+                preBarriers,
+                {destinationImage.handle(), acquiredSwapchainImage},
+                destinationImage.getExtent(),
+                postBarriers
+            );
+        }
 
         std::array<VkSemaphore, 2> waitSemaphores{
             pass.acquireSemaphore.handle(), VK_NULL_HANDLE
@@ -2003,16 +2052,59 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     bool boundedOrderedAcquireProbe = false;
     size_t orderedAcquireConsecutiveFailures = 0;
     if (this->privateOrderedTransport) {
+        const std::optional<double> nativeRecoveryTargetFps = [&]()
+                -> std::optional<double> {
+            if (this->adaptiveScheduler) {
+                if (this->profile.target_fps > 0) {
+                    return static_cast<double>(this->profile.target_fps);
+                }
+                return std::nullopt;
+            }
+            if (this->gamescopeRefreshHz && *this->gamescopeRefreshHz > 0) {
+                return static_cast<double>(*this->gamescopeRefreshHz);
+            }
+            return std::nullopt;
+        }();
         const auto recovery =
             this->recoveryState.orderedAcquireRecovery.beforePresent(
-                presentNow
+                presentNow, this->frameState.recentRealInterval,
+                nativeRecoveryTargetFps
             );
+        if (presentDiagnosticsEnabled() &&
+                (recovery.nativeCadenceSaturationEntered ||
+                 recovery.nativeCadenceDemandResumed)) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=ordered-acquire-native-saturation"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " state="
+                      << (recovery.nativeCadenceSaturationEntered
+                              ? "entered" : "exited")
+                      << " native_base_fps=" << recovery.nativeBaseFps
+                      << " target_fps=" << recovery.nativeTargetFps
+                      << " consecutive_failures="
+                      << recovery.consecutiveFailures
+                      << " bypassed_frames=" << recovery.bypassedFrames
+                      << " recovery_ms="
+                      << std::chrono::duration<double, std::milli>(
+                             recovery.drainDuration
+                         ).count()
+                      << " frame=" << this->frameState.realFrameIndex
+                      << " sequence=" << this->frameState.sequenceIndex
+                      << " action="
+                      << (recovery.nativeCadenceSaturationEntered
+                              ? "defer-probe-native-target-satisfied"
+                              : "warm-history-before-one-frame-probe")
+                      << '\n';
+        }
         if (recovery.bypassGeneration) {
             // Keep Adaptive's cadence clock current while freezing every
             // multiplier evaluation. No backend work or synthetic swapchain
             // acquire is attempted until the ordered FIFO has drained. After
             // a successful probe, the same path provides deterministic
             // native-only stabilization until the absolute recovery deadline.
+            // If native cadence already satisfies the requested target, the
+            // recovery owner suppresses repeated warm-up/probe churn here and
+            // re-arms exactly once after a sustained material cadence deficit.
             if (this->adaptiveScheduler) {
                 static_cast<void>(
                     this->adaptiveScheduler->planFrame(presentNow, true)

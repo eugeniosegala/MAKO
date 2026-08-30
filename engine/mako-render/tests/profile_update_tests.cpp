@@ -545,19 +545,24 @@ int main() {
         "Dormant scaler choices must save without disrupting an engine-off process");
     auto makoScalingEngine = nativeScalingEngine;
     makoScalingEngine.scaling_method = ls::ScalingMethod::Mako;
-    decision = classifyProfileUpdate(
+    const auto dormantModelPlan = planProfileUpdate(
         nativeScalingEngine, makoScalingEngine, 3, true
     );
-    expect(decision.action ==
-            ProfileUpdateAction::DeferUntilSwapchainRecreation &&
-            decision.spatialScalingChanged &&
+    decision = dormantModelPlan.decision;
+    expect(decision.action == ProfileUpdateAction::NoRuntimeChange &&
+            !decision.spatialScalingChanged &&
+            decision.spatialScalingDormantUpdate &&
+            !decision.swapchainRecreationDeferred &&
+            dormantModelPlan.appliedProfile.scaling_method ==
+                ls::ScalingMethod::Mako &&
             makoScalingEngine.frame_generation_enabled,
-        "Native-to-MAKO method changes must remain live FG-compatible recreations");
+        "An inactive scaler model change must save without recreating WSI or FG");
     decision = planProfileUpdate(
         nativeScalingEngine, makoScalingEngine, 3, true, true
     ).decision;
     expect(decision.action == ProfileUpdateAction::ApplyLive &&
             decision.spatialScalingChanged &&
+            !decision.spatialScalingDormantUpdate &&
             decision.spatialScalingLiveRebuild &&
             !decision.swapchainRecreationDeferred &&
             !liveProfileResourceRecreationAvailable(decision, true),
@@ -603,11 +608,11 @@ int main() {
     expect(guardedLiveProfileResourceRecreationAvailable(
             gamescopeFactorDecision, true, true, true, true
         ),
-        "A maintenance1-fenced Gamescope spatial role must request recreation for an extent change");
+        "A maintenance1-fenced Gamescope resource owner must request recreation for an extent change");
     expect(!guardedLiveProfileResourceRecreationAvailable(
             gamescopeFactorDecision, true, true, true, false
         ),
-        "The upper Gamescope role must not request recreation for an extent change");
+        "A capability-only Gamescope role must not request recreation for an extent change");
     expect(!guardedLiveProfileResourceRecreationAvailable(
             gamescopeFactorDecision, true, false, true, true
         ),
@@ -641,7 +646,7 @@ int main() {
         ) && !guardedLiveProfileResourceRecreationAvailable(
             combinedFixedPlan.decision, true, true, true, false
         ),
-        "Only the lower Gamescope role may request recreation for a combined factor and Fixed update");
+        "Only the Gamescope spatial resource owner may request recreation for a combined factor and Fixed update");
 
     auto combinedAdaptiveRequest = combinedFixedRequest;
     combinedAdaptiveRequest.scaling_factor = 1.5F;
@@ -665,7 +670,7 @@ int main() {
         ) && !guardedLiveProfileResourceRecreationAvailable(
             combinedAdaptivePlan.decision, true, true, true, false
         ),
-        "A combined Adaptive capacity change must not add a second upper-role recreation request");
+        "A combined Adaptive capacity change must emit only the spatial owner's recreation request");
 
     auto fixedCapacityOnlyRequest = combinedFixedCurrent;
     fixedCapacityOnlyRequest.multiplier = 3;
@@ -768,11 +773,16 @@ int main() {
 
     next = scalingCurrent;
     next.scaling_sharpness = 0.75F;
-    decision = classifyProfileUpdate(scalingCurrent, next, 3, true);
-    expect(decision.action ==
-            ProfileUpdateAction::DeferUntilSwapchainRecreation &&
-            decision.spatialScalingChanged,
-        "Scaling shader parameters are recreation-bound in the initial pipeline");
+    const auto dormantSharpnessPlan = planProfileUpdate(
+        scalingCurrent, next, 3, true
+    );
+    decision = dormantSharpnessPlan.decision;
+    expect(decision.action == ProfileUpdateAction::NoRuntimeChange &&
+            !decision.spatialScalingChanged &&
+            decision.spatialScalingDormantUpdate &&
+            !decision.swapchainRecreationDeferred &&
+            dormantSharpnessPlan.appliedProfile.scaling_sharpness == 0.75F,
+        "Inactive scaler sharpness must save without a WSI recreation");
     decision = planProfileUpdate(
         scalingCurrent, next, 3, true, true
     ).decision;

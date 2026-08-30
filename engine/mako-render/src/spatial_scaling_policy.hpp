@@ -22,6 +22,58 @@ namespace mako::layer {
         VkExtent2D presentation{};
     };
 
+    /// Immutable ordering selected for a combined spatial-scaling and
+    /// frame-generation swapchain. Deck/1080p-class presentation extents pay
+    /// for reconstruction once before interpolation. Larger outputs retain
+    /// source-resolution interpolation resources and reconstruct each
+    /// delivered image immediately before WSI presentation.
+    enum class SpatialFramePipelinePlacement {
+        PreFrameGeneration,
+        PostFrameGeneration,
+    };
+
+    inline constexpr uint64_t preFrameGenerationPresentationPixelBudget =
+        uint64_t{1920} * 1200;
+
+    [[nodiscard]] constexpr uint64_t extentPixelCount(
+            const VkExtent2D extent) noexcept {
+        return static_cast<uint64_t>(extent.width) * extent.height;
+    }
+
+    [[nodiscard]] constexpr SpatialFramePipelinePlacement
+    selectSpatialFramePipelinePlacement(
+            const VkExtent2D source,
+            const VkExtent2D presentation) noexcept {
+        if (source.width == 0 || source.height == 0 ||
+                presentation.width == 0 || presentation.height == 0 ||
+                extentPixelCount(presentation) <=
+                    preFrameGenerationPresentationPixelBudget) {
+            return SpatialFramePipelinePlacement::PreFrameGeneration;
+        }
+        return SpatialFramePipelinePlacement::PostFrameGeneration;
+    }
+
+    [[nodiscard]] constexpr VkExtent2D frameGenerationExtent(
+            const SpatialFramePipelinePlacement placement,
+            const VkExtent2D source,
+            const VkExtent2D presentation) noexcept {
+        return placement == SpatialFramePipelinePlacement::PreFrameGeneration
+            ? presentation : source;
+    }
+
+    [[nodiscard]] constexpr const char* spatialFramePipelinePlacementName(
+            const SpatialFramePipelinePlacement placement) noexcept {
+        return placement == SpatialFramePipelinePlacement::PreFrameGeneration
+            ? "pre-frame-generation" : "post-frame-generation";
+    }
+
+    [[nodiscard]] constexpr const char* spatialFramePipelinePlacementReason(
+            const SpatialFramePipelinePlacement placement) noexcept {
+        return placement == SpatialFramePipelinePlacement::PreFrameGeneration
+            ? "presentation-within-low-resolution-budget"
+            : "source-resolution-frame-generation-saves-high-resolution-work";
+    }
+
     /// Immutable subset needed by instance-level fixed-surface queries. Root
     /// publishes this as one coherent snapshot so Vulkan capability queries
     /// never race the mutable configuration/profile state.
@@ -167,6 +219,7 @@ namespace mako::layer {
         std::optional<SpatialScalingExtents> extents;
         std::optional<FixedSurfaceScalingContract> fixedContract;
         bool reusedPreviousPresentationBudget{false};
+        bool usedBaselinePresentationBudget{false};
         SpatialScalingInactiveReason inactiveReason{
             SpatialScalingInactiveReason::None
         };
@@ -561,58 +614,51 @@ namespace mako::layer {
             static_cast<uint64_t>(presentation.height);
         if (variablePresentationPixels &&
                 presentationPixels > *variablePresentationPixels) {
-            // A resolution increase can make the configured factor request a
-            // presentation surface larger than the display-sized envelope
-            // that was already running successfully (for example 1440p × 2
-            // after a 1080p -> 4K context). Prefer the previous proven lower
-            // extent, aspect-fit to the new source, over either allocating a
-            // 5K surface or dropping the scaler and changing WSI behaviour.
-            if (previousVariableExtents &&
-                    !sameExtent(
-                        previousVariableExtents->source,
-                        previousVariableExtents->presentation
-                    )) {
-                const double previousWidthFactor =
-                    static_cast<double>(
-                        previousVariableExtents->presentation.width
-                    ) / static_cast<double>(requestedExtent.width);
-                const double previousHeightFactor =
-                    static_cast<double>(
-                        previousVariableExtents->presentation.height
-                    ) / static_cast<double>(requestedExtent.height);
-                const double retainedFactor = std::min({
-                    effectiveFactor,
-                    previousWidthFactor,
-                    previousHeightFactor,
-                });
-                if (retainedFactor > 1.0) {
-                    VkExtent2D retainedPresentation{
-                        .width = static_cast<uint32_t>(std::floor(
-                            static_cast<double>(requestedExtent.width) *
-                                retainedFactor
-                        )),
-                        .height = static_cast<uint32_t>(std::floor(
-                            static_cast<double>(requestedExtent.height) *
-                                retainedFactor
-                        )),
-                    };
-                    if (retainedPresentation.width > 1)
-                        retainedPresentation.width &= ~uint32_t{1};
-                    if (retainedPresentation.height > 1)
-                        retainedPresentation.height &= ~uint32_t{1};
-                    const uint64_t retainedPixels =
-                        static_cast<uint64_t>(retainedPresentation.width) *
-                        static_cast<uint64_t>(retainedPresentation.height);
-                    if (retainedPresentation.width > requestedExtent.width &&
-                            retainedPresentation.height >
-                                requestedExtent.height &&
-                            retainedPixels <= *variablePresentationPixels) {
-                        presentation = retainedPresentation;
-                        decision.reusedPreviousPresentationBudget = true;
-                    }
+            // The fallback must not depend on which resolution happened to be
+            // active first. Aspect-fit every over-budget request into the
+            // deterministic 4K baseline envelope, which is already reserved
+            // by variablePresentationPixelBudget(), instead of borrowing a
+            // previous swapchain's presentation extent. This makes a cold
+            // 1440p launch select the same 3840x2160 contract as a 1080p ->
+            // 1440p transition on an 8 GiB unified-memory device.
+            constexpr VkExtent2D baselinePresentation{3840, 2160};
+            const double baselineWidthFactor =
+                static_cast<double>(baselinePresentation.width) /
+                static_cast<double>(requestedExtent.width);
+            const double baselineHeightFactor =
+                static_cast<double>(baselinePresentation.height) /
+                static_cast<double>(requestedExtent.height);
+            const double baselineFactor = std::min({
+                effectiveFactor,
+                baselineWidthFactor,
+                baselineHeightFactor,
+            });
+            if (baselineFactor > 1.0) {
+                VkExtent2D baselineFit{
+                    .width = static_cast<uint32_t>(std::floor(
+                        static_cast<double>(requestedExtent.width) *
+                            baselineFactor
+                    )),
+                    .height = static_cast<uint32_t>(std::floor(
+                        static_cast<double>(requestedExtent.height) *
+                            baselineFactor
+                    )),
+                };
+                if (baselineFit.width > 1)
+                    baselineFit.width &= ~uint32_t{1};
+                if (baselineFit.height > 1)
+                    baselineFit.height &= ~uint32_t{1};
+                const uint64_t baselinePixels =
+                    static_cast<uint64_t>(baselineFit.width) *
+                    static_cast<uint64_t>(baselineFit.height);
+                if (baselineFit.width > requestedExtent.width &&
+                        baselineFit.height > requestedExtent.height &&
+                        baselinePixels <= *variablePresentationPixels) {
+                    presentation = baselineFit;
+                    decision.usedBaselinePresentationBudget = true;
                 }
             }
-            if (!decision.reusedPreviousPresentationBudget) {
+            if (!decision.usedBaselinePresentationBudget) {
                 decision.inactiveReason = SpatialScalingInactiveReason::
                     VariableSurfaceMemoryBudget;
                 return decision;

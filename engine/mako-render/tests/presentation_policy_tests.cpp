@@ -97,6 +97,27 @@ int main() {
     expect(orderedRecoveryAcquireTimeout(
             std::nullopt, 10'000'000, 3) == 10'000'000,
         "recovery probe exceeded the configured acquire ceiling");
+    expect(orderedGeneratedImageAcquireTimeout(120, acquireBudget) ==
+            12'500'000,
+        "one 120 Hz image exceeded its useful delivery window");
+    expect(orderedGeneratedImageAcquireTimeout(120, 17'194'900) ==
+            12'500'000,
+        "the per-image ceiling ignored the remaining cumulative budget");
+    expect(orderedGeneratedImageAcquireTimeout(120, 7'500'000) ==
+            7'500'000,
+        "the per-image ceiling exceeded the remaining cumulative budget");
+    expect(orderedGeneratedImageAcquireTimeout(40, acquireBudget) ==
+            37'500'000,
+        "the per-image ceiling lost its low-refresh scaling");
+    expect(orderedGeneratedImageAcquireTimeout(240, acquireBudget) ==
+            8'000'000,
+        "the per-image ceiling lost its high-refresh safety floor");
+    expect(orderedGeneratedImageAcquireTimeout(
+            std::nullopt, acquireBudget) == 25'000'000,
+        "an unknown-refresh path lost its historical finite ceiling");
+    expect(orderedGeneratedImageAcquireTimeout(120, std::nullopt) ==
+            std::numeric_limits<uint64_t>::max(),
+        "an unconfigured ordered path unexpectedly gained a finite timeout");
 
     GeneratedImageAdmission admission;
     expect(!admission.underPressure(),
@@ -211,25 +232,25 @@ int main() {
             acquireRecovery.active() &&
             observation.consecutiveFailures == 2,
         "healthy ordered acquire probe did not begin constrained stabilization");
-    acquireDecision = acquireRecovery.beforePresent(acquireStart + 1800ms);
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 1000ms);
     expect(acquireDecision.bypassGeneration &&
             acquireDecision.nativeOnlyStabilization &&
             !acquireDecision.limitGeneratedFrames &&
             !acquireDecision.preacquireGeneratedFrame &&
-            acquireDecision.stabilizationRemaining == 1100ms,
+            acquireDecision.stabilizationRemaining == 150ms,
         "ordered recovery did not use deterministic native-only stabilization");
-    for (const auto missAt : {1801ms, 2000ms, 2400ms, 2899ms}) {
+    for (const auto missAt : {1001ms, 1075ms, 1149ms}) {
         static_cast<void>(
             acquireRecovery.reportNonblockingProbeUnavailable(
                 acquireStart + missAt
             )
         );
     }
-    acquireDecision = acquireRecovery.beforePresent(acquireStart + 2899ms);
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 1149ms);
     expect(acquireDecision.bypassGeneration &&
             acquireDecision.nativeOnlyStabilization,
         "ordered recovery left native-only stabilization before its deadline");
-    acquireDecision = acquireRecovery.beforePresent(acquireStart + 2900ms);
+    acquireDecision = acquireRecovery.beforePresent(acquireStart + 1150ms);
     expect(acquireDecision.recoveryStabilized &&
             acquireDecision.beginHistoryWarmup &&
             !acquireRecovery.active(),
@@ -242,6 +263,61 @@ int main() {
             observation.consecutiveFailures == 1 &&
             observation.retryDelay == 250ms,
         "sustained healthy delivery did not reset ordered retry backoff");
+
+    OrderedAcquireRecovery nativeSaturationRecovery;
+    observation = nativeSaturationRecovery.observe(
+        acquireStart, 50ms, 25ms, true
+    );
+    expect(observation.quarantined &&
+            observation.retryDelay == 250ms,
+        "native-saturation scenario did not begin with a finite drain");
+    for (size_t frame = 1; frame < 31; ++frame) {
+        acquireDecision = nativeSaturationRecovery.beforePresent(
+            acquireStart + 8ms * frame, 8ms, 120.0
+        );
+        expect(acquireDecision.bypassGeneration &&
+                !acquireDecision.beginHistoryWarmup,
+            "native-saturation qualification attempted generation early");
+    }
+    acquireDecision = nativeSaturationRecovery.beforePresent(
+        acquireStart + 250ms, 8ms, 120.0
+    );
+    expect(acquireDecision.bypassGeneration &&
+            acquireDecision.nativeCadenceSaturated &&
+            acquireDecision.nativeCadenceSaturationEntered &&
+            !acquireDecision.beginHistoryWarmup &&
+            !acquireDecision.boundedAcquireProbe &&
+            acquireDecision.nativeBaseFps >= 119.0 &&
+            acquireDecision.nativeTargetFps == 120.0,
+        "target-satisfying native cadence did not suppress recovery churn");
+    acquireDecision = nativeSaturationRecovery.beforePresent(
+        acquireStart + 2000ms, 8ms, 120.0
+    );
+    expect(acquireDecision.bypassGeneration &&
+            acquireDecision.nativeCadenceSaturated &&
+            !acquireDecision.nativeCadenceSaturationEntered &&
+            !acquireDecision.beginHistoryWarmup,
+        "native-saturation hold repeated warm-up or probe work");
+
+    bool nativeDemandResumed = false;
+    for (size_t frame = 1; frame <= 20; ++frame) {
+        acquireDecision = nativeSaturationRecovery.beforePresent(
+            acquireStart + 2000ms + 17ms * frame, 17ms, 120.0
+        );
+        if (!acquireDecision.nativeCadenceDemandResumed)
+            continue;
+        nativeDemandResumed = true;
+        expect(!acquireDecision.bypassGeneration &&
+                acquireDecision.beginHistoryWarmup &&
+                acquireDecision.limitGeneratedFrames &&
+                acquireDecision.preacquireGeneratedFrame &&
+                acquireDecision.boundedAcquireProbe &&
+                acquireDecision.nativeBaseFps < 108.0,
+            "native cadence deficit did not re-arm one bounded probe");
+        break;
+    }
+    expect(nativeDemandResumed,
+        "sustained native cadence deficit left recovery permanently held");
 
     acquireRecovery.reset();
     observation = acquireRecovery.observe(

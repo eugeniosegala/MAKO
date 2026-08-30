@@ -259,6 +259,13 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                 "spatial scaling source and presentation extents are identical"
             );
 
+        this->spatialFramePipelinePlacement =
+            combinedSpatialFramePipelineOwnedByLayer()
+            ? selectSpatialFramePipelinePlacement(
+                this->info.applicationExtent, this->info.extent
+            )
+            : SpatialFramePipelinePlacement::PostFrameGeneration;
+
         this->spatialScaler.emplace(
             vk, this->info.applicationExtent, this->info.extent,
             this->colorPipeline.exchangeFormat,
@@ -315,9 +322,13 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                   << static_cast<int>(this->colorPipeline.exchangeFormat)
                   << "; role=" << layerRoleName
                   << "; pipeline="
-                  << (spatialScalingLayer
-                        ? "post-frame-generation"
-                        : "pre-frame-generation")
+                  << spatialFramePipelinePlacementName(
+                        this->spatialFramePipelinePlacement
+                     )
+                  << "; placement_reason="
+                  << spatialFramePipelinePlacementReason(
+                        this->spatialFramePipelinePlacement
+                     )
                   << '\n';
         if (!this->spatialScaler->fallbackReason().empty()) {
             std::cerr << "MAKO Renderer: LS1 scaling unavailable; using MAKO "
@@ -443,20 +454,24 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         return;
     }
     try {
+        const VkExtent2D generationExtent = frameGenerationExtent(
+            this->spatialFramePipelinePlacement,
+            this->info.applicationExtent, this->info.extent
+        );
         std::vector<int> sourceFds(2);
         std::vector<int> destinationFds(generatedFrameCapacity(this->profile));
 
         this->sourceImages.reserve(sourceFds.size());
         for (int& fd : sourceFds)
             this->sourceImages.emplace_back(vk,
-                extent, this->colorPipeline.exchangeFormat,
+                generationExtent, this->colorPipeline.exchangeFormat,
                 VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                 std::nullopt, &fd);
 
         this->destinationImages.reserve(destinationFds.size());
         for (int& fd : destinationFds)
             this->destinationImages.emplace_back(vk,
-                extent, this->colorPipeline.exchangeFormat,
+                generationExtent, this->colorPipeline.exchangeFormat,
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                 std::nullopt, &fd);
 
@@ -467,7 +482,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             this->ctx = ls::owned_ptr<ls::R<backend::Context>>(
                 new ls::R<backend::Context>(backend->openContext(
                     { sourceFds.at(0), sourceFds.at(1) }, destinationFds, syncFd,
-                    extent.width, extent.height,
+                    generationExtent.width, generationExtent.height,
                     this->colorPipeline.encoding,
                     1.0F / ls::effectiveFlowScale(this->profile),
                     ls::effectivePerformanceMode(this->profile)
@@ -742,7 +757,10 @@ Swapchain::buildFrameGenerationResources(const vk::Vulkan& vk,
         throw ls::error("the colour pipeline does not support frame generation");
 
     auto& backendInstance = *this->instance;
-    const VkExtent2D extent = this->info.extent;
+    const VkExtent2D extent = frameGenerationExtent(
+        this->spatialFramePipelinePlacement,
+        this->info.applicationExtent, this->info.extent
+    );
     std::vector<int> sourceFds(2);
     std::vector<int> destinationFds(
         generatedFrameCapacity(resourceProfile)
@@ -1323,7 +1341,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
             this->instance && resourcesAvailable &&
                 this->colorPipeline.generationSupported,
             this->presentRetirementEnabled(), this->gamescopeDetected,
-            spatialScalingLayer
+            spatialScalingOwnedByLayer()
         );
     this->liveProfileResourceRecreation.update(
         this->profile,
@@ -1347,6 +1365,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=runtime-transition-pending"
                   << " context=" << this->diagnosticsState.contextId
+                  << " role=" << layerRoleName
                   << " state_revision=" << runtimeStateRevision
                   << " reason=profile-resources"
                   << " spatial_scaling_pending="
@@ -1376,6 +1395,22 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << '\n';
     };
     logPendingRecreation();
+    if (decision.spatialScalingDormantUpdate &&
+            presentDiagnosticsEnabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=runtime-transition-applied"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " role=" << layerRoleName
+                  << " state_revision=" << runtimeStateRevision
+                  << " reason=spatial-scaler"
+                  << " transition=dormant-profile"
+                  << " requested_method="
+                  << ls::scalingMethodName(nextProfile.scaling_method)
+                  << " requested_sharpness="
+                  << nextProfile.scaling_sharpness
+                  << " scaler_active=0"
+                  << " action=save-without-wsi-recreation\n";
+    }
     this->runtimeStatusState.swapchainRecreationPending =
         decision.swapchainRecreationDeferred;
 

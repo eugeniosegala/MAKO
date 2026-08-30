@@ -795,3 +795,76 @@ void SpatialScaler::record(const vk::Vulkan& vk,
         0, nullptr, 0, nullptr, 1, &applicationBarrier
     );
 }
+
+void SpatialScaler::recordSourceToPresentation(const vk::Vulkan& vk,
+        const vk::CommandBuffer& commandBuffer,
+        const VkImage sourceImage, const VkImage presentationImage,
+        const VkImageLayout sourceLayout,
+        const VkImageLayout presentationLayout) const {
+    const auto handle = commandBuffer.handle();
+    const std::array inputBarriers{
+        imageBarrier(
+            sourceImage, VK_ACCESS_MEMORY_WRITE_BIT,
+            VK_ACCESS_TRANSFER_READ_BIT, sourceLayout,
+            VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+        ),
+        imageBarrier(
+            this->implementation->pipeline->input().handle(), VK_ACCESS_NONE,
+            VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
+            VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+        ),
+    };
+    vk.df().CmdPipelineBarrier(
+        handle, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
+        static_cast<uint32_t>(inputBarriers.size()), inputBarriers.data()
+    );
+
+    const auto sourceCopy = blitRegion(
+        this->implementation->sourceSize, this->implementation->sourceSize
+    );
+    vk.df().CmdBlitImage(
+        handle, sourceImage, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        this->implementation->pipeline->input().handle(),
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &sourceCopy, VK_FILTER_NEAREST
+    );
+
+    this->implementation->pipeline->recordCompute(vk, handle);
+
+    const auto presentationBarrier = imageBarrier(
+        presentationImage,
+        presentationLayout == VK_IMAGE_LAYOUT_UNDEFINED
+            ? VK_ACCESS_NONE : VK_ACCESS_MEMORY_READ_BIT,
+        VK_ACCESS_TRANSFER_WRITE_BIT, presentationLayout,
+        VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+    );
+    vk.df().CmdPipelineBarrier(
+        handle, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT |
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT, 0, 0, nullptr, 0, nullptr,
+        1, &presentationBarrier
+    );
+
+    const auto presentationCopy = blitRegion(
+        this->implementation->presentationSize,
+        this->implementation->presentationSize
+    );
+    vk.df().CmdBlitImage(
+        handle, this->implementation->pipeline->output().handle(),
+        VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        presentationImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        1, &presentationCopy, VK_FILTER_NEAREST
+    );
+
+    const auto finalBarrier = imageBarrier(
+        presentationImage, VK_ACCESS_TRANSFER_WRITE_BIT,
+        VK_ACCESS_MEMORY_READ_BIT, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+    );
+    vk.df().CmdPipelineBarrier(
+        handle, VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 0,
+        0, nullptr, 0, nullptr, 1, &finalBarrier
+    );
+}

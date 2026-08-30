@@ -2440,6 +2440,29 @@ void AdaptiveScheduler::beginStabilization(
         this->diagnostics->stabilization(reason, stabilizationDuration);
 }
 
+void AdaptiveScheduler::beginTransportRecovery(const TimePoint now) {
+    // A lower-image timeout invalidates cadence and stable-pacing proofs. When
+    // the active load was accepted from a measured lower generation level,
+    // the timeout is also direct evidence that the higher load is no longer
+    // safe for this transport. Requalify for one second at native cadence,
+    // then resume the proven lower level and delay another higher probe. Keep
+    // an unrelated long-lived efficiency-probe backoff intact.
+    const auto retainedEfficiencyRetryAt =
+        this->state.efficiencyProbe.retryAt;
+    const AdaptiveGenerationLoadBaseline loadBaseline =
+        this->generationLoadBaseline();
+    this->beginStabilization(now, "generated-image-recovery");
+    if (loadBaseline.baseFps > 0.0) {
+        this->restoreGenerationLimit(
+            now,
+            loadBaseline.fallbackGenerationLimit,
+            "generated-image-pressure-fallback"
+        );
+    }
+    if (retainedEfficiencyRetryAt)
+        this->state.efficiencyProbe.retryAt = retainedEfficiencyRetryAt;
+}
+
 MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         const std::chrono::steady_clock::time_point now,
         const double baseFps) {

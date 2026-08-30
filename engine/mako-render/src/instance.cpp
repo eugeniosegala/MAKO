@@ -820,6 +820,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         VkSwapchainCreateInfoKHR& createInfo,
         const std::optional<SpatialScalingExtents>& previousVariableExtents,
         const std::optional<FixedSurfaceScalingContract>& fixedSurfaceContract,
+        const std::function<void(
+            const FixedSurfaceScalingContract&)>& publishSpatialCreate,
         const std::function<void(void)>& finish) const {
     SwapchainCreateModification modification{
         .applicationExtent = createInfo.imageExtent,
@@ -836,6 +838,18 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     if (res != VK_SUCCESS)
         throw ls::vulkan_error(res, "vkGetPhysicalDeviceSurfaceCapabilitiesKHR() failed");
 
+    // In the managed render -> Gamescope WSI -> spatial chain, the lower
+    // capability owner deliberately returns the virtual source extent. The
+    // current upper resource owner must validate create-time state against
+    // the relayed compositor presentation extent before expanding the source
+    // request. An unrelated extent remains unchanged and fails closed below.
+    if (spatialScalingCapabilityRelayByLayer() &&
+            spatialScalingOwnedByLayer() && fixedSurfaceContract) {
+        static_cast<void>(prepareFixedSurfaceCapabilityRelay(
+            caps, *fixedSurfaceContract
+        ));
+    }
+
     modification.variableSurface = !fixedSurfaceExtent(caps.currentExtent);
 
     VkPhysicalDeviceMemoryProperties memoryProperties{};
@@ -850,11 +864,12 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     auto policySnapshot = this->surfaceScalingPolicySnapshot();
     const bool spatialCapabilityRelay =
         spatialScalingCapabilityRelayByLayer();
-    if (spatialCapabilityRelay) {
-        // The upper role returns a virtual fixed extent to the application,
-        // but only the lower role may turn that source request back into a
-        // presentation-sized swapchain and allocate a scaler. Forward the
-        // application's request through Gamescope WSI unchanged.
+    const bool spatialResourceOwner = spatialScalingOwnedByLayer();
+    const bool spatialExtentOwner =
+        spatialScalingCapabilityOwnedByLayer();
+    if (!spatialResourceOwner && !spatialExtentOwner) {
+        // The legacy upper split role relays capabilities but neither expands
+        // the lower swapchain nor allocates reconstruction resources.
         policySnapshot.policy.enabled = false;
     }
     const auto scalingDecision = scalingDecisionForCreate(
@@ -932,10 +947,11 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             ? "supported" : "unsupported";
     auto inactiveReason = scalingDecision.inactiveReason;
     if (scalingExtents && spatialScalingSupported) {
-        modification.spatialScalingActive = true;
         modification.applicationExtent = scalingExtents->source;
         modification.presentationExtent = scalingExtents->presentation;
-        createInfo.imageExtent = scalingExtents->presentation;
+        modification.spatialScalingActive = spatialResourceOwner;
+        if (spatialExtentOwner)
+            createInfo.imageExtent = scalingExtents->presentation;
         inactiveReason = SpatialScalingInactiveReason::None;
     } else if (scalingExtents) {
         inactiveReason = !spatialShapeSupported
@@ -946,8 +962,29 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                     ? SpatialScalingInactiveReason::QueueCommandsUnsupported
                     : SpatialScalingInactiveReason::SwapchainFormatUnsupported));
     }
+    if (spatialExtentOwner && !spatialResourceOwner) {
+        // Publish every lower create decision, including an explicit no-split
+        // result. The upper combined role must distinguish that valid native
+        // decision from a missing lower DSO; otherwise a deliberate exact-
+        // presentation replacement is rejected as a transient context.
+        publishSpatialCreate(FixedSurfaceScalingContract{
+            .extents = SpatialScalingExtents{
+                .source = modification.applicationExtent,
+                .presentation = modification.presentationExtent,
+            },
+            .factor = policySnapshot.policy.factor,
+            .policyRevision = policySnapshot.revision,
+            .queryGeneration = fixedSurfaceContract
+                ? fixedSurfaceContract->queryGeneration : 0,
+        });
+    }
+    const bool awaitingLowerVariableCreateRelay = spatialCapabilityRelay &&
+        spatialResourceOwner && !fixedSurfaceContract && !scalingExtents &&
+        fixedSurfaceExtent(caps.currentExtent) &&
+        sameExtent(caps.currentExtent, createInfo.imageExtent);
     if (this->active_profile->scaling_enabled &&
-            spatialScalingOwnedByLayer()) {
+            (spatialResourceOwner || spatialExtentOwner) &&
+            !awaitingLowerVariableCreateRelay) {
         const auto advertised = scalingDecision.fixedContract;
         std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
                   << "role=" << layerRoleName
@@ -1005,10 +1042,17 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << modification.variableFeedbackSuppressed
                   << "; previous_presentation_budget_reused="
                   << scalingDecision.reusedPreviousPresentationBudget
+                  << "; baseline_presentation_budget_used="
+                  << scalingDecision.usedBaselinePresentationBudget
+                  << "; extent_selected="
+                  << (scalingExtents.has_value() ? 1 : 0)
                   << "; inactive_reason="
                   << spatialScalingInactiveReasonName(inactiveReason)
                   << "; source_presentation_split="
-                  << (modification.spatialScalingActive ? 1 : 0)
+                  << (scalingExtents && !sameExtent(
+                        scalingExtents->source,
+                        scalingExtents->presentation
+                      ) ? 1 : 0)
                   << "; active=" << modification.spatialScalingActive
                   << '\n';
         if (modification.variableFeedbackSuppressed &&
@@ -1028,7 +1072,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         }
     }
 
-    if (spatialCapabilityRelay &&
+    if (spatialCapabilityRelay && !spatialResourceOwner &&
             ls::spatialScalingRequested(*this->active_profile)) {
         std::cerr << "MAKO Renderer: spatial scaling capability relay: "
                   << "role=" << layerRoleName
@@ -1097,7 +1141,15 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     );
 
     finish();
-    modification.presentationExtent = createInfo.imageExtent;
+    if (modification.spatialScalingActive && !spatialExtentOwner) {
+        // The lower extent owner expanded the real swapchain after Gamescope
+        // WSI observed the source-sized request. Reflect that immutable extent
+        // only in this upper layer's local create description so its combined
+        // scaler/FG context maps the actual presentation-sized images.
+        createInfo.imageExtent = modification.presentationExtent;
+    } else {
+        modification.presentationExtent = createInfo.imageExtent;
+    }
     return modification;
 }
 
@@ -1268,12 +1320,24 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
         insertedContext != this->swapchains.end()
         ? insertedContext->second.diagnosticsId()
         : 0;
+    const VkExtent2D frameGenerationResourceExtent =
+        insertedContext != this->swapchains.end()
+        ? insertedContext->second.frameGenerationResourceExtent()
+        : info.extent;
+    const auto framePipelinePlacement =
+        insertedContext != this->swapchains.end()
+        ? insertedContext->second.framePipelinePlacement()
+        : SpatialFramePipelinePlacement::PreFrameGeneration;
 
     std::clog << "MAKO Renderer: renderer-memory operation=swapchain-context-create"
         << " context=" << diagnosticsContextId
         << " role=" << layerRoleName
         << " width=" << info.extent.width
         << " height=" << info.extent.height
+        << " frame_generation_width="
+        << frameGenerationResourceExtent.width
+        << " frame_generation_height="
+        << frameGenerationResourceExtent.height
         << " context_internal_bytes=" << contextInternal.bytes
         << " context_internal_allocations=" << contextInternal.allocations
         << " context_exported_bytes=" << contextExported.bytes
@@ -1300,6 +1364,16 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << " swapchain=" << swapchain
                   << " width=" << info.extent.width
                   << " height=" << info.extent.height
+                  << " application_width=" << info.applicationExtent.width
+                  << " application_height=" << info.applicationExtent.height
+                  << " frame_generation_width="
+                  << frameGenerationResourceExtent.width
+                  << " frame_generation_height="
+                  << frameGenerationResourceExtent.height
+                  << " spatial_pipeline="
+                  << spatialFramePipelinePlacementName(
+                        framePipelinePlacement
+                     )
                   << " images=" << info.images.size()
                   << " format=" << static_cast<int>(info.format)
                   << " color_space=" << static_cast<int>(info.colorSpace)

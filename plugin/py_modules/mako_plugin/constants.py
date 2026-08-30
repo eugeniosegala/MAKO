@@ -84,6 +84,7 @@ SPATIAL_SCALING_LAYER_DISABLE_ENV = "DISABLE_MAKO_SPATIAL_SCALING"
 # standalone Renderer keeps its established combined-library behavior unless
 # its launcher deliberately opts into the same topology.
 MAKO_SPLIT_LAYER_CHAIN_ENV = "MAKO_SPLIT_LAYER_CHAIN"
+MAKO_SPLIT_LAYER_CHAIN_COMBINED_PIPELINE = "2"
 # Process-start presentation policy. Keep native wrappers and direct Flatpak
 # overrides on the same supported SDR/WSI-isolated boundary.
 GAMESCOPE_WSI_DISABLE_ENV = "DISABLE_GAMESCOPE_WSI"

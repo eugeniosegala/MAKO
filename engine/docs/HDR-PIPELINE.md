@@ -118,7 +118,7 @@ Stock Gamescope WSI also owns presentation policy: it can force a lower MAILBOX 
 
 A proof must admit only MAKO's role manifests and the resolved architecture-correct Gamescope WSI manifest; never expose the complete host implicit-layer directory. Continue excluding unrelated overlays, Mesa helpers, capture/vendor hooks, and competing frame generation. Do not infer order from manifest filenames: use controlled directories or a proven meta-layer and verify instance and device call stacks with `VK_LOADER_DEBUG=layer`. The [Vulkan Loader layer interface](https://github.com/KhronosGroup/Vulkan-Loader/blob/main/docs/LoaderLayerInterface.md) defines the discovery constraints.
 
-HDR admission is a process-start profile choice and requires restart. It must preserve WSI's application-facing HDR semantics while placing MAKO's frame-generation role above WSI so every generated present traverses it; any future spatial role remains below WSI. Begin with a 64-bit native-host proof. Validate 32-bit, Flatpak, Heroic/UMU, and non-SteamOS layouts independently before expanding support.
+HDR admission is a process-start profile choice and requires restart. It must preserve WSI's application-facing HDR semantics while placing MAKO's frame-generation role above WSI so every generated present traverses it. Any future HDR scaling contract must preserve the lower spatial role's capability/extent ownership below WSI while keeping reconstruction in the upper combined role before Frame Generation. Begin with a 64-bit native-host proof. Validate 32-bit, Flatpak, Heroic/UMU, and non-SteamOS layouts independently before expanding support.
 
 ### Staged proof plan
 

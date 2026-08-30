@@ -247,10 +247,19 @@ namespace mako::layer {
             // extend this interval or intermittently re-enable generation.
             bool nativeOnlyStabilization{false};
             bool recoveryStabilized{false};
+            // A drained native FIFO which already satisfies the requested
+            // output cadence needs no synthetic-image availability probe.
+            // Hold the native path without repeated history warm-up, then
+            // re-arm one bounded probe when native cadence materially falls.
+            bool nativeCadenceSaturated{false};
+            bool nativeCadenceSaturationEntered{false};
+            bool nativeCadenceDemandResumed{false};
             size_t bypassedFrames{0};
             size_t consecutiveFailures{0};
             Duration drainDuration{};
             Duration stabilizationRemaining{};
+            double nativeBaseFps{0.0};
+            double nativeTargetFps{0.0};
         };
 
         struct Observation {
@@ -301,7 +310,27 @@ namespace mako::layer {
         }
 
         [[nodiscard]] static constexpr auto stabilizationDuration() {
-            return std::chrono::seconds{2};
+            return std::chrono::milliseconds{250};
+        }
+
+        [[nodiscard]] static constexpr auto
+        nativeCadenceSaturationQualificationDuration() {
+            return std::chrono::milliseconds{200};
+        }
+
+        [[nodiscard]] static constexpr auto
+        nativeCadenceDemandQualificationDuration() {
+            return std::chrono::milliseconds{100};
+        }
+
+        [[nodiscard]] static constexpr double
+        nativeCadenceSaturationRatio() {
+            return 0.95;
+        }
+
+        [[nodiscard]] static constexpr double
+        nativeCadenceDemandRatio() {
+            return 0.90;
         }
 
         [[nodiscard]] static constexpr Duration severeAcquireDuration(
@@ -309,7 +338,79 @@ namespace mako::layer {
             return slowAcquireThreshold * 2;
         }
 
-        [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
+        [[nodiscard]] PresentDecision beforePresent(const TimePoint now,
+                const std::optional<Duration> nativePresentInterval =
+                    std::nullopt,
+                const std::optional<double> nativeTargetFps = std::nullopt) {
+            if (this->retryAt) {
+                this->observeNativeCadence(
+                    now, nativePresentInterval, nativeTargetFps
+                );
+                if (this->nativeCadenceSaturated) {
+                    if (this->nativeCadenceDemandSince &&
+                            now - *this->nativeCadenceDemandSince >=
+                                nativeCadenceDemandQualificationDuration()) {
+                        const double nativeBaseFps =
+                            this->nativeCadenceBaseFps();
+                        const double targetFps = this->nativeTargetFps;
+                        this->nativeCadenceSaturated = false;
+                        this->nativeCadenceSaturationSince.reset();
+                        this->nativeCadenceDemandSince.reset();
+                        this->retryAt.reset();
+                        this->probePending = true;
+                        return {
+                            .beginHistoryWarmup = true,
+                            .limitGeneratedFrames = true,
+                            .preacquireGeneratedFrame = true,
+                            .boundedAcquireProbe = true,
+                            .nativeCadenceDemandResumed = true,
+                            .bypassedFrames = this->bypassedFrames,
+                            .consecutiveFailures =
+                                this->consecutiveFailures,
+                            .drainDuration = this->recoveryStartedAt
+                                ? now - *this->recoveryStartedAt
+                                : Duration{},
+                            .nativeBaseFps = nativeBaseFps,
+                            .nativeTargetFps = targetFps,
+                        };
+                    }
+
+                    this->bypassedFrames++;
+                    return {
+                        .bypassGeneration = true,
+                        .nativeCadenceSaturated = true,
+                        .bypassedFrames = this->bypassedFrames,
+                        .consecutiveFailures = this->consecutiveFailures,
+                        .drainDuration = this->recoveryStartedAt
+                            ? now - *this->recoveryStartedAt
+                            : Duration{},
+                        .nativeBaseFps = this->nativeCadenceBaseFps(),
+                        .nativeTargetFps = this->nativeTargetFps,
+                    };
+                }
+
+                if (now >= *this->retryAt &&
+                        this->nativeCadenceSaturationSince &&
+                        now - *this->nativeCadenceSaturationSince >=
+                            nativeCadenceSaturationQualificationDuration()) {
+                    this->nativeCadenceSaturated = true;
+                    this->nativeCadenceDemandSince.reset();
+                    this->bypassedFrames++;
+                    return {
+                        .bypassGeneration = true,
+                        .nativeCadenceSaturated = true,
+                        .nativeCadenceSaturationEntered = true,
+                        .bypassedFrames = this->bypassedFrames,
+                        .consecutiveFailures = this->consecutiveFailures,
+                        .drainDuration = this->recoveryStartedAt
+                            ? now - *this->recoveryStartedAt
+                            : Duration{},
+                        .nativeBaseFps = this->nativeCadenceBaseFps(),
+                        .nativeTargetFps = this->nativeTargetFps,
+                    };
+                }
+            }
+
             if (!this->retryAt) {
                 if (this->guardPending) {
                     return {
@@ -556,9 +657,86 @@ namespace mako::layer {
             this->consecutiveFailures = 0;
             this->bypassedFrames = 0;
             this->nonblockingProbeMisses = 0;
+            this->resetNativeCadenceObservation();
         }
 
     private:
+        void observeNativeCadence(const TimePoint now,
+                const std::optional<Duration> nativePresentInterval,
+                const std::optional<double> targetFps) {
+            if (!targetFps || !std::isfinite(*targetFps) ||
+                    *targetFps <= 0.0) {
+                this->resetNativeCadenceObservation();
+                return;
+            }
+            if (this->nativeTargetFps == 0.0 ||
+                    std::abs(this->nativeTargetFps - *targetFps) > 0.01) {
+                this->resetNativeCadenceObservation();
+                this->nativeTargetFps = *targetFps;
+            }
+            if (!nativePresentInterval)
+                return;
+            if (this->ignoreNextNativeInterval) {
+                this->ignoreNextNativeInterval = false;
+                return;
+            }
+
+            const double rawIntervalSeconds =
+                std::chrono::duration<double>(*nativePresentInterval).count();
+            if (!std::isfinite(rawIntervalSeconds) ||
+                    rawIntervalSeconds <= 0.0 ||
+                    rawIntervalSeconds > 0.25) {
+                this->nativeSmoothedIntervalSeconds = 0.0;
+                this->nativeCadenceSaturationSince.reset();
+                if (this->nativeCadenceSaturated &&
+                        !this->nativeCadenceDemandSince) {
+                    this->nativeCadenceDemandSince = now;
+                }
+                return;
+            }
+            if (this->nativeSmoothedIntervalSeconds == 0.0) {
+                this->nativeSmoothedIntervalSeconds = rawIntervalSeconds;
+            } else {
+                this->nativeSmoothedIntervalSeconds =
+                    this->nativeSmoothedIntervalSeconds * 0.75 +
+                    rawIntervalSeconds * 0.25;
+            }
+
+            const double baseFps = this->nativeCadenceBaseFps();
+            if (baseFps >= this->nativeTargetFps *
+                    nativeCadenceSaturationRatio()) {
+                if (!this->nativeCadenceSaturationSince)
+                    this->nativeCadenceSaturationSince = now;
+                this->nativeCadenceDemandSince.reset();
+                return;
+            }
+
+            this->nativeCadenceSaturationSince.reset();
+            if (this->nativeCadenceSaturated &&
+                    baseFps < this->nativeTargetFps *
+                        nativeCadenceDemandRatio()) {
+                if (!this->nativeCadenceDemandSince)
+                    this->nativeCadenceDemandSince = now;
+            } else {
+                this->nativeCadenceDemandSince.reset();
+            }
+        }
+
+        [[nodiscard]] double nativeCadenceBaseFps() const {
+            return this->nativeSmoothedIntervalSeconds > 0.0
+                ? 1.0 / this->nativeSmoothedIntervalSeconds
+                : 0.0;
+        }
+
+        void resetNativeCadenceObservation() {
+            this->nativeCadenceSaturationSince.reset();
+            this->nativeCadenceDemandSince.reset();
+            this->nativeSmoothedIntervalSeconds = 0.0;
+            this->nativeTargetFps = 0.0;
+            this->nativeCadenceSaturated = false;
+            this->ignoreNextNativeInterval = true;
+        }
+
         [[nodiscard]] Observation beginNativeDrain(const TimePoint now,
                 const bool timedOut, const bool deadlineExceeded,
                 const bool severe,
@@ -573,6 +751,7 @@ namespace mako::layer {
             this->guardPending = false;
             this->probePending = false;
             this->consecutiveSlowFrames = 0;
+            this->resetNativeCadenceObservation();
             return {
                 .quarantined = true,
                 .timedOut = timedOut,
@@ -611,7 +790,43 @@ namespace mako::layer {
         size_t consecutiveFailures{0};
         size_t bypassedFrames{0};
         size_t nonblockingProbeMisses{0};
+        std::optional<TimePoint> nativeCadenceSaturationSince;
+        std::optional<TimePoint> nativeCadenceDemandSince;
+        double nativeSmoothedIntervalSeconds{0.0};
+        double nativeTargetFps{0.0};
+        bool nativeCadenceSaturated{false};
+        bool ignoreNextNativeInterval{true};
     };
+
+    /// Keep the application-present budget cumulative for 3x/4x/5x, while
+    /// preventing one unavailable lower image from consuming the full legacy
+    /// 50 ms ceiling by itself. On a known-refresh ordered path, one image gets
+    /// one-and-a-half display periods with an 8 ms floor; an image that misses
+    /// that useful delivery window must enter recovery instead of blocking a
+    /// 120 Hz application present for the separate 25 ms pressure threshold.
+    /// Unknown-refresh and unconfigured paths retain their historical 25 ms
+    /// and unbounded contracts respectively.
+    [[nodiscard]] inline uint64_t orderedGeneratedImageAcquireTimeout(
+            const std::optional<uint32_t> refreshHz,
+            const std::optional<uint64_t> remainingBudget) {
+        if (!remainingBudget)
+            return std::numeric_limits<uint64_t>::max();
+        constexpr uint64_t nanosecondsPerSecond = 1'000'000'000;
+        constexpr uint64_t minimumPerImageTimeout = 8'000'000;
+        constexpr uint64_t unknownRefreshTimeout = 25'000'000;
+        const uint64_t perImageCeiling = refreshHz && *refreshHz > 0
+            ? std::max(
+                minimumPerImageTimeout,
+                (nanosecondsPerSecond * 3 +
+                    static_cast<uint64_t>(*refreshHz) * 2 - 1) /
+                    (static_cast<uint64_t>(*refreshHz) * 2)
+            )
+            : unknownRefreshTimeout;
+        return std::min(
+            *remainingBudget,
+            perImageCeiling
+        );
+    }
 
     struct PipelineBusyDecision {
         bool diagnostic{false};

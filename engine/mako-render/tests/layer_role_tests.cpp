@@ -33,6 +33,7 @@ namespace {
 
 int main() {
 #if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
+    unsetenv(splitLayerChainEnvironment.data());
     const auto lower = profileForLayer(exercisedProfile());
     expect(spatialScalingLayer && !frameGenerationLayer,
         "the lower build must identify only the spatial-scaling role");
@@ -49,9 +50,34 @@ int main() {
     expect(splitLayerChainEnabled(),
         "the lower layer is always part of an isolated split chain");
     expect(spatialScalingOwnedByLayer(),
-        "the lower layer must enforce spatial capability contracts");
+        "the legacy lower layer must own spatial reconstruction");
+    expect(spatialScalingCapabilityOwnedByLayer(),
+        "the lower layer must always own spatial capability contracts");
     expect(shouldRejectUnmatchedFixedSpatialCreate(true, false),
-        "the lower layer must reject an unmatched fixed spatial request");
+        "the dedicated layer must reject an unmatched fixed spatial request");
+    expect(!combinedSpatialFramePipelineOwnedByLayer(),
+        "an unversioned dedicated role must not own the combined pipeline");
+    setenv(
+        splitLayerChainEnvironment.data(),
+        combinedPipelineSplitValue.data(), 1
+    );
+    const auto currentLower = profileForLayerContext(lower);
+    expect(!spatialScalingOwnedByLayer(),
+        "the current lower layer must delegate spatial reconstruction");
+    expect(spatialScalingCapabilityOwnedByLayer(),
+        "the current lower layer must retain surface capability ownership");
+    expect(!currentLower.scaling_enabled &&
+            currentLower.scaling_method == ls::ScalingMethod::Native,
+        "the current lower layer must remain allocation-free");
+    expect(shouldRejectUnmatchedFixedSpatialCreate(true, false),
+        "the lower extent owner must fail closed without its fixed contract");
+    expect(!combinedSpatialFramePipelineOwnedByLayer(),
+        "the capability-only lower role must not own the combined pipeline");
+    expect(!spatialScalingCapabilityRelayByLayer(),
+        "the application-facing dedicated role must not export a relay");
+    expect(!shouldRejectUncontractedSpatialCreate(true, false, false),
+        "the allocation-free lower role must not consume its own relay");
+    unsetenv(splitLayerChainEnvironment.data());
 #else
     unsetenv(splitLayerChainEnvironment.data());
     const auto direct = profileForLayer(exercisedProfile());
@@ -64,29 +90,65 @@ int main() {
         "direct Renderer launches must retain the established combined library");
     expect(spatialScalingOwnedByLayer(),
         "the direct combined layer must enforce spatial capability contracts");
+    expect(spatialScalingCapabilityOwnedByLayer(),
+        "the direct combined layer must own spatial capability queries");
+    expect(combinedSpatialFramePipelineOwnedByLayer(),
+        "the direct combined layer must own the extent-selected pipeline");
     expect(shouldRejectUnmatchedFixedSpatialCreate(true, false),
         "the direct combined layer must reject an unmatched fixed request");
     expect(!shouldRejectUnmatchedFixedSpatialCreate(true, true),
         "a selected scaling extent must satisfy the fixed contract");
 
-    setenv(splitLayerChainEnvironment.data(), "1", 1);
-    const auto upper = profileForLayer(exercisedProfile());
-    expect(upper.frame_generation_enabled && upper.adaptive,
-        "the upper split layer must retain frame-generation configuration");
-    expect(upper.scaling_enabled &&
-            upper.scaling_method == ls::ScalingMethod::Mako,
-        "the upper split layer must retain scaling configuration for the "
-        "fixed-surface capability relay");
+    setenv(
+        splitLayerChainEnvironment.data(),
+        legacyPostFrameGenerationSplitValue.data(), 1
+    );
+    const auto legacyUpper = profileForLayer(exercisedProfile());
+    expect(legacyUpper.frame_generation_enabled && legacyUpper.adaptive,
+        "the legacy upper split layer must retain frame generation");
     expect(!spatialScalingOwnedByLayer(),
-        "the upper split layer must forward lower-role spatial contracts");
+        "the legacy upper split layer must delegate reconstruction");
     expect(spatialScalingCapabilityRelayByLayer(),
-        "the upper split layer must relay virtual capabilities through WSI");
-    const auto upperContext = profileForLayerContext(upper);
-    expect(!upperContext.scaling_enabled &&
-            upperContext.scaling_method == ls::ScalingMethod::Native,
-        "the upper split layer must not allocate spatial-scaling resources");
+        "the legacy upper role must relay virtual capabilities through WSI");
+    const auto legacyUpperContext = profileForLayerContext(legacyUpper);
+    expect(!legacyUpperContext.scaling_enabled &&
+            legacyUpperContext.scaling_method == ls::ScalingMethod::Native,
+        "the legacy upper role must not allocate spatial resources");
     expect(!shouldRejectUnmatchedFixedSpatialCreate(true, false),
-        "the upper split layer must not reject a lower-role source extent");
+        "the legacy upper role must not reject a lower-role source extent");
+    expect(!shouldRejectUncontractedSpatialCreate(true, false, false),
+        "the legacy allocation-free upper role must preserve its lower owner");
+
+    setenv(
+        splitLayerChainEnvironment.data(),
+        combinedPipelineSplitValue.data(), 1
+    );
+    const auto currentFrameGeneration = profileForLayer(exercisedProfile());
+    expect(currentFrameGeneration.frame_generation_enabled &&
+            currentFrameGeneration.adaptive,
+        "the current split frame-generation role must retain generation");
+    expect(spatialScalingOwnedByLayer(),
+        "the current frame-generation role must own reconstruction");
+    expect(!spatialScalingCapabilityOwnedByLayer(),
+        "the lower spatial role must retain fixed capability ownership");
+    expect(spatialScalingCapabilityRelayByLayer(),
+        "the current frame-generation role must consume relayed capabilities");
+    const auto currentFrameGenerationContext =
+        profileForLayerContext(currentFrameGeneration);
+    expect(currentFrameGenerationContext.scaling_enabled &&
+            currentFrameGenerationContext.scaling_method ==
+                ls::ScalingMethod::Mako,
+        "the current frame-generation role must allocate the combined scaler");
+    expect(shouldRejectUnmatchedFixedSpatialCreate(true, false),
+        "the current frame-generation role must fail closed without a relay");
+    expect(combinedSpatialFramePipelineOwnedByLayer(),
+        "the current upper context must own the extent-selected pipeline");
+    expect(shouldRejectUncontractedSpatialCreate(true, false, false) &&
+            !shouldRejectUncontractedSpatialCreate(true, true, false) &&
+            !shouldRejectUncontractedSpatialCreate(false, false, false) &&
+            !shouldRejectUncontractedSpatialCreate(true, false, true),
+        "the current combined owner must reject only a provisioned create "
+        "that lacks a coherent lower create decision");
 
     setenv(splitLayerChainEnvironment.data(), "0", 1);
     const auto disabledSplit = profileForLayer(exercisedProfile());

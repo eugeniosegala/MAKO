@@ -34,6 +34,7 @@ from .constants import (
     MAKO_LAYER_NAME,
     MAKO_PROFILE_ENV,
     MAKO_PROFILE_FALLBACK_ENV,
+    MAKO_SPLIT_LAYER_CHAIN_COMBINED_PIPELINE,
     MAKO_SPLIT_LAYER_CHAIN_ENV,
     MANGOHUD_LAYER_NAME_64,
     PRESENT_ACQUIRE_TIMEOUT_ENV,
@@ -60,7 +61,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 51
+WRAPPER_FORMAT_VERSION = 55
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -71,7 +72,7 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"export {PRESENT_DIAGNOSTICS_ENV}=",
     f"export {MAKO_LAYER_ENABLE_ENV}=1",
     f"unset {MAKO_SPLIT_LAYER_CHAIN_ENV}",
-    f"export {MAKO_SPLIT_LAYER_CHAIN_ENV}=1",
+    f"export {MAKO_SPLIT_LAYER_CHAIN_ENV}={MAKO_SPLIT_LAYER_CHAIN_COMBINED_PIPELINE}",
     *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
     f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
     f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
@@ -327,19 +328,19 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"    mako_implicit_layer_path={shlex.quote(context.flatpak_implicit_layer_dir)}",
         "else",
         f"    mako_implicit_layer_path={shlex.quote(str(context.local_share_dir))}",
-        '    if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
-        f"        export {MAKO_SPLIT_LAYER_CHAIN_ENV}=1",
-        "    fi",
-        # Frame generation and spatial scaling deliberately occupy opposite
-        # sides of Gamescope WSI. Every synthetic present therefore passes
-        # through Gamescope's pacing implementation, while the lower spatial
-        # layer still receives its variable Wayland surface and can own a
-        # larger presentation extent.
+        # Preserve the established Renderer -> Gamescope WSI -> spatial order.
+        # This development probe keeps frame generation at source resolution
+        # and lets the lower role reconstruct every delivered image after WSI.
+        # It exists to isolate the placement regression before the equivalent
+        # ordering is folded into the combined upper owner.
         '    if [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
         '[ "$mako_gamescope_wsi_session" = 1 ] && [ -r '
         f"{gamescope_wsi_manifest} ] && "
         '( [ "${mako_spatial_scaling_required:-0}" != 1 ] || [ -r '
         f"{spatial_scaling_manifest} ] ) && [ \"${{{MAKO_LAYER_DISABLE_ENV}:-0}}\" != 1 ]; then",
+        '        if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
+        f"            export {MAKO_SPLIT_LAYER_CHAIN_ENV}={MAKO_SPLIT_LAYER_CHAIN_COMBINED_PIPELINE}",
+        "        fi",
         f"        unset {GAMESCOPE_WSI_DISABLE_ENV}",
         f"        export {GAMESCOPE_WSI_ENABLE_ENV}=1",
         "        export NODEVICE_SELECT=1",

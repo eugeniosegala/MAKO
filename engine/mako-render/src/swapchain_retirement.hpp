@@ -54,22 +54,31 @@ namespace mako::layer {
     /// An upper WSI may destroy its application-visible swapchain before
     /// creating the replacement and consequently pass a null oldSwapchain to
     /// the lower layer. If MAKO retained that exact lower swapchain for
-    /// maintenance-fence completion, it is still the non-retired swapchain
-    /// associated with the native window. Hand it to the lower create exactly
-    /// once so Vulkan can retire it without discarding MAKO's lifetime proof.
-    [[nodiscard]] constexpr bool shouldHandoffRetainedSwapchainAsOld(
+    /// maintenance-fence completion, finish its proven retirement before the
+    /// replacement create. Passing the retained handle back through Gamescope
+    /// as oldSwapchain can deadlock its WSI replacement path.
+    [[nodiscard]] constexpr bool
+    shouldRetireRetainedSwapchainBeforeNullOldReplacement(
             const VkSwapchainKHR requestedOldSwapchain,
             const VkDevice createDevice,
             const VkSurfaceKHR createSurface,
             const VkDevice retiredDevice,
-            const VkSurfaceKHR retiredSurface,
-            const bool handoffConsumed) noexcept {
+            const VkSurfaceKHR retiredSurface) noexcept {
         return requestedOldSwapchain == VK_NULL_HANDLE &&
             createDevice != VK_NULL_HANDLE &&
             createDevice == retiredDevice &&
             createSurface != VK_NULL_HANDLE &&
-            createSurface == retiredSurface &&
-            !handoffConsumed;
+            createSurface == retiredSurface;
+    }
+
+    /// Replacement recovery is independent of the handle passed to the lower
+    /// WSI. A completed destroy-before-create retirement remains a known
+    /// replacement even though Gamescope must receive a null oldSwapchain.
+    [[nodiscard]] constexpr bool swapchainCreateIsReplacement(
+            const VkSwapchainKHR requestedOldSwapchain,
+            const bool retiredNullOldReplacement) noexcept {
+        return requestedOldSwapchain != VK_NULL_HANDLE ||
+            retiredNullOldReplacement;
     }
 
     /// Prefer the promoted extension name when the driver advertises it, then

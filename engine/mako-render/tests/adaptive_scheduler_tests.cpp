@@ -204,6 +204,18 @@ namespace {
             });
         }
 
+        void recoveryResume(size_t generationLimit,
+                std::chrono::steady_clock::duration higherProbeDelay,
+                std::string_view reason) override {
+            this->events.push_back({
+                .operation = "adaptive-recovery-resume-scheduled",
+                .reason = std::string(reason),
+                .testedLimit = generationLimit,
+                .duration = std::chrono::duration_cast<
+                    std::chrono::milliseconds>(higherProbeDelay),
+            });
+        }
+
         void loadShed(size_t previousLimit, size_t resumedLimit,
                 double, double, std::string_view reason) override {
             this->events.push_back({
@@ -527,6 +539,31 @@ namespace {
         const auto* coldStart = startup.diagnostics.last("stabilization");
         require(coldStart && coldStart->duration == 3s,
             "cold startup lost its three-second splash-screen guard");
+    }
+
+    void testTransportRecoveryInvalidatesStableCadence() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+        harness.runAtFps(60.0, 12s);
+        const auto before = harness.scheduler.snapshot();
+        require(before.phase == AdaptiveSchedulerPhase::StableCadence &&
+                before.stableCadenceLimit == 1,
+            "precondition failed: ordered Smooth Cadence was not accepted");
+
+        harness.scheduler.beginTransportRecovery(harness.now);
+        const auto after = harness.scheduler.snapshot();
+        require(after.phase == AdaptiveSchedulerPhase::Stabilizing &&
+                !after.stableCadenceLimit &&
+                after.generationLimit == 0 &&
+                after.validatedGenerationLimit == 0,
+            "transport recovery retained stale stable-cadence or pacing state");
+        const auto* stabilization = harness.diagnostics.last("stabilization");
+        require(stabilization &&
+                stabilization->reason == "generated-image-recovery" &&
+                stabilization->duration == 1s,
+            "transport recovery did not request one fresh cadence qualification");
     }
 
     void testBusyWarmupNotificationIsIdempotent() {
@@ -3168,7 +3205,7 @@ namespace {
             "harmful restored 3x load did not fall back to proven 2x");
     }
 
-    void testGeneratedImageRecoveryRetainsCollapseGuard() {
+    void testGeneratedImageRecoveryFallsBackToProvenLoad() {
         Harness harness(110, 3);
         harness.start();
         harness.runAtFps(50.0, 10s);
@@ -3181,29 +3218,24 @@ namespace {
                 loadBaseline.baseFps > 0.0,
             "precondition failed: higher load had no lower-level baseline");
 
-        harness.scheduler.beginStabilization(
-            harness.now, "generated-image-recovery"
+        harness.scheduler.beginTransportRecovery(harness.now);
+        const auto recovery = harness.scheduler.snapshot();
+        require(recovery.phase == AdaptiveSchedulerPhase::Stabilizing &&
+                recovery.generationLimit == 1 &&
+                recovery.validatedGenerationLimit == 1,
+            "image pressure did not select the proven lower load for recovery");
+        const auto* resume = harness.diagnostics.last(
+            "adaptive-recovery-resume-scheduled"
         );
-        harness.scheduler.restoreGenerationLimit(
-            harness.now,
-            recoveredLimit,
-            "generated-image-recovery",
-            loadBaseline.fallbackGenerationLimit,
-            loadBaseline.baseFps
-        );
+        require(resume &&
+                resume->reason == "generated-image-pressure-fallback" &&
+                resume->testedLimit == 1 &&
+                resume->duration == 5s,
+            "image-pressure fallback did not delay the next higher probe");
 
-        for (size_t frame = 0;
-                frame < 160 && !harness.diagnostics.contains("rescue-start");
-                ++frame) {
-            harness.frameAtFps(35.0);
-        }
-        const auto* rescueStart = harness.diagnostics.last("rescue-start");
-        require(rescueStart && rescueStart->reason == "strict-load-collapse",
-            "in-place image recovery cleared the delayed-collapse guard");
-
-        harness.runAtFps(64.0, 2s);
+        harness.runAtFps(50.0, 5s);
         require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "image recovery did not return harmful 3x load to proven 2x");
+            "image recovery retried the failed higher load before its backoff");
     }
 
     void testDeterministicReplay() {
@@ -3248,6 +3280,7 @@ int main() {
     const std::vector<TestCase> tests{
         {"startup warm-up is explicit", testStartupWarmupIsExplicit},
         {"swapchain recreation settles promptly", testSwapchainRecreationUsesBoundedSettlingGuard},
+        {"transport recovery invalidates stable cadence", testTransportRecoveryInvalidatesStableCadence},
         {"busy warm-up notification is idempotent", testBusyWarmupNotificationIsIdempotent},
         {"transient busy frame does not rearm warm-up", testTransientBusyFrameDoesNotRearmCompletedWarmup},
         {"invalid configuration is rejected", testInvalidConfigurationIsRejectedAtBoundary},
@@ -3325,7 +3358,7 @@ int main() {
         {"SDR 2x load shed stays generated", testSdrTwoXCollapseRetainsMinimumGeneratedPolicy},
         {"Smooth Cadence collapse measures real-only", testSmoothCadenceCollapseUsesRealOnlyMeasurement},
         {"restored load keeps collapse guard", testRestoredDiscontinuityLoadRetainsCollapseGuard},
-        {"image recovery keeps collapse guard", testGeneratedImageRecoveryRetainsCollapseGuard},
+        {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
         {"cadence replay is deterministic", testDeterministicReplay},
     };
 

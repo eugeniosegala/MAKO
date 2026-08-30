@@ -18,6 +18,7 @@
 #include "runtime_status.hpp"
 #include "runtime_transition.hpp"
 #include "spatial_scaler.hpp"
+#include "spatial_scaling_policy.hpp"
 
 #include <array>
 #include <chrono>
@@ -51,10 +52,16 @@ namespace mako::layer {
         bool privateOrderedTransport{false};
         bool spatialScalingActive{false};
         // The upper WSI either supplied a live oldSwapchain handle or MAKO
-        // bridged its exact retained lower handle after a destroy-before-create
-        // sequence. This is a known owner-driven replacement rather than a cold
-        // process start, so Adaptive may use its bounded recovery guard.
+        // completed retirement of the exact retained lower handle before a
+        // null-old destroy-before-create replacement. This is a known
+        // owner-driven replacement rather than a cold process start, so
+        // Adaptive may use its bounded recovery guard.
         bool replacement{false};
+        // Keep startup boundary diagnostics finite: these breadcrumbs are
+        // intended to identify an intermittent acquire/present stall without
+        // adding sustained hot-path logging.
+        uint32_t startupAcquireDiagnostics{0};
+        uint32_t startupPresentDiagnostics{0};
     };
 
     /// modify the swapchain create info based on the profile pre-swapchain creation
@@ -104,6 +111,16 @@ namespace mako::layer {
         }
         [[nodiscard]] bool spatialScalingActive() const {
             return this->spatialScaler.has_value();
+        }
+        [[nodiscard]] VkExtent2D frameGenerationResourceExtent() const {
+            return frameGenerationExtent(
+                this->spatialFramePipelinePlacement,
+                this->info.applicationExtent, this->info.extent
+            );
+        }
+        [[nodiscard]] SpatialFramePipelinePlacement
+        framePipelinePlacement() const {
+            return this->spatialFramePipelinePlacement;
         }
 
         /// Apply configuration that is safe for an already-created context.
@@ -288,6 +305,9 @@ namespace mako::layer {
         };
         std::optional<SpatialScaler> spatialScaler;
         std::vector<SpatialScalingPass> spatialScalingPasses;
+        SpatialFramePipelinePlacement spatialFramePipelinePlacement{
+            SpatialFramePipelinePlacement::PreFrameGeneration
+        };
 
         struct PresentRetirementFence {
             vk::Fence fence;

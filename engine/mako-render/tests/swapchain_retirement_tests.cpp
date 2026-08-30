@@ -148,18 +148,21 @@ int main() {
     const auto deviceA = reinterpret_cast<VkDevice>(1);
     const auto deviceB = reinterpret_cast<VkDevice>(2);
     const auto swapchainA = reinterpret_cast<VkSwapchainKHR>(1);
-    expect(shouldHandoffRetainedSwapchainAsOld(
-            VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceA, false),
-        "a retained lower swapchain was not selected for null-old replacement");
-    expect(!shouldHandoffRetainedSwapchainAsOld(
-            swapchainA, deviceA, surfaceA, deviceA, surfaceA, false) &&
-            !shouldHandoffRetainedSwapchainAsOld(
-                VK_NULL_HANDLE, deviceA, surfaceA, deviceB, surfaceA, false) &&
-            !shouldHandoffRetainedSwapchainAsOld(
-                VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceB, false) &&
-            !shouldHandoffRetainedSwapchainAsOld(
-                VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceA, true),
-        "retained lower handoff ignored old-swapchain, owner, or one-shot bounds");
+    expect(shouldRetireRetainedSwapchainBeforeNullOldReplacement(
+            VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceA),
+        "a retained lower swapchain was not selected for pre-create retirement");
+    expect(!shouldRetireRetainedSwapchainBeforeNullOldReplacement(
+            swapchainA, deviceA, surfaceA, deviceA, surfaceA) &&
+            !shouldRetireRetainedSwapchainBeforeNullOldReplacement(
+                VK_NULL_HANDLE, deviceA, surfaceA, deviceB, surfaceA) &&
+            !shouldRetireRetainedSwapchainBeforeNullOldReplacement(
+                VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceB),
+        "pre-create retirement ignored old-swapchain, device, or surface ownership");
+
+    expect(swapchainCreateIsReplacement(swapchainA, false) &&
+            swapchainCreateIsReplacement(VK_NULL_HANDLE, true) &&
+            !swapchainCreateIsReplacement(VK_NULL_HANDLE, false),
+        "replacement classification depended on forwarding a retained old handle");
 
     expect(presentFenceWillSignal(VK_SUCCESS) &&
             presentFenceWillSignal(VK_SUBOPTIMAL_KHR) &&

@@ -24,6 +24,29 @@ namespace mako::layer {
 
     inline constexpr std::string_view splitLayerChainEnvironment =
         "MAKO_SPLIT_LAYER_CHAIN";
+    inline constexpr std::string_view legacyPostFrameGenerationSplitValue =
+        "1";
+    inline constexpr std::string_view combinedPipelineSplitValue = "2";
+
+    enum class SplitLayerChainLayout {
+        Disabled,
+        LegacyPostFrameGeneration,
+        CombinedPipeline,
+        Invalid,
+    };
+
+    [[nodiscard]] inline SplitLayerChainLayout splitLayerChainLayout() {
+        const char* const rawValue =
+            std::getenv(splitLayerChainEnvironment.data());
+        const std::string_view value = rawValue ? rawValue : "";
+        if (value.empty() || value == "0")
+            return SplitLayerChainLayout::Disabled;
+        if (value == legacyPostFrameGenerationSplitValue)
+            return SplitLayerChainLayout::LegacyPostFrameGeneration;
+        if (value == combinedPipelineSplitValue)
+            return SplitLayerChainLayout::CombinedPipeline;
+        return SplitLayerChainLayout::Invalid;
+    }
 
     /// The lower spatial role can observe external-memory features enabled by
     /// the upper frame-generation role. Those device features are not proof
@@ -40,46 +63,81 @@ namespace mako::layer {
     [[nodiscard]] inline bool splitLayerChainEnabled() {
         if constexpr (spatialScalingLayer)
             return true;
-
-        const char* value = std::getenv(splitLayerChainEnvironment.data());
-        return value != nullptr && std::string_view(value) != "" &&
-            std::string_view(value) != "0";
+        return splitLayerChainLayout() != SplitLayerChainLayout::Disabled;
     }
 
     /// Direct Renderer launches retain combined frame-generation and spatial
-    /// ownership. In Decky's split chain, only the dedicated lower role owns
-    /// spatial reconstruction and create-time contracts. The upper
-    /// frame-generation role relays fixed-surface capability virtualization
-    /// back through Gamescope WSI, which may otherwise restore the native
-    /// extent before Proton or a game observes it.
+    /// ownership. Renderer 2.2 split chains reconstructed below Gamescope WSI.
+    /// Current split chains preserve that loader order but let the upper
+    /// frame-generation role own an extent-selected combined pipeline. The
+    /// lower spatial role remains capability-only.
     [[nodiscard]] inline bool spatialScalingOwnedByLayer() {
+        const auto layout = splitLayerChainLayout();
+        if constexpr (spatialScalingLayer) {
+            return layout != SplitLayerChainLayout::CombinedPipeline;
+        }
+        return layout == SplitLayerChainLayout::Disabled ||
+            layout == SplitLayerChainLayout::CombinedPipeline;
+    }
+
+    /// Capability virtualization remains below Gamescope WSI so the spatial
+    /// role observes the compositor-owned presentation surface. The upper
+    /// role consumes that immutable result through the relay in either split
+    /// layout; direct combined launches own the query without a relay.
+    [[nodiscard]] inline bool spatialScalingCapabilityOwnedByLayer() {
         if constexpr (spatialScalingLayer)
             return true;
-
         return !splitLayerChainEnabled();
     }
 
-    /// The upper split role needs scaling configuration only to relay the
-    /// lower role's virtual source extent. It must not create a scaler, alter
-    /// a swapchain, or reserve spatial retirement resources itself.
+    /// Both split layouts relay the lower role's virtual fixed extent through
+    /// Gamescope WSI. In the legacy layout the upper role forwards the source
+    /// create unchanged. In the current layout it uses the relayed contract to
+    /// allocate one combined scaler/FG context at the selected FG extent.
     [[nodiscard]] inline bool spatialScalingCapabilityRelayByLayer() {
         if constexpr (spatialScalingLayer)
             return false;
+        const auto layout = splitLayerChainLayout();
+        return layout == SplitLayerChainLayout::LegacyPostFrameGeneration ||
+            layout == SplitLayerChainLayout::CombinedPipeline;
+    }
 
-        return splitLayerChainEnabled();
+    /// The direct Renderer and the current upper split role own one combined
+    /// scaling/FG context. The immutable swapchain extent policy chooses the
+    /// exact pre/post ordering inside that owner.
+    [[nodiscard]] inline bool combinedSpatialFramePipelineOwnedByLayer() {
+        if constexpr (spatialScalingLayer)
+            return false;
+        return spatialScalingOwnedByLayer();
     }
 
     [[nodiscard]] inline bool shouldRejectUnmatchedFixedSpatialCreate(
             const bool fixedVirtualSourceRequest,
             const bool scalingExtentsSelected) {
-        return spatialScalingOwnedByLayer() && fixedVirtualSourceRequest &&
-            !scalingExtentsSelected;
+        return (spatialScalingOwnedByLayer() ||
+                spatialScalingCapabilityOwnedByLayer()) &&
+            fixedVirtualSourceRequest && !scalingExtentsSelected;
+    }
+
+    /// A current split upper role must never construct a transient native-size
+    /// FG context while scaling is provisioned but its lower WSI extent relay
+    /// is missing or invalid. An explicit lower no-split decision is a valid
+    /// native create, not a missing dependency. The lower swapchain is rolled
+    /// back only when no coherent lower decision was observed.
+    [[nodiscard]] inline bool shouldRejectUncontractedSpatialCreate(
+            const bool scalingProvisioned,
+            const bool spatialScalingActive,
+            const bool lowerCreateDecisionObserved) {
+        return scalingProvisioned && !spatialScalingActive &&
+            !lowerCreateDecisionObserved &&
+            spatialScalingOwnedByLayer() &&
+            spatialScalingCapabilityRelayByLayer();
     }
 
     /// Preserve the process profile used for capability queries and
-    /// process-static policy. The upper split role retains scaling fields
-    /// solely for its capability relay; its swapchain contexts receive the
-    /// masked projection below.
+    /// process-static policy. A legacy split frame-generation role retains
+    /// scaling fields only for relay coherence, while the current split role
+    /// also applies them to its combined swapchain context.
     [[nodiscard]] inline ls::GameConf profileForLayer(
             ls::GameConf profile) {
         if constexpr (spatialScalingLayer) {
@@ -110,12 +168,11 @@ namespace mako::layer {
     }
 
     /// Project a process profile onto the resources that this role is allowed
-    /// to own. This keeps the upper split role's capability relay allocation
-    /// free while the lower role remains the sole owner of spatial resources
-    /// and private live-scaler transitions.
+    /// to own. Legacy upper and current lower roles remain allocation-free;
+    /// the current upper role retains both scaling and frame generation.
     [[nodiscard]] inline ls::GameConf profileForLayerContext(
             ls::GameConf profile) {
-        if (spatialScalingCapabilityRelayByLayer()) {
+        if (!spatialScalingOwnedByLayer()) {
             profile.scaling_enabled = false;
             profile.scaling_method = ls::ScalingMethod::Native;
             profile.scaling_factor = ls::GameConfDefaults::scalingFactor;

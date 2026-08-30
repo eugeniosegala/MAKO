@@ -84,7 +84,6 @@ namespace {
             ls::R<vk::Vulkan> vk;
             std::optional<Swapchain> context;
             std::chrono::steady_clock::time_point notBefore{};
-            bool replacementHandoffConsumed{false};
         };
         std::atomic_size_t retiredSwapchainCount{0};
         std::mutex retiredSwapchainsMutex;
@@ -93,12 +92,15 @@ namespace {
     }* instance_info; // NOLINT (global variable)
 
     enum class FixedSurfaceCapabilityRelayOperation : uint32_t {
-        Begin,
-        Consume,
+        BeginCapability,
+        ConsumeCapability,
+        BeginCreate,
+        ConsumeCreate,
     };
 
 #if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
     thread_local FixedSurfaceCapabilityRelaySlot fixedSurfaceCapabilityRelay;
+    thread_local FixedSurfaceCapabilityRelaySlot spatialCreateRelay;
 #endif
 
     bool initializeLayerInfo();
@@ -232,26 +234,23 @@ namespace {
         }
     }
 
-    std::optional<VkSwapchainKHR> claimRetainedSwapchainForReplacement(
+    std::optional<VkSwapchainKHR>
+    retainedSwapchainBeforeNullOldReplacement(
             const VkDevice device, const VkSurfaceKHR surface,
             const VkSwapchainKHR requestedOldSwapchain) {
         const std::lock_guard retirementLock(
             instance_info->retiredSwapchainsMutex
         );
-        for (auto& [swapchain, retired] :
+        for (const auto& [swapchain, retired] :
                 instance_info->retiredSwapchains) {
-            if (!shouldHandoffRetainedSwapchainAsOld(
+            if (!shouldRetireRetainedSwapchainBeforeNullOldReplacement(
                     requestedOldSwapchain,
                     device,
                     surface,
                     retired.device,
-                    retired.surface,
-                    retired.replacementHandoffConsumed)) {
+                    retired.surface)) {
                 continue;
             }
-            // Vulkan retires oldSwapchain even when creation fails, so this
-            // candidate must never be supplied to a later retry.
-            retired.replacementHandoffConsumed = true;
             return swapchain;
         }
         return std::nullopt;
@@ -882,8 +881,9 @@ namespace {
 #if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
 // The split roles are separate DSOs, and Gamescope WSI may replace the surface
 // handle between them. Export only a same-thread, one-shot capability relay
-// from the lower spatial role. The upper role brackets one downstream query
-// and never gains resource or swapchain ownership.
+// from the lower spatial role. The upper role brackets one downstream query;
+// current split layout 2 uses the immutable result to own the combined
+// scaler/frame-generation context without moving the lower capability owner.
 extern "C" __attribute__((visibility("default"))) VkBool32
 makoSpatialScalingLookupFixedContract(
         const uint32_t rawOperation,
@@ -897,18 +897,32 @@ makoSpatialScalingLookupFixedContract(
     const auto operation = static_cast<FixedSurfaceCapabilityRelayOperation>(
         rawOperation
     );
-    if (operation == FixedSurfaceCapabilityRelayOperation::Begin) {
-        fixedSurfaceCapabilityRelay.begin();
+    FixedSurfaceCapabilityRelaySlot* slot{};
+    if (operation ==
+            FixedSurfaceCapabilityRelayOperation::BeginCapability ||
+            operation ==
+            FixedSurfaceCapabilityRelayOperation::ConsumeCapability) {
+        slot = &fixedSurfaceCapabilityRelay;
+    } else if (operation ==
+            FixedSurfaceCapabilityRelayOperation::BeginCreate ||
+            operation == FixedSurfaceCapabilityRelayOperation::ConsumeCreate) {
+        slot = &spatialCreateRelay;
+    }
+    if (!slot)
+        return VK_FALSE;
+
+    if (operation == FixedSurfaceCapabilityRelayOperation::BeginCapability ||
+            operation == FixedSurfaceCapabilityRelayOperation::BeginCreate) {
+        slot->begin();
         return VK_TRUE;
     }
-    if (operation != FixedSurfaceCapabilityRelayOperation::Consume ||
-            !lowerSurface || !source || !presentation || !factor ||
+    if (!lowerSurface || !source || !presentation || !factor ||
             !policyRevision || !queryGeneration) {
-        fixedSurfaceCapabilityRelay.begin();
+        slot->begin();
         return VK_FALSE;
     }
 
-    const auto record = fixedSurfaceCapabilityRelay.consume(physicalDevice);
+    const auto record = slot->consume(physicalDevice);
     if (!record)
         return VK_FALSE;
 
@@ -937,9 +951,19 @@ namespace {
         void* handle{nullptr};
         LowerFixedSurfaceContractLookup lookup{nullptr};
         VkPhysicalDevice physicalDevice{VK_NULL_HANDLE};
+        FixedSurfaceCapabilityRelayOperation beginOperation{
+            FixedSurfaceCapabilityRelayOperation::BeginCapability
+        };
+        FixedSurfaceCapabilityRelayOperation consumeOperation{
+            FixedSurfaceCapabilityRelayOperation::ConsumeCapability
+        };
         bool armed{false};
 
         LowerFixedSurfaceContractLookupState() = default;
+        LowerFixedSurfaceContractLookupState(
+                const FixedSurfaceCapabilityRelayOperation beginOperation,
+                const FixedSurfaceCapabilityRelayOperation consumeOperation) :
+            beginOperation(beginOperation), consumeOperation(consumeOperation) {}
         LowerFixedSurfaceContractLookupState(
             const LowerFixedSurfaceContractLookupState&
         ) = delete;
@@ -957,7 +981,7 @@ namespace {
             if (armed && lookup) {
                 static_cast<void>(lookup(
                     static_cast<uint32_t>(
-                        FixedSurfaceCapabilityRelayOperation::Begin
+                        this->beginOperation
                     ),
                     physicalDevice, nullptr, nullptr, nullptr, nullptr,
                     nullptr, nullptr
@@ -972,7 +996,7 @@ namespace {
                 return;
             armed = lookup(
                 static_cast<uint32_t>(
-                    FixedSurfaceCapabilityRelayOperation::Begin
+                    this->beginOperation
                 ),
                 physicalDevice, nullptr, nullptr, nullptr, nullptr, nullptr,
                 nullptr
@@ -989,7 +1013,7 @@ namespace {
             };
             const VkBool32 found = lookup(
                 static_cast<uint32_t>(
-                    FixedSurfaceCapabilityRelayOperation::Consume
+                    this->consumeOperation
                 ),
                 physicalDevice, &record.lowerSurface,
                 &record.contract.extents.source,
@@ -1260,6 +1284,11 @@ namespace {
             const std::optional<FixedSurfaceCapabilityRelayRecord>&
                 lowerRelay) {
         if (!layer_info || !instance_info) {
+            return;
+        }
+        if (!spatialScalingCapabilityOwnedByLayer() &&
+                !spatialScalingCapabilityRelayByLayer()) {
+            clearFixedSurfaceScalingContract(physicalDevice, surface);
             return;
         }
         try {
@@ -1553,27 +1582,62 @@ namespace {
                         fixedSurfaceContract = contract->second;
                 }
             }
-            const auto modification =
+            LowerFixedSurfaceContractLookupState lowerCreateRelayState(
+                FixedSurfaceCapabilityRelayOperation::BeginCreate,
+                FixedSurfaceCapabilityRelayOperation::ConsumeCreate
+            );
+            if (spatialScalingOwnedByLayer() &&
+                    spatialScalingCapabilityRelayByLayer()) {
+                beginLowerFixedSurfaceCapabilityRelay(
+                    lowerCreateRelayState, it->second.physdev()
+                );
+            }
+            bool retiredNullOldReplacement{false};
+            auto modification =
                 layer_info->root.modifySwapchainCreateInfo(
                     it->second, newInfo, previousVariableExtents,
                     fixedSurfaceContract,
+                    [&](const FixedSurfaceScalingContract& contract) {
+#if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
+                        if (spatialScalingCapabilityOwnedByLayer() &&
+                                !spatialScalingOwnedByLayer()) {
+                            spatialCreateRelay.publish(
+                                it->second.physdev(), info->surface, contract
+                            );
+                        }
+#else
+                        static_cast<void>(contract);
+#endif
+                    },
                     [&, newInfo = &newInfo]() {
                         const auto retainedOldSwapchain =
-                            claimRetainedSwapchainForReplacement(
+                            retainedSwapchainBeforeNullOldReplacement(
                                 device,
                                 newInfo->surface,
                                 newInfo->oldSwapchain
                             );
                         if (retainedOldSwapchain) {
-                            newInfo->oldSwapchain = *retainedOldSwapchain;
+                            if (!finalizeRetiredSwapchain(
+                                    *retainedOldSwapchain,
+                                    UINT64_MAX,
+                                    "replacement-create")) {
+                                throw ls::vulkan_error(
+                                    VK_ERROR_INITIALIZATION_FAILED,
+                                    "retained swapchain retirement failed "
+                                    "before null-old replacement"
+                                );
+                            }
+                            retiredNullOldReplacement = true;
                             if (present_diagnostics::enabled()) {
                                 std::cerr << "MAKO Renderer: present diagnostics: "
-                                             "operation=swapchain-retirement-handoff"
+                                             "operation=swapchain-retirement-before-replacement"
                                           << " role=" << layerRoleName
                                           << " swapchain="
                                           << *retainedOldSwapchain
                                           << " surface=" << newInfo->surface
                                           << " reason=null-upper-old-swapchain"
+                                          << " lower_old_swapchain=0"
+                                          << " action=destroy-before-create"
                                           << '\n';
                             }
                         }
@@ -1588,15 +1652,101 @@ namespace {
                         lowerSwapchainCreated = true;
                     }
                 );
+            const auto lowerCreateRelay = lowerCreateRelayState.consume();
+            const bool lowerCreateRelayMatchesRequest = lowerCreateRelay &&
+                lowerCreateRelay->contract.queryGeneration == 0 && sameExtent(
+                    lowerCreateRelay->contract.extents.source,
+                    info->imageExtent
+                );
+            const bool lowerCreateSplitDecision =
+                lowerCreateRelayMatchesRequest && !sameExtent(
+                    lowerCreateRelay->contract.extents.source,
+                    lowerCreateRelay->contract.extents.presentation
+                );
+            const bool lowerCreateNativeDecision =
+                lowerCreateRelayMatchesRequest && sameExtent(
+                    lowerCreateRelay->contract.extents.source,
+                    lowerCreateRelay->contract.extents.presentation
+                );
+            if (!modification.spatialScalingActive &&
+                    lowerCreateSplitDecision) {
+                modification.applicationExtent =
+                    lowerCreateRelay->contract.extents.source;
+                modification.presentationExtent =
+                    lowerCreateRelay->contract.extents.presentation;
+                modification.spatialScalingActive = true;
+                modification.variableSurface = true;
+                newInfo.imageExtent = modification.presentationExtent;
+                std::cerr << "MAKO Renderer: spatial scaling create relay applied: "
+                          << "role=" << layerRoleName
+                          << "; source="
+                          << modification.applicationExtent.width << 'x'
+                          << modification.applicationExtent.height
+                          << "; presentation="
+                          << modification.presentationExtent.width << 'x'
+                          << modification.presentationExtent.height
+                          << "; relay_surface_mode="
+                          << (lowerCreateRelay->lowerSurface == info->surface
+                                ? "shared" : "aliased")
+                          << "; ownership=upper-combined-role"
+                          << "; surface_extent_mode=variable"
+                          << "; source_presentation_split=1"
+                          << "; active=1"
+                          << "; pipeline=combined-cost-aware\n";
+            } else if (!modification.spatialScalingActive &&
+                    lowerCreateNativeDecision) {
+                std::cerr << "MAKO Renderer: spatial scaling create relay applied: "
+                          << "role=" << layerRoleName
+                          << "; source=" << info->imageExtent.width << 'x'
+                          << info->imageExtent.height
+                          << "; presentation=" << info->imageExtent.width << 'x'
+                          << info->imageExtent.height
+                          << "; relay_surface_mode="
+                          << (lowerCreateRelay->lowerSurface == info->surface
+                                ? "shared" : "aliased")
+                          << "; ownership=upper-combined-role"
+                          << "; source_presentation_split=0"
+                          << "; active=0"
+                          << "; action=native"
+                          << "; inactive_reason=lower-create-no-source-presentation-split\n";
+            } else if (shouldRejectUncontractedSpatialCreate(
+                    layer_info->root.scalingEngineProvisioned(),
+                    modification.spatialScalingActive,
+                    lowerCreateSplitDecision || lowerCreateNativeDecision)) {
+                std::cerr << "MAKO Renderer: spatial scaling create relay unavailable: "
+                          << "role=" << layerRoleName
+                          << "; requested=" << info->imageExtent.width << 'x'
+                          << info->imageExtent.height
+                          << "; action=reject-transient-native-context"
+                          << "; inactive_reason=no-lower-create-contract\n";
+                throw ls::vulkan_error(
+                    VK_ERROR_INITIALIZATION_FAILED,
+                    "the combined scaling/frame-generation owner did not "
+                    "receive the lower WSI extent contract"
+                );
+            }
             const auto commitVariableSurfaceScaling = [&]() {
                 const std::lock_guard lock(
                     instance_info->surfaceScalingMutex
                 );
+                // The current lower split role owns extent selection but not
+                // reconstruction resources. Retain its successful variable
+                // source/presentation pair even though spatialScalingActive
+                // is intentionally false for that allocation-free context;
+                // later lower creates need this proven presentation envelope
+                // before the upper resource owner can consume the relay.
+                const bool spatialScalingExtentSelected =
+                    modification.spatialScalingActive ||
+                    (spatialScalingCapabilityOwnedByLayer() &&
+                        !sameExtent(
+                            modification.applicationExtent,
+                            modification.presentationExtent
+                        ));
                 const auto committed = committedVariableSurfaceScalingExtents(
                     previousVariableExtents,
                     layer_info->root.active(),
                     modification.variableSurface,
-                    modification.spatialScalingActive,
+                    spatialScalingExtentSelected,
                     modification.variableFeedbackSuppressed,
                     modification.applicationExtent,
                     modification.presentationExtent
@@ -1642,7 +1792,9 @@ namespace {
                     modification.privateOrderedTransport,
                 .spatialScalingActive =
                     modification.spatialScalingActive,
-                .replacement = newInfo.oldSwapchain != VK_NULL_HANDLE,
+                .replacement = swapchainCreateIsReplacement(
+                    newInfo.oldSwapchain, retiredNullOldReplacement
+                ),
             }).first->second;
 
             // An enabled implicit layer can run in a process that does not
@@ -1836,18 +1988,61 @@ namespace {
 
                 auto& context = layer_info->root.getSwapchainContext(swapchain);
                 presentingContextId = context.diagnosticsId();
+                const bool traceStartupPresent =
+                    present_diagnostics::enabled() &&
+                    metadata != instance_info->swapchainInfos.end() &&
+                    metadata->second.startupPresentDiagnostics++ < 8;
+                if (traceStartupPresent) {
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=startup-present-boundary"
+                              << " context=" << context.diagnosticsId()
+                              << " role=" << layerRoleName
+                              << " stage=enter"
+                              << " ordinal="
+                              << metadata->second.startupPresentDiagnostics
+                              << " swapchain=" << swapchain
+                              << " image=" << info->pImageIndices[i]
+                              << '\n';
+                }
                 result = context.present(it->second,
                     queue, swapchain,
                     const_cast<void*>(info->pNext),
                     info->pImageIndices[i],
                     waitSemaphores
                 );
+                if (traceStartupPresent) {
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=startup-present-boundary"
+                              << " context=" << context.diagnosticsId()
+                              << " role=" << layerRoleName
+                              << " stage=return"
+                              << " ordinal="
+                              << metadata->second.startupPresentDiagnostics
+                              << " swapchain=" << swapchain
+                              << " image=" << info->pImageIndices[i]
+                              << " result=" << result
+                              << '\n';
+                }
                 const bool liveProfileRecreationRequested =
                     context.requestLiveProfileResourceRecreationAfterPresent(
                         result
                     );
-                if (liveProfileRecreationRequested)
+                if (liveProfileRecreationRequested) {
+                    // This role owns the guarded request only after
+                    // Swapchain::present() returned from a successful lower
+                    // present. The application's acquired real image has
+                    // therefore already reached the presentation engine; make
+                    // that proof explicit before replacing the successful
+                    // result with the one-shot recreation signal.
+                    if (present_diagnostics::enabled()) {
+                        std::cerr << "MAKO Renderer: present diagnostics: "
+                                     "operation=original-present-recreation-propagate"
+                                  << " context=" << context.diagnosticsId()
+                                  << " result=" << VK_ERROR_OUT_OF_DATE_KHR
+                                  << " action=application-image-submitted-before-recreation\n";
+                    }
                     result = VK_ERROR_OUT_OF_DATE_KHR;
+                }
                 if (result == VK_ERROR_OUT_OF_DATE_KHR &&
                         present_diagnostics::enabled()) {
                     std::cerr << "MAKO Renderer: present diagnostics: "
@@ -1906,6 +2101,50 @@ namespace {
 #pragma clang diagnostic pop
     }
 
+    VkResult myvkAcquireNextImageKHR(
+            VkDevice device, VkSwapchainKHR swapchain, uint64_t timeout,
+            VkSemaphore semaphore, VkFence fence, uint32_t* imageIndex) {
+        const auto mapping = instance_info->swapchains.find(swapchain);
+        if (mapping == instance_info->swapchains.end())
+            return VK_ERROR_INITIALIZATION_FAILED;
+
+        const auto metadata = instance_info->swapchainInfos.find(swapchain);
+        const bool traceStartupAcquire =
+            present_diagnostics::enabled() &&
+            metadata != instance_info->swapchainInfos.end() &&
+            metadata->second.startupAcquireDiagnostics++ < 8;
+        if (traceStartupAcquire) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=startup-acquire-boundary"
+                      << " role=" << layerRoleName
+                      << " stage=enter"
+                      << " ordinal="
+                      << metadata->second.startupAcquireDiagnostics
+                      << " swapchain=" << swapchain
+                      << " timeout_ns=" << timeout
+                      << '\n';
+        }
+        const auto result = mapping->second.get().df().AcquireNextImageKHR(
+            device, swapchain, timeout, semaphore, fence, imageIndex
+        );
+        if (traceStartupAcquire) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=startup-acquire-boundary"
+                      << " role=" << layerRoleName
+                      << " stage=return"
+                      << " ordinal="
+                      << metadata->second.startupAcquireDiagnostics
+                      << " swapchain=" << swapchain
+                      << " result=" << result;
+            if ((result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) &&
+                    imageIndex) {
+                std::cerr << " image=" << *imageIndex;
+            }
+            std::cerr << '\n';
+        }
+        return result;
+    }
+
     void myvkDestroySwapchainKHR(
             VkDevice device,
             VkSwapchainKHR swapchain,
@@ -1961,7 +2200,6 @@ namespace {
                                 .vk = ls::R<vk::Vulkan>(it->second),
                                 .context = std::move(context),
                                 .notBefore = now + swapchainRetirementGracePeriod,
-                                .replacementHandoffConsumed = false,
                             }
                         ).second;
                     if (inserted) {
@@ -2026,6 +2264,7 @@ namespace {
                     { "vkGetPhysicalDeviceSurfaceCapabilities2KHR",
                         VKPTR(myvkGetPhysicalDeviceSurfaceCapabilities2KHR) },
                     { "vkCreateSwapchainKHR", VKPTR(myvkCreateSwapchainKHR) },
+                    { "vkAcquireNextImageKHR", VKPTR(myvkAcquireNextImageKHR) },
                     { "vkQueuePresentKHR", VKPTR(myvkQueuePresentKHR) },
                     { "vkDestroySwapchainKHR", VKPTR(myvkDestroySwapchainKHR) }
 #undef VKPTR

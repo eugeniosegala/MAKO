@@ -142,7 +142,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         )
         self.assertEqual(values["DISABLE_GAMESCOPE"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
-        self.assertEqual(values["SPLIT"], "1")
+        self.assertEqual(values["SPLIT"], "2")
         self.assertEqual(values["DISABLE_SCALING"], "")
         self.assertEqual(values["ENABLE_SCALING"], "")
         self.assertEqual(values["ENABLE"], "")
@@ -173,7 +173,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
-        self.assertEqual(values["SPLIT"], "1")
+        self.assertEqual(values["SPLIT"], "")
         self.assertEqual(values["DISABLE_SCALING"], "1")
         self.assertEqual(values["ENABLE_SCALING"], "")
 
@@ -192,7 +192,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
-        self.assertEqual(values["SPLIT"], "1")
+        self.assertEqual(values["SPLIT"], "")
         self.assertEqual(values["DISABLE_SCALING"], "1")
         self.assertEqual(values["ENABLE_SCALING"], "")
 
@@ -561,7 +561,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
         self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
         self.assertEqual(values["DISABLE_SCALING"], "1")
-        self.assertEqual(values["SPLIT"], "1")
+        self.assertEqual(values["SPLIT"], "")
         self.assertEqual(values["INSTANCE"], "")
         self.assertIn(
             "MAKO Decky: Gamescope WSI skipped: no active Gamescope session",

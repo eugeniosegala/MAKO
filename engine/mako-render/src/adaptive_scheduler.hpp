@@ -201,6 +201,7 @@ namespace mako::layer {
         void updateDynamicCadenceProbeInterval(
             TimePoint now, std::chrono::milliseconds interval);
         void beginStabilization(TimePoint now, std::string_view reason);
+        void beginTransportRecovery(TimePoint now);
         void restoreGenerationLimit(TimePoint now, size_t generationLimit,
             std::string_view reason,
             std::optional<size_t> monitoredFallbackLimit = std::nullopt,

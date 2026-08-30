@@ -33,6 +33,7 @@ namespace mako::layer {
         bool baseFpsCapChanged{false};
         bool dynamicCadenceProbeIntervalChanged{false};
         bool spatialScalingChanged{false};
+        bool spatialScalingDormantUpdate{false};
         bool spatialScalingLiveRebuild{false};
         bool frameGenerationBackendChanged{false};
         bool generatedFrameCapacityExceeded{false};
@@ -262,17 +263,17 @@ namespace mako::layer {
              frameGenerationResourcesAvailable);
     }
 
-    /// A recreation request is safe only when the lower present is protected
-    /// by swapchain-maintenance1 retirement proof. Managed Gamescope may use
-    /// that path only for the lower spatial role's extent change; frame-
-    /// generation resources remain private-context transitions and must not
-    /// provoke an application-visible recreation through the upper role.
+    /// A recreation request is safe only when the resource owner's final
+    /// present is protected by swapchain-maintenance1 retirement proof.
+    /// Managed Gamescope may use that path only for the role that owns the
+    /// active scaler's extent change; frame-generation-only resource changes
+    /// remain private-context transitions.
     [[nodiscard]] inline bool guardedLiveProfileResourceRecreationAvailable(
             const ProfileUpdateDecision& decision,
             const bool frameGenerationResourcesAvailable,
             const bool presentRetirementEnabled,
             const bool gamescopeDetected,
-            const bool lowerSpatialRole) {
+            const bool spatialResourceOwner) {
         if (!presentRetirementEnabled ||
                 !liveProfileResourceRecreationAvailable(
                     decision, frameGenerationResourcesAvailable
@@ -280,7 +281,7 @@ namespace mako::layer {
             return false;
         }
         return !gamescopeDetected ||
-            (lowerSpatialRole && decision.spatialScalingChanged);
+            (spatialResourceOwner && decision.spatialScalingChanged);
     }
 
     /// A natural swapchain recreation reuses Root's process-wide backend. Keep
@@ -475,7 +476,7 @@ namespace mako::layer {
             const ls::GameConf& current, const ls::GameConf& next,
             const size_t generatedFrameCapacity,
             const bool frameGenerationResourcesAvailable,
-            const bool spatialScalerLiveRebuildAvailable = false,
+            const bool spatialScalerActive = false,
             const bool frameGenerationPrivateRebuildAvailable = false) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
@@ -531,11 +532,22 @@ namespace mako::layer {
             (ls::spatialScalingRequested(current) ||
              ls::spatialScalingRequested(next)) &&
             scalerSettingsChanged;
+        // Method and sharpness are dormant profile choices when this
+        // swapchain has no scaler (for example an extent that cannot upscale
+        // inside the allocation envelope). Save them immediately so the next
+        // eligible natural recreation uses the latest choice, but do not
+        // disturb the WSI or frame-generation contexts merely to rebuild a
+        // resource that does not exist. Factor remains extent-bound because
+        // changing it can make the current source eligible.
+        const bool spatialScalingDormantUpdate =
+            spatialScalingResourcesChanged && !spatialScalerActive &&
+            !scalingFactorChanged;
         const bool spatialScalingLiveRebuild =
             spatialScalingResourcesChanged &&
-            spatialScalerLiveRebuildAvailable &&
+            spatialScalerActive &&
             !scalingFactorChanged;
-        if (spatialScalingResourcesChanged) {
+        if (spatialScalingResourcesChanged &&
+                !spatialScalingDormantUpdate) {
             applied.scaling_method = current.scaling_method;
             applied.scaling_factor = current.scaling_factor;
             applied.scaling_sharpness = current.scaling_sharpness;
@@ -606,7 +618,8 @@ namespace mako::layer {
             ));
         const bool spatialScalingChanged =
             current.scaling_enabled != next.scaling_enabled ||
-            spatialScalingResourcesChanged;
+            (spatialScalingResourcesChanged &&
+             !spatialScalingDormantUpdate);
         const bool liveChange = frameGenerationChanged ||
             refreshRateThresholdChanged ||
                 generationPolicyChanged ||
@@ -635,6 +648,8 @@ namespace mako::layer {
                 .dynamicCadenceProbeIntervalChanged =
                     dynamicCadenceProbeIntervalChanged,
                 .spatialScalingChanged = spatialScalingChanged,
+                .spatialScalingDormantUpdate =
+                    spatialScalingDormantUpdate,
                 .spatialScalingLiveRebuild =
                     spatialScalingLiveRebuild,
                 .frameGenerationBackendChanged =

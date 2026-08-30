@@ -59,6 +59,49 @@ int main() {
     expect(!liveGamescopeHdrReclassificationAllowed(true),
         "Scaled swapchains must remain on their immutable SDR boundary");
 
+    const auto deckPlacement = selectSpatialFramePipelinePlacement(
+        {852, 532}, {1280, 800}
+    );
+    expect(deckPlacement ==
+            SpatialFramePipelinePlacement::PreFrameGeneration &&
+            sameExtent(frameGenerationExtent(
+                deckPlacement, {852, 532}, {1280, 800}
+            ), {1280, 800}),
+        "Deck-class outputs must reconstruct once before frame generation");
+    const auto fullHdPlacement = selectSpatialFramePipelinePlacement(
+        {1280, 720}, {1920, 1080}
+    );
+    expect(fullHdPlacement ==
+            SpatialFramePipelinePlacement::PreFrameGeneration,
+        "720p-to-1080p must retain the low-resolution pre-FG path");
+    expect(selectSpatialFramePipelinePlacement(
+            {1280, 800}, {1920, 1200}
+        ) == SpatialFramePipelinePlacement::PreFrameGeneration,
+        "The 1920x1200 low-resolution budget boundary must remain pre-FG");
+    const auto fourKPlacement = selectSpatialFramePipelinePlacement(
+        {1920, 1080}, {3840, 2160}
+    );
+    expect(fourKPlacement ==
+            SpatialFramePipelinePlacement::PostFrameGeneration &&
+            sameExtent(frameGenerationExtent(
+                fourKPlacement, {1920, 1080}, {3840, 2160}
+            ), {1920, 1080}),
+        "1080p-to-4K must keep interpolation resources at source resolution");
+    expect(selectSpatialFramePipelinePlacement(
+            {2560, 1440}, {3840, 2160}
+        ) == SpatialFramePipelinePlacement::PostFrameGeneration,
+        "1440p-to-4K must keep the high-resolution source-FG path");
+    expect(std::string_view(spatialFramePipelinePlacementName(
+            fourKPlacement)) == "post-frame-generation" &&
+            std::string_view(spatialFramePipelinePlacementReason(
+                fourKPlacement)) ==
+                "source-resolution-frame-generation-saves-high-resolution-work",
+        "Pipeline placement diagnostics must remain stable and machine-readable");
+    expect(selectSpatialFramePipelinePlacement(
+            {0, 0}, {3840, 2160}
+        ) == SpatialFramePipelinePlacement::PreFrameGeneration,
+        "Invalid extents must fail to the conservative pre-FG placement");
+
     VkSurfaceCapabilitiesKHR surfaceCapabilities{
         .supportedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
         .supportedUsageFlags = VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
@@ -465,15 +508,22 @@ int main() {
     expect(fourKPresentation.extents && sameExtent(
             fourKPresentation.extents->presentation, {3840, 2160}),
         "An 8 GiB device must retain exact 1080p-to-4K scaling");
-    const auto fiveKRejected = scalingDecisionForCreate(
+    const auto coldFiveKUsesBaseline = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {2560, 1440},
         std::nullopt, std::nullopt,
         variablePresentationPixelBudget(eightGiB)
     );
-    expect(!fiveKRejected.extents && fiveKRejected.inactiveReason ==
-            SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
-        "An 8 GiB device must reject an exact 5K presentation over its envelope");
-    const auto fiveKRetainsProvenFourK = scalingDecisionForCreate(
+    expect(coldFiveKUsesBaseline.extents &&
+            coldFiveKUsesBaseline.usedBaselinePresentationBudget &&
+            !coldFiveKUsesBaseline.reusedPreviousPresentationBudget &&
+            sameExtent(
+                coldFiveKUsesBaseline.extents->source, {2560, 1440}
+            ) &&
+            sameExtent(
+                coldFiveKUsesBaseline.extents->presentation, {3840, 2160}
+            ),
+        "A cold 1440p launch must use the deterministic 4K presentation envelope");
+    const auto fiveKAfterFourKIsIdentical = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {2560, 1440},
         SpatialScalingExtents{
             .source = {1920, 1080},
@@ -482,15 +532,17 @@ int main() {
         std::nullopt,
         variablePresentationPixelBudget(eightGiB)
     );
-    expect(fiveKRetainsProvenFourK.extents &&
-            fiveKRetainsProvenFourK.reusedPreviousPresentationBudget &&
+    expect(fiveKAfterFourKIsIdentical.extents &&
+            fiveKAfterFourKIsIdentical.usedBaselinePresentationBudget &&
+            !fiveKAfterFourKIsIdentical.reusedPreviousPresentationBudget &&
             sameExtent(
-                fiveKRetainsProvenFourK.extents->source, {2560, 1440}
+                fiveKAfterFourKIsIdentical.extents->source, {2560, 1440}
             ) &&
             sameExtent(
-                fiveKRetainsProvenFourK.extents->presentation, {3840, 2160}
+                fiveKAfterFourKIsIdentical.extents->presentation,
+                coldFiveKUsesBaseline.extents->presentation
             ),
-        "A 1440p resolution change must retain the proven 4K presentation envelope instead of falling back to native");
+        "A prior 1080p swapchain must not change the 1440p allocation decision");
     const auto eightKRejected = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {3840, 2160},
         std::nullopt, std::nullopt,

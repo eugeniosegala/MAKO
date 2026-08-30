@@ -106,6 +106,8 @@ namespace mako::layer {
                 previousVariableExtents,
             const std::optional<FixedSurfaceScalingContract>&
                 fixedSurfaceContract,
+            const std::function<void(
+                const FixedSurfaceScalingContract&)>& publishSpatialCreate,
             const std::function<void(void)>& finish) const;
         /// Replace a fixed native surface extent with the configured source
         /// extent after the lower driver has populated the capabilities.
