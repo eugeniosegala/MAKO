@@ -279,6 +279,10 @@ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND 
 
 ## lsfg-vk components
 
+The original implementation from which MAKO Renderer descends incorporated portions of an earlier lsfg-vk revision that the upstream project published under the MIT License reproduced below. The upstream project subsequently adopted the GNU General Public License version 3 for its later development. This notice applies only to the source incorporated under the earlier MIT terms and its descendants in MAKO; it does not assert that later lsfg-vk revisions are MIT-licensed.
+
+MAKO Renderer has since undergone substantial independent architectural and implementation changes. As a project provenance policy, MAKO does not copy, merge, port, or otherwise incorporate source code from later GPLv3-licensed lsfg-vk revisions. Future MAKO development proceeds from MAKO's own codebase and project history. This statement records provenance and development policy only; it does not add any restriction to the GPL-3.0-or-later rights granted for MAKO.
+
 MIT License
 
 Copyright (c) 2025 lsfg-vk

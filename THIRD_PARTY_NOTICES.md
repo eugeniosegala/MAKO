@@ -16,6 +16,12 @@ Lossless Scaling, LS1, and LSFG are used descriptively and remain the property o
 
 The complete notices for the original Decky LSFG-VK plugin, lsfg-vk components, toml++, Bjoern Hoehrmann's UTF-8 decoder, and Steam Deck Homebrew components are reproduced in [LICENSE.md](LICENSE.md).
 
+### lsfg-vk provenance boundary
+
+The original implementation from which MAKO Renderer descends incorporated portions of an earlier lsfg-vk revision published under the MIT License. The upstream project subsequently adopted the GNU General Public License version 3 for its later development. MAKO preserves the historical MIT notice and attribution in [LICENSE.md](LICENSE.md); they apply only to source incorporated under those earlier terms and its descendants in MAKO, not to later upstream releases.
+
+MAKO Renderer is now substantially different in architecture and implementation. As a project provenance policy, MAKO does not copy, merge, port, or otherwise import source from later GPLv3-licensed lsfg-vk revisions. Further development proceeds from MAKO's own codebase and project history. This statement is informational and does not impose an additional condition on MAKO recipients beyond the licenses otherwise identified in these documents.
+
 ## MAKO Decky frontend
 
 MAKO Decky's compiled frontend includes the following third-party code and icon data. Exact dependency versions are recorded in `plugin/package.json` and `plugin/pnpm-lock.yaml`. MAKO Decky packages include copies of the upstream dependency license files under `third_party_licenses/` and retain a frontend source map with the exact bundled dependency source content.
