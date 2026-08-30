@@ -2,7 +2,7 @@
   "CONTENT_SCALING": "Spatial Scaling",
   "SCALING_ENABLED": "Enable Scaling (Restart)",
   "SCALING_ENABLED_DESC": "Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO Scaler.",
-  "SCALING_ENABLED_WARNING": "Leave scaling off when you do not need it, as it consumes resources.",
+  "SCALING_ENABLED_WARNING": "Leave Scaling off when you do not need it, as it consumes resources. Using it with Frame Generation may affect performance; try different performance settings or a lower in-game resolution. Results vary by game and device.",
   "SCALING_METHOD": "Scaling Method",
   "SCALING_METHOD_DESC": "Choose the scaling model. You can change it while the game is running.",
   "SCALING_METHOD_COMPARISON_TIP": "How scaling works:\n1. In Steam, set Game Resolution to your display's maximum resolution (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. In the game, choose a lower resolution, such as 480p or 720p (or higher on Steam Machine).\n3. Use a Scale Factor to enlarge the image. 2x doubles your resolution.\n\nReducing the resolution of the game and scaling it back can substantially increase performance, with an image-quality trade-off. If your display supports it, use MAKO to scale from 2K to 4K.",

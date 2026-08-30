@@ -193,7 +193,7 @@ describe("Scaling controls", () => {
     expect(
       screen
         .getByText(
-          "Leave scaling off when you do not need it, as it consumes resources.",
+          "Leave Scaling off when you do not need it, as it consumes resources. Using it with Frame Generation may affect performance; try different performance settings or a lower in-game resolution. Results vary by game and device.",
         )
         .closest('[data-tone="warning"]'),
     ).toBeTruthy();

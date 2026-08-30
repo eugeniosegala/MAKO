@@ -125,6 +125,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("scalingSettings"),
         QStringLiteral("scalingEnabled"),
         QStringLiteral("scalingEnabledDesc"),
+        QStringLiteral("scalingEnabledWarning"),
         QStringLiteral("scalingMethod"),
         QStringLiteral("scalingMethodDesc"),
         QStringLiteral("scalingMethodNative"),

@@ -2,7 +2,7 @@
   "CONTENT_SCALING": "Escalado",
   "SCALING_ENABLED": "Activar escalado (Reiniciar)",
   "SCALING_ENABLED_DESC": "Actívalo antes de iniciar el juego. Si está desactivado, el escalado se desactiva por completo. Admite modelos de Lossless Scaling y MAKO Scaler.",
-  "SCALING_ENABLED_WARNING": "Deja el escalado desactivado cuando no lo necesites, ya que consume recursos.",
+  "SCALING_ENABLED_WARNING": "Deja el escalado desactivado cuando no lo necesites, ya que consume recursos. Usarlo junto con la generación de cuadros puede afectar al rendimiento; prueba diferentes ajustes de rendimiento o una resolución más baja en el juego. Los resultados varían según el juego y el dispositivo.",
   "SCALING_METHOD": "Método de escalado",
   "SCALING_METHOD_DESC": "Elige el modelo de escalado. Puedes cambiarlo mientras el juego está en ejecución.",
   "SCALING_METHOD_COMPARISON_TIP": "Cómo funciona el escalado:\n1. En Steam, establece la resolución del juego en la resolución máxima de tu pantalla (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. En el juego, elige una resolución menor, como 480p o 720p.\n3. Usa un factor de escala para ampliar la imagen; 2x es un buen punto de partida.\n\nEsto reduce la resolución que renderiza el juego y luego la escala de nuevo a la resolución de tu pantalla. Puede mejorar mucho el rendimiento, con una compensación en la calidad de imagen. Como alternativa, si tu pantalla lo admite, usa MAKO para escalar de 2K a 4K.",

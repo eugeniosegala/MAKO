@@ -2,7 +2,7 @@
   "CONTENT_SCALING": "Redimensionamento",
   "SCALING_ENABLED": "Ativar redimensionamento (Reiniciar)",
   "SCALING_ENABLED_DESC": "Ative antes de iniciar o jogo. Quando está desativado, o redimensionamento fica totalmente desativado. Suporta os modelos do Lossless Scaling e o MAKO Scaler.",
-  "SCALING_ENABLED_WARNING": "Deixe o redimensionamento desativado quando não precisar dele, pois consome recursos.",
+  "SCALING_ENABLED_WARNING": "Deixe o redimensionamento desativado quando não precisar dele, pois consome recursos. Usá-lo com a geração de fotogramas pode afetar o desempenho; experimente diferentes definições de desempenho ou uma resolução mais baixa no jogo. Os resultados variam consoante o jogo e o dispositivo.",
   "SCALING_METHOD": "Método de redimensionamento",
   "SCALING_METHOD_DESC": "Escolha o modelo de redimensionamento. Pode alterá-lo enquanto o jogo está em execução.",
   "SCALING_METHOD_COMPARISON_TIP": "Como funciona o redimensionamento:\n1. No Steam, defina a resolução do jogo para a resolução máxima do ecrã (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. No jogo, escolha uma resolução mais baixa, como 480p ou 720p.\n3. Utilize um fator de redimensionamento para ampliar a imagem; 2x é um bom ponto de partida.\n\nIsto reduz a resolução que o jogo processa e depois amplia-a para a resolução do ecrã. Pode melhorar muito o desempenho, com uma contrapartida na qualidade de imagem. Em alternativa, se o ecrã suportar, utilize o MAKO para redimensionar de 2K para 4K.",

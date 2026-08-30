@@ -223,7 +223,7 @@ ApplicationWindow {
 
                     GroupEntry {
                         title: t.scalingEnabled
-                        description: t.scalingEnabledDesc
+                        description: t.scalingEnabledDesc + "\n\n" + t.scalingEnabledWarning
                         compactRestartMarker: true
 
                         CheckBox {
