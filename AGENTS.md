@@ -149,6 +149,7 @@ Keep diagnostic operation names and fields machine-filterable. If a current log 
 - Treat that schema as the Decky profile allowlist. Unknown keys are inert on read and removed by the next canonical write; wrapper keys cannot become environment exports unless the current schema and generator support them. Preserve changed semantics through an explicit, tested migration instead of retaining arbitrary legacy fields or reusing a retired name.
 - Published Renderer URLs, checksums, and pins in `plugin/package.json` are maintained by the release/pinning scripts. Local-engine packaging writes local identity into the ZIP without changing the tracked release pin.
 - `Lossless.dll` is a user-supplied licensed input. Never add it to the repository, package it, upload it, or treat its presence as portable CI data.
+- MAKO Renderer descends from the GPL-3.0-or-later lsfg-vk version 2 history identified in `LICENSE.md`. The replacement lsfg-vk repository announced on 27 August 2026 is licensed under CC BY-NC-ND 4.0 and is not a source for MAKO; never copy its post-reset code, documentation, or assets into this repository.
 - Preserve unrelated worktree changes. Inspect `git status` before editing and do not clean generated or local files unless the task explicitly requests it.
 
 ## Compatibility cleanup contract

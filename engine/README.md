@@ -10,7 +10,7 @@
 
 MAKO Renderer is the Vulkan renderer and layer component of MAKO. It brings Lossless Scaling frame generation to Steam Deck, Steam Machine, SteamOS, and Linux more broadly, with scaling coming soon.
 
-The layer is derived from [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) and retains its open-source attribution and license obligations. It requires a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer does not bundle or replace that proprietary library.
+The layer descends directly from the GPL-3.0-or-later version 2 tree of [lsfg-vk](https://github.com/PancakeTAS/lsfg-vk) at upstream commit [`8b0da266`](https://github.com/PancakeTAS/lsfg-vk/commit/8b0da2661c6f3473a7fccc8ba643880050e71642) and retains its open-source attribution and license obligations. It requires a user-supplied `Lossless.dll` from a licensed [Lossless Scaling](https://store.steampowered.com/app/993090/Lossless_Scaling/) installation. MAKO Renderer does not bundle or replace that proprietary library. The exact [Renderer lineage](../LICENSE.md#lsfg-vk-renderer-lineage) is recorded in the root license.
 
 ## Downloads
 

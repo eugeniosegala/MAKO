@@ -228,7 +228,7 @@ Community creators have covered and tested the project on Steam Deck hardware. S
 MAKO is built on the work of two open-source projects and their communities:
 
 - **[Kurt Himebauch / xXJSONDeruloXx](https://github.com/xXJSONDeruloXx/decky-lsfg-vk)** created the original Decky LSFG-VK plugin that formed the foundation of MAKO's Decky interface, installation workflow, and per-game controls.
-- **[PancakeTAS](https://github.com/PancakeTAS/lsfg-vk)** and the **lsfg-vk contributors** created the Vulkan layer and Linux integration on which MAKO Renderer is based.
+- **[PancakeTAS](https://github.com/PancakeTAS/lsfg-vk)** and the **lsfg-vk contributors** created the GPL-3.0-or-later version 2 Vulkan layer and Linux integration from which MAKO Renderer descends. MAKO's direct upstream baseline is [`8b0da266`](https://github.com/PancakeTAS/lsfg-vk/commit/8b0da2661c6f3473a7fccc8ba643880050e71642); the exact lineage and migration commits are recorded in [LICENSE.md](LICENSE.md#lsfg-vk-renderer-lineage).
 
 MAKO also thanks the **Lossless Scaling developers** for the frame-generation and scaling technology accessed through each user's licensed installation, and the **Decky Loader team**, community contributors, testers, guide authors, and creators who helped make the project possible.
 
