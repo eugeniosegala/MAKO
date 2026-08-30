@@ -195,6 +195,7 @@ describe("Scaling controls", () => {
     ).toBeTruthy();
     expect(screen.getByText(/Steam Machine: 3840 × 2160 \/ 4K/)).toBeTruthy();
     expect(screen.getByText(/480p or 720p/)).toBeTruthy();
+    expect(screen.getByText(/or higher on Steam Machine/)).toBeTruthy();
     expect(screen.getByText(/2x doubles your resolution/)).toBeTruthy();
     expect(
       screen.getByText(
