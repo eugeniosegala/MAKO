@@ -6,6 +6,20 @@ vi.mock("@decky/ui", () => ({
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
+  SliderField: ({
+    label,
+    disabled,
+    description,
+  }: {
+    label: React.ReactNode;
+    disabled?: boolean;
+    description?: React.ReactNode;
+  }) => (
+    <div>
+      <button disabled={disabled}>{label}</button>
+      {description}
+    </div>
+  ),
   ToggleField: ({
     label,
     checked,
@@ -64,7 +78,7 @@ import { getDefaults } from "../../src/config/configSchema";
 afterEach(cleanup);
 
 describe("Performance Settings", () => {
-  test("keeps Ultra Performance restart-bound while exposing the lighter model", () => {
+  test("groups Ultra Performance, Flow Scale, and FP16 without duplicating the lighter model", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
     const onConfigUpdate = vi.fn(async () => undefined);
@@ -88,20 +102,25 @@ describe("Performance Settings", () => {
         .closest("button")
         ?.querySelector('svg[aria-hidden="true"]'),
     ).toBeTruthy();
-    const lighterModel = screen.getByText("Lighter FG Model");
-    expect(lighterModel.getAttribute("data-checked")).toBe("true");
-    expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
-    expect((lighterModel as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByText("Lighter FG Model")).toBeNull();
     expect(
-      screen.getByText(
-        /less aggressive performance option than Ultra Performance/,
-      ),
+      (screen.getByText("Flow Scale (75%)") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    const allowFp16 = screen.getByText("Allow FP16 (Restart)");
+    expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
+    expect(allowFp16.getAttribute("data-checked")).toBe("true");
+    expect(allowFp16.getAttribute("data-bottom-separator")).toBe("none");
+    expect(
+      screen.queryByText(/private frame-generation context live/),
+    ).toBeNull();
+    expect(
+      screen.getByText(/Reduces MAKO's GPU workload on low-power devices/),
     ).toBeTruthy();
-    expect(screen.queryByText(/private frame-generation context live/)).toBeNull();
     expect(
-      screen.getByText(
-        /Primarily intended for low-power devices such as Steam Deck/,
-      ),
+      screen.getByText(/LS1 Performance when Scaling is enabled/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/performance across the active MAKO features/),
     ).toBeTruthy();
     const info = screen.getByRole("note");
     expect(info.getAttribute("data-tone")).toBe("info");

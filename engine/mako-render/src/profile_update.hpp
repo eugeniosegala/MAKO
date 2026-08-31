@@ -53,7 +53,8 @@ namespace mako::layer {
     spatialScalerRebuildQuietPeriod(
             const ls::GameConf& current,
             const ls::GameConf& requested) noexcept {
-        if (current.scaling_method != requested.scaling_method)
+        if (ls::effectiveScalingMethod(current) !=
+                ls::effectiveScalingMethod(requested))
             return std::chrono::milliseconds::zero();
         return std::chrono::milliseconds(500);
     }
@@ -166,7 +167,8 @@ namespace mako::layer {
         return {
             .scalingEnabled = scalingActive,
             .scalingMethod = scalingActive
-                ? profile.scaling_method : ls::ScalingMethod::Native,
+                ? ls::effectiveScalingMethod(profile)
+                : ls::ScalingMethod::Native,
             .scalingFactor = scalingActive ? profile.scaling_factor : 1.0F,
             .scalingSupersampling = scalingActive
                 ? profile.scaling_supersampling : false,
@@ -543,7 +545,8 @@ namespace mako::layer {
         // They remain at their actually applied values until recreation
         // completes inside an already compatible process.
         const bool scalingMethodChanged =
-            current.scaling_method != next.scaling_method;
+            ls::effectiveScalingMethod(current) !=
+                ls::effectiveScalingMethod(applied);
         const bool scalingFactorChanged =
             current.scaling_factor != next.scaling_factor;
         const bool scalingSupersamplingChanged =

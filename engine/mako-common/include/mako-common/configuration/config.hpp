@@ -182,6 +182,16 @@ namespace ls {
         return profile.scaling_enabled;
     }
 
+    /// Spatial model selected after applying cross-feature presets. Ultra
+    /// Performance keeps a disabled scaling engine dormant, but uses the
+    /// lower-cost licensed model whenever that engine is provisioned.
+    [[nodiscard]] constexpr ScalingMethod effectiveScalingMethod(
+            const GameConf& profile) noexcept {
+        return profile.scaling_enabled && profile.ultra_performance
+            ? ScalingMethod::Ls1Performance
+            : profile.scaling_method;
+    }
+
     /// Whether this method requires user-supplied licensed model resources.
     [[nodiscard]] constexpr bool licensedScalingModelRequested(
             const ScalingMethod method) noexcept {

@@ -22,10 +22,7 @@ import {
   type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
-import {
-  MakoExperimentalSettingLabel,
-  MakoInlineTip,
-} from "./MakoUi";
+import { MakoExperimentalSettingLabel, MakoInlineTip } from "./MakoUi";
 
 interface ScalingControlProps {
   config: ConfigurationData;
@@ -45,24 +42,30 @@ export function ScalingControl({
   runtimeFactorCeiling = null,
   onConfigChange,
 }: ScalingControlProps) {
-  const scalerActive = config.scaling_method !== SCALING_METHOD_NATIVE;
-  const steppedRuntimeCeiling = runtimeFactorCeiling === null
-    ? null
-    : Math.max(
-        SCALING_FACTOR_MIN,
-        Math.min(
-          SCALING_FACTOR_MAX,
-          Math.floor((runtimeFactorCeiling + 0.0001) * 10) / 10,
-        ),
-      );
-  const factorMaximum = !config.scaling_supersampling &&
-      steppedRuntimeCeiling !== null
-    ? steppedRuntimeCeiling
-    : SCALING_FACTOR_MAX;
+  const effectiveScalingMethod =
+    config.scaling_enabled && config.ultra_performance
+      ? SCALING_METHOD_LS1_PERFORMANCE
+      : config.scaling_method;
+  const scalerActive = effectiveScalingMethod !== SCALING_METHOD_NATIVE;
+  const steppedRuntimeCeiling =
+    runtimeFactorCeiling === null
+      ? null
+      : Math.max(
+          SCALING_FACTOR_MIN,
+          Math.min(
+            SCALING_FACTOR_MAX,
+            Math.floor((runtimeFactorCeiling + 0.0001) * 10) / 10,
+          ),
+        );
+  const factorMaximum =
+    !config.scaling_supersampling && steppedRuntimeCeiling !== null
+      ? steppedRuntimeCeiling
+      : SCALING_FACTOR_MAX;
   const displayedFactor = Math.min(config.scaling_factor, factorMaximum);
-  const factorLimited = !config.scaling_supersampling &&
-    factorMaximum < SCALING_FACTOR_MAX;
-  const factorHasNoHeadroom = !config.scaling_supersampling &&
+  const factorLimited =
+    !config.scaling_supersampling && factorMaximum < SCALING_FACTOR_MAX;
+  const factorHasNoHeadroom =
+    !config.scaling_supersampling &&
     factorMaximum <= SCALING_FACTOR_MIN + 0.0001;
   const scalingMethodOptions = [
     {
@@ -141,7 +144,7 @@ export function ScalingControl({
                       <span style={{ whiteSpace: "pre-line" }}>
                         {t(
                           "SCALING_METHOD_COMPARISON_TIP",
-                          "How scaling works:\n1. In Steam, set Game Resolution to your display's maximum resolution (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. In the game, choose a lower resolution, such as 480p or 720p (or higher on Steam Machine).\n3. Use a Scale Factor to enlarge the image. 2x doubles your resolution.\n\nReducing the resolution of the game and scaling it back can substantially increase performance, with an image-quality trade-off. If your display supports it, use MAKO to scale from 2K to 4K.",
+                          "How scaling works:\n1. In Steam, set Game Resolution to your display's maximum resolution (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160).\n2. In the game, choose a lower resolution, such as 480p, 720p, or more.\n3. Use a Scale Factor to enlarge the image. 2x doubles your resolution.\n\nReducing the resolution of the game and scaling it back can substantially increase performance, with an image-quality trade-off.",
                         )}
                       </span>
                     </MakoInlineTip>
@@ -153,8 +156,8 @@ export function ScalingControl({
             >
               <Dropdown
                 rgOptions={scalingMethodOptions}
-                selectedOption={config.scaling_method}
-                disabled={disabled}
+                selectedOption={effectiveScalingMethod}
+                disabled={disabled || config.ultra_performance}
                 onChange={(option) =>
                   onConfigChange(SCALING_METHOD, String(option.data))
                 }
@@ -177,7 +180,7 @@ export function ScalingControl({
                     <MakoInlineTip tone="warning">
                       {t(
                         "SCALING_SUPERSAMPLING_WARNING",
-                        "Supersampling is active. MAKO may render more pixels than the display can show.",
+                        "Supersampling is enabled. MAKO can render above the display target for a sharper downsampled image.",
                       )}
                     </MakoInlineTip>
                   )}
@@ -185,9 +188,7 @@ export function ScalingControl({
               }
               checked={config.scaling_supersampling}
               disabled={disabled}
-              onChange={(value) =>
-                onConfigChange(SCALING_SUPERSAMPLING, value)
-              }
+              onChange={(value) => onConfigChange(SCALING_SUPERSAMPLING, value)}
             />
           </PanelSectionRow>
 
@@ -227,9 +228,11 @@ export function ScalingControl({
               step={0.1}
               validValues="steps"
               minimumDpadGranularity={0.1}
-              notchCount={Math.round(
-                (factorMaximum - SCALING_FACTOR_MIN) / 0.1,
-              ) + 1}
+              notchCount={
+                factorHasNoHeadroom
+                  ? 3
+                  : Math.round((factorMaximum - SCALING_FACTOR_MIN) / 0.1) + 1
+              }
               notchTicksVisible
               disabled={disabled || factorHasNoHeadroom}
               onChange={(value) =>

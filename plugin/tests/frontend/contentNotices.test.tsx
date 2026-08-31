@@ -144,11 +144,7 @@ describe("content status notices", () => {
 
     expect(screen.getByText("🦈")).toBeTruthy();
     expect(screen.getByText("Hello from the MAKO Team!")).toBeTruthy();
-    expect(
-      screen.getByText(
-        "Here's a few tips to make your experience even better.",
-      ),
-    ).toBeTruthy();
+    expect(screen.queryByText(/Here's a few tips/)).toBeNull();
     const welcome = screen.getByRole("note");
     expect(welcome.textContent).toContain("Many settings apply live.");
     expect(welcome.textContent).toContain(

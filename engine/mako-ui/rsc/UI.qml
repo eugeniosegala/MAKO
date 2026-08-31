@@ -218,6 +218,211 @@ ApplicationWindow {
                 }
 
                 Group {
+                    name: t.frameGeneration
+                    enabled: backend.available
+
+                    GroupEntry {
+                        title: t.frameGeneration
+                        description: t.frameGenerationDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.frame_generation_enabled
+                            onToggled: backend.frame_generation_enabled = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.baseFpsCap
+                        description: t.baseFpsCapDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: !(backend.adaptive && backend.adaptive_auto_base_fps_cap)
+
+                        SpinBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            from: backend.minimum_base_fps_cap
+                            to: backend.maximum_base_fps_cap
+                            editable: true
+
+                            value: backend.base_fps_cap
+                            textFromValue: function (value) {
+                                return value === 0 ? t.off : value + t.fps;
+                            }
+                            valueFromText: function (text) {
+                                var parsed = parseInt(text);
+                                return isNaN(parsed)
+                                    ? backend.minimum_base_fps_cap
+                                    : Math.max(
+                                        backend.minimum_base_fps_cap,
+                                        Math.min(backend.maximum_base_fps_cap, parsed)
+                                    );
+                            }
+                            onValueModified: backend.base_fps_cap = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.adaptiveFrameGen
+                        description: t.adaptiveFrameGenDesc
+                        visible: backend.frame_generation_enabled
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.adaptive
+                            onToggled: backend.adaptive = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.fractionalAdaptive
+                        description: t.fractionalAdaptiveDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: backend.adaptive
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.fractional_adaptive
+                            onToggled: backend.fractional_adaptive = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.targetFps
+                        description: t.targetFpsDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: backend.adaptive
+
+                        SpinBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            from: backend.minimum_target_fps
+                            to: backend.maximum_target_fps
+
+                            value: backend.target_fps
+                            onValueModified: backend.target_fps = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.adaptiveFpsCapPrefix + (backend.target_fps / 2) + t.adaptiveFpsCapSuffix
+                        description: t.adaptiveFpsCapDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: backend.adaptive
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.adaptive_auto_base_fps_cap
+                            onToggled: backend.adaptive_auto_base_fps_cap = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.maxAdaptiveMultiplier
+                        description: t.maxAdaptiveMultiplierDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: backend.adaptive
+
+                        SpinBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            from: backend.minimum_adaptive_max_multiplier
+                            to: backend.maximum_adaptive_max_multiplier
+
+                            value: backend.adaptive_max_multiplier
+                            textFromValue: function (value) {
+                                return value + t.multiplierX;
+                            }
+                            valueFromText: function (text) {
+                                return parseInt(text);
+                            }
+                            onValueModified: backend.adaptive_max_multiplier = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.smoothCadence
+                        description: t.smoothCadenceDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: backend.adaptive
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.adaptive_stable_cadence
+                            onToggled: backend.adaptive_stable_cadence = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.multiplier
+                        description: t.multiplierDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: !backend.adaptive
+
+                        SpinBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            from: backend.minimum_multiplier
+                            to: backend.maximum_multiplier
+
+                            value: backend.multiplier
+                            onValueModified: backend.multiplier = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.performanceMode
+                        description: t.performanceModeDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: !backend.ultra_performance
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.performance_mode
+                            onToggled: backend.performance_mode = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.flowScale
+                        description: t.flowScaleDesc
+                        visible: backend.frame_generation_enabled
+                        enabled: !backend.ultra_performance
+
+                        FlowSlider {
+                            Layout.fillWidth: true
+
+                            from: backend.minimum_flow_scale
+                            to: backend.maximum_flow_scale
+
+                            value: backend.flow_scale
+                            onUpdate: value => backend.flow_scale = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.gpu
+                        description: t.gpuDesc
+                        visible: backend.frame_generation_enabled
+                        compactRestartMarker: true
+
+                        ComboBox {
+                            Layout.fillWidth: true
+
+                            model: backend.gpus
+                            currentIndex: backend.gpu
+                            onActivated: index => backend.gpu = index
+                        }
+                    }
+                }
+
+                Group {
                     name: t.scalingSettings
                     enabled: backend.available
 
@@ -238,12 +443,12 @@ ApplicationWindow {
                         title: t.scalingMethod
                         description: t.scalingMethodDesc
                         visible: backend.scaling_enabled
-                        enabled: backend.scaling_enabled
+                        enabled: backend.scaling_enabled && !backend.ultra_performance
 
                         ComboBox {
                             Layout.fillWidth: true
                             model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]
-                            currentIndex: backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1
+                            currentIndex: backend.ultra_performance ? 3 : backend.scaling_method === "native" ? 0 : backend.scaling_method === "ls1" ? 2 : backend.scaling_method === "ls1-performance" ? 3 : 1
                             onActivated: index => backend.scaling_method = index === 0 ? "native" : index === 2 ? "ls1" : index === 3 ? "ls1-performance" : "mako"
                         }
                     }
@@ -298,187 +503,6 @@ ApplicationWindow {
                 }
 
                 Group {
-                    name: t.frameGeneration
-                    enabled: backend.available
-
-                    GroupEntry {
-                        title: t.frameGeneration
-                        description: t.frameGenerationDesc
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.frame_generation_enabled
-                            onToggled: backend.frame_generation_enabled = checked
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.baseFpsCap
-                        description: t.baseFpsCapDesc
-                        enabled: !(backend.adaptive && backend.adaptive_auto_base_fps_cap)
-
-                        SpinBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            from: backend.minimum_base_fps_cap
-                            to: backend.maximum_base_fps_cap
-                            editable: true
-
-                            value: backend.base_fps_cap
-                            textFromValue: function (value) {
-                                return value === 0 ? t.off : value + t.fps;
-                            }
-                            valueFromText: function (text) {
-                                var parsed = parseInt(text);
-                                return isNaN(parsed)
-                                    ? backend.minimum_base_fps_cap
-                                    : Math.max(
-                                        backend.minimum_base_fps_cap,
-                                        Math.min(backend.maximum_base_fps_cap, parsed)
-                                    );
-                            }
-                            onValueModified: backend.base_fps_cap = value
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.adaptiveFrameGen
-                        description: t.adaptiveFrameGenDesc
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.adaptive
-                            onToggled: backend.adaptive = checked
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.fractionalAdaptive
-                        description: t.fractionalAdaptiveDesc
-                        enabled: backend.adaptive
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.fractional_adaptive
-                            onToggled: backend.fractional_adaptive = checked
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.targetFps
-                        description: t.targetFpsDesc
-                        enabled: backend.adaptive
-
-                        SpinBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            from: backend.minimum_target_fps
-                            to: backend.maximum_target_fps
-
-                            value: backend.target_fps
-                            onValueModified: backend.target_fps = value
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.adaptiveFpsCapPrefix + (backend.target_fps / 2) + t.adaptiveFpsCapSuffix
-                        description: t.adaptiveFpsCapDesc
-                        enabled: backend.adaptive
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.adaptive_auto_base_fps_cap
-                            onToggled: backend.adaptive_auto_base_fps_cap = checked
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.maxAdaptiveMultiplier
-                        description: t.maxAdaptiveMultiplierDesc
-                        enabled: backend.adaptive
-
-                        SpinBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            from: backend.minimum_adaptive_max_multiplier
-                            to: backend.maximum_adaptive_max_multiplier
-
-                            value: backend.adaptive_max_multiplier
-                            textFromValue: function (value) {
-                                return value + t.multiplierX;
-                            }
-                            valueFromText: function (text) {
-                                return parseInt(text);
-                            }
-                            onValueModified: backend.adaptive_max_multiplier = value
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.smoothCadence
-                        description: t.smoothCadenceDesc
-                        enabled: backend.adaptive
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.adaptive_stable_cadence
-                            onToggled: backend.adaptive_stable_cadence = checked
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.multiplier
-                        description: t.multiplierDesc
-                        enabled: !backend.adaptive
-
-                        SpinBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            from: backend.minimum_multiplier
-                            to: backend.maximum_multiplier
-
-                            value: backend.multiplier
-                            onValueModified: backend.multiplier = value
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.flowScale
-                        description: t.flowScaleDesc
-                        enabled: !backend.ultra_performance
-
-                        FlowSlider {
-                            Layout.fillWidth: true
-
-                            from: backend.minimum_flow_scale
-                            to: backend.maximum_flow_scale
-
-                            value: backend.flow_scale
-                            onUpdate: value => backend.flow_scale = value
-                        }
-                    }
-
-                    GroupEntry {
-                        title: t.gpu
-                        description: t.gpuDesc
-                        compactRestartMarker: true
-
-                        ComboBox {
-                            Layout.fillWidth: true
-
-                            model: backend.gpus
-                            currentIndex: backend.gpu
-                            onActivated: index => backend.gpu = index
-                        }
-                    }
-                }
-
-                Group {
                     name: t.performanceSettings
                     enabled: backend.available
 
@@ -495,18 +519,6 @@ ApplicationWindow {
                         }
                     }
 
-                    GroupEntry {
-                        title: t.performanceMode
-                        description: t.performanceModeDesc
-                        enabled: !backend.ultra_performance
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.performance_mode
-                            onToggled: backend.performance_mode = checked
-                        }
-                    }
                 }
 
                 Group {

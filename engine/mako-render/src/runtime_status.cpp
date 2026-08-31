@@ -135,7 +135,7 @@ std::string mako::layer::runtimeStatusJson(
     std::ostringstream stream;
     stream << std::boolalpha
            << '{'
-           << "\"schema_version\":3"
+           << "\"schema_version\":4"
            << ",\"pid\":" << processId
            << ",\"process_start_ticks\":" << processStartTicks
            << ",\"context\":" << contextId
@@ -155,6 +155,8 @@ std::string mako::layer::runtimeStatusJson(
            << '}'
            << ",\"applied_generated_capacity\":"
            << status.appliedGeneratedCapacity
+           << ",\"frame_generation_active\":"
+           << status.frameGenerationActive
            << ",\"spatial_scaling\":{"
            << "\"active\":" << status.spatialScalingActive
            << ",\"activation_supported\":"
@@ -166,11 +168,29 @@ std::string mako::layer::runtimeStatusJson(
         stream << "null";
     stream << ",\"source_width\":" << status.spatialSourceWidth
            << ",\"source_height\":" << status.spatialSourceHeight
+           << ",\"presentation_width\":"
+           << status.spatialPresentationWidth
+           << ",\"presentation_height\":"
+           << status.spatialPresentationHeight
            << ",\"gamescope_target_width\":"
            << status.gamescopeTargetWidth
            << ",\"gamescope_target_height\":"
            << status.gamescopeTargetHeight
-           << ",\"non_supersampling_factor_ceiling\":";
+           << ",\"requested_method\":"
+           << jsonString(ls::scalingMethodName(status.spatialRequestedMethod))
+           << ",\"active_method\":"
+           << jsonString(ls::scalingMethodName(status.spatialActiveMethod))
+           << ",\"effective_factor\":"
+           << status.spatialEffectiveFactor
+           << ",\"pipeline\":" << jsonString(status.spatialPipeline)
+           << ",\"supersampling_active\":"
+           << status.spatialSupersamplingActive
+           << ",\"fallback_reason\":";
+    if (status.spatialFallbackReason)
+        stream << jsonString(*status.spatialFallbackReason);
+    else
+        stream << "null";
+    stream << ",\"non_supersampling_factor_ceiling\":";
     if (status.nonSupersamplingFactorCeiling)
         stream << *status.nonSupersamplingFactorCeiling;
     else

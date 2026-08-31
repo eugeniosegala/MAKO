@@ -148,6 +148,16 @@ describe("Frame Generation controls", () => {
       .getByText("−")
       .closest<HTMLElement>('[data-focusable="true"]');
     expect(fixedMultiplierControls?.style.marginTop).toBe("6px");
+    const lighterModel = screen.getByText("Lighter FG Model");
+    expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
+    expect(
+      screen
+        .getByText("Fixed FPS Multiplier")
+        .compareDocumentPosition(lighterModel) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    fireEvent.click(lighterModel);
+    expect(onConfigChange).toHaveBeenCalledWith("performance_mode", true);
     const fixedMultiplierDescription = screen.getByText(
       /Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. 5x is a high-cost option for high-refresh displays. Test both per game/,
     );
@@ -158,7 +168,9 @@ describe("Frame Generation controls", () => {
         /Enable Fractional Adaptive to keep more real frames, but test it per game/,
       ),
     ).toBeTruthy();
-    expect(screen.queryByText(/MAKO prepares and swaps private resources live/)).toBeNull();
+    expect(
+      screen.queryByText(/MAKO prepares and swaps private resources live/),
+    ).toBeNull();
     expect(screen.queryByText(/may require a restart/)).toBeNull();
     expect(
       screen
@@ -177,7 +189,9 @@ describe("Frame Generation controls", () => {
     );
 
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
-    expect(screen.queryByText(/MAKO prepares and swaps private resources live/)).toBeNull();
+    expect(
+      screen.queryByText(/MAKO prepares and swaps private resources live/),
+    ).toBeNull();
     expect(
       screen
         .getByText("Adaptive Frame Generation")
@@ -206,6 +220,17 @@ describe("Frame Generation controls", () => {
     expect(screen.getByText(/^Interpolation ceiling/).style.paddingBottom).toBe(
       "2px",
     );
+
+    rerender(
+      <FpsMultiplierControl
+        config={{ ...defaults, adaptive: false, ultra_performance: true }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+    const lockedLighterModel = screen.getByText("Lighter FG Model");
+    expect((lockedLighterModel as HTMLButtonElement).disabled).toBe(true);
+    expect(lockedLighterModel.getAttribute("data-checked")).toBe("true");
   });
 
   test("collapses mode controls while generation is off without changing saved state", () => {
@@ -230,6 +255,11 @@ describe("Frame Generation controls", () => {
     expect(
       screen.getByText("Frame Generation").getAttribute("data-checked"),
     ).toBe("false");
+    expect(
+      screen
+        .getByText("Frame Generation")
+        .getAttribute("data-bottom-separator"),
+    ).toBe("none");
     expect(screen.queryByText("Adaptive Frame Generation")).toBeNull();
     expect(screen.queryByText("Fractional Adaptive")).toBeNull();
     expect(screen.queryByText(/Target FPS \(90\)$/)).toBeNull();
@@ -251,6 +281,11 @@ describe("Frame Generation controls", () => {
     );
 
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
+    expect(
+      screen
+        .getByText("Frame Generation")
+        .getAttribute("data-bottom-separator"),
+    ).toBe("default");
     expect(
       screen.getByText("Fractional Adaptive").getAttribute("data-checked"),
     ).toBe("true");

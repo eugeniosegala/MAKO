@@ -16,6 +16,7 @@ import {
 } from "../config/configSchema";
 import { RUNTIME_STATUS_POLL_INTERVAL_MS } from "../config/uiTiming";
 import {
+  EMPTY_RUNTIME_SCALING_UI_STATE,
   runtimeScalingUiState,
   type RuntimeScalingUiState,
 } from "../utils/runtimeScalingUtils";
@@ -130,13 +131,9 @@ export function useDllDetection() {
   };
 }
 
-export function useRuntimeScalingStatus(
-  profileName: string,
-  enabled: boolean,
-) {
+export function useRuntimeScalingStatus(profileName: string, enabled: boolean) {
   const [runtimeState, setRuntimeState] = useState<RuntimeScalingUiState>({
-    inactiveReason: null,
-    nonSupersamplingFactorCeiling: null,
+    ...EMPTY_RUNTIME_SCALING_UI_STATE,
   });
 
   useEffect(() => {
@@ -144,10 +141,7 @@ export function useRuntimeScalingStatus(
     const refresh = async () => {
       if (!enabled) {
         if (active) {
-          setRuntimeState({
-            inactiveReason: null,
-            nonSupersamplingFactorCeiling: null,
-          });
+          setRuntimeState({ ...EMPTY_RUNTIME_SCALING_UI_STATE });
         }
         return;
       }
@@ -158,10 +152,7 @@ export function useRuntimeScalingStatus(
         }
       } catch {
         if (active) {
-          setRuntimeState({
-            inactiveReason: null,
-            nonSupersamplingFactorCeiling: null,
-          });
+          setRuntimeState({ ...EMPTY_RUNTIME_SCALING_UI_STATE });
         }
       }
     };

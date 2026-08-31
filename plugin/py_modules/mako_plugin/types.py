@@ -209,6 +209,12 @@ class RuntimePendingState(TypedDict):
     process_restart: bool
 
 
+RuntimeScalingMethod = Literal["native", "mako", "ls1", "ls1-performance"]
+RuntimeScalingPipeline = Literal[
+    "inactive", "pre-frame-generation", "post-frame-generation"
+]
+
+
 class RuntimeSpatialScalingState(TypedDict):
     """Effective scaling state for one Renderer context."""
 
@@ -217,8 +223,16 @@ class RuntimeSpatialScalingState(TypedDict):
     inactive_reason: Optional[str]
     source_width: int
     source_height: int
+    presentation_width: int
+    presentation_height: int
     gamescope_target_width: int
     gamescope_target_height: int
+    requested_method: RuntimeScalingMethod
+    active_method: RuntimeScalingMethod
+    effective_factor: float
+    pipeline: RuntimeScalingPipeline
+    supersampling_active: bool
+    fallback_reason: Optional[str]
     non_supersampling_factor_ceiling: Optional[float]
 
 
@@ -235,6 +249,7 @@ class RuntimeContextState(TypedDict):
     reason: str
     pending: RuntimePendingState
     applied_generated_capacity: int
+    frame_generation_active: bool
     spatial_scaling: RuntimeSpatialScalingState
     requested: RuntimeProfileSnapshot
     applied: RuntimeProfileSnapshot

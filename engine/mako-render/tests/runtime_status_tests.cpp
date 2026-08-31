@@ -40,6 +40,7 @@ int main() {
         .requestedProfile = requested,
         .appliedProfile = applied,
         .appliedGeneratedCapacity = 1,
+        .frameGenerationActive = true,
         .frameGenerationPrivatePending = true,
         .spatialScalingActive = false,
         .spatialScalingActivationSupported = false,
@@ -47,14 +48,22 @@ int main() {
             "gamescope-wsi-surface-unproven",
         .spatialSourceWidth = 960,
         .spatialSourceHeight = 540,
+        .spatialPresentationWidth = 1280,
+        .spatialPresentationHeight = 720,
         .gamescopeTargetWidth = 1280,
         .gamescopeTargetHeight = 800,
+        .spatialRequestedMethod = ls::ScalingMethod::Ls1,
+        .spatialActiveMethod = ls::ScalingMethod::Mako,
+        .spatialEffectiveFactor = 4.0 / 3.0,
+        .spatialPipeline = "pre-frame-generation",
+        .spatialSupersamplingActive = false,
+        .spatialFallbackReason = "translator unavailable",
         .nonSupersamplingFactorCeiling = 4.0 / 3.0,
     };
     const auto json = mako::layer::runtimeStatusJson(
         record, 123, 321, 456, "frame-generation", 789
     );
-    expect(json.find("\"schema_version\":3") != std::string::npos,
+    expect(json.find("\"schema_version\":4") != std::string::npos,
         "schema version missing");
     expect(json.find("\"phase\":\"draining\"") != std::string::npos,
         "phase missing");
@@ -70,6 +79,24 @@ int main() {
     expect(json.find("\"applied_generated_capacity\":1") !=
             std::string::npos,
         "applied capacity missing");
+    expect(json.find("\"frame_generation_active\":true") !=
+            std::string::npos,
+        "effective frame generation state missing");
+    expect(json.find("\"presentation_width\":1280") !=
+            std::string::npos,
+        "spatial presentation width missing");
+    expect(json.find("\"requested_method\":\"ls1\"") !=
+            std::string::npos,
+        "requested spatial method missing");
+    expect(json.find("\"active_method\":\"mako\"") !=
+            std::string::npos,
+        "active spatial method missing");
+    expect(json.find("\"pipeline\":\"pre-frame-generation\"") !=
+            std::string::npos,
+        "spatial pipeline placement missing");
+    expect(json.find("\"fallback_reason\":\"translator unavailable\"") !=
+            std::string::npos,
+        "spatial fallback reason missing");
     expect(json.find("\"non_supersampling_factor_ceiling\":1.33333") !=
             std::string::npos,
         "spatial scaling display ceiling missing");

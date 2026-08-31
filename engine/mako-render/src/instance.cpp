@@ -1268,7 +1268,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
             // Native Resolution and MAKO do not require the licensed shader,
             // but retaining its path while the Scaling Engine is provisioned
             // is what makes a later private LS1 selection genuinely live.
-            if (ls::licensedScalingModelRequested(profile.scaling_method)) {
+            if (ls::licensedScalingModelRequested(
+                    ls::effectiveScalingMethod(profile))) {
                 std::cerr << "MAKO Renderer: unable to locate Lossless.dll for LS1; "
                              "the MAKO fallback will be used: "
                           << error.what() << '\n';

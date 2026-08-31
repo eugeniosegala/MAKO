@@ -213,16 +213,17 @@ describe("Scaling controls", () => {
     expect(
       screen.getByText(/How scaling works:/).closest('[data-tone="info"]'),
     ).toBeTruthy();
-    expect(screen.getByText(/Steam Machine: 3840 × 2160 \/ 4K/)).toBeTruthy();
-    expect(screen.getByText(/480p or 720p/)).toBeTruthy();
-    expect(screen.getByText(/or higher on Steam Machine/)).toBeTruthy();
+    expect(screen.getByText(/Steam Machine: 3840 × 2160/)).toBeTruthy();
+    expect(screen.queryByText(/\/ 4K/)).toBeNull();
+    expect(screen.getByText(/480p, 720p, or more/)).toBeTruthy();
+    expect(screen.queryByText(/higher on Steam Machine/)).toBeNull();
     expect(screen.getByText(/2x doubles your resolution/)).toBeTruthy();
     expect(
       screen.getByText(
         /Reducing the resolution of the game and scaling it back can substantially increase performance/,
       ),
     ).toBeTruthy();
-    expect(screen.getByText(/scale from 2K to 4K/)).toBeTruthy();
+    expect(screen.queryByText(/scale from 2K to 4K/)).toBeNull();
 
     rerender(
       <ScalingControl
@@ -259,13 +260,12 @@ describe("Scaling controls", () => {
     const limited = screen.getByText("Scale Factor (1.3x display limit)");
     expect(limited.getAttribute("data-maximum")).toBe("1.3");
     expect(limited.getAttribute("data-notch-count")).toBe("4");
-    fireEvent.click(screen.getByRole("button", {
-      name: "Quality Supersampling",
-    }));
-    expect(onConfigChange).toHaveBeenCalledWith(
-      SCALING_SUPERSAMPLING,
-      true,
+    fireEvent.click(
+      screen.getByRole("button", {
+        name: "Quality Supersampling",
+      }),
     );
+    expect(onConfigChange).toHaveBeenCalledWith(SCALING_SUPERSAMPLING, true);
 
     rerender(
       <ScalingControl
@@ -276,9 +276,11 @@ describe("Scaling controls", () => {
     );
     const expanded = screen.getByText("Scale Factor (1.8x)");
     expect(expanded.getAttribute("data-maximum")).toBe("2");
-    expect(screen.getByText(
-      "Supersampling is active. MAKO may render more pixels than the display can show.",
-    )).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Supersampling is enabled. MAKO can render above the display target for a sharper downsampled image.",
+      ),
+    ).toBeTruthy();
   });
 
   test("disables a factor with no display headroom and explains the alternatives", () => {
@@ -299,12 +301,58 @@ describe("Scaling controls", () => {
 
     const factor = screen.getByText("Scale Factor (1.0x display limit)");
     expect((factor as HTMLButtonElement).disabled).toBe(true);
-    expect(factor.getAttribute("data-notch-count")).toBe("1");
+    expect(factor.getAttribute("data-notch-count")).toBe("3");
     expect(
       screen.getByText(
         "This resolution already fills the display. Lower the in-game resolution or enable Quality Supersampling.",
       ),
     ).toBeTruthy();
+  });
+
+  test("keeps pre-game choices saved and only clamps their live presentation", () => {
+    window.SP_REACT = React;
+    const onConfigChange = vi.fn(async () => undefined);
+    const config = {
+      ...getDefaults(),
+      scaling_enabled: true,
+      scaling_factor: 1.8,
+      scaling_supersampling: false,
+    };
+    const { rerender } = render(
+      <ScalingControl config={config} onConfigChange={onConfigChange} />,
+    );
+
+    expect(screen.getByText("Scale Factor (1.8x)")).toBeTruthy();
+    expect(onConfigChange).not.toHaveBeenCalled();
+
+    rerender(
+      <ScalingControl
+        config={config}
+        runtimeFactorCeiling={1.2}
+        onConfigChange={onConfigChange}
+      />,
+    );
+    expect(screen.getByText("Scale Factor (1.2x display limit)")).toBeTruthy();
+    expect(onConfigChange).not.toHaveBeenCalled();
+  });
+
+  test("shows Ultra Performance's effective scaler as locked", () => {
+    window.SP_REACT = React;
+    render(
+      <ScalingControl
+        config={{
+          ...getDefaults(),
+          scaling_enabled: true,
+          scaling_method: SCALING_METHOD_MAKO,
+          ultra_performance: true,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const method = screen.getByRole("button", { name: "Scaling Method" });
+    expect(method.getAttribute("data-selected")).toBe("ls1-performance");
+    expect((method as HTMLButtonElement).disabled).toBe(true);
   });
 
   test("replaces scaling guidance with the running-surface warning", () => {

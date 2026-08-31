@@ -161,7 +161,9 @@ namespace mako::ui {
                     ls::scalingMethodName(ls::GameConfDefaults::scalingMethod)
                 )
             )
-            return QString::fromUtf8(ls::scalingMethodName(conf.scaling_method));
+            return QString::fromUtf8(
+                ls::scalingMethodName(ls::effectiveScalingMethod(conf))
+            );
         }
         [[nodiscard]] float getScalingFactor() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingFactor)
@@ -385,6 +387,7 @@ namespace mako::ui {
         }
         void scalingMethodUpdated(const QString& scaling_method) {
             VALIDATE_AND_GET_PROFILE()
+            if (conf.scaling_enabled && conf.ultra_performance) return;
             const auto parsed = ls::scalingMethodFromName(
                 scaling_method.toStdString()
             );

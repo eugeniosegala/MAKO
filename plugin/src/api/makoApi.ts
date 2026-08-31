@@ -203,14 +203,33 @@ export interface RuntimePendingState {
   process_restart: boolean;
 }
 
+export type RuntimeScalingMethod =
+  | "native"
+  | "mako"
+  | "ls1"
+  | "ls1-performance";
+
+export type RuntimeScalingPipeline =
+  | "inactive"
+  | "pre-frame-generation"
+  | "post-frame-generation";
+
 export interface RuntimeSpatialScalingState {
   active: boolean;
   activation_supported: boolean;
   inactive_reason: Nullable<string>;
   source_width: number;
   source_height: number;
+  presentation_width: number;
+  presentation_height: number;
   gamescope_target_width: number;
   gamescope_target_height: number;
+  requested_method: RuntimeScalingMethod;
+  active_method: RuntimeScalingMethod;
+  effective_factor: number;
+  pipeline: RuntimeScalingPipeline;
+  supersampling_active: boolean;
+  fallback_reason: Nullable<string>;
   non_supersampling_factor_ceiling: Nullable<number>;
 }
 
@@ -225,6 +244,7 @@ export interface RuntimeContextState {
   reason: string;
   pending: RuntimePendingState;
   applied_generated_capacity: number;
+  frame_generation_active: boolean;
   spatial_scaling: RuntimeSpatialScalingState;
   requested: RuntimeProfileSnapshot;
   applied: RuntimeProfileSnapshot;

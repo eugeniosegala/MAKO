@@ -22,19 +22,14 @@ import { ProfileManagement } from "./ProfileManagement";
 import { UsageInstructions } from "./UsageInstructions";
 import { SmartClipboardButton } from "./SmartClipboardButton";
 import { FgmodClipboardButton } from "./FgmodClipboardButton";
-import { FpsMultiplierControl } from "./FpsMultiplierControl";
-import { ScalingControl } from "./ScalingControl";
-import { PerformanceConfigurationGroup } from "./ConfigurationSectionGroups";
+import { FeatureSettings } from "./FeatureSettings";
+import { RuntimeStatusCard } from "./RuntimeStatusCard";
 import { ContentNotices } from "./ContentNotices";
 import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
 import { currentRelease } from "virtual:mako-release-info";
-import {
-  MakoButtonTheme,
-  MakoReleaseIdentity,
-  MakoSectionHeader,
-} from "./MakoUi";
+import { MakoButtonTheme, MakoReleaseIdentity } from "./MakoUi";
 import t from "../i18n/i18n";
 
 export function Content() {
@@ -196,44 +191,17 @@ export function Content() {
 
         {isInstalled && (
           <>
-            <MakoSectionHeader>
-              {t("CONTENT_SCALING", "Spatial Scaling")}
-            </MakoSectionHeader>
-
-            <ScalingControl
+            {mainRunningApp && (
+              <RuntimeStatusCard runtimeState={scalingRuntimeState} />
+            )}
+            <FeatureSettings
               config={config}
               disabled={engineUpdateRequired}
-              runtimeInactiveReason={scalingRuntimeState.inactiveReason}
-              runtimeFactorCeiling={
-                scalingRuntimeState.nonSupersamplingFactorCeiling
-              }
-              onConfigChange={handleConfigChange}
-            />
-
-            <MakoSectionHeader>
-              {t("CONTENT_FPS_MULTIPLIER", "Frame Generation")}
-            </MakoSectionHeader>
-
-            <FpsMultiplierControl
-              config={config}
-              onConfigChange={handleConfigChange}
-              onConfigUpdate={handleConfigChanges}
-            />
-
-            <PerformanceConfigurationGroup
-              config={config}
+              runtimeState={scalingRuntimeState}
               onConfigChange={handleConfigChange}
               onConfigUpdate={handleConfigChanges}
             />
           </>
-        )}
-
-        {isInstalled && (
-          <ConfigurationSection
-            config={config}
-            onConfigChange={handleConfigChange}
-            onConfigUpdate={handleConfigChanges}
-          />
         )}
 
         <UsageInstructions />
@@ -243,6 +211,15 @@ export function Content() {
             <SmartClipboardButton />
             <FgmodClipboardButton />
           </>
+        )}
+
+        {isInstalled && (
+          <ConfigurationSection
+            config={config}
+            onConfigChange={handleConfigChange}
+            onConfigUpdate={handleConfigChanges}
+            includeAdvancedRendering={false}
+          />
         )}
 
         <PanelSectionRow>

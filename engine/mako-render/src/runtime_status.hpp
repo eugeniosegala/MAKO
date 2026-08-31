@@ -51,6 +51,7 @@ namespace mako::layer {
         ls::GameConf requestedProfile;
         ls::GameConf appliedProfile;
         size_t appliedGeneratedCapacity{0};
+        bool frameGenerationActive{false};
         bool frameGenerationPrivatePending{false};
         bool spatialPrivatePending{false};
         bool swapchainRecreationPending{false};
@@ -60,8 +61,16 @@ namespace mako::layer {
         std::optional<std::string> spatialScalingInactiveReason;
         uint32_t spatialSourceWidth{0};
         uint32_t spatialSourceHeight{0};
+        uint32_t spatialPresentationWidth{0};
+        uint32_t spatialPresentationHeight{0};
         uint32_t gamescopeTargetWidth{0};
         uint32_t gamescopeTargetHeight{0};
+        ls::ScalingMethod spatialRequestedMethod{ls::ScalingMethod::Native};
+        ls::ScalingMethod spatialActiveMethod{ls::ScalingMethod::Native};
+        double spatialEffectiveFactor{1.0};
+        std::string spatialPipeline{"inactive"};
+        bool spatialSupersamplingActive{false};
+        std::optional<std::string> spatialFallbackReason;
         std::optional<double> nonSupersamplingFactorCeiling;
         std::optional<std::string> error;
     };

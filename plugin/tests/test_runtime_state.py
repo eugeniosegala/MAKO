@@ -69,7 +69,7 @@ class RuntimeStateTests(unittest.TestCase):
             process_start_ticks: int | None = None,
             error: str | None = None) -> dict[str, object]:
         return {
-            "schema_version": 3,
+            "schema_version": 4,
             "pid": os.getpid(),
             "process_start_ticks": (
                 self.process_start_ticks
@@ -89,14 +89,28 @@ class RuntimeStateTests(unittest.TestCase):
                 "process_restart": False,
             },
             "applied_generated_capacity": 1,
+            "frame_generation_active": role == "frame-generation",
             "spatial_scaling": {
                 "active": role == "spatial-scaling",
                 "activation_supported": True,
                 "inactive_reason": None,
                 "source_width": 960,
                 "source_height": 540,
+                "presentation_width": 1280,
+                "presentation_height": 720,
                 "gamescope_target_width": 1280,
                 "gamescope_target_height": 800,
+                "requested_method": "ls1",
+                "active_method": (
+                    "ls1" if role == "spatial-scaling" else "native"
+                ),
+                "effective_factor": 4 / 3,
+                "pipeline": (
+                    "pre-frame-generation"
+                    if role == "spatial-scaling" else "inactive"
+                ),
+                "supersampling_active": False,
+                "fallback_reason": None,
                 "non_supersampling_factor_ceiling": 4 / 3,
             },
             "requested": _profile(profile, 5),
@@ -134,6 +148,11 @@ class RuntimeStateTests(unittest.TestCase):
         )
         self.assertFalse(
             status["contexts"][0]["spatial_scaling"]["active"]
+        )
+        self.assertTrue(status["contexts"][0]["frame_generation_active"])
+        self.assertEqual(
+            status["contexts"][1]["spatial_scaling"]["active_method"],
+            "ls1",
         )
         self.assertEqual(
             self.service.get_status("another-profile")["phase"], "inactive"
@@ -177,6 +196,12 @@ class RuntimeStateTests(unittest.TestCase):
         target = self.runtime_directory / "target.txt"
         target.write_text(json.dumps(self._record()), encoding="utf-8")
         (self.runtime_directory / "linked.json").symlink_to(target)
+        invalid_method = self._record(context=8)
+        invalid_method["spatial_scaling"]["active_method"] = "unknown"
+        self._write("invalid-method.json", invalid_method)
+        invalid_pipeline = self._record(context=9)
+        invalid_pipeline["spatial_scaling"]["pipeline"] = "unordered"
+        self._write("invalid-pipeline.json", invalid_pipeline)
 
         status = self.service.get_status()
 

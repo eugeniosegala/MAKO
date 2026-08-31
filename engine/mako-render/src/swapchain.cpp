@@ -269,7 +269,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         this->spatialScaler.emplace(
             vk, this->info.applicationExtent, this->info.extent,
             this->colorPipeline.exchangeFormat,
-            this->profile.scaling_method,
+            ls::effectiveScalingMethod(this->profile),
             this->profile.scaling_sharpness,
             scalingShaderDll
         );
@@ -700,6 +700,23 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
             static_cast<double>(ls::GameConfLimits::maximumScalingFactor)
         );
     }
+    const double effectiveSpatialFactor =
+        this->info.applicationExtent.width > 0 &&
+            this->info.applicationExtent.height > 0
+        ? std::min(
+            static_cast<double>(this->info.extent.width) /
+                this->info.applicationExtent.width,
+            static_cast<double>(this->info.extent.height) /
+                this->info.applicationExtent.height
+        )
+        : 1.0;
+    const bool supersamplingActive = this->spatialScaler &&
+        this->profile.scaling_supersampling &&
+        this->info.gamescopePresentationTarget &&
+        (this->info.extent.width >
+            this->info.gamescopePresentationTarget->width ||
+         this->info.extent.height >
+            this->info.gamescopePresentationTarget->height);
     this->runtimeStatusPublisher.publish(RuntimeStatusRecord{
         .phase = phase,
         .reason = std::string(reason),
@@ -707,6 +724,9 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
         .requestedProfile = this->runtimeStatusState.requestedProfile,
         .appliedProfile = this->profile,
         .appliedGeneratedCapacity = this->destinationImages.size(),
+        .frameGenerationActive = effectiveFrameGenerationEnabled(
+            this->profile, this->gamescopeRefreshHz
+        ) && !this->destinationImages.empty(),
         .frameGenerationPrivatePending =
             this->frameGenerationTransition.pendingRequest(),
         .spatialPrivatePending = this->spatialTransition.pendingRequest(),
@@ -725,10 +745,31 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
                 },
         .spatialSourceWidth = this->info.applicationExtent.width,
         .spatialSourceHeight = this->info.applicationExtent.height,
+        .spatialPresentationWidth = this->info.extent.width,
+        .spatialPresentationHeight = this->info.extent.height,
         .gamescopeTargetWidth = this->info.gamescopePresentationTarget
             ? this->info.gamescopePresentationTarget->width : 0,
         .gamescopeTargetHeight = this->info.gamescopePresentationTarget
             ? this->info.gamescopePresentationTarget->height : 0,
+        .spatialRequestedMethod = this->spatialScaler
+            ? this->spatialScaler->requestedMethod()
+            : ls::effectiveScalingMethod(this->profile),
+        .spatialActiveMethod = this->spatialScaler
+            ? this->spatialScaler->activeMethod()
+            : ls::ScalingMethod::Native,
+        .spatialEffectiveFactor = effectiveSpatialFactor,
+        .spatialPipeline = this->spatialScaler
+            ? spatialFramePipelinePlacementName(
+                this->spatialFramePipelinePlacement
+            )
+            : "inactive",
+        .spatialSupersamplingActive = supersamplingActive,
+        .spatialFallbackReason = this->spatialScaler &&
+                !this->spatialScaler->fallbackReason().empty()
+            ? std::optional<std::string>{
+                this->spatialScaler->fallbackReason()
+            }
+            : std::nullopt,
         .nonSupersamplingFactorCeiling =
             nonSupersamplingFactorCeiling,
         .error = this->runtimeStatusState.error,
@@ -1388,7 +1429,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
     }
     if (decision.spatialScalingLiveRebuild) {
         const SpatialResourceRequest request{
-            .method = nextProfile.scaling_method,
+            .method = ls::effectiveScalingMethod(nextProfile),
             .sharpness = nextProfile.scaling_sharpness,
         };
         if (this->spatialTransition.pendingRequest() &&
@@ -1406,12 +1447,14 @@ ProfileUpdateDecision Swapchain::updateProfile(
                       << " state_revision=" << runtimeStateRevision
                       << " reason=spatial-scaler"
                       << " requested_method="
-                      << ls::scalingMethodName(nextProfile.scaling_method)
+                      << ls::scalingMethodName(
+                          ls::effectiveScalingMethod(nextProfile))
                       << " requested_sharpness="
                       << nextProfile.scaling_sharpness
                       << " action=rebuild-private-scaler\n";
         }
-    } else if (nextProfile.scaling_method == this->profile.scaling_method &&
+    } else if (ls::effectiveScalingMethod(nextProfile) ==
+                ls::effectiveScalingMethod(this->profile) &&
             nextProfile.scaling_sharpness ==
                 this->profile.scaling_sharpness) {
         this->spatialTransition.cancel();
@@ -1487,7 +1530,8 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << " reason=spatial-scaler"
                   << " transition=dormant-profile"
                   << " requested_method="
-                  << ls::scalingMethodName(nextProfile.scaling_method)
+                  << ls::scalingMethodName(
+                      ls::effectiveScalingMethod(nextProfile))
                   << " requested_sharpness="
                   << nextProfile.scaling_sharpness
                   << " scaler_active=0"
@@ -1781,6 +1825,7 @@ void Swapchain::updateGamescopeRefreshRate(
                   << " effective_frame_generation_enabled="
                   << generationIsEnabled << '\n';
     }
+    this->publishRuntimeStatus("gamescope-refresh-rate");
 }
 
 void Swapchain::disableFrameGeneration() {
@@ -1795,4 +1840,5 @@ void Swapchain::disableFrameGeneration() {
     this->recoveryState.orderedAcquireRecovery.reset();
     if (this->adaptiveScheduler)
         this->adaptiveScheduler->cancelHistoryWarmup();
+    this->publishRuntimeStatus("profile-unmatched");
 }

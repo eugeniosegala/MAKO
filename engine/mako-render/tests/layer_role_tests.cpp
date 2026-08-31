@@ -27,6 +27,7 @@ namespace {
         profile.scaling_method = ls::ScalingMethod::Mako;
         profile.scaling_factor = 2.0F;
         profile.scaling_sharpness = 0.8F;
+        profile.ultra_performance = true;
         return profile;
     }
 }
@@ -38,8 +39,8 @@ int main() {
     expect(spatialScalingLayer && !frameGenerationLayer,
         "the lower build must identify only the spatial-scaling role");
     expect(lower.scaling_enabled &&
-            lower.scaling_method == ls::ScalingMethod::Mako,
-        "the lower layer must retain spatial-scaling configuration");
+            lower.scaling_method == ls::ScalingMethod::Ls1Performance,
+        "the lower layer must retain Ultra Performance's effective scaler");
     expect(!lower.frame_generation_enabled && !lower.adaptive,
         "the lower layer must never own frame generation");
     expect(generatedFrameCapacityForActivePolicy(lower) == 0,
@@ -88,6 +89,9 @@ int main() {
         "the upper layer must follow actual device interop availability");
     expect(direct.frame_generation_enabled && direct.scaling_enabled,
         "direct Renderer launches must retain the established combined library");
+    expect(ls::effectiveScalingMethod(direct) ==
+            ls::ScalingMethod::Ls1Performance,
+        "direct Renderer launches must apply Ultra Performance to scaling");
     expect(spatialScalingOwnedByLayer(),
         "the direct combined layer must enforce spatial capability contracts");
     expect(spatialScalingCapabilityOwnedByLayer(),

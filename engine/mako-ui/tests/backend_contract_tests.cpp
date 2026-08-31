@@ -47,6 +47,13 @@ void test_scaling_properties() {
     static_assert(ls::GameConfLimits::maximumScalingFactor == 2.0F);
     static_assert(ls::GameConfLimits::minimumScalingSharpness == 0.0F);
     static_assert(ls::GameConfLimits::maximumScalingSharpness == 1.0F);
+    ls::GameConf ultra_scaling;
+    ultra_scaling.scaling_enabled = true;
+    ultra_scaling.scaling_method = ls::ScalingMethod::Mako;
+    ultra_scaling.ultra_performance = true;
+    require(ls::effectiveScalingMethod(ultra_scaling) ==
+            ls::ScalingMethod::Ls1Performance,
+        "Ultra Performance does not select LS1 Performance for Scaling");
 
     require_property("scaling_enabled", "bool", true, false);
     require_property("scaling_method", "QString", true, false);
@@ -121,7 +128,7 @@ void test_fractional_adaptive_preset() {
         "Fractional Adaptive control does not update the atomic preset property");
 }
 
-void test_independent_scaling_group() {
+void test_feature_group_order_and_ownership() {
     QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString qml = QString::fromUtf8(file.readAll());
@@ -135,8 +142,43 @@ void test_independent_scaling_group() {
     );
     require(frame_generation_group_start >= 0,
         "Frame Generation group is missing");
-    require(group_start < frame_generation_group_start,
-        "Scaling must precede Frame Generation to match MAKO Decky");
+    const qsizetype performance_group_start = qml.indexOf(
+        QStringLiteral("name: t.performanceSettings")
+    );
+    require(performance_group_start >= 0,
+        "Performance Settings group is missing");
+    require(frame_generation_group_start < group_start &&
+            group_start < performance_group_start,
+        "Frame Generation, Scaling, and Performance Settings are out of order");
+
+    const QString frame_generation_group = qml.mid(
+        frame_generation_group_start,
+        group_start - frame_generation_group_start
+    );
+    require(frame_generation_group.count(QStringLiteral("GroupEntry {")) == 12 &&
+            frame_generation_group.count(QStringLiteral(
+                "visible: backend.frame_generation_enabled")) == 11,
+        "Frame Generation must retain its switch while hiding every subordinate control when disabled");
+    require(frame_generation_group.contains(
+                QStringLiteral("title: t.performanceMode")) &&
+            frame_generation_group.contains(
+                QStringLiteral("checked: backend.performance_mode")),
+        "Lighter FG Model does not belong to Frame Generation");
+
+    qsizetype performance_group_end = qml.indexOf(
+        QStringLiteral("\n                Group {"),
+        performance_group_start + 1
+    );
+    if (performance_group_end < 0)
+        performance_group_end = qml.size();
+    const QString performance_group = qml.mid(
+        performance_group_start,
+        performance_group_end - performance_group_start
+    );
+    require(!performance_group.contains(
+                QStringLiteral("title: t.performanceMode")),
+        "Lighter FG Model remains duplicated under Performance Settings");
+
     qsizetype group_end = qml.indexOf(
         QStringLiteral("\n                Group {"), group_start + 1
     );
@@ -163,6 +205,12 @@ void test_independent_scaling_group() {
     require(scaling_group.contains(QStringLiteral(
             "model: [t.scalingMethodNative, t.scalingMethodMako, t.scalingMethodLs1, t.scalingMethodLs1Performance]")),
         "Scaling method order must expose Native before every scaler");
+    require(scaling_group.contains(QStringLiteral(
+            "enabled: backend.scaling_enabled && !backend.ultra_performance")),
+        "Ultra Performance must visibly lock the Renderer scaling method");
+    require(scaling_group.contains(QStringLiteral(
+            "currentIndex: backend.ultra_performance ? 3")),
+        "Ultra Performance must visibly select LS1 Performance");
     require(!scaling_group.contains(QStringLiteral("backend.adaptive")),
         "Scaling group is coupled to Adaptive");
     require(!scaling_group.contains(
@@ -195,7 +243,7 @@ int main() {
         test_scaling_properties();
         test_multiplier_limits();
         test_fractional_adaptive_preset();
-        test_independent_scaling_group();
+        test_feature_group_order_and_ownership();
         test_compact_restart_markers();
     } catch (const std::exception& error) {
         std::cerr << "mako-ui backend contract test failed: "

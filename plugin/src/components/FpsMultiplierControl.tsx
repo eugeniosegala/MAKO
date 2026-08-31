@@ -17,6 +17,7 @@ import {
   FRAME_GENERATION_ENABLED,
   getDefaults,
   MULTIPLIER,
+  PERFORMANCE_MODE,
   TARGET_FPS,
   TARGET_FPS_MAX,
   TARGET_FPS_MIN,
@@ -108,6 +109,7 @@ export function FpsMultiplierControl({
             </>
           }
           checked={frameGenerationEnabled}
+          bottomSeparator={frameGenerationEnabled ? undefined : "none"}
           onChange={(value) => onConfigChange(FRAME_GENERATION_ENABLED, value)}
         />
       </PanelSectionRow>
@@ -348,6 +350,20 @@ export function FpsMultiplierControl({
                 </DialogButton>
               </MakoFocusable>
             </Field>
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model")}
+              description={t(
+                "CONFIG_PERFORMANCE_MODE_DESC",
+                "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. Ultra Performance locks this on.",
+              )}
+              checked={config.ultra_performance || config.performance_mode}
+              disabled={config.ultra_performance}
+              onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
+              bottomSeparator="none"
+            />
           </PanelSectionRow>
         </>
       )}

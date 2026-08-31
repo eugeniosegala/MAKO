@@ -141,6 +141,7 @@ namespace mako::layer {
     [[nodiscard]] inline ls::GameConf profileForLayer(
             ls::GameConf profile) {
         if constexpr (spatialScalingLayer) {
+            profile.scaling_method = ls::effectiveScalingMethod(profile);
             profile.frame_generation_enabled = false;
             profile.frame_generation_refresh_threshold =
                 ls::GameConfDefaults::frameGenerationRefreshThreshold;

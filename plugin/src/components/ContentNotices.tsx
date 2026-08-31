@@ -92,12 +92,6 @@ function WelcomeNotice({ separated }: { separated: boolean }) {
               }}
             >
               <div>
-                {t(
-                  "WELCOME_TIPS_INTRO",
-                  "Here's a few tips to make your experience even better.",
-                )}
-              </div>
-              <div style={{ marginTop: "4px" }}>
                 {t("WELCOME_LIVE_UPDATES", "Many settings apply live.")}{" "}
                 {t(
                   "WELCOME_RESTART_REQUIRED",

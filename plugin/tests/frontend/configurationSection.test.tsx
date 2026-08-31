@@ -191,7 +191,7 @@ describe("External Tools controls", () => {
     ).toBe("26px");
   });
 
-  test("shows Ultra Performance's effective flow and FP16 values as locked", () => {
+  test("leaves shared performance controls to the primary feature flow", () => {
     render(
       <ConfigurationSection
         config={{
@@ -205,11 +205,8 @@ describe("External Tools controls", () => {
       />,
     );
 
-    const flowScale = screen.getByText("Flow Scale (75%)");
-    const allowFp16 = screen.getByText("Allow FP16 (Restart)");
-    expect((flowScale as HTMLButtonElement).disabled).toBe(true);
-    expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
-    expect(allowFp16.getAttribute("data-checked")).toBe("true");
+    expect(screen.queryByText("Flow Scale (75%)")).toBeNull();
+    expect(screen.queryByText("Allow FP16 (Restart)")).toBeNull();
   });
 
   test("marks process-start controls as Restart without marking live controls", () => {
@@ -221,14 +218,9 @@ describe("External Tools controls", () => {
       />,
     );
 
-    expect(screen.getByText("Allow FP16 (Restart)")).toBeTruthy();
-    expect(screen.queryByText("Flow Scale (Restart)")).toBeNull();
+    expect(screen.queryByText("Allow FP16 (Restart)")).toBeNull();
+    expect(screen.queryByText(/^Flow Scale/)).toBeNull();
     expect(screen.queryByText("Lighter FG Model (Restart)")).toBeNull();
-    expect(
-      screen.getByText(
-        /Controls the internal motion-estimation resolution used only for Frame Generation/,
-      ),
-    ).toBeTruthy();
     expect(screen.queryByText(/atomic handoff/)).toBeNull();
 
     fireEvent.click(

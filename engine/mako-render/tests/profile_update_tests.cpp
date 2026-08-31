@@ -502,11 +502,29 @@ int main() {
             decision.processRestartDeferred &&
             !liveProfileResourceRecreationAvailable(decision, true),
         "A process-static edit must suppress combined forced recreation");
+    expect(ls::effectiveScalingMethod(next) ==
+            ls::ScalingMethod::Ls1Performance,
+        "Ultra Performance must select LS1 Performance when scaling starts");
 
     auto runningUltra = current;
     runningUltra.ultra_performance = true;
     runningUltra.flow_scale = ls::GameConfDefaults::ultraPerformanceFlowScale;
     runningUltra.performance_mode = true;
+    runningUltra.scaling_enabled = true;
+    runningUltra.scaling_method = ls::ScalingMethod::Mako;
+    expect(ls::effectiveScalingMethod(runningUltra) ==
+            ls::ScalingMethod::Ls1Performance,
+        "A running Ultra Performance profile must use the performance scaler");
+    auto savedUltraScalerChoice = runningUltra;
+    savedUltraScalerChoice.scaling_method = ls::ScalingMethod::Ls1;
+    const auto savedUltraScalerPlan = planProfileUpdate(
+        runningUltra, savedUltraScalerChoice, 2, true, true
+    );
+    expect(savedUltraScalerPlan.decision.action ==
+            ProfileUpdateAction::NoRuntimeChange &&
+            savedUltraScalerPlan.appliedProfile.scaling_method ==
+                ls::ScalingMethod::Ls1,
+        "Ultra Performance must preserve dormant model choices without rebuilding");
     auto updatedRunningUltra = runningUltra;
     updatedRunningUltra.target_fps = 120;
     decision = classifyProfileUpdate(runningUltra, updatedRunningUltra, 2, true);

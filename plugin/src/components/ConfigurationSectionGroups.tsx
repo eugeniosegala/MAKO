@@ -35,7 +35,6 @@ import {
   FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
   GAMESCOPE_WSI_COMPATIBILITY,
   GPU,
-  PERFORMANCE_MODE,
   ULTRA_PERFORMANCE_FLOW_SCALE,
   type ConfigurationData,
 } from "../config/configSchema";
@@ -141,7 +140,7 @@ export function PerformanceConfigurationGroup({
               <div>
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "May improve frame-generation performance by up to 30% in favourable GPU-limited scenarios. Uses 75% Flow Scale, the Lighter FG Model, and FP16 when supported to reduce GPU work. Increases visual artifacts. Primarily intended for low-power devices such as Steam Deck.",
+                  "Reduces MAKO's GPU workload on low-power devices. Uses 75% Flow Scale, the Lighter FG Model, FP16 when supported, and LS1 Performance when Scaling is enabled. Trades image quality for performance across the active MAKO features.",
                 )}
               </div>
               <MakoInlineTip tone="info">
@@ -158,15 +157,39 @@ export function PerformanceConfigurationGroup({
       </PanelSectionRow>
 
       <PanelSectionRow>
-        <ToggleField
-          label={t("CONFIG_PERFORMANCE_MODE", "Lighter FG Model")}
+        <SliderField
+          label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
           description={t(
-            "CONFIG_PERFORMANCE_MODE_DESC",
-            "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. It is a less aggressive performance option than Ultra Performance. Ultra Performance locks this on.",
+            "CONFIG_FLOW_SCALE_DESC",
+            "Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality.",
           )}
-          checked={config.ultra_performance || config.performance_mode}
+          value={
+            config.ultra_performance
+              ? ULTRA_PERFORMANCE_FLOW_SCALE
+              : config.flow_scale
+          }
+          min={FLOW_SCALE_MIN}
+          max={FLOW_SCALE_MAX}
+          step={0.01}
           disabled={config.ultra_performance}
-          onChange={(value) => onConfigChange(PERFORMANCE_MODE, value)}
+          onChange={(value) => onConfigChange(FLOW_SCALE, value)}
+        />
+      </PanelSectionRow>
+
+      <PanelSectionRow>
+        <ToggleField
+          label={
+            <MakoRestartLabel
+              label={t("CONFIG_ALLOW_FP16", "Allow FP16 (Restart)")}
+            />
+          }
+          description={t(
+            "CONFIG_ALLOW_FP16_DESC",
+            "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs. Restart the game after changing it.",
+          )}
+          checked={config.ultra_performance || config.allow_fp16}
+          disabled={config.ultra_performance}
+          onChange={(value) => onConfigChange(ALLOW_FP16, value)}
           bottomSeparator="none"
         />
       </PanelSectionRow>
@@ -205,26 +228,6 @@ export function AdvancedRenderingConfigurationGroup({
         <>
           <PanelSectionRow>
             <SliderField
-              label={`${t("CONFIG_FLOW_SCALE", "Flow Scale")} (${Math.round((config.ultra_performance ? ULTRA_PERFORMANCE_FLOW_SCALE : config.flow_scale) * 100)}%)`}
-              description={t(
-                "CONFIG_FLOW_SCALE_DESC",
-                "Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality.",
-              )}
-              value={
-                config.ultra_performance
-                  ? ULTRA_PERFORMANCE_FLOW_SCALE
-                  : config.flow_scale
-              }
-              min={FLOW_SCALE_MIN}
-              max={FLOW_SCALE_MAX}
-              step={0.01}
-              disabled={config.ultra_performance}
-              onChange={(value) => onConfigChange(FLOW_SCALE, value)}
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <SliderField
               label={`${t("CONFIG_BASE_FPS_CAP", "Base FPS Cap")}${config.base_fps_cap > 0 ? ` (${config.base_fps_cap} FPS)` : ` (${t("CONFIG_BASE_FPS_CAP_OFF", "Off")})`}`}
               description={
                 <>
@@ -258,23 +261,6 @@ export function AdvancedRenderingConfigurationGroup({
               step={1}
               disabled={config.adaptive && config.adaptive_auto_base_fps_cap}
               onChange={(value) => onConfigUpdate(baseFpsCapChanges(value))}
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <ToggleField
-              label={
-                <MakoRestartLabel
-                  label={t("CONFIG_ALLOW_FP16", "Allow FP16 (Restart)")}
-                />
-              }
-              description={t(
-                "CONFIG_ALLOW_FP16_DESC",
-                "Global renderer setting: applies to all profiles and cannot be changed per game. Improves performance on AMD; disable for older NVIDIA GPUs. Restart the game after changing it.",
-              )}
-              checked={config.ultra_performance || config.allow_fp16}
-              disabled={config.ultra_performance}
-              onChange={(value) => onConfigChange(ALLOW_FP16, value)}
             />
           </PanelSectionRow>
 

@@ -151,6 +151,17 @@ int main() {
     nativeEngine.scaling_method = ls::ScalingMethod::Mako;
     expect(ls::spatialScalingRequested(nativeEngine),
         "A selected scaler must activate when the engine is enabled");
+    expect(ls::effectiveScalingMethod(nativeEngine) ==
+            ls::ScalingMethod::Mako,
+        "An ordinary scaling profile must retain its selected method");
+    nativeEngine.ultra_performance = true;
+    expect(ls::effectiveScalingMethod(nativeEngine) ==
+            ls::ScalingMethod::Ls1Performance,
+        "Ultra Performance must select LS1 Performance for an enabled engine");
+    nativeEngine.scaling_enabled = false;
+    expect(ls::effectiveScalingMethod(nativeEngine) ==
+            ls::ScalingMethod::Mako,
+        "Ultra Performance must not activate or overwrite a disabled scaler");
 
     const auto directory = std::filesystem::temp_directory_path() /
         ("mako-config-test-" + std::to_string(static_cast<long long>(::getpid())));

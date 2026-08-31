@@ -14,6 +14,12 @@ interface ConfigurationSectionProps {
     value: boolean | number | string,
   ) => Promise<void>;
   onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
+  includeAdvancedRendering?: boolean;
+}
+
+interface FrameGenerationConfigurationSectionProps
+  extends ConfigurationSectionProps {
+  initiallyCollapsed?: boolean;
 }
 
 const WORKAROUNDS_COLLAPSED_KEY = "mako-workarounds-collapsed";
@@ -21,22 +27,55 @@ const CONFIG_COLLAPSED_KEY = "mako-config-collapsed";
 const EXTERNAL_TOOLS_COLLAPSED_KEY = "mako-external-tools-collapsed";
 const MANUAL_OVERRIDES_COLLAPSED_KEY = "mako-manual-overrides-collapsed";
 
+const collapseControlStyles = `
+  .MAKO_ConfigCollapseButton_Container > div > div > div > button,
+  .MAKO_ConfigCollapseButton_Container > div > div > div > div > button,
+  .MAKO_WorkaroundsCollapseButton_Container > div > div > div > button,
+  .MAKO_ExternalToolsCollapseButton_Container > div > div > div > button,
+  .MAKO_ManualOverridesCollapseButton_Container > div > div > div > button {
+    height: 10px !important;
+  }
+  .MAKO_WorkaroundsCollapseButton_Container > div > div > div > div > button,
+  .MAKO_ExternalToolsCollapseButton_Container > div > div > div > div > button,
+  .MAKO_ManualOverridesCollapseButton_Container > div > div > div > div > button {
+    height: 10px !important;
+  }
+`;
+
+export function FrameGenerationConfigurationSection({
+  config,
+  onConfigChange,
+  onConfigUpdate,
+  initiallyCollapsed = true,
+}: FrameGenerationConfigurationSectionProps) {
+  const [configCollapsed, setConfigCollapsed] = usePersistentCollapseState(
+    CONFIG_COLLAPSED_KEY,
+    initiallyCollapsed,
+    "frame generation advanced settings",
+  );
+
+  return (
+    <>
+      <style>{collapseControlStyles}</style>
+      <AdvancedRenderingConfigurationGroup
+        config={config}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+        collapsed={configCollapsed}
+        onToggle={() => setConfigCollapsed(!configCollapsed)}
+      />
+    </>
+  );
+}
+
 export function ConfigurationSection({
   config,
   onConfigChange,
   onConfigUpdate,
+  includeAdvancedRendering = true,
 }: ConfigurationSectionProps) {
-  const [configCollapsed, setConfigCollapsed] = usePersistentCollapseState(
-    CONFIG_COLLAPSED_KEY,
-    false,
-    "config",
-  );
   const [workaroundsCollapsed, setWorkaroundsCollapsed] =
-    usePersistentCollapseState(
-      WORKAROUNDS_COLLAPSED_KEY,
-      true,
-      "workarounds",
-    );
+    usePersistentCollapseState(WORKAROUNDS_COLLAPSED_KEY, true, "workarounds");
   const [manualOverridesCollapsed, setManualOverridesCollapsed] =
     usePersistentCollapseState(
       MANUAL_OVERRIDES_COLLAPSED_KEY,
@@ -52,19 +91,7 @@ export function ConfigurationSection({
 
   return (
     <>
-      <style>{`
-        .MAKO_ConfigCollapseButton_Container > div > div > div > button,
-        .MAKO_ConfigCollapseButton_Container > div > div > div > div > button,
-        .MAKO_WorkaroundsCollapseButton_Container > div > div > div > button,
-        .MAKO_ExternalToolsCollapseButton_Container > div > div > div > button,
-        .MAKO_ManualOverridesCollapseButton_Container > div > div > div > button {
-          height: 10px !important;
-        }
-        .MAKO_WorkaroundsCollapseButton_Container > div > div > div > div > button,
-        .MAKO_ExternalToolsCollapseButton_Container > div > div > div > div > button,
-        .MAKO_ManualOverridesCollapseButton_Container > div > div > div > div > button {
-          height: 10px !important;
-        }
+      <style>{`${collapseControlStyles}
         .MAKO_ManualOverrideFields {
           display: flex;
           flex-direction: column;
@@ -85,13 +112,14 @@ export function ConfigurationSection({
         }
       `}</style>
 
-      <AdvancedRenderingConfigurationGroup
-        config={config}
-        onConfigChange={onConfigChange}
-        onConfigUpdate={onConfigUpdate}
-        collapsed={configCollapsed}
-        onToggle={() => setConfigCollapsed(!configCollapsed)}
-      />
+      {includeAdvancedRendering && (
+        <FrameGenerationConfigurationSection
+          config={config}
+          onConfigChange={onConfigChange}
+          onConfigUpdate={onConfigUpdate}
+          initiallyCollapsed={false}
+        />
+      )}
 
       <CompatibilityConfigurationGroup
         config={config}

@@ -14,14 +14,22 @@ from .types import (
     RuntimeContextState,
     RuntimePendingState,
     RuntimeProfileSnapshot,
+    RuntimeScalingMethod,
+    RuntimeScalingPipeline,
     RuntimeSpatialScalingState,
     RuntimeStatusResponse,
 )
 
 
-_SCHEMA_VERSION = 3
+_SCHEMA_VERSION = 4
 _MAXIMUM_STATUS_BYTES = 64 * 1024
 _VALID_ROLES = frozenset(("frame-generation", "spatial-scaling"))
+_VALID_SCALING_METHODS = frozenset((
+    "native", "mako", "ls1", "ls1-performance",
+))
+_VALID_SPATIAL_PIPELINES = frozenset((
+    "inactive", "pre-frame-generation", "post-frame-generation",
+))
 _VALID_PHASES = frozenset((
     "active",
     "debouncing",
@@ -175,11 +183,31 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
     inactive_reason = value.get("inactive_reason")
     if inactive_reason is not None and not isinstance(inactive_reason, str):
         raise ValueError("spatial_scaling.inactive_reason must be a string or null")
+    fallback_reason = value.get("fallback_reason")
+    if fallback_reason is not None and not isinstance(fallback_reason, str):
+        raise ValueError("spatial_scaling.fallback_reason must be a string or null")
     ceiling = value.get("non_supersampling_factor_ceiling")
     if ceiling is not None:
         ceiling = _number(
             ceiling, "spatial_scaling.non_supersampling_factor_ceiling"
         )
+    requested_method = _string(
+        value.get("requested_method"),
+        "spatial_scaling.requested_method",
+    )
+    active_method = _string(
+        value.get("active_method"), "spatial_scaling.active_method"
+    )
+    pipeline = _string(value.get("pipeline"), "spatial_scaling.pipeline")
+    if requested_method not in _VALID_SCALING_METHODS:
+        raise ValueError("spatial_scaling.requested_method is invalid")
+    if active_method not in _VALID_SCALING_METHODS:
+        raise ValueError("spatial_scaling.active_method is invalid")
+    if pipeline not in _VALID_SPATIAL_PIPELINES:
+        raise ValueError("spatial_scaling.pipeline is invalid")
+    validated_requested_method = cast(RuntimeScalingMethod, requested_method)
+    validated_active_method = cast(RuntimeScalingMethod, active_method)
+    validated_pipeline = cast(RuntimeScalingPipeline, pipeline)
     return {
         "active": _boolean(value.get("active"), "spatial_scaling.active"),
         "activation_supported": _boolean(
@@ -193,6 +221,14 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
         "source_height": _integer(
             value.get("source_height"), "spatial_scaling.source_height"
         ),
+        "presentation_width": _integer(
+            value.get("presentation_width"),
+            "spatial_scaling.presentation_width",
+        ),
+        "presentation_height": _integer(
+            value.get("presentation_height"),
+            "spatial_scaling.presentation_height",
+        ),
         "gamescope_target_width": _integer(
             value.get("gamescope_target_width"),
             "spatial_scaling.gamescope_target_width",
@@ -201,6 +237,18 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
             value.get("gamescope_target_height"),
             "spatial_scaling.gamescope_target_height",
         ),
+        "requested_method": validated_requested_method,
+        "active_method": validated_active_method,
+        "effective_factor": _number(
+            value.get("effective_factor"),
+            "spatial_scaling.effective_factor",
+        ),
+        "pipeline": validated_pipeline,
+        "supersampling_active": _boolean(
+            value.get("supersampling_active"),
+            "spatial_scaling.supersampling_active",
+        ),
+        "fallback_reason": fallback_reason,
         "non_supersampling_factor_ceiling": ceiling,
     }
 
@@ -238,6 +286,10 @@ def _context(value: object) -> RuntimeContextState:
         "applied_generated_capacity": _integer(
             value.get("applied_generated_capacity"),
             "applied_generated_capacity",
+        ),
+        "frame_generation_active": _boolean(
+            value.get("frame_generation_active"),
+            "frame_generation_active",
         ),
         "spatial_scaling": _spatial_scaling(value.get("spatial_scaling")),
         "requested": _profile(value.get("requested"), "requested"),
