@@ -50,17 +50,20 @@ vi.mock("@decky/ui", () => ({
     checked,
     disabled,
     description,
+    bottomSeparator,
     onChange,
   }: {
     label: React.ReactNode;
     checked: boolean;
     disabled?: boolean;
     description?: React.ReactNode;
+    bottomSeparator?: string;
     onChange: (value: boolean) => void;
   }) => (
     <div>
       <button
         data-checked={String(checked)}
+        data-bottom-separator={bottomSeparator ?? "default"}
         disabled={disabled}
         onClick={() => onChange(!checked)}
       >
@@ -148,6 +151,7 @@ describe("Scaling controls", () => {
         .getAttribute("data-mako-experimental-badge"),
     ).toBe("true");
     expect(enabled.getAttribute("data-checked")).toBe("false");
+    expect(enabled.getAttribute("data-bottom-separator")).toBe("none");
     expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
     expect(screen.queryByText("Quality Supersampling")).toBeNull();
     expect(screen.queryByText("Scaling Sharpness (80%)")).toBeNull();
@@ -169,6 +173,13 @@ describe("Scaling controls", () => {
     );
 
     const factor = screen.getByText("Scale Factor (1.5x)");
+    expect(
+      screen
+        .getByRole("button", {
+          name: "Enable Scaling (Restart) Experimental",
+        })
+        .getAttribute("data-bottom-separator"),
+    ).toBe("default");
     expect(screen.getByText("Quality Supersampling")).toBeTruthy();
     const sharpness = screen.getByText("Scaling Sharpness (80%)");
     const method = screen.getByRole("button", { name: "Scaling Method" });

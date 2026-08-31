@@ -112,7 +112,7 @@ export function PerformanceConfigurationGroup({
 }: PerformanceConfigurationGroupProps) {
   return (
     <>
-      <MakoSectionHeader topMargin="26px">
+      <MakoSectionHeader>
         {t("CONTENT_PERFORMANCE_SETTINGS", "Performance Settings")}
       </MakoSectionHeader>
 
@@ -214,7 +214,7 @@ export function AdvancedRenderingConfigurationGroup({
 
   return (
     <>
-      <MakoSectionHeader topMargin="26px">
+      <MakoSectionHeader>
         {t("CONFIG_SECTION_TITLE", "Advanced Rendering Settings")}
       </MakoSectionHeader>
 
@@ -354,7 +354,7 @@ export function CompatibilityConfigurationGroup({
 
   return (
     <>
-      <MakoSectionHeader topMargin="26px">
+      <MakoSectionHeader>
         {t("CONFIG_WORKAROUNDS_TITLE", "Compatibility Settings")}
       </MakoSectionHeader>
 
@@ -548,7 +548,7 @@ export function ExternalToolsConfigurationGroup({
 }: ConfigurationGroupProps) {
   return (
     <>
-      <MakoSectionHeader topMargin="26px">
+      <MakoSectionHeader>
         {t("CONFIG_EXTERNAL_TOOLS_TITLE", "External Tools")}
       </MakoSectionHeader>
 
@@ -631,7 +631,7 @@ export function ManualOverridesConfigurationGroup({
 }: ConfigurationGroupProps) {
   return (
     <>
-      <MakoSectionHeader topMargin="26px">
+      <MakoSectionHeader>
         {t("CONFIG_MANUAL_OVERRIDES_TITLE", "Manual Overrides")}
       </MakoSectionHeader>
 

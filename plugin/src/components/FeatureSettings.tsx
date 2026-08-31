@@ -27,7 +27,7 @@ export function FeatureSettings({
 }: FeatureSettingsProps) {
   return (
     <>
-      <MakoSectionHeader topMargin="18px">
+      <MakoSectionHeader>
         {t("CONTENT_FPS_MULTIPLIER", "Frame Generation")}
       </MakoSectionHeader>
       <FpsMultiplierControl
@@ -35,7 +35,7 @@ export function FeatureSettings({
         onConfigChange={onConfigChange}
         onConfigUpdate={onConfigUpdate}
       />
-      <MakoSectionHeader topMargin="26px">
+      <MakoSectionHeader>
         {t("CONTENT_SCALING", "Spatial Settings")}
       </MakoSectionHeader>
       <ScalingControl

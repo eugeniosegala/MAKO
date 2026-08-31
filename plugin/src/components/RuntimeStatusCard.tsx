@@ -107,6 +107,22 @@ function StatusRow({
   );
 }
 
+function StatusNotices({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      data-mako-live-status-notices="true"
+      style={{
+        display: "grid",
+        gap: "4px",
+        marginTop: "8px",
+        color: "#f7d9b4",
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function RuntimeStatusCard({
   runtimeState,
 }: {
@@ -114,7 +130,7 @@ export function RuntimeStatusCard({
 }) {
   return (
     <>
-      <MakoSectionHeader topMargin="18px">
+      <MakoSectionHeader>
         {t("LIVE_STATUS_TITLE", "Live Status")}
       </MakoSectionHeader>
       <PanelSectionRow>
@@ -205,14 +221,14 @@ export function RuntimeStatusCard({
                           <StatusDetail
                             label={t(
                               "LIVE_STATUS_MAX_MULTIPLIER",
-                              "Max multiplier",
+                              "Max factor",
                             )}
                             value={`${runtimeState.frameGenerationMultiplier ?? "—"}×`}
                           />
                         </>
                       ) : (
                         <StatusDetail
-                          label={t("LIVE_STATUS_MULTIPLIER", "Multiplier")}
+                          label={t("LIVE_STATUS_MULTIPLIER", "Factor")}
                           value={`${runtimeState.frameGenerationMultiplier ?? "—"}×`}
                         />
                       )}
@@ -226,12 +242,12 @@ export function RuntimeStatusCard({
                     t("LIVE_STATUS_OFF", "Off")
                   )}
                   {runtimeState.frameGenerationPending && (
-                    <div style={{ marginTop: "3px", color: "#f7d9b4" }}>
+                    <StatusNotices>
                       {t(
                         "LIVE_STATUS_PENDING",
                         "A saved change is still applying or needs a restart.",
                       )}
-                    </div>
+                    </StatusNotices>
                   )}
                 </StatusRow>
                 <StatusRow
@@ -246,27 +262,21 @@ export function RuntimeStatusCard({
                         value={methodLabel(runtimeState.activeMethod)}
                       />
                       <StatusDetail
-                        label={t(
-                          "LIVE_STATUS_ORIGINAL_RESOLUTION",
-                          "Original resolution",
-                        )}
+                        label={t("LIVE_STATUS_ORIGINAL_RESOLUTION", "Input")}
                         value={resolution(
                           runtimeState.sourceWidth,
                           runtimeState.sourceHeight,
                         )}
                       />
                       <StatusDetail
-                        label={t(
-                          "LIVE_STATUS_SCALED_RESOLUTION",
-                          "Scaled resolution",
-                        )}
+                        label={t("LIVE_STATUS_SCALED_RESOLUTION", "Output")}
                         value={resolution(
                           runtimeState.presentationWidth,
                           runtimeState.presentationHeight,
                         )}
                       />
                       <StatusDetail
-                        label={t("LIVE_STATUS_MULTIPLIER", "Multiplier")}
+                        label={t("LIVE_STATUS_MULTIPLIER", "Factor")}
                         value={`${runtimeState.effectiveFactor.toFixed(2)}×`}
                       />
                     </>
@@ -285,33 +295,41 @@ export function RuntimeStatusCard({
                   ) : (
                     t("LIVE_STATUS_OFF", "Off")
                   )}
-                  {runtimeState.supersamplingActive && (
-                    <div style={{ marginTop: "3px", color: "#f7d9b4" }}>
-                      {t(
-                        "LIVE_STATUS_SUPERSAMPLING",
-                        "Quality Supersampling is on for a sharper final image.",
+                  {(runtimeState.supersamplingActive ||
+                    runtimeState.fallbackReason ||
+                    runtimeState.scalingPending) && (
+                    <StatusNotices>
+                      {runtimeState.supersamplingActive && (
+                        <div>
+                          {t(
+                            "LIVE_STATUS_SUPERSAMPLING",
+                            "Quality Supersampling is on for a sharper final image.",
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
-                  {runtimeState.fallbackReason && (
-                    <div style={{ marginTop: "3px", color: "#f7d9b4" }}>
-                      {t(
-                        "LIVE_STATUS_SCALING_FALLBACK",
-                        "You selected {requested}; MAKO is using {active} instead.",
-                        {
-                          requested: methodLabel(runtimeState.requestedMethod),
-                          active: methodLabel(runtimeState.activeMethod),
-                        },
+                      {runtimeState.fallbackReason && (
+                        <div>
+                          {t(
+                            "LIVE_STATUS_SCALING_FALLBACK",
+                            "You selected {requested}; MAKO is using {active} instead.",
+                            {
+                              requested: methodLabel(
+                                runtimeState.requestedMethod,
+                              ),
+                              active: methodLabel(runtimeState.activeMethod),
+                            },
+                          )}
+                        </div>
                       )}
-                    </div>
-                  )}
-                  {runtimeState.scalingPending && (
-                    <div style={{ marginTop: "3px", color: "#f7d9b4" }}>
-                      {t(
-                        "LIVE_STATUS_PENDING",
-                        "A saved change is still applying or needs a restart.",
+                      {runtimeState.scalingPending && (
+                        <div>
+                          {t(
+                            "LIVE_STATUS_PENDING",
+                            "A saved change is still applying or needs a restart.",
+                          )}
+                        </div>
                       )}
-                    </div>
+                    </StatusNotices>
                   )}
                 </StatusRow>
               </div>

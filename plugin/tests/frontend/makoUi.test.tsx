@@ -42,9 +42,11 @@ describe("MAKO section headers", () => {
 
     render(<MakoSectionHeader>Spatial Scaling</MakoSectionHeader>);
 
-    expect(screen.getByText("Spatial Scaling").style.borderBottom).toBe(
+    const heading = screen.getByText("Spatial Scaling");
+    expect(heading.style.borderBottom).toBe(
       "4px solid rgba(77, 170, 190, 0.48)",
     );
+    expect(heading.parentElement?.style.marginTop).toBe("26px");
   });
 });
 

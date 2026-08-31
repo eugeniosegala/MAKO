@@ -317,7 +317,6 @@ export function ProfileManagement({
                 gap: "6px",
                 width: "100%",
                 marginTop: "6px",
-                marginBottom: "8px",
               }}
               flow-children="column"
               noFocusRing

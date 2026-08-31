@@ -138,7 +138,7 @@ vi.mock("../../src/components/MakoUi", () => ({
   ),
   MakoSectionHeader: ({
     children,
-    topMargin,
+    topMargin = "26px",
   }: {
     children: React.ReactNode;
     topMargin?: React.CSSProperties["marginTop"];

@@ -36,6 +36,7 @@ export function MakoFocusable(props: MakoFocusableProps) {
 
 export const makoPanelDivider = "1px solid rgba(77, 170, 190, 0.2)";
 export const makoAccentColor = "#83bff0";
+export const makoSectionGap = "26px";
 
 export const makoPanelStyle: CSSProperties = {
   overflow: "hidden",
@@ -264,7 +265,7 @@ export function MakoReleaseIdentity({
 export function MakoSectionHeader({
   children,
   description,
-  topMargin = "32px",
+  topMargin = makoSectionGap,
 }: MakoSectionHeaderProps) {
   return (
     <PanelSectionRow>

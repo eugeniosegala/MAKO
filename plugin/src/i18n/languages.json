@@ -279,11 +279,11 @@
     "LIVE_STATUS_STEADY_VALUE": "Steady",
     "LIVE_STATUS_FRACTIONAL_VALUE": "Fractional",
     "LIVE_STATUS_TARGET": "Target",
-    "LIVE_STATUS_MAX_MULTIPLIER": "Max multiplier",
-    "LIVE_STATUS_MULTIPLIER": "Multiplier",
+    "LIVE_STATUS_MAX_MULTIPLIER": "Max factor",
+    "LIVE_STATUS_MULTIPLIER": "Factor",
     "LIVE_STATUS_MODEL": "Model",
-    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Original resolution",
-    "LIVE_STATUS_SCALED_RESOLUTION": "Scaled resolution",
+    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Input",
+    "LIVE_STATUS_SCALED_RESOLUTION": "Output",
     "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
   },
   "ja": {
@@ -566,11 +566,11 @@
     "LIVE_STATUS_STEADY_VALUE": "Steady",
     "LIVE_STATUS_FRACTIONAL_VALUE": "Fractional",
     "LIVE_STATUS_TARGET": "Target",
-    "LIVE_STATUS_MAX_MULTIPLIER": "Max multiplier",
-    "LIVE_STATUS_MULTIPLIER": "Multiplier",
+    "LIVE_STATUS_MAX_MULTIPLIER": "Max factor",
+    "LIVE_STATUS_MULTIPLIER": "Factor",
     "LIVE_STATUS_MODEL": "Model",
-    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Original resolution",
-    "LIVE_STATUS_SCALED_RESOLUTION": "Scaled resolution",
+    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Input",
+    "LIVE_STATUS_SCALED_RESOLUTION": "Output",
     "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
   },
   "ko": {
@@ -853,11 +853,11 @@
     "LIVE_STATUS_STEADY_VALUE": "Steady",
     "LIVE_STATUS_FRACTIONAL_VALUE": "Fractional",
     "LIVE_STATUS_TARGET": "Target",
-    "LIVE_STATUS_MAX_MULTIPLIER": "Max multiplier",
-    "LIVE_STATUS_MULTIPLIER": "Multiplier",
+    "LIVE_STATUS_MAX_MULTIPLIER": "Max factor",
+    "LIVE_STATUS_MULTIPLIER": "Factor",
     "LIVE_STATUS_MODEL": "Model",
-    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Original resolution",
-    "LIVE_STATUS_SCALED_RESOLUTION": "Scaled resolution",
+    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Input",
+    "LIVE_STATUS_SCALED_RESOLUTION": "Output",
     "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
   },
   "language_metadata": {
@@ -1166,11 +1166,11 @@
     "LIVE_STATUS_STEADY_VALUE": "Steady",
     "LIVE_STATUS_FRACTIONAL_VALUE": "Fractional",
     "LIVE_STATUS_TARGET": "Target",
-    "LIVE_STATUS_MAX_MULTIPLIER": "Max multiplier",
-    "LIVE_STATUS_MULTIPLIER": "Multiplier",
+    "LIVE_STATUS_MAX_MULTIPLIER": "Max factor",
+    "LIVE_STATUS_MULTIPLIER": "Factor",
     "LIVE_STATUS_MODEL": "Model",
-    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Original resolution",
-    "LIVE_STATUS_SCALED_RESOLUTION": "Scaled resolution",
+    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Input",
+    "LIVE_STATUS_SCALED_RESOLUTION": "Output",
     "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
   },
   "pt-PT": {
@@ -1453,11 +1453,11 @@
     "LIVE_STATUS_STEADY_VALUE": "Steady",
     "LIVE_STATUS_FRACTIONAL_VALUE": "Fractional",
     "LIVE_STATUS_TARGET": "Target",
-    "LIVE_STATUS_MAX_MULTIPLIER": "Max multiplier",
-    "LIVE_STATUS_MULTIPLIER": "Multiplier",
+    "LIVE_STATUS_MAX_MULTIPLIER": "Max factor",
+    "LIVE_STATUS_MULTIPLIER": "Factor",
     "LIVE_STATUS_MODEL": "Model",
-    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Original resolution",
-    "LIVE_STATUS_SCALED_RESOLUTION": "Scaled resolution",
+    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Input",
+    "LIVE_STATUS_SCALED_RESOLUTION": "Output",
     "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
   },
   "steam_language_map": {
@@ -1753,11 +1753,11 @@
     "LIVE_STATUS_STEADY_VALUE": "Steady",
     "LIVE_STATUS_FRACTIONAL_VALUE": "Fractional",
     "LIVE_STATUS_TARGET": "Target",
-    "LIVE_STATUS_MAX_MULTIPLIER": "Max multiplier",
-    "LIVE_STATUS_MULTIPLIER": "Multiplier",
+    "LIVE_STATUS_MAX_MULTIPLIER": "Max factor",
+    "LIVE_STATUS_MULTIPLIER": "Factor",
     "LIVE_STATUS_MODEL": "Model",
-    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Original resolution",
-    "LIVE_STATUS_SCALED_RESOLUTION": "Scaled resolution",
+    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Input",
+    "LIVE_STATUS_SCALED_RESOLUTION": "Output",
     "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
   },
   "uk": {
@@ -2040,11 +2040,11 @@
     "LIVE_STATUS_STEADY_VALUE": "Steady",
     "LIVE_STATUS_FRACTIONAL_VALUE": "Fractional",
     "LIVE_STATUS_TARGET": "Target",
-    "LIVE_STATUS_MAX_MULTIPLIER": "Max multiplier",
-    "LIVE_STATUS_MULTIPLIER": "Multiplier",
+    "LIVE_STATUS_MAX_MULTIPLIER": "Max factor",
+    "LIVE_STATUS_MULTIPLIER": "Factor",
     "LIVE_STATUS_MODEL": "Model",
-    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Original resolution",
-    "LIVE_STATUS_SCALED_RESOLUTION": "Scaled resolution",
+    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Input",
+    "LIVE_STATUS_SCALED_RESOLUTION": "Output",
     "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
   },
   "zh": {
@@ -2327,11 +2327,11 @@
     "LIVE_STATUS_STEADY_VALUE": "Steady",
     "LIVE_STATUS_FRACTIONAL_VALUE": "Fractional",
     "LIVE_STATUS_TARGET": "Target",
-    "LIVE_STATUS_MAX_MULTIPLIER": "Max multiplier",
-    "LIVE_STATUS_MULTIPLIER": "Multiplier",
+    "LIVE_STATUS_MAX_MULTIPLIER": "Max factor",
+    "LIVE_STATUS_MULTIPLIER": "Factor",
     "LIVE_STATUS_MODEL": "Model",
-    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Original resolution",
-    "LIVE_STATUS_SCALED_RESOLUTION": "Scaled resolution",
+    "LIVE_STATUS_ORIGINAL_RESOLUTION": "Input",
+    "LIVE_STATUS_SCALED_RESOLUTION": "Output",
     "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
   }
 }

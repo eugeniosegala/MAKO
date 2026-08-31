@@ -39,6 +39,7 @@ describe("authoritative live status", () => {
           frameGenerationAdaptiveStyle: "fractional",
           frameGenerationTargetFps: 120,
           frameGenerationMultiplier: 3,
+          frameGenerationPending: true,
           scalingActive: true,
           scalingEnabled: true,
           sourceWidth: 960,
@@ -51,6 +52,7 @@ describe("authoritative live status", () => {
           pipeline: "pre-frame-generation",
           supersamplingActive: true,
           fallbackReason: "translator unavailable",
+          scalingPending: true,
         }}
       />,
     );
@@ -67,15 +69,23 @@ describe("authoritative live status", () => {
     expect(screen.getByText("Fractional")).toBeTruthy();
     expect(screen.getByText("Target")).toBeTruthy();
     expect(screen.getByText("120 FPS")).toBeTruthy();
-    expect(screen.getByText("Max multiplier")).toBeTruthy();
+    expect(screen.getByText("Max factor")).toBeTruthy();
     expect(screen.getByText("3×")).toBeTruthy();
     expect(screen.getByText("Model")).toBeTruthy();
     expect(screen.getByText("MAKO Scaler")).toBeTruthy();
-    expect(screen.getByText("Original resolution")).toBeTruthy();
+    expect(screen.getByText("Input")).toBeTruthy();
     expect(screen.getByText("960 × 540")).toBeTruthy();
-    expect(screen.getByText("Scaled resolution")).toBeTruthy();
+    expect(screen.getByText("Output")).toBeTruthy();
     expect(screen.getByText("1440 × 810")).toBeTruthy();
     expect(screen.getByText("1.50×")).toBeTruthy();
+    expect(screen.getByText("Factor")).toBeTruthy();
+    const notices = container.querySelectorAll(
+      '[data-mako-live-status-notices="true"]',
+    );
+    expect(notices).toHaveLength(2);
+    notices.forEach((notice) => {
+      expect((notice as HTMLElement).style.marginTop).toBe("8px");
+    });
     expect(screen.queryByText(/Upscaling runs/)).toBeNull();
     expect(
       screen.getByText(

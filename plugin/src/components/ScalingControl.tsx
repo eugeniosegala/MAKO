@@ -127,6 +127,7 @@ export function ScalingControl({
           }
           checked={config.scaling_enabled}
           disabled={disabled}
+          bottomSeparator={config.scaling_enabled ? undefined : "none"}
           onChange={(value) => onConfigChange(SCALING_ENABLED, value)}
         />
       </PanelSectionRow>
