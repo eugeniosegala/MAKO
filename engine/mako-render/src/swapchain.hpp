@@ -57,11 +57,6 @@ namespace mako::layer {
         // owner-driven replacement rather than a cold process start, so
         // Adaptive may use its bounded recovery guard.
         bool replacement{false};
-        // Keep startup boundary diagnostics finite: these breadcrumbs are
-        // intended to identify an intermittent acquire/present stall without
-        // adding sustained hot-path logging.
-        uint32_t startupAcquireDiagnostics{0};
-        uint32_t startupPresentDiagnostics{0};
     };
 
     /// modify the swapchain create info based on the profile pre-swapchain creation

@@ -45,6 +45,9 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.service.local_share_dir = Path(
             "/home/deck/.local/share/vulkan/implicit_layer.d"
         )
+        self.service.spatial_scaling_layer_dir = Path(
+            "/home/deck/.local/share/mako-render/vulkan/spatial_scaling.d"
+        )
         self.service.gamescope_wsi_compatibility_dir = Path(
             "/home/deck/.local/share/mako/gamescope_wsi_compatibility.d"
         )
@@ -129,10 +132,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         defaults = ConfigurationManager.get_defaults()
         content = self.service._generate_script_content(defaults)
 
-        self.assertEqual(len(content.encode("utf-8")), 8064)
+        self.assertEqual(len(content.encode("utf-8")), 8076)
         self.assertEqual(
             _sha256(content),
-            "c7b51ca8a98a8ce6975b2fcb8fe73dbbbf4e5080af0dc993e14f2e53d2af3d40",
+            "2d634eeb5fed23ba4e1b024e8e833391be754df0686a2a55f521e5cc6ca001cb",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -199,10 +202,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
                 profile_data
             )
 
-        self.assertEqual(len(content.encode("utf-8")), 10236)
+        self.assertEqual(len(content.encode("utf-8")), 10248)
         self.assertEqual(
             _sha256(content),
-            "903f1fd909274d554b8d590a7872e6e72f336b0aff1c35dbc007a15f42a87916",
+            "9d30dfdd45948372492dd86002d31927b22b7570e8013ff9c5cae3c3bb7fcfa7",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -282,7 +285,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "ea9d5a139730eb3e3cba2400405552ac4525ed459846459ae319c476d9f722b3",
+            "ac1fe1c6da10df8dea5d11d402d0236d6df2b8a033d08981354cc49801627f96",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):

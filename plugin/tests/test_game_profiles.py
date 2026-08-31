@@ -170,8 +170,8 @@ class GameProfileTests(unittest.TestCase):
         )["profiles"]["mako"]
 
         self.assertFalse(profile["scaling_enabled"])
-        self.assertEqual(profile["scaling_factor"], 2.0)
-        self.assertEqual(profile["scaling_sharpness"], 0.9)
+        self.assertEqual(profile["scaling_factor"], 1.8)
+        self.assertEqual(profile["scaling_sharpness"], 0.8)
         self.assertFalse(profile["frame_generation_enabled"])
 
     def test_explicit_fractional_choice_is_preserved_for_existing_profiles(self):

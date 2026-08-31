@@ -74,8 +74,8 @@ namespace ls {
         static constexpr bool frameGenerationEnabled = true;
         static constexpr bool scalingEnabled = false;
         static constexpr ScalingMethod scalingMethod = ScalingMethod::Native;
-        static constexpr float scalingFactor = 2.0F;
-        static constexpr float scalingSharpness = 0.9F;
+        static constexpr float scalingFactor = 1.8F;
+        static constexpr float scalingSharpness = 0.8F;
         static constexpr uint32_t frameGenerationRefreshThreshold = 0;
         static constexpr uint32_t baseFpsCap = 0;
         static constexpr bool adaptive = false;

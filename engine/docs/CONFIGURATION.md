@@ -14,8 +14,8 @@ name = "My game"
 active_in = ["Game.exe"]
 scaling_enabled = false
 scaling_method = "native"
-scaling_factor = 2.0
-scaling_sharpness = 0.9
+scaling_factor = 1.8
+scaling_sharpness = 0.8
 multiplier = 2
 frame_generation_enabled = true
 frame_generation_refresh_threshold = 0
@@ -32,8 +32,8 @@ frame_generation_refresh_threshold = 0
 - **`active_in`**: Executables or process names that select this profile.
 - **`scaling_enabled`**: Enables scaling independently from frame generation. Enable it before starting the game; when off, scaling is fully disabled. Changing it requires a game restart because MAKO Decky stages the frame-generation role, Gamescope WSI, and spatial role at process start. Scaling is SDR-only and accepts only the swapchain shapes, queues, formats, and extent contracts defined in [Spatial scaling architecture](SCALING.md). Default: `false`.
 - **`scaling_method`**: Selects `native` (**Native Resolution**), `mako` (**MAKO Scaler**), `ls1` (**LS1 Quality**), or `ls1-performance` (**LS1 Performance**). Native is the model-free linear baseline; MAKO Scaler is the open single-pass scaler; LS1 Quality and Performance use the user's licensed DLL and an architecture-matched `libvkd3d-shader.so.1`. LS1 initialization failure is logged and falls back to MAKO Scaler for that swapchain. With scaling provisioned, method changes rebuild only MAKO's private scaler. Default: `native`.
-- **`scaling_factor`**: Source-to-presentation ratio from `1.0` to `2.0`; `1.0` performs no scaling work. Fixed surfaces derive an even source extent from the compositor-owned presentation extent. Variable surfaces enlarge the application's request within surface and device-memory limits. Default: `2.0`.
-- **`scaling_sharpness`**: Normalized `0.0` to `1.0` multiplier for MAKO's bounded local sharpening at its static 2x baseline, or nearest selection among LS1's five learned model variants. Default: `0.9`.
+- **`scaling_factor`**: Source-to-presentation ratio from `1.0` to `2.0`; `1.0` performs no scaling work. Fixed surfaces derive an even source extent from the compositor-owned presentation extent. Variable surfaces enlarge the application's request within surface and device-memory limits. Default: `1.8`.
+- **`scaling_sharpness`**: Normalized `0.0` to `1.0` multiplier for MAKO's bounded local sharpening at its static 2x baseline, or nearest selection among LS1's five learned model variants. Default: `0.8`.
 - **`multiplier`**: Supported fixed multipliers range from 2x through 5x. 5x is an opt-in high-refresh mode that needs four full-resolution generated outputs per real frame, so it substantially increases GPU and memory use. The direct Renderer default is `2`.
 - **`frame_generation_enabled`**: Live on/off switch. `false` presents real frames, reconstructed first when scaling is active, while retaining the backend, private images, and synchronization objects needed for an immediate later enable. The Off path schedules no LSFG work and submits no generated images; the retained resources trade additional startup memory for reliable live switching. If interop or the backend was unavailable when the process created its Vulkan device and swapchain, enabling remains pending for restart instead of pretending to generate. Default: `true`.
 - **`frame_generation_refresh_threshold`**: Pauses frame generation when Gamescope confirms that the current display is at or below this refresh rate, then resumes the configured mode above it. `0` disables the guard. Missing refresh feedback fails open, and this setting never overrides `frame_generation_enabled = false`. Direct configuration accepts 0–1000 Hz; MAKO Decky's slider uses 30–240 Hz and starts at 60 Hz when enabled. Default: `0`.

@@ -149,8 +149,8 @@ active_in = ["Game.exe"]
 
 scaling_enabled = true
 scaling_method = "ls1"
-scaling_factor = 2.0
-scaling_sharpness = 0.9
+scaling_factor = 1.8
+scaling_sharpness = 0.8
 
 # Scaling-only:
 frame_generation_enabled = false
@@ -160,8 +160,8 @@ frame_generation_enabled = false
 | --- | --- | --- | --- |
 | `scaling_enabled` | Boolean | `false` | Enables scaling for the process. Enable it before starting the game; when it is off, scaling is fully disabled. Changing it requires a game restart; MAKO Decky also stages Gamescope WSI when enabled. |
 | `scaling_method` | `native`, `mako`, `ls1`, `ls1-performance` | `native` | Selects the Native Resolution model-free linear baseline, MAKO Scaler, LS1 Quality, or LS1 Performance. Method changes rebuild MAKO's private scaler without game-owned WSI recreation after the engine is provisioned. LS1 requires the licensed DLL and vkd3d-shader; failure uses MAKO Scaler and logs why. |
-| `scaling_factor` | 1.0–2.0 | `2.0` | Ratio from each source dimension to each presentation dimension; 1.0 performs no scaling work. |
-| `scaling_sharpness` | 0.0–1.0 | `0.9` | Multiplier for MAKO's continuous sharpening at its static 2x baseline, or LS1's nearest one of five learned model variants. |
+| `scaling_factor` | 1.0–2.0 | `1.8` | Ratio from each source dimension to each presentation dimension; 1.0 performs no scaling work. |
+| `scaling_sharpness` | 0.0–1.0 | `0.8` | Multiplier for MAKO's continuous sharpening at its static 2x baseline, or LS1's nearest one of five learned model variants. |
 
 To combine scaling with Fixed Frame Generation, set `frame_generation_enabled = true`, leave `adaptive = false`, and select `multiplier`. To combine it with Adaptive Frame Generation, enable both `frame_generation_enabled` and `adaptive`, then configure the normal Adaptive target, ceiling, and cadence options. No scaling-specific frame-generation mode exists.
 

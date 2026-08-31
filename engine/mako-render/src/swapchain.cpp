@@ -533,6 +533,11 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                         this->gamescopeRefreshHz,
                         configuredAcquireTimeout, 3
                     );
+                const auto perImageAcquireTimeout =
+                    orderedGeneratedImageAcquireTimeout(
+                        this->gamescopeRefreshHz,
+                        configuredAcquireTimeout
+                    );
                 std::cerr << "MAKO Renderer: present diagnostics: "
                              "operation=ordered-acquire-policy"
                           << " context=" << this->diagnosticsState.contextId
@@ -548,6 +553,17 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                           << std::chrono::duration<double, std::milli>(
                                  slowAcquireThreshold
                              ).count()
+                          << " per_image_timeout_ms="
+                          << (perImageAcquireTimeout ==
+                                std::numeric_limits<uint64_t>::max()
+                                ? 0.0
+                                : static_cast<double>(
+                                      perImageAcquireTimeout
+                                  ) / 1'000'000.0)
+                          << " per_image_timeout_unbounded="
+                          << (perImageAcquireTimeout ==
+                                std::numeric_limits<uint64_t>::max()
+                                ? 1 : 0)
                           << " severe_threshold_ms="
                           << std::chrono::duration<double, std::milli>(
                                  OrderedAcquireRecovery::

@@ -1988,41 +1988,12 @@ namespace {
 
                 auto& context = layer_info->root.getSwapchainContext(swapchain);
                 presentingContextId = context.diagnosticsId();
-                const bool traceStartupPresent =
-                    present_diagnostics::enabled() &&
-                    metadata != instance_info->swapchainInfos.end() &&
-                    metadata->second.startupPresentDiagnostics++ < 8;
-                if (traceStartupPresent) {
-                    std::cerr << "MAKO Renderer: present diagnostics: "
-                                 "operation=startup-present-boundary"
-                              << " context=" << context.diagnosticsId()
-                              << " role=" << layerRoleName
-                              << " stage=enter"
-                              << " ordinal="
-                              << metadata->second.startupPresentDiagnostics
-                              << " swapchain=" << swapchain
-                              << " image=" << info->pImageIndices[i]
-                              << '\n';
-                }
                 result = context.present(it->second,
                     queue, swapchain,
                     const_cast<void*>(info->pNext),
                     info->pImageIndices[i],
                     waitSemaphores
                 );
-                if (traceStartupPresent) {
-                    std::cerr << "MAKO Renderer: present diagnostics: "
-                                 "operation=startup-present-boundary"
-                              << " context=" << context.diagnosticsId()
-                              << " role=" << layerRoleName
-                              << " stage=return"
-                              << " ordinal="
-                              << metadata->second.startupPresentDiagnostics
-                              << " swapchain=" << swapchain
-                              << " image=" << info->pImageIndices[i]
-                              << " result=" << result
-                              << '\n';
-                }
                 const bool liveProfileRecreationRequested =
                     context.requestLiveProfileResourceRecreationAfterPresent(
                         result
@@ -2108,41 +2079,9 @@ namespace {
         if (mapping == instance_info->swapchains.end())
             return VK_ERROR_INITIALIZATION_FAILED;
 
-        const auto metadata = instance_info->swapchainInfos.find(swapchain);
-        const bool traceStartupAcquire =
-            present_diagnostics::enabled() &&
-            metadata != instance_info->swapchainInfos.end() &&
-            metadata->second.startupAcquireDiagnostics++ < 8;
-        if (traceStartupAcquire) {
-            std::cerr << "MAKO Renderer: present diagnostics: "
-                         "operation=startup-acquire-boundary"
-                      << " role=" << layerRoleName
-                      << " stage=enter"
-                      << " ordinal="
-                      << metadata->second.startupAcquireDiagnostics
-                      << " swapchain=" << swapchain
-                      << " timeout_ns=" << timeout
-                      << '\n';
-        }
-        const auto result = mapping->second.get().df().AcquireNextImageKHR(
+        return mapping->second.get().df().AcquireNextImageKHR(
             device, swapchain, timeout, semaphore, fence, imageIndex
         );
-        if (traceStartupAcquire) {
-            std::cerr << "MAKO Renderer: present diagnostics: "
-                         "operation=startup-acquire-boundary"
-                      << " role=" << layerRoleName
-                      << " stage=return"
-                      << " ordinal="
-                      << metadata->second.startupAcquireDiagnostics
-                      << " swapchain=" << swapchain
-                      << " result=" << result;
-            if ((result == VK_SUCCESS || result == VK_SUBOPTIMAL_KHR) &&
-                    imageIndex) {
-                std::cerr << " image=" << *imageIndex;
-            }
-            std::cerr << '\n';
-        }
-        return result;
     }
 
     void myvkDestroySwapchainKHR(

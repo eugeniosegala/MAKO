@@ -148,8 +148,8 @@ describe("generated cross-language contracts", () => {
       sharpness: defaults.scaling_sharpness,
     }).toEqual({
       enabled: false,
-      factor: 2,
-      sharpness: 0.9,
+      factor: 1.8,
+      sharpness: 0.8,
     });
   });
 });

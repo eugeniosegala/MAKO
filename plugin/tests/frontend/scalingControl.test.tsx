@@ -139,8 +139,8 @@ describe("Scaling controls", () => {
       name: "Enable Scaling (Restart)",
     });
     expect(enabled.getAttribute("data-checked")).toBe("false");
-    expect(screen.queryByText("Scale Factor (2.0x)")).toBeNull();
-    expect(screen.queryByText("Scaling Sharpness (90%)")).toBeNull();
+    expect(screen.queryByText("Scale Factor (1.8x)")).toBeNull();
+    expect(screen.queryByText("Scaling Sharpness (80%)")).toBeNull();
     expect(screen.queryByRole("button", { name: "Scaling Method" })).toBeNull();
     expect(screen.queryByText("MAKO Scaler")).toBeNull();
 
@@ -158,8 +158,8 @@ describe("Scaling controls", () => {
       />,
     );
 
-    const factor = screen.getByText("Scale Factor (2.0x)");
-    const sharpness = screen.getByText("Scaling Sharpness (90%)");
+    const factor = screen.getByText("Scale Factor (1.8x)");
+    const sharpness = screen.getByText("Scaling Sharpness (80%)");
     const method = screen.getByRole("button", { name: "Scaling Method" });
     expect((factor as HTMLButtonElement).disabled).toBe(false);
     expect((sharpness as HTMLButtonElement).disabled).toBe(false);
@@ -227,8 +227,8 @@ describe("Scaling controls", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Scaling Method" })).toBeTruthy();
-    expect(screen.getByText("Scale Factor (2.0x)")).toBeTruthy();
-    expect(screen.queryByText("Scaling Sharpness (90%)")).toBeNull();
+    expect(screen.getByText("Scale Factor (1.8x)")).toBeTruthy();
+    expect(screen.queryByText("Scaling Sharpness (80%)")).toBeNull();
   });
 
   test("writes only the selected scaling field when combined with frame generation", () => {
@@ -292,10 +292,10 @@ describe("Scaling controls", () => {
       ).disabled,
     ).toBe(true);
     expect(
-      (screen.getByText("Scale Factor (2.0x)") as HTMLButtonElement).disabled,
+      (screen.getByText("Scale Factor (1.8x)") as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(
-      (screen.getByText("Scaling Sharpness (90%)") as HTMLButtonElement)
+      (screen.getByText("Scaling Sharpness (80%)") as HTMLButtonElement)
         .disabled,
     ).toBe(true);
   });

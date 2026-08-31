@@ -1245,6 +1245,7 @@ VkResult Swapchain::presentGeneratedFrames(
     auto originalPresentDuration = DiagnosticsClock::duration::zero();
     auto maximumLowerPresentDuration = DiagnosticsClock::duration::zero();
     bool acquireDeadlineExceeded = false;
+    uint64_t lastAcquireTimeout = 0;
     const auto reportOrderedAcquire = [&](const bool timedOut,
             const bool budgetExhausted,
             const size_t presentedGeneratedFrames) {
@@ -1340,6 +1341,15 @@ VkResult Swapchain::presentGeneratedFrames(
                                 : 0.0)
                           << " acquire_budget_unbounded="
                           << (plan.configuredAcquireTimeout ? 0 : 1)
+                          << " acquire_attempt_timeout_ms="
+                          << static_cast<double>(lastAcquireTimeout) /
+                                1'000'000.0
+                          << " acquire_attempt_timeout_scope="
+                          << (budgetExhausted
+                                ? "application-present-budget"
+                                : timedOut
+                                    ? "generated-image"
+                                    : "not-applicable")
                           << " slow_threshold_ms="
                           << std::chrono::duration<double, std::milli>(
                                  slowThreshold
@@ -1499,6 +1509,7 @@ VkResult Swapchain::presentGeneratedFrames(
                 orderedGeneratedImageAcquireTimeout(
                     this->gamescopeRefreshHz, remainingAcquireBudget
             );
+            lastAcquireTimeout = acquireTimeout;
             if (acquireBudgetExhausted) {
                 result = VK_TIMEOUT;
                 acquireDeadlineExceeded = true;
@@ -1643,6 +1654,14 @@ VkResult Swapchain::presentGeneratedFrames(
                           << plan.requestedGeneratedFrames.size()
                           << " on_time=" << i
                           << " deadline_ms="
+                          << static_cast<double>(acquireBudgetExhausted
+                                ? *plan.configuredAcquireTimeout
+                                : lastAcquireTimeout) / 1'000'000.0
+                          << " deadline_scope="
+                          << (acquireBudgetExhausted
+                                ? "application-present"
+                                : "generated-image")
+                          << " application_present_budget_ms="
                           << static_cast<double>(
                                  *plan.configuredAcquireTimeout
                              ) / 1'000'000.0

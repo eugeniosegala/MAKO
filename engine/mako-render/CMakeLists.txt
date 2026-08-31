@@ -74,6 +74,11 @@ if(MAKO_BUILD_VK_LAYER)
     target_compile_definitions(mako-render-scaling PRIVATE
         MAKO_LAYER_ROLE_SPATIAL_SCALING=1)
     mako_configure_renderer_layer(mako-render-scaling)
+
+    # The upper role consumes a same-process relay exported by the separately
+    # compiled lower role. Keep targeted developer builds coherent: rebuilding
+    # the public renderer target must never leave the spatial DSO stale.
+    add_dependencies(mako-render mako-render-scaling)
 endif()
 
 if(BUILD_TESTING)

@@ -166,6 +166,8 @@ For a non-system prefix, set `MAKO_LAYER_LIBRARY_PATH` to the manifest-relative 
 cmake --build build
 ```
 
+The default build produces both split-chain Vulkan DSOs. A targeted `--target mako-render` build also refreshes `mako-render-scaling`, because the upper and lower roles share one versioned runtime contract and must never be staged from different source generations.
+
 4. **Install**
 
 ```bash
