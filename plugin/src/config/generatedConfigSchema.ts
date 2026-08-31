@@ -161,7 +161,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   scaling_method: {
     name: "scaling_method",
     fieldType: ConfigFieldType.STRING,
-    default: "native",
+    default: "ls1",
     description: "live spatial selection inside a provisioned engine: Native Resolution, MAKO Scaler, LS1 Quality, or LS1 Performance"
   },
   scaling_factor: {
@@ -369,7 +369,7 @@ export function getDefaults(): ConfigurationData {
     dll: "",
     allow_fp16: true,
     scaling_enabled: false,
-    scaling_method: "native",
+    scaling_method: "ls1",
     scaling_factor: 1.8,
     scaling_sharpness: 0.8,
     frame_generation_enabled: true,

@@ -39,7 +39,7 @@ void require_property(const char* name, const char* type_name,
 void test_scaling_properties() {
     static_assert(!ls::GameConfDefaults::scalingEnabled);
     static_assert(ls::GameConfDefaults::scalingMethod ==
-        ls::ScalingMethod::Native);
+        ls::ScalingMethod::Ls1);
     static_assert(ls::GameConfDefaults::scalingFactor == 1.8F);
     static_assert(ls::GameConfDefaults::scalingSharpness == 0.8F);
     static_assert(ls::GameConfLimits::minimumScalingFactor == 1.0F);

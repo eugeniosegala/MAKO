@@ -92,6 +92,41 @@ namespace mako::layer {
         uint64_t revision{0};
     };
 
+    /// Window-system provenance observed by one layer DSO. In a managed split
+    /// chain the lower spatial role must see the Wayland surface created by
+    /// Gamescope WSI; an X11 surface at that boundary means WSI passed the
+    /// application's physical window through and source/presentation geometry
+    /// cannot be separated safely. The direct combined Renderer does not
+    /// require this proof because it owns the application's surface itself.
+    enum class SpatialSurfaceOrigin {
+        Unknown,
+        Wayland,
+        Xcb,
+        Xlib,
+    };
+
+    [[nodiscard]] constexpr const char* spatialSurfaceOriginName(
+            const SpatialSurfaceOrigin origin) noexcept {
+        switch (origin) {
+            case SpatialSurfaceOrigin::Unknown:
+                return "unknown";
+            case SpatialSurfaceOrigin::Wayland:
+                return "wayland";
+            case SpatialSurfaceOrigin::Xcb:
+                return "xcb";
+            case SpatialSurfaceOrigin::Xlib:
+                return "xlib";
+        }
+        return "unknown";
+    }
+
+    [[nodiscard]] constexpr bool spatialSplitSurfaceScalingSupported(
+            const bool lowerSplitSurfaceProofRequired,
+            const SpatialSurfaceOrigin origin) noexcept {
+        return !lowerSplitSurfaceProofRequired ||
+            origin == SpatialSurfaceOrigin::Wayland;
+    }
+
     /// Result of virtualizing one fixed-surface capability query. Entrypoint
     /// code adds the surface-scoped query generation only after its queue and
     /// format preflight succeeds and the virtual capabilities are returned to
@@ -110,6 +145,7 @@ namespace mako::layer {
         float factor{1.0F};
         uint64_t policyRevision{0};
         uint64_t queryGeneration{0};
+        bool spatialSurfaceScalingSupported{true};
     };
 
     /// One capability contract published by the lower spatial-scaling DSO
@@ -167,6 +203,7 @@ namespace mako::layer {
         SurfaceChangedAfterCapabilityQuery,
         ApplicationExtentOverrideNoSplit,
         ApplicationExtentMismatch,
+        GamescopeWsiSurfaceUnproven,
         VariableSurfaceFeedback,
         VariableSurfaceNoHeadroom,
         VariableSurfaceMemoryBudget,
@@ -197,6 +234,8 @@ namespace mako::layer {
                 return "application-extent-override-no-source-presentation-split";
             case SpatialScalingInactiveReason::ApplicationExtentMismatch:
                 return "application-extent-mismatch";
+            case SpatialScalingInactiveReason::GamescopeWsiSurfaceUnproven:
+                return "gamescope-wsi-surface-unproven";
             case SpatialScalingInactiveReason::VariableSurfaceFeedback:
                 return "variable-surface-feedback";
             case SpatialScalingInactiveReason::VariableSurfaceNoHeadroom:
@@ -218,6 +257,7 @@ namespace mako::layer {
     struct SpatialScalingCreateDecision {
         std::optional<SpatialScalingExtents> extents;
         std::optional<FixedSurfaceScalingContract> fixedContract;
+        bool retainedPreviousFixedSource{false};
         bool reusedPreviousPresentationBudget{false};
         bool usedBaselinePresentationBudget{false};
         SpatialScalingInactiveReason inactiveReason{
@@ -241,9 +281,109 @@ namespace mako::layer {
         return !spatialScalingActive;
     }
 
+    [[nodiscard]] inline bool validSpatialScalingFactor(
+        float factor) noexcept;
+
     [[nodiscard]] constexpr bool sameExtent(
             const VkExtent2D left, const VkExtent2D right) noexcept {
         return left.width == right.width && left.height == right.height;
+    }
+
+    /// Resolve the unconstrained variable-surface presentation extent for a
+    /// source/factor pair using the same floor-and-even rule as swapchain
+    /// admission. Surface and memory ceilings are intentionally excluded.
+    [[nodiscard]] inline VkExtent2D unconstrainedVariablePresentationExtent(
+            const VkExtent2D source, const float factor) noexcept {
+        if (!validSpatialScalingFactor(factor) || factor <= 1.0F)
+            return source;
+        VkExtent2D presentation{
+            .width = static_cast<uint32_t>(std::floor(
+                static_cast<double>(source.width) * factor
+            )),
+            .height = static_cast<uint32_t>(std::floor(
+                static_cast<double>(source.height) * factor
+            )),
+        };
+        if (presentation.width > 1)
+            presentation.width &= ~uint32_t{1};
+        if (presentation.height > 1)
+            presentation.height &= ~uint32_t{1};
+        return presentation;
+    }
+
+    /// A variable-surface factor edit is WSI-neutral when the active
+    /// presentation was already clamped below the old unconstrained request
+    /// and the new factor still reaches that exact presentation envelope.
+    /// Fixed surfaces are excluded because their virtual source advertisement
+    /// is factor-bound even when the lower presentation extent is unchanged.
+    [[nodiscard]] inline bool
+    variableSurfaceFactorChangePreservesEffectiveExtents(
+            const bool variableSurface,
+            const bool spatialScalingContractActive,
+            const VkExtent2D source,
+            const VkExtent2D presentation,
+            const float currentFactor,
+            const float requestedFactor) noexcept {
+        if (!variableSurface || !spatialScalingContractActive ||
+                currentFactor == requestedFactor ||
+                !validSpatialScalingFactor(currentFactor) ||
+                !validSpatialScalingFactor(requestedFactor) ||
+                requestedFactor <= 1.0F ||
+                sameExtent(source, presentation)) {
+            return false;
+        }
+        const auto unconstrainedCurrent =
+            unconstrainedVariablePresentationExtent(source, currentFactor);
+        const bool currentWasConstrained =
+            presentation.width <= unconstrainedCurrent.width &&
+            presentation.height <= unconstrainedCurrent.height &&
+            !sameExtent(presentation, unconstrainedCurrent);
+        if (!currentWasConstrained)
+            return false;
+        const auto unconstrainedRequested =
+            unconstrainedVariablePresentationExtent(source, requestedFactor);
+        return unconstrainedRequested.width >= presentation.width &&
+            unconstrainedRequested.height >= presentation.height;
+    }
+
+    enum class SpatialCreateRelayDecision {
+        Unavailable,
+        Native,
+        Split,
+    };
+
+    /// Classify the lower role's decision for the create call bracketed by the
+    /// upper role. The slot already proves same-thread, one-shot and physical-
+    /// device provenance. Query generations are deliberately DSO-local and
+    /// may be nonzero for fixed surfaces, so request/extent coherence—not a
+    /// synthetic generation value—distinguishes a valid decision from a
+    /// missing or mismatched relay.
+    [[nodiscard]] constexpr SpatialCreateRelayDecision
+    classifySpatialCreateRelay(
+            const FixedSurfaceScalingContract& contract,
+            const VkExtent2D requestedExtent) noexcept {
+        if (!sameExtent(contract.extents.source, requestedExtent))
+            return SpatialCreateRelayDecision::Unavailable;
+        return sameExtent(
+            contract.extents.source, contract.extents.presentation
+        ) ? SpatialCreateRelayDecision::Native
+          : SpatialCreateRelayDecision::Split;
+    }
+
+    /// The upper combined role cannot validate an application override until
+    /// its downstream create reaches the lower extent owner. Defer only a
+    /// fixed-surface decision for which neither the upper capability cache nor
+    /// its local policy selected extents; the post-create one-shot relay still
+    /// rejects a missing or mismatched lower decision.
+    [[nodiscard]] constexpr bool awaitLowerSpatialCreateRelay(
+            const bool capabilityRelay,
+            const bool spatialResourceOwner,
+            const bool fixedSurfaceContractAvailable,
+            const bool scalingExtentsSelected,
+            const bool fixedSurface) noexcept {
+        return capabilityRelay && spatialResourceOwner &&
+            !fixedSurfaceContractAvailable && !scalingExtentsSelected &&
+            fixedSurface;
     }
 
     /// The upper role in a split chain may receive either the lower role's
@@ -533,6 +673,29 @@ namespace mako::layer {
                 return decision;
             }
             if (!sameExtent(fixedContract->extents.source, requestedExtent)) {
+                // A fixed Gamescope surface may keep the application's
+                // existing virtual window size while a live factor update
+                // advertises a different source. Retain only the exact split
+                // proven by the preceding swapchain on this same surface and
+                // presentation. This prevents an OUT_OF_DATE recreation loop
+                // without treating an arbitrary stale request as valid.
+                if (previousVariableExtents &&
+                        sameExtent(
+                            previousVariableExtents->source,
+                            requestedExtent
+                        ) &&
+                        sameExtent(
+                            previousVariableExtents->presentation,
+                            realCapabilities.currentExtent
+                        ) &&
+                        !sameExtent(
+                            previousVariableExtents->source,
+                            previousVariableExtents->presentation
+                        )) {
+                    decision.extents = *previousVariableExtents;
+                    decision.retainedPreviousFixedSource = true;
+                    return decision;
+                }
                 decision.inactiveReason = sameExtent(
                     requestedExtent, realCapabilities.currentExtent
                 ) ? SpatialScalingInactiveReason::ApplicationExtentOverrideNoSplit

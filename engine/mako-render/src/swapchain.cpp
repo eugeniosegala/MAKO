@@ -696,6 +696,15 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
             this->runtimeStatusState.swapchainRecreationPending,
         .processRestartPending =
             this->runtimeStatusState.processRestartPending,
+        .spatialScalingActive = this->spatialScaler.has_value(),
+        .spatialScalingActivationSupported =
+            this->info.spatialScalingActivationSupported,
+        .spatialScalingInactiveReason =
+            this->info.spatialScalingActivationSupported
+                ? std::nullopt
+                : std::optional<std::string>{
+                    "gamescope-wsi-surface-unproven"
+                },
         .error = this->runtimeStatusState.error,
     });
 }
@@ -1274,10 +1283,24 @@ ProfileUpdateDecision Swapchain::updateProfile(
     const bool privateFrameGenerationRebuildAvailable =
         this->instance && resourcesAvailable &&
         this->colorPipeline.generationSupported;
+    const bool spatialScalingEffectiveExtentUnchanged =
+        variableSurfaceFactorChangePreservesEffectiveExtents(
+            this->info.variableSurface,
+            !sameExtent(
+                this->info.applicationExtent,
+                this->info.extent
+            ),
+            this->info.applicationExtent,
+            this->info.extent,
+            this->profile.scaling_factor,
+            nextProfile.scaling_factor
+        );
     auto plan = planProfileUpdate(
         this->profile, nextProfile, this->destinationImages.size(),
         resourcesAvailable, this->spatialScaler.has_value(),
-        privateFrameGenerationRebuildAvailable
+        privateFrameGenerationRebuildAvailable,
+        this->info.spatialScalingActivationSupported,
+        spatialScalingEffectiveExtentUnchanged
     );
     auto decision = plan.decision;
     if (decision.frameGenerationPrivateRebuild) {
@@ -1426,6 +1449,22 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << nextProfile.scaling_sharpness
                   << " scaler_active=0"
                   << " action=save-without-wsi-recreation\n";
+    }
+    if (decision.spatialScalingEffectiveExtentUnchanged &&
+            presentDiagnosticsEnabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=runtime-transition-applied"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " role=" << layerRoleName
+                  << " state_revision=" << runtimeStateRevision
+                  << " reason=spatial-factor"
+                  << " transition=effective-extent-no-op"
+                  << " requested_factor=" << nextProfile.scaling_factor
+                  << " source=" << this->info.applicationExtent.width
+                  << 'x' << this->info.applicationExtent.height
+                  << " presentation=" << this->info.extent.width
+                  << 'x' << this->info.extent.height
+                  << " action=retain-swapchain-and-private-resources\n";
     }
     this->runtimeStatusState.swapchainRecreationPending =
         decision.swapchainRecreationDeferred;

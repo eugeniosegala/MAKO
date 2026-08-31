@@ -40,6 +40,9 @@ MAKO_INSTALLER_NO_LAUNCH=1 \
 [[ -x "$install_prefix/bin/mako-ui" ]] || fail "UI was not installed"
 [[ -f "$install_prefix/share/mako-render/installer/installed-files.sha256" ]] ||
     fail "installer state was not written"
+grep -Fq '"owner": "standalone"' \
+    "$install_prefix/share/mako-render/active-renderer.json" ||
+    fail "installer did not select the standalone Renderer as active"
 grep -Fxq "Exec=\"$install_prefix/bin/mako-ui\" %U" \
     "$install_prefix/share/applications/io.github.eugeniosegala.mako.desktop" ||
     fail "configuration launcher does not use the absolute installed UI path"
@@ -79,6 +82,8 @@ MAKO_INSTALLER_ASSUME_YES=1 \
 "$install_prefix/bin/mako-installer" --uninstall >/dev/null
 
 [[ ! -e "$install_prefix/bin/mako-ui" ]] || fail "uninstaller left the managed UI"
+[[ ! -e "$install_prefix/share/mako-render/active-renderer.json" ]] ||
+    fail "uninstaller left the active Renderer identity"
 [[ -f "$install_prefix/share/applications/io.github.eugeniosegala.mako.desktop" ]] ||
     fail "uninstaller removed a modified file"
 [[ -f "$config_home/mako-render/conf.toml" ]] || fail "uninstaller removed configuration by default"
@@ -104,5 +109,34 @@ MAKO_INSTALLER_NO_LAUNCH=1 \
 "$package_root/Install MAKO Renderer" --install >/dev/null
 [[ -x "$install_prefix/bin/mako-ui" ]] ||
     fail "installer did not continue after accepting the MAKO Decky warning"
+grep -Fq '"version": "test-version"' \
+    "$install_prefix/share/mako-render/active-renderer.json" ||
+    fail "installer did not record the active standalone Renderer version"
+
+HOME="$test_root" \
+XDG_CONFIG_HOME="$config_home" \
+MAKO_INSTALLER_ASSUME_YES=1 \
+MAKO_INSTALLER_NO_LAUNCH=1 \
+"$package_root/Install MAKO Renderer" --install >/dev/null
+mkdir -p "$test_root/.local/share/mako-render/lib"
+printf '%s\n' 'decky renderer' > \
+    "$test_root/.local/share/mako-render/lib/libmako-render.so"
+printf '%s\n' '#!/usr/bin/env bash' > "$test_root/.local/bin/mako-run"
+
+HOME="$test_root" \
+XDG_CONFIG_HOME="$config_home" \
+MAKO_INSTALLER_ASSUME_YES=1 \
+"$test_root/.local/bin/mako-installer" --uninstall >/dev/null
+
+[[ ! -e "$test_root/.local/bin/mako-ui" ]] ||
+    fail "default uninstaller left the standalone UI"
+[[ ! -e "$test_root/.local/share/mako-render/lib/libmako-render.so" ]] ||
+    fail "default uninstaller left the Decky-supplied Renderer"
+[[ ! -e "$test_root/.local/bin/mako-run" ]] ||
+    fail "default uninstaller left the Decky Renderer wrapper"
+[[ ! -e "$test_root/.local/share/mako-render/active-renderer.json" ]] ||
+    fail "default uninstaller left the active Renderer identity"
+[[ ! -e "$test_root/.local/share/mako-render" ]] ||
+    fail "default uninstaller left the managed Renderer data directory"
 
 printf '%s\n' 'mako-installer contract test passed'

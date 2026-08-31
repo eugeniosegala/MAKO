@@ -41,11 +41,15 @@ int main() {
         .appliedProfile = applied,
         .appliedGeneratedCapacity = 1,
         .frameGenerationPrivatePending = true,
+        .spatialScalingActive = false,
+        .spatialScalingActivationSupported = false,
+        .spatialScalingInactiveReason =
+            "gamescope-wsi-surface-unproven",
     };
     const auto json = mako::layer::runtimeStatusJson(
         record, 123, 321, 456, "frame-generation", 789
     );
-    expect(json.find("\"schema_version\":1") != std::string::npos,
+    expect(json.find("\"schema_version\":2") != std::string::npos,
         "schema version missing");
     expect(json.find("\"phase\":\"draining\"") != std::string::npos,
         "phase missing");
@@ -61,6 +65,11 @@ int main() {
     expect(json.find("\"applied_generated_capacity\":1") !=
             std::string::npos,
         "applied capacity missing");
+    expect(json.find("\"spatial_scaling\":{\"active\":false,"
+            "\"activation_supported\":false,\"inactive_reason\":"
+            "\"gamescope-wsi-surface-unproven\"}") !=
+            std::string::npos,
+        "spatial scaling activation status missing");
 
     const auto temporaryRoot = std::filesystem::temp_directory_path() /
         ("mako-runtime-status-test-" +

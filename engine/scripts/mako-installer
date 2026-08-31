@@ -6,12 +6,36 @@ script_dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 install_prefix="${MAKO_INSTALL_PREFIX:-$HOME/.local}"
 state_dir="$install_prefix/share/mako-render/installer"
 state_manifest="$state_dir/installed-files.sha256"
+active_renderer_state="$install_prefix/share/mako-render/active-renderer.json"
 config_dir="${XDG_CONFIG_HOME:-$HOME/.config}/mako-render"
 payload_manifest="$script_dir/MAKO-Renderer-install-manifest.txt"
 version_file="$script_dir/MAKO-Renderer-version.txt"
 decky_plugin_manifest="$HOME/homebrew/plugins/Mako/plugin.json"
+decky_install_prefix="$HOME/.local"
 configuration_desktop_path="share/applications/io.github.eugeniosegala.mako.desktop"
 uninstaller_desktop_path="share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
+decky_renderer_relative_paths=(
+    ".local/share/mako-render/lib/libmako-render.so"
+    ".local/share/mako-render/lib32/libmako-render.so"
+    ".local/share/mako-render/lib/libmako-render-scaling.so"
+    ".local/share/mako-render/lib32/libmako-render-scaling.so"
+    ".local/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
+    ".local/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+    ".local/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json"
+    ".local/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json"
+    ".local/share/mako-render/vulkan/gamescope_wsi_compatibility.d/VkLayer_FROG_gamescope_wsi.x86_64.json"
+    ".local/share/mako-render/vulkan/mangohud.d/MangoHud.x86_64.json"
+    ".local/share/mako-render/vulkan/mangohud.d/MangoHud.x86.json"
+    ".local/share/mako-render/vulkan/vkbasalt.d/vkBasalt.json"
+    ".local/share/mako-render/vulkan/vkbasalt.d/vkBasalt.x86.json"
+    ".local/share/mako-render/bin/mako-cli"
+    ".local/share/mako-render/installed-engine.json"
+    ".local/share/mako-render/active-renderer.json"
+    ".local/bin/mako-run"
+    ".local/bin/mako-diagnostics"
+    ".local/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
+    ".local/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
+)
 
 fail() {
     local message="$1"
@@ -165,6 +189,15 @@ write_installed_state_manifest() {
     mv -f -- "$temporary_path" "$state_manifest"
 }
 
+write_active_renderer_state() {
+    local version="$1"
+    local temporary_path="$active_renderer_state.mako-install.$$"
+    printf '{\n  "schema_version": 1,\n  "owner": "standalone",\n  "version": "%s"\n}\n' \
+        "$version" > "$temporary_path"
+    chmod 0644 "$temporary_path"
+    mv -f -- "$temporary_path" "$active_renderer_state"
+}
+
 remove_if_managed() {
     local path="$1"
     local expected_hash="$2"
@@ -176,9 +209,25 @@ remove_if_managed() {
     fi
 }
 
+remove_empty_parent_directories() {
+    local path="$1"
+    local root="$2"
+    local directory relative_path top_level boundary
+    directory="$(dirname -- "$path")"
+    relative_path="${directory#"$root"/}"
+    [[ "$relative_path" != "$directory" && "$relative_path" == */* ]] ||
+        return 0
+    top_level="${relative_path%%/*}"
+    boundary="$root/$top_level"
+    while [[ "$directory" != "$boundary" ]]; do
+        rmdir -- "$directory" 2>/dev/null || break
+        directory="$(dirname -- "$directory")"
+    done
+}
+
 warn_decky_installation() {
     [[ -f "$decky_plugin_manifest" ]] || return 0
-    local message="Warning: MAKO Decky is installed at ${decky_plugin_manifest%/plugin.json}. Continuing replaces shared Renderer and Vulkan-manifest files. An incompatible Renderer may prevent MAKO Decky from working until its matching Renderer is installed again. Continue with the standalone installation?"
+    local message="Warning: MAKO Decky is installed at ${decky_plugin_manifest%/plugin.json}. Continuing selects this standalone Renderer version for both launch workflows. If it differs from Decky's bundled version, MAKO Decky will offer its normal Renderer update. Continue with the standalone installation?"
     printf 'MAKO installer: %s\n' "$message" >&2
     confirm "$message"
 }
@@ -194,6 +243,8 @@ install_payload() {
     local version
     version="$(tr -d '[:space:]' < "$version_file")"
     [[ -n "$version" ]] || fail "The MAKO Renderer version file is empty."
+    [[ "$version" =~ ^[0-9A-Za-z][0-9A-Za-z._+-]*$ ]] ||
+        fail "The MAKO Renderer version file is invalid."
 
     validate_manifest "$payload_manifest"
     if [[ -f "$state_manifest" ]]; then
@@ -235,6 +286,7 @@ install_payload() {
 
     mkdir -p -- "$state_dir"
     write_installed_state_manifest
+    write_active_renderer_state "$version"
 
     notice "MAKO Renderer $version is installed. MAKO Renderer Configuration will open now."
     if [[ "${MAKO_INSTALLER_NO_LAUNCH:-0}" != "1" ]]; then
@@ -252,7 +304,7 @@ uninstall_payload() {
         fail "No MAKO Renderer installation managed by this installer was found at $install_prefix."
 
     validate_manifest "$state_manifest"
-    if ! confirm "Remove the MAKO Renderer files installed in $install_prefix? Modified files and your profiles will be kept."; then
+    if ! confirm "Remove the managed native MAKO Renderer? MAKO Decky, modified files, and your profiles will be kept."; then
         exit 0
     fi
 
@@ -260,10 +312,24 @@ uninstall_payload() {
     while IFS= read -r line || [[ -n "$line" ]]; do
         parse_manifest_line "$line"
         remove_if_managed "$install_prefix/$manifest_path" "$manifest_hash"
+        remove_empty_parent_directories \
+            "$install_prefix/$manifest_path" "$install_prefix"
     done < "$state_manifest"
+
+    if [[ "$install_prefix" == "$decky_install_prefix" ]]; then
+        local relative_path
+        for relative_path in "${decky_renderer_relative_paths[@]}"; do
+            rm -f -- "$HOME/$relative_path"
+            remove_empty_parent_directories \
+                "$HOME/$relative_path" "$decky_install_prefix"
+        done
+    else
+        rm -f -- "$active_renderer_state"
+        remove_empty_parent_directories \
+            "$active_renderer_state" "$install_prefix"
+    fi
     rm -f -- "$state_manifest"
-    rmdir -- "$state_dir" 2>/dev/null || true
-    rmdir -- "$(dirname -- "$state_dir")" 2>/dev/null || true
+    remove_empty_parent_directories "$state_manifest" "$install_prefix"
     rmdir -- "$install_prefix/bin" 2>/dev/null || true
 
     if [[ "$purge_configuration" == "1" ]] ||
@@ -282,7 +348,8 @@ Usage: mako-installer [--install] [--uninstall [--purge-configuration]]
 
 Run ‘Install MAKO Renderer’ from an extracted MAKO Renderer archive to install
 or update the standalone user-local Renderer. Run mako-installer --uninstall
-from an installed system to remove only files owned by the installer.
+from a default installation to remove the managed native Renderer shared with
+MAKO Decky. A custom installation prefix removes only that standalone payload.
 EOF
 }
 

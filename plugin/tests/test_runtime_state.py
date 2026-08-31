@@ -68,7 +68,7 @@ class RuntimeStateTests(unittest.TestCase):
             process_start_ticks: int | None = None,
             error: str | None = None) -> dict[str, object]:
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "pid": os.getpid(),
             "process_start_ticks": (
                 self.process_start_ticks
@@ -88,6 +88,11 @@ class RuntimeStateTests(unittest.TestCase):
                 "process_restart": False,
             },
             "applied_generated_capacity": 1,
+            "spatial_scaling": {
+                "active": role == "spatial-scaling",
+                "activation_supported": True,
+                "inactive_reason": None,
+            },
             "requested": _profile(profile, 5),
             "applied": _profile(profile, 2),
             "error": error,
@@ -120,6 +125,9 @@ class RuntimeStateTests(unittest.TestCase):
         )
         self.assertEqual(
             status["contexts"][0]["requested"]["multiplier"], 5
+        )
+        self.assertFalse(
+            status["contexts"][0]["spatial_scaling"]["active"]
         )
         self.assertEqual(
             self.service.get_status("another-profile")["phase"], "inactive"

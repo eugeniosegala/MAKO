@@ -15,7 +15,7 @@ vi.mock("@decky/ui", () => ({
     description?: React.ReactNode;
     children: React.ReactNode;
   }) => (
-    <div>
+    <div data-field-label={typeof label === "string" ? label : undefined}>
       <span>{label}</span>
       {description}
       {children}
@@ -136,8 +136,13 @@ describe("Scaling controls", () => {
     );
 
     const enabled = screen.getByRole("button", {
-      name: "Enable Scaling (Restart)",
+      name: "Enable Scaling (Restart) Experimental",
     });
+    expect(
+      screen
+        .getByText("Experimental")
+        .getAttribute("data-mako-experimental-badge"),
+    ).toBe("true");
     expect(enabled.getAttribute("data-checked")).toBe("false");
     expect(screen.queryByText("Scale Factor (1.8x)")).toBeNull();
     expect(screen.queryByText("Scaling Sharpness (80%)")).toBeNull();
@@ -193,7 +198,7 @@ describe("Scaling controls", () => {
     expect(
       screen
         .getByText(
-          "Leave Scaling off when you do not need it, as it consumes resources. Using it with Frame Generation may affect performance; try different performance settings or a lower in-game resolution. Results vary by game and device.",
+          "Leave Scaling off when you do not need it, as it consumes resources. Using it with Frame Generation may affect performance; try different performance settings or a lower in-game resolution.",
         )
         .closest('[data-tone="warning"]'),
     ).toBeTruthy();
@@ -229,6 +234,29 @@ describe("Scaling controls", () => {
     expect(screen.getByRole("button", { name: "Scaling Method" })).toBeTruthy();
     expect(screen.getByText("Scale Factor (1.8x)")).toBeTruthy();
     expect(screen.queryByText("Scaling Sharpness (80%)")).toBeNull();
+  });
+
+  test("replaces scaling guidance with the running-surface warning", () => {
+    window.SP_REACT = React;
+
+    render(
+      <ScalingControl
+        config={{
+          ...getDefaults(),
+          scaling_enabled: true,
+          scaling_method: SCALING_METHOD_MAKO,
+        }}
+        runtimeInactiveReason="gamescope-wsi-surface-unproven"
+        onConfigChange={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const warning = screen.getByText(
+      "Scaling is unavailable for this running surface because Gamescope WSI did not create it. Model and factor changes are saved for the next supported surface; Frame Generation continues at native resolution.",
+    );
+    expect(warning.closest('[data-tone="warning"]')).toBeTruthy();
+    expect(warning.closest('[data-field-label="Scaling Method"]')).toBeTruthy();
+    expect(screen.queryByText(/How scaling works:/)).toBeNull();
   });
 
   test("writes only the selected scaling field when combined with frame generation", () => {
@@ -287,7 +315,7 @@ describe("Scaling controls", () => {
     expect(
       (
         screen.getByRole("button", {
-          name: "Enable Scaling (Restart)",
+          name: "Enable Scaling (Restart) Experimental",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);

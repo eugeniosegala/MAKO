@@ -208,6 +208,14 @@ class RuntimePendingState(TypedDict):
     process_restart: bool
 
 
+class RuntimeSpatialScalingState(TypedDict):
+    """Effective scaling state for one Renderer context."""
+
+    active: bool
+    activation_supported: bool
+    inactive_reason: Optional[str]
+
+
 class RuntimeContextState(TypedDict):
     """One validated active Renderer context status record."""
 
@@ -221,6 +229,7 @@ class RuntimeContextState(TypedDict):
     reason: str
     pending: RuntimePendingState
     applied_generated_capacity: int
+    spatial_scaling: RuntimeSpatialScalingState
     requested: RuntimeProfileSnapshot
     applied: RuntimeProfileSnapshot
     error: Optional[str]

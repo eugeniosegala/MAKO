@@ -144,10 +144,12 @@ describe("generated cross-language contracts", () => {
 
     expect({
       enabled: defaults.scaling_enabled,
+      method: defaults.scaling_method,
       factor: defaults.scaling_factor,
       sharpness: defaults.scaling_sharpness,
     }).toEqual({
       enabled: false,
+      method: "ls1",
       factor: 1.8,
       sharpness: 0.8,
     });

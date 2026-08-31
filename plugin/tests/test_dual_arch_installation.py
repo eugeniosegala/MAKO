@@ -20,6 +20,8 @@ class _Logger:
 sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 
 from py_modules.mako_plugin.constants import (  # noqa: E402
+    ACTIVE_RENDERER_OWNER_STANDALONE,
+    ACTIVE_RENDERER_STATE_SCHEMA_VERSION,
     MAKO_LAYER_DISABLE_ENV,
     MAKO_LAYER_ENABLE_ENV,
     MAKO_LAYER_BUILD_MARKER,
@@ -120,7 +122,34 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.registered_json32_file = registered_dir / JSON32_FILENAME
         self.service.cli_file = self.root / "bin/mako-cli"
         self.service.mako_launch_script_path = self.root / "bin/mako-run"
+        self.service.diagnostics_script_path = self.root / "bin/mako-diagnostics"
         self.service.engine_state_file = self.root / "installed-engine.json"
+        self.service.active_renderer_state_file = (
+            self.root / "active-renderer.json"
+        )
+        self.service.standalone_install_prefix = self.root / "standalone"
+        self.service.standalone_lib_file = (
+            self.service.standalone_install_prefix / "lib" / LIB_FILENAME
+        )
+        self.service.standalone_lib32_file = (
+            self.service.standalone_install_prefix / "lib32" / LIB_FILENAME
+        )
+        self.service.standalone_spatial_scaling_lib_file = (
+            self.service.standalone_install_prefix
+            / "lib"
+            / SPATIAL_SCALING_LIB_FILENAME
+        )
+        self.service.standalone_spatial_scaling_lib32_file = (
+            self.service.standalone_install_prefix
+            / "lib32"
+            / SPATIAL_SCALING_LIB_FILENAME
+        )
+        self.service.standalone_installer_state_file = (
+            self.service.standalone_install_prefix
+            / "share/mako-render/installer/installed-files.sha256"
+        )
+        self.service.config_dir = self.root / "config"
+        self.service.config_file_path = self.service.config_dir / "conf.toml"
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -212,6 +241,46 @@ class DualArchInstallationTests(unittest.TestCase):
                 info.size = len(content)
                 archive.addfile(info, io.BytesIO(content))
         return archive_path
+
+    def _touch_minimal_64bit_installation(self) -> None:
+        for path in (
+            self.service.lib_file,
+            self.service.json_file,
+            self.service.spatial_scaling_lib_file,
+            self.service.spatial_scaling_json_file,
+            self.service.registered_json_file,
+            self.service.mako_launch_script_path,
+        ):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        self.service.json_file.write_text(
+            json.dumps({
+                "layer": {
+                    "library_path": str(self.service.lib_file),
+                },
+            }),
+            encoding="utf-8",
+        )
+
+    def _touch_minimal_standalone_64bit_installation(self) -> None:
+        for path in (
+            self.service.standalone_lib_file,
+            self.service.json_file,
+            self.service.standalone_spatial_scaling_lib_file,
+            self.service.spatial_scaling_json_file,
+            self.service.registered_json_file,
+            self.service.mako_launch_script_path,
+        ):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        self.service.json_file.write_text(
+            json.dumps({
+                "layer": {
+                    "library_path": str(self.service.standalone_lib_file),
+                },
+            }),
+            encoding="utf-8",
+        )
 
     def test_installs_and_rewrites_both_layer_architectures(self):
         self.service._extract_and_install_files(self._archive())
@@ -736,6 +805,195 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertEqual(status["host_architecture"], "aarch64")
         self.assertFalse(status["host_architecture_supported"])
         self.assertIn("Games remain on their normal Armada launch path", status["error"])
+
+    def test_standalone_active_version_drives_decky_update_status(self):
+        self._touch_minimal_standalone_64bit_installation()
+        metadata = {
+            "name": "renderer.tar.xz",
+            "version": "3.0.0",
+            "sha256hash": "a" * 64,
+            "architectures": ["64"],
+            "host_architectures": ["x86_64"],
+        }
+        self.service.standalone_installer_state_file.parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        self.service.standalone_installer_state_file.write_text(
+            f"{'0' * 64}  bin/mako-ui\n",
+            encoding="utf-8",
+        )
+
+        for active_version, expected_update in (
+            ("3.0.0", False),
+            ("3.1.0", True),
+        ):
+            with self.subTest(active_version=active_version):
+                self.service.active_renderer_state_file.write_text(
+                    json.dumps({
+                        "schema_version": ACTIVE_RENDERER_STATE_SCHEMA_VERSION,
+                        "owner": ACTIVE_RENDERER_OWNER_STANDALONE,
+                        "version": active_version,
+                    }),
+                    encoding="utf-8",
+                )
+                with (
+                    patch.object(
+                        self.service,
+                        "_bundled_archive_metadata",
+                        return_value=metadata,
+                    ),
+                    patch.object(
+                        self.service,
+                        "_host_compatibility",
+                        return_value=("x86_64", True, None),
+                    ),
+                ):
+                    status = self.service.check_installation()
+
+                self.assertTrue(status["installed"])
+                self.assertEqual(
+                    status["installed_engine_version"], active_version
+                )
+                self.assertEqual(
+                    status["engine_update_required"], expected_update
+                )
+
+    def test_legacy_decky_engine_state_remains_readable(self):
+        self._touch_minimal_64bit_installation()
+        metadata = {
+            "name": "renderer.tar.xz",
+            "version": "3.0.0",
+            "sha256hash": "a" * 64,
+            "architectures": ["64"],
+            "host_architectures": ["x86_64"],
+        }
+        self.service.engine_state_file.write_text(
+            json.dumps({
+                "archive": metadata["name"],
+                "version": metadata["version"],
+                "sha256hash": metadata["sha256hash"],
+            }),
+            encoding="utf-8",
+        )
+
+        with (
+            patch.object(
+                self.service,
+                "_bundled_archive_metadata",
+                return_value=metadata,
+            ),
+            patch.object(
+                self.service,
+                "_host_compatibility",
+                return_value=("x86_64", True, None),
+            ),
+        ):
+            status = self.service.check_installation()
+
+        self.assertTrue(status["installed"])
+        self.assertEqual(status["installed_engine_version"], "3.0.0")
+        self.assertFalse(status["engine_update_required"])
+
+    def test_legacy_standalone_override_invalidates_stale_decky_state(self):
+        self._touch_minimal_64bit_installation()
+        metadata = {
+            "name": "renderer.tar.xz",
+            "version": "3.0.0",
+            "sha256hash": "a" * 64,
+            "architectures": ["64"],
+            "host_architectures": ["x86_64"],
+        }
+        self.service.engine_state_file.write_text(
+            json.dumps({
+                "archive": metadata["name"],
+                "version": metadata["version"],
+                "sha256hash": metadata["sha256hash"],
+            }),
+            encoding="utf-8",
+        )
+        self.service._write_active_renderer_state(metadata)
+        standalone_library = (
+            self.service.standalone_install_prefix
+            / "lib/libmako-render.so"
+        )
+        for path in (
+            standalone_library,
+            self.service.standalone_spatial_scaling_lib_file,
+        ):
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.touch()
+        self.service.json_file.write_text(
+            json.dumps({
+                "layer": {
+                    "library_path": str(standalone_library),
+                },
+            }),
+            encoding="utf-8",
+        )
+
+        with (
+            patch.object(
+                self.service,
+                "_bundled_archive_metadata",
+                return_value=metadata,
+            ),
+            patch.object(
+                self.service,
+                "_host_compatibility",
+                return_value=("x86_64", True, None),
+            ),
+        ):
+            status = self.service.check_installation()
+
+        self.assertTrue(status["installed"])
+        self.assertFalse(status["engine_version_known"])
+        self.assertIsNone(status["installed_engine_version"])
+        self.assertTrue(status["engine_update_required"])
+
+    def test_uninstall_removes_decky_and_standalone_renderer_files(self):
+        decky_file = self.service.lib_file
+        decky_file.parent.mkdir(parents=True, exist_ok=True)
+        decky_file.write_bytes(b"decky-renderer")
+        self.service.active_renderer_state_file.write_text(
+            json.dumps({
+                "schema_version": ACTIVE_RENDERER_STATE_SCHEMA_VERSION,
+                "owner": ACTIVE_RENDERER_OWNER_STANDALONE,
+                "version": "3.1.0",
+            }),
+            encoding="utf-8",
+        )
+
+        standalone_file = self.service.standalone_install_prefix / "bin/mako-ui"
+        modified_file = (
+            self.service.standalone_install_prefix
+            / "share/applications/io.github.eugeniosegala.mako.desktop"
+        )
+        standalone_file.parent.mkdir(parents=True, exist_ok=True)
+        modified_file.parent.mkdir(parents=True, exist_ok=True)
+        standalone_file.write_bytes(b"standalone-ui")
+        modified_file.write_bytes(b"user-modified")
+        self.service.standalone_installer_state_file.parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        self.service.standalone_installer_state_file.write_text(
+            "\n".join((
+                f"{hashlib.sha256(standalone_file.read_bytes()).hexdigest()}  bin/mako-ui",
+                f"{'0' * 64}  share/applications/io.github.eugeniosegala.mako.desktop",
+            )) + "\n",
+            encoding="utf-8",
+        )
+        self.service.config_file_path.parent.mkdir(parents=True, exist_ok=True)
+        self.service.config_file_path.write_text("version = 2\n", encoding="utf-8")
+
+        result = self.service.uninstall()
+
+        self.assertTrue(result["success"], result.get("error"))
+        self.assertFalse(decky_file.exists())
+        self.assertFalse(self.service.active_renderer_state_file.exists())
+        self.assertFalse(standalone_file.exists())
+        self.assertTrue(modified_file.exists())
+        self.assertFalse(self.service.standalone_installer_state_file.exists())
+        self.assertTrue(self.service.config_file_path.exists())
 
     def test_installed_files_use_deterministic_permissions(self):
         self.service._extract_and_install_files(self._archive())

@@ -110,6 +110,21 @@ vi.mock("@decky/ui", () => ({
   }) => <button onClick={onClick}>{children}</button>,
 }));
 vi.mock("../../src/components/MakoUi", () => ({
+  MakoExperimentalSettingLabel: ({
+    label,
+    badgeLabel,
+  }: {
+    label: string;
+    badgeLabel: string;
+  }) => (
+    <span
+      data-mako-experimental-setting-label="true"
+      style={{ columnGap: "6px", rowGap: "6px" }}
+    >
+      <span>{label}</span>
+      <span data-mako-experimental-badge="true">{badgeLabel}</span>
+    </span>
+  ),
   MakoRestartLabel: ({ label }: { label: string }) => label,
   MakoInlineTip: ({
     children,
@@ -360,8 +375,13 @@ describe("External Tools controls", () => {
 
     expect(screen.getByText("Enable MangoHud (Restart)")).toBeTruthy();
     expect(screen.getByText("Enable vkBasalt (Restart)")).toBeTruthy();
+    expect(
+      screen
+        .getByText("Experimental")
+        .getAttribute("data-mako-experimental-badge"),
+    ).toBe("true");
     const vkBasaltDescription = screen.getByText(
-      "Experimental. Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
+      "Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
     );
     expect(vkBasaltDescription).toBeTruthy();
     expect(vkBasaltDescription.getAttribute("data-tone")).toBeNull();

@@ -22,6 +22,7 @@ from shared_config import (
     FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
     SCALING_FACTOR_MAX,
     SCALING_FACTOR_MIN,
+    SCALING_METHOD_LS1,
     SCALING_SHARPNESS_MAX,
     SCALING_SHARPNESS_MIN,
     TARGET_FPS_MAX,
@@ -203,6 +204,14 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertFalse(CONFIG_SCHEMA_DEF["scaling_enabled"]["default"])
         self.assertIn(
             "static constexpr bool scalingEnabled = false;",
+            source,
+        )
+        self.assertEqual(
+            CONFIG_SCHEMA_DEF["scaling_method"]["default"],
+            SCALING_METHOD_LS1,
+        )
+        self.assertIn(
+            "static constexpr ScalingMethod scalingMethod = ScalingMethod::Ls1;",
             source,
         )
 

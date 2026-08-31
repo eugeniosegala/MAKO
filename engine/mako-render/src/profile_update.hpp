@@ -34,6 +34,7 @@ namespace mako::layer {
         bool dynamicCadenceProbeIntervalChanged{false};
         bool spatialScalingChanged{false};
         bool spatialScalingDormantUpdate{false};
+        bool spatialScalingEffectiveExtentUnchanged{false};
         bool spatialScalingLiveRebuild{false};
         bool frameGenerationBackendChanged{false};
         bool generatedFrameCapacityExceeded{false};
@@ -477,7 +478,9 @@ namespace mako::layer {
             const size_t generatedFrameCapacity,
             const bool frameGenerationResourcesAvailable,
             const bool spatialScalerActive = false,
-            const bool frameGenerationPrivateRebuildAvailable = false) {
+            const bool frameGenerationPrivateRebuildAvailable = false,
+            const bool spatialScalingActivationSupported = true,
+            const bool spatialScalingEffectiveExtentUnchanged = false) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
@@ -541,13 +544,17 @@ namespace mako::layer {
         // changing it can make the current source eligible.
         const bool spatialScalingDormantUpdate =
             spatialScalingResourcesChanged && !spatialScalerActive &&
-            !scalingFactorChanged;
+            (!scalingFactorChanged || !spatialScalingActivationSupported);
+        const bool spatialScalingExtentNoOp =
+            spatialScalingResourcesChanged && scalingFactorChanged &&
+            spatialScalingEffectiveExtentUnchanged;
         const bool spatialScalingLiveRebuild =
             spatialScalingResourcesChanged &&
             spatialScalerActive &&
             !scalingFactorChanged;
         if (spatialScalingResourcesChanged &&
-                !spatialScalingDormantUpdate) {
+                !spatialScalingDormantUpdate &&
+                !spatialScalingExtentNoOp) {
             applied.scaling_method = current.scaling_method;
             applied.scaling_factor = current.scaling_factor;
             applied.scaling_sharpness = current.scaling_sharpness;
@@ -619,7 +626,8 @@ namespace mako::layer {
         const bool spatialScalingChanged =
             current.scaling_enabled != next.scaling_enabled ||
             (spatialScalingResourcesChanged &&
-             !spatialScalingDormantUpdate);
+             !spatialScalingDormantUpdate &&
+             !spatialScalingExtentNoOp);
         const bool liveChange = frameGenerationChanged ||
             refreshRateThresholdChanged ||
                 generationPolicyChanged ||
@@ -650,6 +658,8 @@ namespace mako::layer {
                 .spatialScalingChanged = spatialScalingChanged,
                 .spatialScalingDormantUpdate =
                     spatialScalingDormantUpdate,
+                .spatialScalingEffectiveExtentUnchanged =
+                    spatialScalingExtentNoOp,
                 .spatialScalingLiveRebuild =
                     spatialScalingLiveRebuild,
                 .frameGenerationBackendChanged =

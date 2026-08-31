@@ -106,6 +106,7 @@ namespace mako::layer {
                 previousVariableExtents,
             const std::optional<FixedSurfaceScalingContract>&
                 fixedSurfaceContract,
+            bool spatialSurfaceScalingSupported,
             const std::function<void(
                 const FixedSurfaceScalingContract&)>& publishSpatialCreate,
             const std::function<void(void)>& finish) const;

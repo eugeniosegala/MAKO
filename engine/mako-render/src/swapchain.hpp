@@ -51,6 +51,15 @@ namespace mako::layer {
         // reinterpreted without replacing the game-owned swapchain.
         bool privateOrderedTransport{false};
         bool spatialScalingActive{false};
+        // Variable WSI surfaces retain the source extent and select a larger
+        // lower presentation envelope. Factor edits which remain above an
+        // already active ceiling can therefore be applied without replacing
+        // the game-owned swapchain.
+        bool variableSurface{false};
+        // False only when the lower split role proved that Gamescope WSI did
+        // not own this surface. No live factor can make that surface safe, so
+        // scaler choices remain dormant until a natural surface boundary.
+        bool spatialScalingActivationSupported{true};
         // The upper WSI either supplied a live oldSwapchain handle or MAKO
         // completed retirement of the exact retained lower handle before a
         // null-old destroy-before-create replacement. This is a known

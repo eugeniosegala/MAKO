@@ -128,6 +128,8 @@ int main() {
                 ls::GameConfDefaults::performanceMode &&
             defaults.pacing == ls::GameConfDefaults::pacing,
         "GameConf must use the Renderer profile defaults");
+    expect(defaults.scaling_method == ls::ScalingMethod::Ls1,
+        "LS1 Quality must be the default spatial scaling method");
     expect(ls::scalingMethodFromName("native") ==
                 ls::ScalingMethod::Native &&
             std::string_view(ls::scalingMethodName(

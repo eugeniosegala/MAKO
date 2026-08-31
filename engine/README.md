@@ -49,7 +49,7 @@ The archive provides `mako-ui`, `mako-cli`, `mako-launch`, `mako-diagnostics`, d
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> Direct installation is separate from MAKO Decky. The installer warns before replacing paths shared with a Decky installation; if you continue, reinstall Decky's matching Renderer afterwards.
+> MAKO Decky and the standalone archive share one active native Renderer. The standalone installer warns before selecting its version while MAKO Decky is installed. MAKO Decky adopts an existing standalone Renderer, reports its active version, and offers the bundled update when the versions differ. **Uninstall MAKO Renderer** removes native Renderer files supplied by either managed installer, keeps MAKO Decky and profiles, and causes MAKO Decky to offer installation again. Uninstalling MAKO Decky also removes the managed native Renderer. Shared Flatpak runtime extensions remain installed.
 
 For Flatpak games or emulators, install the matching MAKO Vulkan runtime extension and grant the application access to MAKO configuration and the Steam library. MAKO Decky performs this through **Flatpak Setup**; direct installs can follow the <a href="docs/FLATPAK-GUIDE.md" target="_blank" rel="noopener noreferrer">Flatpak guide</a>.
 

@@ -55,6 +55,9 @@ namespace mako::layer {
         bool spatialPrivatePending{false};
         bool swapchainRecreationPending{false};
         bool processRestartPending{false};
+        bool spatialScalingActive{false};
+        bool spatialScalingActivationSupported{true};
+        std::optional<std::string> spatialScalingInactiveReason;
         std::optional<std::string> error;
     };
 

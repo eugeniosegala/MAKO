@@ -59,6 +59,31 @@ int main() {
     expect(!liveGamescopeHdrReclassificationAllowed(true),
         "Scaled swapchains must remain on their immutable SDR boundary");
 
+    expect(spatialSplitSurfaceScalingSupported(
+            false, SpatialSurfaceOrigin::Unknown
+        ) && spatialSplitSurfaceScalingSupported(
+            false, SpatialSurfaceOrigin::Xlib
+        ),
+        "The direct combined Renderer must accept its application-owned surface");
+    expect(spatialSplitSurfaceScalingSupported(
+            true, SpatialSurfaceOrigin::Wayland
+        ),
+        "The lower split role must accept a Gamescope WSI Wayland surface");
+    expect(!spatialSplitSurfaceScalingSupported(
+            true, SpatialSurfaceOrigin::Unknown
+        ) && !spatialSplitSurfaceScalingSupported(
+            true, SpatialSurfaceOrigin::Xcb
+        ) && !spatialSplitSurfaceScalingSupported(
+            true, SpatialSurfaceOrigin::Xlib
+        ),
+        "The lower split role must fail legacy or unproven surfaces native");
+    expect(std::string_view(spatialSurfaceOriginName(
+            SpatialSurfaceOrigin::Wayland
+        )) == "wayland" && std::string_view(spatialSurfaceOriginName(
+            SpatialSurfaceOrigin::Xlib
+        )) == "xlib",
+        "Surface provenance diagnostics must remain machine-readable");
+
     const auto deckPlacement = selectSpatialFramePipelinePlacement(
         {852, 532}, {1280, 800}
     );
@@ -291,6 +316,47 @@ int main() {
     capabilityRelay.begin();
     expect(!capabilityRelay.consume(lowerPhysicalDevice),
         "Beginning a capability query must clear any stale relay contract");
+    expect(classifySpatialCreateRelay(
+            fixedContract, fixedContract.extents.source
+        ) == SpatialCreateRelayDecision::Split,
+        "A fixed-surface create relay must accept the lower DSO's nonzero query generation");
+    const FixedSurfaceScalingContract nativeCreateDecision{
+        .extents = {
+            .source = fixedContract.extents.presentation,
+            .presentation = fixedContract.extents.presentation,
+        },
+        .factor = 1.5F,
+        .policyRevision = 8,
+        .queryGeneration = 12,
+    };
+    expect(classifySpatialCreateRelay(
+            nativeCreateDecision, nativeCreateDecision.extents.source
+        ) == SpatialCreateRelayDecision::Native,
+        "An application native-extent override must remain a valid explicit lower create decision");
+    const FixedSurfaceScalingContract liveFactorCreateDecision{
+        .extents = {
+            .source = {1706, 960},
+            .presentation = {2560, 1440},
+        },
+        .factor = 1.5F,
+        .policyRevision = 21,
+        .queryGeneration = 19,
+    };
+    expect(classifySpatialCreateRelay(
+            liveFactorCreateDecision, {1706, 960}
+        ) == SpatialCreateRelayDecision::Split,
+        "A guarded live-factor replacement must accept the exact lower fixed-surface decision");
+    expect(classifySpatialCreateRelay(
+            liveFactorCreateDecision, {1422, 800}
+        ) == SpatialCreateRelayDecision::Unavailable,
+        "A stale or mismatched lower create decision must still fail closed");
+    expect(awaitLowerSpatialCreateRelay(true, true, false, false, true),
+        "An upper fixed-surface create without a capability contract must reach the lower one-shot decision");
+    expect(!awaitLowerSpatialCreateRelay(true, true, true, false, true) &&
+            !awaitLowerSpatialCreateRelay(true, true, false, true, true) &&
+            !awaitLowerSpatialCreateRelay(true, false, false, false, true) &&
+            !awaitLowerSpatialCreateRelay(true, true, false, false, false),
+        "Only the upper owner's unresolved fixed-surface create may await the lower relay");
     auto relayedSourceCapabilities = real;
     relayedSourceCapabilities.currentExtent = fixedContract.extents.source;
     expect(prepareFixedSurfaceCapabilityRelay(
@@ -338,6 +404,66 @@ int main() {
             customOverride.inactiveReason ==
                 SpatialScalingInactiveReason::ApplicationExtentMismatch,
         "An application extent override must remain application-owned");
+    const FixedSurfaceScalingContract changedFactorContract{
+        .extents = {
+            .source = {1536, 864},
+            .presentation = {1920, 1080},
+        },
+        .factor = 1.25F,
+        .policyRevision = 8,
+        .queryGeneration = 12,
+    };
+    profile.scaling_factor = 1.25F;
+    const auto retainedFixedSource = scalingDecisionForCreate(
+        profile, true, 8, real, {1280, 720},
+        SpatialScalingExtents{
+            .source = {1280, 720},
+            .presentation = {1920, 1080},
+        },
+        changedFactorContract
+    );
+    expect(retainedFixedSource.extents &&
+            retainedFixedSource.retainedPreviousFixedSource &&
+            sameExtent(retainedFixedSource.extents->source, {1280, 720}) &&
+            sameExtent(
+                retainedFixedSource.extents->presentation, {1920, 1080}
+            ),
+        "A live fixed-surface factor change must retain the exact proven prior split while WSI keeps its source");
+    const auto unprovenChangedFactorRequest = scalingDecisionForCreate(
+        profile, true, 8, real, {1400, 800},
+        SpatialScalingExtents{
+            .source = {1280, 720},
+            .presentation = {1920, 1080},
+        },
+        changedFactorContract
+    );
+    expect(!unprovenChangedFactorRequest.extents &&
+            !unprovenChangedFactorRequest.retainedPreviousFixedSource &&
+            unprovenChangedFactorRequest.inactiveReason ==
+                SpatialScalingInactiveReason::ApplicationExtentMismatch,
+        "A fixed-surface factor change must reject an unproven source extent");
+    auto changedPresentation = real;
+    changedPresentation.currentExtent = {2560, 1440};
+    const auto changedPresentationRequest = scalingDecisionForCreate(
+        profile, true, 8, changedPresentation, {1280, 720},
+        SpatialScalingExtents{
+            .source = {1280, 720},
+            .presentation = {1920, 1080},
+        },
+        FixedSurfaceScalingContract{
+            .extents = {
+                .source = {2048, 1152},
+                .presentation = {2560, 1440},
+            },
+            .factor = 1.25F,
+            .policyRevision = 8,
+            .queryGeneration = 13,
+        }
+    );
+    expect(!changedPresentationRequest.extents &&
+            !changedPresentationRequest.retainedPreviousFixedSource,
+        "A previous split from a different presentation extent must not be retained");
+    profile.scaling_factor = 1.5F;
     const auto missingContract = scalingDecisionForCreate(
         profile, true, 7, real, {1280, 720}
     );
@@ -399,7 +525,10 @@ int main() {
             "application-extent-override-no-source-presentation-split" &&
             std::string_view(spatialScalingInactiveReasonName(
                 SpatialScalingInactiveReason::SwapchainFormatUnsupported)) ==
-            "swapchain-format-unsupported",
+            "swapchain-format-unsupported" &&
+            std::string_view(spatialScalingInactiveReasonName(
+                SpatialScalingInactiveReason::GamescopeWsiSurfaceUnproven)) ==
+            "gamescope-wsi-surface-unproven",
         "Inactive reason diagnostics must retain stable machine-readable names");
 
     VkSurfaceCapabilitiesKHR variableCreate{
@@ -523,6 +652,21 @@ int main() {
                 coldFiveKUsesBaseline.extents->presentation, {3840, 2160}
             ),
         "A cold 1440p launch must use the deterministic 4K presentation envelope");
+    expect(variableSurfaceFactorChangePreservesEffectiveExtents(
+            true, true, {2560, 1440}, {3840, 2160}, 2.0F, 1.8F),
+        "A factor edit above an active variable-surface ceiling must preserve the effective extents");
+    expect(variableSurfaceFactorChangePreservesEffectiveExtents(
+            true, true, {2560, 1440}, {3840, 2160}, 2.0F, 1.5F),
+        "A factor edit exactly matching an active variable-surface ceiling must preserve the effective extents");
+    expect(!variableSurfaceFactorChangePreservesEffectiveExtents(
+            true, true, {2560, 1440}, {3840, 2160}, 2.0F, 1.4F),
+        "A factor edit below an active variable-surface ceiling must require new extents");
+    expect(!variableSurfaceFactorChangePreservesEffectiveExtents(
+            false, true, {2560, 1440}, {3840, 2160}, 2.0F, 1.8F),
+        "A fixed surface must retain its factor-bound capability contract");
+    expect(!variableSurfaceFactorChangePreservesEffectiveExtents(
+            true, true, {1280, 720}, {1920, 1080}, 1.5F, 1.8F),
+        "An unconstrained variable surface must recreate when its factor changes");
     const auto fiveKAfterFourKIsIdentical = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {2560, 1440},
         SpatialScalingExtents{

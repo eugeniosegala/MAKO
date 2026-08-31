@@ -35,6 +35,13 @@ RUNTIME_STATE_DIRNAME = "runtime-state"
 SCRIPT_NAME = MAKO_WRAPPER_RELATIVE_PATH
 DIAGNOSTICS_SCRIPT_NAME = ".local/bin/mako-diagnostics"
 DIAGNOSTICS_HELPER_FILENAME = Path(DIAGNOSTICS_SCRIPT_NAME).name
+ACTIVE_RENDERER_STATE_FILENAME = "active-renderer.json"
+ACTIVE_RENDERER_STATE_SCHEMA_VERSION = 1
+ACTIVE_RENDERER_OWNER_DECKY = "decky"
+ACTIVE_RENDERER_OWNER_STANDALONE = "standalone"
+STANDALONE_INSTALLER_STATE_RELATIVE_PATH = (
+    f"{MAKO_ROOT}/installer/installed-files.sha256"
+)
 
 # Avoid persistent Gamescope presentation stalls by giving the generated-image
 # acquisition path a bounded first wait. During backoff, the engine probes
@@ -137,6 +144,32 @@ SPATIAL_SCALING_JSON32_FILENAME = (
 )
 CLI_FILENAME = "mako-cli"
 CLI_DIR = f"{MAKO_ROOT}/bin"
+
+# The standalone uninstaller mirrors this fixed list so removing MAKO Renderer
+# also removes a Decky-supplied native payload. A cross-component contract test
+# keeps the independently packaged Python and shell implementations aligned.
+DECKY_NATIVE_RENDERER_RELATIVE_PATHS = (
+    f"{LOCAL_LIB}/{LIB_FILENAME}",
+    f"{LOCAL_LIB32}/{LIB_FILENAME}",
+    f"{LOCAL_LIB}/{SPATIAL_SCALING_LIB_FILENAME}",
+    f"{LOCAL_LIB32}/{SPATIAL_SCALING_LIB_FILENAME}",
+    f"{VULKAN_LAYER_DIR}/{JSON_FILENAME}",
+    f"{VULKAN_LAYER_DIR}/{JSON32_FILENAME}",
+    f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON_FILENAME}",
+    f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON32_FILENAME}",
+    f"{GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR}/{GAMESCOPE_WSI_MANIFEST_FILENAME_64}",
+    f"{MANGOHUD_LAYER_DIR}/{MANGOHUD_MANIFEST_FILENAME_64}",
+    f"{MANGOHUD_LAYER_DIR}/{MANGOHUD_MANIFEST_FILENAME_32}",
+    f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_64}",
+    f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_32}",
+    f"{CLI_DIR}/{CLI_FILENAME}",
+    f"{MAKO_ROOT}/installed-engine.json",
+    f"{MAKO_ROOT}/{ACTIVE_RENDERER_STATE_FILENAME}",
+    MAKO_WRAPPER_RELATIVE_PATH,
+    DIAGNOSTICS_SCRIPT_NAME,
+    f"{USER_VULKAN_LAYER_DIR}/{JSON_FILENAME}",
+    f"{USER_VULKAN_LAYER_DIR}/{JSON32_FILENAME}",
+)
 
 BIN_DIR = "bin"
 

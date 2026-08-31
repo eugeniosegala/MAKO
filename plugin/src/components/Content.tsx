@@ -9,6 +9,7 @@ import {
   useInstallationStatus,
   useDllDetection,
   useMakoConfig,
+  useRuntimeScalingStatus,
 } from "../hooks/useMakoHooks";
 import { useProfileManagement } from "../hooks/useProfileManagement";
 import { useInstallationActions } from "../hooks/useInstallationActions";
@@ -75,6 +76,10 @@ export function Content() {
     loadProfileConfig: loadMakoConfig,
     syncCurrentProfile,
   });
+  const scalingInactiveReason = useRuntimeScalingStatus(
+    editingProfile,
+    Boolean(isInstalled && mainRunningApp),
+  );
   const {
     saveConfigChanges: handleConfigChanges,
     saveConfigField: handleConfigChange,
@@ -198,6 +203,7 @@ export function Content() {
             <ScalingControl
               config={config}
               disabled={engineUpdateRequired}
+              runtimeInactiveReason={scalingInactiveReason}
               onConfigChange={handleConfigChange}
             />
 

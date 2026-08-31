@@ -106,6 +106,9 @@ class PluginLifecycleTests(unittest.TestCase):
             current_package_host_compatibility=lambda: (
                 "x86_64", True, None
             ),
+            prepare_active_standalone_for_decky=lambda: calls.append(
+                "standalone-adoption"
+            ) or False,
             migrate_gamescope_wsi_compatibility_manifest_if_needed=lambda: calls.append(
                 "gamescope-wsi-manifest"
             ) or False,
@@ -130,6 +133,7 @@ class PluginLifecycleTests(unittest.TestCase):
             "wrapper-settings",
             "base-fps-cap",
             "launch-script",
+            "standalone-adoption",
             "gamescope-wsi-manifest",
             "postprocess-manifests",
             "diagnostics-helper",

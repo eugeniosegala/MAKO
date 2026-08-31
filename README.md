@@ -180,7 +180,7 @@ The clean update path avoids Decky retaining an older backend or bundled payload
 4. Open MAKO Decky and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
 5. If you use Heroic or EmuDeck Flatpak emulators, open **Flatpak Setup** and select **Update** for each prepared application's matching runtime extension shown by MAKO.
 
-Profiles and Steam launch options are retained. The private native engine and launcher are recreated in step 4; shared Flatpak extensions are retained and then refreshed in step 5.
+Profiles and Steam launch options are retained. Uninstalling MAKO Decky removes the managed native Renderer, including files supplied by the standalone archive installer, and step 4 recreates the Renderer and Decky launcher. Shared Flatpak extensions are retained and then refreshed in step 5.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
@@ -196,7 +196,7 @@ Decky is optional. Desktop Linux users can install the published MAKO Renderer a
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> This installer is for the standalone MAKO Renderer only. It warns and asks for confirmation when MAKO Decky is installed because the current Decky and standalone flows share Renderer, Vulkan-manifest, and configuration paths. Continuing may leave MAKO Decky incompatible until you reinstall its matching Renderer.
+> MAKO Decky and the standalone archive share one active native Renderer. The standalone installer warns when MAKO Decky is present, then makes its Renderer version active if you continue. When MAKO Decky is installed afterward, it adopts the active standalone Renderer and offers its bundled update only when the versions differ. **Uninstall MAKO Renderer** removes the native Renderer files supplied by either managed installer while leaving MAKO Decky and your profiles in place; uninstalling MAKO Decky removes its plugin and the managed native Renderer. Shared Flatpak runtime extensions remain installed.
 
 ## Documentation
 

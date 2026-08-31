@@ -133,7 +133,7 @@ std::string mako::layer::runtimeStatusJson(
     std::ostringstream stream;
     stream << std::boolalpha
            << '{'
-           << "\"schema_version\":1"
+           << "\"schema_version\":2"
            << ",\"pid\":" << processId
            << ",\"process_start_ticks\":" << processStartTicks
            << ",\"context\":" << contextId
@@ -153,6 +153,16 @@ std::string mako::layer::runtimeStatusJson(
            << '}'
            << ",\"applied_generated_capacity\":"
            << status.appliedGeneratedCapacity
+           << ",\"spatial_scaling\":{"
+           << "\"active\":" << status.spatialScalingActive
+           << ",\"activation_supported\":"
+           << status.spatialScalingActivationSupported
+           << ",\"inactive_reason\":";
+    if (status.spatialScalingInactiveReason)
+        stream << jsonString(*status.spatialScalingInactiveReason);
+    else
+        stream << "null";
+    stream << '}'
            << ",\"requested\":" << profileJson(status.requestedProfile)
            << ",\"applied\":" << profileJson(status.appliedProfile)
            << ",\"error\":";

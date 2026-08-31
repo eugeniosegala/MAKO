@@ -46,6 +46,7 @@ import {
 import { ultraPerformanceChanges } from "../config/ultraPerformancePreset";
 import t from "../i18n/i18n";
 import {
+  MakoExperimentalSettingLabel,
   MakoInlineTip,
   MakoRestartLabel,
   MakoSectionHeader,
@@ -465,7 +466,7 @@ export function CompatibilityConfigurationGroup({
                   <div>
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC",
-                      "Provided automatically when Scaling is enabled. Enable it separately for FG-only profiles that need the Gamescope WSI presentation path. It can run with Frame Generation and one post-process tool. Restart the game after changing it.",
+                      "May reduce coloured or pixelated motion artifacts in some games by using Gamescope's presentation path. Scaling enables it automatically. For FG-only profiles, enable it only for affected games.",
                     )}
                   </div>
                   {!config.scaling_enabled && (
@@ -500,7 +501,7 @@ export function CompatibilityConfigurationGroup({
               }
               description={t(
                 "CONFIG_DISABLE_STEAMDECK_MODE_DESC",
-                "Disables Steam Deck mode. Unlocks hidden settings in some games. Restart the game after changing it.",
+                "Disables Steam Deck mode. Unlocks hidden settings in some games.",
               )}
               checked={config.disable_steamdeck_mode}
               onChange={(value) =>
@@ -521,7 +522,7 @@ export function CompatibilityConfigurationGroup({
               }
               description={t(
                 "CONFIG_ENABLE_ZINK_DESC",
-                "Uses the Vulkan-based OpenGL implementation for OpenGL games. May cause crashes or freezes in some games. Restart the game after changing it.",
+                "Uses the Vulkan-based OpenGL implementation for OpenGL games. May cause crashes or freezes in some games.",
               )}
               checked={config.enable_zink}
               onChange={(value) => onConfigChange(ENABLE_ZINK, value)}
@@ -628,16 +629,17 @@ export function ExternalToolsConfigurationGroup({
           <PanelSectionRow>
             <ToggleField
               label={
-                <MakoRestartLabel
+                <MakoExperimentalSettingLabel
                   label={t(
                     "CONFIG_ENABLE_VKBASALT",
                     "Enable vkBasalt (Restart)",
                   )}
+                  badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
                 />
               }
               description={t(
                 "CONFIG_ENABLE_VKBASALT_DESC",
-                "Experimental. Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
+                "Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
               )}
               bottomSeparator="none"
               checked={

@@ -33,6 +33,13 @@
 #include <vulkan/vk_layer.h>
 #include <vulkan/vulkan_core.h>
 
+// Platform surface create-info types are opaque here: MAKO only forwards the
+// structures and records which entrypoint produced the resulting handle. This
+// avoids making the Renderer link against X11, XCB, or Wayland client APIs.
+struct VkWaylandSurfaceCreateInfoKHR;
+struct VkXcbSurfaceCreateInfoKHR;
+struct VkXlibSurfaceCreateInfoKHR;
+
 using namespace mako::layer;
 
 namespace {
@@ -75,6 +82,8 @@ namespace {
         > fixedSurfaceScalingContracts;
         std::unordered_map<VkSurfaceKHR, SpatialScalingExtents>
             variableSurfaceScalingExtents;
+        std::unordered_map<VkSurfaceKHR, SpatialSurfaceOrigin> surfaceOrigins;
+        std::unordered_set<VkSurfaceKHR> unprovenSplitSurfacesLogged;
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
         std::unordered_set<VkSwapchainKHR> nativeSwapchains;
@@ -893,7 +902,8 @@ makoSpatialScalingLookupFixedContract(
         VkExtent2D* const presentation,
         float* const factor,
         uint64_t* const policyRevision,
-        uint64_t* const queryGeneration) noexcept {
+        uint64_t* const queryGeneration,
+        VkBool32* const spatialSurfaceScalingSupported) noexcept {
     const auto operation = static_cast<FixedSurfaceCapabilityRelayOperation>(
         rawOperation
     );
@@ -917,7 +927,8 @@ makoSpatialScalingLookupFixedContract(
         return VK_TRUE;
     }
     if (!lowerSurface || !source || !presentation || !factor ||
-            !policyRevision || !queryGeneration) {
+            !policyRevision || !queryGeneration ||
+            !spatialSurfaceScalingSupported) {
         slot->begin();
         return VK_FALSE;
     }
@@ -932,6 +943,8 @@ makoSpatialScalingLookupFixedContract(
     *factor = record->contract.factor;
     *policyRevision = record->contract.policyRevision;
     *queryGeneration = record->contract.queryGeneration;
+    *spatialSurfaceScalingSupported = record->contract
+        .spatialSurfaceScalingSupported ? VK_TRUE : VK_FALSE;
     return VK_TRUE;
 }
 #endif
@@ -939,7 +952,7 @@ makoSpatialScalingLookupFixedContract(
 namespace {
     using LowerFixedSurfaceContractLookup = VkBool32 (*) (
         uint32_t, VkPhysicalDevice, VkSurfaceKHR*, VkExtent2D*, VkExtent2D*,
-        float*, uint64_t*, uint64_t*
+        float*, uint64_t*, uint64_t*, VkBool32*
     );
 
     constexpr std::string_view lowerFixedSurfaceContractSymbol =
@@ -984,7 +997,7 @@ namespace {
                         this->beginOperation
                     ),
                     physicalDevice, nullptr, nullptr, nullptr, nullptr,
-                    nullptr, nullptr
+                    nullptr, nullptr, nullptr
                 ));
             }
             armed = false;
@@ -999,7 +1012,7 @@ namespace {
                     this->beginOperation
                 ),
                 physicalDevice, nullptr, nullptr, nullptr, nullptr, nullptr,
-                nullptr
+                nullptr, nullptr
             ) == VK_TRUE;
         }
 
@@ -1011,6 +1024,7 @@ namespace {
             FixedSurfaceCapabilityRelayRecord record{
                 .physicalDevice = physicalDevice,
             };
+            VkBool32 spatialSurfaceSupported = VK_TRUE;
             const VkBool32 found = lookup(
                 static_cast<uint32_t>(
                     this->consumeOperation
@@ -1019,11 +1033,13 @@ namespace {
                 &record.contract.extents.source,
                 &record.contract.extents.presentation,
                 &record.contract.factor, &record.contract.policyRevision,
-                &record.contract.queryGeneration
+                &record.contract.queryGeneration, &spatialSurfaceSupported
             );
             armed = false;
             if (found != VK_TRUE)
                 return std::nullopt;
+            record.contract.spatialSurfaceScalingSupported =
+                spatialSurfaceSupported == VK_TRUE;
             return record;
         }
     };
@@ -1277,6 +1293,72 @@ namespace {
         }
     }
 
+    void recordSurfaceOrigin(
+            const VkSurfaceKHR surface,
+            const SpatialSurfaceOrigin origin) {
+        if (!instance_info || surface == VK_NULL_HANDLE)
+            return;
+        bool inserted{};
+        {
+            const std::lock_guard lock(instance_info->surfaceScalingMutex);
+            inserted = instance_info->surfaceOrigins.emplace(
+                surface, origin
+            ).second;
+        }
+        if (inserted && present_diagnostics::enabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=surface-provenance"
+                      << " role=" << layerRoleName
+                      << " surface=" << surface
+                      << " origin=" << spatialSurfaceOriginName(origin)
+                      << " gamescope_wsi_surface_proven="
+                      << (origin == SpatialSurfaceOrigin::Wayland ? 1 : 0)
+                      << '\n';
+        }
+    }
+
+    [[nodiscard]] SpatialSurfaceOrigin surfaceOrigin(
+            const VkSurfaceKHR surface) {
+        if (!instance_info)
+            return SpatialSurfaceOrigin::Unknown;
+        const std::lock_guard lock(instance_info->surfaceScalingMutex);
+        const auto origin = instance_info->surfaceOrigins.find(surface);
+        return origin == instance_info->surfaceOrigins.end()
+            ? SpatialSurfaceOrigin::Unknown : origin->second;
+    }
+
+    [[nodiscard]] bool spatialSurfaceScalingSupported(
+            const VkSurfaceKHR surface) {
+        return spatialSplitSurfaceScalingSupported(
+            spatialScalingLayer, surfaceOrigin(surface)
+        );
+    }
+
+    void logUnprovenSplitSurfaceOnce(const VkSurfaceKHR surface) {
+        if (!instance_info || !spatialScalingLayer)
+            return;
+        bool firstObservation{};
+        const auto origin = surfaceOrigin(surface);
+        {
+            const std::lock_guard lock(instance_info->surfaceScalingMutex);
+            firstObservation = instance_info->unprovenSplitSurfacesLogged
+                .insert(surface).second;
+        }
+        if (firstObservation) {
+            std::cerr << "MAKO Renderer: spatial scaling split surface policy: "
+                      << "role=" << layerRoleName
+                      << "; surface=" << surface
+                      << "; origin=" << spatialSurfaceOriginName(origin)
+                      << "; gamescope_wsi_surface_proven=0"
+                      << "; action=native"
+                      << "; inactive_reason="
+                      << spatialScalingInactiveReasonName(
+                          SpatialScalingInactiveReason::
+                              GamescopeWsiSurfaceUnproven
+                      ) << '\n';
+        }
+    }
+
     void maybeVirtualizeSurfaceCapabilities(
             const VkPhysicalDevice physicalDevice,
             const VkSurfaceKHR surface,
@@ -1289,6 +1371,11 @@ namespace {
         if (!spatialScalingCapabilityOwnedByLayer() &&
                 !spatialScalingCapabilityRelayByLayer()) {
             clearFixedSurfaceScalingContract(physicalDevice, surface);
+            return;
+        }
+        if (!spatialSurfaceScalingSupported(surface)) {
+            clearFixedSurfaceScalingContract(physicalDevice, surface);
+            logUnprovenSplitSurfaceOnce(surface);
             return;
         }
         try {
@@ -1494,12 +1581,79 @@ namespace {
                 contracts.erase(surface);
             }
             instance_info->variableSurfaceScalingExtents.erase(surface);
+            instance_info->surfaceOrigins.erase(surface);
+            instance_info->unprovenSplitSurfacesLogged.erase(surface);
         }
         const auto lower = reinterpret_cast<PFN_vkDestroySurfaceKHR>(
             layer_info->GetInstanceProcAddr(instance, "vkDestroySurfaceKHR")
         );
         if (lower)
             lower(instance, surface, alloc);
+    }
+
+    using CreateWaylandSurface = VkResult (VKAPI_PTR *)(
+        VkInstance, const VkWaylandSurfaceCreateInfoKHR*,
+        const VkAllocationCallbacks*, VkSurfaceKHR*
+    );
+    using CreateXcbSurface = VkResult (VKAPI_PTR *)(
+        VkInstance, const VkXcbSurfaceCreateInfoKHR*,
+        const VkAllocationCallbacks*, VkSurfaceKHR*
+    );
+    using CreateXlibSurface = VkResult (VKAPI_PTR *)(
+        VkInstance, const VkXlibSurfaceCreateInfoKHR*,
+        const VkAllocationCallbacks*, VkSurfaceKHR*
+    );
+
+    template <typename CreateSurface, typename CreateInfo>
+    VkResult createSurfaceAndRecord(
+            const VkInstance instance,
+            const CreateInfo* createInfo,
+            const VkAllocationCallbacks* alloc,
+            VkSurfaceKHR* surface,
+            const char* entrypoint,
+            const SpatialSurfaceOrigin origin) {
+        const auto lower = reinterpret_cast<CreateSurface>(
+            layer_info->GetInstanceProcAddr(instance, entrypoint)
+        );
+        if (!lower)
+            return VK_ERROR_EXTENSION_NOT_PRESENT;
+        const auto result = lower(instance, createInfo, alloc, surface);
+        if (result == VK_SUCCESS && surface)
+            recordSurfaceOrigin(*surface, origin);
+        return result;
+    }
+
+    VkResult myvkCreateWaylandSurfaceKHR(
+            const VkInstance instance,
+            const VkWaylandSurfaceCreateInfoKHR* createInfo,
+            const VkAllocationCallbacks* alloc,
+            VkSurfaceKHR* surface) {
+        return createSurfaceAndRecord<
+            CreateWaylandSurface
+        >(instance, createInfo, alloc, surface, "vkCreateWaylandSurfaceKHR",
+            SpatialSurfaceOrigin::Wayland);
+    }
+
+    VkResult myvkCreateXcbSurfaceKHR(
+            const VkInstance instance,
+            const VkXcbSurfaceCreateInfoKHR* createInfo,
+            const VkAllocationCallbacks* alloc,
+            VkSurfaceKHR* surface) {
+        return createSurfaceAndRecord<
+            CreateXcbSurface
+        >(instance, createInfo, alloc, surface, "vkCreateXcbSurfaceKHR",
+            SpatialSurfaceOrigin::Xcb);
+    }
+
+    VkResult myvkCreateXlibSurfaceKHR(
+            const VkInstance instance,
+            const VkXlibSurfaceCreateInfoKHR* createInfo,
+            const VkAllocationCallbacks* alloc,
+            VkSurfaceKHR* surface) {
+        return createSurfaceAndRecord<
+            CreateXlibSurface
+        >(instance, createInfo, alloc, surface, "vkCreateXlibSurfaceKHR",
+            SpatialSurfaceOrigin::Xlib);
     }
 
     VkResult myvkCreateSwapchainKHR(
@@ -1582,6 +1736,49 @@ namespace {
                         fixedSurfaceContract = contract->second;
                 }
             }
+            // Fixed Gamescope surfaces do not participate in the variable-
+            // surface cache, but live factor changes can still recreate a
+            // swapchain before WSI changes the application's virtual window.
+            // Supply the exact previous split from the replaced swapchain so
+            // policy can retain it safely. For the null-old WSI spelling,
+            // accept a unique live context on this surface only.
+            const auto previousSwapchainExtents = [&]()
+                    -> std::optional<SpatialScalingExtents> {
+                const auto extentsFor = [&](const auto& swapchainInfo)
+                        -> std::optional<SpatialScalingExtents> {
+                    if (swapchainInfo.surface != info->surface || sameExtent(
+                            swapchainInfo.applicationExtent,
+                            swapchainInfo.extent
+                        )) {
+                        return std::nullopt;
+                    }
+                    return SpatialScalingExtents{
+                        .source = swapchainInfo.applicationExtent,
+                        .presentation = swapchainInfo.extent,
+                    };
+                };
+                if (info->oldSwapchain != VK_NULL_HANDLE) {
+                    const auto previous =
+                        instance_info->swapchainInfos.find(info->oldSwapchain);
+                    return previous != instance_info->swapchainInfos.end()
+                        ? extentsFor(previous->second) : std::nullopt;
+                }
+
+                std::optional<SpatialScalingExtents> unique;
+                for (const auto& [handle, swapchainInfo] :
+                        instance_info->swapchainInfos) {
+                    static_cast<void>(handle);
+                    const auto candidate = extentsFor(swapchainInfo);
+                    if (!candidate)
+                        continue;
+                    if (unique)
+                        return std::nullopt;
+                    unique = candidate;
+                }
+                return unique;
+            }();
+            if (previousSwapchainExtents)
+                previousVariableExtents = previousSwapchainExtents;
             LowerFixedSurfaceContractLookupState lowerCreateRelayState(
                 FixedSurfaceCapabilityRelayOperation::BeginCreate,
                 FixedSurfaceCapabilityRelayOperation::ConsumeCreate
@@ -1593,10 +1790,13 @@ namespace {
                 );
             }
             bool retiredNullOldReplacement{false};
+            bool spatialScalingActivationSupported =
+                spatialSurfaceScalingSupported(info->surface);
             auto modification =
                 layer_info->root.modifySwapchainCreateInfo(
                     it->second, newInfo, previousVariableExtents,
                     fixedSurfaceContract,
+                    spatialScalingActivationSupported,
                     [&](const FixedSurfaceScalingContract& contract) {
 #if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
                         if (spatialScalingCapabilityOwnedByLayer() &&
@@ -1653,21 +1853,15 @@ namespace {
                     }
                 );
             const auto lowerCreateRelay = lowerCreateRelayState.consume();
-            const bool lowerCreateRelayMatchesRequest = lowerCreateRelay &&
-                lowerCreateRelay->contract.queryGeneration == 0 && sameExtent(
-                    lowerCreateRelay->contract.extents.source,
-                    info->imageExtent
-                );
-            const bool lowerCreateSplitDecision =
-                lowerCreateRelayMatchesRequest && !sameExtent(
-                    lowerCreateRelay->contract.extents.source,
-                    lowerCreateRelay->contract.extents.presentation
-                );
-            const bool lowerCreateNativeDecision =
-                lowerCreateRelayMatchesRequest && sameExtent(
-                    lowerCreateRelay->contract.extents.source,
-                    lowerCreateRelay->contract.extents.presentation
-                );
+            const auto lowerCreateDecision = lowerCreateRelay
+                ? classifySpatialCreateRelay(
+                    lowerCreateRelay->contract, info->imageExtent
+                )
+                : SpatialCreateRelayDecision::Unavailable;
+            const bool lowerCreateSplitDecision = lowerCreateDecision ==
+                SpatialCreateRelayDecision::Split;
+            const bool lowerCreateNativeDecision = lowerCreateDecision ==
+                SpatialCreateRelayDecision::Native;
             if (!modification.spatialScalingActive &&
                     lowerCreateSplitDecision) {
                 modification.applicationExtent =
@@ -1693,8 +1887,18 @@ namespace {
                           << "; source_presentation_split=1"
                           << "; active=1"
                           << "; pipeline=combined-cost-aware\n";
-            } else if (!modification.spatialScalingActive &&
-                    lowerCreateNativeDecision) {
+            } else if (lowerCreateNativeDecision) {
+                // The lower extent owner is authoritative even when the upper
+                // role could independently derive a variable-surface split.
+                // A native result means WSI did not provide a safe compositor
+                // presentation surface, so discard the upper prediction and
+                // keep frame generation on the application's exact extent.
+                modification.applicationExtent = info->imageExtent;
+                modification.presentationExtent = info->imageExtent;
+                modification.spatialScalingActive = false;
+                newInfo.imageExtent = info->imageExtent;
+                spatialScalingActivationSupported = lowerCreateRelay->contract
+                    .spatialSurfaceScalingSupported;
                 std::cerr << "MAKO Renderer: spatial scaling create relay applied: "
                           << "role=" << layerRoleName
                           << "; source=" << info->imageExtent.width << 'x'
@@ -1708,7 +1912,11 @@ namespace {
                           << "; source_presentation_split=0"
                           << "; active=0"
                           << "; action=native"
-                          << "; inactive_reason=lower-create-no-source-presentation-split\n";
+                          << "; inactive_reason="
+                          << (spatialScalingActivationSupported
+                                ? "lower-create-no-source-presentation-split"
+                                : "gamescope-wsi-surface-unproven")
+                          << '\n';
             } else if (shouldRejectUncontractedSpatialCreate(
                     layer_info->root.scalingEngineProvisioned(),
                     modification.spatialScalingActive,
@@ -1792,6 +2000,9 @@ namespace {
                     modification.privateOrderedTransport,
                 .spatialScalingActive =
                     modification.spatialScalingActive,
+                .variableSurface = modification.variableSurface,
+                .spatialScalingActivationSupported =
+                    spatialScalingActivationSupported,
                 .replacement = swapchainCreateIsReplacement(
                     newInfo.oldSwapchain, retiredNullOldReplacement
                 ),
@@ -2197,6 +2408,12 @@ namespace {
                     { "vkCreateDevice", VKPTR(myvkCreateDevice) },
                     { "vkDestroyDevice", VKPTR(myvkDestroyDevice) },
                     { "vkDestroyInstance", VKPTR(myvkDestroyInstance) },
+                    { "vkCreateWaylandSurfaceKHR",
+                        VKPTR(myvkCreateWaylandSurfaceKHR) },
+                    { "vkCreateXcbSurfaceKHR",
+                        VKPTR(myvkCreateXcbSurfaceKHR) },
+                    { "vkCreateXlibSurfaceKHR",
+                        VKPTR(myvkCreateXlibSurfaceKHR) },
                     { "vkDestroySurfaceKHR", VKPTR(myvkDestroySurfaceKHR) },
                     { "vkGetPhysicalDeviceSurfaceCapabilitiesKHR",
                         VKPTR(myvkGetPhysicalDeviceSurfaceCapabilitiesKHR) },

@@ -11,6 +11,8 @@ vi.mock("@decky/ui", () => ({
 
 import {
   MakoButtonTheme,
+  MakoExperimentalBadge,
+  MakoExperimentalSettingLabel,
   MakoInlineTip,
   MakoReleaseIdentity,
   MakoRestartLabel,
@@ -69,6 +71,32 @@ describe("MAKO restart labels", () => {
     expect(
       container.querySelector('[data-mako-restart-marker="true"]'),
     ).toBeNull();
+  });
+});
+
+describe("MAKO experimental badges", () => {
+  test("renders a compact non-warning status marker", () => {
+    render(<MakoExperimentalBadge label="Experimental" />);
+
+    const badge = screen.getByText("Experimental");
+    expect(badge.getAttribute("data-mako-experimental-badge")).toBe("true");
+    expect(badge.style.textTransform).toBe("uppercase");
+    expect(badge.style.borderRadius).toBe("999px");
+  });
+
+  test("uses the original compact spacing between the setting and badge", () => {
+    const { container } = render(
+      <MakoExperimentalSettingLabel
+        label="Enable Scaling (Restart)"
+        badgeLabel="Experimental"
+      />,
+    );
+
+    const settingLabel = container.querySelector<HTMLElement>(
+      '[data-mako-experimental-setting-label="true"]',
+    );
+    expect(settingLabel?.style.columnGap).toBe("6px");
+    expect(settingLabel?.style.rowGap).toBe("6px");
   });
 });
 

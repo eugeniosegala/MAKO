@@ -28,6 +28,8 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 - Provides a per-profile Gamescope WSI compatibility toggle plus host-installed MangoHud or experimental vkBasalt under **External Tools**. Scaling requires and locks its managed WSI path; independently enabling WSI for an FG-only profile is limited to supported 64-bit host launches.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Keeps MAKO activation limited to the selected game process.
+- Shares one active native Renderer version with the standalone archive installer. Installing either version selects it for both launch workflows; a later MAKO Decky installation adopts a valid standalone Renderer and offers its bundled update when the versions differ.
+- Removes all files supplied by either managed native Renderer installer when you select **Uninstall MAKO Renderer**, while preserving MAKO Decky and profiles so the plugin can offer installation again. Uninstalling MAKO Decky also removes the managed native Renderer; shared Flatpak runtime extensions remain installed.
 
 ## Development
 

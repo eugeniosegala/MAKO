@@ -14,6 +14,11 @@ interface MakoReleaseIdentityProps {
   bottomMargin?: CSSProperties["marginBottom"];
 }
 
+interface MakoExperimentalSettingLabelProps {
+  label: string;
+  badgeLabel: string;
+}
+
 type SteamFocusFlow =
   "column" | "column-reverse" | "row" | "row-reverse" | "grid" | "geometric";
 
@@ -79,6 +84,54 @@ export function MakoRestartLabel({ label }: { label: string }) {
       >
         {match[2]}
       </span>
+    </span>
+  );
+}
+
+/** Mark an intentionally early-access control without turning the label into a warning. */
+export function MakoExperimentalBadge({ label }: { label: string }) {
+  return (
+    <span
+      data-mako-experimental-badge="true"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "1px 5px",
+        border: "1px solid rgba(244, 162, 89, 0.5)",
+        borderRadius: "999px",
+        background: "rgba(104, 59, 19, 0.42)",
+        color: "#f7d9b4",
+        fontSize: "0.62em",
+        fontWeight: 600,
+        lineHeight: 1.35,
+        letterSpacing: "0.15px",
+        textTransform: "uppercase",
+        whiteSpace: "nowrap",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+/** Keep experimental setting labels on one shared compact spacing rhythm. */
+export function MakoExperimentalSettingLabel({
+  label,
+  badgeLabel,
+}: MakoExperimentalSettingLabelProps) {
+  return (
+    <span
+      data-mako-experimental-setting-label="true"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        columnGap: "6px",
+        rowGap: "6px",
+        flexWrap: "wrap",
+      }}
+    >
+      <MakoRestartLabel label={label} />
+      <MakoExperimentalBadge label={badgeLabel} />
     </span>
   );
 }

@@ -4,6 +4,7 @@ import {
   checkLosslessScalingDll,
   getMakoConfig,
   getProfileConfig,
+  getRuntimeStatus,
   updateMakoConfigFromObject,
   type ConfigUpdateResult,
   configFailureResult,
@@ -13,6 +14,8 @@ import {
   type ConfigurationPatch,
   getDefaults,
 } from "../config/configSchema";
+import { RUNTIME_STATUS_POLL_INTERVAL_MS } from "../config/uiTiming";
+import { scalingInactiveReason } from "../utils/runtimeScalingUtils";
 import { showErrorToast, ToastMessages } from "../utils/toastUtils";
 import t from "../i18n/i18n";
 
@@ -122,6 +125,40 @@ export function useDllDetection() {
     dllDetected,
     dllDetectionStatus,
   };
+}
+
+export function useRuntimeScalingStatus(
+  profileName: string,
+  enabled: boolean,
+) {
+  const [inactiveReason, setInactiveReason] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    const refresh = async () => {
+      if (!enabled) {
+        if (active) setInactiveReason(null);
+        return;
+      }
+      try {
+        const status = await getRuntimeStatus(profileName);
+        if (active) {
+          setInactiveReason(scalingInactiveReason(status, profileName));
+        }
+      } catch {
+        if (active) setInactiveReason(null);
+      }
+    };
+
+    void refresh();
+    const interval = setInterval(refresh, RUNTIME_STATUS_POLL_INTERVAL_MS);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [enabled, profileName]);
+
+  return inactiveReason;
 }
 
 export function useMakoConfig() {

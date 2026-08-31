@@ -803,6 +803,45 @@ int main() {
             decision.swapchainRecreationDeferred,
         "A factor change must remain extent-bound even when private model rebuilding is available");
 
+    const auto effectiveExtentNoOpPlan = planProfileUpdate(
+        scalingCurrent, next, 3, true, true, false, true, true
+    );
+    expect(effectiveExtentNoOpPlan.decision.action ==
+                ProfileUpdateAction::NoRuntimeChange &&
+            effectiveExtentNoOpPlan.decision.
+                spatialScalingEffectiveExtentUnchanged &&
+            !effectiveExtentNoOpPlan.decision.spatialScalingChanged &&
+            !effectiveExtentNoOpPlan.decision.swapchainRecreationDeferred &&
+            effectiveExtentNoOpPlan.appliedProfile.scaling_factor == 2.0F,
+        "A factor edit with identical effective extents must retain the live swapchain and scaler");
+    auto lowerExtentOwnerCurrent = scalingCurrent;
+    lowerExtentOwnerCurrent.frame_generation_enabled = false;
+    auto lowerExtentOwnerNext = next;
+    lowerExtentOwnerNext.frame_generation_enabled = false;
+    const auto lowerExtentOwnerNoOpPlan = planProfileUpdate(
+        lowerExtentOwnerCurrent, lowerExtentOwnerNext,
+        0, false, false, false, true, true
+    );
+    expect(lowerExtentOwnerNoOpPlan.decision.action ==
+                ProfileUpdateAction::NoRuntimeChange &&
+            lowerExtentOwnerNoOpPlan.decision.
+                spatialScalingEffectiveExtentUnchanged &&
+            !lowerExtentOwnerNoOpPlan.decision.spatialScalingDormantUpdate &&
+            !lowerExtentOwnerNoOpPlan.decision.swapchainRecreationDeferred &&
+            lowerExtentOwnerNoOpPlan.appliedProfile.scaling_factor == 2.0F,
+        "The allocation-free lower extent owner must commit the same factor no-op without recreation");
+
+    const auto permanentlyDormantFactorPlan = planProfileUpdate(
+        scalingCurrent, next, 3, true, false, false, false
+    );
+    expect(permanentlyDormantFactorPlan.decision.action ==
+            ProfileUpdateAction::NoRuntimeChange &&
+            permanentlyDormantFactorPlan.decision.spatialScalingDormantUpdate &&
+            !permanentlyDormantFactorPlan.decision.spatialScalingChanged &&
+            !permanentlyDormantFactorPlan.decision.swapchainRecreationDeferred &&
+            permanentlyDormantFactorPlan.appliedProfile.scaling_factor == 2.0F,
+        "A factor edit on an unproven split surface must remain dormant without recreating WSI");
+
     next = current;
     next.scaling_enabled = true;
     next.frame_generation_enabled = false;

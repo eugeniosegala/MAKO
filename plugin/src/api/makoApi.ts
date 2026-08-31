@@ -202,6 +202,12 @@ export interface RuntimePendingState {
   process_restart: boolean;
 }
 
+export interface RuntimeSpatialScalingState {
+  active: boolean;
+  activation_supported: boolean;
+  inactive_reason: Nullable<string>;
+}
+
 export interface RuntimeContextState {
   pid: number;
   process_start_ticks: number;
@@ -213,6 +219,7 @@ export interface RuntimeContextState {
   reason: string;
   pending: RuntimePendingState;
   applied_generated_capacity: number;
+  spatial_scaling: RuntimeSpatialScalingState;
   requested: RuntimeProfileSnapshot;
   applied: RuntimeProfileSnapshot;
   error: Nullable<string>;

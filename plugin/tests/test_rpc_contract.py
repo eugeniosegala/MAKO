@@ -37,6 +37,7 @@ from py_modules.mako_plugin.types import (  # noqa: E402
     RuntimeContextState,
     RuntimePendingState,
     RuntimeProfileSnapshot,
+    RuntimeSpatialScalingState,
     RuntimeStatusResponse,
 )
 
@@ -123,6 +124,7 @@ class RpcContractTests(unittest.TestCase):
             ProfileResponse: "ProfileResult",
             RuntimeProfileSnapshot: "RuntimeProfileSnapshot",
             RuntimePendingState: "RuntimePendingState",
+            RuntimeSpatialScalingState: "RuntimeSpatialScalingState",
             RuntimeContextState: "RuntimeContextState",
             RuntimeStatusResponse: "RuntimeStatusResult",
             FlatpakApp: "FlatpakApp",

@@ -21,11 +21,15 @@ import {
   type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
-import { MakoInlineTip, MakoRestartLabel } from "./MakoUi";
+import {
+  MakoExperimentalSettingLabel,
+  MakoInlineTip,
+} from "./MakoUi";
 
 interface ScalingControlProps {
   config: ConfigurationData;
   disabled?: boolean;
+  runtimeInactiveReason?: string | null;
   onConfigChange: (
     fieldName: keyof ConfigurationData,
     value: boolean | number | string,
@@ -35,6 +39,7 @@ interface ScalingControlProps {
 export function ScalingControl({
   config,
   disabled = false,
+  runtimeInactiveReason = null,
   onConfigChange,
 }: ScalingControlProps) {
   const scalerActive = config.scaling_method !== SCALING_METHOD_NATIVE;
@@ -62,8 +67,9 @@ export function ScalingControl({
       <PanelSectionRow>
         <ToggleField
           label={
-            <MakoRestartLabel
+            <MakoExperimentalSettingLabel
               label={t("SCALING_ENABLED", "Enable Scaling (Restart)")}
+              badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
             />
           }
           description={
@@ -77,7 +83,7 @@ export function ScalingControl({
               <MakoInlineTip tone="warning">
                 {t(
                   "SCALING_ENABLED_WARNING",
-                  "Leave Scaling off when you do not need it, as it consumes resources. Using it with Frame Generation may affect performance; try different performance settings or a lower in-game resolution. Results vary by game and device.",
+                  "Leave Scaling off when you do not need it, as it consumes resources. Using it with Frame Generation may affect performance; try different performance settings or a lower in-game resolution.",
                 )}
               </MakoInlineTip>
             </>
@@ -101,14 +107,24 @@ export function ScalingControl({
                       "Choose the scaling model. You can change it while the game is running.",
                     )}
                   </div>
-                  <MakoInlineTip tone="info">
-                    <span style={{ whiteSpace: "pre-line" }}>
+                  {runtimeInactiveReason ===
+                  "gamescope-wsi-surface-unproven" ? (
+                    <MakoInlineTip tone="warning">
                       {t(
-                        "SCALING_METHOD_COMPARISON_TIP",
-                        "How scaling works:\n1. In Steam, set Game Resolution to your display's maximum resolution (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. In the game, choose a lower resolution, such as 480p or 720p (or higher on Steam Machine).\n3. Use a Scale Factor to enlarge the image. 2x doubles your resolution.\n\nReducing the resolution of the game and scaling it back can substantially increase performance, with an image-quality trade-off. If your display supports it, use MAKO to scale from 2K to 4K.",
+                        "SCALING_RUNTIME_SURFACE_UNSUPPORTED",
+                        "Scaling is unavailable for this running surface because Gamescope WSI did not create it. Model and factor changes are saved for the next supported surface; Frame Generation continues at native resolution.",
                       )}
-                    </span>
-                  </MakoInlineTip>
+                    </MakoInlineTip>
+                  ) : (
+                    <MakoInlineTip tone="info">
+                      <span style={{ whiteSpace: "pre-line" }}>
+                        {t(
+                          "SCALING_METHOD_COMPARISON_TIP",
+                          "How scaling works:\n1. In Steam, set Game Resolution to your display's maximum resolution (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160 / 4K).\n2. In the game, choose a lower resolution, such as 480p or 720p (or higher on Steam Machine).\n3. Use a Scale Factor to enlarge the image. 2x doubles your resolution.\n\nReducing the resolution of the game and scaling it back can substantially increase performance, with an image-quality trade-off. If your display supports it, use MAKO to scale from 2K to 4K.",
+                        )}
+                      </span>
+                    </MakoInlineTip>
+                  )}
                 </>
               }
               childrenLayout="below"

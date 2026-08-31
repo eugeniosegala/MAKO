@@ -14,11 +14,12 @@ from .types import (
     RuntimeContextState,
     RuntimePendingState,
     RuntimeProfileSnapshot,
+    RuntimeSpatialScalingState,
     RuntimeStatusResponse,
 )
 
 
-_SCHEMA_VERSION = 1
+_SCHEMA_VERSION = 2
 _MAXIMUM_STATUS_BYTES = 64 * 1024
 _VALID_ROLES = frozenset(("frame-generation", "spatial-scaling"))
 _VALID_PHASES = frozenset((
@@ -164,6 +165,22 @@ def _pending(value: object) -> RuntimePendingState:
     }
 
 
+def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
+    if not isinstance(value, dict):
+        raise ValueError("spatial_scaling must be an object")
+    inactive_reason = value.get("inactive_reason")
+    if inactive_reason is not None and not isinstance(inactive_reason, str):
+        raise ValueError("spatial_scaling.inactive_reason must be a string or null")
+    return {
+        "active": _boolean(value.get("active"), "spatial_scaling.active"),
+        "activation_supported": _boolean(
+            value.get("activation_supported"),
+            "spatial_scaling.activation_supported",
+        ),
+        "inactive_reason": inactive_reason,
+    }
+
+
 def _context(value: object) -> RuntimeContextState:
     if not isinstance(value, dict):
         raise ValueError("runtime record must be an object")
@@ -198,6 +215,7 @@ def _context(value: object) -> RuntimeContextState:
             value.get("applied_generated_capacity"),
             "applied_generated_capacity",
         ),
+        "spatial_scaling": _spatial_scaling(value.get("spatial_scaling")),
         "requested": _profile(value.get("requested"), "requested"),
         "applied": _profile(value.get("applied"), "applied"),
         "error": error_value,

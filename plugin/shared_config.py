@@ -142,7 +142,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
 
     "scaling_method": {
         "fieldType": ConfigFieldType.STRING,
-        "default": SCALING_METHOD_NATIVE,
+        "default": SCALING_METHOD_LS1,
         "description": "live spatial selection inside a provisioned engine: Native Resolution, MAKO Scaler, LS1 Quality, or LS1 Performance",
         "location": "toml"
     },
