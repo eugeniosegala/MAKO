@@ -126,6 +126,31 @@ int main() {
             {0, 0}, {3840, 2160}
         ) == SpatialFramePipelinePlacement::PreFrameGeneration,
         "Invalid extents must fail to the conservative pre-FG placement");
+    const auto directSourceUsage = frameGenerationSourceImageUsage(
+        SpatialFramePipelinePlacement::PreFrameGeneration, true
+    );
+    expect((directSourceUsage & VK_IMAGE_USAGE_STORAGE_BIT) != 0 &&
+            (directSourceUsage & VK_IMAGE_USAGE_TRANSFER_SRC_BIT) != 0 &&
+            (directSourceUsage & VK_IMAGE_USAGE_TRANSFER_DST_BIT) != 0 &&
+            (directSourceUsage & VK_IMAGE_USAGE_SAMPLED_BIT) != 0,
+        "Pre-FG scaling sources must support direct compute reconstruction and backend sampling");
+    expect((frameGenerationSourceImageUsage(
+                SpatialFramePipelinePlacement::PostFrameGeneration, true
+            ) & VK_IMAGE_USAGE_STORAGE_BIT) == 0 &&
+            (frameGenerationSourceImageUsage(
+                SpatialFramePipelinePlacement::PreFrameGeneration, false
+            ) & VK_IMAGE_USAGE_STORAGE_BIT) == 0,
+        "Post-FG and FG-only sources must retain the narrow transport usage contract");
+    expect(directSpatialFrameGenerationOutputEligible(
+            SpatialFramePipelinePlacement::PreFrameGeneration, true, 2
+        ) && !directSpatialFrameGenerationOutputEligible(
+            SpatialFramePipelinePlacement::PostFrameGeneration, true, 2
+        ) && !directSpatialFrameGenerationOutputEligible(
+            SpatialFramePipelinePlacement::PreFrameGeneration, false, 2
+        ) && !directSpatialFrameGenerationOutputEligible(
+            SpatialFramePipelinePlacement::PreFrameGeneration, true, 1
+        ),
+        "Direct spatial output eligibility must remain limited to the complete pre-FG source pair");
 
     VkSurfaceCapabilitiesKHR surfaceCapabilities{
         .supportedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,

@@ -132,7 +132,7 @@ SUBCOMMAND OPTIONS:
         -s, --sharpness <FLOAT>         Sharpness from 0.0 through 1.0
         -u, --warmup <INT>              Untimed warm-up graph iterations
         -n, --samples <INT>             Timestamped graph iterations
-        -x, --frame-generation-handoff Include the full-resolution FG source copy
+        -x, --frame-generation-handoff Include the full-resolution FG source handoff
 
     synchronization-validation-canary
         -g, --gpu <STRING>              GPU to use

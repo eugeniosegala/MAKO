@@ -79,6 +79,22 @@ namespace {
         return generatedFrameCapacityForProfile(profile);
     }
 
+    bool directSpatialFrameGenerationOutputSupported(
+            const vk::Vulkan& vk,
+            const VkFormat format,
+            const SpatialFramePipelinePlacement placement,
+            const bool spatialScalingActive) {
+        if (!directSpatialFrameGenerationOutputEligible(
+                placement, spatialScalingActive, 2)) {
+            return false;
+        }
+        return vk.supportsExternalImageFormat(
+            format,
+            frameGenerationSourceImageUsage(placement, true),
+            VK_EXTERNAL_MEMORY_FEATURE_EXPORTABLE_BIT
+        );
+    }
+
     SwapchainColorPipeline initialColorPipeline(
             const VkFormat format, const VkColorSpaceKHR colorSpace,
             const std::optional<bool> gamescopeHdrActive,
@@ -460,12 +476,20 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         );
         std::vector<int> sourceFds(2);
         std::vector<int> destinationFds(generatedFrameCapacity(this->profile));
+        const auto sourceImageUsage = frameGenerationSourceImageUsage(
+            this->spatialFramePipelinePlacement,
+            directSpatialFrameGenerationOutputSupported(
+                vk, this->colorPipeline.exchangeFormat,
+                this->spatialFramePipelinePlacement,
+                this->spatialScaler.has_value()
+            )
+        );
 
         this->sourceImages.reserve(sourceFds.size());
         for (int& fd : sourceFds)
             this->sourceImages.emplace_back(vk,
                 generationExtent, this->colorPipeline.exchangeFormat,
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                sourceImageUsage,
                 std::nullopt, &fd);
 
         this->destinationImages.reserve(destinationFds.size());
@@ -502,6 +526,12 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
         }
 
         this->ensureFrameGenerationExecutionResources(vk);
+        if (this->spatialScaler) {
+            this->configureDirectSpatialFrameGenerationOutputs(
+                vk, *this->spatialScaler, this->sourceImages,
+                "swapchain-create"
+            );
+        }
 
         this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
             this->profile.multiplier, this->destinationImages.size()
@@ -862,10 +892,18 @@ Swapchain::buildFrameGenerationResources(const vk::Vulkan& vk,
     FrameGenerationResources resources;
     resources.sourceImages.reserve(sourceFds.size());
     resources.destinationImages.reserve(destinationFds.size());
+    const auto sourceImageUsage = frameGenerationSourceImageUsage(
+        this->spatialFramePipelinePlacement,
+        directSpatialFrameGenerationOutputSupported(
+            vk, pipeline.exchangeFormat,
+            this->spatialFramePipelinePlacement,
+            this->spatialScaler.has_value()
+        )
+    );
     for (int& fd : sourceFds) {
         resources.sourceImages.emplace_back(vk,
             extent, pipeline.exchangeFormat,
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            sourceImageUsage,
             std::nullopt, &fd);
     }
     for (int& fd : destinationFds) {
@@ -965,9 +1003,22 @@ void Swapchain::rebuildPrivateResources(const vk::Vulkan& vk,
         );
     }
     this->colorPipeline = std::move(pipeline);
+    this->clearDirectSpatialFrameGenerationOutputs();
     this->commitFrameGenerationResources(
         std::move(replacement), resourceProfile, "hdr-private-transition"
     );
+    if (this->spatialScaler) {
+        this->configureDirectSpatialFrameGenerationOutputs(
+            vk, *this->spatialScaler, this->sourceImages,
+            "hdr-private-transition"
+        );
+    }
+    if (this->preparedSpatialScaler) {
+        this->configureDirectSpatialFrameGenerationOutputs(
+            vk, *this->preparedSpatialScaler, this->sourceImages,
+            "hdr-private-transition-prepared-scaler"
+        );
+    }
 
     std::cerr << "MAKO Renderer: swapchain colour pipeline transitioned in place: mode="
               << this->colorPipeline.name
@@ -1162,6 +1213,8 @@ bool Swapchain::applyPendingFrameGenerationResources(
                 return false;
             this->frameState.renderFenceInFlight = false;
         }
+        if (this->spatialScaler && !this->spatialScalingPassesReady(vk))
+            return false;
     } catch (const std::exception& error) {
         std::cerr << "MAKO Renderer: private frame-generation drain poll failed; "
                      "native presentation retained: "
@@ -1173,10 +1226,23 @@ bool Swapchain::applyPendingFrameGenerationResources(
         this->frameGenerationTransition.value().profile;
     auto replacement = std::move(*this->preparedFrameGenerationResources);
     this->preparedFrameGenerationResources.reset();
+    this->clearDirectSpatialFrameGenerationOutputs();
     this->commitFrameGenerationResources(
         std::move(replacement), committedProfile,
         "private-resource-transition"
     );
+    if (this->spatialScaler) {
+        this->configureDirectSpatialFrameGenerationOutputs(
+            vk, *this->spatialScaler, this->sourceImages,
+            "private-resource-transition"
+        );
+    }
+    if (this->preparedSpatialScaler) {
+        this->configureDirectSpatialFrameGenerationOutputs(
+            vk, *this->preparedSpatialScaler, this->sourceImages,
+            "private-resource-transition-prepared-scaler"
+        );
+    }
     const auto committedRevision =
         this->frameGenerationTransition.committed();
     logPrivateFrameGenerationMemory(
@@ -1224,6 +1290,10 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
                 vk, this->info.applicationExtent, this->info.extent,
                 this->colorPipeline.exchangeFormat, requested.method,
                 requested.sharpness, this->scalingShaderDll
+            );
+            this->configureDirectSpatialFrameGenerationOutputs(
+                vk, *this->preparedSpatialScaler, this->sourceImages,
+                "spatial-scaler-prepared"
             );
             this->spatialTransition.prepared();
             this->publishRuntimeStatus("spatial-scaler");
@@ -1335,6 +1405,54 @@ bool Swapchain::spatialScalingPassesReady(const vk::Vulkan& vk) {
         pass.completionInFlight = false;
     }
     return true;
+}
+
+void Swapchain::configureDirectSpatialFrameGenerationOutputs(
+        const vk::Vulkan& vk, SpatialScaler& scaler,
+        const std::span<const vk::Image> outputs,
+        const std::string_view reason) noexcept {
+    if (!directSpatialFrameGenerationOutputEligible(
+            this->spatialFramePipelinePlacement,
+            this->info.spatialScalingActive, outputs.size())) {
+        scaler.clearDirectFrameGenerationOutputs();
+        return;
+    }
+    if (!directSpatialFrameGenerationOutputSupported(
+            vk, this->colorPipeline.exchangeFormat,
+            this->spatialFramePipelinePlacement,
+            this->info.spatialScalingActive)) {
+        scaler.clearDirectFrameGenerationOutputs();
+        std::cerr << "MAKO Renderer: spatial scaling FG source transport: "
+                     "mode=copy-private-output; direct-output-unavailable="
+                     "external-storage-format-unsupported"
+                  << "; reason=" << reason << '\n';
+        return;
+    }
+
+    try {
+        std::vector<std::reference_wrapper<const vk::Image>> references;
+        references.reserve(outputs.size());
+        for (const auto& output : outputs)
+            references.push_back(std::cref(output));
+        scaler.configureDirectFrameGenerationOutputs(vk, references);
+        std::cerr << "MAKO Renderer: spatial scaling FG source transport: "
+                     "mode=direct-reconstruction; outputs="
+                  << scaler.directFrameGenerationOutputCount()
+                  << "; fallback=copy-private-output"
+                  << "; reason=" << reason << '\n';
+    } catch (const std::exception& error) {
+        scaler.clearDirectFrameGenerationOutputs();
+        std::cerr << "MAKO Renderer: spatial scaling FG source transport: "
+                     "mode=copy-private-output; direct-output-unavailable="
+                  << error.what() << "; reason=" << reason << '\n';
+    }
+}
+
+void Swapchain::clearDirectSpatialFrameGenerationOutputs() noexcept {
+    if (this->spatialScaler)
+        this->spatialScaler->clearDirectFrameGenerationOutputs();
+    if (this->preparedSpatialScaler)
+        this->preparedSpatialScaler->clearDirectFrameGenerationOutputs();
 }
 
 ProfileUpdateDecision Swapchain::updateProfile(

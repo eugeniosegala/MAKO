@@ -5,6 +5,7 @@
 #include "mako-common/configuration/config.hpp"
 
 #include <algorithm>
+#include <cstddef>
 #include <cmath>
 #include <cstdint>
 #include <optional>
@@ -59,6 +60,30 @@ namespace mako::layer {
             const VkExtent2D presentation) noexcept {
         return placement == SpatialFramePipelinePlacement::PreFrameGeneration
             ? presentation : source;
+    }
+
+    /// The pre-FG spatial graph may write reconstruction straight into the
+    /// exported FG source. Post-FG reconstruction and FG-only swapchains keep
+    /// the narrower transfer/sampled contract.
+    [[nodiscard]] constexpr VkImageUsageFlags frameGenerationSourceImageUsage(
+            const SpatialFramePipelinePlacement placement,
+            const bool directSpatialOutputEnabled) noexcept {
+        const auto baseUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+            VK_IMAGE_USAGE_SAMPLED_BIT;
+        return directSpatialOutputEnabled &&
+                placement == SpatialFramePipelinePlacement::PreFrameGeneration
+            ? baseUsage | VK_IMAGE_USAGE_STORAGE_BIT |
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT
+            : baseUsage;
+    }
+
+    [[nodiscard]] constexpr bool directSpatialFrameGenerationOutputEligible(
+            const SpatialFramePipelinePlacement placement,
+            const bool spatialScalingActive,
+            const size_t sourceImageCount) noexcept {
+        return spatialScalingActive &&
+            placement == SpatialFramePipelinePlacement::PreFrameGeneration &&
+            sourceImageCount == 2;
     }
 
     [[nodiscard]] constexpr const char* spatialFramePipelinePlacementName(

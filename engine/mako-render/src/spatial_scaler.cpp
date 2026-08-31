@@ -18,6 +18,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -133,11 +134,28 @@ namespace {
         virtual ~Pipeline() = default;
         [[nodiscard]] virtual const vk::Image& input() const = 0;
         [[nodiscard]] virtual const vk::Image& output() const = 0;
+        virtual void configureDirectOutputs(
+            const vk::Vulkan&,
+            std::span<const std::reference_wrapper<const vk::Image>>) = 0;
+        virtual void clearDirectOutputs() = 0;
+        [[nodiscard]] virtual size_t directOutputCount() const = 0;
+        [[nodiscard]] virtual bool hasDirectOutput(VkImage) const = 0;
         virtual void recordCompute(
-            const vk::Vulkan&, VkCommandBuffer
+            const vk::Vulkan&, VkCommandBuffer,
+            VkImage directOutput = VK_NULL_HANDLE
         ) const = 0;
         [[nodiscard]] virtual uint32_t modelVariant() const { return 0; }
     };
+
+    [[nodiscard]] std::optional<size_t> directOutputIndex(
+            const std::span<const VkImage> outputs,
+            const VkImage image) {
+        for (size_t index = 0; index < outputs.size(); ++index) {
+            if (outputs[index] == image)
+                return index;
+        }
+        return std::nullopt;
+    }
 
     class NativeResolutionPipeline final : public Pipeline {
     public:
@@ -160,8 +178,30 @@ namespace {
         [[nodiscard]] const vk::Image& output() const override {
             return this->reconstructedImage;
         }
+        void configureDirectOutputs(const vk::Vulkan&,
+                const std::span<const std::reference_wrapper<const vk::Image>>
+                    outputs) override {
+            std::vector<VkImage> handles;
+            handles.reserve(outputs.size());
+            for (const auto& output : outputs)
+                handles.push_back(output.get().handle());
+            this->directOutputs = std::move(handles);
+        }
+        void clearDirectOutputs() override {
+            this->directOutputs.clear();
+        }
+        [[nodiscard]] size_t directOutputCount() const override {
+            return this->directOutputs.size();
+        }
+        [[nodiscard]] bool hasDirectOutput(
+                const VkImage image) const override {
+            return directOutputIndex(this->directOutputs, image).has_value();
+        }
         void recordCompute(const vk::Vulkan& vk,
-                const VkCommandBuffer commandBuffer) const override {
+                const VkCommandBuffer commandBuffer,
+                const VkImage directOutput) const override {
+            const VkImage outputImage = directOutput == VK_NULL_HANDLE
+                ? this->reconstructedImage.handle() : directOutput;
             const std::array barriers{
                 imageBarrier(
                     this->sourceImage.handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -170,7 +210,7 @@ namespace {
                     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
                 ),
                 imageBarrier(
-                    this->reconstructedImage.handle(), VK_ACCESS_NONE,
+                    outputImage, VK_ACCESS_NONE,
                     VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
                 ),
@@ -188,12 +228,12 @@ namespace {
                 commandBuffer,
                 this->sourceImage.handle(),
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-                this->reconstructedImage.handle(),
+                outputImage,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 1, &region, VK_FILTER_LINEAR
             );
             const auto outputBarrier = imageBarrier(
-                this->reconstructedImage.handle(),
+                outputImage,
                 VK_ACCESS_TRANSFER_WRITE_BIT,
                 VK_ACCESS_TRANSFER_READ_BIT,
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -211,6 +251,7 @@ namespace {
         VkExtent2D presentationSize{};
         vk::Image sourceImage;
         vk::Image reconstructedImage;
+        std::vector<VkImage> directOutputs;
     };
 
     class MakoPipeline final : public Pipeline {
@@ -276,8 +317,72 @@ namespace {
         [[nodiscard]] const vk::Image& output() const override {
             return this->reconstructedImage;
         }
+        void configureDirectOutputs(const vk::Vulkan& vk,
+                const std::span<const std::reference_wrapper<const vk::Image>>
+                    outputs) override {
+            std::optional<vk::DescriptorPool> replacementPool;
+            std::vector<vk::DescriptorSet> replacementSets;
+            std::vector<VkImage> replacementHandles;
+            if (!outputs.empty()) {
+                const auto count = static_cast<uint32_t>(outputs.size());
+                replacementPool.emplace(vk, vk::Limits{
+                    .sets = count,
+                    .uniform_buffers = count,
+                    .samplers = count,
+                    .sampled_images = count,
+                    .storage_images = count,
+                });
+                replacementSets.reserve(outputs.size());
+                replacementHandles.reserve(outputs.size());
+                for (const auto& output : outputs) {
+                    replacementSets.emplace_back(
+                        vk, *replacementPool, this->shader,
+                        std::vector<ls::R<const vk::Image>>{
+                            std::cref(this->sourceImage)
+                        },
+                        std::vector<ls::R<const vk::Image>>{
+                            std::cref(output.get())
+                        },
+                        std::vector<ls::R<const vk::Sampler>>{
+                            std::cref(this->sampler)
+                        },
+                        std::vector<ls::R<const vk::Buffer>>{
+                            std::cref(this->parameterBuffer)
+                        }
+                    );
+                    replacementHandles.push_back(output.get().handle());
+                }
+            }
+
+            this->directDescriptorSets.clear();
+            this->directDescriptorPool.reset();
+            this->directDescriptorPool = std::move(replacementPool);
+            this->directDescriptorSets = std::move(replacementSets);
+            this->directOutputs = std::move(replacementHandles);
+        }
+        void clearDirectOutputs() override {
+            this->directDescriptorSets.clear();
+            this->directDescriptorPool.reset();
+            this->directOutputs.clear();
+        }
+        [[nodiscard]] size_t directOutputCount() const override {
+            return this->directOutputs.size();
+        }
+        [[nodiscard]] bool hasDirectOutput(
+                const VkImage image) const override {
+            return directOutputIndex(this->directOutputs, image).has_value();
+        }
         void recordCompute(const vk::Vulkan& vk,
-                const VkCommandBuffer commandBuffer) const override {
+                const VkCommandBuffer commandBuffer,
+                const VkImage directOutput) const override {
+            const auto directIndex = directOutput == VK_NULL_HANDLE
+                ? std::optional<size_t>{}
+                : directOutputIndex(this->directOutputs, directOutput);
+            const VkImage outputImage = directIndex
+                ? directOutput : this->reconstructedImage.handle();
+            const auto& outputDescriptors = directIndex
+                ? this->directDescriptorSets.at(*directIndex)
+                : this->descriptorSet;
             const std::array barriers{
                 imageBarrier(
                     this->sourceImage.handle(), VK_ACCESS_TRANSFER_WRITE_BIT,
@@ -286,7 +391,7 @@ namespace {
                     VK_IMAGE_LAYOUT_GENERAL
                 ),
                 imageBarrier(
-                    this->reconstructedImage.handle(), VK_ACCESS_NONE,
+                    outputImage, VK_ACCESS_NONE,
                     VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                     VK_IMAGE_LAYOUT_GENERAL
                 ),
@@ -301,7 +406,7 @@ namespace {
                 commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                 this->shader.pipeline()
             );
-            const auto descriptor = this->descriptorSet.handle();
+            const auto descriptor = outputDescriptors.handle();
             vk.df().CmdBindDescriptorSets(
                 commandBuffer, VK_PIPELINE_BIND_POINT_COMPUTE,
                 this->shader.pipelinelayout(), 0, 1, &descriptor, 0, nullptr
@@ -312,7 +417,7 @@ namespace {
                 (this->presentationSize.height + 7) / 8, 1
             );
             const auto outputBarrier = imageBarrier(
-                this->reconstructedImage.handle(), VK_ACCESS_SHADER_WRITE_BIT,
+                outputImage, VK_ACCESS_SHADER_WRITE_BIT,
                 VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
             );
@@ -333,6 +438,9 @@ namespace {
         vk::Sampler sampler;
         vk::Buffer parameterBuffer;
         vk::DescriptorSet descriptorSet;
+        std::optional<vk::DescriptorPool> directDescriptorPool;
+        std::vector<vk::DescriptorSet> directDescriptorSets;
+        std::vector<VkImage> directOutputs;
     };
 
     class Ls1Pipeline final : public Pipeline {
@@ -467,8 +575,74 @@ namespace {
             return this->variant;
         }
 
+        void configureDirectOutputs(const vk::Vulkan& vk,
+                const std::span<const std::reference_wrapper<const vk::Image>>
+                    outputs) override {
+            std::optional<vk::DescriptorPool> replacementPool;
+            std::vector<vk::DescriptorSet> replacementSets;
+            std::vector<VkImage> replacementHandles;
+            if (!outputs.empty()) {
+                const auto count = static_cast<uint32_t>(outputs.size());
+                replacementPool.emplace(vk, vk::Limits{
+                    .sets = count,
+                    .uniform_buffers = count,
+                    .samplers = count,
+                    .sampled_images = count * 2,
+                    .storage_images = count,
+                });
+                replacementSets.reserve(outputs.size());
+                replacementHandles.reserve(outputs.size());
+                for (const auto& output : outputs) {
+                    replacementSets.emplace_back(
+                        vk, *replacementPool, this->reconstruction,
+                        std::vector<ls::R<const vk::Image>>{
+                            std::cref(this->featureImage),
+                            std::cref(this->sourceImage),
+                        },
+                        std::vector<ls::R<const vk::Image>>{
+                            std::cref(output.get())
+                        },
+                        std::vector<ls::R<const vk::Sampler>>{
+                            std::cref(this->sampler)
+                        },
+                        std::vector<ls::R<const vk::Buffer>>{
+                            std::cref(this->parameterBuffer)
+                        }
+                    );
+                    replacementHandles.push_back(output.get().handle());
+                }
+            }
+
+            this->directDescriptorSets.clear();
+            this->directDescriptorPool.reset();
+            this->directDescriptorPool = std::move(replacementPool);
+            this->directDescriptorSets = std::move(replacementSets);
+            this->directOutputs = std::move(replacementHandles);
+        }
+        void clearDirectOutputs() override {
+            this->directDescriptorSets.clear();
+            this->directDescriptorPool.reset();
+            this->directOutputs.clear();
+        }
+        [[nodiscard]] size_t directOutputCount() const override {
+            return this->directOutputs.size();
+        }
+        [[nodiscard]] bool hasDirectOutput(
+                const VkImage image) const override {
+            return directOutputIndex(this->directOutputs, image).has_value();
+        }
+
         void recordCompute(const vk::Vulkan& vk,
-                const VkCommandBuffer commandBuffer) const override {
+                const VkCommandBuffer commandBuffer,
+                const VkImage directOutput) const override {
+            const auto directIndex = directOutput == VK_NULL_HANDLE
+                ? std::optional<size_t>{}
+                : directOutputIndex(this->directOutputs, directOutput);
+            const VkImage outputImage = directIndex
+                ? directOutput : this->reconstructedImage.handle();
+            const auto& outputDescriptors = directIndex
+                ? this->directDescriptorSets.at(*directIndex)
+                : *this->reconstructionDescriptors;
             std::array<VkImageMemoryBarrier, 5> initialBarriers{};
             size_t initialBarrierCount = 0;
             initialBarriers.at(initialBarrierCount++) = imageBarrier(
@@ -482,7 +656,7 @@ namespace {
                 VK_IMAGE_LAYOUT_GENERAL
             );
             initialBarriers.at(initialBarrierCount++) = imageBarrier(
-                this->reconstructedImage.handle(), VK_ACCESS_NONE,
+                outputImage, VK_ACCESS_NONE,
                 VK_ACCESS_SHADER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
                 VK_IMAGE_LAYOUT_GENERAL
             );
@@ -531,11 +705,11 @@ namespace {
             );
             bindAndDispatch(
                 vk, commandBuffer, this->reconstruction,
-                *this->reconstructionDescriptors, this->presentationSize
+                outputDescriptors, this->presentationSize
             );
 
             const auto outputBarrier = imageBarrier(
-                this->reconstructedImage.handle(), VK_ACCESS_SHADER_WRITE_BIT,
+                outputImage, VK_ACCESS_SHADER_WRITE_BIT,
                 VK_ACCESS_TRANSFER_READ_BIT, VK_IMAGE_LAYOUT_GENERAL,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
             );
@@ -580,6 +754,9 @@ namespace {
         std::optional<vk::DescriptorSet> stage2Descriptors;
         std::optional<vk::DescriptorSet> stage3Descriptors;
         std::optional<vk::DescriptorSet> reconstructionDescriptors;
+        std::optional<vk::DescriptorPool> directDescriptorPool;
+        std::vector<vk::DescriptorSet> directDescriptorSets;
+        std::vector<VkImage> directOutputs;
     };
 }
 
@@ -672,6 +849,32 @@ SpatialScaler::~SpatialScaler() = default;
 SpatialScaler::SpatialScaler(SpatialScaler&&) noexcept = default;
 SpatialScaler& SpatialScaler::operator=(SpatialScaler&&) noexcept = default;
 
+void SpatialScaler::configureDirectFrameGenerationOutputs(
+        const vk::Vulkan& vk,
+        const std::span<
+            const std::reference_wrapper<const vk::Image>> outputs) {
+    for (const auto& output : outputs) {
+        const auto extent = output.get().getExtent();
+        if (extent.width != this->implementation->presentationSize.width ||
+                extent.height !=
+                    this->implementation->presentationSize.height) {
+            throw ls::vulkan_error(
+                "direct Frame Generation output extent does not match "
+                "spatial presentation extent"
+            );
+        }
+    }
+    this->implementation->pipeline->configureDirectOutputs(vk, outputs);
+}
+
+void SpatialScaler::clearDirectFrameGenerationOutputs() {
+    this->implementation->pipeline->clearDirectOutputs();
+}
+
+size_t SpatialScaler::directFrameGenerationOutputCount() const {
+    return this->implementation->pipeline->directOutputCount();
+}
+
 VkExtent2D SpatialScaler::sourceExtent() const {
     return this->implementation->sourceSize;
 }
@@ -742,7 +945,16 @@ void SpatialScaler::record(const vk::Vulkan& vk,
         1, &sourceCopy, VK_FILTER_NEAREST
     );
 
-    this->implementation->pipeline->recordCompute(vk, handle);
+    const bool directFrameGenerationOutput =
+        frameGenerationSource != VK_NULL_HANDLE &&
+        this->implementation->pipeline->hasDirectOutput(
+            frameGenerationSource
+        );
+    this->implementation->pipeline->recordCompute(
+        vk, handle,
+        directFrameGenerationOutput
+            ? frameGenerationSource : VK_NULL_HANDLE
+    );
 
     std::array<VkImageMemoryBarrier, 2> outputBarriers{};
     size_t outputBarrierCount = 0;
@@ -751,7 +963,8 @@ void SpatialScaler::record(const vk::Vulkan& vk,
         VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
     );
-    if (frameGenerationSource != VK_NULL_HANDLE) {
+    if (frameGenerationSource != VK_NULL_HANDLE &&
+            !directFrameGenerationOutput) {
         outputBarriers.at(outputBarrierCount++) = imageBarrier(
             frameGenerationSource, VK_ACCESS_NONE,
             VK_ACCESS_TRANSFER_WRITE_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
@@ -769,7 +982,8 @@ void SpatialScaler::record(const vk::Vulkan& vk,
         this->implementation->presentationSize,
         this->implementation->presentationSize
     );
-    if (frameGenerationSource != VK_NULL_HANDLE) {
+    if (frameGenerationSource != VK_NULL_HANDLE &&
+            !directFrameGenerationOutput) {
         vk.df().CmdBlitImage(
             handle, this->implementation->pipeline->output().handle(),
             VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
@@ -778,7 +992,10 @@ void SpatialScaler::record(const vk::Vulkan& vk,
         );
     }
     vk.df().CmdBlitImage(
-        handle, this->implementation->pipeline->output().handle(),
+        handle,
+        directFrameGenerationOutput
+            ? frameGenerationSource
+            : this->implementation->pipeline->output().handle(),
         VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         applicationImage, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         1, &presentationCopy, VK_FILTER_NEAREST

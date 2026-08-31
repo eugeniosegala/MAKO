@@ -24,6 +24,7 @@
 #include <exception>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <optional>
@@ -759,7 +760,7 @@ int quality::runSpatial(const SpatialOptions& opts) {
         const auto dll = configuredDll(
             opts.dll, ls::licensedScalingModelRequested(*method)
         );
-        const mako::layer::SpatialScaler scaler{
+        mako::layer::SpatialScaler scaler{
             vk,
             sourceExtent,
             presentationExtent,
@@ -892,7 +893,7 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         const auto dll = configuredDll(
             opts.dll, ls::licensedScalingModelRequested(*method)
         );
-        const mako::layer::SpatialScaler scaler{
+        mako::layer::SpatialScaler scaler{
             vk,
             sourceExtent,
             presentationExtent,
@@ -919,7 +920,16 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         if (opts.frame_generation_handoff) {
             frameGenerationSource.emplace(
                 vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
-                VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT
+                VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+                    VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                    VK_IMAGE_USAGE_SAMPLED_BIT |
+                    VK_IMAGE_USAGE_STORAGE_BIT
+            );
+            const std::array directOutputs{
+                std::cref(*frameGenerationSource)
+            };
+            scaler.configureDirectFrameGenerationOutputs(
+                vk, directOutputs
             );
         }
         const size_t sourceBytes = static_cast<size_t>(sourceExtent.width) *
@@ -971,12 +981,19 @@ int quality::runSpatialProfile(const SpatialProfileOptions& opts) {
         const auto samples = timestamps.microseconds();
         const auto statistics = profileStatistics(samples);
         std::cout << std::fixed << std::setprecision(3)
-            << "MAKO spatial GPU profile: PASS schema=1\n"
+            << "MAKO spatial GPU profile: PASS schema=2\n"
             << "  method: " << ls::scalingMethodName(*method) << '\n'
             << "  factor: " << opts.scaling_factor << '\n'
             << "  sharpness: " << opts.sharpness << '\n'
             << "  frame-generation handoff: "
             << (opts.frame_generation_handoff ? "yes" : "no") << '\n'
+            << "  frame-generation transport: "
+            << (!opts.frame_generation_handoff
+                    ? "none"
+                    : scaler.directFrameGenerationOutputCount() > 0
+                        ? "direct-reconstruction"
+                        : "copy-private-output")
+            << '\n'
             << "  extent: " << sourceExtent.width << 'x' << sourceExtent.height
             << " -> " << presentationExtent.width << 'x'
             << presentationExtent.height << '\n'
@@ -1096,7 +1113,7 @@ int quality::runCombined(const CombinedOptions& opts) {
         const vk::Vulkan vk = makeVulkan(opts.gpu, "mako-combined-quality-regression");
         const std::string selectedGpu = selectedDeviceName(vk);
         const auto dll = configuredDll(opts.dll, true);
-        const mako::layer::SpatialScaler scaler{
+        mako::layer::SpatialScaler scaler{
             vk,
             sourceExtent,
             presentationExtent,
@@ -1123,7 +1140,8 @@ int quality::runCombined(const CombinedOptions& opts) {
         };
         std::pair<int, int> sourceFds{};
         const auto frameSourceUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-            VK_IMAGE_USAGE_SAMPLED_BIT;
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
+            VK_IMAGE_USAGE_STORAGE_BIT;
         const vk::Image previousFrameSource{
             vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
             frameSourceUsage, std::nullopt, &sourceFds.first
@@ -1132,6 +1150,11 @@ int quality::runCombined(const CombinedOptions& opts) {
             vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
             frameSourceUsage, std::nullopt, &sourceFds.second
         };
+        const std::array directOutputs{
+            std::cref(previousFrameSource),
+            std::cref(currentFrameSource),
+        };
+        scaler.configureDirectFrameGenerationOutputs(vk, directOutputs);
         int destinationFd{};
         const vk::Image destinationImage{
             vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
@@ -1203,6 +1226,10 @@ int quality::runCombined(const CombinedOptions& opts) {
             << "MAKO quality result: " << (passed ? "PASS" : "FAIL")
             << " kind=combined scene=" << opts.scene << '\n'
             << "  spatial method: " << ls::scalingMethodName(*method) << '\n'
+            << "  spatial FG transport: "
+            << (scaler.directFrameGenerationOutputCount() == 2
+                    ? "direct-reconstruction" : "copy-private-output")
+            << '\n'
             << "  factor: " << opts.scaling_factor << '\n'
             << "  sharpness: " << opts.sharpness << '\n'
             << "  interpolation: " << opts.interpolation << '\n'

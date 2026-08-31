@@ -367,6 +367,11 @@ namespace mako::layer {
             SpatialScalingPass& pass);
         [[nodiscard]] bool spatialScalingPassesReady(
             const vk::Vulkan& vk);
+        void configureDirectSpatialFrameGenerationOutputs(
+            const vk::Vulkan& vk, SpatialScaler& scaler,
+            std::span<const vk::Image> outputs,
+            std::string_view reason) noexcept;
+        void clearDirectSpatialFrameGenerationOutputs() noexcept;
         void publishRuntimeStatus(std::string_view reason) noexcept;
         [[nodiscard]] static std::optional<uint64_t>
             generatedImageAcquireTimeoutNs();

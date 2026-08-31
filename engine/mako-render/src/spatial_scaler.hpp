@@ -6,9 +6,12 @@
 #include "mako-common/vulkan/command_buffer.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 
+#include <cstddef>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
 
 #include <vulkan/vulkan_core.h>
@@ -33,6 +36,18 @@ namespace mako::layer {
         SpatialScaler& operator=(const SpatialScaler&) = delete;
         SpatialScaler(SpatialScaler&&) noexcept;
         SpatialScaler& operator=(SpatialScaler&&) noexcept;
+
+        /// Preallocate direct-output bindings for MAKO-owned, presentation-
+        /// sized Frame Generation source images. Once configured, record()
+        /// writes reconstruction into the selected exported source and copies
+        /// that same result back to the real WSI image, avoiding the previous
+        /// presentation-sized private-output copy. Clearing the bindings
+        /// restores the copy-based path without changing pipeline ordering.
+        void configureDirectFrameGenerationOutputs(
+            const vk::Vulkan& vk,
+            std::span<const std::reference_wrapper<const vk::Image>> outputs);
+        void clearDirectFrameGenerationOutputs();
+        [[nodiscard]] size_t directFrameGenerationOutputCount() const;
 
         /// Reconstruct the application's low-resolution rectangle, write the
         /// native-resolution result back into its image, and optionally copy
