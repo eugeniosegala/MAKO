@@ -46,6 +46,7 @@ namespace mako::layer {
         bool variableFeedbackSuppressed{false};
         VkExtent2D applicationExtent{};
         VkExtent2D presentationExtent{};
+        std::optional<VkExtent2D> gamescopePresentationTarget;
     };
 
     /// Root context of the MAKO Renderer layer.
@@ -161,6 +162,7 @@ namespace mako::layer {
         StableBooleanFeedback hdrFeedback;
         std::optional<bool> gamescopeHdrActive;
         bool gamescopeDetected{false};
+        std::optional<VkExtent2D> gamescopePresentationTarget;
         std::optional<uint32_t> gamescopeRefreshHz;
         std::optional<bool> lastHdrFeedbackSample;
         std::string lastHdrActivationSource;

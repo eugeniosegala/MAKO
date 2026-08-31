@@ -226,6 +226,15 @@ namespace {
             });
         }
 
+        void automaticBaseCapSuppressed(size_t generationLimit, double,
+                double, std::string_view reason) override {
+            this->events.push_back({
+                .operation = "automatic-base-cap-suppressed",
+                .reason = std::string(reason),
+                .testedLimit = generationLimit,
+            });
+        }
+
         void nativeCadenceProbe(std::string_view operation, size_t,
                 double, double, size_t) override {
             this->events.push_back({
@@ -328,13 +337,15 @@ namespace {
                     ),
                 const std::optional<uint32_t> displayRefreshFps =
                     std::nullopt,
-                const bool nearTargetNativePreference = true) :
+                const bool nearTargetNativePreference = true,
+                const bool automaticBaseFpsCap = false) :
             scheduler(
                 AdaptiveSchedulerConfig{
                     .targetFps = targetFps,
                     .maximumMultiplier = maximumMultiplier,
                     .generatedFrameCapacity = GeneratedFramePlan::capacity,
                     .stableCadence = stableCadence,
+                    .automaticBaseFpsCap = automaticBaseFpsCap,
                     .nearTargetNativePreference =
                         nearTargetNativePreference,
                     .dynamicCadenceRecovery = dynamicCadenceRecovery,
@@ -442,6 +453,7 @@ namespace {
             fingerprint.mix(snapshot.rampEvaluationActive);
             fingerprint.mix(snapshot.rearmRequired);
             fingerprint.mix(snapshot.discontinuityRecoveryActive);
+            fingerprint.mix(snapshot.automaticBaseCapSuppressed);
         }
         for (const auto& event : harness.diagnostics.events) {
             fingerprint.mix(event.operation);
@@ -492,19 +504,19 @@ namespace {
             disruptionTrace
         );
 
-        require(steady45 == 17922259728464763653ULL,
+        require(steady45 == 2958441852441804317ULL,
             "45-to-90 characterization changed: " +
                 std::to_string(steady45));
-        require(boundary425 == 17868105727514782793ULL,
+        require(boundary425 == 2150815767361452681ULL,
             "42.5-to-90 characterization changed: " +
                 std::to_string(boundary425));
-        require(boundary4275 == 4184744030236575051ULL,
+        require(boundary4275 == 7209996886570826541ULL,
             "42.75-to-90 characterization changed: " +
                 std::to_string(boundary4275));
-        require(boundary43 == 4100649750651905631ULL,
+        require(boundary43 == 1194662062457436213ULL,
             "43-to-90 characterization changed: " +
                 std::to_string(boundary43));
-        require(disruptions == 1580889166940170359ULL,
+        require(disruptions == 3251577126843654263ULL,
             "disruption characterization changed: " +
                 std::to_string(disruptions));
     }
@@ -3144,6 +3156,8 @@ namespace {
         require(harness.scheduler.snapshot().phase !=
                 AdaptiveSchedulerPhase::RescueMeasurement,
             "SDR 2x collapse entered a disruptive real-only measurement");
+        require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "SDR 2x collapse altered an automatic cap that was not enabled");
         require(plan.size() == 1,
             "SDR 2x collapse dropped the transition frame to native-only");
     }
@@ -3170,6 +3184,94 @@ namespace {
             "Smooth Cadence rescue was not exposed as scheduler state");
         require(harness.frameAtFps(30.0).empty(),
             "Smooth Cadence rescue generated during real-only measurement");
+    }
+
+    void testOrderedSdrSmoothCollapseReleasesAutomaticCap() {
+        Harness harness(
+            90, 2, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 90, true, true
+        );
+        harness.start();
+        harness.runAtFps(47.0, 12s);
+        require(harness.scheduler.snapshot().phase ==
+                AdaptiveSchedulerPhase::StableCadence,
+            "precondition failed: Ordered-SDR Smooth Cadence did not settle");
+
+        for (size_t frame = 0;
+                frame < 120 && !harness.scheduler.snapshot().
+                    automaticBaseCapSuppressed;
+                ++frame) {
+            harness.frameAtFps(30.0);
+        }
+        const auto collapsed = harness.scheduler.snapshot();
+        require(collapsed.phase == AdaptiveSchedulerPhase::RescueMeasurement &&
+                collapsed.automaticBaseCapSuppressed,
+            "Ordered-SDR cadence collapse did not release the automatic cap during rescue");
+        const auto* capSuppressed = harness.diagnostics.last(
+            "automatic-base-cap-suppressed"
+        );
+        require(capSuppressed && capSuppressed->reason ==
+                "stable-cadence-collapse",
+            "Ordered-SDR Smooth collapse did not diagnose automatic-cap release");
+
+        harness.runAtFps(60.0, 2s);
+        require(harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "automatic-cap release did not survive successful rescue measurement");
+
+        size_t nativePlans = 0;
+        size_t generatedPlans = 0;
+        for (size_t frame = 0; frame < 120; ++frame) {
+            const auto plan = harness.frameAtFps(60.0);
+            require(plan.size() <= 1,
+                "post-collapse Fractional recovery exceeded the 2x ceiling");
+            if (plan.empty())
+                nativePlans++;
+            else
+                generatedPlans++;
+        }
+        require(nativePlans > 0 && generatedPlans > 0,
+            "post-collapse recovery returned to a constant 2x cadence instead of Fractional output");
+    }
+
+    void testOrderedSdrMinimumGeneratedCollapseReleasesAutomaticCap() {
+        Harness harness(
+            90, 2, false, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 90, true, true
+        );
+        harness.start();
+        harness.runAtFps(45.0, 8s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: Ordered-SDR 45-to-90 policy was not validated");
+
+        AdaptiveFramePlan transitionPlan;
+        for (size_t frame = 0;
+                frame < 120 && !harness.scheduler.snapshot().
+                    automaticBaseCapSuppressed;
+                ++frame) {
+            transitionPlan = harness.frameAtFps(30.0);
+        }
+        require(harness.scheduler.snapshot().automaticBaseCapSuppressed,
+            "30-to-60 collapse did not release the automatic 45 FPS cap");
+        const auto* capSuppressed = harness.diagnostics.last(
+            "automatic-base-cap-suppressed"
+        );
+        require(capSuppressed && capSuppressed->reason ==
+                "ordered-sdr-minimum-generated-collapse",
+            "30-to-60 collapse did not diagnose the minimum-generated cap release");
+        require(transitionPlan.size() == 1,
+            "minimum-generated collapse dropped its transition frame");
+
+        size_t nativePlans = 0;
+        size_t generatedPlans = 0;
+        for (size_t frame = 0; frame < 180; ++frame) {
+            const auto plan = harness.frameAtFps(60.0);
+            if (plan.empty())
+                nativePlans++;
+            else
+                generatedPlans++;
+        }
+        require(nativePlans > 0 && generatedPlans > 0,
+            "uncapped 60 FPS recovery did not use Fractional delivery toward 90 FPS");
     }
 
     void testRestoredDiscontinuityLoadRetainsCollapseGuard() {
@@ -3357,6 +3459,8 @@ int main() {
         {"SDR severe marginal gain backs off", testSdrSevereMarginalGainFallsBackAndBacksOff},
         {"SDR 2x load shed stays generated", testSdrTwoXCollapseRetainsMinimumGeneratedPolicy},
         {"Smooth Cadence collapse measures real-only", testSmoothCadenceCollapseUsesRealOnlyMeasurement},
+        {"Ordered SDR Smooth collapse releases automatic cap", testOrderedSdrSmoothCollapseReleasesAutomaticCap},
+        {"Ordered SDR minimum-generated collapse releases automatic cap", testOrderedSdrMinimumGeneratedCollapseReleasesAutomaticCap},
         {"restored load keeps collapse guard", testRestoredDiscontinuityLoadRetainsCollapseGuard},
         {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
         {"cadence replay is deterministic", testDeterministicReplay},

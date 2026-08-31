@@ -27,12 +27,39 @@ namespace mako::layer {
         bool gamescopeDetected{false};
         std::optional<uint32_t> gamescopePid;
         std::optional<uint32_t> xwaylandServerId;
+        std::optional<uint32_t> outputWidth;
+        std::optional<uint32_t> outputHeight;
         std::string status;
         std::string activationSource;
         std::string display;
         std::string resolverStatus;
         std::string resolverCandidates;
     };
+
+    struct GamescopePresentationTarget {
+        uint32_t width{0};
+        uint32_t height{0};
+
+        bool operator==(const GamescopePresentationTarget&) const = default;
+    };
+
+    /// Server zero owns Gamescope's real presentation dimensions. Treat the
+    /// X11 root geometry as an output ceiling only after the same resolver
+    /// that owns HDR and refresh feedback has proven Gamescope identity.
+    [[nodiscard]] inline std::optional<GamescopePresentationTarget>
+    confirmedGamescopePresentationTarget(
+            const GamescopeHdrFeedbackSample& sample) {
+        if (!sample.gamescopeDetected || !sample.xwaylandServerId ||
+                *sample.xwaylandServerId != 0 || !sample.outputWidth ||
+                !sample.outputHeight || *sample.outputWidth == 0 ||
+                *sample.outputHeight == 0) {
+            return std::nullopt;
+        }
+        return GamescopePresentationTarget{
+            .width = *sample.outputWidth,
+            .height = *sample.outputHeight,
+        };
+    }
 
     /// Keep compositor feedback responsive when Gamescope is present, but do
     /// not wake an ordinary desktop Vulkan process four times per second just

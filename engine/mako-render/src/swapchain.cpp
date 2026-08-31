@@ -682,6 +682,24 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
         phase = RuntimeApplicationPhase::Debouncing;
     }
 
+    std::optional<double> nonSupersamplingFactorCeiling;
+    if (this->info.variableSurface &&
+            this->info.gamescopePresentationTarget &&
+            this->info.applicationExtent.width > 0 &&
+            this->info.applicationExtent.height > 0) {
+        nonSupersamplingFactorCeiling = std::clamp(
+            std::min(
+                static_cast<double>(
+                    this->info.gamescopePresentationTarget->width
+                ) / this->info.applicationExtent.width,
+                static_cast<double>(
+                    this->info.gamescopePresentationTarget->height
+                ) / this->info.applicationExtent.height
+            ),
+            static_cast<double>(ls::GameConfLimits::minimumScalingFactor),
+            static_cast<double>(ls::GameConfLimits::maximumScalingFactor)
+        );
+    }
     this->runtimeStatusPublisher.publish(RuntimeStatusRecord{
         .phase = phase,
         .reason = std::string(reason),
@@ -705,6 +723,14 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
                 : std::optional<std::string>{
                     "gamescope-wsi-surface-unproven"
                 },
+        .spatialSourceWidth = this->info.applicationExtent.width,
+        .spatialSourceHeight = this->info.applicationExtent.height,
+        .gamescopeTargetWidth = this->info.gamescopePresentationTarget
+            ? this->info.gamescopePresentationTarget->width : 0,
+        .gamescopeTargetHeight = this->info.gamescopePresentationTarget
+            ? this->info.gamescopePresentationTarget->height : 0,
+        .nonSupersamplingFactorCeiling =
+            nonSupersamplingFactorCeiling,
         .error = this->runtimeStatusState.error,
     });
 }
@@ -726,6 +752,8 @@ bool Swapchain::resetGenerationScheduler(
             .maximumMultiplier = policy->maximumMultiplier,
             .generatedFrameCapacity = this->destinationImages.size(),
             .stableCadence = policy->stableCadence,
+            .automaticBaseFpsCap =
+                this->profile.adaptive_auto_base_fps_cap,
             .nearTargetNativePreference =
                 policy->nearTargetNativePreference,
             .dynamicCadenceRecovery = policy->dynamicCadenceRecovery,
@@ -1295,12 +1323,27 @@ ProfileUpdateDecision Swapchain::updateProfile(
             this->profile.scaling_factor,
             nextProfile.scaling_factor
         );
+    const bool spatialSupersamplingEffectiveExtentUnchanged =
+        variableSurfaceSupersamplingChangePreservesEffectiveExtents(
+            this->info.variableSurface,
+            !sameExtent(
+                this->info.applicationExtent,
+                this->info.extent
+            ),
+            this->info.applicationExtent,
+            this->info.extent,
+            nextProfile.scaling_factor,
+            this->profile.scaling_supersampling,
+            nextProfile.scaling_supersampling,
+            this->info.gamescopePresentationTarget
+        );
     auto plan = planProfileUpdate(
         this->profile, nextProfile, this->destinationImages.size(),
         resourcesAvailable, this->spatialScaler.has_value(),
         privateFrameGenerationRebuildAvailable,
         this->info.spatialScalingActivationSupported,
-        spatialScalingEffectiveExtentUnchanged
+        spatialScalingEffectiveExtentUnchanged,
+        spatialSupersamplingEffectiveExtentUnchanged
     );
     auto decision = plan.decision;
     if (decision.frameGenerationPrivateRebuild) {

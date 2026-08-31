@@ -70,6 +70,63 @@ describe("profile configuration writer", () => {
     expect(loadProfileConfig).not.toHaveBeenCalled();
   });
 
+  test("does not clear supersampling when a later factor edit is saved", async () => {
+    const supersamplingConfig = {
+      ...getDefaults(),
+      scaling_supersampling: true,
+    };
+    const factorConfig = {
+      ...supersamplingConfig,
+      scaling_factor: 1.6,
+    };
+    const updateProfileConfigFields = vi
+      .fn()
+      .mockResolvedValueOnce({
+        success: true,
+        config: supersamplingConfig,
+        message: "updated",
+        error: null,
+      })
+      .mockResolvedValueOnce({
+        success: true,
+        config: factorConfig,
+        message: "updated",
+        error: null,
+      });
+    const replaceConfig = vi.fn();
+    const { result } = renderHook(() =>
+      useProfileConfigWriter({
+        editingProfile: "game",
+        getEditingProfile: () => "game",
+        updateProfileConfigFields,
+        loadProfileConfig: vi.fn(async () => undefined),
+        applyConfigPatch: vi.fn(),
+        replaceConfig,
+      }),
+    );
+
+    act(() =>
+      void result.current.saveConfigField("scaling_supersampling", true),
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROFILE_CONFIG_SAVE_DELAY_MS);
+    });
+    expect(updateProfileConfigFields).toHaveBeenNthCalledWith(1, "game", {
+      scaling_supersampling: true,
+    });
+
+    act(() => void result.current.saveConfigField("scaling_factor", 1.6));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(PROFILE_CONFIG_SAVE_DELAY_MS);
+    });
+
+    expect(updateProfileConfigFields).toHaveBeenNthCalledWith(2, "game", {
+      scaling_factor: 1.6,
+    });
+    expect(replaceConfig).toHaveBeenLastCalledWith(factorConfig);
+    expect(factorConfig.scaling_supersampling).toBe(true);
+  });
+
   test("allows only one backend write in flight", async () => {
     let resolveFirstWrite: ((value: unknown) => void) | undefined;
     const firstWrite = new Promise((resolve) => {

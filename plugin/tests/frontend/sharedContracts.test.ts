@@ -150,7 +150,7 @@ describe("generated cross-language contracts", () => {
     }).toEqual({
       enabled: false,
       method: "ls1",
-      factor: 1.8,
+      factor: 1.5,
       sharpness: 0.8,
     });
   });

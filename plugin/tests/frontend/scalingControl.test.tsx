@@ -121,6 +121,7 @@ import {
   SCALING_METHOD_MAKO,
   SCALING_METHOD_NATIVE,
   SCALING_SHARPNESS,
+  SCALING_SUPERSAMPLING,
   getDefaults,
 } from "../../src/config/configSchema";
 
@@ -144,7 +145,8 @@ describe("Scaling controls", () => {
         .getAttribute("data-mako-experimental-badge"),
     ).toBe("true");
     expect(enabled.getAttribute("data-checked")).toBe("false");
-    expect(screen.queryByText("Scale Factor (1.8x)")).toBeNull();
+    expect(screen.queryByText("Scale Factor (1.5x)")).toBeNull();
+    expect(screen.queryByText("Quality Supersampling")).toBeNull();
     expect(screen.queryByText("Scaling Sharpness (80%)")).toBeNull();
     expect(screen.queryByRole("button", { name: "Scaling Method" })).toBeNull();
     expect(screen.queryByText("MAKO Scaler")).toBeNull();
@@ -163,7 +165,8 @@ describe("Scaling controls", () => {
       />,
     );
 
-    const factor = screen.getByText("Scale Factor (1.8x)");
+    const factor = screen.getByText("Scale Factor (1.5x)");
+    expect(screen.getByText("Quality Supersampling")).toBeTruthy();
     const sharpness = screen.getByText("Scaling Sharpness (80%)");
     const method = screen.getByRole("button", { name: "Scaling Method" });
     expect((factor as HTMLButtonElement).disabled).toBe(false);
@@ -232,8 +235,76 @@ describe("Scaling controls", () => {
       />,
     );
     expect(screen.getByRole("button", { name: "Scaling Method" })).toBeTruthy();
-    expect(screen.getByText("Scale Factor (1.8x)")).toBeTruthy();
+    expect(screen.getByText("Scale Factor (1.5x)")).toBeTruthy();
     expect(screen.queryByText("Scaling Sharpness (80%)")).toBeNull();
+  });
+
+  test("limits the factor to live display geometry until supersampling is enabled", () => {
+    window.SP_REACT = React;
+    const onConfigChange = vi.fn(async () => undefined);
+    const ordinaryConfig = {
+      ...getDefaults(),
+      scaling_enabled: true,
+      scaling_factor: 1.8,
+      scaling_supersampling: false,
+    };
+    const { rerender } = render(
+      <ScalingControl
+        config={ordinaryConfig}
+        runtimeFactorCeiling={4 / 3}
+        onConfigChange={onConfigChange}
+      />,
+    );
+
+    const limited = screen.getByText("Scale Factor (1.3x display limit)");
+    expect(limited.getAttribute("data-maximum")).toBe("1.3");
+    expect(limited.getAttribute("data-notch-count")).toBe("4");
+    fireEvent.click(screen.getByRole("button", {
+      name: "Quality Supersampling",
+    }));
+    expect(onConfigChange).toHaveBeenCalledWith(
+      SCALING_SUPERSAMPLING,
+      true,
+    );
+
+    rerender(
+      <ScalingControl
+        config={{ ...ordinaryConfig, scaling_supersampling: true }}
+        runtimeFactorCeiling={4 / 3}
+        onConfigChange={onConfigChange}
+      />,
+    );
+    const expanded = screen.getByText("Scale Factor (1.8x)");
+    expect(expanded.getAttribute("data-maximum")).toBe("2");
+    expect(screen.getByText(
+      "Supersampling is active. MAKO may render more pixels than the display can show.",
+    )).toBeTruthy();
+  });
+
+  test("disables a factor with no display headroom and explains the alternatives", () => {
+    window.SP_REACT = React;
+
+    render(
+      <ScalingControl
+        config={{
+          ...getDefaults(),
+          scaling_enabled: true,
+          scaling_factor: 1.5,
+          scaling_supersampling: false,
+        }}
+        runtimeFactorCeiling={1}
+        onConfigChange={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const factor = screen.getByText("Scale Factor (1.0x display limit)");
+    expect((factor as HTMLButtonElement).disabled).toBe(true);
+    expect(factor.getAttribute("data-notch-count")).toBe("1");
+    expect(
+      screen.getByText(
+        "This resolution already fills the display. Lower the in-game resolution or enable Quality Supersampling.",
+      ),
+    ).toBeTruthy();
   });
 
   test("replaces scaling guidance with the running-surface warning", () => {
@@ -320,7 +391,7 @@ describe("Scaling controls", () => {
       ).disabled,
     ).toBe(true);
     expect(
-      (screen.getByText("Scale Factor (1.8x)") as HTMLButtonElement).disabled,
+      (screen.getByText("Scale Factor (1.5x)") as HTMLButtonElement).disabled,
     ).toBe(true);
     expect(
       (screen.getByText("Scaling Sharpness (80%)") as HTMLButtonElement)

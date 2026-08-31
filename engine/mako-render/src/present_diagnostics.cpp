@@ -296,6 +296,23 @@ namespace {
                   << '\n';
     }
 
+    void logAdaptiveAutomaticBaseCapSuppressed(
+            const size_t generationLimit, const double baselineBaseFps,
+            const double currentBaseFps, const std::string_view reason) {
+        if (!enabled())
+            return;
+
+        std::cerr << "MAKO Renderer: present diagnostics: operation="
+                     "adaptive-auto-base-cap-suppressed"
+                  << " context=" << activeContextId
+                  << " generated_limit=" << generationLimit
+                  << " baseline_base_fps=" << baselineBaseFps
+                  << " current_base_fps=" << currentBaseFps
+                  << " reason=" << reason
+                  << " action=release-half-target-pacer-for-fractional-recovery"
+                  << '\n';
+    }
+
     void logAdaptiveDiscontinuityRecoveryStart(
             const size_t generationLimit, const double baselineBaseFps,
             const std::string_view reason,
@@ -673,6 +690,15 @@ namespace {
             logAdaptiveRescueComplete(
                 previousLimit, resumedLimit, requestedLimit, configuredLimit,
                 baselineBaseFps, measuredBaseFps, decision
+            );
+        }
+
+        void automaticBaseCapSuppressed(const size_t generationLimit,
+                const double baselineBaseFps,
+                const double currentBaseFps,
+                const std::string_view reason) override {
+            logAdaptiveAutomaticBaseCapSuppressed(
+                generationLimit, baselineBaseFps, currentBaseFps, reason
             );
         }
 

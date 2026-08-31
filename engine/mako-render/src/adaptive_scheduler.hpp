@@ -42,6 +42,9 @@ namespace mako::layer {
         size_t maximumMultiplier{ls::GameConfDefaults::adaptiveMaxMultiplier};
         size_t generatedFrameCapacity{0};
         bool stableCadence{ls::GameConfDefaults::adaptiveStableCadence};
+        bool automaticBaseFpsCap{
+            ls::GameConfDefaults::adaptiveAutoBaseFpsCap
+        };
         bool nearTargetNativePreference{false};
         bool dynamicCadenceRecovery{
             ls::GameConfDefaults::dynamicCadenceRecovery
@@ -86,6 +89,7 @@ namespace mako::layer {
         bool discontinuityRecoveryActive{false};
         bool nativeCadenceProbeActive{false};
         bool nearTargetNativePreference{false};
+        bool automaticBaseCapSuppressed{false};
         bool targetOutputClockActive{false};
         double targetOutputBudgetCreditOutputs{0.0};
         double targetOutputPhaseErrorOutputs{0.0};
@@ -173,6 +177,8 @@ namespace mako::layer {
             std::chrono::steady_clock::duration) {}
         virtual void cadenceRefresh(std::string_view, size_t, size_t) {}
         virtual void loadShed(size_t, size_t, double, double,
+            std::string_view) {}
+        virtual void automaticBaseCapSuppressed(size_t, double, double,
             std::string_view) {}
         virtual void nativeCadenceProbe(std::string_view, size_t, double,
             double, size_t) {}
@@ -310,6 +316,9 @@ namespace mako::layer {
             TimePoint now, double baseFps, size_t configuredGenerationLimit);
         [[nodiscard]] inline PlanningStageResult applyStrictLoadGuard(
             TimePoint now, double baseFps, size_t& generatedFrameCount);
+        void suppressAutomaticBaseCap(size_t generationLimit,
+            double baselineBaseFps, double currentBaseFps,
+            std::string_view reason);
         void beginCadenceRefresh(TimePoint now, std::string_view reason);
         void scheduleRearm(TimePoint now, std::string_view reason,
             size_t fallbackLimit = 0, double baselineBaseFps = 0.0);
@@ -673,6 +682,10 @@ namespace mako::layer {
                 bool fromStrictLoad{false};
                 size_t strictLoadLimit{0};
             } rescue;
+
+            struct AutomaticBaseCap {
+                bool suppressed{false};
+            } automaticBaseCap;
 
             struct StrictLoad {
                 size_t baselineLimit{0};

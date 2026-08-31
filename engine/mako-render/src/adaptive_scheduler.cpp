@@ -376,6 +376,8 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
         .nativeCadenceProbeActive = this->state.nativeCadenceProbe.active,
         .nearTargetNativePreference =
             this->state.nearTargetNativePreference.active,
+        .automaticBaseCapSuppressed =
+            this->state.automaticBaseCap.suppressed,
         .targetOutputClockActive =
             this->state.outputPlanner.targetClockActive,
         .targetOutputBudgetCreditOutputs =
@@ -385,6 +387,18 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
         .targetOutputDeferredBudgetOutput =
             this->state.outputPlanner.deferredBudgetOutput,
     };
+}
+
+void AdaptiveScheduler::suppressAutomaticBaseCap(
+        const size_t generationLimit, const double baselineBaseFps,
+        const double currentBaseFps, const std::string_view reason) {
+    if (this->state.automaticBaseCap.suppressed)
+        return;
+
+    this->state.automaticBaseCap.suppressed = true;
+    this->diagnostics->automaticBaseCapSuppressed(
+        generationLimit, baselineBaseFps, currentBaseFps, reason
+    );
 }
 
 size_t AdaptiveScheduler::configuredGenerationLimit() const {
@@ -1020,6 +1034,16 @@ AdaptiveScheduler::advanceStableCadence(
                         ? adaptiveStableCadenceConvergenceRetryDelay
                         : adaptiveStableCadenceRetryDelay);
                 if (severeCollapse) {
+                    if (this->config.recoveryPolicy ==
+                            AdaptiveRecoveryPolicy::OrderedSdr &&
+                            this->config.automaticBaseFpsCap) {
+                        this->suppressAutomaticBaseCap(
+                            generatedLimit,
+                            rescueBaselineBaseFps,
+                            baseFps,
+                            "stable-cadence-collapse"
+                        );
+                    }
                     this->state.rescue.previousLimit = generatedLimit;
                     this->state.rescue.baselineBaseFps = rescueBaselineBaseFps;
                     this->state.rescue.until =
@@ -1796,7 +1820,18 @@ AdaptiveScheduler::applyStrictLoadGuard(
         strictOutputCollapse &&
         (!this->state.rescue.cooldownUntil ||
          now >= *this->state.rescue.cooldownUntil);
-    if (strictLoadCollapse) {
+    const bool minimumGeneratedPacerCollapse =
+        this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
+        this->config.automaticBaseFpsCap &&
+        strictLoadMonitored &&
+        this->state.outputPlanner.generationLimit == 1 &&
+        baseFps < this->state.strictLoad.baselineBaseFps *
+            adaptiveStrictLoadCollapseRatio &&
+        severeCurrentOutputDeficit &&
+        !this->state.automaticBaseCap.suppressed &&
+        (!this->state.rescue.cooldownUntil ||
+         now >= *this->state.rescue.cooldownUntil);
+    if (strictLoadCollapse || minimumGeneratedPacerCollapse) {
         this->state.strictLoad.healthySince.reset();
         this->state.strictLoad.recoverySince.reset();
         if (!this->state.strictLoad.collapseSince)
@@ -1804,6 +1839,17 @@ AdaptiveScheduler::applyStrictLoadGuard(
         if (now - *this->state.strictLoad.collapseSince >=
                 adaptiveStrictLoadCollapseDuration) {
             const size_t collapsedLimit = this->state.outputPlanner.generationLimit;
+            if (minimumGeneratedPacerCollapse) {
+                this->suppressAutomaticBaseCap(
+                    collapsedLimit,
+                    this->state.strictLoad.baselineBaseFps,
+                    baseFps,
+                    "ordered-sdr-minimum-generated-collapse"
+                );
+                this->state.strictLoad.collapseSince.reset();
+                if (!strictLoadCollapse)
+                    return {.planningReady = true};
+            }
             if (this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr) {
                 // The ordered SDR path does not need a disruptive one-second
                 // real-only measurement. A higher multiplier can immediately

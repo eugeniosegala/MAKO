@@ -3,7 +3,10 @@ import type {
   RuntimeContextState,
   RuntimeStatusResult,
 } from "../../src/api/makoApi";
-import { scalingInactiveReason } from "../../src/utils/runtimeScalingUtils";
+import {
+  runtimeScalingUiState,
+  scalingInactiveReason,
+} from "../../src/utils/runtimeScalingUtils";
 
 const context = {
   requested: {
@@ -16,6 +19,11 @@ const context = {
     active: false,
     activation_supported: false,
     inactive_reason: "gamescope-wsi-surface-unproven",
+    source_width: 960,
+    source_height: 540,
+    gamescope_target_width: 1280,
+    gamescope_target_height: 800,
+    non_supersampling_factor_ceiling: 4 / 3,
   },
 } as RuntimeContextState;
 
@@ -47,5 +55,21 @@ describe("runtime scaling availability", () => {
         "game",
       ),
     ).toBeNull();
+  });
+
+  test("uses the safest renderer-proven live factor ceiling", () => {
+    const second = {
+      ...context,
+      context: 2,
+      spatial_scaling: {
+        ...context.spatial_scaling,
+        non_supersampling_factor_ceiling: 1.5,
+      },
+    } as RuntimeContextState;
+    expect(runtimeScalingUiState(status([second, context]), "game"))
+      .toEqual({
+        inactiveReason: "gamescope-wsi-surface-unproven",
+        nonSupersamplingFactorCeiling: 4 / 3,
+      });
   });
 });

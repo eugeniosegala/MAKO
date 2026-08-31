@@ -201,7 +201,7 @@ write_active_renderer_state() {
 remove_if_managed() {
     local path="$1"
     local expected_hash="$2"
-    [[ -f "$path" ]] || return
+    [[ -f "$path" ]] || return 0
     if [[ "$(hash_file "$path")" == "$expected_hash" ]]; then
         rm -f -- "$path"
     else

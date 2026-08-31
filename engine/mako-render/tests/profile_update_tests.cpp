@@ -330,6 +330,11 @@ int main() {
         "Adaptive auto-cap changes must reset presentation timing");
     expect(effectiveBaseFpsCap(next) == 45.0,
         "Adaptive auto-cap did not derive half of the 90 FPS target");
+    const AdaptiveSchedulerSnapshot collapsedAutomaticCap{
+        .automaticBaseCapSuppressed = true,
+    };
+    expect(effectiveBaseFpsCap(next, collapsedAutomaticCap) == 0.0,
+        "A proven Ordered-SDR collapse did not release the automatic cap");
 
     auto overlappingCaps = next;
     overlappingCaps.base_fps_cap = 30;
@@ -340,6 +345,9 @@ int main() {
     resumedManualCap.adaptive_auto_base_fps_cap = false;
     expect(effectiveBaseFpsCap(resumedManualCap) == 30.0,
         "Disabling Adaptive auto-cap must restore the saved manual cap");
+    expect(effectiveBaseFpsCap(
+                resumedManualCap, collapsedAutomaticCap) == 30.0,
+        "Scheduler headroom incorrectly released an explicit manual cap");
     decision = classifyProfileUpdate(
         overlappingCaps, resumedManualCap, 3, true
     );
@@ -357,6 +365,9 @@ int main() {
     fixedAutoCap.base_fps_cap = 30;
     expect(effectiveBaseFpsCap(fixedAutoCap) == 30.0,
         "Adaptive auto-cap incorrectly overrode Fixed mode's manual cap");
+    expect(effectiveBaseFpsCap(
+                fixedAutoCap, collapsedAutomaticCap) == 30.0,
+        "Adaptive scheduler headroom incorrectly changed Fixed pacing");
 
     next = current;
     next.frame_generation_enabled = false;
@@ -803,6 +814,28 @@ int main() {
             decision.swapchainRecreationDeferred,
         "A factor change must remain extent-bound even when private model rebuilding is available");
 
+    next = scalingCurrent;
+    next.scaling_supersampling = true;
+    const auto supersamplingPlan = planProfileUpdate(
+        scalingCurrent, next, 3, true, true
+    );
+    expect(supersamplingPlan.decision.action ==
+                ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+            supersamplingPlan.decision.swapchainRecreationDeferred &&
+            !supersamplingPlan.appliedProfile.scaling_supersampling,
+        "An effective supersampling toggle must remain extent-bound until guarded recreation");
+    const auto fixedSupersamplingNoOp = planProfileUpdate(
+        scalingCurrent, next, 3, true, true, false, true, false, true
+    );
+    expect(fixedSupersamplingNoOp.decision.action ==
+                ProfileUpdateAction::NoRuntimeChange &&
+            fixedSupersamplingNoOp.decision.
+                spatialScalingEffectiveExtentUnchanged &&
+            fixedSupersamplingNoOp.appliedProfile.scaling_supersampling,
+        "A fixed-surface supersampling toggle must save live without replacing WSI");
+
+    next = scalingCurrent;
+    next.scaling_factor = 2.0F;
     const auto effectiveExtentNoOpPlan = planProfileUpdate(
         scalingCurrent, next, 3, true, true, false, true, true
     );

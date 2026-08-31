@@ -46,6 +46,7 @@ using namespace mako::layer;
 namespace {
     constexpr uint64_t spatialScalingEnabledBit = uint64_t{1};
     constexpr uint64_t spatialScalingProcessSupportedBit = uint64_t{2};
+    constexpr uint64_t spatialScalingSupersamplingBit = uint64_t{4};
 
     vk::DeviceMemoryTotals memoryDelta(
             const vk::DeviceMemoryTotals& after,
@@ -218,6 +219,8 @@ namespace {
                 ? (*sample.active ? "active" : "inactive") : "unknown") + '\n' +
             std::to_string(sample.gamescopePid.value_or(UINT32_MAX)) + '\n' +
             std::to_string(sample.xwaylandServerId.value_or(UINT32_MAX)) + '\n' +
+            std::to_string(sample.outputWidth.value_or(0)) + 'x' +
+            std::to_string(sample.outputHeight.value_or(0)) + '\n' +
             std::to_string(sample.refreshHz.value_or(0)) + '\n' +
             (sample.outputHdrEnabled
                 ? (*sample.outputHdrEnabled ? "output-hdr" : "output-sdr")
@@ -240,6 +243,9 @@ namespace {
                   << sample.xwaylandServerId.value_or(UINT32_MAX)
                   << "; refresh_hz="
                   << sample.refreshHz.value_or(0)
+                  << "; presentation_target="
+                  << sample.outputWidth.value_or(0) << 'x'
+                  << sample.outputHeight.value_or(0)
                   << "; active=";
         if (sample.active)
             std::cerr << (*sample.active ? 1 : 0);
@@ -287,6 +293,8 @@ void Root::publishSurfaceScalingPolicy() noexcept {
         ls::spatialScalingRequested(*this->active_profile);
     const float factor = this->active_profile
         ? this->active_profile->scaling_factor : 1.0F;
+    const bool supersampling = this->active_profile &&
+        this->active_profile->scaling_supersampling;
     const bool processSupported = spatialScalingProcessSupported(
         this->gamescopeEnvironmentDetected,
         this->gamescopeDetected,
@@ -297,6 +305,8 @@ void Root::publishSurfaceScalingPolicy() noexcept {
     ) << 32U;
     const uint64_t packed = packedFactor |
         (enabled ? spatialScalingEnabledBit : uint64_t{0}) |
+        (supersampling
+            ? spatialScalingSupersamplingBit : uint64_t{0}) |
         (processSupported
             ? spatialScalingProcessSupportedBit : uint64_t{0});
     const uint64_t observedSequence =
@@ -344,6 +354,8 @@ SpatialScalingPolicySnapshot Root::surfaceScalingPolicySnapshot()
                 .factor = std::bit_cast<float>(
                     static_cast<uint32_t>(packed >> 32U)
                 ),
+                .supersampling =
+                    (packed & spatialScalingSupersamplingBit) != 0,
             },
             .processSupported =
                 (packed & spatialScalingProcessSupportedBit) != 0,
@@ -377,6 +389,13 @@ Root::Root() :
     this->lastHdrFeedbackSample = initialHdrFeedback.active;
     this->lastHdrActivationSource = initialHdrFeedback.activationSource;
     this->gamescopeDetected = initialHdrFeedback.gamescopeDetected;
+    if (const auto target = confirmedGamescopePresentationTarget(
+            initialHdrFeedback)) {
+        this->gamescopePresentationTarget = VkExtent2D{
+            .width = target->width,
+            .height = target->height,
+        };
+    }
     this->lastGamescopeRefreshHz = initialHdrFeedback.refreshHz;
     this->gamescopeRefreshHz = initialHdrFeedback.refreshHz;
     this->lastHdrFeedbackDiagnosticKey = hdrFeedbackDiagnosticKey(
@@ -397,6 +416,9 @@ Root::Root() :
                   << "; display=" << initialHdrFeedback.display
                   << "; refresh_hz="
                   << initialHdrFeedback.refreshHz.value_or(0)
+                  << "; presentation_target="
+                  << initialHdrFeedback.outputWidth.value_or(0) << 'x'
+                  << initialHdrFeedback.outputHeight.value_or(0)
                   << "; activation_source="
                   << (initialHdrFeedback.activationSource.empty()
                         ? "unavailable" : initialHdrFeedback.activationSource)
@@ -423,6 +445,9 @@ Root::Root() :
                   << initialHdrFeedback.gamescopePid.value_or(UINT32_MAX)
                   << "; server_id="
                   << initialHdrFeedback.xwaylandServerId.value_or(UINT32_MAX)
+                  << "; presentation_target="
+                  << initialHdrFeedback.outputWidth.value_or(0) << 'x'
+                  << initialHdrFeedback.outputHeight.value_or(0)
                   << "; candidates="
                   << (initialHdrFeedback.resolverCandidates.empty()
                         ? "(none)" : initialHdrFeedback.resolverCandidates)
@@ -509,6 +534,14 @@ ConfigurationUpdateResult Root::update() {
         this->lastHdrFeedbackSample = hdrFeedbackSample.active;
         this->lastHdrActivationSource = hdrFeedbackSample.activationSource;
         this->gamescopeDetected = hdrFeedbackSample.gamescopeDetected;
+        this->gamescopePresentationTarget.reset();
+        if (const auto target = confirmedGamescopePresentationTarget(
+                hdrFeedbackSample)) {
+            this->gamescopePresentationTarget = VkExtent2D{
+                .width = target->width,
+                .height = target->height,
+            };
+        }
         if (hdrFeedbackSample.refreshHz != this->lastGamescopeRefreshHz) {
             this->lastGamescopeRefreshHz = hdrFeedbackSample.refreshHz;
             this->gamescopeRefreshHz = hdrFeedbackSample.refreshHz;
@@ -827,6 +860,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     SwapchainCreateModification modification{
         .applicationExtent = createInfo.imageExtent,
         .presentationExtent = createInfo.imageExtent,
+        .gamescopePresentationTarget = this->gamescopePresentationTarget,
     };
     if (!this->active_profile.has_value()) {
         finish();
@@ -868,6 +902,9 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     const bool spatialResourceOwner = spatialScalingOwnedByLayer();
     const bool spatialExtentOwner =
         spatialScalingCapabilityOwnedByLayer();
+    const bool gamescopePresentationTargetRequired =
+        spatialExtentOwner && splitLayerChainEnabled() &&
+        (this->gamescopeEnvironmentDetected || this->gamescopeDetected);
     if (!spatialResourceOwner && !spatialExtentOwner) {
         // The legacy upper split role relays capabilities but neither expands
         // the lower swapchain nor allocates reconstruction resources.
@@ -882,7 +919,9 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             createInfo.imageExtent,
             previousVariableExtents,
             fixedSurfaceContract,
-            presentationPixelBudget
+            presentationPixelBudget,
+            this->gamescopePresentationTarget,
+            gamescopePresentationTargetRequired
         )
         : SpatialScalingCreateDecision{
             .inactiveReason = SpatialScalingInactiveReason::
@@ -1009,6 +1048,20 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << (deviceLocalHeapBytes / (1024 * 1024))
                   << "; variable_presentation_pixel_budget="
                   << presentationPixelBudget
+                  << "; gamescope_presentation_target="
+                  << (this->gamescopePresentationTarget
+                        ? this->gamescopePresentationTarget->width : 0)
+                  << 'x'
+                  << (this->gamescopePresentationTarget
+                        ? this->gamescopePresentationTarget->height : 0)
+                  << "; gamescope_presentation_target_required="
+                  << gamescopePresentationTargetRequired
+                  << "; gamescope_presentation_target_constrained="
+                  << scalingDecision.gamescopePresentationTargetConstrained
+                  << "; supersampling="
+                  << policySnapshot.policy.supersampling
+                  << "; gamescope_presentation_target_bypassed="
+                  << scalingDecision.gamescopePresentationTargetBypassed
                   << "; advertised_source="
                   << (advertised ? advertised->extents.source.width : 0)
                   << 'x'

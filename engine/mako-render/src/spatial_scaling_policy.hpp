@@ -80,6 +80,7 @@ namespace mako::layer {
     struct SpatialScalingPolicy {
         bool enabled{false};
         float factor{1.0F};
+        bool supersampling{false};
     };
 
     /// One coherent policy snapshot used for a fixed-surface capability query.
@@ -204,6 +205,8 @@ namespace mako::layer {
         ApplicationExtentOverrideNoSplit,
         ApplicationExtentMismatch,
         GamescopeWsiSurfaceUnproven,
+        GamescopePresentationTargetUnavailable,
+        GamescopePresentationTargetNoHeadroom,
         VariableSurfaceFeedback,
         VariableSurfaceNoHeadroom,
         VariableSurfaceMemoryBudget,
@@ -236,6 +239,10 @@ namespace mako::layer {
                 return "application-extent-mismatch";
             case SpatialScalingInactiveReason::GamescopeWsiSurfaceUnproven:
                 return "gamescope-wsi-surface-unproven";
+            case SpatialScalingInactiveReason::GamescopePresentationTargetUnavailable:
+                return "gamescope-presentation-target-unavailable";
+            case SpatialScalingInactiveReason::GamescopePresentationTargetNoHeadroom:
+                return "gamescope-presentation-target-no-headroom";
             case SpatialScalingInactiveReason::VariableSurfaceFeedback:
                 return "variable-surface-feedback";
             case SpatialScalingInactiveReason::VariableSurfaceNoHeadroom:
@@ -260,6 +267,8 @@ namespace mako::layer {
         bool retainedPreviousFixedSource{false};
         bool reusedPreviousPresentationBudget{false};
         bool usedBaselinePresentationBudget{false};
+        bool gamescopePresentationTargetConstrained{false};
+        bool gamescopePresentationTargetBypassed{false};
         SpatialScalingInactiveReason inactiveReason{
             SpatialScalingInactiveReason::None
         };
@@ -344,6 +353,48 @@ namespace mako::layer {
             unconstrainedVariablePresentationExtent(source, requestedFactor);
         return unconstrainedRequested.width >= presentation.width &&
             unconstrainedRequested.height >= presentation.height;
+    }
+
+    /// Supersampling changes only the variable Gamescope output envelope. It
+    /// is WSI-neutral on fixed/direct surfaces and when the requested policy
+    /// still resolves to the already active presentation extent.
+    [[nodiscard]] inline bool
+    variableSurfaceSupersamplingChangePreservesEffectiveExtents(
+            const bool variableSurface,
+            const bool spatialScalingContractActive,
+            const VkExtent2D source,
+            const VkExtent2D presentation,
+            const float factor,
+            const bool currentSupersampling,
+            const bool requestedSupersampling,
+            const std::optional<VkExtent2D>& gamescopeTarget) noexcept {
+        if (currentSupersampling == requestedSupersampling)
+            return false;
+        if (!variableSurface || !gamescopeTarget ||
+                gamescopeTarget->width == 0 ||
+                gamescopeTarget->height == 0 ||
+                gamescopeTarget->width == UINT32_MAX ||
+                gamescopeTarget->height == UINT32_MAX) {
+            return true;
+        }
+        if (!spatialScalingContractActive)
+            return false;
+
+        auto requestedPresentation =
+            unconstrainedVariablePresentationExtent(source, factor);
+        if (!requestedSupersampling) {
+            const double targetFactor = std::min(
+                static_cast<double>(gamescopeTarget->width) / source.width,
+                static_cast<double>(gamescopeTarget->height) / source.height
+            );
+            requestedPresentation = unconstrainedVariablePresentationExtent(
+                source,
+                static_cast<float>(std::min(
+                    static_cast<double>(factor), targetFactor
+                ))
+            );
+        }
+        return sameExtent(requestedPresentation, presentation);
     }
 
     enum class SpatialCreateRelayDecision {
@@ -562,6 +613,7 @@ namespace mako::layer {
             SpatialScalingPolicy{
                 .enabled = ls::spatialScalingRequested(profile),
                 .factor = profile.scaling_factor,
+                .supersampling = profile.scaling_supersampling,
             },
             capabilities
         );
@@ -613,6 +665,7 @@ namespace mako::layer {
             SpatialScalingPolicy{
                 .enabled = ls::spatialScalingRequested(profile),
                 .factor = profile.scaling_factor,
+                .supersampling = profile.scaling_supersampling,
             },
             capabilities
         );
@@ -633,7 +686,10 @@ namespace mako::layer {
             const std::optional<FixedSurfaceScalingContract>&
                 fixedContract = std::nullopt,
             const std::optional<uint64_t>
-                variablePresentationPixels = std::nullopt) noexcept {
+                variablePresentationPixels = std::nullopt,
+            const std::optional<VkExtent2D>&
+                gamescopePresentationTarget = std::nullopt,
+            const bool gamescopePresentationTargetRequired = false) noexcept {
         SpatialScalingCreateDecision decision{
             .fixedContract = fixedContract,
         };
@@ -711,6 +767,13 @@ namespace mako::layer {
         // contract instead: retain the application's requested render extent
         // and enlarge the lower WSI image by the configured factor.
         decision.fixedContract.reset();
+        if (gamescopePresentationTargetRequired &&
+                (!gamescopePresentationTarget ||
+                    !fixedSurfaceExtent(*gamescopePresentationTarget))) {
+            decision.inactiveReason = SpatialScalingInactiveReason::
+                GamescopePresentationTargetUnavailable;
+            return decision;
+        }
         if (requestedExtent.width == 0 || requestedExtent.height == 0) {
             decision.inactiveReason =
                 SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
@@ -743,14 +806,39 @@ namespace mako::layer {
         const double maximumHeightFactor =
             static_cast<double>(realCapabilities.maxImageExtent.height) /
             static_cast<double>(requestedExtent.height);
-        const double effectiveFactor = std::min({
+        const double unconstrainedFactor = std::min({
             static_cast<double>(policy.factor),
             maximumWidthFactor,
             maximumHeightFactor,
         });
+        double effectiveFactor = unconstrainedFactor;
+        if (!policy.supersampling && gamescopePresentationTarget &&
+                fixedSurfaceExtent(*gamescopePresentationTarget)) {
+            const double targetWidthFactor =
+                static_cast<double>(gamescopePresentationTarget->width) /
+                static_cast<double>(requestedExtent.width);
+            const double targetHeightFactor =
+                static_cast<double>(gamescopePresentationTarget->height) /
+                static_cast<double>(requestedExtent.height);
+            const double targetFactor = std::min(
+                targetWidthFactor, targetHeightFactor
+            );
+            effectiveFactor = std::min(effectiveFactor, targetFactor);
+            decision.gamescopePresentationTargetConstrained =
+                targetFactor < unconstrainedFactor;
+        } else if (policy.supersampling && gamescopePresentationTarget &&
+                fixedSurfaceExtent(*gamescopePresentationTarget)) {
+            decision.gamescopePresentationTargetBypassed =
+                requestedExtent.width * effectiveFactor >
+                    gamescopePresentationTarget->width ||
+                requestedExtent.height * effectiveFactor >
+                    gamescopePresentationTarget->height;
+        }
         if (effectiveFactor <= 1.0) {
-            decision.inactiveReason =
-                SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
+            decision.inactiveReason = gamescopePresentationTarget
+                ? SpatialScalingInactiveReason::
+                    GamescopePresentationTargetNoHeadroom
+                : SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
             return decision;
         }
 
@@ -847,11 +935,15 @@ namespace mako::layer {
             const std::optional<FixedSurfaceScalingContract>&
                 fixedContract = std::nullopt,
             const std::optional<uint64_t>
-                variablePresentationPixels = std::nullopt) noexcept {
+                variablePresentationPixels = std::nullopt,
+            const std::optional<VkExtent2D>&
+                gamescopePresentationTarget = std::nullopt,
+            const bool gamescopePresentationTargetRequired = false) noexcept {
         return scalingDecisionForCreate(
             SpatialScalingPolicy{
                 .enabled = ls::spatialScalingRequested(profile),
                 .factor = profile.scaling_factor,
+                .supersampling = profile.scaling_supersampling,
             },
             processSupported,
             policyRevision,
@@ -859,7 +951,9 @@ namespace mako::layer {
             requestedExtent,
             previousVariableExtents,
             fixedContract,
-            variablePresentationPixels
+            variablePresentationPixels,
+            gamescopePresentationTarget,
+            gamescopePresentationTargetRequired
         );
     }
 

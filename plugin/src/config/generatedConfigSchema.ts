@@ -104,6 +104,7 @@ export const ALLOW_FP16 = "allow_fp16" as const;
 export const SCALING_ENABLED = "scaling_enabled" as const;
 export const SCALING_METHOD = "scaling_method" as const;
 export const SCALING_FACTOR = "scaling_factor" as const;
+export const SCALING_SUPERSAMPLING = "scaling_supersampling" as const;
 export const SCALING_SHARPNESS = "scaling_sharpness" as const;
 export const FRAME_GENERATION_ENABLED = "frame_generation_enabled" as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD = "frame_generation_refresh_threshold" as const;
@@ -167,8 +168,14 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   scaling_factor: {
     name: "scaling_factor",
     fieldType: ConfigFieldType.FLOAT,
-    default: 1.8,
+    default: 1.5,
     description: "output scaling factor from 1.0x to 2.0x"
+  },
+  scaling_supersampling: {
+    name: "scaling_supersampling",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "allow quality supersampling beyond the proven display target while retaining Vulkan and memory safety ceilings"
   },
   scaling_sharpness: {
     name: "scaling_sharpness",
@@ -329,6 +336,7 @@ export interface ConfigurationData {
   scaling_enabled: boolean;
   scaling_method: string;
   scaling_factor: number;
+  scaling_supersampling: boolean;
   scaling_sharpness: number;
   frame_generation_enabled: boolean;
   frame_generation_refresh_threshold: number;
@@ -370,7 +378,8 @@ export function getDefaults(): ConfigurationData {
     allow_fp16: true,
     scaling_enabled: false,
     scaling_method: "ls1",
-    scaling_factor: 1.8,
+    scaling_factor: 1.5,
+    scaling_supersampling: false,
     scaling_sharpness: 0.8,
     frame_generation_enabled: true,
     frame_generation_refresh_threshold: 0,
@@ -406,6 +415,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     scaling_enabled: ConfigFieldType.BOOLEAN,
     scaling_method: ConfigFieldType.STRING,
     scaling_factor: ConfigFieldType.FLOAT,
+    scaling_supersampling: ConfigFieldType.BOOLEAN,
     scaling_sharpness: ConfigFieldType.FLOAT,
     frame_generation_enabled: ConfigFieldType.BOOLEAN,
     frame_generation_refresh_threshold: ConfigFieldType.INTEGER,

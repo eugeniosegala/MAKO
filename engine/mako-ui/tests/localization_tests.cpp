@@ -134,6 +134,9 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("scalingMethodLs1Performance"),
         QStringLiteral("scalingFactor"),
         QStringLiteral("scalingFactorDesc"),
+        QStringLiteral("scalingSupersampling"),
+        QStringLiteral("scalingSupersamplingDesc"),
+        QStringLiteral("scalingSupersamplingWarning"),
         QStringLiteral("scalingSharpness"),
         QStringLiteral("scalingSharpnessDesc"),
         QStringLiteral("fractionalAdaptive"),
@@ -159,6 +162,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("performanceMode"),
         QStringLiteral("scalingMethod"),
         QStringLiteral("scalingFactor"),
+        QStringLiteral("scalingSupersampling"),
         QStringLiteral("scalingSharpness"),
     };
 

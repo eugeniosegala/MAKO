@@ -28,6 +28,7 @@ def _profile(name: str, multiplier: int) -> dict[str, object]:
         "scaling_enabled": True,
         "scaling_method": "ls1",
         "scaling_factor": 1.5,
+        "scaling_supersampling": False,
         "scaling_sharpness": 0.5,
         "frame_generation_refresh_threshold": 0,
         "base_fps_cap": 45,
@@ -68,7 +69,7 @@ class RuntimeStateTests(unittest.TestCase):
             process_start_ticks: int | None = None,
             error: str | None = None) -> dict[str, object]:
         return {
-            "schema_version": 2,
+            "schema_version": 3,
             "pid": os.getpid(),
             "process_start_ticks": (
                 self.process_start_ticks
@@ -92,6 +93,11 @@ class RuntimeStateTests(unittest.TestCase):
                 "active": role == "spatial-scaling",
                 "activation_supported": True,
                 "inactive_reason": None,
+                "source_width": 960,
+                "source_height": 540,
+                "gamescope_target_width": 1280,
+                "gamescope_target_height": 800,
+                "non_supersampling_factor_ceiling": 4 / 3,
             },
             "requested": _profile(profile, 5),
             "applied": _profile(profile, 2),

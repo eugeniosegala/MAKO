@@ -15,6 +15,7 @@ import {
   SCALING_METHOD_LS1_PERFORMANCE,
   SCALING_METHOD_MAKO,
   SCALING_METHOD_NATIVE,
+  SCALING_SUPERSAMPLING,
   SCALING_SHARPNESS,
   SCALING_SHARPNESS_MAX,
   SCALING_SHARPNESS_MIN,
@@ -30,6 +31,7 @@ interface ScalingControlProps {
   config: ConfigurationData;
   disabled?: boolean;
   runtimeInactiveReason?: string | null;
+  runtimeFactorCeiling?: number | null;
   onConfigChange: (
     fieldName: keyof ConfigurationData,
     value: boolean | number | string,
@@ -40,9 +42,28 @@ export function ScalingControl({
   config,
   disabled = false,
   runtimeInactiveReason = null,
+  runtimeFactorCeiling = null,
   onConfigChange,
 }: ScalingControlProps) {
   const scalerActive = config.scaling_method !== SCALING_METHOD_NATIVE;
+  const steppedRuntimeCeiling = runtimeFactorCeiling === null
+    ? null
+    : Math.max(
+        SCALING_FACTOR_MIN,
+        Math.min(
+          SCALING_FACTOR_MAX,
+          Math.floor((runtimeFactorCeiling + 0.0001) * 10) / 10,
+        ),
+      );
+  const factorMaximum = !config.scaling_supersampling &&
+      steppedRuntimeCeiling !== null
+    ? steppedRuntimeCeiling
+    : SCALING_FACTOR_MAX;
+  const displayedFactor = Math.min(config.scaling_factor, factorMaximum);
+  const factorLimited = !config.scaling_supersampling &&
+    factorMaximum < SCALING_FACTOR_MAX;
+  const factorHasNoHeadroom = !config.scaling_supersampling &&
+    factorMaximum <= SCALING_FACTOR_MIN + 0.0001;
   const scalingMethodOptions = [
     {
       data: SCALING_METHOD_NATIVE,
@@ -142,25 +163,75 @@ export function ScalingControl({
           </PanelSectionRow>
 
           <PanelSectionRow>
-            <SliderField
-              label={`${t("SCALING_FACTOR", "Scale Factor")} (${config.scaling_factor.toFixed(1)}x)`}
+            <ToggleField
+              label={t("SCALING_SUPERSAMPLING", "Quality Supersampling")}
               description={
-                <span style={{ display: "block", paddingTop: "3px" }}>
-                  {t(
-                    "SCALING_FACTOR_DESC",
-                    "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels.",
+                <>
+                  <div>
+                    {t(
+                      "SCALING_SUPERSAMPLING_DESC",
+                      "Allows scaling beyond the display's native output for higher-quality downsampling. This increases GPU and memory load, especially on low-power devices.",
+                    )}
+                  </div>
+                  {config.scaling_supersampling && (
+                    <MakoInlineTip tone="warning">
+                      {t(
+                        "SCALING_SUPERSAMPLING_WARNING",
+                        "Supersampling is active. MAKO may render more pixels than the display can show.",
+                      )}
+                    </MakoInlineTip>
                   )}
-                </span>
+                </>
               }
-              value={config.scaling_factor}
+              checked={config.scaling_supersampling}
+              disabled={disabled}
+              onChange={(value) =>
+                onConfigChange(SCALING_SUPERSAMPLING, value)
+              }
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <SliderField
+              label={`${t("SCALING_FACTOR", "Scale Factor")} (${displayedFactor.toFixed(1)}x${factorLimited ? ` ${t("SCALING_FACTOR_LIMIT_SUFFIX", "display limit")}` : ""})`}
+              description={
+                <>
+                  <span style={{ display: "block", paddingTop: "3px" }}>
+                    {t(
+                      "SCALING_FACTOR_DESC",
+                      "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels.",
+                    )}
+                  </span>
+                  {factorLimited && (
+                    <MakoInlineTip tone="info">
+                      {factorHasNoHeadroom
+                        ? t(
+                            "SCALING_FACTOR_NO_HEADROOM",
+                            "This resolution already fills the display. Lower the in-game resolution or enable Quality Supersampling.",
+                          )
+                        : t(
+                            "SCALING_FACTOR_DEVICE_LIMIT",
+                            "Current display limit: {factor}x. Your saved {saved}x value is preserved; enable Quality Supersampling to use it.",
+                            {
+                              factor: factorMaximum.toFixed(1),
+                              saved: config.scaling_factor.toFixed(1),
+                            },
+                          )}
+                    </MakoInlineTip>
+                  )}
+                </>
+              }
+              value={displayedFactor}
               min={SCALING_FACTOR_MIN}
-              max={SCALING_FACTOR_MAX}
+              max={factorMaximum}
               step={0.1}
               validValues="steps"
               minimumDpadGranularity={0.1}
-              notchCount={11}
+              notchCount={Math.round(
+                (factorMaximum - SCALING_FACTOR_MIN) / 0.1,
+              ) + 1}
               notchTicksVisible
-              disabled={disabled}
+              disabled={disabled || factorHasNoHeadroom}
               onChange={(value) =>
                 onConfigChange(SCALING_FACTOR, Number(value.toFixed(1)))
               }

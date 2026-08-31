@@ -133,6 +133,7 @@ namespace mako::layer {
         live.scaling_enabled = current.scaling_enabled;
         live.scaling_method = current.scaling_method;
         live.scaling_factor = current.scaling_factor;
+        live.scaling_supersampling = current.scaling_supersampling;
         live.scaling_sharpness = current.scaling_sharpness;
         live.flow_scale = current.flow_scale;
         live.performance_mode = current.performance_mode;
@@ -148,6 +149,7 @@ namespace mako::layer {
         bool scalingEnabled{false};
         ls::ScalingMethod scalingMethod{ls::ScalingMethod::Native};
         float scalingFactor{1.0F};
+        bool scalingSupersampling{false};
         float scalingSharpness{0.5F};
         float effectiveFlowScale{ls::GameConfDefaults::flowScale};
         bool effectivePerformanceMode{false};
@@ -166,6 +168,8 @@ namespace mako::layer {
             .scalingMethod = scalingActive
                 ? profile.scaling_method : ls::ScalingMethod::Native,
             .scalingFactor = scalingActive ? profile.scaling_factor : 1.0F,
+            .scalingSupersampling = scalingActive
+                ? profile.scaling_supersampling : false,
             .scalingSharpness = scalingActive
                 ? profile.scaling_sharpness : 0.5F,
             .effectiveFlowScale = ls::effectiveFlowScale(profile),
@@ -185,7 +189,9 @@ namespace mako::layer {
             const RecreatedProfileResourceKey& current,
             const RecreatedProfileResourceKey& requested) noexcept {
         if (current.scalingEnabled != requested.scalingEnabled ||
-                current.scalingMethod != requested.scalingMethod)
+                current.scalingMethod != requested.scalingMethod ||
+                current.scalingSupersampling !=
+                    requested.scalingSupersampling)
             return std::chrono::milliseconds::zero();
         return std::chrono::milliseconds(500);
     }
@@ -328,6 +334,19 @@ namespace mako::layer {
             );
         }
         return static_cast<double>(profile.base_fps_cap);
+    }
+
+    /// A proven Ordered-SDR collapse may ask the presentation pacer to release
+    /// only Adaptive's automatic half-target cap. Manual and Fixed caps remain
+    /// authoritative, and a fresh scheduler resets this per-swapchain proof.
+    [[nodiscard]] inline double effectiveBaseFpsCap(
+            const ls::GameConf& profile,
+            const AdaptiveSchedulerSnapshot& scheduler) {
+        if (profile.adaptive && profile.adaptive_auto_base_fps_cap &&
+                scheduler.automaticBaseCapSuppressed) {
+            return 0.0;
+        }
+        return effectiveBaseFpsCap(profile);
     }
 
     [[nodiscard]] inline bool dynamicCadenceRecoveryEnabled(
@@ -480,7 +499,8 @@ namespace mako::layer {
             const bool spatialScalerActive = false,
             const bool frameGenerationPrivateRebuildAvailable = false,
             const bool spatialScalingActivationSupported = true,
-            const bool spatialScalingEffectiveExtentUnchanged = false) {
+            const bool spatialScalingEffectiveExtentUnchanged = false,
+            const bool spatialSupersamplingEffectiveExtentUnchanged = false) {
         ls::GameConf applied = next;
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
@@ -526,10 +546,13 @@ namespace mako::layer {
             current.scaling_method != next.scaling_method;
         const bool scalingFactorChanged =
             current.scaling_factor != next.scaling_factor;
+        const bool scalingSupersamplingChanged =
+            current.scaling_supersampling != next.scaling_supersampling;
         const bool scalingSharpnessChanged =
             current.scaling_sharpness != next.scaling_sharpness;
         const bool scalerSettingsChanged = scalingMethodChanged ||
-            scalingFactorChanged || scalingSharpnessChanged;
+            scalingFactorChanged || scalingSupersamplingChanged ||
+            scalingSharpnessChanged;
         const bool spatialScalingResourcesChanged =
             current.scaling_enabled == next.scaling_enabled &&
             (ls::spatialScalingRequested(current) ||
@@ -544,19 +567,25 @@ namespace mako::layer {
         // changing it can make the current source eligible.
         const bool spatialScalingDormantUpdate =
             spatialScalingResourcesChanged && !spatialScalerActive &&
-            (!scalingFactorChanged || !spatialScalingActivationSupported);
+            (!(scalingFactorChanged || scalingSupersamplingChanged) ||
+             !spatialScalingActivationSupported);
         const bool spatialScalingExtentNoOp =
-            spatialScalingResourcesChanged && scalingFactorChanged &&
-            spatialScalingEffectiveExtentUnchanged;
+            spatialScalingResourcesChanged &&
+            (scalingFactorChanged || scalingSupersamplingChanged) &&
+            (!scalingFactorChanged ||
+             spatialScalingEffectiveExtentUnchanged) &&
+            (!scalingSupersamplingChanged ||
+             spatialSupersamplingEffectiveExtentUnchanged);
         const bool spatialScalingLiveRebuild =
             spatialScalingResourcesChanged &&
             spatialScalerActive &&
-            !scalingFactorChanged;
+            !scalingFactorChanged && !scalingSupersamplingChanged;
         if (spatialScalingResourcesChanged &&
                 !spatialScalingDormantUpdate &&
                 !spatialScalingExtentNoOp) {
             applied.scaling_method = current.scaling_method;
             applied.scaling_factor = current.scaling_factor;
+            applied.scaling_supersampling = current.scaling_supersampling;
             applied.scaling_sharpness = current.scaling_sharpness;
             swapchainRecreationDeferred = !spatialScalingLiveRebuild;
         }

@@ -74,7 +74,8 @@ namespace ls {
         static constexpr bool frameGenerationEnabled = true;
         static constexpr bool scalingEnabled = false;
         static constexpr ScalingMethod scalingMethod = ScalingMethod::Ls1;
-        static constexpr float scalingFactor = 1.8F;
+        static constexpr float scalingFactor = 1.5F;
+        static constexpr bool scalingSupersampling = false;
         static constexpr float scalingSharpness = 0.8F;
         static constexpr uint32_t frameGenerationRefreshThreshold = 0;
         static constexpr uint32_t baseFpsCap = 0;
@@ -137,6 +138,8 @@ namespace ls {
         ScalingMethod scaling_method{GameConfDefaults::scalingMethod};
         /// ratio between the source and output dimensions when scaling
         float scaling_factor{GameConfDefaults::scalingFactor};
+        /// allow the scaled presentation to exceed a proven display target
+        bool scaling_supersampling{GameConfDefaults::scalingSupersampling};
         /// normalized scaler sharpening strength
         float scaling_sharpness{GameConfDefaults::scalingSharpness};
         /// pause synthesis at or below a confirmed refresh rate; zero disables it

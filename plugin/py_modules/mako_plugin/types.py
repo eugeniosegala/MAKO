@@ -180,6 +180,7 @@ class RuntimeProfileSnapshot(TypedDict):
     scaling_enabled: bool
     scaling_method: str
     scaling_factor: float
+    scaling_supersampling: bool
     scaling_sharpness: float
     frame_generation_refresh_threshold: int
     base_fps_cap: int
@@ -214,6 +215,11 @@ class RuntimeSpatialScalingState(TypedDict):
     active: bool
     activation_supported: bool
     inactive_reason: Optional[str]
+    source_width: int
+    source_height: int
+    gamescope_target_width: int
+    gamescope_target_height: int
+    non_supersampling_factor_ceiling: Optional[float]
 
 
 class RuntimeContextState(TypedDict):

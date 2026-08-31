@@ -19,7 +19,7 @@ from .types import (
 )
 
 
-_SCHEMA_VERSION = 2
+_SCHEMA_VERSION = 3
 _MAXIMUM_STATUS_BYTES = 64 * 1024
 _VALID_ROLES = frozenset(("frame-generation", "spatial-scaling"))
 _VALID_PHASES = frozenset((
@@ -89,6 +89,10 @@ def _profile(value: object, field: str) -> RuntimeProfileSnapshot:
         ),
         "scaling_factor": _number(
             value.get("scaling_factor"), f"{field}.scaling_factor"
+        ),
+        "scaling_supersampling": _boolean(
+            value.get("scaling_supersampling"),
+            f"{field}.scaling_supersampling",
         ),
         "scaling_sharpness": _number(
             value.get("scaling_sharpness"), f"{field}.scaling_sharpness"
@@ -171,6 +175,11 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
     inactive_reason = value.get("inactive_reason")
     if inactive_reason is not None and not isinstance(inactive_reason, str):
         raise ValueError("spatial_scaling.inactive_reason must be a string or null")
+    ceiling = value.get("non_supersampling_factor_ceiling")
+    if ceiling is not None:
+        ceiling = _number(
+            ceiling, "spatial_scaling.non_supersampling_factor_ceiling"
+        )
     return {
         "active": _boolean(value.get("active"), "spatial_scaling.active"),
         "activation_supported": _boolean(
@@ -178,6 +187,21 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
             "spatial_scaling.activation_supported",
         ),
         "inactive_reason": inactive_reason,
+        "source_width": _integer(
+            value.get("source_width"), "spatial_scaling.source_width"
+        ),
+        "source_height": _integer(
+            value.get("source_height"), "spatial_scaling.source_height"
+        ),
+        "gamescope_target_width": _integer(
+            value.get("gamescope_target_width"),
+            "spatial_scaling.gamescope_target_width",
+        ),
+        "gamescope_target_height": _integer(
+            value.get("gamescope_target_height"),
+            "spatial_scaling.gamescope_target_height",
+        ),
+        "non_supersampling_factor_ceiling": ceiling,
     }
 
 

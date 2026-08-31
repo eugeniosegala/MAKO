@@ -176,6 +176,7 @@ export interface RuntimeProfileSnapshot {
   scaling_enabled: boolean;
   scaling_method: string;
   scaling_factor: number;
+  scaling_supersampling: boolean;
   scaling_sharpness: number;
   frame_generation_refresh_threshold: number;
   base_fps_cap: number;
@@ -206,6 +207,11 @@ export interface RuntimeSpatialScalingState {
   active: boolean;
   activation_supported: boolean;
   inactive_reason: Nullable<string>;
+  source_width: number;
+  source_height: number;
+  gamescope_target_width: number;
+  gamescope_target_height: number;
+  non_supersampling_factor_ceiling: Nullable<number>;
 }
 
 export interface RuntimeContextState {

@@ -78,6 +78,7 @@ struct GamescopeHdrFeedbackReader::Impl {
     decltype(&XCloseDisplay) closeDisplay{nullptr};
     decltype(&XInternAtom) internAtom{nullptr};
     decltype(&XDefaultRootWindow) defaultRootWindow{nullptr};
+    decltype(&XGetWindowAttributes) getWindowAttributes{nullptr};
     decltype(&XGetWindowProperty) getWindowProperty{nullptr};
     decltype(&XFree) freeData{nullptr};
 
@@ -256,6 +257,9 @@ struct GamescopeHdrFeedbackReader::Impl {
                     this->defaultRootWindow, "XDefaultRootWindow"
                 ) &&
                 this->resolve(
+                    this->getWindowAttributes, "XGetWindowAttributes"
+                ) &&
+                this->resolve(
                     this->getWindowProperty, "XGetWindowProperty"
                 ) &&
                 this->resolve(this->freeData, "XFree");
@@ -422,6 +426,15 @@ struct GamescopeHdrFeedbackReader::Impl {
             this->resolverStatus = sample.status;
             this->closeSelectedDisplay();
             return sample;
+        }
+        if (sample.gamescopeDetected) {
+            XWindowAttributes attributes{};
+            if (this->getWindowAttributes(
+                    this->display, this->root, &attributes) != 0 &&
+                    attributes.width > 0 && attributes.height > 0) {
+                sample.outputWidth = static_cast<uint32_t>(attributes.width);
+                sample.outputHeight = static_cast<uint32_t>(attributes.height);
+            }
         }
         sample.refreshHz = this->readCardinal(
             this->display, this->root, gamescopeRefreshProperty

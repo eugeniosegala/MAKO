@@ -69,6 +69,7 @@ MAKO_INSTALLER_NO_LAUNCH=1 \
 
 grep -Fq 'exit 42' "$install_prefix/bin/mako-ui" || fail "update did not replace the UI"
 printf '%s\n' 'user modification' > "$install_prefix/share/applications/io.github.eugeniosegala.mako.desktop"
+rm -f -- "$install_prefix/bin/mako-ui"
 mkdir -p "$config_home/mako-render"
 printf '%s\n' 'version = 1' > "$config_home/mako-render/conf.toml"
 decky_plugin_dir="$test_root/homebrew/plugins/Mako"

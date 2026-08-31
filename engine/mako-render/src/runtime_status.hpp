@@ -58,6 +58,11 @@ namespace mako::layer {
         bool spatialScalingActive{false};
         bool spatialScalingActivationSupported{true};
         std::optional<std::string> spatialScalingInactiveReason;
+        uint32_t spatialSourceWidth{0};
+        uint32_t spatialSourceHeight{0};
+        uint32_t gamescopeTargetWidth{0};
+        uint32_t gamescopeTargetHeight{0};
+        std::optional<double> nonSupersamplingFactorCeiling;
         std::optional<std::string> error;
     };
 

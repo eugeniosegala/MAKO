@@ -252,6 +252,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             **ConfigurationManager.get_defaults(),
             "scaling_enabled": True,
             "scaling_factor": 1.8,
+            "scaling_supersampling": True,
             "scaling_sharpness": 0.7,
         }
 
@@ -261,10 +262,12 @@ class ConfigurationBoundaryTests(unittest.TestCase):
 
         self.assertIn("scaling_enabled = true", toml_content)
         self.assertIn("scaling_factor = 1.8", toml_content)
+        self.assertIn("scaling_supersampling = true", toml_content)
         self.assertIn("scaling_sharpness = 0.7", toml_content)
         for field in (
             "scaling_enabled",
             "scaling_factor",
+            "scaling_supersampling",
             "scaling_sharpness",
         ):
             with self.subTest(field=field):

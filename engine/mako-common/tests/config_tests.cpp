@@ -48,6 +48,7 @@ namespace {
             left.scaling_enabled == right.scaling_enabled &&
             left.scaling_method == right.scaling_method &&
             left.scaling_factor == right.scaling_factor &&
+            left.scaling_supersampling == right.scaling_supersampling &&
             left.scaling_sharpness == right.scaling_sharpness &&
             left.frame_generation_refresh_threshold ==
                 right.frame_generation_refresh_threshold &&
@@ -80,6 +81,7 @@ adaptive = false
 scaling_enabled = true
 scaling_method = "ls1"
 scaling_factor = 1.75
+scaling_supersampling = true
 scaling_sharpness = 0.6
 frame_generation_refresh_threshold = 60
 base_fps_cap = 60
@@ -104,6 +106,8 @@ int main() {
             defaults.scaling_method ==
                 ls::GameConfDefaults::scalingMethod &&
             defaults.scaling_factor == ls::GameConfDefaults::scalingFactor &&
+            defaults.scaling_supersampling ==
+                ls::GameConfDefaults::scalingSupersampling &&
             defaults.scaling_sharpness ==
                 ls::GameConfDefaults::scalingSharpness &&
             defaults.frame_generation_refresh_threshold ==
@@ -377,6 +381,7 @@ scaling_sharpness = 0.5
     setenv("MAKO_SCALING_ENABLED", "1", 1);
     setenv("MAKO_SCALING_METHOD", "native", 1);
     setenv("MAKO_SCALING_FACTOR", "2", 1);
+    setenv("MAKO_SCALING_SUPERSAMPLING", "1", 1);
     setenv("MAKO_SCALING_SHARPNESS", "0.75", 1);
     const ls::WatchedConfig environmentConfig;
     expect(environmentConfig.get().profiles().front().dynamic_cadence_recovery &&
@@ -393,6 +398,7 @@ scaling_sharpness = 0.5
             ls::spatialScalingRequested(
                 environmentConfig.get().profiles().front()) &&
             environmentConfig.get().profiles().front().scaling_factor == 2.0F &&
+            environmentConfig.get().profiles().front().scaling_supersampling &&
             environmentConfig.get().profiles().front().scaling_sharpness == 0.75F,
         "Environment configuration must expose scaling and cadence policy");
     unsetenv("MAKO_DYNAMIC_CADENCE_RECOVERY");
@@ -402,6 +408,7 @@ scaling_sharpness = 0.5
     unsetenv("MAKO_SCALING_ENABLED");
     unsetenv("MAKO_SCALING_METHOD");
     unsetenv("MAKO_SCALING_FACTOR");
+    unsetenv("MAKO_SCALING_SUPERSAMPLING");
     unsetenv("MAKO_SCALING_SHARPNESS");
     unsetenv("MAKO_ADAPTIVE");
     unsetenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");

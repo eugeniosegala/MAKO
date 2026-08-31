@@ -15,7 +15,10 @@ import {
   getDefaults,
 } from "../config/configSchema";
 import { RUNTIME_STATUS_POLL_INTERVAL_MS } from "../config/uiTiming";
-import { scalingInactiveReason } from "../utils/runtimeScalingUtils";
+import {
+  runtimeScalingUiState,
+  type RuntimeScalingUiState,
+} from "../utils/runtimeScalingUtils";
 import { showErrorToast, ToastMessages } from "../utils/toastUtils";
 import t from "../i18n/i18n";
 
@@ -131,22 +134,35 @@ export function useRuntimeScalingStatus(
   profileName: string,
   enabled: boolean,
 ) {
-  const [inactiveReason, setInactiveReason] = useState<string | null>(null);
+  const [runtimeState, setRuntimeState] = useState<RuntimeScalingUiState>({
+    inactiveReason: null,
+    nonSupersamplingFactorCeiling: null,
+  });
 
   useEffect(() => {
     let active = true;
     const refresh = async () => {
       if (!enabled) {
-        if (active) setInactiveReason(null);
+        if (active) {
+          setRuntimeState({
+            inactiveReason: null,
+            nonSupersamplingFactorCeiling: null,
+          });
+        }
         return;
       }
       try {
         const status = await getRuntimeStatus(profileName);
         if (active) {
-          setInactiveReason(scalingInactiveReason(status, profileName));
+          setRuntimeState(runtimeScalingUiState(status, profileName));
         }
       } catch {
-        if (active) setInactiveReason(null);
+        if (active) {
+          setRuntimeState({
+            inactiveReason: null,
+            nonSupersamplingFactorCeiling: null,
+          });
+        }
       }
     };
 
@@ -158,7 +174,7 @@ export function useRuntimeScalingStatus(
     };
   }, [enabled, profileName]);
 
-  return inactiveReason;
+  return runtimeState;
 }
 
 export function useMakoConfig() {

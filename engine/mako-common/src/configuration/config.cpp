@@ -44,7 +44,8 @@ multiplier = 4
 frame_generation_enabled = true
 scaling_enabled = false
 scaling_method = 'ls1'
-scaling_factor = 1.8
+scaling_factor = 1.5
+scaling_supersampling = false
 scaling_sharpness = 0.8
 frame_generation_refresh_threshold = 0
 base_fps_cap = 0
@@ -87,6 +88,7 @@ ConfigFile::ConfigFile() {
         .scaling_enabled = GameConfDefaults::scalingEnabled,
         .scaling_method = GameConfDefaults::scalingMethod,
         .scaling_factor = GameConfDefaults::scalingFactor,
+        .scaling_supersampling = GameConfDefaults::scalingSupersampling,
         .scaling_sharpness = GameConfDefaults::scalingSharpness,
         .frame_generation_refresh_threshold =
             GameConfDefaults::frameGenerationRefreshThreshold,
@@ -289,6 +291,9 @@ namespace {
             .scaling_factor = tbl["scaling_factor"].value_or(
                 GameConfDefaults::scalingFactor
             ),
+            .scaling_supersampling = tbl["scaling_supersampling"].value_or(
+                GameConfDefaults::scalingSupersampling
+            ),
             .scaling_sharpness = tbl["scaling_sharpness"].value_or(
                 GameConfDefaults::scalingSharpness
             ),
@@ -364,6 +369,7 @@ namespace {
             .scaling_enabled = GameConfDefaults::scalingEnabled,
             .scaling_method = GameConfDefaults::scalingMethod,
             .scaling_factor = GameConfDefaults::scalingFactor,
+            .scaling_supersampling = GameConfDefaults::scalingSupersampling,
             .scaling_sharpness = GameConfDefaults::scalingSharpness,
             .frame_generation_refresh_threshold =
                 GameConfDefaults::frameGenerationRefreshThreshold,
@@ -398,6 +404,11 @@ namespace {
             conf.scaling_method = scalingMethodFromString(scaling_method);
         const char* scaling_factor = std::getenv("MAKO_SCALING_FACTOR");
         if (scaling_factor) conf.scaling_factor = std::stof(scaling_factor);
+        const char* scaling_supersampling =
+            std::getenv("MAKO_SCALING_SUPERSAMPLING");
+        if (scaling_supersampling)
+            conf.scaling_supersampling =
+                std::string(scaling_supersampling) != "0";
         const char* scaling_sharpness = std::getenv("MAKO_SCALING_SHARPNESS");
         if (scaling_sharpness)
             conf.scaling_sharpness = std::stof(scaling_sharpness);
@@ -515,6 +526,7 @@ void ConfigFile::write(const std::filesystem::path& path) const {
         profile.insert("scaling_enabled", conf.scaling_enabled);
         profile.insert("scaling_method", scalingMethodName(conf.scaling_method));
         profile.insert("scaling_factor", conf.scaling_factor);
+        profile.insert("scaling_supersampling", conf.scaling_supersampling);
         profile.insert("scaling_sharpness", conf.scaling_sharpness);
         profile.insert(
             "frame_generation_refresh_threshold",

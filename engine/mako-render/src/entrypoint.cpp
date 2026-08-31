@@ -1862,8 +1862,17 @@ namespace {
                 SpatialCreateRelayDecision::Split;
             const bool lowerCreateNativeDecision = lowerCreateDecision ==
                 SpatialCreateRelayDecision::Native;
-            if (!modification.spatialScalingActive &&
-                    lowerCreateSplitDecision) {
+            if (lowerCreateSplitDecision) {
+                const bool relayAdjustedUpperPrediction =
+                    !modification.spatialScalingActive ||
+                    !sameExtent(
+                        modification.applicationExtent,
+                        lowerCreateRelay->contract.extents.source
+                    ) ||
+                    !sameExtent(
+                        modification.presentationExtent,
+                        lowerCreateRelay->contract.extents.presentation
+                    );
                 modification.applicationExtent =
                     lowerCreateRelay->contract.extents.source;
                 modification.presentationExtent =
@@ -1886,6 +1895,8 @@ namespace {
                           << "; surface_extent_mode=variable"
                           << "; source_presentation_split=1"
                           << "; active=1"
+                          << "; relay_adjusted_upper_prediction="
+                          << relayAdjustedUpperPrediction
                           << "; pipeline=combined-cost-aware\n";
             } else if (lowerCreateNativeDecision) {
                 // The lower extent owner is authoritative even when the upper
@@ -1995,6 +2006,8 @@ namespace {
                 .colorSpace = newInfo.imageColorSpace,
                 .applicationExtent = modification.applicationExtent,
                 .extent = newInfo.imageExtent,
+                .gamescopePresentationTarget =
+                    modification.gamescopePresentationTarget,
                 .presentMode = newInfo.presentMode,
                 .privateOrderedTransport =
                     modification.privateOrderedTransport,

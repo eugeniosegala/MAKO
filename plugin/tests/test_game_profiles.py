@@ -170,7 +170,7 @@ class GameProfileTests(unittest.TestCase):
         )["profiles"]["mako"]
 
         self.assertFalse(profile["scaling_enabled"])
-        self.assertEqual(profile["scaling_factor"], 1.8)
+        self.assertEqual(profile["scaling_factor"], 1.5)
         self.assertEqual(profile["scaling_sharpness"], 0.8)
         self.assertFalse(profile["frame_generation_enabled"])
 
@@ -359,6 +359,29 @@ class GameProfileTests(unittest.TestCase):
         self.assertTrue(saved["scaling_enabled"])
         self.assertEqual(saved["scaling_factor"], 1.8)
         self.assertEqual(saved["scaling_sharpness"], 0.7)
+
+    def test_scaling_factor_patch_preserves_persisted_supersampling(self):
+        supersampling_result = self.service.update_profile_config_fields(
+            "mako", {"scaling_supersampling": True}
+        )
+        self.assertTrue(supersampling_result["success"])
+        self.assertIn(
+            "scaling_supersampling = true",
+            self.service.config_file_path.read_text(encoding="utf-8"),
+        )
+
+        factor_result = self.service.update_profile_config_fields(
+            "mako", {"scaling_factor": 1.6}
+        )
+
+        self.assertTrue(factor_result["success"])
+        saved = self.service.get_profile_config("mako")["config"]
+        self.assertTrue(saved["scaling_supersampling"])
+        self.assertEqual(saved["scaling_factor"], 1.6)
+        self.assertIn(
+            "scaling_supersampling = true",
+            self.service.config_file_path.read_text(encoding="utf-8"),
+        )
 
     def test_field_update_merges_with_latest_canonical_profile(self):
         existing = dict(ConfigurationManager.get_defaults())

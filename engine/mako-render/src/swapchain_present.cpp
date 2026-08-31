@@ -1925,14 +1925,18 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     AdaptiveSchedulerSnapshot schedulerSnapshot;
     bool handoffEligible = false;
     bool cadenceBaseCapEligible = false;
+    bool automaticBaseCapSuppressed = false;
     if (this->adaptiveScheduler) {
         schedulerSnapshot = this->adaptiveScheduler->snapshot();
+        automaticBaseCapSuppressed =
+            effectiveBaseFpsCap(this->profile, schedulerSnapshot) <= 0.0 &&
+            effectiveBaseFpsCap(this->profile) > 0.0;
         cadenceBaseCapEligible = smoothCadenceBaseCapEligible(
             this->profile,
             this->privateOrderedTransport,
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz
-        );
+        ) && !automaticBaseCapSuppressed;
         handoffEligible = smoothCadencePacerHandoffActive(
             this->profile,
             this->privateOrderedTransport,
@@ -1991,7 +1995,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     const double baseFpsCap = handoff.active
         ? 0.0
         : cadenceBaseCap.framesPerSecond.value_or(
-            effectiveBaseFpsCap(this->profile)
+            effectiveBaseFpsCap(this->profile, schedulerSnapshot)
         );
     const auto limiterDeadline = this->realFramePacer.schedule(
         limiterArrival, baseFpsCap

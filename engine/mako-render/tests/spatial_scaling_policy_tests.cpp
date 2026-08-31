@@ -528,7 +528,15 @@ int main() {
             "swapchain-format-unsupported" &&
             std::string_view(spatialScalingInactiveReasonName(
                 SpatialScalingInactiveReason::GamescopeWsiSurfaceUnproven)) ==
-            "gamescope-wsi-surface-unproven",
+            "gamescope-wsi-surface-unproven" &&
+            std::string_view(spatialScalingInactiveReasonName(
+                SpatialScalingInactiveReason::
+                    GamescopePresentationTargetUnavailable)) ==
+            "gamescope-presentation-target-unavailable" &&
+            std::string_view(spatialScalingInactiveReasonName(
+                SpatialScalingInactiveReason::
+                    GamescopePresentationTargetNoHeadroom)) ==
+            "gamescope-presentation-target-no-headroom",
         "Inactive reason diagnostics must retain stable machine-readable names");
 
     VkSurfaceCapabilitiesKHR variableCreate{
@@ -612,6 +620,90 @@ int main() {
         .minImageExtent = {16, 16},
         .maxImageExtent = {8192, 8192},
     };
+    profile.scaling_factor = 1.8F;
+    const auto unboundedVariablePresentation = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {1280, 720}
+    );
+    expect(unboundedVariablePresentation.extents && sameExtent(
+            unboundedVariablePresentation.extents->presentation,
+            {2302, 1294}
+        ),
+        "A standalone variable surface without a proven output must retain the requested factor");
+    const auto missingRequiredGamescopeTarget = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {1280, 720},
+        std::nullopt, std::nullopt, std::nullopt, std::nullopt, true
+    );
+    expect(!missingRequiredGamescopeTarget.extents &&
+            missingRequiredGamescopeTarget.inactiveReason ==
+                SpatialScalingInactiveReason::
+                    GamescopePresentationTargetUnavailable,
+        "A managed variable Gamescope surface without a proven target must fail closed");
+    const auto deckNoHeadroom = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {1280, 720},
+        std::nullopt, std::nullopt, std::nullopt,
+        VkExtent2D{1280, 800}, true
+    );
+    expect(!deckNoHeadroom.extents &&
+            deckNoHeadroom.gamescopePresentationTargetConstrained &&
+            deckNoHeadroom.inactiveReason == SpatialScalingInactiveReason::
+                GamescopePresentationTargetNoHeadroom,
+        "A Deck 720p source must not supersample past its 1280x800 output");
+    const auto deckConstrained = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {960, 540},
+        std::nullopt, std::nullopt, std::nullopt,
+        VkExtent2D{1280, 800}, true
+    );
+    expect(deckConstrained.extents &&
+            deckConstrained.gamescopePresentationTargetConstrained &&
+            sameExtent(deckConstrained.extents->source, {960, 540}) &&
+            sameExtent(deckConstrained.extents->presentation, {1280, 720}),
+        "A Deck variable surface must aspect-fit scaling into the real output ceiling");
+    profile.scaling_supersampling = true;
+    const auto deckSupersampled = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {960, 540},
+        std::nullopt, std::nullopt, std::nullopt,
+        VkExtent2D{1280, 800}, true
+    );
+    expect(deckSupersampled.extents &&
+            !deckSupersampled.gamescopePresentationTargetConstrained &&
+            deckSupersampled.gamescopePresentationTargetBypassed &&
+            sameExtent(
+                deckSupersampled.extents->presentation, {1726, 970}
+            ),
+        "Quality supersampling must deliberately exceed a proven Deck output target");
+    expect(!variableSurfaceSupersamplingChangePreservesEffectiveExtents(
+            true, true, {960, 540}, {1280, 720}, 1.8F,
+            false, true, VkExtent2D{1280, 800}),
+        "Enabling supersampling above a clamped target must require an extent transition");
+    expect(variableSurfaceSupersamplingChangePreservesEffectiveExtents(
+            false, true, {960, 540}, {1280, 720}, 1.8F,
+            false, true, VkExtent2D{1280, 800}),
+        "A fixed surface must treat supersampling as a live no-op");
+    profile.scaling_supersampling = false;
+    const auto deckBelowCeiling = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {640, 360},
+        std::nullopt, std::nullopt, std::nullopt,
+        VkExtent2D{1280, 800}, true
+    );
+    expect(deckBelowCeiling.extents &&
+            !deckBelowCeiling.gamescopePresentationTargetConstrained &&
+            sameExtent(deckBelowCeiling.extents->presentation, {1150, 646}),
+        "A requested factor below the Deck output ceiling must remain unchanged");
+    const auto dockedConstrained = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {1280, 720},
+        std::nullopt, std::nullopt, std::nullopt,
+        VkExtent2D{1920, 1080}, true
+    );
+    expect(dockedConstrained.extents &&
+            dockedConstrained.gamescopePresentationTargetConstrained &&
+            sameExtent(
+                dockedConstrained.extents->presentation, {1920, 1080}
+            ),
+        "A docked target must cap scaling without changing source aspect ratio");
+    expect(variableSurfaceFactorChangePreservesEffectiveExtents(
+            true, true, {960, 540}, {1280, 720}, 1.8F, 1.5F),
+        "A live factor edit that still reaches the Gamescope ceiling must avoid redundant reconstruction");
+    profile.scaling_factor = 2.0F;
     constexpr VkDeviceSize gibibyte = uint64_t{1024} * 1024 * 1024;
     const auto twoGiB = memoryProperties(2 * gibibyte);
     const auto eightGiB = memoryProperties(8 * gibibyte);

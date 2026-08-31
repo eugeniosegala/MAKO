@@ -76,7 +76,7 @@ export function Content() {
     loadProfileConfig: loadMakoConfig,
     syncCurrentProfile,
   });
-  const scalingInactiveReason = useRuntimeScalingStatus(
+  const scalingRuntimeState = useRuntimeScalingStatus(
     editingProfile,
     Boolean(isInstalled && mainRunningApp),
   );
@@ -203,7 +203,10 @@ export function Content() {
             <ScalingControl
               config={config}
               disabled={engineUpdateRequired}
-              runtimeInactiveReason={scalingInactiveReason}
+              runtimeInactiveReason={scalingRuntimeState.inactiveReason}
+              runtimeFactorCeiling={
+                scalingRuntimeState.nonSupersamplingFactorCeiling
+              }
               onConfigChange={handleConfigChange}
             />
 

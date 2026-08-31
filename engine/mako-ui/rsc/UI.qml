@@ -249,6 +249,20 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
+                        title: t.scalingSupersampling
+                        description: t.scalingSupersamplingDesc + (backend.scaling_supersampling ? "\n\n" + t.scalingSupersamplingWarning : "")
+                        visible: backend.scaling_enabled
+                        enabled: backend.scaling_enabled
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.scaling_supersampling
+                            onToggled: backend.scaling_supersampling = checked
+                        }
+                    }
+
+                    GroupEntry {
                         title: t.scalingFactor
                         description: t.scalingFactorDesc
                         visible: backend.scaling_enabled

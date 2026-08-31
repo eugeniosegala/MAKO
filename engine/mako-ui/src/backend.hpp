@@ -41,6 +41,7 @@ namespace mako::ui {
         Q_PROPERTY(bool scaling_enabled READ getScalingEnabled WRITE scalingEnabledUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString scaling_method READ getScalingMethod WRITE scalingMethodUpdated NOTIFY refreshUI)
         Q_PROPERTY(float scaling_factor READ getScalingFactor WRITE scalingFactorUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool scaling_supersampling READ getScalingSupersampling WRITE scalingSupersamplingUpdated NOTIFY refreshUI)
         Q_PROPERTY(float scaling_sharpness READ getScalingSharpness WRITE scalingSharpnessUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint frame_generation_refresh_threshold READ getFrameGenerationRefreshThreshold WRITE frameGenerationRefreshThresholdUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint base_fps_cap READ getBaseFPSCap WRITE baseFPSCapUpdated NOTIFY refreshUI)
@@ -165,6 +166,10 @@ namespace mako::ui {
         [[nodiscard]] float getScalingFactor() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingFactor)
             return conf.scaling_factor;
+        }
+        [[nodiscard]] bool getScalingSupersampling() const {
+            VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingSupersampling)
+            return conf.scaling_supersampling;
         }
         [[nodiscard]] float getScalingSharpness() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingSharpness)
@@ -395,6 +400,11 @@ namespace mako::ui {
                 ls::GameConfLimits::minimumScalingFactor,
                 ls::GameConfLimits::maximumScalingFactor
             );
+            MARK_DIRTY()
+        }
+        void scalingSupersamplingUpdated(bool scaling_supersampling) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.scaling_supersampling = scaling_supersampling;
             MARK_DIRTY()
         }
         void scalingSharpnessUpdated(float scaling_sharpness) {

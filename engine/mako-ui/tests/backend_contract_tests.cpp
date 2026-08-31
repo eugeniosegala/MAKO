@@ -40,7 +40,8 @@ void test_scaling_properties() {
     static_assert(!ls::GameConfDefaults::scalingEnabled);
     static_assert(ls::GameConfDefaults::scalingMethod ==
         ls::ScalingMethod::Ls1);
-    static_assert(ls::GameConfDefaults::scalingFactor == 1.8F);
+    static_assert(ls::GameConfDefaults::scalingFactor == 1.5F);
+    static_assert(!ls::GameConfDefaults::scalingSupersampling);
     static_assert(ls::GameConfDefaults::scalingSharpness == 0.8F);
     static_assert(ls::GameConfLimits::minimumScalingFactor == 1.0F);
     static_assert(ls::GameConfLimits::maximumScalingFactor == 2.0F);
@@ -50,6 +51,7 @@ void test_scaling_properties() {
     require_property("scaling_enabled", "bool", true, false);
     require_property("scaling_method", "QString", true, false);
     require_property("scaling_factor", "float", true, false);
+    require_property("scaling_supersampling", "bool", true, false);
     require_property("scaling_sharpness", "float", true, false);
     require_property("minimum_scaling_factor", "float", false, true);
     require_property("maximum_scaling_factor", "float", false, true);
@@ -148,10 +150,13 @@ void test_independent_scaling_group() {
         "Scaling group does not bind the method property");
     require(scaling_group.contains(QStringLiteral("backend.scaling_factor")),
         "Scaling group does not bind the factor property");
+    require(scaling_group.contains(
+                QStringLiteral("backend.scaling_supersampling")),
+        "Scaling group does not bind the supersampling property");
     require(scaling_group.contains(QStringLiteral("backend.scaling_sharpness")),
         "Scaling group does not bind the sharpness property");
     require(scaling_group.count(
-            QStringLiteral("visible: backend.scaling_enabled")) == 3 &&
+            QStringLiteral("visible: backend.scaling_enabled")) == 4 &&
             scaling_group.count(QStringLiteral(
                 "visible: backend.scaling_enabled && backend.scaling_method !== \"native\"")) == 1,
         "Native must retain Scale Factor while hiding model-only sharpness");

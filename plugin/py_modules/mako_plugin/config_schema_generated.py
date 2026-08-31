@@ -14,6 +14,7 @@ ALLOW_FP16 = "allow_fp16"
 SCALING_ENABLED = "scaling_enabled"
 SCALING_METHOD = "scaling_method"
 SCALING_FACTOR = "scaling_factor"
+SCALING_SUPERSAMPLING = "scaling_supersampling"
 SCALING_SHARPNESS = "scaling_sharpness"
 FRAME_GENERATION_ENABLED = "frame_generation_enabled"
 FRAME_GENERATION_REFRESH_THRESHOLD = "frame_generation_refresh_threshold"
@@ -48,6 +49,7 @@ class ConfigurationData(TypedDict):
     scaling_enabled: bool
     scaling_method: str
     scaling_factor: float
+    scaling_supersampling: bool
     scaling_sharpness: float
     frame_generation_enabled: bool
     frame_generation_refresh_threshold: int
@@ -82,6 +84,7 @@ class ConfigurationPatch(TypedDict, total=False):
     scaling_enabled: bool
     scaling_method: str
     scaling_factor: float
+    scaling_supersampling: bool
     scaling_sharpness: float
     frame_generation_enabled: bool
     frame_generation_refresh_threshold: int
@@ -188,4 +191,4 @@ def get_script_generation_logic():
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'scaling_enabled', 'scaling_method', 'scaling_factor', 'scaling_sharpness', 'frame_generation_enabled', 'frame_generation_refresh_threshold', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'dynamic_cadence_recovery', 'dynamic_cadence_probe_interval_seconds', 'ultra_performance', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'gamescope_wsi_compatibility', 'external_vulkan_layer', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']
+ALL_FIELDS = ['dll', 'allow_fp16', 'scaling_enabled', 'scaling_method', 'scaling_factor', 'scaling_supersampling', 'scaling_sharpness', 'frame_generation_enabled', 'frame_generation_refresh_threshold', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'dynamic_cadence_recovery', 'dynamic_cadence_probe_interval_seconds', 'ultra_performance', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'gamescope_wsi_compatibility', 'external_vulkan_layer', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']

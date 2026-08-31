@@ -93,6 +93,8 @@ namespace {
                << ",\"scaling_method\":"
                << jsonString(ls::scalingMethodName(profile.scaling_method))
                << ",\"scaling_factor\":" << profile.scaling_factor
+               << ",\"scaling_supersampling\":"
+               << profile.scaling_supersampling
                << ",\"scaling_sharpness\":" << profile.scaling_sharpness
                << ",\"frame_generation_refresh_threshold\":"
                << profile.frame_generation_refresh_threshold
@@ -133,7 +135,7 @@ std::string mako::layer::runtimeStatusJson(
     std::ostringstream stream;
     stream << std::boolalpha
            << '{'
-           << "\"schema_version\":2"
+           << "\"schema_version\":3"
            << ",\"pid\":" << processId
            << ",\"process_start_ticks\":" << processStartTicks
            << ",\"context\":" << contextId
@@ -160,6 +162,17 @@ std::string mako::layer::runtimeStatusJson(
            << ",\"inactive_reason\":";
     if (status.spatialScalingInactiveReason)
         stream << jsonString(*status.spatialScalingInactiveReason);
+    else
+        stream << "null";
+    stream << ",\"source_width\":" << status.spatialSourceWidth
+           << ",\"source_height\":" << status.spatialSourceHeight
+           << ",\"gamescope_target_width\":"
+           << status.gamescopeTargetWidth
+           << ",\"gamescope_target_height\":"
+           << status.gamescopeTargetHeight
+           << ",\"non_supersampling_factor_ceiling\":";
+    if (status.nonSupersamplingFactorCeiling)
+        stream << *status.nonSupersamplingFactorCeiling;
     else
         stream << "null";
     stream << '}'

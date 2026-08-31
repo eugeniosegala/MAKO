@@ -289,6 +289,8 @@ class ConfigurationManager:
                 f"scaling_enabled = {str(config['scaling_enabled']).lower()}",
                 f"scaling_method = {_toml_string(config['scaling_method'])}",
                 f"scaling_factor = {config['scaling_factor']}",
+                "scaling_supersampling = "
+                f"{str(config['scaling_supersampling']).lower()}",
                 f"scaling_sharpness = {config['scaling_sharpness']}",
                 f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
                 "frame_generation_refresh_threshold = "

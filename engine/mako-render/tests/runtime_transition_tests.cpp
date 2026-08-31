@@ -157,6 +157,25 @@ int main() {
             displays),
         "server zero from another Gamescope process must be rejected");
 
+    const GamescopeHdrFeedbackSample deckOutputSample{
+        .gamescopeDetected = true,
+        .gamescopePid = 42,
+        .xwaylandServerId = 0,
+        .outputWidth = 1280,
+        .outputHeight = 800,
+    };
+    expect(confirmedGamescopePresentationTarget(deckOutputSample) ==
+            GamescopePresentationTarget{1280, 800},
+        "Gamescope server-zero geometry must become the presentation target");
+    auto nestedOutputSample = deckOutputSample;
+    nestedOutputSample.xwaylandServerId = 1;
+    expect(!confirmedGamescopePresentationTarget(nestedOutputSample),
+        "nested Gamescope Xwayland geometry must not become an output target");
+    auto incompleteOutputSample = deckOutputSample;
+    incompleteOutputSample.outputHeight.reset();
+    expect(!confirmedGamescopePresentationTarget(incompleteOutputSample),
+        "incomplete Gamescope root geometry must fail closed");
+
     // Gamescope starts with app-HDR cached false and can therefore leave its
     // Boolean property absent. Prefer explicit app evidence and accept app HDR
     // metadata as an equivalent positive signal. Output capability is never

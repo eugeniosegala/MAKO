@@ -45,6 +45,9 @@ namespace mako::layer {
         // capabilities. The actual swapchain images retain `extent`.
         VkExtent2D applicationExtent;
         VkExtent2D extent;
+        // Proven Gamescope output geometry used to cap ordinary scaling and
+        // to expose the live non-supersampling slider ceiling.
+        std::optional<VkExtent2D> gamescopePresentationTarget;
         VkPresentModeKHR presentMode;
         // Persist the exact create-time transport decision. HDR feedback can
         // change later, but Vulkan present mode/pNext compatibility cannot be

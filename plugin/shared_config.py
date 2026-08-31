@@ -149,8 +149,15 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
 
     "scaling_factor": {
         "fieldType": ConfigFieldType.FLOAT,
-        "default": 1.8,
+        "default": 1.5,
         "description": "output scaling factor from 1.0x to 2.0x",
+        "location": "toml"
+    },
+
+    "scaling_supersampling": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "allow quality supersampling beyond the proven display target while retaining Vulkan and memory safety ceilings",
         "location": "toml"
     },
 
