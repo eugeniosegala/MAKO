@@ -5,7 +5,7 @@
 // MAKO's spatial reconstruction pass is deliberately independent from the
 // proprietary LS1 resources. It combines a clamped sharpened-cubic reconstruction
 // with contrast-aware anti-ringing and a bounded local sharpening term at a
-// twofold baseline, scaled by the profile multiplier, in one output-resolution
+// threefold baseline, scaled by the profile multiplier, in one output-resolution
 // pass.
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
@@ -171,13 +171,13 @@ void main() {
         abs(luma(center11.rgb) - luma(center10.rgb));
     float edgeDirectionConfidence = abs(horizontalEdge - verticalEdge) /
         (horizontalEdge + verticalEdge + 0.0001);
-    const float sharpeningBaseline = 2.0;
+    const float sharpeningBaseline = 3.0;
     float sharpeningGain = sharpeningBaseline * parameters.tuning.x *
         mix(0.18, 0.32, edgeDirectionConfidence) *
         mix(1.0, 0.55, ringingRisk);
     vec3 sharpened = baseColor + (baseColor - localAverage) * sharpeningGain;
 
-    // Scale the contrast-relative sharpening envelope with the twofold
+    // Scale the contrast-relative sharpening envelope with the threefold
     // baseline, but never permit the unbounded overshoot that produces bright
     // halos around UI and text.
     vec3 envelope = vec3(sharpeningBaseline * (0.02 + contrast * 0.08));

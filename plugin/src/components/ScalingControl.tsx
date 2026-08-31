@@ -27,6 +27,7 @@ import { MakoExperimentalSettingLabel, MakoInlineTip } from "./MakoUi";
 interface ScalingControlProps {
   config: ConfigurationData;
   disabled?: boolean;
+  runtimeActivationSupported?: boolean | null;
   runtimeInactiveReason?: string | null;
   runtimeFactorCeiling?: number | null;
   onConfigChange: (
@@ -38,6 +39,7 @@ interface ScalingControlProps {
 export function ScalingControl({
   config,
   disabled = false,
+  runtimeActivationSupported = null,
   runtimeInactiveReason = null,
   runtimeFactorCeiling = null,
   onConfigChange,
@@ -47,6 +49,12 @@ export function ScalingControl({
       ? SCALING_METHOD_LS1_PERFORMANCE
       : config.scaling_method;
   const scalerActive = effectiveScalingMethod !== SCALING_METHOD_NATIVE;
+  const runningSurfaceUnsupported =
+    runtimeActivationSupported === false ||
+    runtimeInactiveReason === "gamescope-wsi-surface-unproven";
+  const unavailableControlClassName = runningSurfaceUnsupported
+    ? "MAKO_ScalingUnavailableControl"
+    : undefined;
   const steppedRuntimeCeiling =
     runtimeFactorCeiling === null
       ? null
@@ -88,6 +96,11 @@ export function ScalingControl({
 
   return (
     <>
+      <style>{`
+        .MAKO_ScalingUnavailableControl {
+          filter: grayscale(1);
+        }
+      `}</style>
       <PanelSectionRow>
         <ToggleField
           label={
@@ -131,12 +144,11 @@ export function ScalingControl({
                       "Choose the scaling model. You can change it while the game is running.",
                     )}
                   </div>
-                  {runtimeInactiveReason ===
-                  "gamescope-wsi-surface-unproven" ? (
+                  {runningSurfaceUnsupported ? (
                     <MakoInlineTip tone="warning">
                       {t(
                         "SCALING_RUNTIME_SURFACE_UNSUPPORTED",
-                        "Scaling is unavailable for this running surface because Gamescope WSI did not create it. Model and factor changes are saved for the next supported surface; Frame Generation continues at native resolution.",
+                        "This running surface does not support MAKO scaling. Quality Supersampling, Scale Factor, and Sharpness are locked until a supported surface is detected. Frame Generation remains available.",
                       )}
                     </MakoInlineTip>
                   ) : (
@@ -166,30 +178,37 @@ export function ScalingControl({
           </PanelSectionRow>
 
           <PanelSectionRow>
-            <ToggleField
-              label={t("SCALING_SUPERSAMPLING", "Quality Supersampling")}
-              description={
-                <>
-                  <div>
-                    {t(
-                      "SCALING_SUPERSAMPLING_DESC",
-                      "Allows scaling beyond the display's native output for higher-quality downsampling. This increases GPU and memory load, especially on low-power devices.",
-                    )}
-                  </div>
-                  {config.scaling_supersampling && (
-                    <MakoInlineTip tone="warning">
+            <div
+              className={unavailableControlClassName}
+              style={{ width: "100%" }}
+            >
+              <ToggleField
+                label={t("SCALING_SUPERSAMPLING", "Quality Supersampling")}
+                description={
+                  <>
+                    <div>
                       {t(
-                        "SCALING_SUPERSAMPLING_WARNING",
-                        "Supersampling is enabled. MAKO can render above the display target for a sharper downsampled image.",
+                        "SCALING_SUPERSAMPLING_DESC",
+                        "Allows scaling beyond the display's native output for higher-quality downsampling. This increases GPU and memory load, especially on low-power devices.",
                       )}
-                    </MakoInlineTip>
-                  )}
-                </>
-              }
-              checked={config.scaling_supersampling}
-              disabled={disabled}
-              onChange={(value) => onConfigChange(SCALING_SUPERSAMPLING, value)}
-            />
+                    </div>
+                    {config.scaling_supersampling && (
+                      <MakoInlineTip tone="warning">
+                        {t(
+                          "SCALING_SUPERSAMPLING_WARNING",
+                          "Supersampling is enabled. MAKO can render above the display target for a sharper downsampled image.",
+                        )}
+                      </MakoInlineTip>
+                    )}
+                  </>
+                }
+                checked={config.scaling_supersampling}
+                disabled={disabled || runningSurfaceUnsupported}
+                onChange={(value) =>
+                  onConfigChange(SCALING_SUPERSAMPLING, value)
+                }
+              />
+            </div>
           </PanelSectionRow>
 
           <PanelSectionRow>
@@ -234,7 +253,10 @@ export function ScalingControl({
                   : Math.round((factorMaximum - SCALING_FACTOR_MIN) / 0.1) + 1
               }
               notchTicksVisible
-              disabled={disabled || factorHasNoHeadroom}
+              className={unavailableControlClassName}
+              disabled={
+                disabled || runningSurfaceUnsupported || factorHasNoHeadroom
+              }
               onChange={(value) =>
                 onConfigChange(SCALING_FACTOR, Number(value.toFixed(1)))
               }
@@ -247,13 +269,14 @@ export function ScalingControl({
                 label={`${t("SCALING_SHARPNESS", "Scaling Sharpness")} (${Math.round(config.scaling_sharpness * 100)}%)`}
                 description={t(
                   "SCALING_SHARPNESS_DESC",
-                  "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants.",
+                  "For MAKO, applies this 0–100% multiplier to its 3x sharpening baseline. For LS1, selects one of five learned sharpness variants.",
                 )}
                 value={config.scaling_sharpness}
                 min={SCALING_SHARPNESS_MIN}
                 max={SCALING_SHARPNESS_MAX}
                 step={0.01}
-                disabled={disabled}
+                className={unavailableControlClassName}
+                disabled={disabled || runningSurfaceUnsupported}
                 bottomSeparator="none"
                 onChange={(value) =>
                   onConfigChange(SCALING_SHARPNESS, Number(value.toFixed(2)))

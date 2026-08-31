@@ -32,11 +32,13 @@ export interface RuntimeScalingUiState {
   frameGenerationActive: boolean;
   frameGenerationEnabled: boolean;
   frameGenerationMode: "off" | "fixed" | "adaptive";
+  frameGenerationAdaptiveStyle: "fractional" | "steady" | null;
   frameGenerationTargetFps: number | null;
   frameGenerationMultiplier: number | null;
   frameGenerationPending: boolean;
   scalingActive: boolean;
   scalingEnabled: boolean;
+  scalingActivationSupported: boolean | null;
   scalingPending: boolean;
   inactiveReason: string | null;
   nonSupersamplingFactorCeiling: number | null;
@@ -60,11 +62,13 @@ export const EMPTY_RUNTIME_SCALING_UI_STATE: RuntimeScalingUiState = {
   frameGenerationActive: false,
   frameGenerationEnabled: false,
   frameGenerationMode: "off",
+  frameGenerationAdaptiveStyle: null,
   frameGenerationTargetFps: null,
   frameGenerationMultiplier: null,
   frameGenerationPending: false,
   scalingActive: false,
   scalingEnabled: false,
+  scalingActivationSupported: null,
   scalingPending: false,
   inactiveReason: null,
   nonSupersamplingFactorCeiling: null,
@@ -113,8 +117,16 @@ export function runtimeScalingUiState(
   );
   const spatialContext =
     newestContext(contexts, (candidate) => candidate.spatial_scaling.active) ??
+    newestContext(
+      contexts,
+      (candidate) => candidate.role === "spatial-scaling",
+    ) ??
     newestContext(contexts, (candidate) => candidate.requested.scaling_enabled);
   const appliedFrameProfile = frameContext?.applied;
+  const scalingRequestedContext = newestContext(
+    contexts,
+    (candidate) => candidate.requested.scaling_enabled,
+  );
   const frameGenerationEnabled = Boolean(
     appliedFrameProfile?.frame_generation_enabled,
   );
@@ -129,6 +141,11 @@ export function runtimeScalingUiState(
     frameGenerationActive: Boolean(frameContext?.frame_generation_active),
     frameGenerationEnabled,
     frameGenerationMode,
+    frameGenerationAdaptiveStyle: appliedFrameProfile?.adaptive
+      ? appliedFrameProfile.adaptive_auto_base_fps_cap
+        ? "steady"
+        : "fractional"
+      : null,
     frameGenerationTargetFps: appliedFrameProfile?.adaptive
       ? appliedFrameProfile.target_fps
       : null,
@@ -143,7 +160,10 @@ export function runtimeScalingUiState(
         frameContext.pending.process_restart),
     ),
     scalingActive: Boolean(spatialContext?.spatial_scaling.active),
-    scalingEnabled: Boolean(spatialContext?.applied.scaling_enabled),
+    scalingEnabled: Boolean(scalingRequestedContext?.requested.scaling_enabled),
+    scalingActivationSupported: spatialContext
+      ? spatialContext.spatial_scaling.activation_supported
+      : null,
     scalingPending: Boolean(
       spatialContext &&
       (spatialContext.pending.spatial_private ||

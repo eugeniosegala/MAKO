@@ -101,7 +101,7 @@ MAKO Scaler then records this work:
 
 1. Dispatch one 8-by-8-workgroup compute pass over the presentation extent.
 2. Sample a clamped 4-by-4 neighbourhood for each output pixel, reconstruct with separable Catmull-Rom weights, and clamp the result to the local colour envelope.
-3. Blend a small bilinear anti-ringing correction in high-contrast regions and apply a bounded, edge-aware sharpening term with a static 2x baseline multiplied by `scaling_sharpness`.
+3. Blend a small bilinear anti-ringing correction in high-contrast regions and apply a bounded, edge-aware sharpening term with a static 3x baseline multiplied by `scaling_sharpness`.
 
 LS1 Quality runs three 16-by-16-workgroup neural passes: two source-sized RGBA8 feature stages followed by a learned luma-feature stage that writes a 2x-source `R8_SNORM` image. LS1 Performance replaces those three passes with one lower-cost learned pass that writes the same feature representation. Both modes then run the common output-resolution LS1 reconstruction pass, which combines the learned feature image with the original source through the model's linear sampler and colour reconstruction. The five DLL model variants are selected by rounding `scaling_sharpness * 4`.
 
@@ -165,7 +165,7 @@ frame_generation_enabled = false
 | `scaling_method` | `native`, `mako`, `ls1`, `ls1-performance` | `ls1` | Selects the Native Resolution model-free linear baseline, MAKO Scaler, LS1 Quality, or LS1 Performance. Method changes rebuild MAKO's private scaler without game-owned WSI recreation after the engine is provisioned. LS1 requires the licensed DLL and vkd3d-shader; failure uses MAKO Scaler and logs why. Ultra Performance uses LS1 Performance as the effective model only when Scaling is enabled, while retaining this saved choice for later non-Ultra use. |
 | `scaling_factor` | 1.0–2.0 | `1.5` | Ratio from each source dimension to each presentation dimension; 1.0 performs no scaling work. |
 | `scaling_supersampling` | Boolean | `false` | Lets a variable managed Gamescope surface exceed its proven output target when the factor requests it. Vulkan and memory ceilings still apply; fixed and direct non-Gamescope geometry is unchanged. |
-| `scaling_sharpness` | 0.0–1.0 | `0.8` | Multiplier for MAKO's continuous sharpening at its static 2x baseline, or LS1's nearest one of five learned model variants. |
+| `scaling_sharpness` | 0.0–1.0 | `0.8` | Multiplier for MAKO's continuous sharpening at its static 3x baseline, or LS1's nearest one of five learned model variants. |
 
 To combine scaling with Fixed Frame Generation, set `frame_generation_enabled = true`, leave `adaptive = false`, and select `multiplier`. To combine it with Adaptive Frame Generation, enable both `frame_generation_enabled` and `adaptive`, then configure the normal Adaptive target, ceiling, and cadence options. No scaling-specific frame-generation mode exists.
 

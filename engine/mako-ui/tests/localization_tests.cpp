@@ -214,7 +214,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
             QStringLiteral("Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels."),
         "English scale-factor help does not match Decky");
     require(english.value(QStringLiteral("scalingSharpnessDesc")).toString() ==
-            QStringLiteral("For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants."),
+            QStringLiteral("For MAKO, applies this 0–100% multiplier to its 3x sharpening baseline. For LS1, selects one of five learned sharpness variants."),
         "English sharpening help does not describe the MAKO baseline");
     require(english.value(QStringLiteral("flowScaleDesc")).toString() ==
             QStringLiteral("Controls the internal motion-estimation resolution used only for Frame Generation. Lower values reduce GPU work; higher values favour quality."),

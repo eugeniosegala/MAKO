@@ -25,6 +25,37 @@ function resolution(width: number, height: number): string {
   return width > 0 && height > 0 ? `${width} × ${height}` : "—";
 }
 
+function StatusDetail({
+  label,
+  value,
+}: {
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "minmax(0, 1fr) auto",
+        gap: "5px",
+        alignItems: "baseline",
+        marginTop: "2px",
+      }}
+    >
+      <span style={{ color: "#839da5" }}>{label}</span>
+      <span
+        style={{
+          color: "#d7e7eb",
+          textAlign: "right",
+          overflowWrap: "anywhere",
+        }}
+      >
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function StatusRow({
   label,
   active,
@@ -81,49 +112,6 @@ export function RuntimeStatusCard({
 }: {
   runtimeState: RuntimeScalingUiState;
 }) {
-  const frameGenerationSummary = runtimeState.frameGenerationActive
-    ? runtimeState.frameGenerationMode === "adaptive"
-      ? t(
-          "LIVE_STATUS_FG_ADAPTIVE",
-          "Adaptive · {target} FPS · up to {multiplier}x",
-          {
-            target: runtimeState.frameGenerationTargetFps ?? "—",
-            multiplier: runtimeState.frameGenerationMultiplier ?? "—",
-          },
-        )
-      : t("LIVE_STATUS_FG_FIXED", "Fixed · {multiplier}x", {
-          multiplier: runtimeState.frameGenerationMultiplier ?? "—",
-        })
-    : runtimeState.frameGenerationEnabled
-      ? t(
-          "LIVE_STATUS_FG_INACTIVE",
-          "On in settings, but not currently generating frames.",
-        )
-      : t("LIVE_STATUS_OFF", "Off");
-  const scalingSummary = runtimeState.scalingActive
-    ? t(
-        "LIVE_STATUS_SCALING_ACTIVE",
-        "{method} · {source} → {presentation} · {factor}x",
-        {
-          method: methodLabel(runtimeState.activeMethod),
-          source: resolution(
-            runtimeState.sourceWidth,
-            runtimeState.sourceHeight,
-          ),
-          presentation: resolution(
-            runtimeState.presentationWidth,
-            runtimeState.presentationHeight,
-          ),
-          factor: runtimeState.effectiveFactor.toFixed(2),
-        },
-      )
-    : runtimeState.scalingEnabled
-      ? t(
-          "LIVE_STATUS_SCALING_INACTIVE",
-          "On in settings, but the game image is not being upscaled.",
-        )
-      : t("LIVE_STATUS_OFF", "Off");
-
   return (
     <>
       <MakoSectionHeader topMargin="18px">
@@ -186,7 +174,57 @@ export function RuntimeStatusCard({
                   label={t("CONTENT_FPS_MULTIPLIER", "Frame Generation")}
                   active={runtimeState.frameGenerationActive}
                 >
-                  {frameGenerationSummary}
+                  {runtimeState.frameGenerationActive ? (
+                    <>
+                      <StatusDetail
+                        label={t("LIVE_STATUS_MODE", "Mode")}
+                        value={
+                          runtimeState.frameGenerationMode === "adaptive"
+                            ? t("ADAPTIVE_VALUE", "Adaptive")
+                            : t("LIVE_STATUS_FIXED_VALUE", "Fixed")
+                        }
+                      />
+                      {runtimeState.frameGenerationMode === "adaptive" ? (
+                        <>
+                          <StatusDetail
+                            label={t("LIVE_STATUS_ADAPTIVE_STYLE", "Style")}
+                            value={
+                              runtimeState.frameGenerationAdaptiveStyle ===
+                              "steady"
+                                ? t("LIVE_STATUS_STEADY_VALUE", "Steady")
+                                : t(
+                                    "LIVE_STATUS_FRACTIONAL_VALUE",
+                                    "Fractional",
+                                  )
+                            }
+                          />
+                          <StatusDetail
+                            label={t("LIVE_STATUS_TARGET", "Target")}
+                            value={`${runtimeState.frameGenerationTargetFps ?? "—"} FPS`}
+                          />
+                          <StatusDetail
+                            label={t(
+                              "LIVE_STATUS_MAX_MULTIPLIER",
+                              "Max multiplier",
+                            )}
+                            value={`${runtimeState.frameGenerationMultiplier ?? "—"}×`}
+                          />
+                        </>
+                      ) : (
+                        <StatusDetail
+                          label={t("LIVE_STATUS_MULTIPLIER", "Multiplier")}
+                          value={`${runtimeState.frameGenerationMultiplier ?? "—"}×`}
+                        />
+                      )}
+                    </>
+                  ) : runtimeState.frameGenerationEnabled ? (
+                    t(
+                      "LIVE_STATUS_FG_INACTIVE",
+                      "On in settings, but not currently generating frames.",
+                    )
+                  ) : (
+                    t("LIVE_STATUS_OFF", "Off")
+                  )}
                   {runtimeState.frameGenerationPending && (
                     <div style={{ marginTop: "3px", color: "#f7d9b4" }}>
                       {t(
@@ -201,19 +239,51 @@ export function RuntimeStatusCard({
                   active={runtimeState.scalingActive}
                   separated
                 >
-                  {scalingSummary}
-                  {runtimeState.scalingActive && (
-                    <div style={{ marginTop: "3px" }}>
-                      {runtimeState.pipeline === "pre-frame-generation"
-                        ? t(
-                            "LIVE_STATUS_PIPELINE_PRE",
-                            "Upscaling runs before generated frames.",
-                          )
-                        : t(
-                            "LIVE_STATUS_PIPELINE_POST",
-                            "Upscaling runs after generated frames.",
-                          )}
-                    </div>
+                  {runtimeState.scalingActive ? (
+                    <>
+                      <StatusDetail
+                        label={t("LIVE_STATUS_MODEL", "Model")}
+                        value={methodLabel(runtimeState.activeMethod)}
+                      />
+                      <StatusDetail
+                        label={t(
+                          "LIVE_STATUS_ORIGINAL_RESOLUTION",
+                          "Original resolution",
+                        )}
+                        value={resolution(
+                          runtimeState.sourceWidth,
+                          runtimeState.sourceHeight,
+                        )}
+                      />
+                      <StatusDetail
+                        label={t(
+                          "LIVE_STATUS_SCALED_RESOLUTION",
+                          "Scaled resolution",
+                        )}
+                        value={resolution(
+                          runtimeState.presentationWidth,
+                          runtimeState.presentationHeight,
+                        )}
+                      />
+                      <StatusDetail
+                        label={t("LIVE_STATUS_MULTIPLIER", "Multiplier")}
+                        value={`${runtimeState.effectiveFactor.toFixed(2)}×`}
+                      />
+                    </>
+                  ) : runtimeState.scalingEnabled ? (
+                    runtimeState.scalingActivationSupported === false ? (
+                      t(
+                        "LIVE_STATUS_SCALING_UNAVAILABLE",
+                        "Unavailable for this running surface.",
+                      )
+                    ) : (
+                      t(
+                        "LIVE_STATUS_SCALING_INACTIVE",
+                        "On in settings, but the game image is not being upscaled.",
+                      )
+                    )
+                  ) : (
+                    t("LIVE_STATUS_OFF", "Off")
                   )}
                   {runtimeState.supersamplingActive && (
                     <div style={{ marginTop: "3px", color: "#f7d9b4" }}>

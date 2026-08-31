@@ -41,6 +41,7 @@ export function FeatureSettings({
       <ScalingControl
         config={config}
         disabled={disabled}
+        runtimeActivationSupported={runtimeState.scalingActivationSupported}
         runtimeInactiveReason={runtimeState.inactiveReason}
         runtimeFactorCeiling={runtimeState.nonSupersamplingFactorCeiling}
         onConfigChange={onConfigChange}

@@ -350,12 +350,21 @@ describe("External Tools controls", () => {
 
     expect(screen.getByText("External Tools")).toBeTruthy();
     expect(
-      screen
-        .getByText(
-          "External tools may affect performance. Test each game carefully.",
-        )
-        .getAttribute("data-tone"),
-    ).toBe("info");
+      screen.queryByText(
+        "Optional and per profile. MangoHud and vkBasalt are mutually exclusive with each other, but either can run with Gamescope WSI, Frame Generation, and Scaling. Restart the game after changing the tool.",
+      ),
+    ).toBeNull();
+    expect(
+      screen.queryByText(
+        "External tools may affect performance. Test each game carefully.",
+      ),
+    ).toBeNull();
+    expect(screen.getByText("Manual Overrides")).toBeTruthy();
+    expect(
+      screen.queryByText(
+        "Optional. MAKO detects these automatically; change them only for custom setups, launchers, or emulators.",
+      ),
+    ).toBeNull();
     expect(screen.queryByText("Enable MangoHud (Restart)")).toBeNull();
     expect(screen.queryByText("Enable vkBasalt (Restart)")).toBeNull();
 

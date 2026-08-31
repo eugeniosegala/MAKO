@@ -96,8 +96,10 @@ describe("runtime scaling availability", () => {
       hasContext: true,
       frameGenerationActive: true,
       frameGenerationMode: "adaptive",
+      frameGenerationAdaptiveStyle: "fractional",
       frameGenerationTargetFps: 120,
       frameGenerationMultiplier: 3,
+      scalingActivationSupported: false,
       inactiveReason: "gamescope-wsi-surface-unproven",
       nonSupersamplingFactorCeiling: 4 / 3,
     });
@@ -129,6 +131,7 @@ describe("runtime scaling availability", () => {
       runtimeScalingUiState(status([scalingContext, context]), "game"),
     ).toMatchObject({
       scalingActive: true,
+      scalingActivationSupported: true,
       sourceWidth: 960,
       sourceHeight: 540,
       presentationWidth: 1440,
@@ -140,5 +143,22 @@ describe("runtime scaling availability", () => {
       supersamplingActive: true,
       fallbackReason: "translator unavailable",
     });
+  });
+
+  test("reports Steady Adaptive from the applied automatic base cap", () => {
+    expect(
+      runtimeScalingUiState(
+        status([
+          {
+            ...context,
+            applied: {
+              ...context.applied,
+              adaptive_auto_base_fps_cap: true,
+            },
+          },
+        ]),
+        "game",
+      ),
+    ).toMatchObject({ frameGenerationAdaptiveStyle: "steady" });
   });
 });

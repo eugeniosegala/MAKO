@@ -552,30 +552,6 @@ export function ExternalToolsConfigurationGroup({
         {t("CONFIG_EXTERNAL_TOOLS_TITLE", "External Tools")}
       </MakoSectionHeader>
 
-      <PanelSectionRow>
-        <div
-          style={{
-            fontSize: "11px",
-            lineHeight: "1.35",
-            color: "#b8c5d6",
-            marginBottom: "4px",
-          }}
-        >
-          <div>
-            {t(
-              "CONFIG_EXTERNAL_TOOLS_DESC",
-              "Optional and per profile. MangoHud and vkBasalt are mutually exclusive with each other, but either can run with Gamescope WSI, Frame Generation, and Scaling. Restart the game after changing the tool.",
-            )}
-          </div>
-          <MakoInlineTip tone="info">
-            {t(
-              "CONFIG_EXTERNAL_TOOLS_WARNING",
-              "External tools may affect performance. Test each game carefully.",
-            )}
-          </MakoInlineTip>
-        </div>
-      </PanelSectionRow>
-
       <CollapseControl
         containerClassName="MAKO_ExternalToolsCollapseButton_Container"
         collapsed={collapsed}
@@ -658,22 +634,6 @@ export function ManualOverridesConfigurationGroup({
       <MakoSectionHeader topMargin="26px">
         {t("CONFIG_MANUAL_OVERRIDES_TITLE", "Manual Overrides")}
       </MakoSectionHeader>
-
-      <PanelSectionRow>
-        <div
-          style={{
-            fontSize: "11px",
-            lineHeight: "1.35",
-            color: "#b8c5d6",
-            marginBottom: "4px",
-          }}
-        >
-          {t(
-            "CONFIG_MANUAL_OVERRIDES_DESC",
-            "Optional. MAKO detects these automatically; change them only for custom setups, launchers, or emulators.",
-          )}
-        </div>
-      </PanelSectionRow>
 
       <CollapseControl
         containerClassName="MAKO_ManualOverridesCollapseButton_Container"

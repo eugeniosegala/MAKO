@@ -36,6 +36,7 @@ describe("authoritative live status", () => {
           frameGenerationActive: true,
           frameGenerationEnabled: true,
           frameGenerationMode: "adaptive",
+          frameGenerationAdaptiveStyle: "fractional",
           frameGenerationTargetFps: 120,
           frameGenerationMultiplier: 3,
           scalingActive: true,
@@ -60,13 +61,22 @@ describe("authoritative live status", () => {
         '[data-mako-live-status-grid="compact-two-column"]',
       ),
     ).toBeTruthy();
-    expect(screen.getByText("Adaptive · 120 FPS · up to 3x")).toBeTruthy();
-    expect(
-      screen.getByText("MAKO Scaler · 960 × 540 → 1440 × 810 · 1.50x"),
-    ).toBeTruthy();
-    expect(
-      screen.getByText("Upscaling runs before generated frames."),
-    ).toBeTruthy();
+    expect(screen.getByText("Mode")).toBeTruthy();
+    expect(screen.getByText("Adaptive")).toBeTruthy();
+    expect(screen.getByText("Style")).toBeTruthy();
+    expect(screen.getByText("Fractional")).toBeTruthy();
+    expect(screen.getByText("Target")).toBeTruthy();
+    expect(screen.getByText("120 FPS")).toBeTruthy();
+    expect(screen.getByText("Max multiplier")).toBeTruthy();
+    expect(screen.getByText("3×")).toBeTruthy();
+    expect(screen.getByText("Model")).toBeTruthy();
+    expect(screen.getByText("MAKO Scaler")).toBeTruthy();
+    expect(screen.getByText("Original resolution")).toBeTruthy();
+    expect(screen.getByText("960 × 540")).toBeTruthy();
+    expect(screen.getByText("Scaled resolution")).toBeTruthy();
+    expect(screen.getByText("1440 × 810")).toBeTruthy();
+    expect(screen.getByText("1.50×")).toBeTruthy();
+    expect(screen.queryByText(/Upscaling runs/)).toBeNull();
     expect(
       screen.getByText(
         "Quality Supersampling is on for a sharper final image.",
@@ -85,5 +95,23 @@ describe("authoritative live status", () => {
 
     expect(screen.getByText("Waiting for MAKO")).toBeTruthy();
     expect(screen.getByText(/running game is not using MAKO yet/)).toBeTruthy();
+  });
+
+  test("states when scaling is unavailable for the running surface", () => {
+    window.SP_REACT = React;
+    render(
+      <RuntimeStatusCard
+        runtimeState={{
+          ...EMPTY_RUNTIME_SCALING_UI_STATE,
+          hasContext: true,
+          scalingEnabled: true,
+          scalingActivationSupported: false,
+        }}
+      />,
+    );
+
+    expect(
+      screen.getByText("Unavailable for this running surface."),
+    ).toBeTruthy();
   });
 });

@@ -78,6 +78,7 @@ vi.mock("@decky/ui", () => ({
     step = 1,
     notchCount,
     notchTicksVisible,
+    className,
     disabled,
     onChange,
   }: {
@@ -89,11 +90,13 @@ vi.mock("@decky/ui", () => ({
     step?: number;
     notchCount?: number;
     notchTicksVisible?: boolean;
+    className?: string;
     disabled?: boolean;
     onChange: (value: number) => void;
   }) => (
     <div>
       <button
+        className={className}
         data-minimum={min}
         data-maximum={max}
         data-step={step}
@@ -189,7 +192,7 @@ describe("Scaling controls", () => {
     expect(screen.queryByText(/guarded game-owned recreation/)).toBeNull();
     expect(
       screen.getByText(
-        "For MAKO, applies this 0–100% multiplier to its 2x sharpening baseline. For LS1, selects one of five learned sharpness variants.",
+        "For MAKO, applies this 0–100% multiplier to its 3x sharpening baseline. For LS1, selects one of five learned sharpness variants.",
       ),
     ).toBeTruthy();
     expect(screen.queryByText(/private scaler rebuild/)).toBeNull();
@@ -358,24 +361,49 @@ describe("Scaling controls", () => {
   test("replaces scaling guidance with the running-surface warning", () => {
     window.SP_REACT = React;
 
-    render(
+    const { container } = render(
       <ScalingControl
         config={{
           ...getDefaults(),
           scaling_enabled: true,
           scaling_method: SCALING_METHOD_MAKO,
         }}
+        runtimeActivationSupported={false}
         runtimeInactiveReason="gamescope-wsi-surface-unproven"
         onConfigChange={vi.fn(async () => undefined)}
       />,
     );
 
     const warning = screen.getByText(
-      "Scaling is unavailable for this running surface because Gamescope WSI did not create it. Model and factor changes are saved for the next supported surface; Frame Generation continues at native resolution.",
+      "This running surface does not support MAKO scaling. Quality Supersampling, Scale Factor, and Sharpness are locked until a supported surface is detected. Frame Generation remains available.",
     );
     expect(warning.closest('[data-tone="warning"]')).toBeTruthy();
     expect(warning.closest('[data-field-label="Scaling Method"]')).toBeTruthy();
     expect(screen.queryByText(/How scaling works:/)).toBeNull();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Quality Supersampling",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByText("Scale Factor (1.5x)") as HTMLButtonElement).disabled,
+    ).toBe(true);
+    expect(
+      (screen.getByText("Scaling Sharpness (80%)") as HTMLButtonElement)
+        .disabled,
+    ).toBe(true);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Scaling Method",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+    expect(
+      container.querySelectorAll(".MAKO_ScalingUnavailableControl"),
+    ).toHaveLength(3);
   });
 
   test("writes only the selected scaling field when combined with frame generation", () => {
@@ -419,7 +447,7 @@ describe("Scaling controls", () => {
   test("locks the full group until the installed Renderer is current", () => {
     window.SP_REACT = React;
 
-    render(
+    const { container } = render(
       <ScalingControl
         config={{
           ...getDefaults(),
@@ -445,5 +473,8 @@ describe("Scaling controls", () => {
       (screen.getByText("Scaling Sharpness (80%)") as HTMLButtonElement)
         .disabled,
     ).toBe(true);
+    expect(
+      container.querySelectorAll(".MAKO_ScalingUnavailableControl"),
+    ).toHaveLength(0);
   });
 });
