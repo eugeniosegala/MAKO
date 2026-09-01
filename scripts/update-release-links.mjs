@@ -53,13 +53,21 @@ const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const repositoryRoot = dirname(scriptDirectory);
 const readmePath = join(repositoryRoot, "README.md");
-const escapedName = componentDetails.name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapedName = escapeRegExp(componentDetails.name);
+const escapedTableText = escapeRegExp(componentDetails.tableText);
 const rowPattern = new RegExp(
-  `^(\\| \\*\\*${escapedName}\\*\\* \\| [^|]+ \\| )\\[[^\\]]+\\]\\([^)]+\\)( \\|)$`,
+  `^(\\| \\*\\*${escapedName}\\*\\* \\| [^|]+ \\| )` +
+    `(\\[${escapedTableText}\\]\\([^)]+\\)|` +
+    `<a\\b[^>]*\\bhref="[^"]+"[^>]*>${escapedTableText}</a>)` +
+    `( \\|)$`,
   "m",
 );
-const linkPattern = new RegExp(
+const markdownLinkPattern = new RegExp(
   `(\\[${escapeRegExp(componentDetails.linkText)}\\]\\()[^)]+(\\))`,
+  "g",
+);
+const htmlLinkPattern = new RegExp(
+  `(<a\\b[^>]*\\bhref=")[^"]+("[^>]*>${escapeRegExp(componentDetails.linkText)}</a>)`,
   "g",
 );
 const changedPaths = [];
@@ -75,19 +83,34 @@ for (const [relativePath, expectedLinkCount] of Object.entries(componentDetails.
     }
     updated = updated.replace(
       rowPattern,
-      `$1[${componentDetails.tableText}](${componentDetails.releaseUrl})$2`,
+      (_match, prefix, link, suffix) => {
+        const updatedLink = link.startsWith("<a")
+          ? link.replace(
+              /(\bhref=")[^"]+(")/,
+              (_href, hrefPrefix, hrefSuffix) =>
+                `${hrefPrefix}${componentDetails.releaseUrl}${hrefSuffix}`,
+            )
+          : `[${componentDetails.tableText}](${componentDetails.releaseUrl})`;
+        return `${prefix}${updatedLink}${suffix}`;
+      },
     );
   }
 
-  const matchingLinks = [...updated.matchAll(linkPattern)];
-  if (matchingLinks.length !== expectedLinkCount) {
+  const matchingMarkdownLinks = [...updated.matchAll(markdownLinkPattern)];
+  const matchingHtmlLinks = [...updated.matchAll(htmlLinkPattern)];
+  const matchingLinkCount = matchingMarkdownLinks.length + matchingHtmlLinks.length;
+  if (matchingLinkCount !== expectedLinkCount) {
     throw new Error(
       `Expected ${expectedLinkCount} '${componentDetails.linkText}' link(s) in ${path}, ` +
-      `found ${matchingLinks.length}`,
+      `found ${matchingLinkCount}`,
     );
   }
   updated = updated.replace(
-    linkPattern,
+    markdownLinkPattern,
+    (_match, prefix, suffix) => `${prefix}${componentDetails.releaseUrl}${suffix}`,
+  );
+  updated = updated.replace(
+    htmlLinkPattern,
     (_match, prefix, suffix) => `${prefix}${componentDetails.releaseUrl}${suffix}`,
   );
 
