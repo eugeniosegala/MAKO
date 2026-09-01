@@ -130,12 +130,16 @@ int main() {
         .swapchainCount = 1,
         .pPresentIds = &presentId,
     };
-    // Production pNext chains enter through an opaque Vulkan ABI pointer.
-    // Keep the fixture opaque too so LTO cannot reason across distinct Vulkan
-    // aggregate types in a way that no real loader call permits.
-    const void* volatile opaquePrecedingNode = &precedingNode;
-    expect(findSwapchainPresentFenceInfo(opaquePrecedingNode) == &presentFence,
+    // Use two real Vulkan structures so the fixture exercises the same mixed
+    // ABI chain that production receives from the loader.
+    const auto* const chainedPresentFence =
+        findSwapchainPresentFenceInfo(&precedingNode);
+    expect(chainedPresentFence,
         "present-fence lookup failed behind a preceding pNext node");
+    expect(chainedPresentFence->swapchainCount == 1,
+        "chained present-fence count changed");
+    expect(upstreamPresentFenceProtectsSwapchain(chainedPresentFence),
+        "chained present fence was not accepted as lifetime proof");
 
     expect(swapchainRetirementGracePeriod == std::chrono::milliseconds(50),
         "the compositor retirement grace contract changed unexpectedly");
