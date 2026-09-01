@@ -367,13 +367,14 @@ class DiagnosticsHelperTests(unittest.TestCase):
     def test_retained_sessions_can_be_selected_or_combined(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             base_path = Path(temporary_directory) / "present-diagnostics.log"
-            previous_path = Path(f"{base_path}.1")
-            oldest_path = Path(f"{base_path}.2")
-            for path, label in (
-                (base_path, "latest"),
-                (previous_path, "previous"),
-                (oldest_path, "oldest"),
-            ):
+            retained_sessions = (
+                (base_path, "latest-slot"),
+                (Path(f"{base_path}.1"), "previous-slot"),
+                (Path(f"{base_path}.2"), "two-back-slot"),
+                (Path(f"{base_path}.3"), "three-back-slot"),
+                (Path(f"{base_path}.4"), "oldest-slot"),
+            )
+            for path, label in retained_sessions:
                 path.write_text(
                     f"MAKO Renderer: session-marker={label}\n",
                     encoding="utf-8",
@@ -406,28 +407,26 @@ class DiagnosticsHelperTests(unittest.TestCase):
             )
 
         self.assertEqual(latest.returncode, 0, latest.stderr)
-        self.assertIn("session-marker=latest", latest.stdout)
-        self.assertNotIn("session-marker=previous", latest.stdout)
+        self.assertIn("session-marker=latest-slot", latest.stdout)
+        self.assertNotIn("session-marker=previous-slot", latest.stdout)
         self.assertEqual(previous.returncode, 0, previous.stderr)
-        self.assertIn("session-marker=previous", previous.stdout)
+        self.assertIn("session-marker=previous-slot", previous.stdout)
         self.assertEqual(oldest.returncode, 0, oldest.stderr)
-        self.assertIn("session-marker=oldest", oldest.stdout)
+        self.assertIn("session-marker=oldest-slot", oldest.stdout)
         self.assertEqual(previous_two.returncode, 0, previous_two.stderr)
         self.assertLess(
-            previous_two.stdout.index("session-marker=oldest"),
-            previous_two.stdout.index("session-marker=previous"),
+            previous_two.stdout.index("session-marker=two-back-slot"),
+            previous_two.stdout.index("session-marker=previous-slot"),
         )
-        self.assertNotIn("session-marker=latest", previous_two.stdout)
+        self.assertNotIn("session-marker=oldest-slot", previous_two.stdout)
+        self.assertNotIn("session-marker=latest-slot", previous_two.stdout)
         self.assertEqual(combined.returncode, 0, combined.stderr)
-        self.assertLess(
-            combined.stdout.index("session-marker=oldest"),
-            combined.stdout.index("session-marker=previous"),
-        )
-        self.assertLess(
-            combined.stdout.index("session-marker=previous"),
-            combined.stdout.index("session-marker=latest"),
-        )
-        self.assertEqual(combined.stderr.count("retained sessions: 3"), 3)
+        combined_markers = [
+            combined.stdout.index(f"session-marker={label}")
+            for _, label in reversed(retained_sessions)
+        ]
+        self.assertEqual(combined_markers, sorted(combined_markers))
+        self.assertEqual(combined.stderr.count("retained sessions: 5"), 5)
 
     def test_missing_retained_session_fails_clearly(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

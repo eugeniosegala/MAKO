@@ -10,7 +10,7 @@ If Decky Loader cannot install **MAKO Decky**, or it never appears or opens afte
 
 If **MAKO Decky** is installed and opens in Decky Loader, use its [diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md). It covers games launched through `/home/deck/.local/bin/mako-run`, the managed renderer, and Flatpak extensions.
 
-The Decky diagnostics guide covers native Steam and Proton games, Heroic, and EmuDeck shortcuts without changing their normal arguments. Its managed wrapper retains the latest three diagnostics-enabled game sessions: the normal report command selects the latest, while documented `--session` selectors can extract either earlier run, both previous runs, or all available runs together.
+The Decky diagnostics guide covers native Steam and Proton games, Heroic, and EmuDeck shortcuts without changing their normal arguments. Its managed wrapper retains the latest five diagnostics-enabled game sessions: the normal report command selects the latest, while documented `--session` selectors can extract the immediately previous run, the oldest retained run, the two immediately previous runs, or all available runs together.
 
 ## Standalone MAKO Renderer
 

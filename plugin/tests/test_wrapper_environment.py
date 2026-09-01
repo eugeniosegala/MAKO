@@ -1254,7 +1254,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             log_contents,
         )
 
-    def test_enabled_diagnostics_retains_exactly_three_launch_sessions(self):
+    def test_enabled_diagnostics_retains_exactly_five_launch_sessions(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             log_path = Path(temporary_directory) / "present-diagnostics.log"
             script = "\n".join([
@@ -1262,7 +1262,14 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 'printf "%s\\n" "$MAKO_TEST_SESSION" >&2',
             ])
 
-            for session in ("run-one", "run-two", "run-three", "run-four"):
+            for session in (
+                "run-one",
+                "run-two",
+                "run-three",
+                "run-four",
+                "run-five",
+                "run-six",
+            ):
                 result = subprocess.run(
                     ["bash", "-c", script],
                     check=False,
@@ -1277,13 +1284,21 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 )
                 self.assertEqual(result.returncode, 0, result.stderr)
 
-            self.assertEqual(log_path.read_text(encoding="utf-8"), "run-four\n")
+            self.assertEqual(log_path.read_text(encoding="utf-8"), "run-six\n")
             self.assertEqual(
                 Path(f"{log_path}.1").read_text(encoding="utf-8"),
-                "run-three\n",
+                "run-five\n",
             )
             self.assertEqual(
                 Path(f"{log_path}.2").read_text(encoding="utf-8"),
+                "run-four\n",
+            )
+            self.assertEqual(
+                Path(f"{log_path}.3").read_text(encoding="utf-8"),
+                "run-three\n",
+            )
+            self.assertEqual(
+                Path(f"{log_path}.4").read_text(encoding="utf-8"),
                 "run-two\n",
             )
             self.assertEqual(
@@ -1292,17 +1307,20 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     "present-diagnostics.log",
                     "present-diagnostics.log.1",
                     "present-diagnostics.log.2",
+                    "present-diagnostics.log.3",
+                    "present-diagnostics.log.4",
                 ],
             )
 
     def test_disabled_diagnostics_preserves_existing_session_history(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             log_path = Path(temporary_directory) / "present-diagnostics.log"
-            previous_path = Path(f"{log_path}.1")
-            oldest_path = Path(f"{log_path}.2")
+            retained_paths = [
+                Path(f"{log_path}.{index}") for index in range(1, 5)
+            ]
             log_path.write_text("latest\n", encoding="utf-8")
-            previous_path.write_text("previous\n", encoding="utf-8")
-            oldest_path.write_text("oldest\n", encoding="utf-8")
+            for index, retained_path in enumerate(retained_paths, start=1):
+                retained_path.write_text(f"previous-{index}\n", encoding="utf-8")
             script = "\n".join(
                 self.service._generate_layer_environment_lines()
             )
@@ -1321,14 +1339,11 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(log_path.read_text(encoding="utf-8"), "latest\n")
-            self.assertEqual(
-                previous_path.read_text(encoding="utf-8"),
-                "previous\n",
-            )
-            self.assertEqual(
-                oldest_path.read_text(encoding="utf-8"),
-                "oldest\n",
-            )
+            for index, retained_path in enumerate(retained_paths, start=1):
+                self.assertEqual(
+                    retained_path.read_text(encoding="utf-8"),
+                    f"previous-{index}\n",
+                )
 
     def test_development_wrapper_keeps_diagnostics_opt_in(self):
         service = ConfigurationService(

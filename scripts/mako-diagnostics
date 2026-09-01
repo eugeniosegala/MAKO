@@ -8,7 +8,7 @@ default_steam_logs=(
   "${HOME}/.var/app/com.valvesoftware.Steam/.steam/steam/logs/console-linux.txt"
 )
 log_path="${MAKO_PRESENT_DIAGNOSTICS_LOG:-}"
-retained_session_count=3
+retained_session_count=5
 session=latest
 line_count=800
 presets=()
@@ -50,7 +50,7 @@ Examples:
   mako-diagnostics --lines 2000 all > mako-report.txt
   mako-diagnostics --session previous --lines 2000 all > previous-report.txt
   mako-diagnostics --session previous-two --lines 2000 all > earlier-report.txt
-  mako-diagnostics --session all --lines 2000 all > three-session-report.txt
+  mako-diagnostics --session all --lines 2000 all > five-session-report.txt
 EOF
 }
 
@@ -138,6 +138,7 @@ if [[ -z "$log_path" ]]; then
 fi
 
 base_log_path="$log_path"
+oldest_session_index=$((retained_session_count - 1))
 log_paths=()
 session_labels=()
 
@@ -154,23 +155,29 @@ case "$session" in
     add_session_log "${base_log_path}.1" previous
     ;;
   oldest)
-    add_session_log "${base_log_path}.2" oldest
+    add_session_log "${base_log_path}.${oldest_session_index}" oldest
     ;;
   previous-two)
     if [[ -f "${base_log_path}.2" ]]; then
-      add_session_log "${base_log_path}.2" oldest
+      add_session_log "${base_log_path}.2" previous-2
     fi
     if [[ -f "${base_log_path}.1" ]]; then
       add_session_log "${base_log_path}.1" previous
     fi
     ;;
   all)
-    if [[ -f "${base_log_path}.2" ]]; then
-      add_session_log "${base_log_path}.2" oldest
-    fi
-    if [[ -f "${base_log_path}.1" ]]; then
-      add_session_log "${base_log_path}.1" previous
-    fi
+    for ((session_index = oldest_session_index; session_index >= 1; session_index--)); do
+      selected_log_path="${base_log_path}.${session_index}"
+      selected_session="previous-${session_index}"
+      if ((session_index == oldest_session_index)); then
+        selected_session=oldest
+      elif ((session_index == 1)); then
+        selected_session=previous
+      fi
+      if [[ -f "$selected_log_path" ]]; then
+        add_session_log "$selected_log_path" "$selected_session"
+      fi
+    done
     if [[ -f "$base_log_path" ]]; then
       add_session_log "$base_log_path" latest
     fi
@@ -186,7 +193,7 @@ fi
 for selected_log_path in "${log_paths[@]}"; do
   if [[ ! -f "$selected_log_path" ]]; then
     echo "Diagnostics log not found for session '$session': $selected_log_path" >&2
-    echo "Only the latest three diagnostics-enabled MAKO Decky launches are retained." >&2
+    echo "Only the latest $retained_session_count diagnostics-enabled MAKO Decky launches are retained." >&2
     exit 1
   fi
 done

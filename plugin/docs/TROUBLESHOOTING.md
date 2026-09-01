@@ -37,6 +37,6 @@ Follow the root [clean update workflow](../../README.md#updating-mako-decky). It
 
 ## Diagnostics
 
-Follow [Collect MAKO Decky Diagnostics](COLLECT_DIAGNOSTICS.md). It gives launch-type-specific logging instructions, preserves the latest three sessions, creates a Desktop report, restores normal settings, and submits the file privately. Diagnostics are opt-in because synchronous logging can distort frame pacing.
+Follow [Collect MAKO Decky Diagnostics](COLLECT_DIAGNOSTICS.md). It gives launch-type-specific logging instructions, preserves the latest five sessions, creates a Desktop report, restores normal settings, and submits the file privately. Diagnostics are opt-in because synchronous logging can distort frame pacing.
 
 If Decky cannot install, display, or open the plugin at all, use [MAKO Decky installation failures](DECKY_INSTALLATION_FAILURES.md) instead.

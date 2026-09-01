@@ -59,7 +59,7 @@ Do not add the Decky `mako-run` wrapper to a standalone Renderer installation.
 3. Fully exit the game. Do not merely suspend it.
 4. Wait a few seconds for the game, Wine, Proton, or emulator processes to close.
 
-Create the report before starting another diagnostics-enabled standalone game. Standalone Steam console logs are shared logs and are not split into MAKO Decky's three-session private history, so another run can add unrelated lines.
+Create the report before starting another diagnostics-enabled standalone game. Standalone Steam console logs are shared logs and are not split into MAKO Decky's five-session private history, so another run can add unrelated lines.
 
 ## 3. Create the Desktop report
 
@@ -85,7 +85,7 @@ mako-diagnostics --log "$HOME/Desktop/MAKO-renderer-session.log" --lines 2000 al
 
 Use the full `$HOME/.local/bin/mako-diagnostics` path in that command when it is not on `PATH`.
 
-The helper prefers a MAKO Decky private log when one exists. Otherwise, it selects the newest native or Flatpak Steam console log. The `all` preset keeps the most recent 2,000 relevant MAKO, Vulkan-loader, and compositor lines rather than copying the complete source log. The default session is always the latest. When `--log PATH` names the base of a three-session MAKO Decky history, `--session previous`, `--session oldest`, `--session previous-two`, or `--session all` selects `PATH.1`, `PATH.2`, both earlier sessions, or every available retained session respectively; standalone Steam console logs do not create those rotated files.
+The helper prefers a MAKO Decky private log when one exists. Otherwise, it selects the newest native or Flatpak Steam console log. The `all` preset keeps the most recent 2,000 relevant MAKO, Vulkan-loader, and compositor lines rather than copying the complete source log. The default session is always the latest. When `--log PATH` names the base of a five-session MAKO Decky history, `--session previous`, `--session oldest`, `--session previous-two`, or `--session all` selects `PATH.1`, `PATH.4`, the two immediately previous sessions, or every available retained session respectively; standalone Steam console logs do not create those rotated files.
 
 Open the **Desktop** folder and confirm that `MAKO-diagnostics.txt` exists. The default `all` preset is best for an initial report; maintainers may request `startup`, `errors`, `scaling`, `adaptive`, `recovery`, `performance`, `layers`, or `hdr` for follow-up. Every preset retains process and swapchain identity. `scaling` records extent, format, queue, activation, fallback, capacity, and transition decisions but not reconstructed-image quality; `inactive_reason=application-extent-override-no-source-presentation-split`, `source_presentation_split=0`, or `active=0` means the scaler did not run. `adaptive` reports scheduler measurements, not scanout timestamps. `recovery` records acquire budgets, pressure classification, native relief, bounded probes, backoff, stabilization, history warm-up, and request/admission/delivery counts. `performance` adds phase breakdowns only when the configured slow-operation threshold is crossed.
 

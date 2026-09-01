@@ -2,7 +2,7 @@
 
 Use this guide when **MAKO Decky** opens in Decky Loader and games launch through `mako-run`. Standalone `mako-launch` installations use the [MAKO Renderer guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md).
 
-You will enable diagnostics temporarily, reproduce the problem, create a Desktop report, restore normal launch settings, and upload it through the [MAKO diagnostic report form][diagnostic-form]. MAKO retains the latest three diagnostics-enabled game sessions.
+You will enable diagnostics temporarily, reproduce the problem, create a Desktop report, restore normal launch settings, and upload it through the [MAKO diagnostic report form][diagnostic-form]. MAKO retains the latest five diagnostics-enabled game sessions.
 
 Do not attach `MAKO-diagnostics.txt` to a public issue. Review it for usernames, game names, application IDs, ROM names, and paths. Remove details you do not want to share, and never send passwords, credentials, serial numbers, licence keys, or `Lossless.dll`. Google sign-in is required for the form upload.
 
@@ -62,7 +62,7 @@ If the emulator is a native application or AppImage instead of a Flatpak, use th
 3. Fully exit the game. Do not merely suspend it.
 4. Wait a few seconds for the game and emulator processes to close.
 
-Each diagnostics-enabled MAKO Decky launch starts a fresh private session log. The latest session remains `present-diagnostics.log`, the previous session becomes `present-diagnostics.log.1`, and the oldest retained session becomes `present-diagnostics.log.2`. Starting a fourth diagnostics-enabled game replaces the oldest retained session. Fully exit one game before starting the next so each log represents one completed run.
+Each diagnostics-enabled MAKO Decky launch starts a fresh private session log. The latest session remains `present-diagnostics.log`, and the four previous sessions become `present-diagnostics.log.1` through `present-diagnostics.log.4`, with `.4` the oldest retained session. Starting a sixth diagnostics-enabled game replaces the oldest retained session. Fully exit one game before starting the next so each log represents one completed run.
 
 ## 3. Create the Desktop report
 
@@ -90,17 +90,17 @@ The standard command deliberately omits `--session`, so it always reports the la
 # Immediately previous session
 /home/deck/.local/bin/mako-diagnostics --session previous --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-previous.txt 2>&1
 
-# Oldest of the three retained sessions
+# Oldest of the five retained sessions
 /home/deck/.local/bin/mako-diagnostics --session oldest --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-oldest.txt 2>&1
 
-# Both earlier sessions, ordered from oldest to previous
+# Two immediately previous sessions, ordered chronologically
 /home/deck/.local/bin/mako-diagnostics --session previous-two --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-previous-two.txt 2>&1
 
 # Every available retained session, ordered from oldest to latest
 /home/deck/.local/bin/mako-diagnostics --session all --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-all.txt 2>&1
 ```
 
-In these commands, `--session all` selects the retained sessions while the final `all` selects the diagnostic preset. A combined report applies `--lines 2000` separately to every available session, includes a source and session label for each one, and preserves chronological session order. If only one or two sessions have been recorded, `--session all` includes only those available sessions.
+In these commands, `--session all` selects the retained sessions while the final `all` selects the diagnostic preset. A combined report applies `--lines 2000` separately to every available session, includes a source and session label for each one, and preserves chronological session order. Until all five slots have been recorded, `--session all` includes only the sessions that are available.
 
 Focused presets include `startup`, `errors`, `scaling`, `adaptive`, `recovery`, `performance`, `layers`, and `hdr`. Use them only for a requested follow-up; the first report should remain `all`. Presets retain process and swapchain identity. `scaling` records policy, extents, format/queue selection, live recreation, capacity, and failures, not image quality; `active=0`, `source_presentation_split=0`, or an `inactive_reason` other than `none` means the spatial model did not run. `adaptive` records scheduler state rather than scanout timestamps, `recovery` records ordered recovery phases and delivery counts, and `performance` adds phase timing for slow presents.
 

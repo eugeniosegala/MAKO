@@ -61,7 +61,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 56
+WRAPPER_FORMAT_VERSION = 57
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -262,9 +262,27 @@ def host_compatibility_guard_lines(
 
 def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
     """Activate MAKO through its deterministic Vulkan discovery boundary."""
-    if PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT != 3:
-        raise ValueError("the managed diagnostics rotation requires three sessions")
+    if PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT < 1:
+        raise ValueError("managed diagnostics must retain at least one session")
     diagnostics_log_path = context.config_dir / PRESENT_DIAGNOSTICS_LOG_FILENAME
+    diagnostics_rotation_lines: list[str] = []
+    for retained_index in range(
+            PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT - 1,
+            0,
+            -1,
+    ):
+        source_suffix = "" if retained_index == 1 else f".{retained_index - 1}"
+        target_suffix = f".{retained_index}"
+        diagnostics_rotation_lines.extend([
+            (
+                '        if [ "$mako_diagnostics_rotation_ready" = 1 ] && '
+                f'[ -f "$mako_diagnostics_log{source_suffix}" ] && ! mv -f -- '
+                f'"$mako_diagnostics_log{source_suffix}" '
+                f'"$mako_diagnostics_log{target_suffix}" 2>/dev/null; then'
+            ),
+            "            mako_diagnostics_rotation_ready=0",
+            "        fi",
+        ])
     gamescope_wsi_manifest = shlex.quote(str(
         context.gamescope_wsi_compatibility_dir /
         context.gamescope_wsi_manifest_filename_64
@@ -472,24 +490,9 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"mako_diagnostics_default={shlex.quote(str(diagnostics_log_path))}",
         f'if [ "${{{PRESENT_DIAGNOSTICS_ENV}:-0}}" != "0" ]; then',
         f'    mako_diagnostics_log="${{{PRESENT_DIAGNOSTICS_LOG_ENV}:-$mako_diagnostics_default}}"',
-        '    mako_diagnostics_previous="${mako_diagnostics_log}.1"',
-        '    mako_diagnostics_oldest="${mako_diagnostics_log}.2"',
         "    mako_diagnostics_rotation_ready=1",
         '    if [ -f "$mako_diagnostics_log" ]; then',
-        (
-            '        if [ -f "$mako_diagnostics_previous" ] && ! mv -f -- '
-            '"$mako_diagnostics_previous" "$mako_diagnostics_oldest" '
-            "2>/dev/null; then"
-        ),
-        "            mako_diagnostics_rotation_ready=0",
-        "        fi",
-        (
-            '        if [ "$mako_diagnostics_rotation_ready" = 1 ] && '
-            '! mv -f -- "$mako_diagnostics_log" '
-            '"$mako_diagnostics_previous" 2>/dev/null; then'
-        ),
-        "            mako_diagnostics_rotation_ready=0",
-        "        fi",
+        *diagnostics_rotation_lines,
         "    fi",
         (
             '    if [ "$mako_diagnostics_rotation_ready" = 1 ] && '
