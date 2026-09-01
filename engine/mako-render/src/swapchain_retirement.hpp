@@ -3,9 +3,7 @@
 #pragma once
 
 #include <chrono>
-#include <cstddef>
 #include <cstring>
-#include <type_traits>
 
 #include <vulkan/vulkan_core.h>
 
@@ -100,27 +98,13 @@ namespace mako::layer {
         return nullptr;
     }
 
-    struct PNextHeader {
-        VkStructureType sType;
-        const void* pNext;
-    };
-
-    static_assert(std::is_trivially_copyable_v<PNextHeader>);
-    static_assert(sizeof(PNextHeader) == sizeof(VkBaseInStructure));
-    static_assert(offsetof(PNextHeader, sType) ==
-        offsetof(VkBaseInStructure, sType));
-    static_assert(offsetof(PNextHeader, pNext) ==
-        offsetof(VkBaseInStructure, pNext));
-
     // Vulkan guarantees that every extensible structure starts with sType and
     // pNext, but C++ strict-aliasing rules do not make an arbitrary Vulkan
-    // structure a VkBaseInStructure object or its next node a typed base
-    // structure. Copy the common ABI header into a raw-pointer representation
-    // so optimized builds can traverse caller-owned mixed-structure chains
-    // without type-punning or pointer-provenance assumptions.
-    [[nodiscard]] inline PNextHeader pNextHeader(
+    // structure a VkBaseInStructure object. Copy the common header so optimized
+    // builds can traverse a caller-owned chain without type-punning UB.
+    [[nodiscard]] inline VkBaseInStructure pNextHeader(
             const void* node) noexcept {
-        PNextHeader header{};
+        VkBaseInStructure header{};
         if (node)
             std::memcpy(&header, node, sizeof(header));
         return header;
