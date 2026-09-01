@@ -4,18 +4,18 @@
 
 ### Release codename: Abyssal Fang
 
-> _“The abyss does not roar before it strikes; it shows one fang.”_
+> _“The abyss keeps its strength beneath the surface; one fang above the tide is warning enough.”_
 >
-> **Cassian, _Hierophant of the Abyssal Forge_**
+> **Severin Voss, _Cartographer of the Drowned Meridian_**
 
 ---
 
 MAKO Renderer 3.0 is a major milestone for MAKO and a clear step forward from earlier versions, with major changes throughout the underlying engine. Render at a lower resolution, reconstruct each real frame with spatial scaling, then optionally combine it with Frame Generation for higher displayed FPS.
 
-- **Spatial Scaling and Lossless Scaling models are here:** Enable Scaling before starting a game, choose a lower in-game resolution, then select Native Resolution, LS1 Quality, LS1 Performance, or **MAKO Scaler** (MAKO's own performance-focused scaler). The LS1 models use your licensed `Lossless.dll`; if they are unavailable, MAKO safely falls back to MAKO Scaler. Fixed and Adaptive Frame Generation work on their own or alongside Spatial Scaling.
-- **A scaler for every setup:** **MAKO Scaler** is MAKO's built-in, open, performance-focused scaler and works without Lossless Scaling. **LS1 Quality** and **LS1 Performance** use the proprietary models from your licensed Lossless Scaling installation through your own `Lossless.dll`.
+- **Spatial Scaling joins Frame Generation:** Enable Scaling before starting a game and choose a lower in-game resolution. MAKO reconstructs every real frame to the presentation resolution before optionally applying Fixed or Adaptive Frame Generation; Scaling and Frame Generation can also run independently.
+- **Choose how each real frame is rebuilt:** **Native Resolution** is the model-free linear baseline, **MAKO Scaler** is MAKO's open, performance-focused single-pass option, **LS1 Quality** prioritizes reconstruction quality, and **LS1 Performance** lowers the LS1 processing cost. The LS1 options use models from your licensed Lossless Scaling installation through your own `Lossless.dll`; if they are unavailable, MAKO safely falls back to MAKO Scaler.
 - **Deck scaling respects the real output:** Variable Gamescope surfaces now cap reconstruction at the positively identified display dimensions before Frame Generation allocates its context. A source that already fills the output stays native, while smaller sources still aspect-fit upward, avoiding discarded supersampling load without changing direct non-Gamescope scaling.
-- **Cleaner native install handoff:** MAKO Decky and the standalone archive now agree on the active Renderer version. Installing either one selects its version, and uninstalling MAKO Renderer removes files supplied by both managed native installation paths while preserving profiles.
+- **Guided installation, updates, and removal:** The standalone archive now includes branded **Install MAKO Renderer** and **Uninstall MAKO Renderer** wizards, complete offline instructions, and the correct Steam launch option. Installation verifies the package, updates safely, and preserves profiles; removal explains when the native Renderer is shared with MAKO Decky and keeps profiles by default unless you explicitly choose to remove them. Both managed installation paths now agree on the active Renderer version.
 - **Frame Generation is smarter and smoother:** Adaptive now offers a steady base cap for more consistent pacing and Fractional Adaptive for targets such as 60 real FPS to 90 displayed FPS. On ordered Gamescope SDR, a proven combined scaling-load collapse releases the automatic half-target cap instead of leaving Deck-class hardware trapped at 30 real/60 displayed FPS after the load recovers. Manual and Fixed caps remain unchanged. Fixed mode remains available when you prefer a simple 2x to 5x multiplier.
 - **Tune more while you play:** Compatible Frame Generation, scaling-method, sharpness, target, and performance settings can update during a game. Process-start options remain restart-bound, keeping the presentation path stable.
 - **Presentation is more resilient:** MAKO handles Gamescope and desktop surfaces, resolution changes, uneven frame times, and unavailable scaling models more robustly. When a requested path is not safe or supported, MAKO falls back cleanly instead of risking the game session.
