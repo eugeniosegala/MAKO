@@ -106,6 +106,10 @@ export function ConfigurationSection({
         .MAKO_ManualOverrideFields > * + * {
           margin-top: 0 !important;
         }
+        .MAKO_GpuDescription {
+          display: block;
+          padding-bottom: 10px;
+        }
       `}</style>
 
       {includeAdvancedRendering && (

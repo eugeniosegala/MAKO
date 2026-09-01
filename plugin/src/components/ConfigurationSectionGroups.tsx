@@ -667,10 +667,14 @@ export function ManualOverridesConfigurationGroup({
               label={
                 <MakoRestartLabel label={t("CONFIG_GPU", "GPU (Restart)")} />
               }
-              description={t(
-                "CONFIG_GPU_DESC",
-                "Optional GPU name, vendor:device ID, or PCI bus ID. Restart the game after changing it.",
-              )}
+              description={
+                <span className="MAKO_GpuDescription">
+                  {t(
+                    "CONFIG_GPU_DESC",
+                    "Optional GPU name, vendor:device ID, or PCI bus ID. Restart the game after changing it.",
+                  )}
+                </span>
+              }
               value={config.gpu}
               onChange={(event) =>
                 onConfigChange(GPU, event.currentTarget.value)

@@ -253,6 +253,12 @@ describe("External Tools controls", () => {
     );
     expect(screen.getByText("Lossless.dll Path (Restart)")).toBeTruthy();
     expect(screen.getByText("GPU (Restart)")).toBeTruthy();
+    expect(
+      window.getComputedStyle(
+        container.querySelector<HTMLElement>(".MAKO_GpuDescription")!,
+      ).paddingBottom,
+    ).toBe("10px");
+    expect(container.querySelector(".MAKO_MatchedProcessesField")).toBeNull();
   });
 
   test("explains setting ownership with quiet relationship hints", () => {
