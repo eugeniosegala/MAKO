@@ -14,6 +14,19 @@ decky_plugin_manifest="$HOME/homebrew/plugins/Mako/plugin.json"
 decky_install_prefix="$HOME/.local"
 configuration_desktop_path="share/applications/io.github.eugeniosegala.mako.desktop"
 uninstaller_desktop_path="share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
+dialog_title="MAKO Renderer"
+dialog_icon_name="io.github.eugeniosegala.mako"
+dialog_icon_path=""
+dialog_data_dirs="$script_dir/share:$script_dir/../share:$install_prefix/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+for candidate_icon in \
+        "$script_dir/share/icons/hicolor/256x256/apps/$dialog_icon_name.png" \
+        "$script_dir/../share/icons/hicolor/256x256/apps/$dialog_icon_name.png" \
+        "$install_prefix/share/icons/hicolor/256x256/apps/$dialog_icon_name.png"; do
+    if [[ -f "$candidate_icon" ]]; then
+        dialog_icon_path="$candidate_icon"
+        break
+    fi
+done
 decky_renderer_relative_paths=(
     ".local/share/mako-render/lib/libmako-render.so"
     ".local/share/mako-render/lib32/libmako-render.so"
@@ -37,14 +50,27 @@ decky_renderer_relative_paths=(
     ".local/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
 )
 
+kdialog_mako() {
+    env XDG_DATA_DIRS="$dialog_data_dirs" \
+        kdialog --title "$dialog_title" --icon "$dialog_icon_name" "$@"
+}
+
+zenity_mako() {
+    local -a options=(--title="$dialog_title")
+    if [[ -n "$dialog_icon_path" ]]; then
+        options+=(--window-icon="$dialog_icon_path")
+    fi
+    zenity "${options[@]}" "$@"
+}
+
 fail() {
     local message="$1"
     if [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" != "1" ]] &&
             { [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; }; then
         if command -v kdialog >/dev/null 2>&1; then
-            kdialog --error "$message" || true
+            kdialog_mako --error "$message" || true
         elif command -v zenity >/dev/null 2>&1; then
-            zenity --error --text="$message" || true
+            zenity_mako --error --text="$message" || true
         fi
     fi
     printf 'MAKO installer: %s\n' "$message" >&2
@@ -56,11 +82,11 @@ notice() {
     if [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" != "1" ]] &&
             { [[ -n "${DISPLAY:-}" ]] || [[ -n "${WAYLAND_DISPLAY:-}" ]]; }; then
         if command -v kdialog >/dev/null 2>&1; then
-            kdialog --msgbox "$message" || true
+            kdialog_mako --msgbox "$message" || true
             return
         fi
         if command -v zenity >/dev/null 2>&1; then
-            zenity --info --text="$message" || true
+            zenity_mako --info --text="$message" || true
             return
         fi
     fi
@@ -74,16 +100,17 @@ confirm() {
     fi
     if [[ -n "${DISPLAY:-}" || -n "${WAYLAND_DISPLAY:-}" ]]; then
         if command -v kdialog >/dev/null 2>&1; then
-            kdialog --yesno "$message"
+            kdialog_mako --yesno "$message"
             return
         fi
         if command -v zenity >/dev/null 2>&1; then
-            zenity --question --text="$message"
+            zenity_mako --question --text="$message"
             return
         fi
     fi
     local answer
-    read -r -p "$message [y/N] " answer
+    printf '%s [y/N] ' "$message" >&2
+    read -r answer
     [[ "$answer" =~ ^[Yy]([Ee][Ss])?$ ]]
 }
 
@@ -288,7 +315,10 @@ install_payload() {
     write_installed_state_manifest
     write_active_renderer_state "$version"
 
-    notice "MAKO Renderer $version is installed. MAKO Renderer Configuration will open now."
+    notice "MAKO Renderer $version is installed. MAKO Renderer Configuration will open now.
+
+For a native Steam or Proton game, use this Steam launch option:
+\"$install_prefix/bin/mako-launch\" %command%"
     if [[ "${MAKO_INSTALLER_NO_LAUNCH:-0}" != "1" ]]; then
         if [[ -x "$install_prefix/bin/mako-ui" ]]; then
             "$install_prefix/bin/mako-ui" >/dev/null 2>&1 &
@@ -304,7 +334,11 @@ uninstall_payload() {
         fail "No MAKO Renderer installation managed by this installer was found at $install_prefix."
 
     validate_manifest "$state_manifest"
-    if ! confirm "Remove the managed native MAKO Renderer? MAKO Decky, modified files, and your profiles will be kept."; then
+    local uninstall_message="Remove the managed native MAKO Renderer? Modified files and your profiles will be kept."
+    if [[ "$install_prefix" == "$decky_install_prefix" && -f "$decky_plugin_manifest" ]]; then
+        uninstall_message="Remove the managed native MAKO Renderer? MAKO Decky will remain installed, but its shared native Renderer will be removed. Open MAKO Decky and select Install Renderer before using MAKO again. Modified files and your profiles will be kept."
+    fi
+    if ! confirm "$uninstall_message"; then
         exit 0
     fi
 
@@ -334,9 +368,9 @@ uninstall_payload() {
 
     if [[ "$purge_configuration" == "1" ]] ||
             { [[ "${MAKO_INSTALLER_ASSUME_YES:-0}" != "1" ]] &&
-                confirm "Also remove your MAKO Renderer profiles and configuration from $config_dir?"; }; then
+                confirm "Also remove your MAKO Renderer profiles, settings, and diagnostics from $config_dir? This cannot be undone."; }; then
         rm -rf -- "$config_dir"
-        notice "MAKO Renderer and its configuration have been removed."
+        notice "MAKO Renderer, its configuration, and its diagnostics have been removed."
     else
         notice "MAKO Renderer has been removed. Your profiles remain in $config_dir."
     fi

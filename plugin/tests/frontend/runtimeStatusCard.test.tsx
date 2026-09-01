@@ -46,6 +46,8 @@ describe("authoritative live status", () => {
           sourceHeight: 540,
           presentationWidth: 1440,
           presentationHeight: 810,
+          gamescopeTargetWidth: 1280,
+          gamescopeTargetHeight: 720,
           requestedMethod: "ls1",
           activeMethod: "mako",
           effectiveFactor: 1.5,
@@ -81,7 +83,7 @@ describe("authoritative live status", () => {
     expect(screen.getByText("Input")).toBeTruthy();
     expect(screen.getByText("960 × 540")).toBeTruthy();
     expect(screen.getByText("Output")).toBeTruthy();
-    expect(screen.getByText("1440 × 810")).toBeTruthy();
+    expect(screen.getByText("1440 × 810 → 1280 × 720")).toBeTruthy();
     expect(screen.getByText("1.50×")).toBeTruthy();
     expect(screen.getByText("Factor")).toBeTruthy();
     const notices = container.querySelectorAll(
@@ -102,6 +104,28 @@ describe("authoritative live status", () => {
         "You selected LS1 Quality; MAKO is using MAKO Scaler instead.",
       ),
     ).toBeTruthy();
+  });
+
+  test("keeps the compact output resolution unchanged without supersampling", () => {
+    window.SP_REACT = React;
+    render(
+      <RuntimeStatusCard
+        runtimeState={{
+          ...EMPTY_RUNTIME_SCALING_UI_STATE,
+          hasContext: true,
+          scalingActive: true,
+          scalingEnabled: true,
+          sourceWidth: 960,
+          sourceHeight: 540,
+          presentationWidth: 1440,
+          presentationHeight: 810,
+          effectiveFactor: 1.5,
+        }}
+      />,
+    );
+
+    expect(screen.getByText("1440 × 810")).toBeTruthy();
+    expect(screen.queryByText(/1440 × 810 →/)).toBeNull();
   });
 
   test("states clearly when a running game is not using MAKO", () => {

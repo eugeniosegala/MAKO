@@ -40,6 +40,7 @@ vi.mock("../../src/i18n/i18n", () => ({
 
 import { FgmodClipboardButton } from "../../src/components/FgmodClipboardButton";
 import { SmartClipboardButton } from "../../src/components/SmartClipboardButton";
+import { UsageInstructions } from "../../src/components/UsageInstructions";
 
 describe("clipboard buttons", () => {
   beforeEach(() => {
@@ -62,6 +63,18 @@ describe("clipboard buttons", () => {
       "/home/deck/.local/bin/mako-run %command%",
     );
     expect(mocks.showClipboardErrorToast).not.toHaveBeenCalled();
+  });
+
+  test("keeps the copy action inside usage instructions before Renderer installation", async () => {
+    mocks.getLaunchOption.mockRejectedValue(new Error("Renderer unavailable"));
+
+    render(<UsageInstructions />);
+
+    expect(await screen.findByText("Usage Instructions")).toBeTruthy();
+    expect(screen.getByText("Copy Launch Option")).toBeTruthy();
+    expect(
+      screen.getByText("/home/deck/.local/bin/mako-run %command%"),
+    ).toBeTruthy();
   });
 
   test("keeps the DeckyFG provider failure visible instead of copying a partial command", async () => {

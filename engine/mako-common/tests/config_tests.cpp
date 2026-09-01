@@ -134,6 +134,8 @@ int main() {
         "GameConf must use the Renderer profile defaults");
     expect(defaults.scaling_method == ls::ScalingMethod::Ls1,
         "LS1 Quality must be the default spatial scaling method");
+    expect(ls::GameConfDefaults::flowScale == 0.9F,
+        "standalone Renderer and MAKO Decky must share the 90% Flow Scale default");
     expect(ls::scalingMethodFromName("native") ==
                 ls::ScalingMethod::Native &&
             std::string_view(ls::scalingMethodName(

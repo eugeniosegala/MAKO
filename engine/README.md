@@ -36,7 +36,7 @@ See the <a href="../README.md#install-and-use" target="_blank" rel="noopener nor
 
 For frame generation or LS1 scaling, first install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO Scaler works without `Lossless.dll`.
 
-Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0" target="_blank" rel="noopener noreferrer">latest Renderer release</a>, then run **Install MAKO Renderer**. It verifies and installs the archive below `~/.local`, preserves profiles, and opens **MAKO Renderer Configuration**. To reopen it later, switch to Desktop Mode, open the bottom-left Application Launcher, search for **MAKO Renderer Configuration**, and click the MAKO-logo app icon. You can also run `~/.local/bin/mako-ui`. Run the installer again after extracting an update; use **Uninstall MAKO Renderer** from the application menu to remove it.
+Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0" target="_blank" rel="noopener noreferrer">latest Renderer release</a>. The extracted `README.txt` contains the complete offline install, update, launch, and uninstall instructions. Run **Install MAKO Renderer**; it verifies and installs the archive below `~/.local`, preserves profiles, opens **MAKO Renderer Configuration**, and shows the native Steam/Proton launch option for the selected installation location. To reopen the UI later, switch to Desktop Mode, open the bottom-left Application Launcher, search for **MAKO Renderer Configuration**, and click the MAKO-logo app icon. You can also run `~/.local/bin/mako-ui`. Run the installer again after extracting an update; use **Uninstall MAKO Renderer** from the application menu to remove it.
 
 For a manual installation, extract the archive into your user-local prefix:
 
@@ -76,6 +76,8 @@ For a direct desktop command, pass the executable and arguments to the same laun
 ```
 
 `mako-launch` enables MAKO only for that process. It maintains the supported standalone Vulkan-layer boundary; use one frame-generation implementation per game. MAKO Decky's optional Gamescope WSI, MangoHud, and vkBasalt controls remain Decky features because they require per-game manifest staging.
+
+Want to use Frame Generation or scaling with videos? See <a href="docs/VIDEOS_WITH_MAKO.md" target="_blank" rel="noopener noreferrer">Videos with MAKO</a>.
 
 ### Manual configuration and validation
 
@@ -137,5 +139,6 @@ Artifacts are written under `engine/out/`. MAKO Decky packages this engine autom
 - <a href="docs/WSI-ISOLATION.md" target="_blank" rel="noopener noreferrer">WSI isolation</a>: Vulkan discovery, Gamescope presentation ownership, and diagnostics.
 - <a href="docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">Optional graphics integrations</a>: MAKO Decky external tools, manual chaining, and limits.
 - <a href="docs/FLATPAK-GUIDE.md" target="_blank" rel="noopener noreferrer">Flatpak guide</a>: runtime extensions and direct application overrides.
+- <a href="docs/VIDEOS_WITH_MAKO.md" target="_blank" rel="noopener noreferrer">Videos with MAKO</a>: use Frame Generation and spatial scaling with mpv.
 - <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">Troubleshooting</a>: activation, configuration, and presentation diagnostics.
 - <a href="docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect standalone diagnostics</a>: create a focused Desktop report.

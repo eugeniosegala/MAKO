@@ -20,7 +20,6 @@ import { InstallationButton } from "./InstallationButton";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { ProfileManagement } from "./ProfileManagement";
 import { UsageInstructions } from "./UsageInstructions";
-import { SmartClipboardButton } from "./SmartClipboardButton";
 import { FgmodClipboardButton } from "./FgmodClipboardButton";
 import { FeatureSettings } from "./FeatureSettings";
 import { RuntimeStatusCard } from "./RuntimeStatusCard";
@@ -206,12 +205,7 @@ export function Content() {
 
         <UsageInstructions />
 
-        {isInstalled && (
-          <>
-            <SmartClipboardButton />
-            <FgmodClipboardButton />
-          </>
-        )}
+        {isInstalled && <FgmodClipboardButton />}
 
         {isInstalled && (
           <ConfigurationSection

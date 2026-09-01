@@ -340,6 +340,18 @@ done
 # disposable.
 cp "$repo_root/scripts/mako-installer" "$install_dir/Install MAKO Renderer"
 chmod 0755 "$install_dir/Install MAKO Renderer"
+standalone_readme="$repo_root/dist/MAKO-Renderer-README.txt"
+if [[ ! -s "$standalone_readme" ]]; then
+    echo "Packaging failed: missing standalone Renderer README: $standalone_readme" >&2
+    exit 1
+fi
+cp "$standalone_readme" "$install_dir/README.txt"
+if ! grep -Fq '~/.local/bin/mako-launch %command%' "$install_dir/README.txt" ||
+        ! grep -Fq 'Uninstall MAKO Renderer' "$install_dir/README.txt" ||
+        ! grep -Fq 'profiles, settings, and diagnostics' "$install_dir/README.txt"; then
+    echo "Packaging failed: standalone Renderer README is incomplete" >&2
+    exit 1
+fi
 printf '%s\n' "$version" > "$install_dir/MAKO-Renderer-version.txt"
 manifest_roots=(bin lib share)
 if [[ -d "$install_dir/lib32" ]]; then

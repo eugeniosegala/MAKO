@@ -3,6 +3,7 @@ import { PanelSectionRow } from "@decky/ui";
 import { DEFAULT_STEAM_LAUNCH_OPTION, getLaunchOption } from "../api/makoApi";
 import t from "../i18n/i18n";
 import { MakoSectionHeader } from "./MakoUi";
+import { SmartClipboardButton } from "./SmartClipboardButton";
 
 export function UsageInstructions() {
   const [launchOption, setLaunchOption] = useState(DEFAULT_STEAM_LAUNCH_OPTION);
@@ -87,6 +88,8 @@ export function UsageInstructions() {
           )}
         </div>
       </PanelSectionRow>
+
+      <SmartClipboardButton />
     </>
   );
 }

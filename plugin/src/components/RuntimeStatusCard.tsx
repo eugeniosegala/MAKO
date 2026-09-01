@@ -272,10 +272,27 @@ export function RuntimeStatusCard({
                         />
                         <StatusDetail
                           label={t("LIVE_STATUS_SCALED_RESOLUTION", "Output")}
-                          value={resolution(
-                            runtimeState.presentationWidth,
-                            runtimeState.presentationHeight,
-                          )}
+                          value={
+                            runtimeState.supersamplingActive
+                              ? t(
+                                  "LIVE_STATUS_SUPERSAMPLED_OUTPUT",
+                                  "{presentation} → {target}",
+                                  {
+                                    presentation: resolution(
+                                      runtimeState.presentationWidth,
+                                      runtimeState.presentationHeight,
+                                    ),
+                                    target: resolution(
+                                      runtimeState.gamescopeTargetWidth,
+                                      runtimeState.gamescopeTargetHeight,
+                                    ),
+                                  },
+                                )
+                              : resolution(
+                                  runtimeState.presentationWidth,
+                                  runtimeState.presentationHeight,
+                                )
+                          }
                         />
                         <StatusDetail
                           label={t("LIVE_STATUS_MULTIPLIER", "Factor")}

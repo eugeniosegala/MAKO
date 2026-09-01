@@ -35,9 +35,48 @@ MAKO_INSTALL_PREFIX="$install_prefix" \
 XDG_CONFIG_HOME="$config_home" \
 MAKO_INSTALLER_ASSUME_YES=1 \
 MAKO_INSTALLER_NO_LAUNCH=1 \
-"$package_root/Install MAKO Renderer" --install >/dev/null
+"$package_root/Install MAKO Renderer" --install >"$test_root/install.log"
 
 [[ -x "$install_prefix/bin/mako-ui" ]] || fail "UI was not installed"
+grep -Fq 'For a native Steam or Proton game, use this Steam launch option:' \
+    "$test_root/install.log" ||
+    fail "installer completion did not explain how to activate the Renderer"
+grep -Fq "\"$install_prefix/bin/mako-launch\" %command%" \
+    "$test_root/install.log" ||
+    fail "installer completion did not show the selected prefix's launcher"
+
+dialog_bin="$test_root/dialog-bin"
+dialog_capture="$test_root/kdialog.log"
+dialog_install_prefix="$test_root/dialog-install"
+mkdir -p "$dialog_bin"
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf '\''XDG_DATA_DIRS=%s\n'\'' "$XDG_DATA_DIRS" >> "$MAKO_DIALOG_CAPTURE"' \
+    'printf '\''%s\n'\'' "$@" >> "$MAKO_DIALOG_CAPTURE"' \
+    'exit 0' > "$dialog_bin/kdialog"
+chmod 0755 "$dialog_bin/kdialog"
+PATH="$dialog_bin:$PATH" \
+DISPLAY=:mako-installer-test \
+MAKO_DIALOG_CAPTURE="$dialog_capture" \
+MAKO_INSTALL_PREFIX="$dialog_install_prefix" \
+XDG_CONFIG_HOME="$config_home" \
+MAKO_INSTALLER_ASSUME_YES=0 \
+MAKO_INSTALLER_NO_LAUNCH=1 \
+"$package_root/Install MAKO Renderer" --install >/dev/null
+grep -Fxq -- '--title' "$dialog_capture" ||
+    fail "KDialog invocation did not set a title"
+grep -Fxq 'MAKO Renderer' "$dialog_capture" ||
+    fail "KDialog invocation did not use the MAKO Renderer title"
+grep -Fxq -- '--icon' "$dialog_capture" ||
+    fail "KDialog invocation did not set an icon"
+grep -Fxq 'io.github.eugeniosegala.mako' "$dialog_capture" ||
+    fail "KDialog invocation did not use the MAKO shark icon"
+grep -Fq "XDG_DATA_DIRS=$package_root/share:" "$dialog_capture" ||
+    fail "KDialog invocation could not discover the extracted shark icon"
+grep -Fxq -- '--yesno' "$dialog_capture" ||
+    fail "branded KDialog confirmation was not exercised"
+grep -Fxq -- '--msgbox' "$dialog_capture" ||
+    fail "branded KDialog completion was not exercised"
 [[ -f "$install_prefix/share/mako-render/installer/installed-files.sha256" ]] ||
     fail "installer state was not written"
 grep -Fq '"owner": "standalone"' \
@@ -123,6 +162,22 @@ mkdir -p "$test_root/.local/share/mako-render/lib"
 printf '%s\n' 'decky renderer' > \
     "$test_root/.local/share/mako-render/lib/libmako-render.so"
 printf '%s\n' '#!/usr/bin/env bash' > "$test_root/.local/bin/mako-run"
+
+printf 'n\n' | HOME="$test_root" \
+        DISPLAY= \
+        WAYLAND_DISPLAY= \
+        XDG_CONFIG_HOME="$config_home" \
+        MAKO_INSTALLER_ASSUME_YES=0 \
+        "$test_root/.local/bin/mako-installer" --uninstall \
+        >"$test_root/decky-uninstall.log" 2>&1
+grep -Fq 'MAKO Decky will remain installed, but its shared native Renderer will be removed.' \
+    "$test_root/decky-uninstall.log" ||
+    fail "uninstaller did not explain the shared MAKO Decky Renderer consequence"
+grep -Fq 'Open MAKO Decky and select Install Renderer before using MAKO again.' \
+    "$test_root/decky-uninstall.log" ||
+    fail "uninstaller did not explain how to restore MAKO Decky"
+[[ -f "$test_root/.local/share/mako-render/lib/libmako-render.so" ]] ||
+    fail "declining the shared Renderer warning changed the Decky payload"
 
 HOME="$test_root" \
 XDG_CONFIG_HOME="$config_home" \

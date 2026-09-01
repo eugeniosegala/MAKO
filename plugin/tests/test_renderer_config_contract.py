@@ -194,6 +194,10 @@ class RendererConfigContractTests(unittest.TestCase):
             renderer_constant("ultraPerformanceFlowScale"),
         )
         self.assertEqual(
+            CONFIG_SCHEMA_DEF["flow_scale"]["default"],
+            renderer_constant("flowScale"),
+        )
+        self.assertEqual(
             CONFIG_SCHEMA_DEF["scaling_factor"]["default"],
             renderer_constant("scalingFactor"),
         )

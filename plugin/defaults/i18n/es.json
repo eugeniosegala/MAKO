@@ -271,6 +271,7 @@
   "LIVE_STATUS_SCALING_INACTIVE": "On in settings, but the game image is not being upscaled.",
   "LIVE_STATUS_PENDING": "A saved change is still applying or needs a restart.",
   "LIVE_STATUS_SUPERSAMPLING": "Quality Supersampling is on for a sharper final image.",
+  "LIVE_STATUS_SUPERSAMPLED_OUTPUT": "{presentation} → {target}",
   "LIVE_STATUS_SCALING_FALLBACK": "You selected {requested}; MAKO is using {active} instead.",
   "LIVE_STATUS_MODE": "Mode",
   "LIVE_STATUS_FIXED_VALUE": "Fixed",
