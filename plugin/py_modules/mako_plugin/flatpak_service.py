@@ -641,8 +641,14 @@ class FlatpakService(BaseService):
             has_config_fs = self._filesystem_override_present(filesystem_section, config_path)
             has_dll_fs = self._filesystem_override_present(filesystem_section, dll_directory)
             has_wrapper_fs = self._filesystem_override_present(filesystem_section, wrapper_path)
+            has_gamescope_wsi_fs = self._filesystem_override_present(
+                filesystem_section,
+                str(self.gamescope_wsi_compatibility_dir),
+            )
 
-            filesystem_override = has_config_fs and has_dll_fs
+            filesystem_override = (
+                has_config_fs and has_dll_fs and has_gamescope_wsi_fs
+            )
 
             environment_values = {}
             in_environment = False
@@ -695,12 +701,13 @@ class FlatpakService(BaseService):
             )
 
             self.log.debug(
-                "Override status for %s: resources=%s (%s/%s), wrapper=%s, "
+                "Override status for %s: resources=%s (%s/%s/%s), wrapper=%s, "
                 "environment=%s, required_environment=%s",
                 app_id,
                 filesystem_override,
                 has_config_fs,
                 has_dll_fs,
+                has_gamescope_wsi_fs,
                 has_wrapper_fs,
                 legacy_env_override,
                 required_env_override,
@@ -879,6 +886,7 @@ class FlatpakService(BaseService):
                 f"--filesystem={config_path}:rw",
                 f"--filesystem={dll_directory}:ro",
                 f"--filesystem={wrapper_path}:ro",
+                f"--filesystem={self.gamescope_wsi_compatibility_dir}:ro",
             ]
 
             for override in filesystem_overrides:
@@ -964,6 +972,7 @@ class FlatpakService(BaseService):
                 f"--nofilesystem={dll_directory}",
                 f"--nofilesystem={config_path}",
                 f"--nofilesystem={wrapper_path}",
+                f"--nofilesystem={self.gamescope_wsi_compatibility_dir}",
             ]
 
             removal_errors = []

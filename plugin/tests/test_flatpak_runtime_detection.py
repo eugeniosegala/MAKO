@@ -360,6 +360,15 @@ versions=26.08;25.08;24.08
                 [
                     "override",
                     "--user",
+                    f"--filesystem={self.service.gamescope_wsi_compatibility_dir}:ro",
+                    app_id,
+                ],
+                calls,
+            )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
                     f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
                     app_id,
                 ],
@@ -517,9 +526,10 @@ versions=26.08;25.08;24.08
         app_id = "org.DolphinEmu.dolphin-emu"
         self.service._get_mako_paths = lambda: ("/config", "/dll")
         self.service.mako_launch_script_path = Path("/wrapper")
+        self.service.gamescope_wsi_compatibility_dir = Path("/wsi")
 
         complete_override = """[Context]
-filesystems=/config;/dll;/wrapper;
+filesystems=/config;/dll;/wrapper;/wsi;
 
 [Environment]
 MAKO_CONFIG=/config/conf.toml

@@ -61,7 +61,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 55
+WRAPPER_FORMAT_VERSION = 56
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -322,41 +322,56 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"mako_spatial_scaling_layer_dir={spatial_scaling_layer_dir}",
         f"mako_mangohud_layer_dir={mangohud_layer_dir}",
         f"mako_vkbasalt_layer_dir={vkbasalt_layer_dir}",
+        "mako_flatpak_runtime=0",
+        "mako_flatpak_launch=0",
+        'if [ "${1##*/}" = flatpak ] && [ "${2:-}" = run ]; then',
+        "    mako_flatpak_launch=1",
+        "fi",
         "unset MANGOHUD",
         "unset ENABLE_VKBASALT",
-        f"if [ -d {shlex.quote(context.flatpak_implicit_layer_dir)} ]; then",
+        f"if [ -d {shlex.quote(context.flatpak_implicit_layer_dir)} ] || "
+        '[ "$mako_flatpak_launch" = 1 ]; then',
         f"    mako_implicit_layer_path={shlex.quote(context.flatpak_implicit_layer_dir)}",
+        "    mako_flatpak_runtime=1",
+        "    mako_spatial_scaling_manifest=\"$mako_implicit_layer_path/"
+        f"{context.spatial_scaling_manifest_filename_64}\"",
         "else",
         f"    mako_implicit_layer_path={shlex.quote(str(context.local_share_dir))}",
+        f"    mako_spatial_scaling_manifest={spatial_scaling_manifest}",
+        "fi",
         # Preserve the established Renderer -> Gamescope WSI -> spatial order.
-        # This development probe keeps frame generation at source resolution
-        # and lets the lower role reconstruct every delivered image after WSI.
-        # It exists to isolate the placement regression before the equivalent
-        # ordering is folded into the combined upper owner.
-        '    if [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
+        # Flatpak preparation stages the host's own WSI binary beside its
+        # guarded manifest, so Heroic and EmuDeck use this same chain without
+        # exposing or searching the host's global Vulkan layer directory.
+        'if [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
         '[ "$mako_gamescope_wsi_session" = 1 ] && [ -r '
         f"{gamescope_wsi_manifest} ] && "
-        '( [ "${mako_spatial_scaling_required:-0}" != 1 ] || [ -r '
-        f"{spatial_scaling_manifest} ] ) && [ \"${{{MAKO_LAYER_DISABLE_ENV}:-0}}\" != 1 ]; then",
-        '        if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
-        f"            export {MAKO_SPLIT_LAYER_CHAIN_ENV}={MAKO_SPLIT_LAYER_CHAIN_COMBINED_PIPELINE}",
-        "        fi",
-        f"        unset {GAMESCOPE_WSI_DISABLE_ENV}",
-        f"        export {GAMESCOPE_WSI_ENABLE_ENV}=1",
-        "        export NODEVICE_SELECT=1",
-        "        export DISABLE_LAYER_MESA_ANTI_LAG=1",
-        f"        mako_managed_instance_layers={MAKO_LAYER_NAME}:{GAMESCOPE_WSI_LAYER_NAME_64}",
-        '        mako_implicit_layer_path="$mako_implicit_layer_path:$mako_gamescope_wsi_layer_dir"',
-        '        if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
-        f"            unset {SPATIAL_SCALING_LAYER_DISABLE_ENV}",
-        f"            export {SPATIAL_SCALING_LAYER_ENABLE_ENV}=1",
-        f'            mako_managed_instance_layers="$mako_managed_instance_layers:{SPATIAL_SCALING_LAYER_NAME}"',
+        '( [ "${mako_spatial_scaling_required:-0}" != 1 ] || '
+        '[ -r "$mako_spatial_scaling_manifest" ] || '
+        '[ "$mako_flatpak_launch" = 1 ] ) && '
+        f'[ "${{{MAKO_LAYER_DISABLE_ENV}:-0}}" != 1 ]; then',
+        '    if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
+        f"        export {MAKO_SPLIT_LAYER_CHAIN_ENV}={MAKO_SPLIT_LAYER_CHAIN_COMBINED_PIPELINE}",
+        "    fi",
+        f"    unset {GAMESCOPE_WSI_DISABLE_ENV}",
+        f"    export {GAMESCOPE_WSI_ENABLE_ENV}=1",
+        "    export NODEVICE_SELECT=1",
+        "    export DISABLE_LAYER_MESA_ANTI_LAG=1",
+        f"    mako_managed_instance_layers={MAKO_LAYER_NAME}:{GAMESCOPE_WSI_LAYER_NAME_64}",
+        '    mako_implicit_layer_path="$mako_implicit_layer_path:$mako_gamescope_wsi_layer_dir"',
+        '    if [ "${mako_spatial_scaling_required:-0}" = 1 ]; then',
+        f"        unset {SPATIAL_SCALING_LAYER_DISABLE_ENV}",
+        f"        export {SPATIAL_SCALING_LAYER_ENABLE_ENV}=1",
+        f'        mako_managed_instance_layers="$mako_managed_instance_layers:{SPATIAL_SCALING_LAYER_NAME}"',
+        '        if [ "$mako_flatpak_runtime" != 1 ]; then',
         '            mako_implicit_layer_path="$mako_implicit_layer_path:$mako_spatial_scaling_layer_dir"',
         "        fi",
-        '    elif [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
-        '[ "$mako_gamescope_wsi_session" != 1 ]; then',
-        '        mako_gamescope_wsi_skip_log="MAKO Decky: Gamescope WSI skipped: no active Gamescope session; continuing with the managed WSI and spatial chain disabled."',
         "    fi",
+        'elif [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
+        '[ "$mako_gamescope_wsi_session" != 1 ]; then',
+        '    mako_gamescope_wsi_skip_log="MAKO Decky: Gamescope WSI skipped: no active Gamescope session; continuing with the managed WSI and spatial chain disabled."',
+        "fi",
+        'if [ "$mako_flatpak_runtime" != 1 ]; then',
         '    case "$mako_external_vulkan_layer" in',
         f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
         f"            if [ -r {mangohud_manifest} ] || [ -r {mangohud_manifest32} ]; then",
@@ -418,9 +433,41 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "unset mako_existing_instance_layers",
         "unset mako_managed_instance_layers",
         "unset mako_managed_external_layer",
+        "unset mako_spatial_scaling_manifest",
         f'export {VK_IMPLICIT_LAYER_PATH_ENV}="$mako_implicit_layer_path"',
         f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
         f"export {MAKO_CONFIG_ENV}={shlex.quote(str(context.config_file_path))}",
+        # A direct EmuDeck/Flatpak shortcut executes this wrapper on the host.
+        # Per-launch Flatpak options must override its persisted app-wide FG
+        # preparation so the explicit managed chain survives into the sandbox.
+        'if [ -n "${VK_INSTANCE_LAYERS:-}" ] && '
+        '[ "${1##*/}" = flatpak ] && [ "${2:-}" = run ]; then',
+        '    mako_flatpak_command="$1"',
+        "    shift",
+        '    mako_flatpak_subcommand="$1"',
+        "    shift",
+        '    set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--env={VK_INSTANCE_LAYERS_ENV}="${{{VK_INSTANCE_LAYERS_ENV}}}" '
+        f'--env={VK_IMPLICIT_LAYER_PATH_ENV}="${{{VK_IMPLICIT_LAYER_PATH_ENV}}}" '
+        f'--env={MAKO_CONFIG_ENV}="${{{MAKO_CONFIG_ENV}}}" '
+        f'--unset-env={VK_ADD_IMPLICIT_LAYER_PATH_ENV} '
+        f'--unset-env={MAKO_LAYER_ENABLE_ENV} '
+        f'--unset-env={MAKO_LAYER_DISABLE_ENV} '
+        f'--unset-env={GAMESCOPE_WSI_ENABLE_ENV} '
+        f'--unset-env={GAMESCOPE_WSI_DISABLE_ENV} '
+        f'--unset-env={SPATIAL_SCALING_LAYER_ENABLE_ENV} '
+        f'--unset-env={SPATIAL_SCALING_LAYER_DISABLE_ENV} '
+        '"$@"',
+        f'    if [ -n "${{{MAKO_SPLIT_LAYER_CHAIN_ENV}:-}}" ]; then',
+        '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--env={MAKO_SPLIT_LAYER_CHAIN_ENV}="${{{MAKO_SPLIT_LAYER_CHAIN_ENV}}}" '
+        '"${@:3}"',
+        "    fi",
+        "    unset mako_flatpak_command",
+        "    unset mako_flatpak_subcommand",
+        "fi",
+        "unset mako_flatpak_runtime",
+        "unset mako_flatpak_launch",
         "# Heroic can discard a game's stderr. Capture opt-in engine diagnostics here instead.",
         f"mako_diagnostics_default={shlex.quote(str(diagnostics_log_path))}",
         f'if [ "${{{PRESENT_DIAGNOSTICS_ENV}:-0}}" != "0" ]; then',

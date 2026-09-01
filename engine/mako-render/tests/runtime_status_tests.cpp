@@ -7,9 +7,12 @@
 #include <fstream>
 #include <iostream>
 #include <iterator>
+#include <locale>
 #include <string>
 
 #include <unistd.h>
+#include <fcntl.h>
+#include <sys/file.h>
 
 namespace {
 
@@ -19,6 +22,21 @@ namespace {
         std::cerr << "runtime status test failed: " << message << '\n';
         std::exit(1);
     }
+
+    class LocalizedNumericPunctuation final : public std::numpunct<char> {
+    protected:
+        char do_decimal_point() const override {
+            return ',';
+        }
+
+        char do_thousands_sep() const override {
+            return '.';
+        }
+
+        std::string do_grouping() const override {
+            return "\3";
+        }
+    };
 
 }
 
@@ -101,6 +119,27 @@ int main() {
             std::string::npos,
         "spatial scaling display ceiling missing");
 
+    const auto previousLocale = std::locale();
+    std::locale::global(std::locale(
+        std::locale::classic(), new LocalizedNumericPunctuation
+    ));
+    const auto localeIndependentJson = mako::layer::runtimeStatusJson(
+        record, 1234567, 2345678, 3456789, "frame-generation", 4567890
+    );
+    std::locale::global(previousLocale);
+    expect(localeIndependentJson.find("\"pid\":1234567") !=
+            std::string::npos,
+        "application locale changed the runtime PID");
+    expect(localeIndependentJson.find("\"context\":3456789") !=
+            std::string::npos,
+        "application locale changed the runtime context ID");
+    expect(localeIndependentJson.find("\"presentation_width\":1280") !=
+            std::string::npos,
+        "application locale changed a runtime extent");
+    expect(localeIndependentJson.find("\"effective_factor\":1.33333") !=
+            std::string::npos,
+        "application locale changed a runtime floating-point value");
+
     const auto temporaryRoot = std::filesystem::temp_directory_path() /
         ("mako-runtime-status-test-" +
          std::to_string(static_cast<uint64_t>(::getpid())));
@@ -110,11 +149,14 @@ int main() {
         "failed to set MAKO_CONFIG");
 
     std::filesystem::path statusPath;
+    std::filesystem::path livenessPath;
     {
         mako::layer::RuntimeStatusPublisher publisher(
             456, "frame-generation"
         );
         statusPath = publisher.path();
+        livenessPath = statusPath;
+        livenessPath += ".lock";
         publisher.publish(record);
         expect(std::filesystem::is_regular_file(statusPath),
             "atomic status file was not published");
@@ -126,9 +168,19 @@ int main() {
         expect(published.find("\"state_revision\":9") !=
                 std::string::npos,
             "published state revision missing");
+        const auto competingDescriptor = ::open(
+            livenessPath.c_str(), O_RDWR | O_CLOEXEC
+        );
+        expect(competingDescriptor >= 0,
+            "runtime liveness lock was not published");
+        expect(::flock(competingDescriptor, LOCK_EX | LOCK_NB) != 0,
+            "runtime liveness lock was not held by its publisher");
+        ::close(competingDescriptor);
     }
     expect(!std::filesystem::exists(statusPath),
         "status file was not retired with its context");
+    expect(!std::filesystem::exists(livenessPath),
+        "liveness lock was not retired with its context");
     std::filesystem::remove_all(temporaryRoot);
     return 0;
 }

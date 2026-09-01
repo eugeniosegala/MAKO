@@ -1,6 +1,7 @@
 """Validation and aggregation tests for Renderer runtime status records."""
 
 import json
+import fcntl
 import os
 from pathlib import Path
 import sys
@@ -185,6 +186,25 @@ class RuntimeStateTests(unittest.TestCase):
 
         self.assertEqual(status["contexts"], [])
         self.assertFalse(path.exists())
+
+    def test_held_liveness_lock_accepts_flatpak_pid_namespace_record(self):
+        path = self._write(
+            "flatpak.json",
+            self._record(process_start_ticks=self.process_start_ticks + 1),
+        )
+        lock_path = path.with_name(path.name + ".lock")
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            status = self.service.get_status("game-profile")
+
+            self.assertEqual(len(status["contexts"]), 1)
+            self.assertEqual(status["contexts"][0]["context"], 1)
+            self.assertTrue(path.exists())
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
 
     def test_malformed_oversized_and_linked_records_are_ignored(self):
         (self.runtime_directory / "malformed.json").write_text(

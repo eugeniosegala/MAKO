@@ -377,6 +377,16 @@ int main() {
 
     auto disabled = current;
     disabled.frame_generation_enabled = false;
+    disabled.base_fps_cap = 30;
+    expect(effectiveBaseFpsCap(disabled) == 0.0,
+        "Frame Generation Off must make the saved Base FPS Cap dormant");
+    auto enabledWithSavedCap = disabled;
+    enabledWithSavedCap.frame_generation_enabled = true;
+    decision = classifyProfileUpdate(disabled, enabledWithSavedCap, 3, true);
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.baseFpsCapChanged &&
+            effectiveBaseFpsCap(enabledWithSavedCap) == 30.0,
+        "Turning generation back on must restore and reset the saved cap");
     decision = classifyProfileUpdate(disabled, current, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive,
         "Turning generation back on must reuse retained resources");
@@ -391,11 +401,13 @@ int main() {
         disabled, unavailableEnableWithCap, 0, false
     );
     expect(unavailableEnablePlan.decision.action ==
-                ProfileUpdateAction::ApplyLive &&
+                ProfileUpdateAction::DeferUntilProcessRestart &&
             unavailableEnablePlan.decision.processRestartDeferred &&
+            !unavailableEnablePlan.decision.baseFpsCapChanged &&
             !unavailableEnablePlan.appliedProfile.frame_generation_enabled &&
-            unavailableEnablePlan.appliedProfile.base_fps_cap == 48,
-        "An unavailable generation enable blocked an unrelated live cap");
+            unavailableEnablePlan.appliedProfile.base_fps_cap == 48 &&
+            effectiveBaseFpsCap(unavailableEnablePlan.appliedProfile) == 0.0,
+        "An unavailable generation enable must save its cap dormant until restart");
 
     next = current;
     next.flow_scale = 0.75F;

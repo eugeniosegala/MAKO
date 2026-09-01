@@ -185,7 +185,7 @@
   "DYNAMIC_CADENCE_PROBE_INTERVAL_DESC": "How often Recovery tests the native frame rate. 0.1 seconds is aggressive and may cause frequent brief pacing hitches; 2 seconds is the default, while 3 seconds checks least often. Test per game.",
   "ADAPTIVE_VALUE": "Adaptive",
   "CONFIG_DLL_PATH": "Lossless.dll Path (Restart)",
-  "CONFIG_DLL_PATH_DESC": "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery. Restart the game after changing it.",
+  "CONFIG_DLL_PATH_DESC": "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.",
   "CONFIG_DISABLE_MAKO_NEXT_LAUNCH": "Disable MAKO Renderer on Next Launch",
   "CONFIG_DISABLE_MAKO_NEXT_LAUNCH_DESC": "Troubleshooting only. Stops MAKO Renderer loading the next time the game starts. Use Frame Generation above to switch synthesis on or off.",
   "CONFIG_DISABLE_HDR_EXPOSURE": "Disable HDR",

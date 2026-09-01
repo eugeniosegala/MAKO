@@ -26,6 +26,7 @@ from .constants import (
     MAKO_PROFILE_FALLBACK_MARKER,
     GAMESCOPE_WSI_DISABLE_ENV, GAMESCOPE_WSI_ENABLE_ENV,
     GAMESCOPE_WSI_LAYER_NAME_64, GAMESCOPE_WSI_MANIFEST_FILENAME_64,
+    GAMESCOPE_WSI_LIBRARY_FILENAME_64,
     MANGOHUD_LAYER_NAME_64, MANGOHUD_MANIFEST_FILENAME_64,
     MANGOHUD_LAYER_NAME_32, MANGOHUD_MANIFEST_FILENAME_32,
     VKBASALT_LAYER_NAME_64, VKBASALT_MANIFEST_FILENAME_64,
@@ -103,6 +104,10 @@ class InstallationService(BaseService):
         self.gamescope_wsi_compatibility_manifest = (
             self.gamescope_wsi_compatibility_dir /
             GAMESCOPE_WSI_MANIFEST_FILENAME_64
+        )
+        self.gamescope_wsi_compatibility_library = (
+            self.gamescope_wsi_compatibility_dir /
+            GAMESCOPE_WSI_LIBRARY_FILENAME_64
         )
         self.mangohud_manifest = (
             self.mangohud_layer_dir / MANGOHUD_MANIFEST_FILENAME_64
@@ -746,6 +751,7 @@ class InstallationService(BaseService):
             GAMESCOPE_WSI_MANIFEST_FILENAME_64
         )
         destination = self.gamescope_wsi_compatibility_manifest
+        library_destination = self.gamescope_wsi_compatibility_library
 
         try:
             manifest = json.loads(source.read_text(encoding="utf-8"))
@@ -759,7 +765,8 @@ class InstallationService(BaseService):
             library_path = layer.get("library_path")
             if not isinstance(library_path, str) or not Path(library_path).is_absolute():
                 raise ValueError("library_path must be absolute")
-            if not Path(library_path).is_file():
+            library_source = Path(library_path)
+            if not library_source.is_file():
                 raise ValueError("library_path is unavailable")
             if layer.get("library_arch") not in (None, "64"):
                 raise ValueError("manifest is not a 64-bit layer")
@@ -773,6 +780,7 @@ class InstallationService(BaseService):
                 raise ValueError("unexpected disable_environment gate")
         except (OSError, json.JSONDecodeError, TypeError, ValueError) as error:
             destination.unlink(missing_ok=True)
+            library_destination.unlink(missing_ok=True)
             self.log.warning(
                 "Gamescope WSI compatibility remains unavailable: %s",
                 error,
@@ -780,27 +788,28 @@ class InstallationService(BaseService):
             return False
 
         try:
-            if (
-                destination.is_file()
-                and destination.read_bytes() == source.read_bytes()
-            ):
-                return False
+            library_updated = not (
+                library_destination.is_file()
+                and library_destination.stat().st_mode & 0o777 == 0o755
+                and library_destination.read_bytes()
+                == library_source.read_bytes()
+            )
         except OSError:
-            # Atomic replacement below is also the repair path for an
-            # unreadable or otherwise damaged managed destination.
-            pass
-
-        copy_managed_file_atomically(
-            source,
-            destination,
-            0o644,
-            self.log,
+            library_updated = True
+        if library_updated:
+            copy_managed_file_atomically(
+                library_source, library_destination, 0o755, self.log
+            )
+        layer["library_path"] = str(library_destination)
+        manifest_content = json.dumps(manifest, indent=4) + "\n"
+        manifest_updated = write_managed_text_atomically(
+            destination, manifest_content, 0o644, self.log
         )
         self.log.info(
-            "Installed guarded Gamescope WSI compatibility manifest at %s",
+            "Installed guarded Gamescope WSI compatibility payload at %s",
             destination,
         )
-        return True
+        return library_updated or manifest_updated
 
     def _stage_guarded_host_manifest(
             self,
@@ -1224,6 +1233,7 @@ class InstallationService(BaseService):
             self.spatial_scaling_json32_file,
             self.registered_json_file, self.registered_json32_file,
             self.gamescope_wsi_compatibility_manifest,
+            self.gamescope_wsi_compatibility_library,
             self.mangohud_manifest, self.mangohud_manifest32,
             self.vkbasalt_manifest, self.vkbasalt_manifest32,
             self.cli_file, self.engine_state_file,

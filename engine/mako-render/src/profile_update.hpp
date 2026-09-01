@@ -329,6 +329,8 @@ namespace mako::layer {
     /// ceiling. Keep the engine's 10 FPS policy floor for unusually low targets.
     [[nodiscard]] inline double effectiveBaseFpsCap(
             const ls::GameConf& profile) {
+        if (!profile.frame_generation_enabled)
+            return 0.0;
         if (profile.adaptive && profile.adaptive_auto_base_fps_cap) {
             return std::max(
                 adaptiveMinimumBaseFps,

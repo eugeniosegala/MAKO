@@ -259,7 +259,10 @@ export function AdvancedRenderingConfigurationGroup({
               min={BASE_FPS_CAP_MIN}
               max={BASE_FPS_CAP_UI_MAX}
               step={1}
-              disabled={config.adaptive && config.adaptive_auto_base_fps_cap}
+              disabled={
+                !config.frame_generation_enabled ||
+                (config.adaptive && config.adaptive_auto_base_fps_cap)
+              }
               onChange={(value) => onConfigUpdate(baseFpsCapChanges(value))}
             />
           </PanelSectionRow>
@@ -652,7 +655,7 @@ export function ManualOverridesConfigurationGroup({
               }
               description={t(
                 "CONFIG_DLL_PATH_DESC",
-                "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery. Restart the game after changing it.",
+                "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.",
               )}
               value={config.dll}
               onChange={(event) =>

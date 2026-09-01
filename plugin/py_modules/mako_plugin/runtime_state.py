@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 from pathlib import Path
@@ -340,9 +341,11 @@ class RuntimeStateService(BaseService):
                 self._read_file_without_following_links(path).decode("utf-8")
             )
             context = _context(raw)
-            if self._process_start_ticks(context["pid"]) != (
-                context["process_start_ticks"]
-            ):
+            process_identity_matches = (
+                self._process_start_ticks(context["pid"])
+                == context["process_start_ticks"]
+            )
+            if not process_identity_matches and not self._liveness_lock_held(path):
                 try:
                     path.unlink()
                 except OSError:
@@ -351,6 +354,28 @@ class RuntimeStateService(BaseService):
             return context
         except (OSError, UnicodeError, json.JSONDecodeError, ValueError):
             return None
+
+    @staticmethod
+    def _liveness_path(status_path: Path) -> Path:
+        return status_path.with_name(status_path.name + ".lock")
+
+    def _liveness_lock_held(self, status_path: Path) -> bool:
+        """Validate a publisher across Flatpak's private PID namespace."""
+        flags = os.O_RDWR | getattr(os, "O_CLOEXEC", 0)
+        flags |= getattr(os, "O_NOFOLLOW", 0)
+        try:
+            descriptor = os.open(self._liveness_path(status_path), flags)
+        except OSError:
+            return False
+        try:
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                return True
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            return False
+        finally:
+            os.close(descriptor)
 
     def get_status(self, profile_name: str = "") -> RuntimeStatusResponse:
         contexts: list[RuntimeContextState] = []

@@ -78,8 +78,8 @@ vi.mock("@decky/ui", () => ({
     children?: React.ReactNode;
   }) => (
     <div>
-      {label}
-      {description}
+      <span>{label}</span>
+      <span>{description}</span>
       {children}
     </div>
   ),
@@ -100,7 +100,18 @@ vi.mock("@decky/ui", () => ({
       {selectedOption}s
     </button>
   ),
-  TextField: ({ label }: { label: React.ReactNode }) => <div>{label}</div>,
+  TextField: ({
+    label,
+    description,
+  }: {
+    label: React.ReactNode;
+    description?: React.ReactNode;
+  }) => (
+    <div>
+      <span>{label}</span>
+      <span>{description}</span>
+    </div>
+  ),
   ButtonItem: ({
     children,
     onClick,
@@ -279,6 +290,59 @@ describe("External Tools controls", () => {
       container.querySelectorAll('[data-mako-setting-relationship="true"]')
         .length,
     ).toBe(2);
+  });
+
+  test("locks Base FPS Cap while Frame Generation is off", () => {
+    render(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          frame_generation_enabled: false,
+          adaptive: true,
+          adaptive_auto_base_fps_cap: false,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      (screen.getByRole("button", {
+        name: "Base FPS Cap (Off)",
+      }) as HTMLButtonElement).disabled,
+    ).toBe(true);
+  });
+
+  test("keeps manual override blocks evenly spaced and avoids a duplicate DLL restart hint", () => {
+    const { container } = render(
+      <ConfigurationSection
+        config={getDefaults()}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>(
+        ".MAKO_ManualOverridesCollapseButton_Container button",
+      )!,
+    );
+
+    expect(
+      screen.getByText(
+        "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery.",
+      ),
+    ).toBeTruthy();
+    expect(
+      screen.queryByText(
+        "Optional full path to Lossless.dll. Leave blank to use MAKO Renderer automatic discovery. Restart the game after changing it.",
+      ),
+    ).toBeNull();
+    const styles = Array.from(container.querySelectorAll("style"))
+      .map((style) => style.textContent ?? "")
+      .join("\n");
+    expect(styles).toContain("gap: 12px");
+    expect(styles).not.toContain("nth-child");
   });
 
   test("warns when Gamescope WSI is enabled independently", () => {

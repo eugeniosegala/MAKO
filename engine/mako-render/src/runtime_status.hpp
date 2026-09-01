@@ -98,6 +98,8 @@ namespace mako::layer {
         void remove() noexcept;
 
         std::filesystem::path statusPath;
+        std::filesystem::path livenessPath;
+        int livenessDescriptor{-1};
         uint64_t contextId{0};
         std::string role;
     };

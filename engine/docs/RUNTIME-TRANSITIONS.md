@@ -71,7 +71,7 @@ For example, if one save changes Flow Scale from 1.0 to 0.75 and Base FPS Cap fr
 | Adaptive target, ceiling within capacity, and Smooth Cadence | Live | Resets generation scheduler policy and relevant pacing handoff state |
 | Dynamic Cadence Recovery | Live | Rebuilds generation scheduler policy; the UI/schema contract separately owns its cap exclusivity |
 | Dynamic Cadence probe interval | Live | Reschedules the inactive probe interval without discarding validated cadence or an active confirmation |
-| Base FPS Cap and Adaptive auto-cap | Live | Resets the real-frame pacer, fixed-window timing, and scheduler policy affected by the effective cap |
+| Base FPS Cap and Adaptive auto-cap | Live while Frame Generation is On; dormant while Off | Resets the real-frame pacer, fixed-window timing, and scheduler policy affected by the effective cap; turning Frame Generation Off releases the cap and turning it back On restores the saved value |
 | Scaling enable (`scaling_enabled`) | Process restart | Existing process retains its actual scaling configuration and WSI membership; Decky provisions or removes the WSI lane only for the next launch |
 | Native/MAKO/LS1 method | Live when scaling is provisioned | Rebuilds only the private spatial context at the next present, keeps the WSI objects and extents stable, warms FG history, and retains the old method on failure; Native uses a model-free linear transfer graph. In an Ultra Performance process with Scaling enabled, LS1 Performance is the effective method and a different saved method remains dormant until the preset is disabled at a process restart |
 | Scaling sharpness | Live when scaling is provisioned | Coalesces edits for 500 ms, then uses the same private spatial rebuild without changing WSI ownership |
@@ -92,7 +92,7 @@ When a field's effective value is unchanged, its storage representation may stil
 
 ## Frame Generation Off resource contract
 
-Frame Generation Off means no per-frame generation execution. The real frame may still pass through the configured Base FPS Cap because that limiter is an independent requested feature, and compositor safety monitoring remains active.
+Frame Generation Off means no per-frame generation execution and no Base FPS Cap. The saved manual or automatic cap remains part of the profile but is dormant until Frame Generation is turned back on. Compositor safety monitoring remains active.
 
 Every matched process provisions Frame Generation interop, backend, private images, and synchronization even when it starts Off. The Off path bypasses those resources: no model scheduling, input copy, generated acquisition, or generated present runs. Retaining them trades startup memory for immediate Off→On. Failed provisioning leaves native or independent scaling active and reports generation as restart-pending. Stable HDR feedback may still update retained colour resources for a later enable.
 

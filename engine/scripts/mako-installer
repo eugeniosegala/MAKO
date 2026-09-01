@@ -37,6 +37,7 @@ decky_renderer_relative_paths=(
     ".local/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json"
     ".local/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json"
     ".local/share/mako-render/vulkan/gamescope_wsi_compatibility.d/VkLayer_FROG_gamescope_wsi.x86_64.json"
+    ".local/share/mako-render/vulkan/gamescope_wsi_compatibility.d/libVkLayer_FROG_gamescope_wsi_x86_64.so"
     ".local/share/mako-render/vulkan/mangohud.d/MangoHud.x86_64.json"
     ".local/share/mako-render/vulkan/mangohud.d/MangoHud.x86.json"
     ".local/share/mako-render/vulkan/vkbasalt.d/vkBasalt.json"

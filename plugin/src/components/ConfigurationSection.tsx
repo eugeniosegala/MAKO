@@ -95,7 +95,7 @@ export function ConfigurationSection({
         .MAKO_ManualOverrideFields {
           display: flex;
           flex-direction: column;
-          gap: 8px;
+          gap: 12px;
           width: 100%;
           min-width: 0;
           margin: 10px 0 0;
@@ -105,10 +105,6 @@ export function ConfigurationSection({
         }
         .MAKO_ManualOverrideFields > * + * {
           margin-top: 0 !important;
-        }
-        .MAKO_ManualOverrideFields > *:nth-child(2),
-        .MAKO_ManualOverrideFields > *:nth-child(3) {
-          margin-top: 4px !important;
         }
       `}</style>
 

@@ -754,7 +754,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "")
 
-    def test_flatpak_does_not_admit_gamescope_wsi_compatibility_mode(self):
+    def test_flatpak_admits_staged_gamescope_wsi_compatibility_mode(self):
         with tempfile.TemporaryDirectory() as flatpak_dir:
             with tempfile.TemporaryDirectory() as compatibility_dir:
                 compatibility_path = Path(compatibility_dir)
@@ -772,13 +772,23 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     "FLATPAK_IMPLICIT_LAYER_DIR",
                     flatpak_dir,
                 ):
-                    values = self._evaluate(config=config)
+                    values = self._evaluate(
+                        self.gamescope_environment,
+                        config,
+                    )
 
-        self.assertEqual(values["IMPLICIT"], flatpak_dir)
-        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"{flatpak_dir}:{compatibility_path}",
+        )
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+        self.assertEqual(
+            values["INSTANCE"],
+            "VK_LAYER_MAKO_render:VK_LAYER_FROG_gamescope_wsi_x86_64",
+        )
 
-    def test_flatpak_scaling_does_not_admit_host_gamescope_wsi(self):
+    def test_flatpak_scaling_uses_packaged_spatial_layer_after_staged_wsi(self):
         with tempfile.TemporaryDirectory() as flatpak_dir:
             with tempfile.TemporaryDirectory() as compatibility_dir:
                 compatibility_path = Path(compatibility_dir)
@@ -789,6 +799,10 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 self.service.gamescope_wsi_compatibility_dir = (
                     compatibility_path
                 )
+                (
+                    Path(flatpak_dir) /
+                    configuration_module.SPATIAL_SCALING_JSON_FILENAME
+                ).write_text("{}", encoding="utf-8")
                 config = ConfigurationManager.get_defaults()
                 config["scaling_enabled"] = True
                 with patch.object(
@@ -796,11 +810,104 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     "FLATPAK_IMPLICIT_LAYER_DIR",
                     flatpak_dir,
                 ):
-                    values = self._evaluate(config=config)
+                    values = self._evaluate(
+                        self.gamescope_environment,
+                        config,
+                    )
 
-        self.assertEqual(values["IMPLICIT"], flatpak_dir)
-        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertEqual(
+            values["IMPLICIT"],
+            f"{flatpak_dir}:{compatibility_path}",
+        )
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "")
         self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+        self.assertEqual(values["SPLIT"], "2")
+        self.assertEqual(values["DISABLE_SCALING"], "")
+        self.assertEqual(values["ENABLE_SCALING"], "")
+        self.assertEqual(
+            values["INSTANCE"],
+            "VK_LAYER_MAKO_render:VK_LAYER_FROG_gamescope_wsi_x86_64:VK_LAYER_MAKO_spatial_scaling",
+        )
+
+    def test_direct_flatpak_shortcut_receives_ordered_chain_per_launch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            flatpak_layer_dir = "/usr/lib/extensions/vulkan/"
+            flatpak_layer_dir += "makorender/share/vulkan/implicit_layer.d"
+            compatibility_path = root / "gamescope-wsi"
+            compatibility_path.mkdir()
+            (
+                compatibility_path /
+                configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            self.service.gamescope_wsi_compatibility_dir = compatibility_path
+            self.service.config_dir = root / "config"
+            self.service.config_file_path = self.service.config_dir / "conf.toml"
+
+            config = ConfigurationManager.get_defaults()
+            config["scaling_enabled"] = True
+            with patch.object(
+                configuration_module,
+                "FLATPAK_IMPLICIT_LAYER_DIR",
+                str(flatpak_layer_dir),
+            ):
+                wrapper = root / "mako-run"
+                wrapper.write_text(
+                    self.service._generate_script_content(config),
+                    encoding="utf-8",
+                )
+            wrapper.chmod(0o755)
+
+            captured = root / "flatpak-arguments"
+            fake_flatpak = root / "flatpak"
+            fake_flatpak.write_text(
+                "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$MAKO_CAPTURE\"\n",
+                encoding="utf-8",
+            )
+            fake_flatpak.chmod(0o755)
+
+            subprocess.run(
+                [
+                    str(wrapper),
+                    str(fake_flatpak),
+                    "run",
+                    "--branch=stable",
+                    "org.DolphinEmu.dolphin-emu",
+                    "--batch",
+                ],
+                check=True,
+                env={
+                    "PATH": os.environ.get("PATH", ""),
+                    "MAKO_CAPTURE": str(captured),
+                    **self.gamescope_environment,
+                },
+            )
+
+            arguments = captured.read_text(encoding="utf-8").splitlines()
+            self.assertEqual(arguments[0], "run")
+            self.assertIn("--env=MAKO_SPLIT_LAYER_CHAIN=2", arguments)
+            self.assertIn(
+                "--env=VK_INSTANCE_LAYERS="
+                "VK_LAYER_MAKO_render:"
+                "VK_LAYER_FROG_gamescope_wsi_x86_64:"
+                "VK_LAYER_MAKO_spatial_scaling",
+                arguments,
+            )
+            self.assertIn(
+                f"--env=VK_IMPLICIT_LAYER_PATH={flatpak_layer_dir}:"
+                f"{compatibility_path}",
+                arguments,
+            )
+            self.assertIn("--unset-env=DISABLE_GAMESCOPE_WSI", arguments)
+            self.assertIn("--unset-env=ENABLE_MAKO", arguments)
+            self.assertEqual(
+                arguments[-3:],
+                [
+                    "--branch=stable",
+                    "org.DolphinEmu.dolphin-emu",
+                    "--batch",
+                ],
+            )
 
     def test_flatpak_sdr_boundary_keeps_gamescope_wsi_out_of_umu_chain(self):
         with tempfile.TemporaryDirectory() as temp_dir:

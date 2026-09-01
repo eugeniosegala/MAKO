@@ -94,6 +94,10 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.gamescope_wsi_compatibility_dir /
             GAMESCOPE_WSI_MANIFEST_FILENAME_64
         )
+        self.service.gamescope_wsi_compatibility_library = (
+            self.service.gamescope_wsi_compatibility_dir /
+            "libVkLayer_FROG_gamescope_wsi_x86_64.so"
+        )
         self.service.mangohud_layer_dir = (
             self.root / "share/vulkan/mangohud.d"
         )
@@ -391,6 +395,14 @@ class DualArchInstallationTests(unittest.TestCase):
             installed["layer"]["name"],
             GAMESCOPE_WSI_LAYER_NAME_64,
         )
+        self.assertEqual(
+            installed["layer"]["library_path"],
+            str(self.service.gamescope_wsi_compatibility_library),
+        )
+        self.assertEqual(
+            self.service.gamescope_wsi_compatibility_library.read_bytes(),
+            b"wsi",
+        )
 
     def test_invalid_gamescope_wsi_manifest_fails_closed(self):
         self.service.lib_file.parent.mkdir(parents=True)
@@ -402,6 +414,7 @@ class DualArchInstallationTests(unittest.TestCase):
         destination = self.service.gamescope_wsi_compatibility_manifest
         destination.parent.mkdir(parents=True)
         destination.write_text("stale", encoding="utf-8")
+        self.service.gamescope_wsi_compatibility_library.write_bytes(b"stale")
 
         with patch.object(
             installation_module,
@@ -413,6 +426,9 @@ class DualArchInstallationTests(unittest.TestCase):
             )
 
         self.assertFalse(destination.exists())
+        self.assertFalse(
+            self.service.gamescope_wsi_compatibility_library.exists()
+        )
 
     def test_gamescope_wsi_startup_migration_skips_uninstalled_renderer(self):
         system_dir = self.root / "system-implicit"

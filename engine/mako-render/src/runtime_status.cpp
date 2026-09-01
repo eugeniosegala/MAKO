@@ -7,10 +7,13 @@
 #include <chrono>
 #include <fstream>
 #include <iomanip>
+#include <locale>
 #include <sstream>
 #include <system_error>
 #include <utility>
 
+#include <fcntl.h>
+#include <sys/file.h>
 #include <unistd.h>
 
 namespace {
@@ -37,6 +40,7 @@ namespace {
 
     std::string jsonString(const std::string_view value) {
         std::ostringstream stream;
+        stream.imbue(std::locale::classic());
         stream << '"';
         for (const unsigned char character : value) {
             switch (character) {
@@ -78,6 +82,7 @@ namespace {
 
     std::string profileJson(const ls::GameConf& profile) {
         std::ostringstream stream;
+        stream.imbue(std::locale::classic());
         stream << std::boolalpha << std::setprecision(9);
         stream << '{'
                << "\"name\":" << jsonString(profile.name)
@@ -133,6 +138,10 @@ std::string mako::layer::runtimeStatusJson(
         const std::string_view role,
         const int64_t updatedUnixMilliseconds) {
     std::ostringstream stream;
+    // Applications such as Dolphin install a process-wide locale with digit
+    // grouping. JSON numbers never permit locale separators, so keep this
+    // observational boundary independent from application stream state.
+    stream.imbue(std::locale::classic());
     stream << std::boolalpha
            << '{'
            << "\"schema_version\":4"
@@ -214,12 +223,33 @@ mako::layer::RuntimeStatusPublisher::RuntimeStatusPublisher(
         "runtime-state";
     this->statusPath = directory /
         (std::to_string(static_cast<uint64_t>(::getpid())) + "-" +
-         this->role + "-" + std::to_string(contextId) + ".json");
+         std::to_string(processStartTicks()) + "-" + this->role + "-" +
+         std::to_string(contextId) + ".json");
+    this->livenessPath = this->statusPath;
+    this->livenessPath += ".lock";
+    std::error_code error;
+    std::filesystem::create_directories(directory, error);
+    if (!error) {
+        this->livenessDescriptor = ::open(
+            this->livenessPath.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600
+        );
+        if (this->livenessDescriptor >= 0 &&
+                ::flock(this->livenessDescriptor, LOCK_EX | LOCK_NB) != 0) {
+            ::close(this->livenessDescriptor);
+            this->livenessDescriptor = -1;
+        }
+    }
+    if (this->livenessDescriptor < 0) {
+        this->statusPath.clear();
+        this->livenessPath.clear();
+    }
 }
 
 mako::layer::RuntimeStatusPublisher::RuntimeStatusPublisher(
         RuntimeStatusPublisher&& other) noexcept :
     statusPath(std::exchange(other.statusPath, {})),
+    livenessPath(std::exchange(other.livenessPath, {})),
+    livenessDescriptor(std::exchange(other.livenessDescriptor, -1)),
     contextId(other.contextId), role(std::move(other.role)) {}
 
 mako::layer::RuntimeStatusPublisher&
@@ -229,6 +259,10 @@ mako::layer::RuntimeStatusPublisher::operator=(
         return *this;
     this->remove();
     this->statusPath = std::exchange(other.statusPath, {});
+    this->livenessPath = std::exchange(other.livenessPath, {});
+    this->livenessDescriptor = std::exchange(
+        other.livenessDescriptor, -1
+    );
     this->contextId = other.contextId;
     this->role = std::move(other.role);
     return *this;
@@ -243,6 +277,14 @@ void mako::layer::RuntimeStatusPublisher::remove() noexcept {
         return;
     std::error_code error;
     std::filesystem::remove(this->statusPath, error);
+    if (this->livenessDescriptor >= 0) {
+        ::close(this->livenessDescriptor);
+        this->livenessDescriptor = -1;
+    }
+    error.clear();
+    std::filesystem::remove(this->livenessPath, error);
+    this->statusPath.clear();
+    this->livenessPath.clear();
 }
 
 void mako::layer::RuntimeStatusPublisher::publish(
