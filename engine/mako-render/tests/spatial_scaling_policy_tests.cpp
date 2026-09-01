@@ -103,6 +103,14 @@ int main() {
             {1280, 800}, {1920, 1200}
         ) == SpatialFramePipelinePlacement::PreFrameGeneration,
         "The 1920x1200 low-resolution budget boundary must remain pre-FG");
+    expect(selectSpatialFramePipelinePlacement(
+            {1720, 600}, {2560, 900}
+        ) == SpatialFramePipelinePlacement::PreFrameGeneration,
+        "An ultrawide output at the same 1920x1200 pixel budget must remain pre-FG");
+    expect(selectSpatialFramePipelinePlacement(
+            {1720, 600}, {2562, 900}
+        ) == SpatialFramePipelinePlacement::PostFrameGeneration,
+        "An ultrawide output above the presentation pixel budget must use post-FG");
     const auto fourKPlacement = selectSpatialFramePipelinePlacement(
         {1920, 1080}, {3840, 2160}
     );
@@ -597,6 +605,50 @@ int main() {
     expect(!variableSurfaceScalingFeedbackDetected(
             profile, fixedFeedbackCapabilities, {960, 600}, customFactor),
         "Fixed surfaces must not enter the variable feedback policy");
+
+    VkSurfaceCapabilitiesKHR managedVariableCreate{
+        .currentExtent = {UINT32_MAX, UINT32_MAX},
+        .minImageExtent = {16, 16},
+        .maxImageExtent = {8192, 8192},
+    };
+    const SpatialScalingExtents previousManagedExtents{
+        .source = {1280, 720},
+        .presentation = {1920, 1080},
+    };
+    expect(!variableSurfaceScalingFeedbackDetected(
+            profile, managedVariableCreate, {1920, 1080},
+            previousManagedExtents, true),
+        "A managed Gamescope create relay must distinguish a real resolution change from uncontracted feedback");
+    const auto managedPreviousPresentationRequest = scalingDecisionForCreate(
+        profile, true, 7, managedVariableCreate, {1920, 1080},
+        previousManagedExtents, std::nullopt, std::nullopt,
+        VkExtent2D{3840, 2160}, true
+    );
+    expect(managedPreviousPresentationRequest.extents &&
+            sameExtent(
+                managedPreviousPresentationRequest.extents->source,
+                {1920, 1080}
+            ) &&
+            sameExtent(
+                managedPreviousPresentationRequest.extents->presentation,
+                {2880, 1620}
+            ) &&
+            managedPreviousPresentationRequest.inactiveReason ==
+                SpatialScalingInactiveReason::None,
+        "A managed 720p-to-1080p game resolution change must remain scalable when the new source equals the previous presentation");
+    const FixedSurfaceScalingContract managedChangedResolutionContract{
+        .extents = *managedPreviousPresentationRequest.extents,
+        .factor = profile.scaling_factor,
+        .policyRevision = 7,
+    };
+    expect(classifySpatialCreateRelay(
+            managedChangedResolutionContract, {1920, 1080}
+        ) == SpatialCreateRelayDecision::Split,
+        "The upper role must accept the exact managed changed-resolution create relay");
+    expect(classifySpatialCreateRelay(
+            managedChangedResolutionContract, {1280, 720}
+        ) == SpatialCreateRelayDecision::Unavailable,
+        "A lower-only Gamescope extent mutation must still fail the upper create relay closed");
 
     const auto retainedFeedback = committedVariableSurfaceScalingExtents(
         customFactor, true, true, false, true, {960, 600}, {960, 600}

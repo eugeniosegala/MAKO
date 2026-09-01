@@ -14,6 +14,10 @@ interface MakoReleaseIdentityProps {
   bottomMargin?: CSSProperties["marginBottom"];
 }
 
+interface MakoSectionTailProps {
+  children: ReactNode;
+}
+
 interface MakoExperimentalSettingLabelProps {
   label: string;
   badgeLabel: string;
@@ -37,6 +41,7 @@ export function MakoFocusable(props: MakoFocusableProps) {
 export const makoPanelDivider = "1px solid rgba(77, 170, 190, 0.2)";
 export const makoAccentColor = "#83bff0";
 export const makoSectionGap = "26px";
+export const makoSectionTailGap = "12px";
 
 export const makoPanelStyle: CSSProperties = {
   overflow: "hidden",
@@ -56,6 +61,21 @@ export const makoPanelSectionHeaderStyle: CSSProperties = {
   lineHeight: 1.25,
   letterSpacing: "0.15px",
 };
+
+export function MakoSectionTail({ children }: MakoSectionTailProps) {
+  return (
+    <div
+      data-mako-section-tail="true"
+      style={{
+        width: "100%",
+        boxSizing: "border-box",
+        paddingBottom: makoSectionTailGap,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
 
 export const makoPanelItemStyle: CSSProperties = {
   padding: "12px 14px",

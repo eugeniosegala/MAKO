@@ -17,6 +17,7 @@ import {
   MakoReleaseIdentity,
   MakoRestartLabel,
   MakoSectionHeader,
+  MakoSectionTail,
   makoDialogButtonStyle,
 } from "../../src/components/MakoUi";
 
@@ -47,6 +48,21 @@ describe("MAKO section headers", () => {
       "4px solid rgba(77, 170, 190, 0.48)",
     );
     expect(heading.parentElement?.style.marginTop).toBe("26px");
+  });
+
+  test("adds the standard trailing space after custom section content", () => {
+    window.SP_REACT = React;
+
+    const { container } = render(
+      <MakoSectionTail>
+        <div>Custom section content</div>
+      </MakoSectionTail>,
+    );
+
+    const tail = container.querySelector<HTMLElement>(
+      '[data-mako-section-tail="true"]',
+    );
+    expect(tail?.style.paddingBottom).toBe("12px");
   });
 });
 

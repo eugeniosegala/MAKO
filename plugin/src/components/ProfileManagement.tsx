@@ -28,6 +28,7 @@ import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState"
 import {
   MakoFocusable,
   MakoSectionHeader,
+  MakoSectionTail,
   makoDialogButtonStyle,
 } from "./MakoUi";
 
@@ -309,74 +310,76 @@ export function ProfileManagement({
           )}
 
           <PanelSectionRow>
-            <MakoFocusable
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "stretch",
-                gap: "6px",
-                width: "100%",
-                marginTop: "6px",
-              }}
-              flow-children="column"
-              noFocusRing
-            >
-              <DialogButton
-                className="Mako_DialogButton"
+            <MakoSectionTail>
+              <MakoFocusable
                 style={{
-                  width: "100%",
-                  minWidth: 0,
-                  height: "34px",
                   display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  flexDirection: "column",
+                  alignItems: "stretch",
                   gap: "6px",
-                  padding: "4px 8px",
-                  fontSize: "12px",
-                  ...makoDialogButtonStyle(focusedAction === "edit"),
-                }}
-                onClick={showRenameProfile}
-                onGamepadFocus={() => setFocusedAction("edit")}
-                onGamepadBlur={() => setFocusedAction(null)}
-                disabled={
-                  isLoading ||
-                  selectedProfile === DEFAULT_PROFILE_NAME ||
-                  !!mainRunningApp
-                }
-              >
-                <RiEditLine size={16} />
-                <span>{t("PROFILE_RENAME_BTN", "Rename")}</span>
-              </DialogButton>
-              <DialogButton
-                className="Mako_DialogButton Mako_DialogButton--danger"
-                style={{
                   width: "100%",
-                  minWidth: 0,
-                  height: "34px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: "6px",
-                  padding: "4px 8px",
-                  fontSize: "12px",
-                  ...makoDialogButtonStyle(
-                    focusedAction === "delete",
-                    "danger",
-                  ),
+                  marginTop: "6px",
                 }}
-                onClick={showDeleteProfile}
-                onGamepadFocus={() => setFocusedAction("delete")}
-                onGamepadBlur={() => setFocusedAction(null)}
-                disabled={
-                  isLoading ||
-                  selectedProfile === DEFAULT_PROFILE_NAME ||
-                  !!mainRunningApp
-                }
+                flow-children="column"
+                noFocusRing
               >
-                <RiDeleteBinLine size={16} />
-                <span>{t("PROFILE_DELETE_BTN", "Delete")}</span>
-              </DialogButton>
-            </MakoFocusable>
+                <DialogButton
+                  className="Mako_DialogButton"
+                  style={{
+                    width: "100%",
+                    minWidth: 0,
+                    height: "34px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                    ...makoDialogButtonStyle(focusedAction === "edit"),
+                  }}
+                  onClick={showRenameProfile}
+                  onGamepadFocus={() => setFocusedAction("edit")}
+                  onGamepadBlur={() => setFocusedAction(null)}
+                  disabled={
+                    isLoading ||
+                    selectedProfile === DEFAULT_PROFILE_NAME ||
+                    !!mainRunningApp
+                  }
+                >
+                  <RiEditLine size={16} />
+                  <span>{t("PROFILE_RENAME_BTN", "Rename")}</span>
+                </DialogButton>
+                <DialogButton
+                  className="Mako_DialogButton Mako_DialogButton--danger"
+                  style={{
+                    width: "100%",
+                    minWidth: 0,
+                    height: "34px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    padding: "4px 8px",
+                    fontSize: "12px",
+                    ...makoDialogButtonStyle(
+                      focusedAction === "delete",
+                      "danger",
+                    ),
+                  }}
+                  onClick={showDeleteProfile}
+                  onGamepadFocus={() => setFocusedAction("delete")}
+                  onGamepadBlur={() => setFocusedAction(null)}
+                  disabled={
+                    isLoading ||
+                    selectedProfile === DEFAULT_PROFILE_NAME ||
+                    !!mainRunningApp
+                  }
+                >
+                  <RiDeleteBinLine size={16} />
+                  <span>{t("PROFILE_DELETE_BTN", "Delete")}</span>
+                </DialogButton>
+              </MakoFocusable>
+            </MakoSectionTail>
           </PanelSectionRow>
         </>
       )}

@@ -59,6 +59,11 @@ describe("authoritative live status", () => {
 
     expect(screen.getByText("MAKO is active")).toBeTruthy();
     expect(
+      screen
+        .getByLabelText("Live Status")
+        .closest('[data-mako-section-tail="true"]'),
+    ).toBeTruthy();
+    expect(
       container.querySelector(
         '[data-mako-live-status-grid="compact-two-column"]',
       ),

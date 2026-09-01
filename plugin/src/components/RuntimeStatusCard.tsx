@@ -3,6 +3,7 @@ import type { RuntimeScalingUiState } from "../utils/runtimeScalingUtils";
 import t from "../i18n/i18n";
 import {
   MakoSectionHeader,
+  MakoSectionTail,
   makoAccentColor,
   makoPanelDivider,
   makoPanelStyle,
@@ -134,208 +135,210 @@ export function RuntimeStatusCard({
         {t("LIVE_STATUS_TITLE", "Live Status")}
       </MakoSectionHeader>
       <PanelSectionRow>
-        <div
-          aria-label={t("LIVE_STATUS_TITLE", "Live Status")}
-          style={{ ...makoPanelStyle, width: "100%" }}
-        >
+        <MakoSectionTail>
           <div
-            style={{
-              padding: "4px 8px",
-              display: "flex",
-              alignItems: "baseline",
-              justifyContent: "flex-end",
-              gap: "8px",
-            }}
+            aria-label={t("LIVE_STATUS_TITLE", "Live Status")}
+            style={{ ...makoPanelStyle, width: "100%" }}
           >
-            <span
-              style={{
-                color: runtimeState.hasContext ? makoAccentColor : "#93a5ab",
-                fontSize: "8.5px",
-                fontWeight: 600,
-                textTransform: "uppercase",
-              }}
-            >
-              {runtimeState.hasContext
-                ? t("LIVE_STATUS_CONNECTED", "MAKO is active")
-                : t("LIVE_STATUS_WAITING", "Waiting for MAKO")}
-            </span>
-          </div>
-
-          {!runtimeState.hasContext ? (
             <div
               style={{
-                padding: "8px 10px",
-                borderTop: makoPanelDivider,
-                color: "#b6c9cf",
-                fontSize: "10px",
-                lineHeight: 1.4,
+                padding: "4px 8px",
+                display: "flex",
+                alignItems: "baseline",
+                justifyContent: "flex-end",
+                gap: "8px",
               }}
             >
-              {t(
-                "LIVE_STATUS_WAITING_DESC",
-                "The running game is not using MAKO yet. Start playing to confirm Frame Generation and Upscaling.",
-              )}
-            </div>
-          ) : (
-            <>
-              <div
-                data-mako-live-status-grid="compact-two-column"
+              <span
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-                  borderTop: makoPanelDivider,
+                  color: runtimeState.hasContext ? makoAccentColor : "#93a5ab",
+                  fontSize: "8.5px",
+                  fontWeight: 600,
+                  textTransform: "uppercase",
                 }}
               >
-                <StatusRow
-                  label={t("CONTENT_FPS_MULTIPLIER", "Frame Generation")}
-                  active={runtimeState.frameGenerationActive}
+                {runtimeState.hasContext
+                  ? t("LIVE_STATUS_CONNECTED", "MAKO is active")
+                  : t("LIVE_STATUS_WAITING", "Waiting for MAKO")}
+              </span>
+            </div>
+
+            {!runtimeState.hasContext ? (
+              <div
+                style={{
+                  padding: "8px 10px",
+                  borderTop: makoPanelDivider,
+                  color: "#b6c9cf",
+                  fontSize: "10px",
+                  lineHeight: 1.4,
+                }}
+              >
+                {t(
+                  "LIVE_STATUS_WAITING_DESC",
+                  "The running game is not using MAKO yet. Start playing to confirm Frame Generation and Upscaling.",
+                )}
+              </div>
+            ) : (
+              <>
+                <div
+                  data-mako-live-status-grid="compact-two-column"
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+                    borderTop: makoPanelDivider,
+                  }}
                 >
-                  {runtimeState.frameGenerationActive ? (
-                    <>
-                      <StatusDetail
-                        label={t("LIVE_STATUS_MODE", "Mode")}
-                        value={
-                          runtimeState.frameGenerationMode === "adaptive"
-                            ? t("ADAPTIVE_VALUE", "Adaptive")
-                            : t("LIVE_STATUS_FIXED_VALUE", "Fixed")
-                        }
-                      />
-                      {runtimeState.frameGenerationMode === "adaptive" ? (
-                        <>
+                  <StatusRow
+                    label={t("CONTENT_FPS_MULTIPLIER", "Frame Generation")}
+                    active={runtimeState.frameGenerationActive}
+                  >
+                    {runtimeState.frameGenerationActive ? (
+                      <>
+                        <StatusDetail
+                          label={t("LIVE_STATUS_MODE", "Mode")}
+                          value={
+                            runtimeState.frameGenerationMode === "adaptive"
+                              ? t("ADAPTIVE_VALUE", "Adaptive")
+                              : t("LIVE_STATUS_FIXED_VALUE", "Fixed")
+                          }
+                        />
+                        {runtimeState.frameGenerationMode === "adaptive" ? (
+                          <>
+                            <StatusDetail
+                              label={t("LIVE_STATUS_ADAPTIVE_STYLE", "Style")}
+                              value={
+                                runtimeState.frameGenerationAdaptiveStyle ===
+                                "steady"
+                                  ? t("LIVE_STATUS_STEADY_VALUE", "Steady")
+                                  : t(
+                                      "LIVE_STATUS_FRACTIONAL_VALUE",
+                                      "Fractional",
+                                    )
+                              }
+                            />
+                            <StatusDetail
+                              label={t("LIVE_STATUS_TARGET", "Target")}
+                              value={`${runtimeState.frameGenerationTargetFps ?? "—"} FPS`}
+                            />
+                            <StatusDetail
+                              label={t(
+                                "LIVE_STATUS_MAX_MULTIPLIER",
+                                "Max factor",
+                              )}
+                              value={`${runtimeState.frameGenerationMultiplier ?? "—"}×`}
+                            />
+                          </>
+                        ) : (
                           <StatusDetail
-                            label={t("LIVE_STATUS_ADAPTIVE_STYLE", "Style")}
-                            value={
-                              runtimeState.frameGenerationAdaptiveStyle ===
-                              "steady"
-                                ? t("LIVE_STATUS_STEADY_VALUE", "Steady")
-                                : t(
-                                    "LIVE_STATUS_FRACTIONAL_VALUE",
-                                    "Fractional",
-                                  )
-                            }
-                          />
-                          <StatusDetail
-                            label={t("LIVE_STATUS_TARGET", "Target")}
-                            value={`${runtimeState.frameGenerationTargetFps ?? "—"} FPS`}
-                          />
-                          <StatusDetail
-                            label={t(
-                              "LIVE_STATUS_MAX_MULTIPLIER",
-                              "Max factor",
-                            )}
+                            label={t("LIVE_STATUS_MULTIPLIER", "Factor")}
                             value={`${runtimeState.frameGenerationMultiplier ?? "—"}×`}
                           />
-                        </>
-                      ) : (
-                        <StatusDetail
-                          label={t("LIVE_STATUS_MULTIPLIER", "Factor")}
-                          value={`${runtimeState.frameGenerationMultiplier ?? "—"}×`}
-                        />
-                      )}
-                    </>
-                  ) : runtimeState.frameGenerationEnabled ? (
-                    t(
-                      "LIVE_STATUS_FG_INACTIVE",
-                      "On in settings, but not currently generating frames.",
-                    )
-                  ) : (
-                    t("LIVE_STATUS_OFF", "Off")
-                  )}
-                  {runtimeState.frameGenerationPending && (
-                    <StatusNotices>
-                      {t(
-                        "LIVE_STATUS_PENDING",
-                        "A saved change is still applying or needs a restart.",
-                      )}
-                    </StatusNotices>
-                  )}
-                </StatusRow>
-                <StatusRow
-                  label={t("FEATURE_UPSCALING_TAB", "Upscaling")}
-                  active={runtimeState.scalingActive}
-                  separated
-                >
-                  {runtimeState.scalingActive ? (
-                    <>
-                      <StatusDetail
-                        label={t("LIVE_STATUS_MODEL", "Model")}
-                        value={methodLabel(runtimeState.activeMethod)}
-                      />
-                      <StatusDetail
-                        label={t("LIVE_STATUS_ORIGINAL_RESOLUTION", "Input")}
-                        value={resolution(
-                          runtimeState.sourceWidth,
-                          runtimeState.sourceHeight,
                         )}
-                      />
-                      <StatusDetail
-                        label={t("LIVE_STATUS_SCALED_RESOLUTION", "Output")}
-                        value={resolution(
-                          runtimeState.presentationWidth,
-                          runtimeState.presentationHeight,
-                        )}
-                      />
-                      <StatusDetail
-                        label={t("LIVE_STATUS_MULTIPLIER", "Factor")}
-                        value={`${runtimeState.effectiveFactor.toFixed(2)}×`}
-                      />
-                    </>
-                  ) : runtimeState.scalingEnabled ? (
-                    runtimeState.scalingActivationSupported === false ? (
+                      </>
+                    ) : runtimeState.frameGenerationEnabled ? (
                       t(
-                        "LIVE_STATUS_SCALING_UNAVAILABLE",
-                        "Unavailable for this running surface.",
+                        "LIVE_STATUS_FG_INACTIVE",
+                        "On in settings, but not currently generating frames.",
                       )
                     ) : (
-                      t(
-                        "LIVE_STATUS_SCALING_INACTIVE",
-                        "On in settings, but the game image is not being upscaled.",
+                      t("LIVE_STATUS_OFF", "Off")
+                    )}
+                    {runtimeState.frameGenerationPending && (
+                      <StatusNotices>
+                        {t(
+                          "LIVE_STATUS_PENDING",
+                          "A saved change is still applying or needs a restart.",
+                        )}
+                      </StatusNotices>
+                    )}
+                  </StatusRow>
+                  <StatusRow
+                    label={t("FEATURE_UPSCALING_TAB", "Upscaling")}
+                    active={runtimeState.scalingActive}
+                    separated
+                  >
+                    {runtimeState.scalingActive ? (
+                      <>
+                        <StatusDetail
+                          label={t("LIVE_STATUS_MODEL", "Model")}
+                          value={methodLabel(runtimeState.activeMethod)}
+                        />
+                        <StatusDetail
+                          label={t("LIVE_STATUS_ORIGINAL_RESOLUTION", "Input")}
+                          value={resolution(
+                            runtimeState.sourceWidth,
+                            runtimeState.sourceHeight,
+                          )}
+                        />
+                        <StatusDetail
+                          label={t("LIVE_STATUS_SCALED_RESOLUTION", "Output")}
+                          value={resolution(
+                            runtimeState.presentationWidth,
+                            runtimeState.presentationHeight,
+                          )}
+                        />
+                        <StatusDetail
+                          label={t("LIVE_STATUS_MULTIPLIER", "Factor")}
+                          value={`${runtimeState.effectiveFactor.toFixed(2)}×`}
+                        />
+                      </>
+                    ) : runtimeState.scalingEnabled ? (
+                      runtimeState.scalingActivationSupported === false ? (
+                        t(
+                          "LIVE_STATUS_SCALING_UNAVAILABLE",
+                          "Unavailable for this running surface.",
+                        )
+                      ) : (
+                        t(
+                          "LIVE_STATUS_SCALING_INACTIVE",
+                          "On in settings, but the game image is not being upscaled.",
+                        )
                       )
-                    )
-                  ) : (
-                    t("LIVE_STATUS_OFF", "Off")
-                  )}
-                  {(runtimeState.supersamplingActive ||
-                    runtimeState.fallbackReason ||
-                    runtimeState.scalingPending) && (
-                    <StatusNotices>
-                      {runtimeState.supersamplingActive && (
-                        <div>
-                          {t(
-                            "LIVE_STATUS_SUPERSAMPLING",
-                            "Quality Supersampling is on for a sharper final image.",
-                          )}
-                        </div>
-                      )}
-                      {runtimeState.fallbackReason && (
-                        <div>
-                          {t(
-                            "LIVE_STATUS_SCALING_FALLBACK",
-                            "You selected {requested}; MAKO is using {active} instead.",
-                            {
-                              requested: methodLabel(
-                                runtimeState.requestedMethod,
-                              ),
-                              active: methodLabel(runtimeState.activeMethod),
-                            },
-                          )}
-                        </div>
-                      )}
-                      {runtimeState.scalingPending && (
-                        <div>
-                          {t(
-                            "LIVE_STATUS_PENDING",
-                            "A saved change is still applying or needs a restart.",
-                          )}
-                        </div>
-                      )}
-                    </StatusNotices>
-                  )}
-                </StatusRow>
-              </div>
-            </>
-          )}
-        </div>
+                    ) : (
+                      t("LIVE_STATUS_OFF", "Off")
+                    )}
+                    {(runtimeState.supersamplingActive ||
+                      runtimeState.fallbackReason ||
+                      runtimeState.scalingPending) && (
+                      <StatusNotices>
+                        {runtimeState.supersamplingActive && (
+                          <div>
+                            {t(
+                              "LIVE_STATUS_SUPERSAMPLING",
+                              "Quality Supersampling is on for a sharper final image.",
+                            )}
+                          </div>
+                        )}
+                        {runtimeState.fallbackReason && (
+                          <div>
+                            {t(
+                              "LIVE_STATUS_SCALING_FALLBACK",
+                              "You selected {requested}; MAKO is using {active} instead.",
+                              {
+                                requested: methodLabel(
+                                  runtimeState.requestedMethod,
+                                ),
+                                active: methodLabel(runtimeState.activeMethod),
+                              },
+                            )}
+                          </div>
+                        )}
+                        {runtimeState.scalingPending && (
+                          <div>
+                            {t(
+                              "LIVE_STATUS_PENDING",
+                              "A saved change is still applying or needs a restart.",
+                            )}
+                          </div>
+                        )}
+                      </StatusNotices>
+                    )}
+                  </StatusRow>
+                </div>
+              </>
+            )}
+          </div>
+        </MakoSectionTail>
       </PanelSectionRow>
     </>
   );

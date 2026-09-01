@@ -33,6 +33,9 @@ namespace mako::layer {
         PostFrameGeneration,
     };
 
+    /// Keep the placement decision aspect-ratio independent. The boundary is
+    /// a presentation-pixel budget equivalent to 1920x1200, not a rectangular
+    /// width/height clamp.
     inline constexpr uint64_t preFrameGenerationPresentationPixelBudget =
         uint64_t{1920} * 1200;
 
@@ -805,13 +808,15 @@ namespace mako::layer {
             return decision;
         }
 
-        // Some variable Wayland surfaces echo the enlarged lower WSI extent
-        // back to the application as its next logical size. Treat an exact
-        // previous presentation extent as compositor feedback, not a new
-        // source to enlarge again. This safely falls back to native rendering
-        // for the recreated swapchain instead of compounding the factor until
-        // the surface maximum is reached.
-        if (previousVariableExtents &&
+        // Some uncontracted variable Wayland surfaces echo the enlarged lower
+        // WSI extent back to the application as its next logical size. Treat
+        // an exact previous presentation extent as compositor feedback, not a
+        // new source to enlarge again. A managed Gamescope split chain instead
+        // proves the application's request through the lower create relay: a
+        // real resolution change matches that source, while a lower-only WSI
+        // mutation fails the upper relay's exact requested-extent check.
+        if (!gamescopePresentationTargetRequired &&
+                previousVariableExtents &&
                 sameExtent(
                     requestedExtent,
                     previousVariableExtents->presentation
@@ -1003,11 +1008,13 @@ namespace mako::layer {
             const VkSurfaceCapabilitiesKHR& realCapabilities,
             const VkExtent2D requestedExtent,
             const std::optional<SpatialScalingExtents>&
-                previousVariableExtents) noexcept {
+                previousVariableExtents,
+            const bool managedGamescopeCreateRelay = false) noexcept {
         return ls::spatialScalingRequested(profile) &&
             validSpatialScalingFactor(profile.scaling_factor) &&
             profile.scaling_factor > 1.0F &&
             !fixedSurfaceExtent(realCapabilities.currentExtent) &&
+            !managedGamescopeCreateRelay &&
             previousVariableExtents &&
             sameExtent(
                 requestedExtent, previousVariableExtents->presentation

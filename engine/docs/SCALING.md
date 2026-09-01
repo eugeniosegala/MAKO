@@ -25,7 +25,7 @@ Every matched process negotiates the external-memory, external-semaphore, and ti
 
 ## Pipeline order
 
-The upper combined owner freezes one placement when the swapchain is created. Presentation extents at or below 1920×1200 use pre-Frame Generation reconstruction:
+The upper combined owner freezes one placement when the swapchain is created. Presentation extents containing no more than 2,304,000 pixels—the 1920×1200 budget—use pre-Frame Generation reconstruction. This is an aspect-ratio-independent pixel budget rather than a rectangular width/height clamp, so an ultrawide 2560×900 presentation sits exactly on the same boundary:
 
 ```text
 Application source rectangle
@@ -44,7 +44,7 @@ full-resolution generated frame(s) + full-resolution real frame -> presentation
 
 This is the Steam Deck/internal-display and 720p-to-1080p path. With `frame_generation_enabled = false`, the reconstructed real frame goes directly to the lower presentation path. With Fixed or Adaptive Frame Generation enabled, the scaler writes reconstruction directly into the selected exported LSFG source and copies that same result back to the real WSI image. This removes the former presentation-sized private-output-to-FG copy while preserving one reconstruction, the real-frame presentation, and the existing Frame Generation → Gamescope WSI → spatial-role chain. If the application device cannot export the required storage-capable format or direct descriptor preparation fails, MAKO retains the previous private-output copy path for that context and reports `mode=copy-private-output`. Generated frames are not scaled individually, so increasing the multiplier does not multiply spatial work.
 
-Presentation extents above 1920×1200 use source-resolution Frame Generation followed by reconstruction:
+Presentation extents above the 2,304,000-pixel budget use source-resolution Frame Generation followed by reconstruction:
 
 ```text
 Application source rectangle -> source-resolution LSFG scheduling
@@ -83,7 +83,7 @@ Desktop window systems normally publish `UINT32_MAX` as `currentExtent`, so ther
 
 On a variable surface, configure the game or window to request the intended lower rendering resolution. MAKO uses only positively identified Gamescope server-zero geometry as an output target; an ordinary desktop window, nested nonzero Xwayland server, or unresolved compositor does not become an inferred monitor target. A factor that cannot enlarge both dimensions within the proven target, surface limits, or deterministic memory baseline leaves scaling inactive.
 
-Some Wayland compositors report MAKO's enlarged lower WSI extent back to the application as its next logical window size. MAKO records the last source/presentation pair per surface and treats an exact echoed presentation extent as compositor feedback rather than a new low-resolution source. That recreated swapchain stays native-sized and the record is retained so repeated echoes cannot compound the scaling factor. A genuinely different application-requested extent may activate scaling again. This conservative rule can also suppress an intentional source-size change that exactly equals the previous presentation size for the remaining surface lifetime. The guard does not apply to fixed extents and is cleared when the surface is destroyed. Direct variable-Wayland scaling can therefore become inactive after a compositor-driven recreation. MAKO Decky's ordered Gamescope WSI lane is the validated managed path, but a replacement context must still retain a genuine source/presentation split; a fixed native surface is valid only when the application consumes MAKO's advertised source capability.
+Some Wayland compositors report MAKO's enlarged lower WSI extent back to the application as its next logical window size. MAKO records the last source/presentation pair per surface and, on a direct or otherwise uncontracted variable surface, treats an exact echoed presentation extent as compositor feedback rather than a new low-resolution source. That recreated swapchain stays native-sized and the record is retained so repeated echoes cannot compound the scaling factor. A genuinely different application-requested extent may activate scaling again. MAKO Decky's ordered Gamescope WSI lane does not apply this ambiguous local guard because its same-thread lower create relay provides the missing proof: an intentional game resolution change exactly matches the upper application's request and may form a new split even when the source equals the previous presentation, while a lower-only WSI extent mutation mismatches the upper request and fails closed. The local feedback guard does not apply to fixed extents and is cleared when the surface is destroyed. Direct variable-Wayland scaling can therefore become inactive after a compositor-driven recreation. Every managed replacement context must still retain a genuine source/presentation split; a fixed native surface is valid only when the application consumes MAKO's advertised source capability.
 
 ## Swapchain, queue, and present-batch contract
 
