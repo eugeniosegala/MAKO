@@ -191,12 +191,12 @@ Profiles and Steam launch options are retained. Uninstalling MAKO Decky removes 
 Decky is optional. Desktop Linux users can install the published MAKO Renderer archive directly:
 
 1. To use frame generation or LS1 scaling, purchase and install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO Scaler does not use `Lossless.dll`.
-2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>. The extracted `README.txt` contains the complete offline install, update, launch, and uninstall instructions. Double-click **Install MAKO Renderer** and choose **Execute** if your file manager asks. The installer opens **MAKO Renderer Configuration** when it finishes and shows the native Steam/Proton launch option for the selected installation location. To reopen the UI later, switch to Desktop Mode, open the bottom-left Application Launcher, search for **MAKO Renderer Configuration**, and click the MAKO-logo app icon. You can also run `~/.local/bin/mako-ui`.
+2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then double-click **Install MAKO Renderer** and choose **Execute** if prompted. The installer opens **MAKO Renderer Configuration** and shows the Steam/Proton launch option; reopen it later from the application launcher or with `~/.local/bin/mako-ui`. The included `README.txt` covers installation, updates, launching, and removal.
 3. Run the installer again after extracting a newer archive. For manual installation, configuration, Flatpak setup, and troubleshooting, see the <a href="engine/README.md#direct-linux-installation" target="_blank" rel="noopener noreferrer">MAKO Renderer guide</a>.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> MAKO Decky and the standalone archive share one active native Renderer. The standalone installer warns when MAKO Decky is present, then makes its Renderer version active if you continue. When MAKO Decky is installed afterward, it adopts the active standalone Renderer and offers its bundled update only when the versions differ. **Uninstall MAKO Renderer** removes the native Renderer files supplied by either managed installer while leaving MAKO Decky and your profiles in place; uninstalling MAKO Decky removes its plugin and the managed native Renderer. Shared Flatpak runtime extensions remain installed.
+> MAKO Decky and the standalone archive share one native Renderer. Installing either selects its version: the standalone installer warns before replacing Decky's version, while Decky adopts a valid standalone installation or offers its bundled update when versions differ. **Uninstall MAKO Renderer** removes the shared native files but keeps MAKO Decky and profiles; uninstalling MAKO Decky removes both the plugin and managed Renderer. Shared Flatpak extensions remain installed.
 
 ## Documentation
 
@@ -207,7 +207,6 @@ Decky is optional. Desktop Linux users can install the published MAKO Renderer a
 - <a href="plugin/docs/PACKAGING.md" target="_blank" rel="noopener noreferrer">Local packaging and publishing</a>: build a ZIP for a Steam machine or publish a release.
 - <a href="HOW_TO_RELEASE.md" target="_blank" rel="noopener noreferrer">Release process</a>: publish both components end to end with one versioned command.
 - <a href="TESTING.md" target="_blank" rel="noopener noreferrer">Testing</a>: pull-request gates, sanitizer coverage, SteamOS hardware validation, and the runtime compatibility boundary.
-- <a href="https://github.com/eugeniosegala/MAKO-Gym" target="_blank" rel="noopener noreferrer">MAKO Gym</a>: private real-hardware Vulkan, Gamescope, frame-generation, and scaling QA scenarios used by the SteamOS release gate.
 - <a href="engine/README.md" target="_blank" rel="noopener noreferrer">MAKO Renderer documentation</a>: engine identity, source builds, configuration, and direct use.
 
 ## Featured in

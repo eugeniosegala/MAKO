@@ -2,7 +2,7 @@
 
 The MAKO trace extractor turns one completed real-game session into a structured, sanitized evidence bundle for comparison across Renderer versions. The producer is [`scripts/capture-trace.sh`](scripts/capture-trace.sh) in this public MAKO repository so diagnostic-format changes and extraction behavior evolve together.
 
-> **Private repository:** The companion [MAKO Traces](https://github.com/eugeniosegala/MAKO-Traces) repository is private. It contains game-session logs, machine and runtime metadata, test observations, and performance evidence that must not be copied into the public MAKO repository. Access to that repository is not required to build, test, package, install, or release MAKO.
+> **Private evidence:** Game-session logs, machine and runtime metadata, test observations, and performance evidence belong outside the public MAKO repository. External evidence storage is not required to build, test, package, install, or release MAKO.
 
 ## Repository boundary
 
@@ -10,27 +10,13 @@ The MAKO trace extractor turns one completed real-game session into a structured
 | --- | --- | --- |
 | `MAKO/scripts/capture-trace.sh` | Public | Session extraction, time slicing, sanitization, metadata generation, credential rejection, and the initial checksum manifest |
 | `MAKO/TRACES.md` | Public | Extractor behavior, safety contract, and maintainer workflow |
-| `MAKO-Traces` | Private | Controlled traces, external reports, executable schemas, the canonical checksum contract and verification, guarded initialization and refresh, append-only history, archive validation, and comparison policy |
+| External evidence archive | Private | Controlled traces, external reports, executable schemas, the canonical checksum contract and verification, guarded initialization and refresh, append-only history, archive validation, and comparison policy |
 
 The archive is never a runtime or distribution dependency; MAKO must work normally without it.
 
 ## Local setup
 
-Keep both repositories as siblings rather than nesting the private archive inside the public worktree:
-
-```text
-<workspace>/
-  MAKO/
-  MAKO-Traces/
-```
-
-Authorized maintainers can clone the private repository with their normal GitHub credentials:
-
-```bash
-git clone https://github.com/eugeniosegala/MAKO-Traces.git ../MAKO-Traces
-```
-
-The extractor defaults to that sibling path. Use `--trace-repo <path>` when the private checkout is elsewhere.
+Keep the authorized evidence archive outside the public MAKO worktree and pass its location with `--trace-repo <path>`. Repository access and checkout details are intentionally not part of the public documentation.
 
 ## Capture a completed session
 

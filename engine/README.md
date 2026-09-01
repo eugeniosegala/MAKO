@@ -36,7 +36,7 @@ See the <a href="../README.md#install-and-use" target="_blank" rel="noopener nor
 
 For frame generation or LS1 scaling, first install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO Scaler works without `Lossless.dll`.
 
-Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0" target="_blank" rel="noopener noreferrer">latest Renderer release</a>. The extracted `README.txt` contains the complete offline install, update, launch, and uninstall instructions. Run **Install MAKO Renderer**; it verifies and installs the archive below `~/.local`, preserves profiles, opens **MAKO Renderer Configuration**, and shows the native Steam/Proton launch option for the selected installation location. To reopen the UI later, switch to Desktop Mode, open the bottom-left Application Launcher, search for **MAKO Renderer Configuration**, and click the MAKO-logo app icon. You can also run `~/.local/bin/mako-ui`. Run the installer again after extracting an update; use **Uninstall MAKO Renderer** from the application menu to remove it.
+Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v2.2.0" target="_blank" rel="noopener noreferrer">latest Renderer release</a>, then run **Install MAKO Renderer**. It verifies the archive, preserves profiles, opens **MAKO Renderer Configuration**, and shows the Steam/Proton launch option. Reopen the UI from the application launcher or with `~/.local/bin/mako-ui`; run the installer again to update or use **Uninstall MAKO Renderer** to remove it. The included `README.txt` contains complete offline instructions.
 
 For a manual installation, extract the archive into your user-local prefix:
 
@@ -49,7 +49,7 @@ The archive provides `mako-ui`, `mako-cli`, `mako-launch`, `mako-diagnostics`, d
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
-> MAKO Decky and the standalone archive share one active native Renderer. The standalone installer warns before selecting its version while MAKO Decky is installed. MAKO Decky adopts an existing standalone Renderer, reports its active version, and offers the bundled update when the versions differ. **Uninstall MAKO Renderer** removes native Renderer files supplied by either managed installer, keeps MAKO Decky and profiles, and causes MAKO Decky to offer installation again. Uninstalling MAKO Decky also removes the managed native Renderer. Shared Flatpak runtime extensions remain installed.
+> MAKO Decky and the standalone archive share one native Renderer. Installing either selects its version: the standalone installer warns before replacing Decky's version, while Decky adopts a valid standalone installation or offers its bundled update when versions differ. **Uninstall MAKO Renderer** removes the shared native files but keeps MAKO Decky and profiles; uninstalling MAKO Decky removes both the plugin and managed Renderer. Shared Flatpak extensions remain installed.
 
 For Flatpak games or emulators, install the matching MAKO Vulkan runtime extension and grant the application access to MAKO configuration and the Steam library. MAKO Decky performs this through **Flatpak Setup**; direct installs can follow the <a href="docs/FLATPAK-GUIDE.md" target="_blank" rel="noopener noreferrer">Flatpak guide</a>.
 
