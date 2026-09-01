@@ -123,9 +123,12 @@ int main() {
     expect(!upstreamPresentFenceProtectsSwapchain(&presentFence, 1),
         "an out-of-range upstream present fence was accepted");
 
-    const VkBaseInStructure precedingNode{
+    const uint64_t presentId = 1;
+    const VkPresentIdKHR precedingNode{
         .sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR,
-        .pNext = reinterpret_cast<const VkBaseInStructure*>(&presentFence),
+        .pNext = &presentFence,
+        .swapchainCount = 1,
+        .pPresentIds = &presentId,
     };
     // Production pNext chains enter through an opaque Vulkan ABI pointer.
     // Keep the fixture opaque too so LTO cannot reason across distinct Vulkan

@@ -61,11 +61,13 @@ case "$selection" in
       if [[ "$valid" != true ]]; then
         fail "unknown suite '$requested_name'."
       fi
-      for selected_name in "${selected_names[@]}"; do
-        if [[ "$selected_name" == "$requested_name" ]]; then
-          fail "suite '$requested_name' was selected more than once."
-        fi
-      done
+      if ((${#selected_names[@]} > 0)); then
+        for selected_name in "${selected_names[@]}"; do
+          if [[ "$selected_name" == "$requested_name" ]]; then
+            fail "suite '$requested_name' was selected more than once."
+          fi
+        done
+      fi
       selected_names+=("$requested_name")
     done
     for suite_name in "${suite_names[@]}"; do
@@ -95,8 +97,14 @@ join_names() {
   printf '%s' "$joined"
 }
 
-selected_record="$(join_names "${selected_names[@]}")"
-omitted_record="$(join_names "${omitted_names[@]}")"
+selected_record=""
+if ((${#selected_names[@]} > 0)); then
+  selected_record="$(join_names "${selected_names[@]}")"
+fi
+omitted_record=""
+if ((${#omitted_names[@]} > 0)); then
+  omitted_record="$(join_names "${omitted_names[@]}")"
+fi
 selected_record="${selected_record:-none}"
 omitted_record="${omitted_record:-none}"
 
