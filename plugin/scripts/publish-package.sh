@@ -255,9 +255,8 @@ printf '%s\n' \
   '> [!TIP]' \
   '> **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.' \
   '' \
-  'Every game, renderer, and display setup behaves differently. Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling-only operation one setting at a time. For scaling, choose the intended lower game resolution. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling models, Flow Scale, and Lighter FG Model use rollback-safe private context replacement. On the managed Gamescope path, a settled Scale Factor edit requests one guarded game-owned recreation and simultaneous compatible FG edits remain live; unsupported paths defer only the factor until the next natural game resolution change or restart. Restart before changing Scaling enablement or another process-start setting. For most games, fullscreen is the best starting point for performance and frame pacing.' \
+  'Every game, renderer, and display setup behaves differently. Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling-only operation one setting at a time. For most games, fullscreen is the best starting point for performance and frame pacing. Keep the configuration that feels best for that game.' \
   '' \
-  '- **Scaling quality and cost:** Higher factors render fewer source pixels but require more reconstruction. Compare text, UI edges, motion, GPU time, and frame pacing against native resolution, then tune sharpening conservatively.' \
   '- **Adaptive target behaviour:** Adaptive varies the generated-frame count toward an average target. It cannot reduce a native frame rate already above that target, and the result still depends on the selected multiplier plus available GPU and compositor capacity.' \
   '- **Quality and latency tuning:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness, so compare the available choices per game.' \
   '' \
@@ -268,17 +267,7 @@ printf '%s\n' \
   '' \
   '> ⚠️ **Required MAKO Renderer update:** Installing the ZIP updates MAKO Decky, but does **not** replace its private Vulkan layer. Open the plugin and select **Install MAKO Renderer** afterwards.' \
   '' \
-  '> [!IMPORTANT]' \
-  '> **Preferred clean update:** To prevent Decky retaining a previous plugin backend or bundled payload, especially when moving between local test ZIPs, uninstall **MAKO Decky**, install the newer ZIP, restart your Steam Deck or Steam Machine, then open it and select **Install MAKO Renderer**.' \
-  '' \
   > "$notes_file"
-
-if [[ "$has_flatpak_bundle" == "true" ]]; then
-  printf '%s\n' \
-    '> **First-time Heroic or EmuDeck setup:** Read the [Heroic and other Flatpak applications guide](https://github.com/eugeniosegala/MAKO#heroic-and-other-flatpak-applications) before preparing either integration.' \
-    '' \
-    >> "$notes_file"
-fi
 
 printf '%s\n' \
   '## Installation' \
@@ -291,8 +280,18 @@ printf '%s\n' \
   '4. In MAKO Decky, select **Install MAKO Renderer**. For native Steam/Proton games, add `/home/deck/.local/bin/mako-run %command%` to the game’s Steam launch options.' \
   '' \
   '> [!IMPORTANT]' \
-  '> If Decky does not show or reload **MAKO Decky** after installing a ZIP, uninstall it, install the ZIP again, then restart your Steam Deck or Steam Machine. Open the plugin afterwards and select **Install MAKO Renderer** again.' \
+  '> **Preferred clean update:** To prevent Decky retaining an older backend or bundled payload, uninstall **MAKO Decky**, install the newer ZIP, restart your Steam Deck or Steam Machine, then open the plugin and select **Install MAKO Renderer**. This also resolves cases where Decky does not show or reload the plugin after installation.' \
   '' \
+  >> "$notes_file"
+
+if [[ "$has_flatpak_bundle" == "true" ]]; then
+  printf '%s\n' \
+    '**First-time Heroic or EmuDeck setup:** Read the [Heroic and other Flatpak applications guide](https://github.com/eugeniosegala/MAKO#heroic-and-other-flatpak-applications) before preparing either integration.' \
+    '' \
+    >> "$notes_file"
+fi
+
+printf '%s\n' \
   '## Updating an existing MAKO Decky installation' \
   '' \
   '1. Quit any game currently using `/home/deck/.local/bin/mako-run`.' \
@@ -310,15 +309,15 @@ printf '%s\n' \
   '' \
   '## Before you play' \
   '' \
-  '- If you use Frame Generation or LS1 scaling, confirm that MAKO can discover `Lossless.dll` or select its path explicitly. The open MAKO Scaler does not need it.' \
-  '- Do not combine `mako-run` with another frame-generation or swapchain-scaling Vulkan wrapper for the same game.' \
+  '- Test MAKO per game. Start with Frame Generation and Scaling disabled, then enable one path at a time before combining them.' \
+  '- If you use Frame Generation or LS1 scaling, confirm the detected `Lossless.dll` path before launching. Leaving it blank permits normal discovery. The open MAKO Scaler does not need it.' \
+  '- Do not combine `mako-run` with another frame-generation or scaling Vulkan wrapper for the same game.' \
   '' \
   "## Bundled MAKO Renderer \`$engine_version\`" \
   '' \
   "- Includes checksum-verified \`$archive_name\`." \
   "- Corresponding MAKO Decky source: [\`$plugin_release_tag\`](https://github.com/$github_repository/tree/$plugin_release_tag)." \
   "- Corresponding MAKO Renderer source: [\`$engine_release_tag\`](https://github.com/$github_repository/tree/$engine_release_tag), pinned by commit and checksum in the ZIP metadata." \
-  '- Installing the ZIP does not replace the private renderer by itself; complete the required in-plugin installation step above.' \
   '' \
   >> "$notes_file"
 

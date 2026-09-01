@@ -155,9 +155,8 @@ $manual_release_notes
 > [!TIP]
 > **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.
 
-Every game, renderer, and display setup behaves differently. Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling-only operation one setting at a time. For scaling, select the intended lower rendering resolution in the game. Fixed/Adaptive mode, target, and multiplier changes apply live; capacity growth, scaling controls, Flow Scale, and Lighter FG Model use one game-owned swapchain recreation when needed. Fullscreen is usually the best starting point for performance and frame pacing. Restart if a title ignores that signal, after major display, DLL, GPU, or process/device-policy changes, and before enabling Frame Generation in a process that started scaling-only.
+Every game, renderer, and display setup behaves differently. Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling-only operation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart after major display, DLL, GPU, Flow Scale, Performance Mode, model, or Scaling enablement changes.
 
-- **Scaling quality and cost:** Higher scaling factors render fewer source pixels but require more reconstruction. Compare text, UI edges, thin geometry, motion, GPU time, and frame pacing against native resolution, then tune sharpening conservatively.
 - **Adaptive target behaviour:** Adaptive varies the generated-frame count toward an average target. It cannot reduce a native frame rate already above that target, and the result still depends on the selected multiplier plus available GPU and compositor capacity.
 - **Quality and latency tuning:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness, so compare the available choices per game.
 
@@ -168,7 +167,13 @@ Every game, renderer, and display setup behaves differently. Compare Fixed Frame
 
 ### Host archive
 
-Download \`$(basename "$archive")\`, extract it into a new folder, then double-click **Install MAKO Renderer** and choose **Execute** if your file manager asks. The installer verifies the payload, installs it under \`~/.local\`, and opens the configuration UI.
+Download \`$(basename "$archive")\`, extract it into a new folder, then use the included graphical installer:
+
+1. Double-click **Install MAKO Renderer**.
+2. Choose **Execute** if your file manager asks.
+3. Confirm the installation. The wizard verifies the package, installs it under \`~/.local\`, safely updates existing files, preserves profiles, and opens the configuration UI.
+
+To remove it later, open **Uninstall MAKO Renderer** from the application menu. The wizard removes MAKO-owned files and keeps your profiles unless you explicitly choose to remove them.
 
 The host archive includes 64-bit and 32-bit Vulkan layers; the CLI and Qt UI are 64-bit.
 
@@ -177,7 +182,7 @@ Reopen the configuration UI after installation:
 - **Application menu:** On Steam Deck or Steam Machine, switch to Desktop Mode, open the bottom-left Application Launcher, search for **MAKO Renderer Configuration**, and click the MAKO-logo app icon.
 - **Terminal:** Run \`~/.local/bin/mako-ui\` from Konsole or another terminal. Do not run it with \`sudo\`.
 
-Configure the profile in the UI or \`~/.config/mako-render/conf.toml\`. Select the licensed DLL path when using Frame Generation or LS1 scaling, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch. The helper activates MAKO through its private Vulkan layer directory, prevents Steam's Vulkan Fossilize/overlay hooks and competing presentation layers from bypassing its swapchain interception, and keeps Gamescope and the Steam/Game Mode interface active outside that application chain.
+Configure the profile in the UI or \`~/.config/mako-render/conf.toml\`. Select the licensed DLL path when using Frame Generation or LS1 scaling, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch.
 
 ### Flatpak runtime extensions
 
@@ -192,9 +197,10 @@ flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.fla
 ## Updating an existing MAKO Renderer installation
 
 1. Quit every game or application currently using MAKO Renderer.
-2. Download the newer host archive and extract it into the same local prefix. Existing files are replaced; your configuration remains under \`~/.config/mako-render/\`.
-3. If you use Flatpak applications, download the matching Flatpak archive and reinstall the extension for each runtime you use.
-4. Restart the game. Revalidate the configuration with \`~/.local/bin/mako-cli validate\` if you changed the DLL path or profiles.
+2. Download the newer host archive and extract it into a new folder.
+3. Run **Install MAKO Renderer** again and confirm the prompt. The wizard verifies and replaces MAKO-owned files while preserving \`~/.config/mako-render/\`.
+4. If you use Flatpak applications, download the matching Flatpak archive and reinstall the extension for each runtime you use.
+5. Restart the game. Revalidate the configuration with \`~/.local/bin/mako-cli validate\` if you changed the DLL path or profiles.
 
 Keep the previous archives until the new version has been tested with your games.
 
@@ -204,8 +210,9 @@ Keep the previous archives until the new version has been tested with your games
 
 ## Before you play
 
-- If you use Frame Generation or LS1 scaling, confirm that MAKO can discover \`Lossless.dll\` or select its path explicitly. The open MAKO Scaler does not need it.
-- Do not combine MAKO with another frame-generation or swapchain-scaling Vulkan wrapper for the same game.
+- Test MAKO per game. Start with Frame Generation and Scaling disabled, then enable one path at a time before combining them.
+- If you use Frame Generation or LS1 scaling, confirm the detected \`Lossless.dll\` path before launching. Leaving it blank permits normal discovery. MAKO Scaler does not need it.
+- Do not combine MAKO with another frame-generation or scaling Vulkan wrapper for the same game.
 
 ## MAKO Renderer release assets \`$version\`
 
