@@ -23,6 +23,7 @@ class LicenseLineageTests(unittest.TestCase):
             "Copyright in the incorporated portions remains with the respective lsfg-vk copyright holders",
             license_text,
         )
+        self.assertIn("Bjoern Hoehrmann UTF-8 decoder", license_text)
         self.assertIn(
             "the MIT License that applied to lsfg-vk version 1 does not describe MAKO Renderer",
             license_text,
