@@ -1,7 +1,3 @@
-## MAKO Renderer Linux build
-
-MAKO Renderer v3.0.0 is a stable release. Test it game by game and retain a known-good rollback path.
-
 ## What's new in MAKO Renderer v3.0.0
 
 <img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/abyssal-fang.png" alt="Abyssal Fang: a Renaissance vision of a colossal mako rising beside a storm-dark fortified harbour" width="100%">
