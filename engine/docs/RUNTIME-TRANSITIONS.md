@@ -118,10 +118,11 @@ Any new control must explicitly classify both its ordinary lifetime and its beha
 
 A live update must reset the smallest state set that can contain assumptions invalidated by the applied field:
 
-- enable/disable transitions clear fixed-window measurements, pacer ownership, generated-image admission, ordered-acquire recovery, and history warm-up state as appropriate;
+- enable/disable transitions clear fixed-window measurements, Fixed cadence-collapse evidence, pacer ownership, generated-image admission, ordered-acquire recovery, and history warm-up state as appropriate;
 - mode, target, ceiling, Smooth Cadence, and cadence-recovery policy changes rebuild the generation scheduler policy;
 - an effective cap change resets both real-frame pacing and scheduler policy that observes the capped cadence;
 - a probe-interval-only change updates the scheduler timer without destroying validated policy;
+- a live scaler/private-resource, mode, Fixed multiplier, refresh, or stronger transport-recovery transition clears Fixed cadence-collapse qualification so old performance evidence cannot cross the changed boundary;
 - a dormant value or metadata-only change performs no scheduler reset; and
 - a deferred value performs no reset until its owning boundary applies it.
 

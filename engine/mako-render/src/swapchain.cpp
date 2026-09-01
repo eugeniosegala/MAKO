@@ -665,6 +665,13 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             std::cerr << "MAKO Renderer: Dynamic Cadence Recovery is unavailable "
                          "for Fixed mode without a supported Gamescope refresh "
                          "signal and 2x-5x multiplier; exact Fixed policy retained\n";
+        } else if (fixedCadenceCollapseRecoveryEligible(
+                false, this->privateOrderedTransport, false, false,
+                this->gamescopeRefreshHz,
+                this->configuredFixedGeneratedFrames)) {
+            std::cerr << "MAKO Renderer: event-triggered Fixed cadence-collapse "
+                         "recovery enabled for ordered Gamescope presentation; "
+                         "healthy qualification=1 s, collapse qualification=250 ms\n";
         }
     } catch (const std::exception& e) {
         // Swapchain creation belongs to the game. A failure in MAKO's optional
@@ -809,6 +816,7 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
 bool Swapchain::resetGenerationScheduler(
         const DiagnosticsClock::time_point now,
         const std::string_view reason) {
+    this->recoveryState.fixedCadenceCollapseRecovery.reset();
     const auto policy = generationSchedulerPolicy(
         this->profile, this->gamescopeRefreshHz
     );
@@ -1373,6 +1381,7 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
     try {
         this->ensureHistoryWarmup();
         this->fixedRefreshBudget.reset();
+        this->recoveryState.fixedCadenceCollapseRecovery.reset();
         this->recoveryState.lowerPresentStallRecovery.reset();
 
         const auto activeMethod = this->spatialScaler->activeMethod();
@@ -1746,6 +1755,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
     if (decision.generationModeChanged || decision.fixedMultiplierChanged ||
             decision.baseFpsCapChanged || enabling || disabling) {
         this->fixedRefreshBudget.reset();
+        this->recoveryState.fixedCadenceCollapseRecovery.reset();
         this->diagnosticsState.fixedWindowStarted.reset();
         this->diagnosticsState.fixedRealFrames = 0;
         this->diagnosticsState.fixedGeneratedFrames = 0;
@@ -1939,6 +1949,7 @@ void Swapchain::updateGamescopeRefreshRate(
     const bool generationAvailabilityChanged =
         generationWasEnabled != generationIsEnabled;
     this->fixedRefreshBudget.reset();
+    this->recoveryState.fixedCadenceCollapseRecovery.reset();
     if (generationAvailabilityChanged) {
         this->diagnosticsState.fixedWindowStarted.reset();
         this->diagnosticsState.fixedRealFrames = 0;
@@ -1993,6 +2004,7 @@ void Swapchain::disableFrameGeneration() {
     this->smoothCadencePacerHandoff.reset();
     this->recoveryState.historyWarmupRemaining = 0;
     this->recoveryState.orderedAcquireRecovery.reset();
+    this->recoveryState.fixedCadenceCollapseRecovery.reset();
     if (this->adaptiveScheduler)
         this->adaptiveScheduler->cancelHistoryWarmup();
     this->publishRuntimeStatus("profile-unmatched");

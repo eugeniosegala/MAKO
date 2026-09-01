@@ -514,6 +514,7 @@ void Swapchain::observeLowerPresentHealth(
         return;
 
     this->fixedRefreshBudget.reset();
+    this->recoveryState.fixedCadenceCollapseRecovery.reset();
     if (!presentDiagnosticsEnabled())
         return;
     std::cerr << "MAKO Renderer: present diagnostics: "
@@ -798,14 +799,86 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             presentNow, this->gamescopeRefreshHz,
             this->configuredFixedGeneratedFrames
         );
+    const bool fixedCadenceRecoveryEligible =
+        fixedCadenceCollapseRecoveryEligible(
+            schedulerEnabled, this->privateOrderedTransport,
+            orderedAcquireRecoveryProbe ||
+                this->recoveryState.orderedAcquireRecovery.active(),
+            plan.historyWarmupActive, this->gamescopeRefreshHz,
+            this->configuredFixedGeneratedFrames
+        );
+    FixedCadenceCollapseRecovery::Decision fixedCadenceRecovery;
+    if (fixedCadenceRecoveryEligible) {
+        fixedCadenceRecovery =
+            this->recoveryState.fixedCadenceCollapseRecovery.observe(
+            presentNow, this->frameState.recentRealInterval,
+            this->gamescopeRefreshHz,
+            this->configuredFixedGeneratedFrames
+        );
+    } else {
+        // Stronger recovery owners and incompatible transports must not leave
+        // qualification or backoff evidence for a later Fixed frame.
+        this->recoveryState.fixedCadenceCollapseRecovery.reset();
+    }
+    if (fixedCadenceRecovery.probeRecovered)
+        this->fixedRefreshBudget.reset();
+    if (presentDiagnosticsEnabled() &&
+            (fixedCadenceRecovery.probeStarted ||
+             fixedCadenceRecovery.probeRejected ||
+             fixedCadenceRecovery.probeRecovered ||
+             fixedCadenceRecovery.recoveryUnstable ||
+             fixedCadenceRecovery.recoveryVerified)) {
+        const char* operation = fixedCadenceRecovery.probeStarted
+            ? "operation=fixed-cadence-collapse-probe-start"
+            : fixedCadenceRecovery.probeRejected
+                ? "operation=fixed-cadence-collapse-probe-rejected"
+                : fixedCadenceRecovery.probeRecovered
+                    ? "operation=fixed-cadence-collapse-probe-recovered"
+                    : fixedCadenceRecovery.recoveryUnstable
+                        ? "operation=fixed-cadence-collapse-recovery-unstable"
+                        : "operation=fixed-cadence-collapse-recovery-verified";
+        const char* action = fixedCadenceRecovery.probeStarted
+            ? "history-only-probe"
+            : fixedCadenceRecovery.probeRecovered
+                ? "verify-fixed-resume"
+                : fixedCadenceRecovery.recoveryVerified
+                    ? "normal-fixed-policy"
+                    : "normal-fixed-policy-with-backoff";
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                  << operation
+                  << " context=" << this->diagnosticsState.contextId
+                  << " baseline_base_fps="
+                  << fixedCadenceRecovery.baselineBaseFps
+                  << " observed_base_fps="
+                  << fixedCadenceRecovery.observedBaseFps
+                  << " confirmed_samples="
+                  << fixedCadenceRecovery.confirmedSamples
+                  << " consecutive_failures="
+                  << fixedCadenceRecovery.consecutiveFailures
+                  << " retry_ms="
+                  << std::chrono::duration<double, std::milli>(
+                         fixedCadenceRecovery.retryDelay
+                     ).count()
+                  << " frame=" << this->frameState.realFrameIndex
+                  << " sequence=" << this->frameState.sequenceIndex
+                  << " action=" << action << '\n';
+    }
+    const size_t effectiveFixedGeneratedFrameCount =
+        fixedCadenceRecovery.suppressGeneration
+        ? 0
+        : fixedGeneratedFrameCount;
     if (!schedulerEnabled &&
-            fixedGeneratedFrameCount < this->configuredFixedGeneratedFrames) {
+            effectiveFixedGeneratedFrameCount <
+                this->configuredFixedGeneratedFrames) {
         this->diagnosticsState.fixedSkippedFrames +=
-            this->configuredFixedGeneratedFrames - fixedGeneratedFrameCount;
+            this->configuredFixedGeneratedFrames -
+                effectiveFixedGeneratedFrameCount;
     }
     plan.requestedGeneratedFrames = schedulerEnabled
         ? adaptivePlan
-        : GeneratedFramePlan::evenlySpaced(fixedGeneratedFrameCount);
+        : GeneratedFramePlan::evenlySpaced(
+            effectiveFixedGeneratedFrameCount
+        );
     if (orderedAcquireRecoveryProbe && !plan.historyWarmupActive &&
             !plan.requestedGeneratedFrames.empty()) {
         // A successful native drain proves only that one image can traverse
@@ -864,8 +937,10 @@ bool Swapchain::generationPipelineReady(const vk::Vulkan& vk,
             this->diagnosticsState.fixedSkippedFrames +=
                 plan.requestedGeneratedFrames.size();
         const auto busy = this->recoveryState.pipelineBusyRecovery.reportBusy(presentNow);
-        if (busy.requestHistoryWarmup)
+        if (busy.requestHistoryWarmup) {
             this->ensureHistoryWarmup();
+            this->recoveryState.fixedCadenceCollapseRecovery.reset();
+        }
         if (presentDiagnosticsEnabled() && busy.diagnostic) {
             std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=pipeline-busy-bypass"
@@ -935,6 +1010,7 @@ void Swapchain::handleRenderFenceBudgetMiss(
     }
     this->recoveryState.backendPending = true;
     this->recoveryState.historyWarmupRemaining = 0;
+    this->recoveryState.fixedCadenceCollapseRecovery.reset();
     if (presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=render-fence-budget-missed"
@@ -1309,6 +1385,7 @@ VkResult Swapchain::presentGeneratedFrames(
         }
         if (observation.quarantined) {
             this->fixedRefreshBudget.reset();
+            this->recoveryState.fixedCadenceCollapseRecovery.reset();
             if (presentDiagnosticsEnabled()) {
                 std::cerr << "MAKO Renderer: present diagnostics: "
                              "operation=ordered-acquire-quarantine"
@@ -2063,6 +2140,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         if (stallRecovery.beginHistoryWarmup) {
             this->ensureHistoryWarmup();
             this->fixedRefreshBudget.reset();
+            this->recoveryState.fixedCadenceCollapseRecovery.reset();
             if (presentDiagnosticsEnabled()) {
                 std::cerr << "MAKO Renderer: present diagnostics: "
                              "operation=lower-present-stall-recovered"
@@ -2082,6 +2160,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             }
         }
         if (stallRecovery.bypassGeneration) {
+            this->recoveryState.fixedCadenceCollapseRecovery.reset();
             if (this->adaptiveScheduler) {
                 static_cast<void>(
                     this->adaptiveScheduler->planFrame(presentNow, true)
@@ -2143,6 +2222,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                       << '\n';
         }
         if (recovery.bypassGeneration) {
+            this->recoveryState.fixedCadenceCollapseRecovery.reset();
             // Keep Adaptive's cadence clock current while freezing every
             // multiplier evaluation. No backend work or synthetic swapchain
             // acquire is attempted until the ordered FIFO has drained. After
@@ -2191,6 +2271,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         if (recovery.beginHistoryWarmup) {
             this->ensureHistoryWarmup();
             this->fixedRefreshBudget.reset();
+            this->recoveryState.fixedCadenceCollapseRecovery.reset();
             if (!recovery.recoveryStabilized &&
                     presentDiagnosticsEnabled()) {
                 std::cerr << "MAKO Renderer: present diagnostics: "
@@ -2290,6 +2371,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                 .reportNonblockingProbeUnavailable(probeFinishedAt);
             if (miss.quarantined) {
                 this->fixedRefreshBudget.reset();
+                this->recoveryState.fixedCadenceCollapseRecovery.reset();
                 if (presentDiagnosticsEnabled()) {
                     std::cerr << "MAKO Renderer: present diagnostics: "
                                  "operation=ordered-acquire-quarantine"
@@ -2328,6 +2410,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             } else if (miss.guardBypassed) {
                 this->ensureHistoryWarmup();
                 this->fixedRefreshBudget.reset();
+                this->recoveryState.fixedCadenceCollapseRecovery.reset();
                 if (presentDiagnosticsEnabled()) {
                     std::cerr << "MAKO Renderer: present diagnostics: "
                                  "operation=ordered-acquire-guard-bypass"

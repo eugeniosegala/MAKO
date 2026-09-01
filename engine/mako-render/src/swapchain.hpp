@@ -227,6 +227,7 @@ namespace mako::layer {
             OrderedAcquireRecovery orderedAcquireRecovery;
             LowerPresentStallRecovery lowerPresentStallRecovery;
             PipelineBusyRecovery pipelineBusyRecovery;
+            FixedCadenceCollapseRecovery fixedCadenceCollapseRecovery;
             bool backendPending{false};
             size_t historyWarmupRemaining{0};
         };

@@ -59,6 +59,9 @@ MAKO Renderer: multi-swapchain spatial-scaling present rejected before semaphore
 MAKO Renderer: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
 MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=60 target_fps=90 generated=1 max_generated=1 stable_cadence=0 target_clock=1 target_budget_credit_outputs=0.25 target_deferred_budget_output=1 target_phase_error_ms=-2.1 source_interval_samples=60 source_interval_mean_ms=16.6 source_interval_stddev_ms=1.2 source_interval_p95_ms=18.5 source_interval_p99_ms=20.5 generated_count_changes=29 requested_interval_samples=90 requested_interval_mean_ms=11.1 requested_interval_stddev_ms=1.3 requested_interval_p95_ms=13.5 requested_interval_p99_ms=13.5 target_phase_error_samples=60 target_phase_error_rms_ms=2.2 target_phase_error_max_ms=5.5
 MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
+MAKO Renderer: present diagnostics: operation=fixed-cadence-collapse-probe-start context=2 baseline_base_fps=30.1 observed_base_fps=30.1 confirmed_samples=0 consecutive_failures=0 retry_ms=0 action=history-only-probe
+MAKO Renderer: present diagnostics: operation=fixed-cadence-collapse-probe-recovered context=2 baseline_base_fps=30.1 observed_base_fps=60 confirmed_samples=3 consecutive_failures=0 retry_ms=0 action=verify-fixed-resume
+MAKO Renderer: present diagnostics: operation=fixed-cadence-collapse-recovery-verified context=2 baseline_base_fps=0 observed_base_fps=60 confirmed_samples=0 consecutive_failures=0 retry_ms=0 action=normal-fixed-policy
 MAKO Renderer: present diagnostics: operation=acquire-generated-image context=1 duration_ms=50 result=VK_TIMEOUT
 MAKO Renderer: present diagnostics: operation=skip-generated-frames context=1 reason=initial-timeout
 MAKO Renderer: present diagnostics: operation=ordered-acquire-policy context=1 configured_timeout_ms=50 slow_threshold_ms=25 severe_threshold_ms=50 budget_scope=application-present first_slow_action=zero-wait-protection guard_miss_action=native-relief-history-warmup recovery_probe_timeout_ms=8.33 recovery_probe_timeout_max_ms=25 recovery_probe_failure=backoff post_probe_policy=native-only stabilization_ms=2000
@@ -128,6 +131,9 @@ class DiagnosticsHelperTests(unittest.TestCase):
         self.assertIn("ordered-acquire-retry", result.stdout)
         self.assertIn("ordered-acquire-recovered", result.stdout)
         self.assertIn("ordered-acquire-stabilized", result.stdout)
+        self.assertIn("fixed-cadence-collapse-probe-start", result.stdout)
+        self.assertIn("fixed-cadence-collapse-probe-recovered", result.stdout)
+        self.assertIn("fixed-cadence-collapse-recovery-verified", result.stdout)
         self.assertIn("pipeline-busy-bypass", result.stdout)
         self.assertIn("render-fence-budget-missed", result.stdout)
         self.assertIn("resume-generated-frames", result.stdout)
@@ -221,6 +227,11 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "generated-delivery-miss",
             "generated-admission-pressure",
             "generated-admission-recovered",
+            "fixed-cadence-collapse-probe-start",
+            "fixed-cadence-collapse-probe-rejected",
+            "fixed-cadence-collapse-probe-recovered",
+            "fixed-cadence-collapse-recovery-unstable",
+            "fixed-cadence-collapse-recovery-verified",
             "ordered-acquire-quarantine",
             "ordered-acquire-policy",
             "ordered-acquire-classification-split",
@@ -312,6 +323,9 @@ class DiagnosticsHelperTests(unittest.TestCase):
             result = self._run("--log", str(path), "performance")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("operation=fixed-plan", result.stdout)
+        self.assertIn("fixed-cadence-collapse-probe-start", result.stdout)
+        self.assertIn("fixed-cadence-collapse-probe-recovered", result.stdout)
+        self.assertIn("fixed-cadence-collapse-recovery-verified", result.stdout)
         self.assertIn("generated_skipped=0", result.stdout)
         self.assertIn("ordered-acquire-quarantine", result.stdout)
         self.assertIn("ordered-acquire-classification-split", result.stdout)

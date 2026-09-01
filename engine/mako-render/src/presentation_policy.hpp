@@ -1285,6 +1285,322 @@ namespace mako::layer {
         size_t consecutiveStalls{0};
     };
 
+    [[nodiscard]] constexpr bool fixedCadenceCollapseRecoveryEligible(
+            const bool schedulerEnabled,
+            const bool privateOrderedTransport,
+            const bool orderedAcquireRecoveryActive,
+            const bool historyWarmupActive,
+            const std::optional<uint32_t> refreshHz,
+            const size_t maximumGeneratedFrames) noexcept {
+        return !schedulerEnabled && privateOrderedTransport &&
+            !orderedAcquireRecoveryActive && !historyWarmupActive &&
+            refreshHz && *refreshHz > 0 && maximumGeneratedFrames > 0;
+    }
+
+    /// Ordered FIFO can make a healthy Fixed source appear permanently slow:
+    /// one generated image plus the original holds the next application
+    /// present, so a temporary overlay/menu cadence collapse feeds back into
+    /// every following frame without producing an acquire or QueuePresent
+    /// timeout. Qualify a healthy target first, then use a short, history-only
+    /// native probe only after a sustained severe collapse. A true workload
+    /// slowdown rejects on the first probe sample and enters bounded backoff;
+    /// a faster exposed cadence must survive both three native samples and a
+    /// generated-delivery verification window before the failure count clears.
+    class FixedCadenceCollapseRecovery {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+        using Duration = Clock::duration;
+
+        struct Decision {
+            bool suppressGeneration{false};
+            bool probeStarted{false};
+            bool probeRejected{false};
+            bool probeRecovered{false};
+            bool recoveryUnstable{false};
+            bool recoveryVerified{false};
+            size_t confirmedSamples{0};
+            size_t consecutiveFailures{0};
+            double baselineBaseFps{0.0};
+            double observedBaseFps{0.0};
+            Duration retryDelay{};
+        };
+
+        [[nodiscard]] static constexpr auto healthyQualificationDuration() {
+            return std::chrono::seconds{1};
+        }
+
+        [[nodiscard]] static constexpr auto collapseQualificationDuration() {
+            return std::chrono::milliseconds{250};
+        }
+
+        [[nodiscard]] static constexpr auto verificationDuration() {
+            return std::chrono::seconds{1};
+        }
+
+        [[nodiscard]] static constexpr double healthyOutputRatio() {
+            return 0.95;
+        }
+
+        [[nodiscard]] static constexpr double collapsedOutputRatio() {
+            return 0.88;
+        }
+
+        [[nodiscard]] static constexpr double collapsedBaselineRatio() {
+            return 0.90;
+        }
+
+        [[nodiscard]] static constexpr double minimumProbeRiseRatio() {
+            return 1.25;
+        }
+
+        [[nodiscard]] Decision observe(const TimePoint now,
+                const std::optional<Duration> realInterval,
+                const std::optional<uint32_t> refreshHz,
+                const size_t maximumGeneratedFrames) {
+            if (!refreshHz || *refreshHz == 0 ||
+                    maximumGeneratedFrames == 0) {
+                this->reset();
+                return {};
+            }
+
+            const auto instantaneousBaseFps = baseFps(realInterval);
+            if (!instantaneousBaseFps) {
+                this->clearQualification();
+                return {};
+            }
+
+            if (this->probeActive) {
+                return this->advanceProbe(now, *instantaneousBaseFps);
+            }
+
+            this->updateSmoothedBaseFps(*instantaneousBaseFps);
+            const double targetFps = static_cast<double>(*refreshHz);
+            const double possibleOutputFps = this->smoothedBaseFps *
+                static_cast<double>(maximumGeneratedFrames + 1);
+            const bool targetHealthy = possibleOutputFps >=
+                targetFps * healthyOutputRatio();
+
+            if (this->verificationUntil) {
+                const bool collapsedAgain = possibleOutputFps <
+                        targetFps * collapsedOutputRatio() &&
+                    this->smoothedBaseFps < this->healthyBaseFps *
+                        collapsedBaselineRatio();
+                if (collapsedAgain) {
+                    const double baselineBaseFps = this->probeBaselineBaseFps;
+                    this->verificationUntil.reset();
+                    this->recordFailure(now);
+                    return {
+                        .recoveryUnstable = true,
+                        .consecutiveFailures = this->consecutiveFailures,
+                        .baselineBaseFps = baselineBaseFps,
+                        .observedBaseFps = this->smoothedBaseFps,
+                        .retryDelay = *this->retryAt - now,
+                    };
+                }
+                if (now >= *this->verificationUntil) {
+                    this->verificationUntil.reset();
+                    this->consecutiveFailures = 0;
+                    this->retryAt.reset();
+                    this->probeBaselineBaseFps = 0.0;
+                    return {
+                        .recoveryVerified = true,
+                        .observedBaseFps = this->smoothedBaseFps,
+                    };
+                }
+                return {};
+            }
+
+            if (targetHealthy) {
+                this->collapseSince.reset();
+                if (!this->healthySince)
+                    this->healthySince = now;
+                if (now - *this->healthySince >=
+                        healthyQualificationDuration()) {
+                    if (this->healthyBaseFps == 0.0) {
+                        this->healthyBaseFps = this->smoothedBaseFps;
+                    } else {
+                        this->healthyBaseFps =
+                            this->healthyBaseFps * 0.9 +
+                            this->smoothedBaseFps * 0.1;
+                    }
+                    this->retryAt.reset();
+                    this->consecutiveFailures = 0;
+                }
+                return {};
+            }
+            this->healthySince.reset();
+
+            if (this->healthyBaseFps <= 0.0 ||
+                    possibleOutputFps >=
+                        targetFps * collapsedOutputRatio() ||
+                    this->smoothedBaseFps >= this->healthyBaseFps *
+                        collapsedBaselineRatio()) {
+                this->collapseSince.reset();
+                return {};
+            }
+            if (this->retryAt && now < *this->retryAt)
+                return {};
+            if (!this->collapseSince) {
+                this->collapseSince = now;
+                return {};
+            }
+            if (now - *this->collapseSince <
+                    collapseQualificationDuration()) {
+                return {};
+            }
+
+            this->probeActive = true;
+            this->probeBaselineBaseFps = this->smoothedBaseFps;
+            this->minimumProbeBaseFps = 0.0;
+            this->probeConfirmedSamples = 0;
+            this->collapseSince.reset();
+            return {
+                .suppressGeneration = true,
+                .probeStarted = true,
+                .consecutiveFailures = this->consecutiveFailures,
+                .baselineBaseFps = this->probeBaselineBaseFps,
+                .observedBaseFps = this->smoothedBaseFps,
+            };
+        }
+
+        void reset() {
+            this->smoothedBaseFps = 0.0;
+            this->healthyBaseFps = 0.0;
+            this->probeBaselineBaseFps = 0.0;
+            this->minimumProbeBaseFps = 0.0;
+            this->healthySince.reset();
+            this->collapseSince.reset();
+            this->retryAt.reset();
+            this->verificationUntil.reset();
+            this->probeActive = false;
+            this->probeConfirmedSamples = 0;
+            this->consecutiveFailures = 0;
+        }
+
+    private:
+        [[nodiscard]] static std::optional<double> baseFps(
+                const std::optional<Duration> interval) {
+            if (!interval)
+                return std::nullopt;
+            const double seconds = std::chrono::duration<double>(
+                *interval
+            ).count();
+            if (!std::isfinite(seconds) || seconds <= 0.0 || seconds > 0.25)
+                return std::nullopt;
+            return 1.0 / seconds;
+        }
+
+        void updateSmoothedBaseFps(const double instantaneousBaseFps) {
+            if (this->smoothedBaseFps == 0.0) {
+                this->smoothedBaseFps = instantaneousBaseFps;
+            } else {
+                this->smoothedBaseFps = this->smoothedBaseFps * 0.75 +
+                    instantaneousBaseFps * 0.25;
+            }
+        }
+
+        [[nodiscard]] Decision advanceProbe(const TimePoint now,
+                const double instantaneousBaseFps) {
+            const bool fasterCadence = instantaneousBaseFps >=
+                this->probeBaselineBaseFps * minimumProbeRiseRatio();
+            if (!fasterCadence) {
+                const double baselineBaseFps = this->probeBaselineBaseFps;
+                this->probeActive = false;
+                this->minimumProbeBaseFps = 0.0;
+                this->probeConfirmedSamples = 0;
+                this->recordFailure(now);
+                return {
+                    .probeRejected = true,
+                    .consecutiveFailures = this->consecutiveFailures,
+                    .baselineBaseFps = baselineBaseFps,
+                    .observedBaseFps = instantaneousBaseFps,
+                    .retryDelay = *this->retryAt - now,
+                };
+            }
+
+            this->probeConfirmedSamples++;
+            this->minimumProbeBaseFps = this->minimumProbeBaseFps == 0.0
+                ? instantaneousBaseFps
+                : std::min(
+                    this->minimumProbeBaseFps, instantaneousBaseFps
+                );
+            if (this->probeConfirmedSamples < confirmationFrames) {
+                return {
+                    .suppressGeneration = true,
+                    .confirmedSamples = this->probeConfirmedSamples,
+                    .consecutiveFailures = this->consecutiveFailures,
+                    .baselineBaseFps = this->probeBaselineBaseFps,
+                    .observedBaseFps = instantaneousBaseFps,
+                };
+            }
+
+            const double recoveredBaseFps = this->minimumProbeBaseFps;
+            this->probeActive = false;
+            this->probeConfirmedSamples = 0;
+            this->minimumProbeBaseFps = 0.0;
+            this->smoothedBaseFps = recoveredBaseFps;
+            this->healthyBaseFps = std::max(
+                this->healthyBaseFps, recoveredBaseFps
+            );
+            this->healthySince = now;
+            this->verificationUntil = now + verificationDuration();
+            return {
+                .suppressGeneration = true,
+                .probeRecovered = true,
+                .confirmedSamples = confirmationFrames,
+                .consecutiveFailures = this->consecutiveFailures,
+                .baselineBaseFps = this->probeBaselineBaseFps,
+                .observedBaseFps = recoveredBaseFps,
+            };
+        }
+
+        void recordFailure(const TimePoint now) {
+            this->consecutiveFailures++;
+            this->retryAt = now + retryDelayForFailure(
+                this->consecutiveFailures
+            );
+            this->collapseSince.reset();
+            this->healthySince.reset();
+        }
+
+        [[nodiscard]] static Duration retryDelayForFailure(
+                const size_t failures) {
+            constexpr std::array delays{
+                std::chrono::seconds{2},
+                std::chrono::seconds{5},
+                std::chrono::seconds{15},
+                std::chrono::seconds{30},
+            };
+            return delays.at(std::min(failures, delays.size()) - 1);
+        }
+
+        void clearQualification() {
+            this->smoothedBaseFps = 0.0;
+            this->healthySince.reset();
+            this->collapseSince.reset();
+            if (this->probeActive) {
+                this->probeActive = false;
+                this->minimumProbeBaseFps = 0.0;
+                this->probeConfirmedSamples = 0;
+            }
+        }
+
+        static constexpr size_t confirmationFrames = 3;
+
+        double smoothedBaseFps{0.0};
+        double healthyBaseFps{0.0};
+        double probeBaselineBaseFps{0.0};
+        double minimumProbeBaseFps{0.0};
+        std::optional<TimePoint> healthySince;
+        std::optional<TimePoint> collapseSince;
+        std::optional<TimePoint> retryAt;
+        std::optional<TimePoint> verificationUntil;
+        bool probeActive{false};
+        size_t probeConfirmedSamples{0};
+        size_t consecutiveFailures{0};
+    };
+
     /// Deterministically suppress synthetic frames which cannot be scanned out
     /// at the confirmed Gamescope refresh rate. Fixed mode remains at its full
     /// multiplier whenever that output fits the display budget.

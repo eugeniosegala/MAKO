@@ -682,6 +682,178 @@ int main() {
         "extended lower-present recovery did not end at its absolute deadline");
     presentStallRecovery.reset();
 
+    const auto cadenceInterval = [](const double framesPerSecond) {
+        return std::chrono::duration_cast<
+            FixedCadenceCollapseRecovery::Duration
+        >(std::chrono::duration<double>(1.0 / framesPerSecond));
+    };
+    const auto cadenceStep = [&](FixedCadenceCollapseRecovery& recovery,
+            FixedCadenceCollapseRecovery::TimePoint& now,
+            const double framesPerSecond,
+            const uint32_t refreshHz = 120,
+            const size_t maximumGeneratedFrames = 1) {
+        const auto interval = cadenceInterval(framesPerSecond);
+        now += interval;
+        return recovery.observe(
+            now, interval, refreshHz, maximumGeneratedFrames
+        );
+    };
+
+    expect(fixedCadenceCollapseRecoveryEligible(
+            false, true, false, false, 120, 1),
+        "ordinary Fixed ordered cadence was not eligible for collapse recovery");
+    expect(!fixedCadenceCollapseRecoveryEligible(
+            true, true, false, false, 120, 1) &&
+            !fixedCadenceCollapseRecoveryEligible(
+                false, false, false, false, 120, 1) &&
+            !fixedCadenceCollapseRecoveryEligible(
+                false, true, true, false, 120, 1) &&
+            !fixedCadenceCollapseRecoveryEligible(
+                false, true, false, true, 120, 1) &&
+            !fixedCadenceCollapseRecoveryEligible(
+                false, true, false, false, std::nullopt, 1) &&
+            !fixedCadenceCollapseRecoveryEligible(
+                false, true, false, false, 120, 0),
+        "Adaptive/HDR/transport-recovery/warm-up/unknown-capacity exclusion regressed");
+
+    FixedCadenceCollapseRecovery fixedCadenceRecovery;
+    auto fixedCadenceNow = FixedCadenceCollapseRecovery::TimePoint{};
+    for (size_t frame = 0; frame < 120; ++frame) {
+        const auto decision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 60.0
+        );
+        expect(!decision.suppressGeneration,
+            "healthy Fixed 2x cadence unexpectedly entered recovery");
+    }
+
+    FixedCadenceCollapseRecovery::Decision fixedCollapseDecision;
+    size_t collapsedFrames = 0;
+    while (!fixedCollapseDecision.probeStarted && collapsedFrames < 60) {
+        fixedCollapseDecision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 30.0
+        );
+        collapsedFrames++;
+    }
+    expect(fixedCollapseDecision.probeStarted &&
+            fixedCollapseDecision.suppressGeneration &&
+            fixedCollapseDecision.baselineBaseFps < 40.0 &&
+            collapsedFrames < 30,
+        "sustained 60-to-30 Fixed cadence collapse did not start a bounded native probe");
+
+    for (size_t confirmation = 1; confirmation <= 3; ++confirmation) {
+        fixedCollapseDecision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 60.0
+        );
+        expect(fixedCollapseDecision.suppressGeneration,
+            "faster Fixed cadence probe resumed generation before confirmation");
+        if (confirmation < 3) {
+            expect(!fixedCollapseDecision.probeRecovered &&
+                    fixedCollapseDecision.confirmedSamples == confirmation,
+                "Fixed cadence probe lost an intermediate confirmation sample");
+        }
+    }
+    expect(fixedCollapseDecision.probeRecovered &&
+            fixedCollapseDecision.confirmedSamples == 3 &&
+            fixedCollapseDecision.observedBaseFps > 59.0,
+        "three faster native samples did not recover Fixed cadence");
+
+    bool fixedRecoveryVerified = false;
+    for (size_t frame = 0; frame < 90 && !fixedRecoveryVerified; ++frame) {
+        fixedCollapseDecision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 60.0
+        );
+        fixedRecoveryVerified = fixedCollapseDecision.recoveryVerified;
+    }
+    expect(fixedRecoveryVerified,
+        "recovered Fixed cadence did not survive generated-delivery verification");
+
+    fixedCadenceRecovery.reset();
+    fixedCadenceNow = FixedCadenceCollapseRecovery::TimePoint{};
+    for (size_t frame = 0; frame < 120; ++frame)
+        static_cast<void>(cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 60.0
+        ));
+    do {
+        fixedCollapseDecision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 30.0
+        );
+    } while (!fixedCollapseDecision.probeStarted);
+    for (size_t confirmation = 0; confirmation < 3; ++confirmation) {
+        fixedCollapseDecision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 60.0
+        );
+    }
+    expect(fixedCollapseDecision.probeRecovered,
+        "unstable-resume precondition did not recover its native probe");
+    fixedCollapseDecision = cadenceStep(
+        fixedCadenceRecovery, fixedCadenceNow, 30.0
+    );
+    expect(fixedCollapseDecision.recoveryUnstable &&
+            !fixedCollapseDecision.suppressGeneration &&
+            fixedCollapseDecision.consecutiveFailures == 1 &&
+            fixedCollapseDecision.retryDelay == 2s,
+        "FG-induced post-probe collapse did not enter oscillation backoff");
+
+    fixedCadenceRecovery.reset();
+    fixedCadenceNow = FixedCadenceCollapseRecovery::TimePoint{};
+    bool unprovenSlowCadenceProbed = false;
+    for (size_t frame = 0; frame < 300; ++frame) {
+        const auto decision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 30.0
+        );
+        unprovenSlowCadenceProbed = unprovenSlowCadenceProbed ||
+            decision.probeStarted;
+    }
+    expect(!unprovenSlowCadenceProbed,
+        "a genuinely slow Fixed source was probed without a healthy baseline");
+
+    fixedCadenceRecovery.reset();
+    fixedCadenceNow = FixedCadenceCollapseRecovery::TimePoint{};
+    for (size_t frame = 0; frame < 120; ++frame)
+        static_cast<void>(cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 60.0
+        ));
+    do {
+        fixedCollapseDecision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 30.0
+        );
+    } while (!fixedCollapseDecision.probeStarted);
+    fixedCollapseDecision = cadenceStep(
+        fixedCadenceRecovery, fixedCadenceNow, 30.0
+    );
+    expect(fixedCollapseDecision.probeRejected &&
+            !fixedCollapseDecision.suppressGeneration &&
+            fixedCollapseDecision.consecutiveFailures == 1 &&
+            fixedCollapseDecision.retryDelay == 2s,
+        "a true 30 FPS slowdown did not reject immediately into bounded backoff");
+    bool retriedInsideBackoff = false;
+    const auto firstRetryDeadline = fixedCadenceNow + 2s;
+    while (fixedCadenceNow < firstRetryDeadline) {
+        const auto decision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 30.0
+        );
+        retriedInsideBackoff = retriedInsideBackoff || decision.probeStarted;
+    }
+    expect(!retriedInsideBackoff,
+        "true Fixed slowdown retried its native probe inside backoff");
+
+    fixedCadenceRecovery.reset();
+    fixedCadenceNow = FixedCadenceCollapseRecovery::TimePoint{};
+    for (size_t frame = 0; frame < 180; ++frame) {
+        const auto decision = cadenceStep(
+            fixedCadenceRecovery, fixedCadenceNow, 55.0
+        );
+        expect(!decision.probeStarted,
+            "a moderate 110 FPS Fixed output fluctuation was classified as a severe collapse");
+    }
+    expect(!fixedCadenceRecovery.observe(
+            fixedCadenceNow + 16ms, 16ms, std::nullopt, 1
+        ).suppressGeneration &&
+            !fixedCadenceRecovery.observe(
+                fixedCadenceNow + 32ms, 16ms, 120, 0
+            ).suppressGeneration,
+        "Fixed cadence recovery activated without ordered refresh/capacity eligibility");
+
     FixedRefreshBudget budget;
     const auto start = FixedRefreshBudget::TimePoint{};
     size_t generated = 0;
