@@ -2020,6 +2020,29 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     if (!this->applyPendingFrameGenerationResources(vk))
         return this->presentNativeFrame(invocation);
 
+    // A post-FG scaler is referenced by generated-image command buffers.
+    // Once its replacement reaches the drain phase, stop scheduling new
+    // generated work until the previous render fence and the real-image
+    // spatial passes have retired. The old scaler continues presenting the
+    // current real frame, preserving image continuity without a device-wide
+    // idle or a game-owned swapchain recreation.
+    if (this->spatialTransition.draining() &&
+            spatialScalerTransitionRequiresGeneratedRenderDrain(
+                this->spatialFramePipelinePlacement)) {
+        if (presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=runtime-transition-draining"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " reason=spatial-scaler"
+                      << " generated_render_work_in_flight="
+                      << this->frameState.renderFenceInFlight
+                      << " frame=" << this->frameState.realFrameIndex
+                      << " sequence=" << this->frameState.sequenceIndex
+                      << " action=real-frame-only\n";
+        }
+        return this->presentNativeFrame(invocation);
+    }
+
     // Frame generation is live-disabled; hand the game's own image directly
     // to the driver without copies, model scheduling or generated images. A
     // scaling-engine process may still attach its preallocated WSI-retirement

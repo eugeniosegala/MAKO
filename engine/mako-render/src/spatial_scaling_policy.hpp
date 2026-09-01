@@ -65,6 +65,17 @@ namespace mako::layer {
             ? presentation : source;
     }
 
+    /// Post-FG reconstruction is recorded into the generated-image command
+    /// buffers guarded by the main render fence. Replacing its private scaler
+    /// therefore requires that fence in addition to the per-WSI-image spatial
+    /// fences. Pre-FG reconstruction is owned entirely by the latter.
+    [[nodiscard]] constexpr bool
+    spatialScalerTransitionRequiresGeneratedRenderDrain(
+            const SpatialFramePipelinePlacement placement) noexcept {
+        return placement ==
+            SpatialFramePipelinePlacement::PostFrameGeneration;
+    }
+
     /// The pre-FG spatial graph may write reconstruction straight into the
     /// exported FG source. Post-FG reconstruction and FG-only swapchains keep
     /// the narrower transfer/sampled contract.

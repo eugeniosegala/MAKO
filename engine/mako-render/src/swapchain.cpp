@@ -1320,8 +1320,45 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
         }
     }
     if (!this->spatialTransition.draining() ||
-            !this->preparedSpatialScaler ||
-            !this->spatialScalingPassesReady(vk)) {
+            !this->preparedSpatialScaler) {
+        return;
+    }
+
+    try {
+        // In the post-FG placement, generated-image command buffers record
+        // reconstruction with the active scaler and are retired by the main
+        // render fence rather than a SpatialScalingPass fence. Do not replace
+        // their pipelines, descriptors, or private images while that work is
+        // still in flight. present() temporarily drains through the real-frame
+        // path, so this nonblocking poll cannot be starved by another generated
+        // batch using the old scaler.
+        const auto generatedRenderDrainRequired =
+            spatialScalerTransitionRequiresGeneratedRenderDrain(
+                this->spatialFramePipelinePlacement
+            );
+        const auto generatedRenderWorkInFlight =
+            generatedRenderDrainRequired &&
+            this->frameState.renderFenceInFlight;
+        if (generatedRenderWorkInFlight) {
+            if (!this->renderFence->wait(vk, 0))
+                return;
+            this->frameState.renderFenceInFlight = false;
+        }
+        if (!this->spatialScalingPassesReady(vk))
+            return;
+        if (generatedRenderDrainRequired && presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=runtime-transition-drain-ready"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " reason=spatial-scaler"
+                      << " generated_render_work_in_flight="
+                      << generatedRenderWorkInFlight
+                      << " action=replace-private-scaler\n";
+        }
+    } catch (const std::exception& error) {
+        std::cerr << "MAKO Renderer: private spatial-scaler drain poll failed; "
+                     "the previous scaler remains active: "
+                  << error.what() << '\n';
         return;
     }
 

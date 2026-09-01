@@ -120,6 +120,11 @@ int main() {
                 fourKPlacement, {1920, 1080}, {3840, 2160}
             ), {1920, 1080}),
         "1080p-to-4K must keep interpolation resources at source resolution");
+    expect(spatialScalerTransitionRequiresGeneratedRenderDrain(
+            fourKPlacement) &&
+            !spatialScalerTransitionRequiresGeneratedRenderDrain(
+                SpatialFramePipelinePlacement::PreFrameGeneration),
+        "Only post-FG live scaler replacement must drain generated render work");
     expect(selectSpatialFramePipelinePlacement(
             {2560, 1440}, {3840, 2160}
         ) == SpatialFramePipelinePlacement::PostFrameGeneration,
