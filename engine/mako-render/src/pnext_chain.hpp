@@ -10,72 +10,138 @@
 
 namespace mako::layer {
 
-    /// Temporarily remove one optional structure from a Vulkan pNext chain.
-    ///
-    /// Gamescope prepends maintenance1 present-mode nodes advertising its
-    /// driver-facing MAILBOX transport. When MAKO deliberately creates the
-    /// private ordered SDR transport, forwarding that node beside a FIFO base
-    /// mode would describe an inconsistent swapchain. We filter the node from
-    /// the lower-facing copy instead of modifying Gamescope's mode array, which
-    /// may be immutable. The HDR transport leaves the node and array untouched.
-    ///
-    /// Gamescope's node is normally the head, so only the caller-owned head
-    /// pointer changes. Nested removal exists for defensive chain composition;
-    /// its predecessor link is restored exactly on scope exit.
-    class ScopedPNextRemoval {
+    /// Build a lower-facing VkSwapchainCreateInfoKHR pNext chain without
+    /// modifying any caller-owned input node. Gamescope normally puts the
+    /// maintenance1 present-mode node at the head, but a legal caller may put
+    /// known swapchain-create structures before it in immutable storage. Copy
+    /// that prefix and share the untouched suffix. An unknown prefix fails
+    /// closed because copying only VkBaseInStructure would truncate it.
+    class FilteredSwapchainCreatePNextChain {
     public:
-        ScopedPNextRemoval(const void*& head, const VkStructureType target,
-                const bool enabled = true) :
-                head(head) {
+        FilteredSwapchainCreatePNextChain(const void* original,
+                const VkStructureType target, const bool enabled = true) :
+                filteredHead(original) {
             if (!enabled)
                 return;
 
-            auto* current = reinterpret_cast<const VkBaseInStructure*>(head);
-            const VkBaseInStructure* previous = nullptr;
-            while (current && current->sType != target) {
-                previous = current;
-                current = current->pNext;
+            const VkBaseInStructure* removed = nullptr;
+            for (auto* node = reinterpret_cast<const VkBaseInStructure*>(
+                    original); node; node = node->pNext) {
+                if (node->sType == target) {
+                    removed = node;
+                    break;
+                }
             }
-            if (!current)
+            if (!removed)
                 return;
 
-            this->removed = current;
-            if (!previous) {
-                this->removedFromHead = true;
-                this->head = current->pNext;
-                return;
+            for (auto* node = reinterpret_cast<const VkBaseInStructure*>(
+                    original); node != removed; node = node->pNext) {
+                const size_t byteSize = swapchainCreateStructureSize(
+                    node->sType
+                );
+                if (byteSize == 0 ||
+                        this->ownedNodeCount == maximumOwnedNodes) {
+                    this->validChain = false;
+                    this->unsupportedType = node->sType;
+                    this->filteredHead = original;
+                    this->ownedNodeCount = 0;
+                    return;
+                }
+                std::memcpy(
+                    this->ownedNodes.at(this->ownedNodeCount).data(),
+                    node, byteSize
+                );
+                this->ownedNodeCount++;
             }
 
-            this->predecessor = const_cast<VkBaseOutStructure*>(
-                reinterpret_cast<const VkBaseOutStructure*>(previous)
-            );
-            this->predecessor->pNext = const_cast<VkBaseOutStructure*>(
-                reinterpret_cast<const VkBaseOutStructure*>(current->pNext)
-            );
+            const void* next = removed->pNext;
+            for (size_t index = this->ownedNodeCount; index > 0; --index) {
+                auto* base = reinterpret_cast<VkBaseOutStructure*>(
+                    this->ownedNodes.at(index - 1).data()
+                );
+                base->pNext = const_cast<VkBaseOutStructure*>(
+                    reinterpret_cast<const VkBaseOutStructure*>(next)
+                );
+                next = base;
+            }
+            this->filteredHead = next;
         }
 
-        ~ScopedPNextRemoval() {
-            if (!this->removed)
-                return;
-            if (this->removedFromHead) {
-                this->head = this->removed;
-                return;
-            }
-            this->predecessor->pNext = const_cast<VkBaseOutStructure*>(
-                reinterpret_cast<const VkBaseOutStructure*>(this->removed)
-            );
+        [[nodiscard]] bool valid() const {
+            return this->validChain;
         }
-
-        ScopedPNextRemoval(const ScopedPNextRemoval&) = delete;
-        ScopedPNextRemoval& operator=(const ScopedPNextRemoval&) = delete;
-        ScopedPNextRemoval(ScopedPNextRemoval&&) = delete;
-        ScopedPNextRemoval& operator=(ScopedPNextRemoval&&) = delete;
+        [[nodiscard]] const void* head() const {
+            return this->filteredHead;
+        }
+        [[nodiscard]] VkStructureType unsupportedStructureType() const {
+            return this->unsupportedType;
+        }
 
     private:
-        const void*& head;
-        const VkBaseInStructure* removed{nullptr};
-        VkBaseOutStructure* predecessor{nullptr};
-        bool removedFromHead{false};
+        static constexpr size_t maximumOwnedNodes = 16;
+        static constexpr size_t maximumNodeBytes = 128;
+
+        struct alignas(std::max_align_t) NodeStorage {
+            [[nodiscard]] void* data() { return this->bytes.data(); }
+            std::array<std::byte, maximumNodeBytes> bytes;
+        };
+
+        static_assert(sizeof(VkDeviceGroupSwapchainCreateInfoKHR) <=
+            maximumNodeBytes);
+        static_assert(sizeof(VkImageFormatListCreateInfo) <= maximumNodeBytes);
+        static_assert(sizeof(VkImageSwapchainCreateInfoKHR) <= maximumNodeBytes);
+        static_assert(sizeof(VkSwapchainCounterCreateInfoEXT) <=
+            maximumNodeBytes);
+        static_assert(sizeof(VkSwapchainDisplayNativeHdrCreateInfoAMD) <=
+            maximumNodeBytes);
+        static_assert(sizeof(VkImageCompressionControlEXT) <= maximumNodeBytes);
+        static_assert(sizeof(VkSwapchainPresentScalingCreateInfoKHR) <=
+            maximumNodeBytes);
+#if defined(VK_NV_present_barrier)
+        static_assert(sizeof(VkSwapchainPresentBarrierCreateInfoNV) <=
+            maximumNodeBytes);
+#endif
+#if defined(VK_NV_low_latency2)
+        static_assert(sizeof(VkSwapchainLatencyCreateInfoNV) <=
+            maximumNodeBytes);
+#endif
+
+        [[nodiscard]] static size_t swapchainCreateStructureSize(
+                const VkStructureType type) noexcept {
+            switch (type) {
+                case VK_STRUCTURE_TYPE_DEVICE_GROUP_SWAPCHAIN_CREATE_INFO_KHR:
+                    return sizeof(VkDeviceGroupSwapchainCreateInfoKHR);
+                case VK_STRUCTURE_TYPE_IMAGE_FORMAT_LIST_CREATE_INFO:
+                    return sizeof(VkImageFormatListCreateInfo);
+                case VK_STRUCTURE_TYPE_IMAGE_SWAPCHAIN_CREATE_INFO_KHR:
+                    return sizeof(VkImageSwapchainCreateInfoKHR);
+                case VK_STRUCTURE_TYPE_SWAPCHAIN_COUNTER_CREATE_INFO_EXT:
+                    return sizeof(VkSwapchainCounterCreateInfoEXT);
+                case VK_STRUCTURE_TYPE_SWAPCHAIN_DISPLAY_NATIVE_HDR_CREATE_INFO_AMD:
+                    return sizeof(VkSwapchainDisplayNativeHdrCreateInfoAMD);
+                case VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT:
+                    return sizeof(VkImageCompressionControlEXT);
+                case VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR:
+                    return sizeof(VkSwapchainPresentScalingCreateInfoKHR);
+#if defined(VK_NV_present_barrier)
+                case VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_BARRIER_CREATE_INFO_NV:
+                    return sizeof(VkSwapchainPresentBarrierCreateInfoNV);
+#endif
+#if defined(VK_NV_low_latency2)
+                case VK_STRUCTURE_TYPE_SWAPCHAIN_LATENCY_CREATE_INFO_NV:
+                    return sizeof(VkSwapchainLatencyCreateInfoNV);
+#endif
+                default:
+                    return 0;
+            }
+        }
+
+        const void* filteredHead{nullptr};
+        bool validChain{true};
+        VkStructureType unsupportedType{VK_STRUCTURE_TYPE_MAX_ENUM};
+        size_t ownedNodeCount{0};
+        std::array<NodeStorage, maximumOwnedNodes> ownedNodes;
     };
 
     /// Build a lower-facing VkPresentInfoKHR pNext chain without modifying

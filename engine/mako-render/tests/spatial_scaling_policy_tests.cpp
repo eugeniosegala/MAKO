@@ -977,6 +977,65 @@ int main() {
             ampleAdmission.heapUsageBytes == 1 * gibibyte,
         "Ample live headroom must retain the conservative static ceiling");
 
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT fourGiBLiveBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    fourGiBLiveBudget.heapBudget[0] = 4 * gibibyte;
+    fourGiBLiveBudget.heapUsage[0] = 1 * gibibyte;
+    const auto fourGiBAdmission = variablePresentationMemoryAdmission(
+        eightGiB, &fourGiBLiveBudget
+    );
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT fiveGiBLiveBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    fiveGiBLiveBudget.heapBudget[0] = 5 * gibibyte;
+    fiveGiBLiveBudget.heapUsage[0] = 1 * gibibyte;
+    const auto fiveGiBAdmission = variablePresentationMemoryAdmission(
+        eightGiB, &fiveGiBLiveBudget
+    );
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT deckObservedLiveBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    deckObservedLiveBudget.heapBudget[0] = 6561 * uint64_t{1024} * 1024;
+    deckObservedLiveBudget.heapUsage[0] = 1 * gibibyte;
+    const auto deckObservedAdmission = variablePresentationMemoryAdmission(
+        eightGiB, &deckObservedLiveBudget
+    );
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT eightGiBLiveBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    eightGiBLiveBudget.heapBudget[0] = 8 * gibibyte;
+    eightGiBLiveBudget.heapUsage[0] = 1 * gibibyte;
+    const auto eightGiBAdmission = variablePresentationMemoryAdmission(
+        eightGiB, &eightGiBLiveBudget
+    );
+    expect(fourGiBAdmission.reservedHeadroomBytes ==
+                minimumVariablePresentationLiveReserve &&
+            fiveGiBAdmission.reservedHeadroomBytes ==
+                minimumVariablePresentationLiveReserve &&
+            deckObservedAdmission.reservedHeadroomBytes ==
+                deckObservedLiveBudget.heapBudget[0] /
+                    variablePresentationLiveReserveDivisor &&
+            eightGiBAdmission.reservedHeadroomBytes ==
+                eightGiBLiveBudget.heapBudget[0] /
+                    variablePresentationLiveReserveDivisor,
+        "Deck-shaped live budgets must use the 512 MiB floor through 5 GiB and the 10% reserve above it");
+    expect(fourGiBAdmission.livePixelBudget &&
+            fiveGiBAdmission.livePixelBudget &&
+            deckObservedAdmission.livePixelBudget &&
+            eightGiBAdmission.livePixelBudget &&
+            *fourGiBAdmission.livePixelBudget <
+                *fiveGiBAdmission.livePixelBudget &&
+            *fiveGiBAdmission.livePixelBudget <
+                *deckObservedAdmission.livePixelBudget &&
+            *deckObservedAdmission.livePixelBudget <
+                *eightGiBAdmission.livePixelBudget,
+        "Increasing Deck-shaped driver budgets must monotonically increase live admission at equal usage");
+
     VkPhysicalDeviceMemoryBudgetPropertiesEXT pressuredLiveBudget{
         .sType =
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
@@ -1451,6 +1510,36 @@ int main() {
             combinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
         "Provisioned frame generation must retain the healthy application plus ordered-batch image count");
 
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT imageCountPricingBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    imageCountPricingBudget.heapBudget[0] = 7 * gibibyte;
+    imageCountPricingBudget.heapUsage[0] = 5'947 * mebibyte;
+    const auto imageCountPricingMemory = variablePresentationMemoryAdmission(
+        eightGiB, &imageCountPricingBudget
+    );
+    const auto applicationMinimumPricing =
+        variablePresentationResourceAdmission(
+            imageCountPricingMemory, {1920, 1080},
+            VK_FORMAT_B8G8R8A8_UNORM, 3, 2
+        );
+    const auto provisionedMinimumPricing =
+        variablePresentationResourceAdmission(
+            imageCountPricingMemory, {1920, 1080},
+            VK_FORMAT_B8G8R8A8_UNORM, combinedCreate.minImageCount, 2
+        );
+    expect(applicationMinimumPricing.presentationBytesPerPixel == 20 &&
+            provisionedMinimumPricing.presentationBytesPerPixel == 32 &&
+            provisionedMinimumPricing.effectivePixelBudget <
+                applicationMinimumPricing.effectivePixelBudget,
+        "Scaling admission must price the prospective six-image WSI graph rather than the application's three-image minimum");
+    expect(
+        (provisionedMinimumPricing.presentationBytesPerPixel -
+            applicationMinimumPricing.presentationBytesPerPixel) *
+                minimumVariablePresentationPixels == 99'532'800,
+        "The 4K admission regression must retain the missing three-image cost as an explicit boundary");
+
     auto fiveXProfile = combinedProfile;
     fiveXProfile.multiplier = 5;
     fiveXProfile.adaptive_max_multiplier = 5;
@@ -1532,6 +1621,81 @@ int main() {
             imageCountCompatibility, 3, 6, {2560, 1440}) &&
             imageCountCompatibility.applicationMinimumSignatures.size() == 1,
         "A proven fallback must not change a different extent in the same process");
+
+    constexpr VkImageUsageFlags compatibilityUsage =
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+        VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    SwapchainImageCountCompatibilityState usageIsolatedCompatibility;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        usageIsolatedCompatibility, 0, 3, 6, {1024, 576}, 0,
+        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        compatibilityUsage, VK_PRESENT_MODE_MAILBOX_KHR
+    ));
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        usageIsolatedCompatibility, 4, 3, 6, {3840, 2160}, 120,
+        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        compatibilityUsage, VK_PRESENT_MODE_MAILBOX_KHR
+    ));
+    expect(!activateSwapchainImageCountCompatibilityForCreate(
+            usageIsolatedCompatibility, 3, 6, {3840, 2160},
+            VK_FORMAT_B8G8R8A8_UNORM,
+            VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+            VK_PRESENT_MODE_MAILBOX_KHR) &&
+            usageIsolatedCompatibility.applicationMinimumSignatures.empty(),
+        "A startup candidate must not reduce queue depth for a different image-usage contract");
+
+    SwapchainImageCountCompatibilityState modeIsolatedCompatibility;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        modeIsolatedCompatibility, 0, 3, 6, {1024, 576}, 0,
+        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        compatibilityUsage, VK_PRESENT_MODE_MAILBOX_KHR
+    ));
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        modeIsolatedCompatibility, 4, 3, 6, {3840, 2160}, 120,
+        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+        compatibilityUsage, VK_PRESENT_MODE_MAILBOX_KHR
+    ));
+    expect(!activateSwapchainImageCountCompatibilityForCreate(
+            modeIsolatedCompatibility, 3, 6, {3840, 2160},
+            VK_FORMAT_B8G8R8A8_UNORM,
+            VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+            compatibilityUsage, VK_PRESENT_MODE_FIFO_KHR) &&
+            modeIsolatedCompatibility.applicationMinimumSignatures.empty(),
+        "A startup candidate must not reduce queue depth for a different present-mode contract");
+
+    SwapchainImageCountCompatibilityState surfaceIsolatedCompatibility;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        surfaceIsolatedCompatibility, 0, 3, 6, {1024, 576}, 0
+    ));
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        surfaceIsolatedCompatibility, 4, 3, 6, {3840, 2160}, 120
+    ));
+    const auto provenSurface = reinterpret_cast<VkSurfaceKHR>(uintptr_t{0x10});
+    const auto unrelatedSurface =
+        reinterpret_cast<VkSurfaceKHR>(uintptr_t{0x20});
+    expect(activateSwapchainImageCountCompatibilityForCreate(
+            surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
+            VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+            0, VK_PRESENT_MODE_FIFO_KHR, provenSurface) &&
+            activateSwapchainImageCountCompatibilityForCreate(
+                surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
+                VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+                0, VK_PRESENT_MODE_FIFO_KHR, provenSurface) &&
+            !activateSwapchainImageCountCompatibilityForCreate(
+                surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
+                VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+                0, VK_PRESENT_MODE_FIFO_KHR, unrelatedSurface),
+        "An established fallback must remain on its proven surface lineage");
+    clearSwapchainImageCountCompatibilityForSurface(
+        surfaceIsolatedCompatibility, provenSurface
+    );
+    expect(surfaceIsolatedCompatibility.applicationMinimumSignatures.empty() &&
+            !activateSwapchainImageCountCompatibilityForCreate(
+                surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
+                VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+                0, VK_PRESENT_MODE_FIFO_KHR, provenSurface),
+        "Destroying the proven surface must expire its compatibility fallback");
 
     SwapchainImageCountCompatibilityState isolatedShortLived;
     expect(observeDestroyedSwapchainForImageCountCompatibility(

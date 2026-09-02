@@ -14,6 +14,17 @@
 
 namespace mako::layer {
 
+    /// MAKO's current presentation transport owns one swapchain per lower
+    /// submit/present sequence. A Vulkan present batch supplies its binary
+    /// waits and per-swapchain pNext arrays once for the whole batch, so it
+    /// cannot be decomposed safely until an explicit fan-out transport owns
+    /// those semantics.
+    [[nodiscard]] constexpr bool shouldRejectManagedMultiSwapchainPresent(
+            const uint32_t swapchainCount,
+            const bool containsManagedMakoContext) noexcept {
+        return swapchainCount > 1 && containsManagedMakoContext;
+    }
+
     [[nodiscard]] inline bool environmentFlagEnabled(const char* value) {
         if (!value)
             return false;

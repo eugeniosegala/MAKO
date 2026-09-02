@@ -27,6 +27,14 @@ namespace mako::layer {
         VkExtent2D applicationExtent{};
         uint32_t requestedMinImages{0};
         uint32_t provisionedMinImages{0};
+        VkFormat format{VK_FORMAT_UNDEFINED};
+        VkColorSpaceKHR colorSpace{VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+        VkImageUsageFlags imageUsage{0};
+        VkPresentModeKHR presentMode{VK_PRESENT_MODE_FIFO_KHR};
+        // Set only when a matching create activates the workaround. Candidate
+        // evidence may cross a surface handoff, but the resulting fallback
+        // must remain local to the surface that actually proved it.
+        VkSurfaceKHR establishedSurface{VK_NULL_HANDLE};
         uint32_t returnedPresentCount{0};
         uint64_t activeLifetimeMs{0};
     };
@@ -53,17 +61,29 @@ namespace mako::layer {
             const uint32_t requestedMinImages,
             const uint32_t provisionedMinImages,
             const VkExtent2D applicationExtent,
-            const uint64_t activeLifetimeMs) {
+            const uint64_t activeLifetimeMs,
+            const VkFormat format = VK_FORMAT_UNDEFINED,
+            const VkColorSpaceKHR colorSpace =
+                VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+            const VkImageUsageFlags imageUsage = 0,
+            const VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR,
+            const VkSurfaceKHR surface = VK_NULL_HANDLE) {
         const auto signatureMatches = [&](const auto& signature) {
             return signature.requestedMinImages == requestedMinImages &&
                 signature.provisionedMinImages == provisionedMinImages &&
                 signature.applicationExtent.width == applicationExtent.width &&
-                signature.applicationExtent.height == applicationExtent.height;
+                signature.applicationExtent.height == applicationExtent.height &&
+                signature.format == format &&
+                signature.colorSpace == colorSpace &&
+                signature.imageUsage == imageUsage &&
+                signature.presentMode == presentMode &&
+                signature.establishedSurface == surface;
         };
-        if (std::ranges::any_of(
-                state.applicationMinimumSignatures, signatureMatches)) {
+        const auto established = std::ranges::find_if(
+            state.applicationMinimumSignatures, signatureMatches
+        );
+        if (established != state.applicationMinimumSignatures.end())
             return SwapchainImageCountCompatibilityObservation::Ignored;
-        }
         if (requestedMinImages >= provisionedMinImages) {
             state.zeroReturnProbeObserved = false;
             state.replacementCandidate.reset();
@@ -89,6 +109,10 @@ namespace mako::layer {
                         .applicationExtent = applicationExtent,
                         .requestedMinImages = requestedMinImages,
                         .provisionedMinImages = provisionedMinImages,
+                        .format = format,
+                        .colorSpace = colorSpace,
+                        .imageUsage = imageUsage,
+                        .presentMode = presentMode,
                         .returnedPresentCount = 0,
                         .activeLifetimeMs = 0,
                     };
@@ -114,6 +138,10 @@ namespace mako::layer {
                     .applicationExtent = applicationExtent,
                     .requestedMinImages = requestedMinImages,
                     .provisionedMinImages = provisionedMinImages,
+                    .format = format,
+                    .colorSpace = colorSpace,
+                    .imageUsage = imageUsage,
+                    .presentMode = presentMode,
                     .returnedPresentCount = std::min(
                         returnedPresentCount,
                         swapchainImageCountShortLivedReturnedPresentMinimum
@@ -139,31 +167,57 @@ namespace mako::layer {
             SwapchainImageCountCompatibilityState& state,
             const uint32_t requestedMinImages,
             const uint32_t provisionedMinImages,
-            const VkExtent2D applicationExtent) {
+            const VkExtent2D applicationExtent,
+            const VkFormat format = VK_FORMAT_UNDEFINED,
+            const VkColorSpaceKHR colorSpace =
+                VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+            const VkImageUsageFlags imageUsage = 0,
+            const VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR,
+            const VkSurfaceKHR surface = VK_NULL_HANDLE) {
         if (requestedMinImages >= provisionedMinImages)
             return false;
-        const auto signatureMatches = [&](const auto& signature) {
+        const auto createSignatureMatches = [&](const auto& signature) {
             return signature.requestedMinImages == requestedMinImages &&
                 signature.provisionedMinImages == provisionedMinImages &&
                 signature.applicationExtent.width == applicationExtent.width &&
-                signature.applicationExtent.height == applicationExtent.height;
+                signature.applicationExtent.height == applicationExtent.height &&
+                signature.format == format &&
+                signature.colorSpace == colorSpace &&
+                signature.imageUsage == imageUsage &&
+                signature.presentMode == presentMode;
         };
         if (std::ranges::any_of(
-                state.applicationMinimumSignatures, signatureMatches)) {
+                state.applicationMinimumSignatures,
+                [&](const auto& signature) {
+                    return createSignatureMatches(signature) &&
+                        signature.establishedSurface == surface;
+                })) {
             return true;
         }
         if (!state.replacementCandidate)
             return false;
 
-        const auto candidate = *state.replacementCandidate;
+        auto candidate = *state.replacementCandidate;
         state.zeroReturnProbeObserved = false;
         state.replacementCandidate.reset();
-        const bool matches = signatureMatches(candidate);
+        const bool matches = createSignatureMatches(candidate);
         if (!matches)
             return false;
 
+        candidate.establishedSurface = surface;
         state.applicationMinimumSignatures.push_back(candidate);
         return true;
+    }
+
+    inline void clearSwapchainImageCountCompatibilityForSurface(
+            SwapchainImageCountCompatibilityState& state,
+            const VkSurfaceKHR surface) {
+        std::erase_if(
+            state.applicationMinimumSignatures,
+            [surface](const auto& signature) {
+                return signature.establishedSurface == surface;
+            }
+        );
     }
 
     [[nodiscard]] inline bool shouldRetrySwapchainWithApplicationMinimum(

@@ -1596,23 +1596,37 @@ namespace {
             // Drain the maintenance1 lifetime proof and release every deferred
             // lower swapchain before forwarding the surface destruction.
             collectRetiredSwapchainsForSurface(surface);
-            const std::lock_guard lock(
-                instance_info->surfaceScalingMutex
-            );
-            for (auto& [physicalDevice, surfaces] :
-                    instance_info->surfaceScalingEligibility) {
-                static_cast<void>(physicalDevice);
-                surfaces.erase(surface);
+            {
+                const std::lock_guard lock(
+                    instance_info->surfaceScalingMutex
+                );
+                for (auto& [physicalDevice, surfaces] :
+                        instance_info->surfaceScalingEligibility) {
+                    static_cast<void>(physicalDevice);
+                    surfaces.erase(surface);
+                }
+                for (auto& [physicalDevice, contracts] :
+                        instance_info->fixedSurfaceScalingContracts) {
+                    static_cast<void>(physicalDevice);
+                    contracts.erase(surface);
+                }
+                instance_info->variableSurfaceScalingExtents.erase(surface);
+                instance_info->variableSurfaceRollbackExtents.erase(surface);
+                instance_info->surfaceOrigins.erase(surface);
+                instance_info->unprovenSplitSurfacesLogged.erase(surface);
             }
-            for (auto& [physicalDevice, contracts] :
-                    instance_info->fixedSurfaceScalingContracts) {
-                static_cast<void>(physicalDevice);
-                contracts.erase(surface);
+            {
+                const std::lock_guard compatibilityLock(
+                    instance_info->swapchainImageCountCompatibilityMutex
+                );
+                for (auto& [device, compatibility] :
+                        instance_info->swapchainImageCountCompatibility) {
+                    static_cast<void>(device);
+                    clearSwapchainImageCountCompatibilityForSurface(
+                        compatibility, surface
+                    );
+                }
             }
-            instance_info->variableSurfaceScalingExtents.erase(surface);
-            instance_info->variableSurfaceRollbackExtents.erase(surface);
-            instance_info->surfaceOrigins.erase(surface);
-            instance_info->unprovenSplitSurfacesLogged.erase(surface);
         }
         const auto lower = reinterpret_cast<PFN_vkDestroySurfaceKHR>(
             layer_info->GetInstanceProcAddr(instance, "vkDestroySurfaceKHR")
@@ -1723,7 +1737,11 @@ namespace {
             // Keep MAKO's old context and scaler resources alive until the
             // application explicitly destroys that handle.
 
-            layer_info->root.update(); // ensure config is up to date
+            // A live factor change can make the upper role request recreation
+            // immediately after it observes a new profile. Force the lower
+            // role past the present-path polling interval here so both split
+            // layers build the replacement from the same saved revision.
+            layer_info->root.update(true);
 
             if (present_diagnostics::enabled()) {
                 std::cerr << "MAKO Renderer: present diagnostics: "
@@ -1903,7 +1921,10 @@ namespace {
                             compatibilityFallback =
                                 activateSwapchainImageCountCompatibilityForCreate(
                                     compatibility, info->minImageCount,
-                                    provisionedMinImages, info->imageExtent
+                                    provisionedMinImages, info->imageExtent,
+                                    info->imageFormat, info->imageColorSpace,
+                                    info->imageUsage, info->presentMode,
+                                    info->surface
                                 );
                         }
                         if (compatibilityFallback) {
@@ -2173,6 +2194,8 @@ namespace {
                 .surface = info->surface,
                 .format = newInfo.imageFormat,
                 .colorSpace = newInfo.imageColorSpace,
+                .applicationImageUsage = info->imageUsage,
+                .applicationPresentMode = info->presentMode,
                 .requestedMinImageCount = info->minImageCount,
                 .provisionedMinImageCount = newInfo.minImageCount,
                 .applicationExtent = modification.applicationExtent,
@@ -2272,20 +2295,23 @@ namespace {
 
         // Binary application wait semaphores belong to the whole present
         // batch and may be consumed only once. The existing per-swapchain FG
-        // transport cannot yet preserve that contract for multiple scaled
-        // swapchains, so reject before submitting any work rather than wait
+        // transport cannot yet preserve that contract for any managed MAKO
+        // context, so reject before submitting any work rather than wait
         // twice, deadlock, or misassociate per-swapchain pNext arrays.
         if (info->swapchainCount > 1) {
-            bool containsSpatialScaling = false;
+            bool containsManagedMakoContext = false;
             for (uint32_t i = 0; i < info->swapchainCount; ++i) {
                 const auto metadata = instance_info->swapchainInfos.find(
                     info->pSwapchains[i]
                 );
-                containsSpatialScaling = containsSpatialScaling ||
+                containsManagedMakoContext = containsManagedMakoContext ||
                     (metadata != instance_info->swapchainInfos.end() &&
-                     metadata->second.spatialScalingActive);
+                     !instance_info->nativeSwapchains.contains(
+                        info->pSwapchains[i]
+                     ));
             }
-            if (containsSpatialScaling) {
+            if (shouldRejectManagedMultiSwapchainPresent(
+                    info->swapchainCount, containsManagedMakoContext)) {
                 constexpr VkResult unsupported =
                     VK_ERROR_UNKNOWN;
                 if (info->pResults) {
@@ -2293,9 +2319,9 @@ namespace {
                         info->pResults, info->swapchainCount, unsupported
                     );
                 }
-                std::cerr << "MAKO Renderer: multi-swapchain spatial-scaling "
-                             "present rejected before semaphore consumption; "
-                             "batch scaling is not supported\n";
+                std::cerr << "MAKO Renderer: multi-swapchain managed present "
+                             "rejected before semaphore consumption; batch "
+                             "frame generation and scaling are not supported\n";
                 return unsupported;
             }
         }
@@ -2564,7 +2590,12 @@ namespace {
                         swapchainMetadata->second.requestedMinImageCount,
                         swapchainMetadata->second.provisionedMinImageCount,
                         swapchainMetadata->second.applicationExtent,
-                        activeLifetimeMs
+                        activeLifetimeMs,
+                        swapchainMetadata->second.format,
+                        swapchainMetadata->second.colorSpace,
+                        swapchainMetadata->second.applicationImageUsage,
+                        swapchainMetadata->second.applicationPresentMode,
+                        swapchainMetadata->second.surface
                     );
             }
             const bool compatibilityEvidence = observation ==

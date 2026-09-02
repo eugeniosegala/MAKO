@@ -4,7 +4,6 @@
 
 #include <cstdlib>
 #include <iostream>
-#include <stdexcept>
 #include <string_view>
 
 using namespace mako::layer;
@@ -19,7 +18,7 @@ namespace {
 }
 
 int main() {
-    VkBaseOutStructure tail{
+    const VkBaseInStructure tail{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext = nullptr,
     };
@@ -27,59 +26,66 @@ int main() {
     // in immutable storage and advertises MAILBOX only. Ordered SDR filters the
     // node; it must never const-cast and rewrite this array to FIFO.
     constexpr VkPresentModeKHR immutableModes[]{VK_PRESENT_MODE_MAILBOX_KHR};
-    VkSwapchainPresentModesCreateInfoEXT createModes{
+    const VkSwapchainPresentModesCreateInfoEXT createModes{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT,
         .pNext = &tail,
         .presentModeCount = 1,
         .pPresentModes = immutableModes,
     };
 
-    const void* head = &createModes;
-    {
-        ScopedPNextRemoval removal(
-            head, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT
-        );
-        expect(head == &tail, "head present-mode node was not filtered");
-        expect(immutableModes[0] == VK_PRESENT_MODE_MAILBOX_KHR,
-            "immutable Gamescope mode storage was modified");
-    }
-    expect(head == &createModes, "head pNext chain was not restored");
+    const FilteredSwapchainCreatePNextChain filteredHead(
+        &createModes, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT
+    );
+    expect(filteredHead.valid() && filteredHead.head() == &tail,
+        "head present-mode node was not filtered");
+    expect(immutableModes[0] == VK_PRESENT_MODE_MAILBOX_KHR,
+        "immutable Gamescope mode storage was modified");
 
-    {
-        // HDR/passthrough transport: disabled filtering must preserve the full
-        // Gamescope node exactly, including its immutable MAILBOX list.
-        ScopedPNextRemoval disabled(
-            head, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT,
-            false
-        );
-        expect(head == &createModes,
-            "disabled filtering changed a native passthrough chain");
-    }
+    const FilteredSwapchainCreatePNextChain disabledCreateFilter(
+        &createModes, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT,
+        false
+    );
+    expect(disabledCreateFilter.valid() &&
+            disabledCreateFilter.head() == &createModes,
+        "disabled filtering changed a native passthrough chain");
 
-    VkBaseOutStructure prefix{
-        .sType = VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_INFO_KHR,
-        .pNext = reinterpret_cast<VkBaseOutStructure*>(&createModes),
+    const VkDeviceGroupSwapchainCreateInfoKHR prefix{
+        .sType = VK_STRUCTURE_TYPE_DEVICE_GROUP_SWAPCHAIN_CREATE_INFO_KHR,
+        .pNext = &createModes,
+        .modes = VK_DEVICE_GROUP_PRESENT_MODE_LOCAL_BIT_KHR,
     };
-    head = &prefix;
-    {
-        ScopedPNextRemoval removal(
-            head, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT
+    const auto* const originalCreateLink = prefix.pNext;
+    const FilteredSwapchainCreatePNextChain filteredNestedCreate(
+        &prefix, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT
+    );
+    expect(filteredNestedCreate.valid(),
+        "known immutable swapchain-create prefix could not be copied");
+    expect(prefix.pNext == originalCreateLink,
+        "create filter rewrote caller-owned immutable storage");
+    const auto* copiedCreatePrefix = reinterpret_cast<
+        const VkDeviceGroupSwapchainCreateInfoKHR*>(
+            filteredNestedCreate.head()
         );
-        expect(head == &prefix, "nested removal changed the chain head");
-        expect(prefix.pNext == &tail, "nested present-mode node was not filtered");
-    }
-    expect(prefix.pNext == reinterpret_cast<VkBaseOutStructure*>(&createModes),
-        "nested pNext chain was not restored");
+    expect(copiedCreatePrefix != &prefix &&
+            copiedCreatePrefix->sType == prefix.sType &&
+            copiedCreatePrefix->modes == prefix.modes &&
+            copiedCreatePrefix->pNext == &tail,
+        "nested create filtering did not preserve the known prefix payload");
 
-    try {
-        ScopedPNextRemoval removal(
-            head, VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT
-        );
-        throw std::runtime_error("test");
-    } catch (const std::runtime_error&) {
-    }
-    expect(prefix.pNext == reinterpret_cast<VkBaseOutStructure*>(&createModes),
-        "exception path did not restore the pNext chain");
+    const VkBaseInStructure unknownCreatePrefix{
+        .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+        .pNext = reinterpret_cast<const VkBaseInStructure*>(&createModes),
+    };
+    const FilteredSwapchainCreatePNextChain unknownCreateFilter(
+        &unknownCreatePrefix,
+        VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT
+    );
+    expect(!unknownCreateFilter.valid() &&
+            unknownCreateFilter.unsupportedStructureType() ==
+                VK_STRUCTURE_TYPE_APPLICATION_INFO &&
+            unknownCreatePrefix.pNext == reinterpret_cast<
+                const VkBaseInStructure*>(&createModes),
+        "unknown immutable create prefix was modified or truncated");
 
     VkBaseInStructure presentTail{
         .sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR,

@@ -25,6 +25,11 @@ namespace {
 }
 
 int main() {
+    expect(!shouldRejectManagedMultiSwapchainPresent(1, true) &&
+            !shouldRejectManagedMultiSwapchainPresent(2, false) &&
+            shouldRejectManagedMultiSwapchainPresent(2, true),
+        "managed multi-swapchain batches must fail closed before shared waits are consumed");
+
     const PresentationEnvironmentPolicy normalEnvironment{};
     const PresentationEnvironmentPolicy isolatedEnvironment{
         .gamescopeWsiDisabled = true,

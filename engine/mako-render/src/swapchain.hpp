@@ -42,6 +42,11 @@ namespace mako::layer {
         VkSurfaceKHR surface;
         VkFormat format;
         VkColorSpaceKHR colorSpace;
+        // Preserve the application's create signature independently from
+        // MAKO's lower-facing usage and present-mode changes. The startup
+        // compatibility policy must not leak across different WSI contracts.
+        VkImageUsageFlags applicationImageUsage{0};
+        VkPresentModeKHR applicationPresentMode{VK_PRESENT_MODE_FIFO_KHR};
         // Preserve the application's requested minimum separately from the
         // bounded minimum forwarded by MAKO and the actual returned count in
         // `images`. These values make startup compatibility reports

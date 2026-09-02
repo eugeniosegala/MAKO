@@ -545,7 +545,7 @@ Root::Root() :
     this->publishSurfaceScalingPolicy();
 }
 
-ConfigurationUpdateResult Root::update() {
+ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
     ConfigurationUpdateResult result;
     const auto now = std::chrono::steady_clock::now();
     constexpr auto hdrFeedbackPollInterval = std::chrono::milliseconds(250);
@@ -610,7 +610,7 @@ ConfigurationUpdateResult Root::update() {
     // every presented frame. Keep the UI responsive while bounding the check
     // to four times per second, matching the feedback sampling cadence.
     constexpr auto configurationPollInterval = std::chrono::milliseconds(250);
-    if (this->lastConfigurationPoll &&
+    if (!forceConfigurationPoll && this->lastConfigurationPoll &&
             now - *this->lastConfigurationPoll < configurationPollInterval)
         return result;
     this->lastConfigurationPoll = now;
@@ -937,12 +937,24 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         memoryProperties2.memoryProperties,
         liveMemoryBudgetAvailable ? &liveMemoryBudget : nullptr
     );
+    const auto contextProfile = profileForLayerContext(*this->active_profile);
+    auto prospectiveCreateInfo = createInfo;
+    static_cast<void>(context_ModifySwapchainCreateInfo(
+        contextProfile,
+        caps.maxImageCount,
+        prospectiveCreateInfo,
+        this->gamescopeHdrActive.value_or(false),
+        this->gamescopeDetected,
+        this->presentationEnvironment,
+        frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled()),
+        false
+    ));
     auto policySnapshot = this->surfaceScalingPolicySnapshot();
     const auto resourceAdmission = variablePresentationResourceAdmission(
         memoryAdmission,
         createInfo.imageExtent,
         createInfo.imageFormat,
-        createInfo.minImageCount,
+        prospectiveCreateInfo.minImageCount,
         generatedFrameCapacityForProfile(*this->active_profile)
     );
     const uint64_t presentationPixelBudget =
@@ -1278,7 +1290,6 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         );
     }
 
-    const auto contextProfile = profileForLayerContext(*this->active_profile);
     modification.privateOrderedTransport = context_ModifySwapchainCreateInfo(
         contextProfile,
         caps.maxImageCount,
@@ -1295,14 +1306,22 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     // base mode to FIFO, so that list must not reach the lower driver: leaving
     // it attached makes the create description inconsistent and has surfaced
     // as a Wine vkCreateSwapchainKHR assertion. Remove only the outer node from
-    // our lower-facing chain; ScopedPNextRemoval never edits its immutable mode
-    // array and restores the caller's chain after finish(). The Gamescope HDR
-    // transport preserves the complete compositor contract.
-    ScopedPNextRemoval presentModes(
+    // our lower-facing chain. Copy a known prefix so neither the immutable mode
+    // array nor any caller-owned pNext link is ever rewritten. The Gamescope
+    // HDR transport preserves the complete compositor contract.
+    const FilteredSwapchainCreatePNextChain presentModes(
         createInfo.pNext,
         VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODES_CREATE_INFO_EXT,
         modification.privateOrderedTransport
     );
+    if (!presentModes.valid()) {
+        throw ls::error(
+            "unsupported VkSwapchainCreateInfoKHR pNext prefix before "
+            "Gamescope present-mode filtering: " +
+            std::to_string(presentModes.unsupportedStructureType())
+        );
+    }
+    createInfo.pNext = presentModes.head();
 
     finish();
     if (modification.spatialScalingActive && !spatialExtentOwner) {

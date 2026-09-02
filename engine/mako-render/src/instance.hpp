@@ -86,8 +86,10 @@ namespace mako::layer {
         }
 
         /// ensure the layer is up-to-date
+        /// @param forceConfigurationPoll bypass the present-path polling
+        /// interval at an application-owned swapchain creation boundary
         /// @return classification of any configuration update
-        ConfigurationUpdateResult update();
+        ConfigurationUpdateResult update(bool forceConfigurationPoll = false);
 
         /// modify instance create info
         /// @param createInfo original create info
