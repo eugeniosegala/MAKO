@@ -811,16 +811,29 @@ int main() {
         "A fixed surface must treat supersampling as a live no-op");
     expect(std::string_view(spatialScalingRuntimeInactiveReason(
             false,
+            true,
+            1.5F,
             SpatialScalingInactiveReason::VariableSurfaceMemoryBudget
         )) == "variable-surface-memory-budget" &&
             spatialScalingRuntimeInactiveReason(
                 true,
+                true,
+                1.5F,
                 SpatialScalingInactiveReason::VariableSurfaceMemoryBudget
             ) == nullptr &&
             spatialScalingRuntimeInactiveReason(
-                false, SpatialScalingInactiveReason::None
-            ) == nullptr,
-        "Runtime status must expose an inactive policy reason only while spatial scaling is inactive");
+                false, true, 1.5F, SpatialScalingInactiveReason::None
+            ) == nullptr &&
+            spatialScalingRuntimeInactiveReason(
+                false, false,
+                1.5F,
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget
+            ) == nullptr &&
+            std::string_view(spatialScalingRuntimeInactiveReason(
+                false, true, 1.0F,
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget
+            )) == "factor-not-upscaling",
+        "Runtime status must expose an inactive policy reason only while spatial scaling is requested and inactive");
     profile.scaling_supersampling = false;
     const auto deckBelowCeiling = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {640, 360},
@@ -919,6 +932,97 @@ int main() {
             fourKUnderPressure.inactiveReason ==
                 SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
         "A normally supported 4K envelope must fail closed when the live driver budget cannot admit it");
+    const SpatialScalingExtents provenFourK{
+        .source = {2560, 1440},
+        .presentation = {3840, 2160},
+    };
+    const auto raisedFactorRetainsProvenFourK = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {2560, 1440},
+        provenFourK, std::nullopt,
+        exhaustedAdmission.effectivePixelBudget,
+        std::nullopt, false, exhaustedAdmission.staticPixelBudget
+    );
+    expect(raisedFactorRetainsProvenFourK.extents &&
+            raisedFactorRetainsProvenFourK.reusedPreviousPresentationBudget &&
+            raisedFactorRetainsProvenFourK.memoryBudgetConstrained &&
+            sameExtent(
+                raisedFactorRetainsProvenFourK.extents->presentation,
+                provenFourK.presentation
+            ),
+        "A tighter live reading must constrain a raised factor to the proven running envelope instead of disabling scaling");
+    profile.scaling_factor = 1.2F;
+    const auto reducedFactorShrinksInsideProvenFourK = scalingDecisionForCreate(
+        profile, true, 8, largeVariableCreate, {2560, 1440},
+        provenFourK, std::nullopt,
+        exhaustedAdmission.effectivePixelBudget,
+        std::nullopt, false, exhaustedAdmission.staticPixelBudget
+    );
+    expect(reducedFactorShrinksInsideProvenFourK.extents &&
+            reducedFactorShrinksInsideProvenFourK.
+                reusedPreviousPresentationBudget &&
+            !reducedFactorShrinksInsideProvenFourK.
+                reusedPreviousDownshiftEnvelope &&
+            !reducedFactorShrinksInsideProvenFourK.
+                memoryBudgetConstrained &&
+            sameExtent(
+                reducedFactorShrinksInsideProvenFourK.extents->presentation,
+                {3072, 1728}
+            ),
+        "Reducing a proven live extent must remain admitted even when the driver's released-allocation accounting lags");
+    profile.scaling_factor = 2.0F;
+    const auto lowerSourceReusesProvenFourK = scalingDecisionForCreate(
+        profile, true, 9, largeVariableCreate, {1920, 1080},
+        provenFourK, std::nullopt, exhaustedAdmission.effectivePixelBudget,
+        std::nullopt, false, exhaustedAdmission.staticPixelBudget
+    );
+    expect(lowerSourceReusesProvenFourK.extents &&
+            lowerSourceReusesProvenFourK.reusedPreviousPresentationBudget &&
+            lowerSourceReusesProvenFourK.reusedPreviousDownshiftEnvelope &&
+            !lowerSourceReusesProvenFourK.memoryBudgetConstrained &&
+            sameExtent(
+                lowerSourceReusesProvenFourK.extents->source, {1920, 1080}
+            ) &&
+            sameExtent(
+                lowerSourceReusesProvenFourK.extents->presentation,
+                provenFourK.presentation
+            ),
+        "A lower source must reuse an already-proven presentation envelope while released-allocation accounting lags");
+    const auto ultrawideDownshiftFitsInsideProvenFourK =
+        scalingDecisionForCreate(
+            profile, true, 9, largeVariableCreate, {2560, 1080},
+            provenFourK, std::nullopt,
+            exhaustedAdmission.effectivePixelBudget,
+            std::nullopt, false, exhaustedAdmission.staticPixelBudget
+        );
+    expect(ultrawideDownshiftFitsInsideProvenFourK.extents &&
+            ultrawideDownshiftFitsInsideProvenFourK.
+                reusedPreviousPresentationBudget &&
+            ultrawideDownshiftFitsInsideProvenFourK.
+                reusedPreviousDownshiftEnvelope &&
+            ultrawideDownshiftFitsInsideProvenFourK.
+                memoryBudgetConstrained &&
+            sameExtent(
+                ultrawideDownshiftFitsInsideProvenFourK.extents->presentation,
+                {3840, 1620}
+            ),
+        "A lower ultrawide source must preserve aspect ratio while remaining inside the proven presentation envelope");
+    const auto largerSourceRequiresFreshAdmission = scalingDecisionForCreate(
+        profile, true, 9, largeVariableCreate, {2560, 1440},
+        SpatialScalingExtents{
+            .source = {1920, 1080},
+            .presentation = {3840, 2160},
+        },
+        std::nullopt, exhaustedAdmission.effectivePixelBudget,
+        std::nullopt, false, exhaustedAdmission.staticPixelBudget
+    );
+    expect(!largerSourceRequiresFreshAdmission.extents &&
+            !largerSourceRequiresFreshAdmission.
+                reusedPreviousPresentationBudget &&
+            !largerSourceRequiresFreshAdmission.
+                reusedPreviousDownshiftEnvelope &&
+            largerSourceRequiresFreshAdmission.inactiveReason ==
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+        "A larger source must not borrow a smaller source's live allocation proof");
 
     const auto staticOnlyAdmission = variablePresentationMemoryAdmission(
         eightGiB
@@ -943,6 +1047,7 @@ int main() {
     );
     expect(coldFiveKUsesBaseline.extents &&
             coldFiveKUsesBaseline.usedBaselinePresentationBudget &&
+            coldFiveKUsesBaseline.memoryBudgetConstrained &&
             !coldFiveKUsesBaseline.reusedPreviousPresentationBudget &&
             sameExtent(
                 coldFiveKUsesBaseline.extents->source, {2560, 1440}

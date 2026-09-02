@@ -47,6 +47,7 @@ MAKO Renderer: live profile resource change requested a game-owned swapchain rec
 MAKO Renderer: present diagnostics: operation=runtime-transition-recreation-requested context=1 state_revision=2 reason=profile-resources lower_present_result=0 signal=VK_ERROR_OUT_OF_DATE_KHR delivery=one-shot-after-semaphore-consumption
 MAKO Renderer: present diagnostics: operation=original-present-recreation-propagate context=2 frame=10 sequence=20 result=-1000001004 action=application-image-submitted-before-recreation
 MAKO Renderer: present diagnostics: operation=swapchain-recreation-observed context=2 role=frame-generation swapchain=1234 source=upstream-or-driver
+MAKO Renderer: present diagnostics: operation=replacement-backend-stabilization context=2 phase=started duration_ms=250 action=scaled-real-frame-only
 MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 effective_flow_scale=0.75 lighter_model=1 generated_frame_capacity=3 hdr=1
 MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
 MAKO Renderer: spatial scaling swapchain policy: requested=854x532; surface_current=1280x800; surface_extent_mode=fixed; advertised_source=854x532; advertised_presentation=1280x800; actual_source=854x532; actual_presentation=1280x800; policy_revision=4; contract_policy_revision=4; query_generation=9; selected_source=854x532; selected_presentation=1280x800; format=44; format_supported=1; shape_supported=1; queue_presentation_support=supported; queue_commands_supported=1; variable_feedback_suppressed=0; inactive_reason=none; source_presentation_split=1; active=1
@@ -269,6 +270,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("fingerprint=abc123.dirty.12345678", result.stdout)
                     self.assertIn("operation=process-identity", result.stdout)
                     self.assertIn("operation=swapchain-context-create", result.stdout)
+                    self.assertIn("operation=replacement-backend-stabilization", result.stdout)
                     self.assertIn("frame_generation_width=1280", result.stdout)
                     self.assertIn("spatial_pipeline=pre-frame-generation", result.stdout)
                     self.assertIn(

@@ -693,6 +693,37 @@ namespace {
             "persistent delivery pressure was incorrectly tolerated");
     }
 
+    void testReplacementBackendStabilizationIsBounded() {
+        using Clock = ReplacementBackendStabilization::Clock;
+        const auto start = Clock::time_point{};
+
+        ReplacementBackendStabilization coldStart;
+        coldStart.begin(false, start);
+        const auto coldDecision = coldStart.beforeFrame(start);
+        require(!coldStart.active() && !coldDecision.bypassBackend &&
+                !coldDecision.resumed,
+            "A cold swapchain was incorrectly given replacement-only backend stabilization");
+
+        ReplacementBackendStabilization replacement;
+        replacement.begin(true, start);
+        const auto first = replacement.beforeFrame(start);
+        const auto repeated = replacement.beforeFrame(
+            start + ReplacementBackendStabilization::duration / 2
+        );
+        const auto resumed = replacement.beforeFrame(
+            start + ReplacementBackendStabilization::duration
+        );
+        const auto completed = replacement.beforeFrame(
+            start + ReplacementBackendStabilization::duration * 2
+        );
+        require(first.bypassBackend && first.diagnostic &&
+                repeated.bypassBackend && !repeated.diagnostic &&
+                !resumed.bypassBackend && resumed.resumed &&
+                !replacement.active() && !completed.bypassBackend &&
+                !completed.resumed,
+            "Replacement backend stabilization did not bypass once, resume once, and retire at its fixed deadline");
+    }
+
     void testSteadySixtyRampsToTwoXFor120Target() {
         Harness harness(120, 3);
         harness.start();
@@ -3387,6 +3418,7 @@ int main() {
         {"transient busy frame does not rearm warm-up", testTransientBusyFrameDoesNotRearmCompletedWarmup},
         {"invalid configuration is rejected", testInvalidConfigurationIsRejectedAtBoundary},
         {"generated delivery window contract", testGeneratedDeliveryWindowContract},
+        {"replacement backend stabilization is bounded", testReplacementBackendStabilizationIsBounded},
         {"scheduler characterization corpus", testCharacterizationTraceCorpus},
         {"60 to 120 settles at 2x", testSteadySixtyRampsToTwoXFor120Target},
         {"fractional target clock follows raw intervals", testFractionalTargetClockAssignsWorkToLongIntervals},

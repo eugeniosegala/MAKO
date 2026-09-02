@@ -170,6 +170,40 @@ describe("runtime scaling availability", () => {
       scalingActivationSupported: true,
       inactiveReason: "variable-surface-memory-budget",
     });
+
+    const allocationFreeLowerContext = {
+      ...context,
+      role: "spatial-scaling",
+      context: 4,
+      frame_generation_active: false,
+      requested: {
+        ...context.requested,
+        scaling_enabled: false,
+        scaling_method: "native",
+      },
+      applied: {
+        ...context.applied,
+        scaling_enabled: false,
+      },
+      spatial_scaling: {
+        ...context.spatial_scaling,
+        active: false,
+        activation_supported: true,
+        inactive_reason: null,
+      },
+    } as RuntimeContextState;
+    expect(
+      runtimeScalingUiState(
+        status([allocationFreeLowerContext, memoryLimitedContext]),
+        "game",
+      ),
+    ).toMatchObject({
+      scalingActive: false,
+      scalingEnabled: true,
+      scalingActivationSupported: true,
+      requestedFactor: 2,
+      inactiveReason: "variable-surface-memory-budget",
+    });
   });
 
   test("reports Steady Adaptive from the applied automatic base cap", () => {

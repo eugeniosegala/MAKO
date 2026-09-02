@@ -3,7 +3,9 @@
 #pragma once
 
 #include <algorithm>
+#include <chrono>
 #include <cstddef>
+#include <optional>
 
 namespace mako::layer {
 
@@ -55,6 +57,56 @@ namespace mako::layer {
     private:
         size_t requestedFrames{0};
         size_t acceptedFrames{0};
+    };
+
+    struct ReplacementBackendStabilizationDecision {
+        bool bypassBackend{false};
+        bool resumed{false};
+        bool diagnostic{false};
+    };
+
+    /// Keep a newly replaced WSI context on its real-frame path briefly before
+    /// submitting temporal-history work to the private backend. Applications
+    /// commonly cycle through several short-lived extents during startup; a
+    /// bounded native-history gap prevents one transient replacement from
+    /// stalling startup while preserving the existing, longer scheduler
+    /// stabilization window before any generated frame is requested.
+    class ReplacementBackendStabilization {
+    public:
+        using Clock = std::chrono::steady_clock;
+        static constexpr auto duration = std::chrono::milliseconds(250);
+
+        void begin(const bool replacement,
+                const Clock::time_point now = Clock::now()) {
+            this->until = replacement
+                ? std::optional<Clock::time_point>{now + duration}
+                : std::nullopt;
+            this->diagnosticEmitted = false;
+        }
+
+        [[nodiscard]] ReplacementBackendStabilizationDecision beforeFrame(
+                const Clock::time_point now = Clock::now()) {
+            if (!this->until)
+                return {};
+            if (now >= *this->until) {
+                this->until.reset();
+                return {.resumed = true};
+            }
+            const bool diagnostic = !this->diagnosticEmitted;
+            this->diagnosticEmitted = true;
+            return {
+                .bypassBackend = true,
+                .diagnostic = diagnostic,
+            };
+        }
+
+        [[nodiscard]] bool active() const {
+            return this->until.has_value();
+        }
+
+    private:
+        std::optional<Clock::time_point> until;
+        bool diagnosticEmitted{false};
     };
 
 }

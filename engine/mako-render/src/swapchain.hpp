@@ -13,6 +13,7 @@
 #include "mako-common/vulkan/vulkan.hpp"
 #include "adaptive_scheduler.hpp"
 #include "color_pipeline.hpp"
+#include "generated_frame_delivery.hpp"
 #include "profile_update.hpp"
 #include "presentation_policy.hpp"
 #include "runtime_status.hpp"
@@ -244,6 +245,7 @@ namespace mako::layer {
             LowerPresentStallRecovery lowerPresentStallRecovery;
             PipelineBusyRecovery pipelineBusyRecovery;
             FixedCadenceCollapseRecovery fixedCadenceCollapseRecovery;
+            ReplacementBackendStabilization replacementBackendStabilization;
             bool backendPending{false};
             size_t historyWarmupRemaining{0};
         };

@@ -350,8 +350,17 @@ namespace mako::layer {
 
     [[nodiscard]] constexpr const char* spatialScalingRuntimeInactiveReason(
             const bool active,
+            const bool scalingRequested,
+            const float requestedFactor,
             const SpatialScalingInactiveReason reason) noexcept {
-        return active || reason == SpatialScalingInactiveReason::None
+        if (active || !scalingRequested)
+            return nullptr;
+        if (requestedFactor <= 1.0F) {
+            return spatialScalingInactiveReasonName(
+                SpatialScalingInactiveReason::FactorNotUpscaling
+            );
+        }
+        return reason == SpatialScalingInactiveReason::None
             ? nullptr : spatialScalingInactiveReasonName(reason);
     }
 
@@ -360,7 +369,9 @@ namespace mako::layer {
         std::optional<FixedSurfaceScalingContract> fixedContract;
         bool retainedPreviousFixedSource{false};
         bool reusedPreviousPresentationBudget{false};
+        bool reusedPreviousDownshiftEnvelope{false};
         bool usedBaselinePresentationBudget{false};
+        bool memoryBudgetConstrained{false};
         bool gamescopePresentationTargetConstrained{false};
         bool gamescopePresentationTargetBypassed{false};
         SpatialScalingInactiveReason inactiveReason{
@@ -853,7 +864,9 @@ namespace mako::layer {
                 variablePresentationPixels = std::nullopt,
             const std::optional<VkExtent2D>&
                 gamescopePresentationTarget = std::nullopt,
-            const bool gamescopePresentationTargetRequired = false) noexcept {
+            const bool gamescopePresentationTargetRequired = false,
+            const std::optional<uint64_t>
+                variablePresentationStaticPixels = std::nullopt) noexcept {
         SpatialScalingCreateDecision decision{
             .fixedContract = fixedContract,
         };
@@ -1026,11 +1039,77 @@ namespace mako::layer {
                 SpatialScalingInactiveReason::VariableSurfaceNoHeadroom;
             return decision;
         }
+        const VkExtent2D requestedPresentation = presentation;
         const uint64_t presentationPixels =
             static_cast<uint64_t>(presentation.width) *
             static_cast<uint64_t>(presentation.height);
         if (variablePresentationPixels &&
                 presentationPixels > *variablePresentationPixels) {
+            // VK_EXT_memory_budget can lag immediately released WSI and
+            // private allocations. When a split extent was already running
+            // on this surface, it is safe to retain that proven envelope or
+            // shrink inside it, including when the game lowers its source
+            // resolution: neither the new source nor presentation resources
+            // can exceed the context they supersede. Apply this only when the
+            // live budget tightened the deterministic ceiling; static
+            // admission remains independent of launch history.
+            const bool liveBudgetTightenedStaticCeiling =
+                variablePresentationStaticPixels &&
+                *variablePresentationPixels <
+                    *variablePresentationStaticPixels;
+            if (liveBudgetTightenedStaticCeiling &&
+                    previousVariableExtents &&
+                    requestedExtent.width <=
+                        previousVariableExtents->source.width &&
+                    requestedExtent.height <=
+                        previousVariableExtents->source.height &&
+                    !sameExtent(
+                        previousVariableExtents->source,
+                        previousVariableExtents->presentation
+                    )) {
+                const double previousWidthFactor =
+                    static_cast<double>(
+                        previousVariableExtents->presentation.width
+                    ) / requestedExtent.width;
+                const double previousHeightFactor =
+                    static_cast<double>(
+                        previousVariableExtents->presentation.height
+                    ) / requestedExtent.height;
+                const double retainedFactor = std::min({
+                    effectiveFactor,
+                    previousWidthFactor,
+                    previousHeightFactor,
+                });
+                if (retainedFactor > 1.0) {
+                    VkExtent2D retainedPresentation{
+                        .width = static_cast<uint32_t>(std::floor(
+                            static_cast<double>(requestedExtent.width) *
+                                retainedFactor
+                        )),
+                        .height = static_cast<uint32_t>(std::floor(
+                            static_cast<double>(requestedExtent.height) *
+                                retainedFactor
+                        )),
+                    };
+                    if (retainedPresentation.width > 1)
+                        retainedPresentation.width &= ~uint32_t{1};
+                    if (retainedPresentation.height > 1)
+                        retainedPresentation.height &= ~uint32_t{1};
+                    if (retainedPresentation.width > requestedExtent.width &&
+                            retainedPresentation.height >
+                                requestedExtent.height) {
+                        presentation = retainedPresentation;
+                        decision.reusedPreviousPresentationBudget = true;
+                        decision.reusedPreviousDownshiftEnvelope = !sameExtent(
+                            previousVariableExtents->source, requestedExtent
+                        );
+                        decision.memoryBudgetConstrained = !sameExtent(
+                            retainedPresentation, requestedPresentation
+                        );
+                    }
+                }
+            }
+
             // The fallback must not depend on which resolution happened to be
             // active first. Aspect-fit every over-budget request into the
             // deterministic 4K baseline envelope, which is already reserved
@@ -1038,44 +1117,50 @@ namespace mako::layer {
             // previous swapchain's presentation extent. This makes a cold
             // 1440p launch select the same 3840x2160 contract as a 1080p ->
             // 1440p transition on an 8 GiB unified-memory device.
-            constexpr VkExtent2D baselinePresentation{3840, 2160};
-            const double baselineWidthFactor =
-                static_cast<double>(baselinePresentation.width) /
-                static_cast<double>(requestedExtent.width);
-            const double baselineHeightFactor =
-                static_cast<double>(baselinePresentation.height) /
-                static_cast<double>(requestedExtent.height);
-            const double baselineFactor = std::min({
-                effectiveFactor,
-                baselineWidthFactor,
-                baselineHeightFactor,
-            });
-            if (baselineFactor > 1.0) {
-                VkExtent2D baselineFit{
-                    .width = static_cast<uint32_t>(std::floor(
-                        static_cast<double>(requestedExtent.width) *
-                            baselineFactor
-                    )),
-                    .height = static_cast<uint32_t>(std::floor(
-                        static_cast<double>(requestedExtent.height) *
-                            baselineFactor
-                    )),
-                };
-                if (baselineFit.width > 1)
-                    baselineFit.width &= ~uint32_t{1};
-                if (baselineFit.height > 1)
-                    baselineFit.height &= ~uint32_t{1};
-                const uint64_t baselinePixels =
-                    static_cast<uint64_t>(baselineFit.width) *
-                    static_cast<uint64_t>(baselineFit.height);
-                if (baselineFit.width > requestedExtent.width &&
-                        baselineFit.height > requestedExtent.height &&
-                        baselinePixels <= *variablePresentationPixels) {
-                    presentation = baselineFit;
-                    decision.usedBaselinePresentationBudget = true;
+            if (!decision.reusedPreviousPresentationBudget) {
+                constexpr VkExtent2D baselinePresentation{3840, 2160};
+                const double baselineWidthFactor =
+                    static_cast<double>(baselinePresentation.width) /
+                    static_cast<double>(requestedExtent.width);
+                const double baselineHeightFactor =
+                    static_cast<double>(baselinePresentation.height) /
+                    static_cast<double>(requestedExtent.height);
+                const double baselineFactor = std::min({
+                    effectiveFactor,
+                    baselineWidthFactor,
+                    baselineHeightFactor,
+                });
+                if (baselineFactor > 1.0) {
+                    VkExtent2D baselineFit{
+                        .width = static_cast<uint32_t>(std::floor(
+                            static_cast<double>(requestedExtent.width) *
+                                baselineFactor
+                        )),
+                        .height = static_cast<uint32_t>(std::floor(
+                            static_cast<double>(requestedExtent.height) *
+                                baselineFactor
+                        )),
+                    };
+                    if (baselineFit.width > 1)
+                        baselineFit.width &= ~uint32_t{1};
+                    if (baselineFit.height > 1)
+                        baselineFit.height &= ~uint32_t{1};
+                    const uint64_t baselinePixels =
+                        static_cast<uint64_t>(baselineFit.width) *
+                        static_cast<uint64_t>(baselineFit.height);
+                    if (baselineFit.width > requestedExtent.width &&
+                            baselineFit.height > requestedExtent.height &&
+                            baselinePixels <= *variablePresentationPixels) {
+                        presentation = baselineFit;
+                        decision.usedBaselinePresentationBudget = true;
+                        decision.memoryBudgetConstrained = !sameExtent(
+                            baselineFit, requestedPresentation
+                        );
+                    }
                 }
             }
-            if (!decision.usedBaselinePresentationBudget) {
+            if (!decision.reusedPreviousPresentationBudget &&
+                    !decision.usedBaselinePresentationBudget) {
                 decision.inactiveReason = SpatialScalingInactiveReason::
                     VariableSurfaceMemoryBudget;
                 return decision;
@@ -1104,7 +1189,9 @@ namespace mako::layer {
                 variablePresentationPixels = std::nullopt,
             const std::optional<VkExtent2D>&
                 gamescopePresentationTarget = std::nullopt,
-            const bool gamescopePresentationTargetRequired = false) noexcept {
+            const bool gamescopePresentationTargetRequired = false,
+            const std::optional<uint64_t>
+                variablePresentationStaticPixels = std::nullopt) noexcept {
         return scalingDecisionForCreate(
             SpatialScalingPolicy{
                 .enabled = ls::spatialScalingRequested(profile),
@@ -1119,7 +1206,8 @@ namespace mako::layer {
             fixedContract,
             variablePresentationPixels,
             gamescopePresentationTarget,
-            gamescopePresentationTargetRequired
+            gamescopePresentationTargetRequired,
+            variablePresentationStaticPixels
         );
     }
 

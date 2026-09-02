@@ -119,18 +119,18 @@ export function runtimeScalingUiState(
     contexts,
     (candidate) => candidate.role === "frame-generation",
   );
-  const spatialContext =
-    newestContext(contexts, (candidate) => candidate.spatial_scaling.active) ??
-    newestContext(
-      contexts,
-      (candidate) => candidate.role === "spatial-scaling",
-    ) ??
-    newestContext(contexts, (candidate) => candidate.requested.scaling_enabled);
-  const appliedFrameProfile = frameContext?.applied;
   const scalingRequestedContext = newestContext(
     contexts,
     (candidate) => candidate.requested.scaling_enabled,
   );
+  const spatialContext =
+    newestContext(contexts, (candidate) => candidate.spatial_scaling.active) ??
+    scalingRequestedContext ??
+    newestContext(
+      contexts,
+      (candidate) => candidate.role === "spatial-scaling",
+    );
+  const appliedFrameProfile = frameContext?.applied;
   const frameGenerationEnabled = Boolean(
     appliedFrameProfile?.frame_generation_enabled,
   );
@@ -177,8 +177,7 @@ export function runtimeScalingUiState(
     inactiveReason:
       spatialContext?.spatial_scaling.inactive_reason ??
       scalingInactiveReason(status, profileName),
-    constraintReason:
-      spatialContext?.spatial_scaling.constraint_reason ?? null,
+    constraintReason: spatialContext?.spatial_scaling.constraint_reason ?? null,
     requestedFactor:
       spatialContext?.requested.scaling_factor ??
       scalingRequestedContext?.requested.scaling_factor ??

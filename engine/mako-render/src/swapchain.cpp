@@ -641,6 +641,9 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             DiagnosticsClock::now(),
             this->info.replacement ? "swapchain-recreation" : "startup"
         );
+        this->recoveryState.replacementBackendStabilization.begin(
+            this->info.replacement, DiagnosticsClock::now()
+        );
         if (schedulerEnabled) {
             const auto policy = generationSchedulerPolicy(
                 this->profile, this->gamescopeRefreshHz
@@ -754,11 +757,28 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
             this->info.gamescopePresentationTarget->width ||
          this->info.extent.height >
             this->info.gamescopePresentationTarget->height);
+    const auto& requestedSpatialProfile =
+        this->runtimeStatusState.requestedProfile;
+    const bool scalingRequested = requestedSpatialProfile.scaling_enabled;
     const char* const spatialInactiveReason =
         spatialScalingRuntimeInactiveReason(
             this->spatialScaler.has_value(),
+            scalingRequested,
+            requestedSpatialProfile.scaling_factor,
             this->info.spatialScalingInactiveReason
         );
+    constexpr double factorComparisonTolerance = 0.005;
+    const bool displayCeilingOwnsConstraint =
+        !requestedSpatialProfile.scaling_supersampling &&
+        nonSupersamplingFactorCeiling &&
+        requestedSpatialProfile.scaling_factor >
+            *nonSupersamplingFactorCeiling + factorComparisonTolerance;
+    const bool memoryConstraintApplies = this->spatialScaler &&
+        scalingRequested &&
+        this->info.spatialScalingMemoryConstrained &&
+        requestedSpatialProfile.scaling_factor >
+            effectiveSpatialFactor + factorComparisonTolerance &&
+        !displayCeilingOwnsConstraint;
     this->runtimeStatusPublisher.publish(RuntimeStatusRecord{
         .phase = phase,
         .reason = std::string(reason),
@@ -784,8 +804,7 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
                 ? std::optional<std::string>{spatialInactiveReason}
                 : std::nullopt,
         .spatialScalingConstraintReason =
-            this->spatialScaler &&
-                this->info.spatialScalingMemoryConstrained
+            memoryConstraintApplies
             ? std::optional<std::string>{
                 spatialScalingInactiveReasonName(
                     SpatialScalingInactiveReason::

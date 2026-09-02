@@ -963,7 +963,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             fixedSurfaceContract,
             presentationPixelBudget,
             this->gamescopePresentationTarget,
-            gamescopePresentationTargetRequired
+            gamescopePresentationTargetRequired,
+            memoryAdmission.staticPixelBudget
         )
         : SpatialScalingCreateDecision{
             .inactiveReason = SpatialScalingInactiveReason::
@@ -974,7 +975,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         scalingDecision.inactiveReason ==
             SpatialScalingInactiveReason::VariableSurfaceFeedback;
     modification.spatialScalingMemoryConstrained =
-        scalingDecision.usedBaselinePresentationBudget;
+        scalingDecision.memoryBudgetConstrained;
     const bool fixedVirtualSourceRequest =
         fixedSurfaceExtent(caps.currentExtent) &&
         !sameExtent(createInfo.imageExtent, caps.currentExtent);
@@ -1167,6 +1168,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << modification.variableFeedbackSuppressed
                   << "; previous_presentation_budget_reused="
                   << scalingDecision.reusedPreviousPresentationBudget
+                  << "; previous_downshift_envelope_reused="
+                  << scalingDecision.reusedPreviousDownshiftEnvelope
                   << "; baseline_presentation_budget_used="
                   << scalingDecision.usedBaselinePresentationBudget
                   << "; extent_selected="

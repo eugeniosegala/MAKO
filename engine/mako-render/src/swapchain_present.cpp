@@ -2129,6 +2129,37 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             !this->colorPipeline.generationSupported) {
         return this->presentNativeFrame(invocation);
     }
+    const auto replacementStabilization =
+        this->recoveryState.replacementBackendStabilization.beforeFrame(
+            presentNow
+        );
+    if (replacementStabilization.bypassBackend) {
+        if (replacementStabilization.diagnostic &&
+                presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=replacement-backend-stabilization"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " duration_ms="
+                      << std::chrono::duration<double, std::milli>(
+                             ReplacementBackendStabilization::duration
+                         ).count()
+                      << " spatial_scaling_active="
+                      << this->spatialScaler.has_value()
+                      << " action=scaled-real-frame-only\n";
+        }
+        return this->presentNativeFrame(invocation);
+    }
+    if (replacementStabilization.resumed) {
+        this->ensureHistoryWarmup();
+        if (presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=replacement-backend-stabilization-complete"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " history_warmup_frames="
+                      << AdaptiveScheduler::historyWarmupFrameCount()
+                      << " action=resume-private-backend\n";
+        }
+    }
     if (!this->recoverBackendIfReady(vk))
         return this->presentNativeFrame(invocation);
 
