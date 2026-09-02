@@ -158,42 +158,6 @@ class DualArchInstallationTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def test_legacy_dll_placeholder_cleanup_preserves_real_user_paths(self):
-        placeholder = "/games/Lossless Scaling/Lossless.dll"
-        dll_service = SimpleNamespace(
-            check_lossless_scaling_dll=lambda: {"detected": False}
-        )
-        defaults = ConfigurationManager.get_defaults()
-        profile = {
-            key: value
-            for key, value in defaults.items()
-            if key not in {"dll", "allow_fp16"}
-        }
-
-        cases = (
-            (placeholder, False, ""),
-            (placeholder, True, placeholder),
-            ("/games/custom/Lossless.dll", False, "/games/custom/Lossless.dll"),
-        )
-        for configured_path, path_exists, expected_path in cases:
-            with self.subTest(
-                configured_path=configured_path,
-                path_exists=path_exists,
-            ), patch.object(Path, "exists", return_value=path_exists):
-                merged = self.service._merge_config_with_defaults(
-                    {
-                        "current_profile": DEFAULT_PROFILE_NAME,
-                        "global_config": {
-                            "dll": configured_path,
-                            "allow_fp16": True,
-                        },
-                        "profiles": {DEFAULT_PROFILE_NAME: profile},
-                    },
-                    dll_service,
-                )
-
-            self.assertEqual(merged["global_config"]["dll"], expected_path)
-
     @staticmethod
     def _manifest(arch: str, *, spatial_scaling: bool = False) -> bytes:
         return json.dumps({

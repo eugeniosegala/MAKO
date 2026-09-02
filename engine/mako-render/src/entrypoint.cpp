@@ -903,7 +903,10 @@ makoSpatialScalingLookupFixedContract(
         float* const factor,
         uint64_t* const policyRevision,
         uint64_t* const queryGeneration,
-        VkBool32* const spatialSurfaceScalingSupported) noexcept {
+        VkBool32* const spatialSurfaceScalingSupported,
+        VkBool32* const variableSurface,
+        VkBool32* const memoryBudgetConstrained,
+        uint32_t* const inactiveReason) noexcept {
     const auto operation = static_cast<FixedSurfaceCapabilityRelayOperation>(
         rawOperation
     );
@@ -928,7 +931,8 @@ makoSpatialScalingLookupFixedContract(
     }
     if (!lowerSurface || !source || !presentation || !factor ||
             !policyRevision || !queryGeneration ||
-            !spatialSurfaceScalingSupported) {
+            !spatialSurfaceScalingSupported || !variableSurface ||
+            !memoryBudgetConstrained || !inactiveReason) {
         slot->begin();
         return VK_FALSE;
     }
@@ -943,8 +947,14 @@ makoSpatialScalingLookupFixedContract(
     *factor = record->contract.factor;
     *policyRevision = record->contract.policyRevision;
     *queryGeneration = record->contract.queryGeneration;
-    *spatialSurfaceScalingSupported = record->contract
-        .spatialSurfaceScalingSupported ? VK_TRUE : VK_FALSE;
+    const auto metadata = fixedSurfaceScalingContractRelayMetadata(
+        record->contract
+    );
+    *spatialSurfaceScalingSupported =
+        metadata.spatialSurfaceScalingSupported;
+    *variableSurface = metadata.variableSurface;
+    *memoryBudgetConstrained = metadata.memoryBudgetConstrained;
+    *inactiveReason = metadata.inactiveReason;
     return VK_TRUE;
 }
 #endif
@@ -952,7 +962,8 @@ makoSpatialScalingLookupFixedContract(
 namespace {
     using LowerFixedSurfaceContractLookup = VkBool32 (*) (
         uint32_t, VkPhysicalDevice, VkSurfaceKHR*, VkExtent2D*, VkExtent2D*,
-        float*, uint64_t*, uint64_t*, VkBool32*
+        float*, uint64_t*, uint64_t*, VkBool32*, VkBool32*, VkBool32*,
+        uint32_t*
     );
 
     constexpr std::string_view lowerFixedSurfaceContractSymbol =
@@ -997,7 +1008,7 @@ namespace {
                         this->beginOperation
                     ),
                     physicalDevice, nullptr, nullptr, nullptr, nullptr,
-                    nullptr, nullptr, nullptr
+                    nullptr, nullptr, nullptr, nullptr, nullptr, nullptr
                 ));
             }
             armed = false;
@@ -1012,7 +1023,7 @@ namespace {
                     this->beginOperation
                 ),
                 physicalDevice, nullptr, nullptr, nullptr, nullptr, nullptr,
-                nullptr, nullptr
+                nullptr, nullptr, nullptr, nullptr, nullptr
             ) == VK_TRUE;
         }
 
@@ -1024,7 +1035,7 @@ namespace {
             FixedSurfaceCapabilityRelayRecord record{
                 .physicalDevice = physicalDevice,
             };
-            VkBool32 spatialSurfaceSupported = VK_TRUE;
+            FixedSurfaceScalingContractRelayMetadata metadata;
             const VkBool32 found = lookup(
                 static_cast<uint32_t>(
                     this->consumeOperation
@@ -1033,13 +1044,18 @@ namespace {
                 &record.contract.extents.source,
                 &record.contract.extents.presentation,
                 &record.contract.factor, &record.contract.policyRevision,
-                &record.contract.queryGeneration, &spatialSurfaceSupported
+                &record.contract.queryGeneration,
+                &metadata.spatialSurfaceScalingSupported,
+                &metadata.variableSurface, &metadata.memoryBudgetConstrained,
+                &metadata.inactiveReason
             );
             armed = false;
-            if (found != VK_TRUE)
+            if (found != VK_TRUE ||
+                    !applyFixedSurfaceScalingContractRelayMetadata(
+                        record.contract, metadata
+                    )) {
                 return std::nullopt;
-            record.contract.spatialSurfaceScalingSupported =
-                spatialSurfaceSupported == VK_TRUE;
+            }
             return record;
         }
     };
@@ -1878,7 +1894,12 @@ namespace {
                 modification.presentationExtent =
                     lowerCreateRelay->contract.extents.presentation;
                 modification.spatialScalingActive = true;
-                modification.variableSurface = true;
+                modification.variableSurface =
+                    lowerCreateRelay->contract.variableSurface;
+                modification.spatialScalingMemoryConstrained =
+                    lowerCreateRelay->contract.memoryBudgetConstrained;
+                modification.spatialScalingInactiveReason =
+                    SpatialScalingInactiveReason::None;
                 newInfo.imageExtent = modification.presentationExtent;
                 std::cerr << "MAKO Renderer: spatial scaling create relay applied: "
                           << "role=" << layerRoleName
@@ -1892,7 +1913,11 @@ namespace {
                           << (lowerCreateRelay->lowerSurface == info->surface
                                 ? "shared" : "aliased")
                           << "; ownership=upper-combined-role"
-                          << "; surface_extent_mode=variable"
+                          << "; surface_extent_mode="
+                          << (modification.variableSurface
+                                ? "variable" : "fixed")
+                          << "; memory_budget_constrained="
+                          << modification.spatialScalingMemoryConstrained
                           << "; source_presentation_split=1"
                           << "; active=1"
                           << "; relay_adjusted_upper_prediction="
@@ -1907,6 +1932,11 @@ namespace {
                 modification.applicationExtent = info->imageExtent;
                 modification.presentationExtent = info->imageExtent;
                 modification.spatialScalingActive = false;
+                modification.variableSurface =
+                    lowerCreateRelay->contract.variableSurface;
+                modification.spatialScalingMemoryConstrained = false;
+                modification.spatialScalingInactiveReason =
+                    lowerCreateRelay->contract.inactiveReason;
                 newInfo.imageExtent = info->imageExtent;
                 spatialScalingActivationSupported = lowerCreateRelay->contract
                     .spatialSurfaceScalingSupported;
@@ -1924,9 +1954,9 @@ namespace {
                           << "; active=0"
                           << "; action=native"
                           << "; inactive_reason="
-                          << (spatialScalingActivationSupported
-                                ? "lower-create-no-source-presentation-split"
-                                : "gamescope-wsi-surface-unproven")
+                          << spatialScalingInactiveReasonName(
+                                modification.spatialScalingInactiveReason
+                             )
                           << '\n';
             } else if (shouldRejectUncontractedSpatialCreate(
                     layer_info->root.scalingEngineProvisioned(),
@@ -2014,6 +2044,10 @@ namespace {
                 .spatialScalingActive =
                     modification.spatialScalingActive,
                 .variableSurface = modification.variableSurface,
+                .spatialScalingMemoryConstrained =
+                    modification.spatialScalingMemoryConstrained,
+                .spatialScalingInactiveReason =
+                    modification.spatialScalingInactiveReason,
                 .spatialScalingActivationSupported =
                     spatialScalingActivationSupported,
                 .replacement = swapchainCreateIsReplacement(

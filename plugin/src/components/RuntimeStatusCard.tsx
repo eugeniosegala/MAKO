@@ -26,6 +26,24 @@ function resolution(width: number, height: number): string {
   return width > 0 && height > 0 ? `${width} × ${height}` : "—";
 }
 
+function scalingInactiveNotice(reason: string | null): string | null {
+  switch (reason) {
+    case "variable-surface-memory-budget":
+      return t(
+        "LIVE_STATUS_SCALING_MEMORY_LIMIT",
+        "The requested render resolution exceeds this GPU's memory safety limit. Lower the in-game resolution.",
+      );
+    case "gamescope-presentation-target-no-headroom":
+    case "variable-surface-no-headroom":
+      return t(
+        "LIVE_STATUS_SCALING_NO_HEADROOM",
+        "This input already fills the display target. Lower the in-game resolution or enable Quality Supersampling.",
+      );
+    default:
+      return null;
+  }
+}
+
 function StatusDetail({
   label,
   value,
@@ -35,9 +53,10 @@ function StatusDetail({
 }) {
   return (
     <div
+      data-mako-live-status-detail="true"
       style={{
         display: "grid",
-        gridTemplateColumns: "minmax(0, 1fr) auto",
+        gridTemplateColumns: "minmax(0, 0.8fr) minmax(0, 1.2fr)",
         gap: "5px",
         alignItems: "baseline",
         marginTop: "2px",
@@ -124,11 +143,39 @@ function StatusNotices({ children }: { children: React.ReactNode }) {
   );
 }
 
+function StatusFooterNotices({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      data-mako-live-status-footer="true"
+      style={{
+        display: "grid",
+        gap: "4px",
+        padding: "6px 10px",
+        borderTop: makoPanelDivider,
+        color: "#f7d9b4",
+        fontSize: "9px",
+        lineHeight: 1.35,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 export function RuntimeStatusCard({
   runtimeState,
 }: {
   runtimeState: RuntimeScalingUiState;
 }) {
+  const inactiveNotice =
+    runtimeState.scalingEnabled && !runtimeState.scalingActive
+      ? scalingInactiveNotice(runtimeState.inactiveReason)
+      : null;
+  const memoryConstraintNotice =
+    runtimeState.scalingActive &&
+    runtimeState.constraintReason === "variable-surface-memory-budget" &&
+    runtimeState.requestedFactor > runtimeState.effectiveFactor + 0.005;
+
   return (
     <>
       <MakoSectionHeader>
@@ -270,30 +317,38 @@ export function RuntimeStatusCard({
                             runtimeState.sourceHeight,
                           )}
                         />
-                        <StatusDetail
-                          label={t("LIVE_STATUS_SCALED_RESOLUTION", "Output")}
-                          value={
-                            runtimeState.supersamplingActive
-                              ? t(
-                                  "LIVE_STATUS_SUPERSAMPLED_OUTPUT",
-                                  "{presentation} → {target}",
-                                  {
-                                    presentation: resolution(
-                                      runtimeState.presentationWidth,
-                                      runtimeState.presentationHeight,
-                                    ),
-                                    target: resolution(
-                                      runtimeState.gamescopeTargetWidth,
-                                      runtimeState.gamescopeTargetHeight,
-                                    ),
-                                  },
-                                )
-                              : resolution(
-                                  runtimeState.presentationWidth,
-                                  runtimeState.presentationHeight,
-                                )
-                          }
-                        />
+                        {runtimeState.supersamplingActive ? (
+                          <>
+                            <StatusDetail
+                              label={t(
+                                "LIVE_STATUS_RENDER_RESOLUTION",
+                                "Render",
+                              )}
+                              value={resolution(
+                                runtimeState.presentationWidth,
+                                runtimeState.presentationHeight,
+                              )}
+                            />
+                            <StatusDetail
+                              label={t(
+                                "LIVE_STATUS_DISPLAY_RESOLUTION",
+                                "Display",
+                              )}
+                              value={resolution(
+                                runtimeState.gamescopeTargetWidth,
+                                runtimeState.gamescopeTargetHeight,
+                              )}
+                            />
+                          </>
+                        ) : (
+                          <StatusDetail
+                            label={t("LIVE_STATUS_SCALED_RESOLUTION", "Output")}
+                            value={resolution(
+                              runtimeState.presentationWidth,
+                              runtimeState.presentationHeight,
+                            )}
+                          />
+                        )}
                         <StatusDetail
                           label={t("LIVE_STATUS_MULTIPLIER", "Factor")}
                           value={`${runtimeState.effectiveFactor.toFixed(2)}×`}
@@ -314,44 +369,59 @@ export function RuntimeStatusCard({
                     ) : (
                       t("LIVE_STATUS_OFF", "Off")
                     )}
-                    {(runtimeState.supersamplingActive ||
-                      runtimeState.fallbackReason ||
-                      runtimeState.scalingPending) && (
-                      <StatusNotices>
-                        {runtimeState.supersamplingActive && (
-                          <div>
-                            {t(
-                              "LIVE_STATUS_SUPERSAMPLING",
-                              "Quality Supersampling is on for a sharper final image.",
-                            )}
-                          </div>
-                        )}
-                        {runtimeState.fallbackReason && (
-                          <div>
-                            {t(
-                              "LIVE_STATUS_SCALING_FALLBACK",
-                              "You selected {requested}; MAKO is using {active} instead.",
-                              {
-                                requested: methodLabel(
-                                  runtimeState.requestedMethod,
-                                ),
-                                active: methodLabel(runtimeState.activeMethod),
-                              },
-                            )}
-                          </div>
-                        )}
-                        {runtimeState.scalingPending && (
-                          <div>
-                            {t(
-                              "LIVE_STATUS_PENDING",
-                              "A saved change is still applying or needs a restart.",
-                            )}
-                          </div>
-                        )}
-                      </StatusNotices>
-                    )}
                   </StatusRow>
                 </div>
+                {(runtimeState.supersamplingActive ||
+                  runtimeState.fallbackReason ||
+                  runtimeState.scalingPending ||
+                  inactiveNotice ||
+                  memoryConstraintNotice) && (
+                  <StatusFooterNotices>
+                    {runtimeState.supersamplingActive && (
+                      <div style={{ color: makoAccentColor }}>
+                        {t(
+                          "LIVE_STATUS_SUPERSAMPLING",
+                          "Quality Supersampling active.",
+                        )}
+                      </div>
+                    )}
+                    {memoryConstraintNotice && (
+                      <div>
+                        {t(
+                          "LIVE_STATUS_SCALING_MEMORY_CONSTRAINED",
+                          "Requested {requested}×; limited to {effective}× by this GPU's memory safety limit.",
+                          {
+                            requested: runtimeState.requestedFactor.toFixed(2),
+                            effective: runtimeState.effectiveFactor.toFixed(2),
+                          },
+                        )}
+                      </div>
+                    )}
+                    {inactiveNotice && <div>{inactiveNotice}</div>}
+                    {runtimeState.fallbackReason && (
+                      <div>
+                        {t(
+                          "LIVE_STATUS_SCALING_FALLBACK",
+                          "You selected {requested}; MAKO is using {active} instead.",
+                          {
+                            requested: methodLabel(
+                              runtimeState.requestedMethod,
+                            ),
+                            active: methodLabel(runtimeState.activeMethod),
+                          },
+                        )}
+                      </div>
+                    )}
+                    {runtimeState.scalingPending && (
+                      <div>
+                        {t(
+                          "LIVE_STATUS_PENDING",
+                          "A saved change is still applying or needs a restart.",
+                        )}
+                      </div>
+                    )}
+                  </StatusFooterNotices>
+                )}
               </>
             )}
           </div>

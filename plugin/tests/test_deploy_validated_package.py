@@ -113,21 +113,6 @@ class DeployValidatedPackageTests(unittest.TestCase):
                 (plugin_root / "bin/MAKO-Renderer-test-linux.tar.xz").is_file()
             )
 
-    def test_deploy_restores_identity_from_unreleased_preview_name(self):
-        with tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            archive = self._create_package(root)
-            plugin_root = self._create_installation(
-                root, "MAKO - Scaling & Frame Generation"
-            )
-
-            DEPLOY_MODULE.deploy(archive, plugin_root)
-
-            self.assertEqual(
-                json.loads((plugin_root / "plugin.json").read_text())["name"],
-                "MAKO - Frame Generation",
-            )
-
     def test_rejects_zip_path_traversal_before_changing_installation(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

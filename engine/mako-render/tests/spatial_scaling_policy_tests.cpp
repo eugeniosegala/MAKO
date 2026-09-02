@@ -366,11 +366,55 @@ int main() {
         .factor = 1.5F,
         .policyRevision = 8,
         .queryGeneration = 12,
+        .variableSurface = true,
+        .inactiveReason = SpatialScalingInactiveReason::
+            GamescopePresentationTargetNoHeadroom,
     };
     expect(classifySpatialCreateRelay(
             nativeCreateDecision, nativeCreateDecision.extents.source
         ) == SpatialCreateRelayDecision::Native,
         "An application native-extent override must remain a valid explicit lower create decision");
+    capabilityRelay.publish(
+        lowerPhysicalDevice, lowerSurface, nativeCreateDecision
+    );
+    const auto relayedNativeDecision = capabilityRelay.consume(
+        lowerPhysicalDevice
+    );
+    expect(relayedNativeDecision &&
+            relayedNativeDecision->contract.variableSurface &&
+            relayedNativeDecision->contract.inactiveReason ==
+                SpatialScalingInactiveReason::
+                    GamescopePresentationTargetNoHeadroom,
+        "A native lower create relay must preserve its variable-surface class and exact inactive reason");
+    const FixedSurfaceScalingContract memoryConstrainedRelayContract{
+        .extents = {
+            .source = {2560, 1440},
+            .presentation = {3840, 2160},
+        },
+        .factor = 2.0F,
+        .spatialSurfaceScalingSupported = true,
+        .variableSurface = true,
+        .memoryBudgetConstrained = true,
+    };
+    const auto relayMetadata = fixedSurfaceScalingContractRelayMetadata(
+        memoryConstrainedRelayContract
+    );
+    FixedSurfaceScalingContract roundTrippedRelayContract;
+    expect(applyFixedSurfaceScalingContractRelayMetadata(
+                roundTrippedRelayContract, relayMetadata
+            ) &&
+            roundTrippedRelayContract.spatialSurfaceScalingSupported &&
+            roundTrippedRelayContract.variableSurface &&
+            roundTrippedRelayContract.memoryBudgetConstrained &&
+            roundTrippedRelayContract.inactiveReason ==
+                SpatialScalingInactiveReason::None,
+        "The cross-DSO create relay must preserve variable-surface memory-constraint metadata");
+    auto invalidRelayMetadata = relayMetadata;
+    invalidRelayMetadata.inactiveReason = UINT32_MAX;
+    expect(!applyFixedSurfaceScalingContractRelayMetadata(
+                roundTrippedRelayContract, invalidRelayMetadata
+            ),
+        "The cross-DSO create relay must reject an unknown inactive reason");
     const FixedSurfaceScalingContract liveFactorCreateDecision{
         .extents = {
             .source = {1706, 960},
@@ -757,10 +801,26 @@ int main() {
             true, true, {960, 540}, {1280, 720}, 1.8F,
             false, true, VkExtent2D{1280, 800}),
         "Enabling supersampling above a clamped target must require an extent transition");
+    expect(!variableSurfaceSupersamplingChangePreservesEffectiveExtents(
+            true, false, {1280, 720}, {1280, 720}, 1.8F,
+            false, true, VkExtent2D{1280, 800}),
+        "Enabling supersampling on a native variable surface must request the extent transition which can activate scaling");
     expect(variableSurfaceSupersamplingChangePreservesEffectiveExtents(
             false, true, {960, 540}, {1280, 720}, 1.8F,
             false, true, VkExtent2D{1280, 800}),
         "A fixed surface must treat supersampling as a live no-op");
+    expect(std::string_view(spatialScalingRuntimeInactiveReason(
+            false,
+            SpatialScalingInactiveReason::VariableSurfaceMemoryBudget
+        )) == "variable-surface-memory-budget" &&
+            spatialScalingRuntimeInactiveReason(
+                true,
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget
+            ) == nullptr &&
+            spatialScalingRuntimeInactiveReason(
+                false, SpatialScalingInactiveReason::None
+            ) == nullptr,
+        "Runtime status must expose an inactive policy reason only while spatial scaling is inactive");
     profile.scaling_supersampling = false;
     const auto deckBelowCeiling = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {640, 360},
@@ -802,6 +862,71 @@ int main() {
     expect(variablePresentationPixelBudget(
             VkPhysicalDeviceMemoryProperties{}) == 0,
         "A device without a local heap must fail the allocation envelope closed");
+
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT ampleLiveBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    ampleLiveBudget.heapBudget[0] = 7 * gibibyte;
+    ampleLiveBudget.heapUsage[0] = 1 * gibibyte;
+    const auto ampleAdmission = variablePresentationMemoryAdmission(
+        eightGiB, &ampleLiveBudget
+    );
+    expect(ampleAdmission.livePixelBudget &&
+            ampleAdmission.effectivePixelBudget ==
+                ampleAdmission.staticPixelBudget &&
+            ampleAdmission.heapBudgetBytes == 7 * gibibyte &&
+            ampleAdmission.heapUsageBytes == 1 * gibibyte,
+        "Ample live headroom must retain the conservative static ceiling");
+
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT pressuredLiveBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    pressuredLiveBudget.heapBudget[0] = 7 * gibibyte;
+    pressuredLiveBudget.heapUsage[0] = 4 * gibibyte;
+    const auto pressuredAdmission = variablePresentationMemoryAdmission(
+        eightGiB, &pressuredLiveBudget
+    );
+    expect(pressuredAdmission.livePixelBudget &&
+            pressuredAdmission.effectivePixelBudget ==
+                *pressuredAdmission.livePixelBudget &&
+            pressuredAdmission.effectivePixelBudget <
+                pressuredAdmission.staticPixelBudget &&
+            pressuredAdmission.effectivePixelBudget >=
+                minimumVariablePresentationPixels,
+        "Current driver pressure must tighten the static allocation ceiling without discarding a safe 4K envelope");
+
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT exhaustedLiveBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    exhaustedLiveBudget.heapBudget[0] = 7 * gibibyte;
+    exhaustedLiveBudget.heapUsage[0] = 6 * gibibyte;
+    const auto exhaustedAdmission = variablePresentationMemoryAdmission(
+        eightGiB, &exhaustedLiveBudget
+    );
+    expect(exhaustedAdmission.livePixelBudget &&
+            exhaustedAdmission.effectivePixelBudget <
+                minimumVariablePresentationPixels,
+        "A live budget under pressure must not inherit the static 4K floor");
+    const auto fourKUnderPressure = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {1920, 1080},
+        std::nullopt, std::nullopt,
+        exhaustedAdmission.effectivePixelBudget
+    );
+    expect(!fourKUnderPressure.extents &&
+            fourKUnderPressure.inactiveReason ==
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+        "A normally supported 4K envelope must fail closed when the live driver budget cannot admit it");
+
+    const auto staticOnlyAdmission = variablePresentationMemoryAdmission(
+        eightGiB
+    );
+    expect(!staticOnlyAdmission.livePixelBudget &&
+            staticOnlyAdmission.effectivePixelBudget ==
+                variablePresentationPixelBudget(eightGiB),
+        "A driver without VK_EXT_memory_budget must retain the deterministic static fallback");
 
     const auto fourKPresentation = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {1920, 1080},

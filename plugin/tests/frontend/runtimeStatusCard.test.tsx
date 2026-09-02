@@ -51,6 +51,8 @@ describe("authoritative live status", () => {
           requestedMethod: "ls1",
           activeMethod: "mako",
           effectiveFactor: 1.5,
+          requestedFactor: 2,
+          constraintReason: "variable-surface-memory-budget",
           pipeline: "pre-frame-generation",
           supersamplingActive: true,
           fallbackReason: "translator unavailable",
@@ -82,21 +84,39 @@ describe("authoritative live status", () => {
     expect(screen.getByText("MAKO Scaler")).toBeTruthy();
     expect(screen.getByText("Input")).toBeTruthy();
     expect(screen.getByText("960 × 540")).toBeTruthy();
-    expect(screen.getByText("Output")).toBeTruthy();
-    expect(screen.getByText("1440 × 810 → 1280 × 720")).toBeTruthy();
+    expect(screen.getByText("Render")).toBeTruthy();
+    expect(screen.getByText("1440 × 810")).toBeTruthy();
+    expect(screen.getByText("Display")).toBeTruthy();
+    expect(screen.getByText("1280 × 720")).toBeTruthy();
+    expect(screen.queryByText(/→/)).toBeNull();
     expect(screen.getByText("1.50×")).toBeTruthy();
     expect(screen.getByText("Factor")).toBeTruthy();
     const notices = container.querySelectorAll(
       '[data-mako-live-status-notices="true"]',
     );
-    expect(notices).toHaveLength(2);
-    notices.forEach((notice) => {
-      expect((notice as HTMLElement).style.marginTop).toBe("8px");
-    });
+    expect(notices).toHaveLength(1);
+    expect((notices[0] as HTMLElement).style.marginTop).toBe("8px");
+    const footer = container.querySelector(
+      '[data-mako-live-status-footer="true"]',
+    );
+    expect(footer).toBeTruthy();
+    expect(
+      container
+        .querySelector('[data-mako-live-status-grid="compact-two-column"]')
+        ?.contains(footer),
+    ).toBe(false);
+    container
+      .querySelectorAll('[data-mako-live-status-detail="true"]')
+      .forEach((detail) => {
+        expect((detail as HTMLElement).style.gridTemplateColumns).toBe(
+          "minmax(0, 0.8fr) minmax(0, 1.2fr)",
+        );
+      });
     expect(screen.queryByText(/Upscaling runs/)).toBeNull();
+    expect(screen.getByText("Quality Supersampling active.")).toBeTruthy();
     expect(
       screen.getByText(
-        "Quality Supersampling is on for a sharper final image.",
+        "Requested 2.00×; limited to 1.50× by this GPU's memory safety limit.",
       ),
     ).toBeTruthy();
     expect(
@@ -126,6 +146,41 @@ describe("authoritative live status", () => {
 
     expect(screen.getByText("1440 × 810")).toBeTruthy();
     expect(screen.queryByText(/1440 × 810 →/)).toBeNull();
+  });
+
+  test.each([
+    [
+      "variable-surface-memory-budget",
+      "The requested render resolution exceeds this GPU's memory safety limit. Lower the in-game resolution.",
+    ],
+    [
+      "gamescope-presentation-target-no-headroom",
+      "This input already fills the display target. Lower the in-game resolution or enable Quality Supersampling.",
+    ],
+  ])("explains the %s scaling limit", (inactiveReason, message) => {
+    window.SP_REACT = React;
+    const { container } = render(
+      <RuntimeStatusCard
+        runtimeState={{
+          ...EMPTY_RUNTIME_SCALING_UI_STATE,
+          hasContext: true,
+          scalingEnabled: true,
+          scalingActivationSupported: true,
+          inactiveReason,
+        }}
+      />,
+    );
+
+    expect(screen.getByText(message)).toBeTruthy();
+    const footer = screen
+      .getByText(message)
+      .closest('[data-mako-live-status-footer="true"]');
+    expect(footer).toBeTruthy();
+    expect(
+      container
+        .querySelector('[data-mako-live-status-grid="compact-two-column"]')
+        ?.contains(footer),
+    ).toBe(false);
   });
 
   test("states clearly when a running game is not using MAKO", () => {

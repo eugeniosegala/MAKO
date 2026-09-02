@@ -22,7 +22,7 @@ from .types import (
 )
 
 
-_SCHEMA_VERSION = 4
+_SCHEMA_VERSION = 5
 _MAXIMUM_STATUS_BYTES = 64 * 1024
 _VALID_ROLES = frozenset(("frame-generation", "spatial-scaling"))
 _VALID_SCALING_METHODS = frozenset((
@@ -184,6 +184,9 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
     inactive_reason = value.get("inactive_reason")
     if inactive_reason is not None and not isinstance(inactive_reason, str):
         raise ValueError("spatial_scaling.inactive_reason must be a string or null")
+    constraint_reason = value.get("constraint_reason")
+    if constraint_reason is not None and not isinstance(constraint_reason, str):
+        raise ValueError("spatial_scaling.constraint_reason must be a string or null")
     fallback_reason = value.get("fallback_reason")
     if fallback_reason is not None and not isinstance(fallback_reason, str):
         raise ValueError("spatial_scaling.fallback_reason must be a string or null")
@@ -216,6 +219,7 @@ def _spatial_scaling(value: object) -> RuntimeSpatialScalingState:
             "spatial_scaling.activation_supported",
         ),
         "inactive_reason": inactive_reason,
+        "constraint_reason": constraint_reason,
         "source_width": _integer(
             value.get("source_width"), "spatial_scaling.source_width"
         ),

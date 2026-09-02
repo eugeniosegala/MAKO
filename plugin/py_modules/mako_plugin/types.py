@@ -221,6 +221,7 @@ class RuntimeSpatialScalingState(TypedDict):
     active: bool
     activation_supported: bool
     inactive_reason: Optional[str]
+    constraint_reason: Optional[str]
     source_width: int
     source_height: int
     presentation_width: int

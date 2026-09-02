@@ -21,6 +21,7 @@ const context = {
     name: "game",
     scaling_enabled: true,
     scaling_method: "ls1",
+    scaling_factor: 2,
   },
   applied: {
     name: "game",
@@ -35,6 +36,7 @@ const context = {
     active: false,
     activation_supported: false,
     inactive_reason: "gamescope-wsi-surface-unproven",
+    constraint_reason: null,
     source_width: 960,
     source_height: 540,
     presentation_width: 1280,
@@ -116,6 +118,7 @@ describe("runtime scaling availability", () => {
         active: true,
         activation_supported: true,
         inactive_reason: null,
+        constraint_reason: "variable-surface-memory-budget",
         presentation_width: 1440,
         presentation_height: 810,
         requested_method: "ls1",
@@ -139,9 +142,33 @@ describe("runtime scaling availability", () => {
       requestedMethod: "ls1",
       activeMethod: "mako",
       effectiveFactor: 1.5,
+      requestedFactor: 2,
+      constraintReason: "variable-surface-memory-budget",
       pipeline: "pre-frame-generation",
       supersamplingActive: true,
       fallbackReason: "translator unavailable",
+    });
+  });
+
+  test("surfaces an inactive memory limit without treating the surface as unsupported", () => {
+    const memoryLimitedContext = {
+      ...context,
+      spatial_scaling: {
+        ...context.spatial_scaling,
+        activation_supported: true,
+        inactive_reason: "variable-surface-memory-budget",
+      },
+    } as RuntimeContextState;
+
+    expect(
+      scalingInactiveReason(status([memoryLimitedContext]), "game"),
+    ).toBeNull();
+    expect(
+      runtimeScalingUiState(status([memoryLimitedContext]), "game"),
+    ).toMatchObject({
+      scalingActive: false,
+      scalingActivationSupported: true,
+      inactiveReason: "variable-surface-memory-budget",
     });
   });
 

@@ -144,7 +144,7 @@ std::string mako::layer::runtimeStatusJson(
     stream.imbue(std::locale::classic());
     stream << std::boolalpha
            << '{'
-           << "\"schema_version\":4"
+           << "\"schema_version\":5"
            << ",\"pid\":" << processId
            << ",\"process_start_ticks\":" << processStartTicks
            << ",\"context\":" << contextId
@@ -173,6 +173,11 @@ std::string mako::layer::runtimeStatusJson(
            << ",\"inactive_reason\":";
     if (status.spatialScalingInactiveReason)
         stream << jsonString(*status.spatialScalingInactiveReason);
+    else
+        stream << "null";
+    stream << ",\"constraint_reason\":";
+    if (status.spatialScalingConstraintReason)
+        stream << jsonString(*status.spatialScalingConstraintReason);
     else
         stream << "null";
     stream << ",\"source_width\":" << status.spatialSourceWidth

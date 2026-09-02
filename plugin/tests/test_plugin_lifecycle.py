@@ -4,7 +4,6 @@ import asyncio
 import sys
 from types import SimpleNamespace
 import unittest
-from unittest.mock import patch
 
 
 class _Logger:
@@ -15,70 +14,9 @@ class _Logger:
 sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 
 from py_modules.mako_plugin.plugin import Plugin  # noqa: E402
-from py_modules.mako_plugin import plugin as plugin_module  # noqa: E402
 
 
 class PluginLifecycleTests(unittest.TestCase):
-    def test_decky_migration_preserves_every_legacy_package_location(self):
-        calls = []
-        plugin = Plugin.__new__(Plugin)
-
-        with (
-            patch.object(
-                plugin_module.decky,
-                "DECKY_USER_HOME",
-                "/home/deck",
-                create=True,
-            ),
-            patch.object(
-                plugin_module.decky,
-                "DECKY_HOME",
-                "/home/deck/homebrew",
-                create=True,
-            ),
-            patch.object(
-                plugin_module.decky,
-                "migrate_logs",
-                side_effect=lambda source: calls.append(("logs", source)),
-                create=True,
-            ),
-            patch.object(
-                plugin_module.decky,
-                "migrate_settings",
-                side_effect=lambda source, destination: calls.append(
-                    ("settings", source, destination)
-                ),
-                create=True,
-            ),
-            patch.object(
-                plugin_module.decky,
-                "migrate_runtime",
-                side_effect=lambda source, destination: calls.append(
-                    ("runtime", source, destination)
-                ),
-                create=True,
-            ),
-        ):
-            asyncio.run(plugin._migration())
-
-        self.assertEqual(calls, [
-            (
-                "logs",
-                "/home/deck/.config/decky-lossless-scaling-vk/"
-                "lossless-scaling-vk.log",
-            ),
-            (
-                "settings",
-                "/home/deck/homebrew/settings/lossless-scaling-vk.json",
-                "/home/deck/.config/decky-lossless-scaling-vk",
-            ),
-            (
-                "runtime",
-                "/home/deck/homebrew/lossless-scaling-vk",
-                "/home/deck/.local/share/decky-lossless-scaling-vk",
-            ),
-        ])
-
     def test_main_runs_every_current_startup_maintenance_task(self):
         calls = []
         plugin = Plugin.__new__(Plugin)
@@ -88,15 +26,6 @@ class PluginLifecycleTests(unittest.TestCase):
             ) or False,
             migrate_profile_metadata_if_needed=lambda: calls.append(
                 "profile-metadata"
-            ) or False,
-            sanitize_captured_processes_if_needed=lambda: calls.append(
-                "captured-processes"
-            ) or False,
-            migrate_wrapper_profile_settings_if_needed=lambda: calls.append(
-                "wrapper-settings"
-            ) or False,
-            migrate_legacy_base_fps_caps_if_needed=lambda: calls.append(
-                "base-fps-cap"
             ) or False,
             migrate_launch_script_if_needed=lambda: calls.append(
                 "launch-script"
@@ -129,9 +58,6 @@ class PluginLifecycleTests(unittest.TestCase):
 
         self.assertEqual(calls, [
             "profile-metadata",
-            "captured-processes",
-            "wrapper-settings",
-            "base-fps-cap",
             "launch-script",
             "standalone-adoption",
             "gamescope-wsi-manifest",

@@ -70,7 +70,7 @@ class RuntimeStateTests(unittest.TestCase):
             process_start_ticks: int | None = None,
             error: str | None = None) -> dict[str, object]:
         return {
-            "schema_version": 4,
+            "schema_version": 5,
             "pid": os.getpid(),
             "process_start_ticks": (
                 self.process_start_ticks
@@ -95,6 +95,7 @@ class RuntimeStateTests(unittest.TestCase):
                 "active": role == "spatial-scaling",
                 "activation_supported": True,
                 "inactive_reason": None,
+                "constraint_reason": None,
                 "source_width": 960,
                 "source_height": 540,
                 "presentation_width": 1280,

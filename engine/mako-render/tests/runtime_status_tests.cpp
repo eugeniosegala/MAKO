@@ -64,6 +64,8 @@ int main() {
         .spatialScalingActivationSupported = false,
         .spatialScalingInactiveReason =
             "gamescope-wsi-surface-unproven",
+        .spatialScalingConstraintReason =
+            "variable-surface-memory-budget",
         .spatialSourceWidth = 960,
         .spatialSourceHeight = 540,
         .spatialPresentationWidth = 1280,
@@ -81,7 +83,7 @@ int main() {
     const auto json = mako::layer::runtimeStatusJson(
         record, 123, 321, 456, "frame-generation", 789
     );
-    expect(json.find("\"schema_version\":4") != std::string::npos,
+    expect(json.find("\"schema_version\":5") != std::string::npos,
         "schema version missing");
     expect(json.find("\"phase\":\"draining\"") != std::string::npos,
         "phase missing");
@@ -115,6 +117,10 @@ int main() {
     expect(json.find("\"fallback_reason\":\"translator unavailable\"") !=
             std::string::npos,
         "spatial fallback reason missing");
+    expect(json.find(
+            "\"constraint_reason\":\"variable-surface-memory-budget\""
+        ) != std::string::npos,
+        "spatial constraint reason missing");
     expect(json.find("\"non_supersampling_factor_ceiling\":1.33333") !=
             std::string::npos,
         "spatial scaling display ceiling missing");

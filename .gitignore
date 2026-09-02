@@ -49,7 +49,7 @@ htmlcov/
 
 # MAKO Renderer (CMake and packaging)
 /engine/build/
-/engine/build-ui/
+/engine/build-*/
 /engine/out/
 /engine/.flatpak-builder/
 

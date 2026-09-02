@@ -422,6 +422,11 @@ VulkanInstanceFuncs vk::initVulkanInstanceFuncs(VkInstance i, PFN_vkGetInstanceP
             ),
         .GetPhysicalDeviceMemoryProperties = ipa<PFN_vkGetPhysicalDeviceMemoryProperties>(mpa, i,
             "vkGetPhysicalDeviceMemoryProperties"),
+        .GetPhysicalDeviceMemoryProperties2 = optionalIpa<
+            PFN_vkGetPhysicalDeviceMemoryProperties2>(
+                mpa, i, "vkGetPhysicalDeviceMemoryProperties2",
+                "vkGetPhysicalDeviceMemoryProperties2KHR"
+            ),
         .CreateDevice = ipa<PFN_vkCreateDevice>(mpa, i, "vkCreateDevice"),
         .GetDeviceProcAddr = ipa<PFN_vkGetDeviceProcAddr>(mpa, i, "vkGetDeviceProcAddr"),
 

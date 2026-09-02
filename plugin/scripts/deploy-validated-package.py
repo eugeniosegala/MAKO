@@ -23,7 +23,6 @@ SUPPORTED_PLUGIN_NAMES = {
     "MAKO",
     "Mako",
     "MAKO - Frame Generation",
-    "MAKO - Scaling & Frame Generation",
 }
 MAX_ARCHIVE_FILES = 20_000
 MAX_UNCOMPRESSED_SIZE = 4 * 1024 * 1024 * 1024

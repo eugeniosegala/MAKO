@@ -57,7 +57,7 @@ Frame Generation, Fixed/Adaptive mode, multiplier, target, refresh guard, and mo
 | Lossless.dll Path, Allow FP16, GPU selection | Game restart |
 | Gamescope WSI compatibility, MangoHud, vkBasalt, Steam Deck Mode, Zink, Force ALSA, and other launcher compatibility | Game restart |
 
-A restart-bound or private-resource edit does not block unrelated compatible controls: MAKO applies the safe subset while the remaining boundary stays pending. Renderer-owned requested-versus-applied records remain available to diagnostics. MAKO Decky polls them only while a game is active and uses the compact Live Status card to report actual Frame Generation activity, scaling activity and geometry, effective model, order, supersampling, fallback, and pending state. It does not show transition pop-ups. A saved profile is not itself proof that every field is active.
+A restart-bound or private-resource edit does not block unrelated compatible controls: MAKO applies the safe subset while the remaining boundary stays pending. Renderer-owned requested-versus-applied records remain available to diagnostics. MAKO Decky polls them only while a game is active and uses the compact Live Status card to report actual Frame Generation activity, scaling activity and geometry, effective model, order, supersampling, fallback, and pending state. Supersampling reports its render and display resolutions separately. Inactive scaling reports Renderer-proven memory and display-headroom limits with corrective guidance, while active scaling that was reduced to the safe memory envelope reports the requested and effective factors explicitly. It does not show transition pop-ups. A saved profile is not itself proof that every field is active.
 
 ## Game and process profiles
 

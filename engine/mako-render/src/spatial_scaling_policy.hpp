@@ -177,16 +177,86 @@ namespace mako::layer {
         uint64_t policyRevision{0};
     };
 
+    enum class SpatialScalingInactiveReason {
+        None,
+        ProcessUnsupported,
+        InvalidFactor,
+        FactorNotUpscaling,
+        NoFixedCapabilityContract,
+        PolicyChangedAfterCapabilityQuery,
+        SurfaceChangedAfterCapabilityQuery,
+        ApplicationExtentOverrideNoSplit,
+        ApplicationExtentMismatch,
+        GamescopeWsiSurfaceUnproven,
+        GamescopePresentationTargetUnavailable,
+        GamescopePresentationTargetNoHeadroom,
+        VariableSurfaceFeedback,
+        VariableSurfaceNoHeadroom,
+        VariableSurfaceMemoryBudget,
+        SwapchainShapeUnsupported,
+        SwapchainFormatUnsupported,
+        QueuePresentationUnsupported,
+        QueueCommandsUnsupported,
+    };
+
     /// Exact fixed-surface contract observed by the application. Swapchain
     /// creation consumes this record instead of recomputing a source extent
-    /// from capabilities that may have changed since the query.
+    /// from capabilities that may have changed since the query. The same
+    /// one-shot record carries a lower split role's create-time surface class
+    /// and exact native decision back to the upper resource owner.
     struct FixedSurfaceScalingContract {
         SpatialScalingExtents extents{};
         float factor{1.0F};
         uint64_t policyRevision{0};
         uint64_t queryGeneration{0};
         bool spatialSurfaceScalingSupported{true};
+        bool variableSurface{false};
+        bool memoryBudgetConstrained{false};
+        SpatialScalingInactiveReason inactiveReason{
+            SpatialScalingInactiveReason::None
+        };
     };
+
+    struct FixedSurfaceScalingContractRelayMetadata {
+        VkBool32 spatialSurfaceScalingSupported{VK_TRUE};
+        VkBool32 variableSurface{VK_FALSE};
+        VkBool32 memoryBudgetConstrained{VK_FALSE};
+        uint32_t inactiveReason{
+            static_cast<uint32_t>(SpatialScalingInactiveReason::None)
+        };
+    };
+
+    [[nodiscard]] constexpr FixedSurfaceScalingContractRelayMetadata
+    fixedSurfaceScalingContractRelayMetadata(
+            const FixedSurfaceScalingContract& contract) noexcept {
+        return {
+            .spatialSurfaceScalingSupported =
+                contract.spatialSurfaceScalingSupported ? VK_TRUE : VK_FALSE,
+            .variableSurface = contract.variableSurface ? VK_TRUE : VK_FALSE,
+            .memoryBudgetConstrained = contract.memoryBudgetConstrained
+                ? VK_TRUE : VK_FALSE,
+            .inactiveReason = static_cast<uint32_t>(contract.inactiveReason),
+        };
+    }
+
+    [[nodiscard]] constexpr bool applyFixedSurfaceScalingContractRelayMetadata(
+            FixedSurfaceScalingContract& contract,
+            const FixedSurfaceScalingContractRelayMetadata& metadata) noexcept {
+        if (metadata.inactiveReason > static_cast<uint32_t>(
+                SpatialScalingInactiveReason::QueueCommandsUnsupported
+            )) {
+            return false;
+        }
+        contract.spatialSurfaceScalingSupported =
+            metadata.spatialSurfaceScalingSupported == VK_TRUE;
+        contract.variableSurface = metadata.variableSurface == VK_TRUE;
+        contract.memoryBudgetConstrained =
+            metadata.memoryBudgetConstrained == VK_TRUE;
+        contract.inactiveReason = static_cast<SpatialScalingInactiveReason>(
+            metadata.inactiveReason
+        );
+        return true;
+    }
 
     /// One capability contract published by the lower spatial-scaling DSO
     /// while an upper split-role query is on the same thread. Gamescope WSI
@@ -233,28 +303,6 @@ namespace mako::layer {
         std::optional<FixedSurfaceCapabilityRelayRecord> record_;
     };
 
-    enum class SpatialScalingInactiveReason {
-        None,
-        ProcessUnsupported,
-        InvalidFactor,
-        FactorNotUpscaling,
-        NoFixedCapabilityContract,
-        PolicyChangedAfterCapabilityQuery,
-        SurfaceChangedAfterCapabilityQuery,
-        ApplicationExtentOverrideNoSplit,
-        ApplicationExtentMismatch,
-        GamescopeWsiSurfaceUnproven,
-        GamescopePresentationTargetUnavailable,
-        GamescopePresentationTargetNoHeadroom,
-        VariableSurfaceFeedback,
-        VariableSurfaceNoHeadroom,
-        VariableSurfaceMemoryBudget,
-        SwapchainShapeUnsupported,
-        SwapchainFormatUnsupported,
-        QueuePresentationUnsupported,
-        QueueCommandsUnsupported,
-    };
-
     [[nodiscard]] constexpr const char* spatialScalingInactiveReasonName(
             const SpatialScalingInactiveReason reason) noexcept {
         switch (reason) {
@@ -298,6 +346,13 @@ namespace mako::layer {
                 return "queue-commands-unsupported";
         }
         return "unknown";
+    }
+
+    [[nodiscard]] constexpr const char* spatialScalingRuntimeInactiveReason(
+            const bool active,
+            const SpatialScalingInactiveReason reason) noexcept {
+        return active || reason == SpatialScalingInactiveReason::None
+            ? nullptr : spatialScalingInactiveReasonName(reason);
     }
 
     struct SpatialScalingCreateDecision {
@@ -551,22 +606,52 @@ namespace mako::layer {
     /// driver exposes only a small device-local aperture. The 768-byte ratio
     /// reserves one third of the heap against a 256-byte-per-presentation-
     /// pixel combined active/retired spatial + frame-generation envelope.
+    /// When VK_EXT_memory_budget is available, additionally require that
+    /// envelope to fit inside the driver's current process budget after a
+    /// 10% (at least 512 MiB) non-MAKO reserve. The dynamic limit deliberately
+    /// has no 4K floor: current pressure must be allowed to reject a normally
+    /// supported allocation instead of risking paging or device loss.
     inline constexpr uint64_t minimumVariablePresentationPixels =
         uint64_t{3840} * uint64_t{2160};
     inline constexpr VkDeviceSize
         variablePresentationHeapBytesPerPixel = 768;
+    inline constexpr VkDeviceSize
+        variablePresentationAllocationBytesPerPixel = 256;
+    inline constexpr VkDeviceSize minimumVariablePresentationLiveReserve =
+        VkDeviceSize{512} * 1024 * 1024;
+    inline constexpr VkDeviceSize variablePresentationLiveReserveDivisor = 10;
+
+    struct VariablePresentationMemoryAdmission {
+        VkDeviceSize heapBytes{0};
+        VkDeviceSize heapBudgetBytes{0};
+        VkDeviceSize heapUsageBytes{0};
+        VkDeviceSize reservedHeadroomBytes{0};
+        uint64_t staticPixelBudget{0};
+        std::optional<uint64_t> livePixelBudget;
+        uint64_t effectivePixelBudget{0};
+    };
+
+    [[nodiscard]] constexpr std::optional<uint32_t>
+    largestDeviceLocalHeapIndex(
+            const VkPhysicalDeviceMemoryProperties& properties) noexcept {
+        std::optional<uint32_t> largestIndex;
+        for (uint32_t index = 0; index < properties.memoryHeapCount; ++index) {
+            if ((properties.memoryHeaps[index].flags &
+                    VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) == 0) {
+                continue;
+            }
+            if (!largestIndex || properties.memoryHeaps[index].size >
+                    properties.memoryHeaps[*largestIndex].size) {
+                largestIndex = index;
+            }
+        }
+        return largestIndex;
+    }
 
     [[nodiscard]] constexpr VkDeviceSize largestDeviceLocalHeapBytes(
             const VkPhysicalDeviceMemoryProperties& properties) noexcept {
-        VkDeviceSize largest{};
-        for (uint32_t index = 0; index < properties.memoryHeapCount; ++index) {
-            if ((properties.memoryHeaps[index].flags &
-                    VK_MEMORY_HEAP_DEVICE_LOCAL_BIT) != 0) {
-                largest = std::max(largest,
-                    properties.memoryHeaps[index].size);
-            }
-        }
-        return largest;
+        const auto index = largestDeviceLocalHeapIndex(properties);
+        return index ? properties.memoryHeaps[*index].size : 0;
     }
 
     [[nodiscard]] constexpr uint64_t variablePresentationPixelBudget(
@@ -580,6 +665,46 @@ namespace mako::layer {
                 heapBytes / variablePresentationHeapBytesPerPixel
             )
         );
+    }
+
+    [[nodiscard]] constexpr VariablePresentationMemoryAdmission
+    variablePresentationMemoryAdmission(
+            const VkPhysicalDeviceMemoryProperties& properties,
+            const VkPhysicalDeviceMemoryBudgetPropertiesEXT*
+                liveBudget = nullptr) noexcept {
+        VariablePresentationMemoryAdmission admission{
+            .heapBytes = largestDeviceLocalHeapBytes(properties),
+            .staticPixelBudget = variablePresentationPixelBudget(properties),
+        };
+        admission.effectivePixelBudget = admission.staticPixelBudget;
+
+        const auto heapIndex = largestDeviceLocalHeapIndex(properties);
+        if (!heapIndex || !liveBudget ||
+                liveBudget->heapBudget[*heapIndex] == 0) {
+            return admission;
+        }
+
+        admission.heapBudgetBytes = liveBudget->heapBudget[*heapIndex];
+        admission.heapUsageBytes = liveBudget->heapUsage[*heapIndex];
+        admission.reservedHeadroomBytes = std::max(
+            minimumVariablePresentationLiveReserve,
+            admission.heapBudgetBytes /
+                variablePresentationLiveReserveDivisor
+        );
+        const VkDeviceSize availableBytes =
+            admission.heapBudgetBytes > admission.heapUsageBytes
+            ? admission.heapBudgetBytes - admission.heapUsageBytes : 0;
+        const VkDeviceSize admissibleBytes =
+            availableBytes > admission.reservedHeadroomBytes
+            ? availableBytes - admission.reservedHeadroomBytes : 0;
+        admission.livePixelBudget = static_cast<uint64_t>(
+            admissibleBytes /
+                variablePresentationAllocationBytesPerPixel
+        );
+        admission.effectivePixelBudget = std::min(
+            admission.staticPixelBudget, *admission.livePixelBudget
+        );
+        return admission;
     }
 
     /// The initial scaler contract is a conventional, unprotected,

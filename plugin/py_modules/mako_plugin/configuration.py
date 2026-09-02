@@ -8,7 +8,6 @@ from typing import Dict, Any, Optional
 from .build_flavor import LOCAL_DEVELOPMENT_BUILD
 from .base_service import BaseService
 from .config_schema import (
-    BASE_FPS_CAP_MAX,
     ConfigurationManager,
     ProfileData,
     DEFAULT_PROFILE_NAME,
@@ -45,14 +44,12 @@ class ConfigurationService(BaseService):
 
     _WRAPPER_FORMAT_VERSION = wrapper_generation.WRAPPER_FORMAT_VERSION
     _WRAPPER_FORMAT_MARKER = wrapper_generation.WRAPPER_FORMAT_MARKER
-    _FIRST_MULTI_PROFILE_WRAPPER_FORMAT = 32
     _HOST_COMPATIBILITY_MARKER = (
         wrapper_generation.HOST_COMPATIBILITY_MARKER
     )
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = wrapper_generation.REQUIRED_WRAPPER_EXPORTS
-    _OBSOLETE_WRAPPER_EXPORTS = wrapper_generation.OBSOLETE_WRAPPER_EXPORTS
 
     def __init__(
             self,
@@ -203,54 +200,6 @@ class ConfigurationService(BaseService):
         self._write_profile_metadata(metadata)
         return True
 
-    def sanitize_captured_processes_if_needed(self) -> bool:
-        """Remove shared launcher/helper names captured by older builds."""
-        profile_data = self._get_profile_data()
-        self.migrate_profile_metadata_if_needed()
-        metadata = self._read_profile_metadata(profile_data)
-        changed = False
-
-        for profile_name, entry in metadata.items():
-            captured = profile_storage.metadata_captured_processes(
-                metadata, profile_name
-            )
-            safe_captured = [
-                process_name
-                for process_name in captured
-                if is_matchable_process_name(process_name)
-            ]
-            if safe_captured == captured:
-                continue
-
-            unsafe_names = {
-                process_name.casefold()
-                for process_name in captured
-                if not is_matchable_process_name(process_name)
-            }
-            config = profile_data["profiles"][profile_name]
-            config["active_in"] = ", ".join(
-                process_name
-                for process_name in self._processes_for_config(config)
-                if process_name.casefold() not in unsafe_names
-            )
-            profile_storage.replace_captured_processes(
-                entry, safe_captured
-            )
-            changed = True
-
-        if not changed:
-            return False
-
-        self._save_profile_data(profile_data)
-        self._write_profile_metadata(metadata)
-        script_result = self.update_mako_script_from_profile_data(profile_data)
-        if not script_result["success"]:
-            raise OSError(
-                script_result.get("error")
-                or "could not update launch wrapper"
-            )
-        return True
-
     def _profile_details(
             self,
             profile_data: ProfileData,
@@ -275,143 +224,6 @@ class ConfigurationService(BaseService):
             profile_settings or self._read_wrapper_profile_settings(),
             self._wrapper_settings_for_profile,
         )
-
-    @staticmethod
-    def _wrapper_format_version(script_content: str) -> Optional[int]:
-        """Parse one canonical wrapper marker, retaining unmarked legacy input."""
-        marker_lines = [
-            line
-            for line in script_content.splitlines()
-            if "mako-wrapper-format" in line
-        ]
-        if not marker_lines:
-            if 'case "$mako_wrapper_profile" in' in script_content:
-                raise ValueError("unmarked wrapper contains multi-profile branches")
-            return None
-        if len(marker_lines) != 1:
-            raise ValueError("wrapper must contain exactly one format marker")
-
-        match = re.fullmatch(
-            r"# mako-wrapper-format: ([1-9][0-9]*)",
-            marker_lines[0],
-        )
-        if match is None:
-            raise ValueError("wrapper contains an invalid format marker")
-        return int(match.group(1))
-
-    def migrate_wrapper_profile_settings_if_needed(self) -> bool:
-        """Preserve old current-wrapper compatibility settings on first upgrade.
-
-        Older releases stored these values only in the generated launcher. That
-        launcher represented the selected profile, so it can be imported without
-        guessing settings for any other profile.
-        """
-        if self.wrapper_profile_settings_path.exists() or not self.mako_script_path.exists():
-            return False
-
-        try:
-            script_content = self.mako_script_path.read_text(encoding="utf-8")
-            wrapper_format = self._wrapper_format_version(script_content)
-            # Format 32 and every later format contain a branch for every
-            # profile. They are not safe sources from which to reconstruct a
-            # missing settings database. Genuinely unmarked predecessor
-            # wrappers remain eligible for the skipped-version upgrade path.
-            if (
-                    wrapper_format is not None
-                    and wrapper_format >= self._FIRST_MULTI_PROFILE_WRAPPER_FORMAT
-            ):
-                return False
-            script_values = ConfigurationManager.parse_script_content(script_content)
-            profile_data = self._get_profile_data()
-            self._write_wrapper_profile_settings({
-                profile_data["current_profile"]: self._normalize_wrapper_settings(script_values)
-            })
-            self.log.info(
-                "Migrated wrapper-only settings into profile '%s'",
-                profile_data["current_profile"],
-            )
-            return True
-        except (OSError, IOError, ValueError, TypeError) as error:
-            self.log.warning("Could not migrate wrapper-only profile settings: %s", error)
-            return False
-
-    def migrate_legacy_base_fps_caps_if_needed(self) -> bool:
-        """Move the former DXVK-only wrapper cap into engine profiles.
-
-        Wrapper format 27 stored ``dxvk_frame_rate`` outside TOML and exported
-        ``DXVK_FRAME_RATE``. Format 28 uses the engine's backend-independent
-        ``base_fps_cap`` instead. Preserve a non-zero cap once, then remove the
-        legacy export so DirectX games are not limited twice.
-        """
-        raw_profiles: Dict[str, Dict[str, Any]] = {}
-        legacy_artifact_found = False
-        if self.wrapper_profile_settings_path.exists():
-            try:
-                payload = json.loads(
-                    self.wrapper_profile_settings_path.read_text(encoding="utf-8")
-                )
-                stored_profiles = payload.get("profiles", {})
-                if isinstance(stored_profiles, dict):
-                    for profile_name, raw_settings in stored_profiles.items():
-                        if isinstance(profile_name, str) and isinstance(raw_settings, dict):
-                            raw_profiles[profile_name] = dict(raw_settings)
-                            legacy_artifact_found = (
-                                "dxvk_frame_rate" in raw_settings or
-                                legacy_artifact_found
-                            )
-            except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
-                self.log.warning(
-                    "Could not inspect legacy Base FPS Cap settings: %s", error
-                )
-
-        profile_data = self._get_profile_data()
-        legacy_caps: Dict[str, int] = {}
-        for profile_name, raw_settings in raw_profiles.items():
-            raw_cap = raw_settings.pop("dxvk_frame_rate", 0)
-            try:
-                cap = int(raw_cap)
-            except (TypeError, ValueError):
-                continue
-            if 0 < cap <= BASE_FPS_CAP_MAX:
-                legacy_caps[profile_name] = cap
-
-        if self.mako_script_path.exists():
-            try:
-                script_content = self.mako_script_path.read_text(encoding="utf-8")
-                match = re.search(
-                    r"^\s*export\s+DXVK_FRAME_RATE=(\d+)\s*$",
-                    script_content,
-                    flags=re.MULTILINE,
-                )
-                if match:
-                    legacy_artifact_found = True
-                    cap = int(match.group(1))
-                    if 0 < cap <= BASE_FPS_CAP_MAX:
-                        legacy_caps.setdefault(
-                            profile_data["current_profile"], cap
-                        )
-            except (OSError, IOError, ValueError):
-                pass
-
-        profile_changed = False
-        for profile_name, cap in legacy_caps.items():
-            profile = profile_data["profiles"].get(profile_name)
-            if profile is None or profile.get("base_fps_cap", 0) != 0:
-                continue
-            profile["base_fps_cap"] = cap
-            profile_changed = True
-
-        if not legacy_artifact_found and not profile_changed:
-            return False
-
-        if profile_changed:
-            self._save_profile_data(profile_data)
-        if self.wrapper_profile_settings_path.exists() or raw_profiles:
-            self._write_wrapper_profile_settings(raw_profiles)
-        result = self.update_mako_script_from_profile_data(profile_data)
-        if not result["success"]:
-            raise OSError(result.get("error") or "could not migrate Base FPS Cap")
-        return True
 
     @staticmethod
     def _has_active_in(config: ConfigurationData) -> bool:
@@ -447,7 +259,6 @@ class ConfigurationService(BaseService):
             ConfigurationResponse with current configuration or error
         """
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
             config = self._config_for_profile(
                 profile_data, profile_data["current_profile"]
@@ -472,7 +283,6 @@ class ConfigurationService(BaseService):
     def get_profile_config(self, profile_name: str) -> ConfigurationResponse:
         """Read one saved profile without changing the runtime selection."""
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
             if profile_name not in profile_data["profiles"]:
                 return self._error_response(
@@ -704,7 +514,6 @@ class ConfigurationService(BaseService):
                 self._HOST_COMPATIBILITY_MARKER,
                 self._diagnostics_default_marker(),
                 self._REQUIRED_WRAPPER_EXPORTS,
-                self._OBSOLETE_WRAPPER_EXPORTS,
             )
             if wrapper_is_current:
                 return False
@@ -822,7 +631,6 @@ class ConfigurationService(BaseService):
             ProfileResponse with success status and the normalized profile name
         """
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
             self.migrate_profile_metadata_if_needed()
             metadata = self._read_profile_metadata(profile_data)
@@ -871,7 +679,6 @@ class ConfigurationService(BaseService):
             ProfileResponse with success status
         """
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
             self.migrate_profile_metadata_if_needed()
             metadata = self._read_profile_metadata(profile_data)
@@ -915,7 +722,6 @@ class ConfigurationService(BaseService):
             ProfileResponse with success status and the normalized profile name
         """
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
             self.migrate_profile_metadata_if_needed()
             metadata = self._read_profile_metadata(profile_data)
@@ -986,7 +792,6 @@ class ConfigurationService(BaseService):
             )
 
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
             self.migrate_profile_metadata_if_needed()
             metadata = self._read_profile_metadata(profile_data)
@@ -1113,7 +918,6 @@ class ConfigurationService(BaseService):
             ProfileResponse with success status
         """
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
 
             new_profile_data = ConfigurationManager.set_current_profile(profile_data, profile_name)
@@ -1149,7 +953,6 @@ class ConfigurationService(BaseService):
         With no live match, restore the default profile.
         """
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
             self.migrate_profile_metadata_if_needed()
             metadata = self._read_profile_metadata(profile_data)
@@ -1257,7 +1060,6 @@ class ConfigurationService(BaseService):
             ConfigurationResponse with success status
         """
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
 
             if profile_name not in profile_data["profiles"]:
@@ -1313,7 +1115,6 @@ class ConfigurationService(BaseService):
     ) -> ConfigurationResponse:
         """Execute one profile patch while holding the write lock."""
         try:
-            self.migrate_wrapper_profile_settings_if_needed()
             profile_data = self._get_profile_data()
             if profile_name not in profile_data["profiles"]:
                 return self._error_response(

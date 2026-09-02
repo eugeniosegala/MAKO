@@ -34,7 +34,6 @@ from .constants import (
     VKBASALT_MANIFEST_FILENAMES_64, VKBASALT_MANIFEST_FILENAMES_32,
     HOST_SYSTEM_IMPLICIT_LAYER_DIR,
     ARMADA_DEVICE_ENV,
-    LEGACY_LOSSLESS_DLL_PLACEHOLDER,
     ACTIVE_RENDERER_STATE_FILENAME,
     ACTIVE_RENDERER_STATE_SCHEMA_VERSION,
     ACTIVE_RENDERER_OWNER_DECKY,
@@ -1503,16 +1502,6 @@ class InstallationService(BaseService):
             merged_data["global_config"]["dll"] = dll_result["path"]
             if old_dll != dll_result["path"]:
                 self.log.info(f"Updated DLL path from '{old_dll}' to: {dll_result['path']}")
-        elif merged_data["global_config"].get("dll") == str(
-            LEGACY_LOSSLESS_DLL_PLACEHOLDER
-        ):
-            # Releases before 0.13.0-experimental.2 wrote this placeholder when
-            # detection failed. Removing a nonexistent placeholder lets MAKO Renderer
-            # use its own automatic discovery instead.
-            if not LEGACY_LOSSLESS_DLL_PLACEHOLDER.exists():
-                merged_data["global_config"]["dll"] = ""
-                self.log.info("Removed obsolete Lossless.dll placeholder to enable upstream automatic discovery")
-
         # Merge each profile: preserve user values, add missing fields
         existing_profiles = existing_profile_data.get("profiles", {})
 

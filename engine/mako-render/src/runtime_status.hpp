@@ -59,6 +59,7 @@ namespace mako::layer {
         bool spatialScalingActive{false};
         bool spatialScalingActivationSupported{true};
         std::optional<std::string> spatialScalingInactiveReason;
+        std::optional<std::string> spatialScalingConstraintReason;
         uint32_t spatialSourceWidth{0};
         uint32_t spatialSourceHeight{0};
         uint32_t spatialPresentationWidth{0};

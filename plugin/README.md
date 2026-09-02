@@ -6,7 +6,7 @@
 
 <!-- prettier-ignore -->
 > [!NOTE]
-> **<a href="https://github.com/eugeniosegala/decky-lsfg-vk-experimental" target="_blank" rel="noopener noreferrer">Decky LSFG-VK Experimental</a> is now MAKO Decky.** The <a href="https://github.com/eugeniosegala/MAKO" target="_blank" rel="noopener noreferrer">MAKO repository</a> is its new home and continuation, including future development, releases, documentation, and issue tracking.
+> **MAKO Decky succeeds <a href="https://github.com/eugeniosegala/decky-lsfg-vk-experimental" target="_blank" rel="noopener noreferrer">Decky LSFG-VK Experimental</a> under a separate product and package identity.** The <a href="https://github.com/eugeniosegala/MAKO" target="_blank" rel="noopener noreferrer">MAKO repository</a> continues its development lineage, but MAKO Decky imports state only from public MAKO 2.0.0 or newer; install it separately from the differently named predecessor.
 
 MAKO Decky is the Decky Loader component of MAKO. It provides per-game controls, installation, updates, Flatpak preparation, and game launch integration for MAKO Renderer on Steam Deck, Steam Machine, SteamOS, and Linux more broadly.
 
@@ -24,7 +24,7 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 
 - Installs the private MAKO Renderer Vulkan layer for the current user.
 - Creates a per-game `mako-run` launcher and profile-based configuration.
-- Presents Fixed and Adaptive controls under **Frame Generation**, followed by **Spatial Settings**, shared **Performance Settings**, and **Advanced Rendering Settings**, so the two features remain easy to scan without duplicated controls. Usage, compatibility, external-tool, and manual controls follow the primary feature flow. A compact **Live Status** card reports what the running game is actually using, including input/output resolution and whether upscaling runs before generated frames. Select **Enable Scaling (Restart)** before launch; methods and sharpness remain live, while Scale Factor requests one guarded game-owned recreation on the managed Gamescope path and otherwise waits for a natural resolution change.
+- Presents Fixed and Adaptive controls under **Frame Generation**, followed by **Spatial Settings**, shared **Performance Settings**, and **Advanced Rendering Settings**, so the two features remain easy to scan without duplicated controls. Usage, compatibility, external-tool, and manual controls follow the primary feature flow. A compact **Live Status** card reports what the running game is actually using, including separate input, render, and display resolutions during supersampling plus explicit memory and display-headroom limits. Select **Enable Scaling (Restart)** before launch; methods and sharpness remain live, while Scale Factor requests one guarded game-owned recreation on the managed Gamescope path and otherwise waits for a natural resolution change.
 - Provides a per-profile Gamescope WSI compatibility toggle plus host-installed MangoHud or experimental vkBasalt under **External Tools**. Scaling requires and locks its managed WSI path; independently enabling WSI for an FG-only profile is limited to supported 64-bit host launches.
 - Prepares matching Vulkan runtime extensions for selected Flatpak applications.
 - Keeps MAKO activation limited to the selected game process.

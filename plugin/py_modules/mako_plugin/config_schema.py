@@ -39,7 +39,7 @@ from shared_config import (
     ConfigFieldType,
     get_defaults,
 )
-from .config_schema_generated import ConfigurationData, get_script_generation_logic, get_script_parsing_logic
+from .config_schema_generated import ConfigurationData, get_script_generation_logic
 
 
 @dataclass
@@ -372,18 +372,6 @@ class ConfigurationManager:
     def parse_toml_content(content: str) -> ConfigurationData:
         profile_data = ConfigurationManager.parse_toml_content_multi_profile(content)
         return profile_data["profiles"][profile_data["current_profile"]]
-
-    @staticmethod
-    def parse_script_content(script_content: str) -> Dict[str, Union[bool, int, str]]:
-        return get_script_parsing_logic()(script_content.splitlines())
-
-    @staticmethod
-    def merge_config_with_script(toml_config: ConfigurationData, script_values: Dict[str, Union[bool, int, str]]) -> ConfigurationData:
-        merged = dict(toml_config)
-        for field in SCRIPT_ONLY_FIELDS:
-            if field in script_values:
-                merged[field] = script_values[field]
-        return cast(ConfigurationData, merged)
 
     @staticmethod
     def normalize_profile_name(profile_name: str) -> str:

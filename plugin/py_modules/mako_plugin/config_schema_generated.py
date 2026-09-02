@@ -123,42 +123,6 @@ class WrapperSettingsData(TypedDict):
     force_alsa_audio: bool
 
 
-def get_script_parsing_logic():
-    """Return the script parsing logic as a callable"""
-    def parse_script_values(lines):
-        script_values = {}
-        for line in lines:
-            line = line.strip()
-            if not line or line.startswith("#") or not line.startswith("export "):
-                continue
-            if "=" in line:
-                export_line = line[len("export "):]
-                key, value = export_line.split("=", 1)
-                key = key.strip()
-                value = value.strip()
-
-                # Auto-generated parsing logic:
-                if key == "DISABLE_MAKO":
-                        script_values["disable_mako"] = value == "1"
-                if key == "MAKO_DISABLE_HDR_EXPOSURE":
-                        script_values["disable_hdr_exposure"] = value == "1"
-                if key == "MAKO_EXTERNAL_VULKAN_LAYER":
-                        script_values["external_vulkan_layer"] = value
-                if key == "SteamDeck":
-                        script_values["disable_steamdeck_mode"] = value == "0"
-                if key == "__GLX_VENDOR_LIBRARY_NAME" and value == "mesa":
-                        script_values["enable_zink"] = True
-                if key == "MESA_LOADER_DRIVER_OVERRIDE" and value == "zink":
-                        script_values["enable_zink"] = True
-                if key == "GALLIUM_DRIVER" and value == "zink":
-                        script_values["enable_zink"] = True
-                if key == "SDL_AUDIODRIVER" and value == "alsa":
-                        script_values["force_alsa_audio"] = True
-
-        return script_values
-    return parse_script_values
-
-
 def get_script_generation_logic():
     """Return the script generation logic as a callable"""
     def generate_script_lines(config):

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <chrono>
+#include <cstddef>
 #include <cstring>
 
 #include <vulkan/vulkan_core.h>
@@ -98,15 +99,40 @@ namespace mako::layer {
         return nullptr;
     }
 
+    struct VulkanPNextHeader {
+        VkStructureType sType{};
+        const void* pNext{nullptr};
+    };
+
+    static_assert(
+        sizeof(VulkanPNextHeader) == sizeof(VkBaseInStructure) &&
+        offsetof(VulkanPNextHeader, sType) ==
+            offsetof(VkBaseInStructure, sType) &&
+        offsetof(VulkanPNextHeader, pNext) ==
+            offsetof(VkBaseInStructure, pNext)
+    );
+
     // Vulkan guarantees that every extensible structure starts with sType and
     // pNext, but C++ strict-aliasing rules do not make an arbitrary Vulkan
-    // structure a VkBaseInStructure object. Copy the common header so optimized
-    // builds can traverse a caller-owned chain without type-punning UB.
-    [[nodiscard]] inline VkBaseInStructure pNextHeader(
+    // structure a VkBaseInStructure object. Copy the common ABI header into a
+    // neutral representation so optimized builds can traverse caller-owned
+    // chains without teaching the compiler that every node has one C++ type.
+    [[nodiscard]] inline VulkanPNextHeader pNextHeader(
             const void* node) noexcept {
-        VkBaseInStructure header{};
-        if (node)
-            std::memcpy(&header, node, sizeof(header));
+        VulkanPNextHeader header{};
+        if (node) {
+            const auto* bytes = static_cast<const std::byte*>(node);
+            std::memcpy(
+                &header.sType,
+                bytes + offsetof(VulkanPNextHeader, sType),
+                sizeof(header.sType)
+            );
+            std::memcpy(
+                &header.pNext,
+                bytes + offsetof(VulkanPNextHeader, pNext),
+                sizeof(header.pNext)
+            );
+        }
         return header;
     }
 

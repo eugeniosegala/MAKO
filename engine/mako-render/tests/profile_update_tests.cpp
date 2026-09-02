@@ -854,6 +854,18 @@ int main() {
             supersamplingPlan.decision.swapchainRecreationDeferred &&
             !supersamplingPlan.appliedProfile.scaling_supersampling,
         "An effective supersampling toggle must remain extent-bound until guarded recreation");
+    const auto nativeVariableSupersamplingPlan = planProfileUpdate(
+        scalingCurrent, next, 3, true, false, false, true, false, false
+    );
+    expect(nativeVariableSupersamplingPlan.decision.action ==
+                ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+            nativeVariableSupersamplingPlan.decision.
+                swapchainRecreationDeferred &&
+            !nativeVariableSupersamplingPlan.decision.
+                spatialScalingDormantUpdate &&
+            !nativeVariableSupersamplingPlan.appliedProfile.
+                scaling_supersampling,
+        "A supported native variable surface must recreate when supersampling can activate scaling");
     const auto fixedSupersamplingNoOp = planProfileUpdate(
         scalingCurrent, next, 3, true, true, false, true, false, true
     );

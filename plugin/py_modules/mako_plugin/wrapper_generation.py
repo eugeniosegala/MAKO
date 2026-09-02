@@ -90,21 +90,12 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"export {MAKO_PROFILE_FALLBACK_ENV}=",
     "mako_diagnostics_default=",
 )
-OBSOLETE_WRAPPER_EXPORTS = (
-    "DXVK_FRAME_RATE",
-    "PROTON_USE_WOW64",
-    "MAKO_PRESENT_RECOVERY_RECREATE",
-    "MAKO_EXPERIMENTAL_HDR",
-)
-
-
 def is_current_wrapper(
         content: str,
         wrapper_format_marker: str = WRAPPER_FORMAT_MARKER,
         host_compatibility_marker: str = HOST_COMPATIBILITY_MARKER,
         diagnostics_default_marker: str = DIAGNOSTICS_DEFAULT_MARKER,
         required_exports: tuple[str, ...] = REQUIRED_WRAPPER_EXPORTS,
-        obsolete_exports: tuple[str, ...] = OBSOLETE_WRAPPER_EXPORTS,
 ) -> bool:
     """Return whether generated cache satisfies every current safety marker."""
     return (
@@ -112,7 +103,6 @@ def is_current_wrapper(
         and host_compatibility_marker in content
         and diagnostics_default_marker in content
         and all(export in content for export in required_exports)
-        and not any(export in content for export in obsolete_exports)
     )
 
 

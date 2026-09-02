@@ -59,6 +59,16 @@ namespace mako::layer {
         // already active ceiling can therefore be applied without replacing
         // the game-owned swapchain.
         bool variableSurface{false};
+        // True when scaling remains active at a lower effective factor because
+        // the requested presentation extent exceeded the create-time memory
+        // admission envelope.
+        bool spatialScalingMemoryConstrained{false};
+        // Exact create-time reason for retaining native geometry. Keep this
+        // independent from activation support: memory and output-headroom
+        // guards are actionable on an otherwise supported surface.
+        SpatialScalingInactiveReason spatialScalingInactiveReason{
+            SpatialScalingInactiveReason::None
+        };
         // False only when the lower split role proved that Gamescope WSI did
         // not own this surface. No live factor can make that surface safe, so
         // scaler choices remain dormant until a natural surface boundary.

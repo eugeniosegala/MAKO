@@ -754,6 +754,11 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
             this->info.gamescopePresentationTarget->width ||
          this->info.extent.height >
             this->info.gamescopePresentationTarget->height);
+    const char* const spatialInactiveReason =
+        spatialScalingRuntimeInactiveReason(
+            this->spatialScaler.has_value(),
+            this->info.spatialScalingInactiveReason
+        );
     this->runtimeStatusPublisher.publish(RuntimeStatusRecord{
         .phase = phase,
         .reason = std::string(reason),
@@ -775,11 +780,19 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
         .spatialScalingActivationSupported =
             this->info.spatialScalingActivationSupported,
         .spatialScalingInactiveReason =
-            this->info.spatialScalingActivationSupported
-                ? std::nullopt
-                : std::optional<std::string>{
-                    "gamescope-wsi-surface-unproven"
-                },
+            spatialInactiveReason
+                ? std::optional<std::string>{spatialInactiveReason}
+                : std::nullopt,
+        .spatialScalingConstraintReason =
+            this->spatialScaler &&
+                this->info.spatialScalingMemoryConstrained
+            ? std::optional<std::string>{
+                spatialScalingInactiveReasonName(
+                    SpatialScalingInactiveReason::
+                        VariableSurfaceMemoryBudget
+                )
+            }
+            : std::nullopt,
         .spatialSourceWidth = this->info.applicationExtent.width,
         .spatialSourceHeight = this->info.applicationExtent.height,
         .spatialPresentationWidth = this->info.extent.width,

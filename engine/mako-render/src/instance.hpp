@@ -44,6 +44,10 @@ namespace mako::layer {
         bool spatialScalingActive{false};
         bool variableSurface{false};
         bool variableFeedbackSuppressed{false};
+        bool spatialScalingMemoryConstrained{false};
+        SpatialScalingInactiveReason spatialScalingInactiveReason{
+            SpatialScalingInactiveReason::None
+        };
         VkExtent2D applicationExtent{};
         VkExtent2D presentationExtent{};
         std::optional<VkExtent2D> gamescopePresentationTarget;

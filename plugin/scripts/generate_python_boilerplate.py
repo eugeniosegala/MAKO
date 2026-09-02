@@ -98,74 +98,6 @@ def generate_wrapper_settings_typed_dict() -> str:
     return "\n".join(lines)
 
 
-def generate_script_parsing() -> str:
-    """Generate script content parsing logic"""
-    lines = []
-
-    script_fields = [
-        (field_name, field_def)
-        for field_name, field_def in CONFIG_SCHEMA_DEF.items()
-        if field_def.get("location") == "script"
-    ]
-
-    for field_name, field_def in script_fields:
-        if field_name == "gamescope_wsi_compatibility":
-            # This persisted switch is folded into the wrapper's shell-local
-            # WSI decision and is not a public environment interface.
-            continue
-        env_var = get_env_var_name(field_name)
-        field_type = ConfigFieldType(field_def["fieldType"])
-
-        if field_type == ConfigFieldType.BOOLEAN:
-            if field_name == "disable_steamdeck_mode":
-                # Special case: SteamDeck=0 means disable_steamdeck_mode=True
-                lines.append(f'                    elif key == "{env_var}":')
-                lines.append(f'                        script_values["{field_name}"] = value == "0"')
-            elif field_name == "enable_zink":
-                # Special case: Zink uses multiple environment variables
-                lines.append(
-                    f'                    elif key == "{ZINK_GLX_VENDOR_ENV}" '
-                    f'and value == "{ZINK_GLX_VENDOR_VALUE}":'
-                )
-                lines.append(f'                        script_values["{field_name}"] = True')
-                lines.append(
-                    f'                    elif key == "{ZINK_MESA_LOADER_ENV}" '
-                    f'and value == "{ZINK_DRIVER_VALUE}":'
-                )
-                lines.append(f'                        script_values["{field_name}"] = True')
-                lines.append(
-                    f'                    elif key == "{ZINK_GALLIUM_DRIVER_ENV}" '
-                    f'and value == "{ZINK_DRIVER_VALUE}":'
-                )
-                lines.append(f'                        script_values["{field_name}"] = True')
-            elif field_name == "force_alsa_audio":
-                lines.append(
-                    f'                    elif key == "{env_var}" and value == '
-                    f'"{SDL_AUDIO_DRIVER_ALSA_VALUE}":'
-                )
-                lines.append(f'                        script_values["{field_name}"] = True')
-            else:
-                lines.append(f'                    elif key == "{env_var}":')
-                lines.append(f'                        script_values["{field_name}"] = value == "1"')
-        elif field_type == ConfigFieldType.INTEGER:
-            lines.append(f'                    elif key == "{env_var}":')
-            lines.append('                        try:')
-            lines.append(f'                            script_values["{field_name}"] = int(value)')
-            lines.append('                        except ValueError:')
-            lines.append('                            pass')
-        elif field_type == ConfigFieldType.FLOAT:
-            lines.append(f'                    elif key == "{env_var}":')
-            lines.append('                        try:')
-            lines.append(f'                            script_values["{field_name}"] = float(value)')
-            lines.append('                        except ValueError:')
-            lines.append('                            pass')
-        elif field_type == ConfigFieldType.STRING:
-            lines.append(f'                    elif key == "{env_var}":')
-            lines.append(f'                        script_values["{field_name}"] = value')
-
-    return "\n".join(lines)
-
-
 def generate_script_generation() -> str:
     """Generate script content generation logic"""
     lines = []
@@ -287,27 +219,6 @@ def generate_complete_schema_file() -> str:
         '',
         '',
         generate_wrapper_settings_typed_dict(),
-        '',
-        '',
-        'def get_script_parsing_logic():',
-        '    """Return the script parsing logic as a callable"""',
-        '    def parse_script_values(lines):',
-        '        script_values = {}',
-        '        for line in lines:',
-        '            line = line.strip()',
-        '            if not line or line.startswith("#") or not line.startswith("export "):',
-        '                continue',
-        '            if "=" in line:',
-        '                export_line = line[len("export "):]',
-        '                key, value = export_line.split("=", 1)',
-        '                key = key.strip()',
-        '                value = value.strip()',
-        '',
-        '                # Auto-generated parsing logic:',
-        f'{generate_script_parsing().replace("                    elif", "                if")}',
-        '',
-        '        return script_values',
-        '    return parse_script_values',
         '',
         '',
         'def get_script_generation_logic():',

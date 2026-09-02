@@ -9,7 +9,6 @@ import unittest
 from py_modules.mako_plugin.constants import (
     JSON32_FILENAME,
     JSON_FILENAME,
-    LEGACY_LOSSLESS_DLL_PLACEHOLDER,
     LIB_FILENAME,
     LOSSLESS_DLL_NAME,
     LOSSLESS_SCALING_DIRECTORY,
@@ -338,17 +337,9 @@ class PathAndPackageContractTests(unittest.TestCase):
             STEAM_COMMON_PATH,
             Path("steamapps/common") / LOSSLESS_SCALING_DIRECTORY,
         )
-        self.assertEqual(
-            LEGACY_LOSSLESS_DLL_PLACEHOLDER,
-            Path("/games") / relative_dll,
-        )
-
         detection = _read(DLL_DETECTION_SOURCE)
         self.assertIn("STEAM_COMMON_PATH", detection)
         self.assertIn("LOSSLESS_DLL_NAME", detection)
-        self.assertIn(
-            "LEGACY_LOSSLESS_DLL_PLACEHOLDER", _read(INSTALLATION_SOURCE)
-        )
 
         renderer_paths = _read(RENDERER_PATHS_SOURCE)
         renderer_relative_dll = (
@@ -394,7 +385,6 @@ class PathAndPackageContractTests(unittest.TestCase):
             "MAKO Decky",
             "MAKO",
             "Mako",
-            "MAKO - Scaling & Frame Generation",
         }
         self.assertEqual(validated_slug, slug)
         self.assertEqual(supported_names, developer_aliases | {listing_name})

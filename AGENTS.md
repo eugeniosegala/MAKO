@@ -20,7 +20,7 @@ Use these names in user-facing prose, UI text, workflow labels, package output, 
 
 The repository and checkout slugs `MAKO-Gym` and `MAKO-Traces` are stable technical identifiers. Preserve them in paths, URLs, schema identifiers, commands, and other literal references while using MAKO Gym and MAKO Traces in prose.
 
-The established Decky manifest/listing name is the deliberate exception: `plugin/plugin.json` remains **MAKO - Frame Generation** as an immutable Decky upgrade identity even though the component now includes spatial scaling. Its publish description can describe current features, while the component is called **MAKO Decky** in project documentation, its frontend, and lifecycle logs. The unreleased **MAKO - Scaling & Frame Generation** preview name is accepted only by the documented local developer-installation migration.
+The established Decky manifest/listing name is the deliberate exception: `plugin/plugin.json` remains **MAKO - Frame Generation** as an immutable Decky upgrade identity even though the component now includes spatial scaling. Its publish description can describe current features, while the component is called **MAKO Decky** in project documentation, its frontend, and lifecycle logs.
 
 Renderer log records use the stable `MAKO Renderer:` prefix. MAKO Decky lifecycle logs name `MAKO Decky`. Do not introduce `mako:`, `mako-render:`, `Mako Renderer:`, or `Mako Decky:` as new public prefixes.
 

@@ -48,7 +48,7 @@ class Plugin:
 
     This class provides a unified interface for installation, configuration,
     and DLL detection services. It implements the Decky Loader plugin lifecycle
-    methods (_main, _unload, _uninstall, _migration).
+    methods (_main, _unload, and _uninstall).
     """
 
     def __init__(self):
@@ -571,21 +571,6 @@ class Plugin:
         except (OSError, ValueError) as error:
             decky.logger.warning("Could not initialize profile metadata: %s", error)
         try:
-            if self.configuration_service.sanitize_captured_processes_if_needed():
-                decky.logger.info("Removed shared helper processes from saved profiles")
-        except (OSError, ValueError) as error:
-            decky.logger.warning("Could not clean saved profile processes: %s", error)
-        try:
-            if self.configuration_service.migrate_wrapper_profile_settings_if_needed():
-                decky.logger.info("Migrated wrapper-only settings into the active profile")
-        except OSError as error:
-            decky.logger.warning("Could not migrate wrapper-only profile settings: %s", error)
-        try:
-            if self.configuration_service.migrate_legacy_base_fps_caps_if_needed():
-                decky.logger.info("Migrated Base FPS Cap into the engine profile")
-        except OSError as error:
-            decky.logger.warning("Could not migrate Base FPS Cap: %s", error)
-        try:
             if self.configuration_service.migrate_launch_script_if_needed():
                 decky.logger.info("Upgraded installed MAKO launch wrapper to the current format")
         except OSError as error:
@@ -654,25 +639,3 @@ class Plugin:
         decky.logger.info("Leaving shared Flatpak runtime extensions installed")
 
         decky.logger.info("MAKO Decky uninstall cleanup completed")
-
-    async def _migration(self):
-        """
-        Migrations that should be performed before entering `_main()`.
-
-        This method is called by Decky Loader for plugin migrations.
-        Currently migrates logs, settings, and runtime data from old locations.
-        """
-        decky.logger.info("Running MAKO Decky migrations")
-
-        decky.migrate_logs(os.path.join(decky.DECKY_USER_HOME,
-                                       ".config", "decky-lossless-scaling-vk", "lossless-scaling-vk.log"))
-
-        decky.migrate_settings(
-            os.path.join(decky.DECKY_HOME, "settings", "lossless-scaling-vk.json"),
-            os.path.join(decky.DECKY_USER_HOME, ".config", "decky-lossless-scaling-vk"))
-
-        decky.migrate_runtime(
-            os.path.join(decky.DECKY_HOME, "lossless-scaling-vk"),
-            os.path.join(decky.DECKY_USER_HOME, ".local", "share", "decky-lossless-scaling-vk"))
-
-        decky.logger.info("MAKO Decky migrations completed")

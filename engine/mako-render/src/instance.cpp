@@ -123,6 +123,28 @@ namespace {
         return value;
     }
 
+    bool physicalDeviceSupportsExtension(
+            const vk::VulkanInstanceFuncs& funcs,
+            const VkPhysicalDevice physicalDevice,
+            const std::string_view name) {
+        uint32_t extensionCount{};
+        auto result = funcs.EnumerateDeviceExtensionProperties(
+            physicalDevice, nullptr, &extensionCount, nullptr
+        );
+        if (result != VK_SUCCESS)
+            return false;
+        std::vector<VkExtensionProperties> extensions(extensionCount);
+        result = funcs.EnumerateDeviceExtensionProperties(
+            physicalDevice, nullptr, &extensionCount, extensions.data()
+        );
+        return result == VK_SUCCESS && std::ranges::any_of(
+            extensions,
+            [name](const VkExtensionProperties& extension) {
+                return name == extension.extensionName;
+            }
+        );
+    }
+
     PhysicalDeviceIdentity identifyApplicationDevice(const vk::Vulkan& vk) {
         const auto& funcs = vk.fi();
         const auto physicalDevice = vk.physdev();
@@ -887,14 +909,34 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
 
     modification.variableSurface = !fixedSurfaceExtent(caps.currentExtent);
 
-    VkPhysicalDeviceMemoryProperties memoryProperties{};
-    vk.fi().GetPhysicalDeviceMemoryProperties(
-        vk.physdev(), &memoryProperties
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT liveMemoryBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    VkPhysicalDeviceMemoryProperties2 memoryProperties2{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_PROPERTIES_2,
+    };
+    const bool liveMemoryBudgetAvailable =
+        vk.fi().GetPhysicalDeviceMemoryProperties2 &&
+        physicalDeviceSupportsExtension(
+            vk.fi(), vk.physdev(), VK_EXT_MEMORY_BUDGET_EXTENSION_NAME
+        );
+    if (liveMemoryBudgetAvailable) {
+        memoryProperties2.pNext = &liveMemoryBudget;
+        vk.fi().GetPhysicalDeviceMemoryProperties2(
+            vk.physdev(), &memoryProperties2
+        );
+    } else {
+        vk.fi().GetPhysicalDeviceMemoryProperties(
+            vk.physdev(), &memoryProperties2.memoryProperties
+        );
+    }
+    const auto memoryAdmission = variablePresentationMemoryAdmission(
+        memoryProperties2.memoryProperties,
+        liveMemoryBudgetAvailable ? &liveMemoryBudget : nullptr
     );
-    const VkDeviceSize deviceLocalHeapBytes =
-        largestDeviceLocalHeapBytes(memoryProperties);
     const uint64_t presentationPixelBudget =
-        variablePresentationPixelBudget(memoryProperties);
+        memoryAdmission.effectivePixelBudget;
 
     auto policySnapshot = this->surfaceScalingPolicySnapshot();
     const bool spatialCapabilityRelay =
@@ -931,6 +973,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     modification.variableFeedbackSuppressed =
         scalingDecision.inactiveReason ==
             SpatialScalingInactiveReason::VariableSurfaceFeedback;
+    modification.spatialScalingMemoryConstrained =
+        scalingDecision.usedBaselinePresentationBudget;
     const bool fixedVirtualSourceRequest =
         fixedSurfaceExtent(caps.currentExtent) &&
         !sameExtent(createInfo.imageExtent, caps.currentExtent);
@@ -1007,6 +1051,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                     ? SpatialScalingInactiveReason::QueueCommandsUnsupported
                     : SpatialScalingInactiveReason::SwapchainFormatUnsupported));
     }
+    modification.spatialScalingInactiveReason = inactiveReason;
     if (spatialExtentOwner && !spatialResourceOwner) {
         // Publish every lower create decision, including an explicit no-split
         // result. The upper combined role must distinguish that valid native
@@ -1023,6 +1068,10 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                 ? fixedSurfaceContract->queryGeneration : 0,
             .spatialSurfaceScalingSupported =
                 spatialSurfaceScalingSupported,
+            .variableSurface = modification.variableSurface,
+            .memoryBudgetConstrained =
+                modification.spatialScalingMemoryConstrained,
+            .inactiveReason = inactiveReason,
         });
     }
     const bool awaitingLowerCreateRelay = awaitLowerSpatialCreateRelay(
@@ -1045,7 +1094,19 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << "; surface_extent_mode="
                   << (modification.variableSurface ? "variable" : "fixed")
                   << "; device_local_heap_mib="
-                  << (deviceLocalHeapBytes / (1024 * 1024))
+                  << (memoryAdmission.heapBytes / (1024 * 1024))
+                  << "; live_memory_budget_available="
+                  << liveMemoryBudgetAvailable
+                  << "; device_local_heap_budget_mib="
+                  << (memoryAdmission.heapBudgetBytes / (1024 * 1024))
+                  << "; device_local_heap_usage_mib="
+                  << (memoryAdmission.heapUsageBytes / (1024 * 1024))
+                  << "; memory_reserved_headroom_mib="
+                  << (memoryAdmission.reservedHeadroomBytes / (1024 * 1024))
+                  << "; variable_presentation_static_pixel_budget="
+                  << memoryAdmission.staticPixelBudget
+                  << "; variable_presentation_live_pixel_budget="
+                  << memoryAdmission.livePixelBudget.value_or(0)
                   << "; variable_presentation_pixel_budget="
                   << presentationPixelBudget
                   << "; gamescope_presentation_target="

@@ -119,7 +119,7 @@ The manifests and guides in MAKO Gym are authoritative for row semantics, thresh
 
 | Suite | Rows | Primary evidence | Guide |
 | --- | --: | --- | --- |
-| `vulkan` | 48 | Real Vulkan construction and configured Fixed/Adaptive/scaler combinations | `docs/VULKAN-FEATURE-MATRIX.md` |
+| `vulkan` | 54 | Real Vulkan construction, Disable-MAKO loader bypass, and configured Fixed/Adaptive/scaler/option combinations | `docs/VULKAN-FEATURE-MATRIX.md` |
 | `quality` | 74 | Procedural LSFG, spatial, and combined output against references | `docs/AMD-QUALITY-REGRESSION.md` |
 | `performance` | 18 | Repeated LSFG throughput and variance through 5120×2160 | `docs/RENDER-PERFORMANCE.md` |
 | `spatial-performance` | 36 | Pixel-qualified production spatial graphs with Vulkan timestamps | `docs/SPATIAL-PERFORMANCE.md` |
@@ -128,7 +128,7 @@ The manifests and guides in MAKO Gym are authoritative for row semantics, thresh
 | `repeatability` | 9 | Byte-identical output across three independent initializations | `docs/QUALITY-REPEATABILITY.md` |
 | `recovery` | 31 | Scripted cadence, hitch, stall, live-scaling, and swapchain lifecycle | `docs/RUNTIME-RECOVERY-MATRIX.md` |
 | `external-recovery` | 5 | Focused full-cover overlay pause/throttle, Fixed genuine-slowdown rejection, workload-proven source return, and bounded 120 FPS recovery through Gamescope WSI | `docs/EXTERNAL-RECOVERY.md` |
-| `gamescope-e2e` | 44 | Native and disposable-Flatpak Gamescope WSI, exact candidate split-chain order and private-PID live-status visibility, fixed/variable surfaces, genuine 32-bit fixed-surface native-override, live-factor relay, and unowned-surface regressions, variable effective-extent factor retention, Deck 1280×800 output-ceiling coverage, Deck-shaped Fixed 3× scaling throughput and automatic-cap recovery, live controls, guarded Scale Factor recreation alone and combined with Fixed/Adaptive FG policy and capacity changes, private FG resource replacement, resolution transitions, and Adaptive efficiency-backoff endurance | `docs/GAMESCOPE-END-TO-END.md` |
+| `gamescope-e2e` | 49 | Native and disposable-Flatpak Gamescope WSI, exact candidate split-chain order and private-PID live-status visibility, live-policy/restart-pending/profile-match journeys, fixed/variable surfaces, genuine 32-bit fixed-surface native-override, live-factor relay, and unowned-surface regressions, variable effective-extent and live-memory admission, Deck 1280×800 output-ceiling coverage, Deck-shaped Fixed 3× scaling throughput and automatic-cap recovery, guarded Scale Factor recreation alone and combined with Fixed/Adaptive FG policy and capacity changes, private FG resource replacement, resolution transitions, Adaptive multiplier-ceiling reporting, and efficiency-backoff endurance | `docs/GAMESCOPE-END-TO-END.md` |
 | `sustained-health` | 3 | Repeated private-resource RSS/allocation plateaus plus Deck and opt-in docked thermal/performance soaks | `docs/SUSTAINED-HEALTH.md` |
 | `proton-e2e` | 12 | Six deterministic scenes through both DXVK and VKD3D-Proton | `docs/PROTON-END-TO-END.md` |
 | `proton-compatibility` | 10 | Stratified sentinels across provenance-checked Proton families | `docs/PROTON-COMPATIBILITY.md` |

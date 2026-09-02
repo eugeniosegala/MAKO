@@ -30,7 +30,6 @@ from py_modules.mako_plugin.config_schema import (  # noqa: E402
 from py_modules.mako_plugin.config_schema_generated import (  # noqa: E402
     ALL_FIELDS,
     get_script_generation_logic,
-    get_script_parsing_logic,
 )
 
 
@@ -1035,9 +1034,6 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            self.assertFalse(
-                self.service.migrate_wrapper_profile_settings_if_needed()
-            )
             with patch.object(
                     configuration_module,
                     "FLATPAK_IMPLICIT_LAYER_DIR",
@@ -1154,17 +1150,6 @@ class WrapperEnvironmentTests(unittest.TestCase):
     def test_full_layer_disable_targets_mako_identity(self):
         lines = get_script_generation_logic()({"disable_mako": True})
         self.assertIn("export DISABLE_MAKO=1", lines)
-
-    def test_mako_disable_export_enables_full_layer_toggle(self):
-        values = get_script_parsing_logic()([
-            "export ENABLE_MAKO=1",
-        ])
-        self.assertNotIn("disable_mako", values)
-
-        values = get_script_parsing_logic()([
-            "export DISABLE_MAKO=1",
-        ])
-        self.assertTrue(values["disable_mako"])
 
     def test_wrapper_never_exports_obsolete_wow64_workaround(self):
         self.assertNotIn("enable_wow64", ALL_FIELDS)
@@ -1563,78 +1548,6 @@ class WrapperEnvironmentTests(unittest.TestCase):
             )
 
             self.assertEqual(self.service._read_wrapper_profile_settings(), {})
-
-    def test_current_wrapper_with_any_obsolete_export_is_regenerated(self):
-        current_script = self.service._generate_script_content(
-            ConfigurationManager.get_defaults()
-        )
-        for obsolete_export in self.service._OBSOLETE_WRAPPER_EXPORTS:
-            with self.subTest(obsolete_export=obsolete_export):
-                with tempfile.TemporaryDirectory() as temp_dir:
-                    self.service.mako_script_path = Path(temp_dir) / "wrapper"
-                    self.service.mako_script_path.write_text(
-                        f"{current_script}\nexport {obsolete_export}=1\n",
-                        encoding="utf-8",
-                    )
-                    self.service._get_profile_data = lambda: {}
-                    self.service.update_mako_script_from_profile_data = (
-                        lambda _profile_data: {"success": True}
-                    )
-
-                    self.assertTrue(
-                        self.service.migrate_launch_script_if_needed()
-                    )
-
-    def test_legacy_dxvk_cap_migrates_into_engine_profile(self):
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temp_path = Path(temp_dir)
-            self.service.config_dir = temp_path
-            self.service.config_file_path = temp_path / "conf.toml"
-            self.service.wrapper_profile_settings_path = temp_path / "wrapper.json"
-            self.service.mako_script_path = temp_path / "wrapper"
-            self.service.config_file_path.write_text(
-                "\n".join([
-                    "version = 2",
-                    '# decky-current-profile = "decky-mako"',
-                    "[global]",
-                    "allow_fp16 = true",
-                    "[[profile]]",
-                    'name = "decky-mako"',
-                    "multiplier = 2",
-                    "",
-                ]),
-                encoding="utf-8",
-            )
-            self.service.wrapper_profile_settings_path.write_text(
-                json.dumps({
-                    "version": 1,
-                    "profiles": {
-                        "decky-mako": {
-                            "dxvk_frame_rate": 60,
-                            "disable_hdr_exposure": True,
-                        },
-                    },
-                }),
-                encoding="utf-8",
-            )
-            self.service.mako_script_path.write_text(
-                "export DXVK_FRAME_RATE=60\n",
-                encoding="utf-8",
-            )
-
-            self.assertTrue(
-                self.service.migrate_legacy_base_fps_caps_if_needed()
-            )
-            profile_data = self.service._get_profile_data()
-            self.assertEqual(
-                profile_data["profiles"]["decky-mako"]["base_fps_cap"],
-                60,
-            )
-            self.assertNotIn(
-                "DXVK_FRAME_RATE",
-                self.service.mako_script_path.read_text(encoding="utf-8"),
-            )
-
 
 if __name__ == "__main__":
     unittest.main()

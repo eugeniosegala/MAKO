@@ -41,6 +41,8 @@ export interface RuntimeScalingUiState {
   scalingActivationSupported: boolean | null;
   scalingPending: boolean;
   inactiveReason: string | null;
+  constraintReason: string | null;
+  requestedFactor: number;
   nonSupersamplingFactorCeiling: number | null;
   sourceWidth: number;
   sourceHeight: number;
@@ -71,6 +73,8 @@ export const EMPTY_RUNTIME_SCALING_UI_STATE: RuntimeScalingUiState = {
   scalingActivationSupported: null,
   scalingPending: false,
   inactiveReason: null,
+  constraintReason: null,
+  requestedFactor: 1,
   nonSupersamplingFactorCeiling: null,
   sourceWidth: 0,
   sourceHeight: 0,
@@ -170,7 +174,15 @@ export function runtimeScalingUiState(
         spatialContext.pending.swapchain_recreation ||
         spatialContext.pending.process_restart),
     ),
-    inactiveReason: scalingInactiveReason(status, profileName),
+    inactiveReason:
+      spatialContext?.spatial_scaling.inactive_reason ??
+      scalingInactiveReason(status, profileName),
+    constraintReason:
+      spatialContext?.spatial_scaling.constraint_reason ?? null,
+    requestedFactor:
+      spatialContext?.requested.scaling_factor ??
+      scalingRequestedContext?.requested.scaling_factor ??
+      1,
     nonSupersamplingFactorCeiling:
       ceilings.length > 0 ? Math.min(...ceilings) : null,
     sourceWidth: spatialContext?.spatial_scaling.source_width ?? 0,

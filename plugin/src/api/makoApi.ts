@@ -218,6 +218,7 @@ export interface RuntimeSpatialScalingState {
   active: boolean;
   activation_supported: boolean;
   inactive_reason: Nullable<string>;
+  constraint_reason: Nullable<string>;
   source_width: number;
   source_height: number;
   presentation_width: number;
