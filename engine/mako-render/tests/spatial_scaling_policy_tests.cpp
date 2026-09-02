@@ -1588,6 +1588,14 @@ int main() {
     expect(shouldRetrySwapchainWithApplicationMinimum(
             VK_ERROR_OUT_OF_HOST_MEMORY, 3, 6),
         "A host-memory rejection must retry an inflated minimum once");
+    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 5) == 1,
+        "A five-image swapchain must retain only 2x generation beside a three-image application minimum");
+    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 6) == 2,
+        "A six-image swapchain must retain 3x generation beside a three-image application minimum");
+    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 3) == 0,
+        "An application-minimum compatibility swapchain must expose no additional live-growth headroom");
+    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 2) == 0,
+        "A malformed returned-image count must fail closed without unsigned underflow");
     expect(!shouldRetrySwapchainWithApplicationMinimum(
             VK_ERROR_SURFACE_LOST_KHR, 3, 6),
         "A lost surface must not be hidden by an image-count retry");

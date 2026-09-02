@@ -1549,9 +1549,20 @@ ProfileUpdateDecision Swapchain::updateProfile(
     this->runtimeStatusState.error.reset();
     const bool resourcesAvailable = this->sourceImages.size() == 2 &&
         !this->destinationImages.empty() && this->syncSemaphore.has_value();
+    const size_t requestedGeneratedFrameCapacity =
+        generatedFrameCapacityForActivePolicy(nextProfile);
+    const size_t existingSwapchainGeneratedFrameCapacity =
+        generatedFrameCapacitySupportedByExistingSwapchain(
+            this->info.requestedMinImageCount, this->info.images.size()
+        );
+    const bool generatedFrameCapacityGrowthFitsExistingSwapchain =
+        requestedGeneratedFrameCapacity <= this->destinationImages.size() ||
+        requestedGeneratedFrameCapacity <=
+            existingSwapchainGeneratedFrameCapacity;
     const bool privateFrameGenerationRebuildAvailable =
         this->instance && resourcesAvailable &&
-        this->colorPipeline.generationSupported;
+        this->colorPipeline.generationSupported &&
+        generatedFrameCapacityGrowthFitsExistingSwapchain;
     const bool spatialScalingEffectiveExtentUnchanged =
         variableSurfaceFactorChangePreservesEffectiveExtents(
             this->info.variableSurface,
@@ -1622,8 +1633,14 @@ ProfileUpdateDecision Swapchain::updateProfile(
                 ls::effectiveFlowScale(nextProfile) &&
             ls::effectivePerformanceMode(this->profile) ==
                 ls::effectivePerformanceMode(nextProfile) &&
-            generatedFrameCapacityForActivePolicy(nextProfile) <=
+            requestedGeneratedFrameCapacity <=
                 this->destinationImages.size()) {
+        this->frameGenerationTransition.cancel();
+        this->preparedFrameGenerationResources.reset();
+    } else if (!generatedFrameCapacityGrowthFitsExistingSwapchain) {
+        // A newer request that exceeds the WSI queue invalidates any older
+        // debounced private candidate. The requested profile remains pending
+        // at Root and will construct at the next game-owned recreation.
         this->frameGenerationTransition.cancel();
         this->preparedFrameGenerationResources.reset();
     }
@@ -1707,8 +1724,10 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << decision.generatedFrameCapacityExceeded
                   << " available_generated_capacity="
                   << this->destinationImages.size()
+                  << " available_wsi_generated_capacity="
+                  << existingSwapchainGeneratedFrameCapacity
                   << " requested_generated_capacity="
-                  << generatedFrameCapacityForActivePolicy(nextProfile)
+                  << requestedGeneratedFrameCapacity
                   << " process_restart_required="
                   << decision.processRestartDeferred
                   << " action="

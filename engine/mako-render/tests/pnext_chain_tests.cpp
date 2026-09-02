@@ -94,6 +94,8 @@ int main() {
     VkPresentRegionsKHR regions{
         .sType = VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR,
         .pNext = &presentTail,
+        .swapchainCount = 0,
+        .pRegions = nullptr,
     };
     const VkDeviceGroupPresentInfoKHR immutablePresentPrefix{
         .sType = VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_INFO_KHR,
@@ -123,6 +125,8 @@ int main() {
     VkSwapchainPresentModeInfoEXT presentModeInfo{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT,
         .pNext = &regions,
+        .swapchainCount = 0,
+        .pPresentModes = nullptr,
     };
     const FilteredPresentPNextChain filteredBoth(
         &presentModeInfo, true, true

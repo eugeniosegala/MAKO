@@ -96,8 +96,13 @@ namespace mako::layer {
         static_assert(sizeof(VkSwapchainDisplayNativeHdrCreateInfoAMD) <=
             maximumNodeBytes);
         static_assert(sizeof(VkImageCompressionControlEXT) <= maximumNodeBytes);
+#if defined(VK_KHR_swapchain_maintenance1)
         static_assert(sizeof(VkSwapchainPresentScalingCreateInfoKHR) <=
             maximumNodeBytes);
+#elif defined(VK_EXT_swapchain_maintenance1)
+        static_assert(sizeof(VkSwapchainPresentScalingCreateInfoEXT) <=
+            maximumNodeBytes);
+#endif
 #if defined(VK_NV_present_barrier)
         static_assert(sizeof(VkSwapchainPresentBarrierCreateInfoNV) <=
             maximumNodeBytes);
@@ -122,8 +127,13 @@ namespace mako::layer {
                     return sizeof(VkSwapchainDisplayNativeHdrCreateInfoAMD);
                 case VK_STRUCTURE_TYPE_IMAGE_COMPRESSION_CONTROL_EXT:
                     return sizeof(VkImageCompressionControlEXT);
+#if defined(VK_KHR_swapchain_maintenance1)
                 case VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_KHR:
                     return sizeof(VkSwapchainPresentScalingCreateInfoKHR);
+#elif defined(VK_EXT_swapchain_maintenance1)
+                case VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_SCALING_CREATE_INFO_EXT:
+                    return sizeof(VkSwapchainPresentScalingCreateInfoEXT);
+#endif
 #if defined(VK_NV_present_barrier)
                 case VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_BARRIER_CREATE_INFO_NV:
                     return sizeof(VkSwapchainPresentBarrierCreateInfoNV);

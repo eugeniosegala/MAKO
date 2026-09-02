@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "profile_update.hpp"
+#include "swapchain_create_policy.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -1030,6 +1031,37 @@ int main() {
         "Generated-capacity growth must use a private rebuild while the old policy remains active");
     expect(generatedFrameCapacityForActivePolicy(adaptiveFourX) == 3,
         "Adaptive 4x active capacity was not selected");
+    const bool privateCapacityFitsFiveImageSwapchain =
+        generatedFrameCapacityForActivePolicy(adaptiveFourX) <=
+            generatedFrameCapacitySupportedByExistingSwapchain(3, 5);
+    const auto wsiConstrainedCapacityPlan = planProfileUpdate(
+        fixedWithDormantFourX, adaptiveFourX, 2, true, false,
+        privateCapacityFitsFiveImageSwapchain
+    );
+    expect(wsiConstrainedCapacityPlan.decision.action ==
+                ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+            !wsiConstrainedCapacityPlan.decision.frameGenerationPrivateRebuild &&
+            wsiConstrainedCapacityPlan.decision.generatedFrameCapacityExceeded &&
+            wsiConstrainedCapacityPlan.decision.swapchainRecreationDeferred &&
+            !wsiConstrainedCapacityPlan.appliedProfile.adaptive,
+        "Live generated-capacity growth must defer when private resources would exceed existing WSI headroom");
+    auto adaptiveTwoX = adaptiveFourX;
+    adaptiveTwoX.adaptive_max_multiplier = 2;
+    auto adaptiveThreeX = adaptiveTwoX;
+    adaptiveThreeX.adaptive_max_multiplier = 3;
+    const bool threeXCapacityFitsFiveImageSwapchain =
+        generatedFrameCapacityForActivePolicy(adaptiveThreeX) <=
+            generatedFrameCapacitySupportedByExistingSwapchain(3, 5);
+    const auto exactLiveGrowthRegressionPlan = planProfileUpdate(
+        adaptiveTwoX, adaptiveThreeX, 1, true, false,
+        threeXCapacityFitsFiveImageSwapchain
+    );
+    expect(exactLiveGrowthRegressionPlan.decision.action ==
+                ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+            exactLiveGrowthRegressionPlan.decision.generatedFrameCapacityExceeded &&
+            !exactLiveGrowthRegressionPlan.decision.frameGenerationPrivateRebuild &&
+            exactLiveGrowthRegressionPlan.appliedProfile.adaptive_max_multiplier == 2,
+        "A live 2x-to-3x request must retain 2x on an exact five-image swapchain");
 
     auto generationDisabled = adaptiveFourX;
     generationDisabled.frame_generation_enabled = false;

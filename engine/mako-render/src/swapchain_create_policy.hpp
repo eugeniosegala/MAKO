@@ -230,6 +230,22 @@ namespace mako::layer {
             result == VK_ERROR_OUT_OF_HOST_MEMORY;
     }
 
+    /// Return the largest generated batch that the already-created WSI
+    /// swapchain can retain alongside the application's requested images and
+    /// MAKO's ordered real-image slot. Drivers may return more images than the
+    /// requested minimum, so use the observed count rather than the create
+    /// request when deciding whether a live private-capacity rebuild is safe.
+    [[nodiscard]] inline size_t
+    generatedFrameCapacitySupportedByExistingSwapchain(
+            const uint32_t requestedMinImages,
+            const size_t returnedImages) noexcept {
+        const size_t reservedImages =
+            static_cast<size_t>(requestedMinImages) + 1;
+        return returnedImages > reservedImages
+            ? returnedImages - reservedImages
+            : 0;
+    }
+
     /// Apply only the WSI mutations justified by resources provisioned on the
     /// application device. Standalone scaling needs transfer usage, but must
     /// not reserve FG images or change the application's present mode.
