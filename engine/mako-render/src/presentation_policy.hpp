@@ -94,14 +94,34 @@ namespace mako::layer {
     /// Generated images on the Gamescope HDR bridge are opportunistic: waiting
     /// for one blocks the application's real present and caused deterministic
     /// 7-13 ms stalls at 120 Hz. A zero timeout means "native frame wins", not
-    /// a backend failure. Ordered/legacy paths retain their configured ceiling
-    /// because their synchronous FIFO contract is intentionally different.
+    /// a backend failure. Headroom-bearing ordered and legacy paths retain
+    /// their configured ceiling because their synchronous FIFO contract is
+    /// intentionally different.
     [[nodiscard]] inline uint64_t generatedImageAcquireTimeout(
             const bool gamescopeHdrTransport,
             const std::optional<uint64_t> configuredTimeout) {
         if (gamescopeHdrTransport)
             return 0;
         return configuredTimeout.value_or(std::numeric_limits<uint64_t>::max());
+    }
+
+    /// A lower WSI pool with no image beyond the application's minimum and
+    /// the current generated batch cannot absorb an ordered acquire wait
+    /// without feeding scanout backpressure into the application's present.
+    /// Admit that batch opportunistically before backend submission instead:
+    /// a missing image then drops only synthetic work and the real frame can
+    /// still reach Gamescope immediately. Extra driver-provided images retain
+    /// the normal blocking ordered path.
+    [[nodiscard]] inline bool orderedGeneratedBatchNeedsNonblockingAdmission(
+            const uint32_t requestedMinImages,
+            const size_t returnedImages,
+            const size_t requestedGeneratedFrames) noexcept {
+        if (requestedGeneratedFrames == 0)
+            return false;
+        if (returnedImages < requestedMinImages)
+            return true;
+        return returnedImages - requestedMinImages <=
+            requestedGeneratedFrames;
     }
 
     /// Ordered SDR owns one configured acquire-wait budget per application
@@ -177,9 +197,9 @@ namespace mako::layer {
     };
 
     /// Tracks temporary generated-swapchain pressure without turning it into
-    /// an engine or temporal-history failure. Gamescope admission is always
-    /// non-blocking; this state exists only to aggregate diagnostics and report
-    /// the eventual recovery.
+    /// an engine or temporal-history failure. Gamescope HDR and headroom-tight
+    /// ordered SDR admission are nonblocking; this state exists only to
+    /// aggregate diagnostics and report the eventual recovery.
     class GeneratedImageAdmission {
     public:
         [[nodiscard]] bool underPressure() const {

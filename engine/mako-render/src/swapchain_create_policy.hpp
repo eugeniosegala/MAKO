@@ -7,6 +7,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <limits>
 #include <optional>
 #include <vector>
 
@@ -230,20 +231,18 @@ namespace mako::layer {
             result == VK_ERROR_OUT_OF_HOST_MEMORY;
     }
 
-    /// Return the largest generated batch that the already-created WSI
-    /// swapchain can retain beside MAKO's ordered real-image slot. The
-    /// application's ownership requirement is already represented by the
-    /// pool returned for max(application minimum, generated capacity + 1);
-    /// adding it again here would revive the same overprovisioning model at
-    /// the live-growth boundary. A driver returning fewer images than the
-    /// application requested is malformed and must fail closed.
+    /// Return the largest generated batch that fits beyond the application's
+    /// requested WSI ownership. The intercepted real frame already occupies
+    /// one of those application images, so it must not be reserved a second
+    /// time. A driver returning fewer images than requested is malformed and
+    /// must fail closed.
     [[nodiscard]] inline size_t
     generatedFrameCapacitySupportedByExistingSwapchain(
             const uint32_t requestedMinImages,
             const size_t returnedImages) noexcept {
-        if (returnedImages < requestedMinImages || returnedImages == 0)
+        if (returnedImages < requestedMinImages)
             return 0;
-        return returnedImages - 1;
+        return returnedImages - requestedMinImages;
     }
 
     /// Apply only the WSI mutations justified by resources provisioned on the
@@ -266,20 +265,19 @@ namespace mako::layer {
 
         switch (profile.pacing) {
             case ls::Pacing::None:
-                // The application and MAKO consume the same WSI pool at
-                // different points in the ordered present sequence. Reserve
-                // whichever minimum is larger instead of adding both
-                // requirements: additive provisioning can turn a normal
-                // three-image game swapchain into six images and break
-                // engines with fixed image-count assumptions. Acquire
-                // recovery retains the real frame if temporary application
-                // ownership leaves insufficient generated-image headroom.
-                createInfo.minImageCount = std::max(
-                    createInfo.minImageCount,
-                    static_cast<uint32_t>(
-                        generatedFrameCapacityForProfile(profile) + 1
-                    )
-                );
+                // Preserve the application's requested WSI ownership and add
+                // one image per generated output. The intercepted real frame
+                // is already one of the application's images, so reserving an
+                // additional real slot would turn a normal three-image 3x
+                // request into the six-image startup regression. Five images
+                // retain the same generated headroom without double-counting.
+                createInfo.minImageCount = static_cast<uint32_t>(std::min(
+                    static_cast<uint64_t>(
+                        std::numeric_limits<uint32_t>::max()
+                    ),
+                    static_cast<uint64_t>(createInfo.minImageCount) +
+                        generatedFrameCapacityForProfile(profile)
+                ));
                 if (maxImages && createInfo.minImageCount > maxImages)
                     createInfo.minImageCount = maxImages;
                 if (orderedFrameGenerationTransport) {

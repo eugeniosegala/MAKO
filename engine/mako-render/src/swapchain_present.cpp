@@ -1022,7 +1022,7 @@ void Swapchain::handleRenderFenceBudgetMiss(
 
 void Swapchain::preacquireGeneratedImages(
         const PresentInvocation& invocation,
-        PresentationFramePlan& plan, const bool trackGamescopeAdmission,
+        PresentationFramePlan& plan, const bool trackNonblockingAdmission,
         const uint64_t acquireTimeout) {
     if (plan.requestedGeneratedFrames.empty() || plan.historyWarmupActive)
         return;
@@ -1050,7 +1050,7 @@ void Swapchain::preacquireGeneratedImages(
         }
         if (lastAcquireResult == VK_NOT_READY ||
                 lastAcquireResult == VK_TIMEOUT) {
-            logPressure = trackGamescopeAdmission &&
+            logPressure = trackNonblockingAdmission &&
                 this->recoveryState.generatedImageAdmission.reportUnavailable();
             if (logPressure) {
                 logSlowPresentOperation(
@@ -1069,7 +1069,7 @@ void Swapchain::preacquireGeneratedImages(
 
     if (plan.admittedGeneratedFrameCount ==
             plan.requestedGeneratedFrames.size()) {
-        if (!trackGamescopeAdmission)
+        if (!trackNonblockingAdmission)
             return;
         const auto recovery = this->recoveryState.generatedImageAdmission.reportAvailable();
         if (recovery.resumed && presentDiagnosticsEnabled()) {
@@ -1083,7 +1083,7 @@ void Swapchain::preacquireGeneratedImages(
         return;
     }
 
-    if (!trackGamescopeAdmission)
+    if (!trackNonblockingAdmission)
         return;
     this->recoveryState.generatedImageAdmission.reportBypassedFrame();
     if (!this->adaptiveScheduler) {
@@ -2341,23 +2341,44 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     );
     plan.boundedOrderedAcquireProbe = boundedOrderedAcquireProbe;
 
-    // The Gamescope HDR bridge is native-first: never hold the application's
-    // real frame behind unfinished private work. Ordered SDR retains the
-    // synchronous FIFO/fence behavior.
+    // The Gamescope HDR bridge is native-first. Ordered SDR remains
+    // synchronous only while its lower WSI pool has a spare beyond the
+    // application's ownership and this generated batch. With no spare,
+    // pre-acquire opportunistically before backend work so lower scanout
+    // backpressure can drop synthetic frames but never stall the real frame.
     if (!this->generationPipelineReady(
             vk, gamescopeHdrTransport, plan, presentNow)) {
         return this->presentNativeFrame(invocation);
     }
 
-    if (gamescopeHdrTransport) {
+    const bool headroomTightOrderedBatch =
+        this->privateOrderedTransport && !orderedAcquireRecoveryProbe &&
+        orderedGeneratedBatchNeedsNonblockingAdmission(
+            this->info.requestedMinImageCount,
+            this->info.images.size(),
+            plan.requestedGeneratedFrames.size()
+        );
+    if (headroomTightOrderedBatch &&
+            !this->diagnosticsState.orderedGeneratedAdmissionPolicyLogged &&
+            presentDiagnosticsEnabled()) {
+        this->diagnosticsState.orderedGeneratedAdmissionPolicyLogged = true;
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=ordered-generated-admission-policy"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " requested_min_images="
+                  << this->info.requestedMinImageCount
+                  << " images=" << this->info.images.size()
+                  << " planned=" << plan.requestedGeneratedFrames.size()
+                  << " acquire_timeout_ns=0"
+                  << " action=native-first\n";
+    }
+    if (gamescopeHdrTransport || headroomTightOrderedBatch) {
         this->preacquireGeneratedImages(
             invocation, plan, true,
-            generatedImageAcquireTimeout(
-                true, plan.configuredAcquireTimeout
-            )
+            0
         );
     }
-    size_t scheduledGeneratedFrameCount = gamescopeHdrTransport
+    size_t scheduledGeneratedFrameCount = plan.generatedImagesPreacquired
         ? plan.admittedGeneratedFrameCount
         : plan.requestedGeneratedFrames.size();
     plan.scheduledGeneratedFrames = scheduleAdmittedGeneratedFrames(

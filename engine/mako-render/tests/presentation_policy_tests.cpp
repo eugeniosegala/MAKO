@@ -65,6 +65,13 @@ int main() {
     expect(generatedImageAcquireTimeout(false, std::nullopt) ==
             std::numeric_limits<uint64_t>::max(),
         "legacy unconfigured acquire behaviour changed");
+    expect(!orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 0) &&
+            !orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 1) &&
+            orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 2) &&
+            orderedGeneratedBatchNeedsNonblockingAdmission(4, 5, 1) &&
+            !orderedGeneratedBatchNeedsNonblockingAdmission(4, 6, 1) &&
+            orderedGeneratedBatchNeedsNonblockingAdmission(4, 3, 1),
+        "ordered admission did not distinguish a real spare from generated headroom");
     constexpr uint64_t acquireBudget = 50'000'000;
     expect(remainingGeneratedImageAcquireBudget(
             std::nullopt, 32'805'100) == std::nullopt,

@@ -214,7 +214,8 @@ namespace mako::layer {
             // remain authoritative through backend submission.
             GeneratedFramePlan requestedGeneratedFrames;
             // Executable plan after transport-specific admission. Gamescope HDR
-            // may contain fewer, deliberately re-spaced timestamps.
+            // and headroom-tight ordered SDR may contain fewer, deliberately
+            // re-spaced timestamps.
             GeneratedFramePlan scheduledGeneratedFrames;
             size_t admittedGeneratedFrameCount{0};
             bool historyWarmupActive{false};
@@ -272,6 +273,7 @@ namespace mako::layer {
             size_t fixedSkippedFrames{0};
             uint64_t contextId{0};
             bool orderedAcquireClassificationSplitLogged{false};
+            bool orderedGeneratedAdmissionPolicyLogged{false};
         };
 
         struct ColorTransitionState {
@@ -457,7 +459,7 @@ namespace mako::layer {
         void preacquireGeneratedImages(
             const PresentInvocation& invocation,
             PresentationFramePlan& plan,
-            bool trackGamescopeAdmission,
+            bool trackNonblockingAdmission,
             uint64_t acquireTimeout);
         void submitSourceCopy(const PresentInvocation& invocation,
             VkImage swapchainImage, const vk::Image& sourceImage);
