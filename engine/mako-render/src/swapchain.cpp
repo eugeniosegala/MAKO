@@ -466,6 +466,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
     if (!this->colorPipeline.generationSupported) {
         std::cerr << "MAKO Renderer: frame generation disabled for this swapchain: "
                   << this->colorPipeline.reason << '\n';
+        this->compatibilityObservationStarted =
+            std::chrono::steady_clock::now();
         this->publishRuntimeStatus("swapchain-create");
         return;
     }
@@ -696,6 +698,8 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                   << ": " << e.what() << '\n';
         this->runtimeStatusState.error = e.what();
     }
+    this->compatibilityObservationStarted =
+        std::chrono::steady_clock::now();
     this->publishRuntimeStatus("swapchain-create");
 }
 

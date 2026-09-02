@@ -77,6 +77,10 @@ For a direct desktop command, pass the executable and arguments to the same laun
 
 `mako-launch` enables MAKO only for that process. It maintains the supported standalone Vulkan-layer boundary; use one frame-generation implementation per game. MAKO Decky's optional Gamescope WSI, MangoHud, and vkBasalt controls remain Decky features because they require per-game manifest staging.
 
+MAKO operates on Vulkan: native Vulkan and Proton games through DXVK or VKD3D-Proton are supported, while OpenGL requires the optional Zink launcher setting. If no profile matches the game process, MAKO remains dormant and presentation stays native.
+
+Direct desktop scaling is supported, but Gamescope/Game Mode is recommended. Without Gamescope, MAKO applies the configured scale factor without an authoritative display target, so the desktop compositor may add another scaling step or make MAKO fall back safely to native presentation after a recreation. Frame Generation remains supported.
+
 Want to use Frame Generation or scaling with videos? See <a href="docs/VIDEOS_WITH_MAKO.md" target="_blank" rel="noopener noreferrer">Videos with MAKO</a>.
 
 ### Manual configuration and validation

@@ -700,7 +700,8 @@ int main() {
         "A lower-only Gamescope extent mutation must still fail the upper create relay closed");
 
     const auto retainedFeedback = committedVariableSurfaceScalingExtents(
-        customFactor, true, true, false, true, {960, 600}, {960, 600}
+        customFactor, true, true, false, true, false,
+        {960, 600}, {960, 600}
     );
     expect(retainedFeedback &&
             sameExtent(retainedFeedback->source, customFactor->source) &&
@@ -709,20 +710,104 @@ int main() {
             ),
         "A successful native feedback-guard recreation must retain the prior pair");
     const auto replacement = committedVariableSurfaceScalingExtents(
-        retainedFeedback, true, true, true, false, {800, 500}, {1200, 750}
+        retainedFeedback, true, true, true, false, false,
+        {800, 500}, {1200, 750}
     );
     expect(replacement && sameExtent(replacement->source, {800, 500}) &&
             sameExtent(replacement->presentation, {1200, 750}),
         "A genuinely different successful source must replace prior feedback state");
     expect(!committedVariableSurfaceScalingExtents(
-            replacement, true, true, false, false, {1200, 750}, {1200, 750}),
+            replacement, true, true, false, false, false,
+            {1200, 750}, {1200, 750}),
         "A successful unsuppressed native recreation must clear variable state");
     expect(!committedVariableSurfaceScalingExtents(
-            replacement, true, false, false, false, {1200, 750}, {1200, 750}),
+            replacement, true, false, false, false, false,
+            {1200, 750}, {1200, 750}),
         "A successful fixed-surface recreation must clear variable state");
     expect(!committedVariableSurfaceScalingExtents(
-            replacement, false, true, false, false, {1200, 750}, {1200, 750}),
+            replacement, false, true, false, false, false,
+            {1200, 750}, {1200, 750}),
         "An inactive profile must clear variable feedback state");
+
+    const SpatialScalingExtents sameSourceFourK{
+        .source = {1920, 1080},
+        .presentation = {3840, 2160},
+    };
+    const auto factorDownshiftRollback =
+        committedVariableSurfaceRollbackExtents(
+            sameSourceFourK, std::nullopt, true, true, true, false, false, false,
+            {1920, 1080}, {2880, 1620}
+        );
+    expect(factorDownshiftRollback && sameExtent(
+            factorDownshiftRollback->presentation, {3840, 2160}),
+        "A successful same-source factor downshift must retain one rollback envelope");
+    const auto duplicateDownshiftCommit =
+        committedVariableSurfaceRollbackExtents(
+            SpatialScalingExtents{
+                .source = {1920, 1080},
+                .presentation = {2880, 1620},
+            },
+            factorDownshiftRollback, true, true, true, false, false, false,
+            {1920, 1080}, {2880, 1620}
+        );
+    expect(duplicateDownshiftCommit && sameExtent(
+            duplicateDownshiftCommit->presentation, {3840, 2160}),
+        "The second split role's duplicate commit must retain the rollback envelope");
+    expect(!committedVariableSurfaceRollbackExtents(
+            SpatialScalingExtents{
+                .source = {1920, 1080},
+                .presentation = {2880, 1620},
+            },
+            duplicateDownshiftCommit, true, true, true, false, false, false,
+            {1920, 1080}, {3840, 2160}),
+        "Reaching the proven maximum must consume the rollback envelope");
+    expect(!committedVariableSurfaceRollbackExtents(
+            sameSourceFourK, std::nullopt, true, true, true, false, false, true,
+            {1920, 1080}, {2880, 1620}),
+        "A memory-forced shrink must not create a future admission bypass");
+
+    const SpatialScalingExtents sameSourceIntermediate{
+        .source = {1920, 1080},
+        .presentation = {3072, 1728},
+    };
+    const auto nativeResolutionCurrent =
+        committedVariableSurfaceScalingExtents(
+            sameSourceIntermediate, true, true, false, false, true,
+            {1920, 1080}, {1920, 1080}
+        );
+    expect(nativeResolutionCurrent && sameExtent(
+            nativeResolutionCurrent->presentation, {3072, 1728}),
+        "Native Resolution must retain the same-source current envelope for the next live factor edit");
+    const auto nativeResolutionRollback =
+        committedVariableSurfaceRollbackExtents(
+            sameSourceIntermediate, factorDownshiftRollback,
+            true, true, false, false, true, false,
+            {1920, 1080}, {1920, 1080}
+        );
+    expect(nativeResolutionRollback && sameExtent(
+            nativeResolutionRollback->presentation, {3840, 2160}),
+        "Native Resolution must retain the same-source proven maximum while live memory accounting settles");
+    expect(!committedVariableSurfaceScalingExtents(
+            sameSourceIntermediate, true, true, false, false, true,
+            {2560, 1440}, {2560, 1440}),
+        "Native Resolution must not carry an envelope across a source change");
+    expect(!committedVariableSurfaceRollbackExtents(
+            sameSourceIntermediate, factorDownshiftRollback,
+            true, true, false, false, true, false,
+            {2560, 1440}, {2560, 1440}),
+        "Native Resolution must not carry rollback proof across a source change");
+    const auto intermediateUpshiftRollback =
+        committedVariableSurfaceRollbackExtents(
+            SpatialScalingExtents{
+                .source = {1920, 1080},
+                .presentation = {2880, 1620},
+            },
+            factorDownshiftRollback, true, true, true, false, false, false,
+            {1920, 1080}, {3072, 1728}
+        );
+    expect(intermediateUpshiftRollback && sameExtent(
+            intermediateUpshiftRollback->presentation, {3840, 2160}),
+        "An intermediate factor step must retain the proven maximum until it is reached");
 
     profile.scaling_factor = 2.0F;
     const auto clampedCustomFactor = scalingExtentsForCreate(
@@ -923,15 +1008,81 @@ int main() {
             exhaustedAdmission.effectivePixelBudget <
                 minimumVariablePresentationPixels,
         "A live budget under pressure must not inherit the static 4K floor");
+    const auto exhaustedResourceAdmission =
+        variablePresentationResourceAdmission(
+            exhaustedAdmission,
+            {1920, 1080},
+            VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+            6,
+            2
+        );
+    expect(exhaustedResourceAdmission.livePixelBudget &&
+            exhaustedResourceAdmission.effectivePixelBudget <
+                minimumVariablePresentationPixels,
+        "The resource-graph admission must still reject 4K when the post-reserve heap cannot hold its WSI, scaler, and FG resources");
     const auto fourKUnderPressure = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {1920, 1080},
         std::nullopt, std::nullopt,
-        exhaustedAdmission.effectivePixelBudget
+        exhaustedResourceAdmission.effectivePixelBudget
     );
     expect(!fourKUnderPressure.extents &&
             fourKUnderPressure.inactiveReason ==
                 SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
         "A normally supported 4K envelope must fail closed when the live driver budget cannot admit it");
+
+    constexpr VkDeviceSize mebibyte = uint64_t{1024} * 1024;
+    VkPhysicalDeviceMemoryBudgetPropertiesEXT observedRe4LiveBudget{
+        .sType =
+            VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+    };
+    observedRe4LiveBudget.heapBudget[0] = 6561 * mebibyte;
+    observedRe4LiveBudget.heapUsage[0] = 5086 * mebibyte;
+    const auto observedRe4MemoryAdmission =
+        variablePresentationMemoryAdmission(
+            eightGiB, &observedRe4LiveBudget
+        );
+    const auto observedRe4ResourceAdmission =
+        variablePresentationResourceAdmission(
+            observedRe4MemoryAdmission,
+            {2560, 1440},
+            VK_FORMAT_A2B10G10R10_UNORM_PACK32,
+            6,
+            2
+        );
+    expect(observedRe4ResourceAdmission.fixedSourceBytes ==
+            variablePresentationFixedAllocationBytes +
+                uint64_t{2560} * 1440 * 96 &&
+            observedRe4ResourceAdmission.presentationBytesPerPixel == 32 &&
+            observedRe4ResourceAdmission.effectivePixelBudget >=
+                minimumVariablePresentationPixels,
+        "The measured RE4 1440p resource graph must admit a 4K packed-10-bit WSI replacement inside the driver's post-reserve headroom");
+    profile.scaling_factor = 1.5F;
+    const auto observedRe4FourK = scalingDecisionForCreate(
+        profile, true, 7, largeVariableCreate, {2560, 1440},
+        std::nullopt, std::nullopt,
+        observedRe4ResourceAdmission.effectivePixelBudget,
+        VkExtent2D{3840, 2160}, true,
+        observedRe4MemoryAdmission.staticPixelBudget
+    );
+    expect(observedRe4FourK.extents &&
+            sameExtent(
+                observedRe4FourK.extents->presentation, {3840, 2160}
+            ) &&
+            !observedRe4FourK.memoryBudgetConstrained,
+        "A late 1440p-to-4K activation must not depend on whether the game allocated its steady-state memory before the factor changed");
+    const auto expensiveRe4ResourceAdmission =
+        variablePresentationResourceAdmission(
+            observedRe4MemoryAdmission,
+            {2560, 1440},
+            VK_FORMAT_R16G16B16A16_SFLOAT,
+            6,
+            4
+        );
+    expect(expensiveRe4ResourceAdmission.livePixelBudget &&
+            expensiveRe4ResourceAdmission.effectivePixelBudget <
+                minimumVariablePresentationPixels,
+        "The same live headroom must remain sensitive to a 64-bit WSI and the maximum generated-frame capacity");
+    profile.scaling_factor = 2.0F;
     const SpatialScalingExtents provenFourK{
         .source = {2560, 1440},
         .presentation = {3840, 2160},
@@ -970,6 +1121,28 @@ int main() {
             ),
         "Reducing a proven live extent must remain admitted even when the driver's released-allocation accounting lags");
     profile.scaling_factor = 2.0F;
+    const SpatialScalingExtents currentSameSourceDownshift{
+        .source = {1920, 1080},
+        .presentation = {2880, 1620},
+    };
+    const auto factorRoundTripRestoresProvenFourK = scalingDecisionForCreate(
+        profile, true, 9, largeVariableCreate, {1920, 1080},
+        currentSameSourceDownshift, std::nullopt,
+        exhaustedAdmission.effectivePixelBudget,
+        std::nullopt, false, exhaustedAdmission.staticPixelBudget,
+        sameSourceFourK
+    );
+    expect(factorRoundTripRestoresProvenFourK.extents &&
+            factorRoundTripRestoresProvenFourK.
+                reusedPreviousPresentationBudget &&
+            factorRoundTripRestoresProvenFourK.
+                reusedRollbackPresentationBudget &&
+            !factorRoundTripRestoresProvenFourK.memoryBudgetConstrained &&
+            sameExtent(
+                factorRoundTripRestoresProvenFourK.extents->presentation,
+                {3840, 2160}
+            ),
+        "A 2x to 1.5x to 2x same-source round trip must restore its one-step proven 4K envelope while live accounting lags");
     const auto lowerSourceReusesProvenFourK = scalingDecisionForCreate(
         profile, true, 9, largeVariableCreate, {1920, 1080},
         provenFourK, std::nullopt, exhaustedAdmission.effectivePixelBudget,
@@ -1024,6 +1197,114 @@ int main() {
                 SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
         "A larger source must not borrow a smaller source's live allocation proof");
 
+    constexpr uint64_t measuredTransitionLivePixelBudget = 2'523'785;
+    const auto largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom =
+        scalingDecisionForCreate(
+            profile, true, 10, largeVariableCreate, {2560, 1440},
+            sameSourceFourK, std::nullopt,
+            measuredTransitionLivePixelBudget,
+            VkExtent2D{3840, 2160}, true,
+            variablePresentationPixelBudget(eightGiB)
+        );
+    expect(largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom.extents &&
+            largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom.
+                reusedPreviousPresentationBudget &&
+            largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom.
+                reusedPreviousSourceGrowthHeadroom &&
+            !largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom.
+                reusedPreviousDownshiftEnvelope &&
+            !largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom.
+                memoryBudgetConstrained &&
+            sameExtent(
+                largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom.
+                    extents->source,
+                {2560, 1440}
+            ) &&
+            sameExtent(
+                largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom.
+                    extents->presentation,
+                {3840, 2160}
+            ),
+        "A larger source may retain a proven 4K output only when its incremental area fits live headroom");
+    const auto coldLargerSourceStillRequiresFullAdmission =
+        scalingDecisionForCreate(
+            profile, true, 10, largeVariableCreate, {2560, 1440},
+            std::nullopt, std::nullopt,
+            measuredTransitionLivePixelBudget,
+            VkExtent2D{3840, 2160}, true,
+            variablePresentationPixelBudget(eightGiB)
+        );
+    expect(!coldLargerSourceStillRequiresFullAdmission.extents &&
+            !coldLargerSourceStillRequiresFullAdmission.
+                reusedPreviousSourceGrowthHeadroom &&
+            coldLargerSourceStillRequiresFullAdmission.inactiveReason ==
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+        "A cold larger source must not receive transition-only presentation proof");
+
+    const SpatialScalingExtents measuredCurrentDownshift{
+        .source = {2560, 1440},
+        .presentation = {3072, 1728},
+    };
+    profile.scaling_factor = 1.2F;
+    const auto measuredNativeToPreviousFactor = scalingDecisionForCreate(
+        profile, true, 11, largeVariableCreate, {2560, 1440},
+        measuredCurrentDownshift, std::nullopt,
+        measuredTransitionLivePixelBudget,
+        VkExtent2D{3840, 2160}, true,
+        variablePresentationPixelBudget(eightGiB), provenFourK
+    );
+    expect(measuredNativeToPreviousFactor.extents &&
+            measuredNativeToPreviousFactor.
+                reusedRollbackPresentationBudget &&
+            sameExtent(
+                measuredNativeToPreviousFactor.extents->presentation,
+                {3072, 1728}
+            ),
+        "The observed Native Resolution to 1.2x step must restore its exact previously running extent");
+    profile.scaling_factor = 1.3F;
+    const auto measuredIntermediateFactor = scalingDecisionForCreate(
+        profile, true, 12, largeVariableCreate, {2560, 1440},
+        measuredCurrentDownshift, std::nullopt,
+        measuredTransitionLivePixelBudget,
+        VkExtent2D{3840, 2160}, true,
+        variablePresentationPixelBudget(eightGiB), provenFourK
+    );
+    expect(measuredIntermediateFactor.extents &&
+            measuredIntermediateFactor.reusedRollbackPresentationBudget &&
+            sameExtent(
+                measuredIntermediateFactor.extents->presentation,
+                {3326, 1870}
+            ),
+        "An intermediate 1.3x step must remain inside the retained proven 4K envelope");
+    const auto measuredRetainedMaximum =
+        committedVariableSurfaceRollbackExtents(
+            measuredCurrentDownshift, provenFourK,
+            true, true, true, false, false, false,
+            {2560, 1440}, {3326, 1870}
+        );
+    expect(measuredRetainedMaximum && sameExtent(
+            measuredRetainedMaximum->presentation, {3840, 2160}),
+        "An intermediate successful upshift must retain the measured 4K maximum");
+    profile.scaling_factor = 1.5F;
+    const auto measuredReturnToFourK = scalingDecisionForCreate(
+        profile, true, 13, largeVariableCreate, {2560, 1440},
+        SpatialScalingExtents{
+            .source = {2560, 1440},
+            .presentation = {3326, 1870},
+        },
+        std::nullopt, measuredTransitionLivePixelBudget,
+        VkExtent2D{3840, 2160}, true,
+        variablePresentationPixelBudget(eightGiB), measuredRetainedMaximum
+    );
+    expect(measuredReturnToFourK.extents &&
+            measuredReturnToFourK.reusedRollbackPresentationBudget &&
+            sameExtent(
+                measuredReturnToFourK.extents->presentation,
+                {3840, 2160}
+            ),
+        "The observed 1.2x to 1.3x to 1.5x sequence must recover its proven 4K output under lagging live accounting");
+
+    profile.scaling_factor = 2.0F;
     const auto staticOnlyAdmission = variablePresentationMemoryAdmission(
         eightGiB
     );
@@ -1164,11 +1445,11 @@ int main() {
         applySwapchainCreateProvisioning(
             combinedProfile, 0, combinedCreate,
             true, true, true
-        );
+    );
     expect(combinedPrivateTransport &&
-            combinedCreate.minImageCount == 3 &&
+            combinedCreate.minImageCount == 6 &&
             combinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
-        "Provisioned frame generation must not inflate an already sufficient application image count");
+        "Provisioned frame generation must retain the healthy application plus ordered-batch image count");
 
     auto fiveXProfile = combinedProfile;
     fiveXProfile.multiplier = 5;
@@ -1182,8 +1463,20 @@ int main() {
     static_cast<void>(applySwapchainCreateProvisioning(
         fiveXProfile, 0, fiveXCreate, true, false, true
     ));
-    expect(fiveXCreate.minImageCount == 5,
-        "Frame generation must raise a small application minimum only to one real plus the generated batch");
+    expect(fiveXCreate.minImageCount == 7,
+        "A larger generated batch must retain application and ordered-batch capacity");
+
+    VkSwapchainCreateInfoKHR applicationDominatedCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 4,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    static_cast<void>(applySwapchainCreateProvisioning(
+        combinedProfile, 0, applicationDominatedCreate, true, false, true
+    ));
+    expect(applicationDominatedCreate.minImageCount == 7,
+        "A larger application minimum must retain the complete ordered-batch headroom");
 
     VkSwapchainCreateInfoKHR boundedFiveXCreate{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -1195,7 +1488,161 @@ int main() {
         fiveXProfile, 4, boundedFiveXCreate, true, false, true
     ));
     expect(boundedFiveXCreate.minImageCount == 4,
-        "The surface maximum must still bound generated-batch image provisioning");
+        "The surface maximum must still bound ordered-queue image provisioning");
+
+    expect(shouldRetrySwapchainWithApplicationMinimum(
+            VK_ERROR_INITIALIZATION_FAILED, 3, 6),
+        "An implementation rejection must retry an inflated minimum once");
+    expect(shouldRetrySwapchainWithApplicationMinimum(
+            VK_ERROR_OUT_OF_DEVICE_MEMORY, 3, 6),
+        "A device-memory rejection must retry an inflated minimum once");
+    expect(shouldRetrySwapchainWithApplicationMinimum(
+            VK_ERROR_OUT_OF_HOST_MEMORY, 3, 6),
+        "A host-memory rejection must retry an inflated minimum once");
+    expect(!shouldRetrySwapchainWithApplicationMinimum(
+            VK_ERROR_SURFACE_LOST_KHR, 3, 6),
+        "A lost surface must not be hidden by an image-count retry");
+    expect(!shouldRetrySwapchainWithApplicationMinimum(
+            VK_ERROR_INITIALIZATION_FAILED, 3, 3),
+        "An unmodified minimum must not be retried identically");
+    SwapchainImageCountCompatibilityState imageCountCompatibility;
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            imageCountCompatibility, 0, 3, 6, {1024, 576}, 0) ==
+                SwapchainImageCountCompatibilityObservation::ZeroReturnProbe &&
+            imageCountCompatibility.zeroReturnProbeObserved &&
+            !imageCountCompatibility.replacementCandidate &&
+            imageCountCompatibility.applicationMinimumSignatures.empty(),
+        "One discarded inflated startup swapchain must be evidence, not a fallback");
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            imageCountCompatibility, 4, 3, 6, {3840, 2160}, 120) ==
+                SwapchainImageCountCompatibilityObservation::
+                    ShortLivedReplacementCandidate &&
+            imageCountCompatibility.replacementCandidate &&
+            imageCountCompatibility.applicationMinimumSignatures.empty(),
+        "A zero-return probe followed by a short multi-present surface must await a matching replacement");
+    expect(activateSwapchainImageCountCompatibilityForCreate(
+            imageCountCompatibility, 3, 6, {3840, 2160}) &&
+            imageCountCompatibility.applicationMinimumSignatures.size() == 1 &&
+            !imageCountCompatibility.replacementCandidate,
+        "A matching third surface must activate the session-local fallback");
+    expect(activateSwapchainImageCountCompatibilityForCreate(
+            imageCountCompatibility, 3, 6, {3840, 2160}),
+        "The proven compatibility fallback must remain stable for the matching signature");
+    expect(!activateSwapchainImageCountCompatibilityForCreate(
+            imageCountCompatibility, 3, 6, {2560, 1440}) &&
+            imageCountCompatibility.applicationMinimumSignatures.size() == 1,
+        "A proven fallback must not change a different extent in the same process");
+
+    SwapchainImageCountCompatibilityState isolatedShortLived;
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            isolatedShortLived, 4, 3, 6, {3840, 2160}, 120) ==
+                SwapchainImageCountCompatibilityObservation::Ignored &&
+            !isolatedShortLived.replacementCandidate &&
+            !activateSwapchainImageCountCompatibilityForCreate(
+                isolatedShortLived, 3, 6, {3840, 2160}),
+        "An isolated short multi-present surface must not seed compatibility mode");
+
+    SwapchainImageCountCompatibilityState longZeroReturn;
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            longZeroReturn, 0, 3, 6, {3840, 2160},
+            swapchainImageCountZeroReturnProbeLifetimeLimitMs + 1) ==
+                SwapchainImageCountCompatibilityObservation::Ignored &&
+            !longZeroReturn.zeroReturnProbeObserved,
+        "A long-lived zero-return surface must not seed a startup signature");
+
+    SwapchainImageCountCompatibilityState healthyCompatibility;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        healthyCompatibility, 0, 3, 6, {1024, 576}, 0
+    ));
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            healthyCompatibility, 1, 3, 6, {3840, 2160}, 120) ==
+                SwapchainImageCountCompatibilityObservation::
+                    HealthySurfaceCleared &&
+            !healthyCompatibility.zeroReturnProbeObserved &&
+            !healthyCompatibility.replacementCandidate,
+        "A one-return successor must not satisfy the multi-present signature");
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        healthyCompatibility, 0, 3, 6, {1024, 576}, 0
+    ));
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            healthyCompatibility, 4, 3, 6, {3840, 2160}, 2'208) ==
+                SwapchainImageCountCompatibilityObservation::
+                    ShortLivedReplacementCandidate,
+        "A measured Detroit startup handoff just above two seconds must remain eligible");
+    expect(activateSwapchainImageCountCompatibilityForCreate(
+            healthyCompatibility, 3, 6, {3840, 2160}),
+        "The measured Detroit startup handoff must activate only for its matching replacement");
+
+    SwapchainImageCountCompatibilityState slowStartupCompatibility;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        slowStartupCompatibility, 0, 3, 6, {1024, 576}, 0
+    ));
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            slowStartupCompatibility, 2, 3, 6, {3840, 2160}, 9'000) ==
+                SwapchainImageCountCompatibilityObservation::
+                    ShortLivedReplacementCandidate,
+        "A low-frame-count startup handoff must remain portable to slower devices");
+
+    SwapchainImageCountCompatibilityState runningSuccessorCompatibility;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        runningSuccessorCompatibility, 0, 3, 6, {1024, 576}, 0
+    ));
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            runningSuccessorCompatibility,
+            swapchainImageCountShortLivedReturnedPresentMaximum + 1,
+            3, 6, {3840, 2160}, 1'000) ==
+                SwapchainImageCountCompatibilityObservation::
+                    HealthySurfaceCleared &&
+            !runningSuccessorCompatibility.replacementCandidate,
+        "A normally running successor must not qualify merely because it is recreated within the time window");
+
+    SwapchainImageCountCompatibilityState longSuccessorCompatibility;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        longSuccessorCompatibility, 0, 3, 6, {1024, 576}, 0
+    ));
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            longSuccessorCompatibility, 4, 3, 6, {3840, 2160},
+            swapchainImageCountReplacementLifetimeLimitMs + 1) ==
+                SwapchainImageCountCompatibilityObservation::
+                    HealthySurfaceCleared,
+        "A long-lived successor must clear startup evidence even with few returned presents");
+
+    SwapchainImageCountCompatibilityState mismatchedReplacement;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        mismatchedReplacement, 0, 3, 6, {1024, 576}, 0
+    ));
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        mismatchedReplacement, 4, 3, 6, {3840, 2160}, 120
+    ));
+    expect(!activateSwapchainImageCountCompatibilityForCreate(
+            mismatchedReplacement, 3, 6, {2560, 1440}) &&
+            !mismatchedReplacement.zeroReturnProbeObserved &&
+            !mismatchedReplacement.replacementCandidate &&
+            mismatchedReplacement.applicationMinimumSignatures.empty(),
+        "A different replacement geometry must clear the candidate without changing the normal queue depth");
+
+    SwapchainImageCountCompatibilityState repeatedZeroCompatibility;
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            repeatedZeroCompatibility, 0, 3, 6, {1024, 576}, 0) ==
+                SwapchainImageCountCompatibilityObservation::ZeroReturnProbe &&
+            observeDestroyedSwapchainForImageCountCompatibility(
+                repeatedZeroCompatibility, 0, 3, 6, {3840, 2160}, 0) ==
+                    SwapchainImageCountCompatibilityObservation::
+                        ShortLivedReplacementCandidate &&
+            activateSwapchainImageCountCompatibilityForCreate(
+                repeatedZeroCompatibility, 3, 6, {3840, 2160}),
+        "A repeated zero-return startup handoff must use the same matching-replacement circuit breaker");
+
+    expect(imageCountCompatibility.applicationMinimumSignatures.size() == 1,
+        "The matching-replacement compatibility decision must stay signature-local and persistent");
+
+    SwapchainImageCountCompatibilityState unmodifiedCompatibility;
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            unmodifiedCompatibility, 0, 3, 3, {3840, 2160}, 0) ==
+                SwapchainImageCountCompatibilityObservation::Ignored &&
+            !unmodifiedCompatibility.zeroReturnProbeObserved &&
+            !unmodifiedCompatibility.replacementCandidate,
+        "An unmodified discarded swapchain must not implicate MAKO's image count");
 
     auto liveDisabledProfile = combinedProfile;
     liveDisabledProfile.frame_generation_enabled = false;

@@ -44,6 +44,7 @@ namespace mako::layer {
         bool spatialScalingActive{false};
         bool variableSurface{false};
         bool variableFeedbackSuppressed{false};
+        bool retainVariableSurfaceProof{false};
         bool spatialScalingMemoryConstrained{false};
         SpatialScalingInactiveReason spatialScalingInactiveReason{
             SpatialScalingInactiveReason::None
@@ -109,6 +110,8 @@ namespace mako::layer {
             const vk::Vulkan& vk, VkSwapchainCreateInfoKHR& createInfo,
             const std::optional<SpatialScalingExtents>&
                 previousVariableExtents,
+            const std::optional<SpatialScalingExtents>&
+                variableSurfaceRollbackExtents,
             const std::optional<FixedSurfaceScalingContract>&
                 fixedSurfaceContract,
             bool spatialSurfaceScalingSupported,

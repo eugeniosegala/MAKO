@@ -91,7 +91,7 @@ test-engine-gym-runtime-overhead *args:
 test-engine-gym-sync-validation *args:
     ./engine/scripts/run-mako-gym.sh --suite sync-validation {{args}}
 
-# Run selected scripted runtime-recovery rows; no --filter runs all 31 default cases.
+# Run selected scripted runtime-recovery rows; no --filter runs all 34 default cases.
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}
 
@@ -102,6 +102,10 @@ test-engine-gym-external-recovery *args:
 # Run the high-cost real Gamescope compositor + WSI + MAKO end-to-end lane.
 test-engine-gym-gamescope-e2e *args:
     ./engine/scripts/run-mako-gym.sh --suite gamescope-e2e {{args}}
+
+# Run native Vulkan and Steam Runtime/Proton through the combined Renderer outside Gamescope.
+test-engine-gym-direct-desktop-e2e *args:
+    ./engine/scripts/run-mako-gym.sh --suite direct-desktop-e2e {{args}}
 
 # Run focused private-resource memory and sustained thermal/performance health soaks.
 test-engine-gym-sustained-health *args:

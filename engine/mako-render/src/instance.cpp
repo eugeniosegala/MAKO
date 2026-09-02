@@ -874,6 +874,8 @@ void Root::modifyDeviceCreateInfo(VkDeviceCreateInfo& createInfo,
 SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk,
         VkSwapchainCreateInfoKHR& createInfo,
         const std::optional<SpatialScalingExtents>& previousVariableExtents,
+        const std::optional<SpatialScalingExtents>&
+            variableSurfaceRollbackExtents,
         const std::optional<FixedSurfaceScalingContract>& fixedSurfaceContract,
         const bool spatialSurfaceScalingSupported,
         const std::function<void(
@@ -935,10 +937,16 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         memoryProperties2.memoryProperties,
         liveMemoryBudgetAvailable ? &liveMemoryBudget : nullptr
     );
-    const uint64_t presentationPixelBudget =
-        memoryAdmission.effectivePixelBudget;
-
     auto policySnapshot = this->surfaceScalingPolicySnapshot();
+    const auto resourceAdmission = variablePresentationResourceAdmission(
+        memoryAdmission,
+        createInfo.imageExtent,
+        createInfo.imageFormat,
+        createInfo.minImageCount,
+        generatedFrameCapacityForProfile(*this->active_profile)
+    );
+    const uint64_t presentationPixelBudget =
+        resourceAdmission.effectivePixelBudget;
     const bool spatialCapabilityRelay =
         spatialScalingCapabilityRelayByLayer();
     const bool spatialResourceOwner = spatialScalingOwnedByLayer();
@@ -964,7 +972,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             presentationPixelBudget,
             this->gamescopePresentationTarget,
             gamescopePresentationTargetRequired,
-            memoryAdmission.staticPixelBudget
+            memoryAdmission.staticPixelBudget,
+            variableSurfaceRollbackExtents
         )
         : SpatialScalingCreateDecision{
             .inactiveReason = SpatialScalingInactiveReason::
@@ -1053,6 +1062,10 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                     : SpatialScalingInactiveReason::SwapchainFormatUnsupported));
     }
     modification.spatialScalingInactiveReason = inactiveReason;
+    modification.retainVariableSurfaceProof =
+        policySnapshot.policy.enabled &&
+        policySnapshot.policy.factor <= 1.0F &&
+        inactiveReason == SpatialScalingInactiveReason::FactorNotUpscaling;
     if (spatialExtentOwner && !spatialResourceOwner) {
         // Publish every lower create decision, including an explicit no-split
         // result. The upper combined role must distinguish that valid native
@@ -1107,9 +1120,13 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << "; variable_presentation_static_pixel_budget="
                   << memoryAdmission.staticPixelBudget
                   << "; variable_presentation_live_pixel_budget="
-                  << memoryAdmission.livePixelBudget.value_or(0)
+                  << resourceAdmission.livePixelBudget.value_or(0)
                   << "; variable_presentation_pixel_budget="
                   << presentationPixelBudget
+                  << "; variable_presentation_fixed_source_mib="
+                  << (resourceAdmission.fixedSourceBytes / (1024 * 1024))
+                  << "; variable_presentation_bytes_per_pixel="
+                  << resourceAdmission.presentationBytesPerPixel
                   << "; gamescope_presentation_target="
                   << (this->gamescopePresentationTarget
                         ? this->gamescopePresentationTarget->width : 0)
@@ -1168,8 +1185,12 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << modification.variableFeedbackSuppressed
                   << "; previous_presentation_budget_reused="
                   << scalingDecision.reusedPreviousPresentationBudget
+                  << "; rollback_presentation_budget_reused="
+                  << scalingDecision.reusedRollbackPresentationBudget
                   << "; previous_downshift_envelope_reused="
                   << scalingDecision.reusedPreviousDownshiftEnvelope
+                  << "; previous_source_growth_headroom_reused="
+                  << scalingDecision.reusedPreviousSourceGrowthHeadroom
                   << "; baseline_presentation_budget_used="
                   << scalingDecision.usedBaselinePresentationBudget
                   << "; extent_selected="

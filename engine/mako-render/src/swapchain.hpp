@@ -174,6 +174,13 @@ namespace mako::layer {
         [[nodiscard]] bool presentRetirementEnabled() const {
             return !this->presentRetirementFences.empty();
         }
+        [[nodiscard]] size_t completedApplicationPresentCount() const {
+            return this->frameState.realFrameIndex;
+        }
+        [[nodiscard]] std::chrono::steady_clock::time_point
+        compatibilityObservationStartedAt() const {
+            return this->compatibilityObservationStarted;
+        }
 
         /// Record a confirmed Gamescope application-HDR state change. Existing
         /// contexts retain their safe encoding until the game naturally
@@ -249,6 +256,8 @@ namespace mako::layer {
             bool backendPending{false};
             size_t historyWarmupRemaining{0};
         };
+
+        std::chrono::steady_clock::time_point compatibilityObservationStarted{};
 
         struct DiagnosticsState {
             std::optional<std::chrono::steady_clock::time_point>

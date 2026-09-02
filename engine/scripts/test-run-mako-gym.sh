@@ -8,7 +8,7 @@ temporary_root="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_root"' EXIT
 
 listed_suites="$($bridge --list-suites)"
-expected_suites=$'vulkan\nquality\nrepeatability\nperformance\nspatial-performance\nruntime-overhead\nsync-validation\nrecovery\nexternal-recovery\ngamescope-e2e\nsustained-health\nproton-e2e\nproton-compatibility'
+expected_suites=$'vulkan\nquality\nrepeatability\nperformance\nspatial-performance\nruntime-overhead\nsync-validation\nrecovery\nexternal-recovery\ngamescope-e2e\ndirect-desktop-e2e\nsustained-health\nproton-e2e\nproton-compatibility'
 if [[ "$listed_suites" != "$expected_suites" ]]; then
     echo "Gym bridge suite inventory is not canonical." >&2
     exit 1
@@ -62,6 +62,9 @@ chmod +x "$fake_gym/scripts/run-external-recovery.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "gamescope-e2e:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-gamescope-end-to-end.sh"
 chmod +x "$fake_gym/scripts/run-gamescope-end-to-end.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "direct-desktop-e2e:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-direct-desktop-end-to-end.sh"
+chmod +x "$fake_gym/scripts/run-direct-desktop-end-to-end.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "sustained-health:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-sustained-health.sh"
 chmod +x "$fake_gym/scripts/run-sustained-health.sh"
@@ -133,6 +136,12 @@ if [[ "$gamescope_e2e_forwarded" != "$gamescope_e2e_expected" ]]; then
     echo "Gym Gamescope E2E arguments were not forwarded exactly." >&2
     exit 1
 fi
+direct_desktop_forwarded="$($bridge --gym-repo "$fake_gym" --suite direct-desktop-e2e --filter '^steam-desktop-dxvk-')"
+direct_desktop_expected=$'direct-desktop-e2e:--filter\ndirect-desktop-e2e:^steam-desktop-dxvk-'
+if [[ "$direct_desktop_forwarded" != "$direct_desktop_expected" ]]; then
+    echo "Gym direct-desktop E2E arguments were not forwarded exactly." >&2
+    exit 1
+fi
 sustained_health_forwarded="$($bridge --gym-repo "$fake_gym" --suite sustained-health --filter '^sustained-deck-')"
 sustained_health_expected=$'sustained-health:--filter\nsustained-health:^sustained-deck-'
 if [[ "$sustained_health_forwarded" != "$sustained_health_expected" ]]; then
@@ -152,9 +161,9 @@ if [[ "$proton_compatibility_forwarded" != "$proton_compatibility_expected" ]]; 
     exit 1
 fi
 all_suites_forwarded="$($bridge --gym-repo "$fake_gym" --all-suites --validate)"
-all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate\nexternal-recovery:--validate\ngamescope-e2e:--validate\nsustained-health:--validate\nproton-e2e:--validate\nproton-compatibility:--validate'
+all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate\nexternal-recovery:--validate\ngamescope-e2e:--validate\ndirect-desktop-e2e:--validate\nsustained-health:--validate\nproton-e2e:--validate\nproton-compatibility:--validate'
 if [[ "$all_suites_forwarded" != "$all_suites_expected" ]]; then
-    echo "Gym all-suites validation did not invoke all thirteen runners exactly once." >&2
+    echo "Gym all-suites validation did not invoke all fourteen runners exactly once." >&2
     exit 1
 fi
 if "$bridge" --gym-repo "$fake_gym" --all-suites --suite quality --validate >/dev/null 2>&1; then
