@@ -1061,9 +1061,36 @@ int main() {
             true, true, true
         );
     expect(combinedPrivateTransport &&
-            combinedCreate.minImageCount > 3 &&
+            combinedCreate.minImageCount == 3 &&
             combinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
-        "Provisioned frame generation must retain its image-capacity and ordered transport policy");
+        "Provisioned frame generation must not inflate an already sufficient application image count");
+
+    auto fiveXProfile = combinedProfile;
+    fiveXProfile.multiplier = 5;
+    fiveXProfile.adaptive_max_multiplier = 5;
+    VkSwapchainCreateInfoKHR fiveXCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 2,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    static_cast<void>(applySwapchainCreateProvisioning(
+        fiveXProfile, 0, fiveXCreate, true, false, true
+    ));
+    expect(fiveXCreate.minImageCount == 5,
+        "Frame generation must raise a small application minimum only to one real plus the generated batch");
+
+    VkSwapchainCreateInfoKHR boundedFiveXCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 2,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    static_cast<void>(applySwapchainCreateProvisioning(
+        fiveXProfile, 4, boundedFiveXCreate, true, false, true
+    ));
+    expect(boundedFiveXCreate.minImageCount == 4,
+        "The surface maximum must still bound generated-batch image provisioning");
 
     auto liveDisabledProfile = combinedProfile;
     liveDisabledProfile.frame_generation_enabled = false;

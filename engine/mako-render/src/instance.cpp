@@ -1515,6 +1515,10 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << spatialFramePipelinePlacementName(
                         framePipelinePlacement
                      )
+                  << " requested_min_images="
+                  << info.requestedMinImageCount
+                  << " provisioned_min_images="
+                  << info.provisionedMinImageCount
                   << " images=" << info.images.size()
                   << " format=" << static_cast<int>(info.format)
                   << " color_space=" << static_cast<int>(info.colorSpace)

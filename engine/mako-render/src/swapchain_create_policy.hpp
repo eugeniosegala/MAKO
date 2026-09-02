@@ -32,8 +32,23 @@ namespace mako::layer {
 
         switch (profile.pacing) {
             case ls::Pacing::None:
-                createInfo.minImageCount +=
-                    generatedFrameCapacityForProfile(profile) + 1;
+                // One intercepted application present keeps the real image
+                // acquired while MAKO acquires at most one image per
+                // generated output. Reserve that total only when the
+                // application's own minimum is smaller. Adding the two
+                // requirements needlessly changes a three-image application
+                // swapchain into six images for a 3x-capable profile and can
+                // break engines with otherwise avoidable WSI image-count
+                // assumptions. If other application frames temporarily hold
+                // the remaining images, generated-image acquire recovery
+                // already retains a native present instead of requiring
+                // permanent app-visible headroom.
+                createInfo.minImageCount = std::max(
+                    createInfo.minImageCount,
+                    static_cast<uint32_t>(
+                        generatedFrameCapacityForProfile(profile) + 1
+                    )
+                );
                 if (maxImages && createInfo.minImageCount > maxImages)
                     createInfo.minImageCount = maxImages;
                 if (orderedFrameGenerationTransport) {

@@ -1720,6 +1720,9 @@ namespace {
                           << info->oldSwapchain
                           << " requested_width=" << info->imageExtent.width
                           << " requested_height=" << info->imageExtent.height
+                          << " requested_min_images=" << info->minImageCount
+                          << " requested_present_mode="
+                          << static_cast<int>(info->presentMode)
                           << '\n';
             }
 
@@ -2034,6 +2037,8 @@ namespace {
                 .surface = info->surface,
                 .format = newInfo.imageFormat,
                 .colorSpace = newInfo.imageColorSpace,
+                .requestedMinImageCount = info->minImageCount,
+                .provisionedMinImageCount = newInfo.minImageCount,
                 .applicationExtent = modification.applicationExtent,
                 .extent = newInfo.imageExtent,
                 .gamescopePresentationTarget =
