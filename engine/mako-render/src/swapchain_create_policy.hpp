@@ -231,19 +231,19 @@ namespace mako::layer {
     }
 
     /// Return the largest generated batch that the already-created WSI
-    /// swapchain can retain alongside the application's requested images and
-    /// MAKO's ordered real-image slot. Drivers may return more images than the
-    /// requested minimum, so use the observed count rather than the create
-    /// request when deciding whether a live private-capacity rebuild is safe.
+    /// swapchain can retain beside MAKO's ordered real-image slot. The
+    /// application's ownership requirement is already represented by the
+    /// pool returned for max(application minimum, generated capacity + 1);
+    /// adding it again here would revive the same overprovisioning model at
+    /// the live-growth boundary. A driver returning fewer images than the
+    /// application requested is malformed and must fail closed.
     [[nodiscard]] inline size_t
     generatedFrameCapacitySupportedByExistingSwapchain(
             const uint32_t requestedMinImages,
             const size_t returnedImages) noexcept {
-        const size_t reservedImages =
-            static_cast<size_t>(requestedMinImages) + 1;
-        return returnedImages > reservedImages
-            ? returnedImages - reservedImages
-            : 0;
+        if (returnedImages < requestedMinImages || returnedImages == 0)
+            return 0;
+        return returnedImages - 1;
     }
 
     /// Apply only the WSI mutations justified by resources provisioned on the
@@ -266,16 +266,20 @@ namespace mako::layer {
 
         switch (profile.pacing) {
             case ls::Pacing::None:
-                // Preserve the normal healthy transport contract: the
-                // application's own in-flight requirement remains intact,
-                // while one real image plus the largest generated batch is
-                // reserved for MAKO's ordered output. A lower-create failure
-                // or a zero-return probe followed by a matching short-lived
-                // replacement can select the unmodified application minimum.
-                // Healthy swapchains retain the established queue depth and
-                // cadence.
-                createInfo.minImageCount +=
-                    generatedFrameCapacityForProfile(profile) + 1;
+                // The application and MAKO consume the same WSI pool at
+                // different points in the ordered present sequence. Reserve
+                // whichever minimum is larger instead of adding both
+                // requirements: additive provisioning can turn a normal
+                // three-image game swapchain into six images and break
+                // engines with fixed image-count assumptions. Acquire
+                // recovery retains the real frame if temporary application
+                // ownership leaves insufficient generated-image headroom.
+                createInfo.minImageCount = std::max(
+                    createInfo.minImageCount,
+                    static_cast<uint32_t>(
+                        generatedFrameCapacityForProfile(profile) + 1
+                    )
+                );
                 if (maxImages && createInfo.minImageCount > maxImages)
                     createInfo.minImageCount = maxImages;
                 if (orderedFrameGenerationTransport) {

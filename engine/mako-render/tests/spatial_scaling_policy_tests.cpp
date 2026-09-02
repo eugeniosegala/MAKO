@@ -1506,9 +1506,9 @@ int main() {
             true, true, true
     );
     expect(combinedPrivateTransport &&
-            combinedCreate.minImageCount == 6 &&
+            combinedCreate.minImageCount == 3 &&
             combinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
-        "Provisioned frame generation must retain the healthy application plus ordered-batch image count");
+        "A three-image application minimum must not be additively inflated by a matching 3x ordered-batch requirement");
 
     VkPhysicalDeviceMemoryBudgetPropertiesEXT imageCountPricingBudget{
         .sType =
@@ -1530,15 +1530,15 @@ int main() {
             VK_FORMAT_B8G8R8A8_UNORM, combinedCreate.minImageCount, 2
         );
     expect(applicationMinimumPricing.presentationBytesPerPixel == 20 &&
-            provisionedMinimumPricing.presentationBytesPerPixel == 32 &&
-            provisionedMinimumPricing.effectivePixelBudget <
+            provisionedMinimumPricing.presentationBytesPerPixel == 20 &&
+            provisionedMinimumPricing.effectivePixelBudget ==
                 applicationMinimumPricing.effectivePixelBudget,
-        "Scaling admission must price the prospective six-image WSI graph rather than the application's three-image minimum");
+        "Scaling admission must price the compatible three-image WSI graph without reviving additive overprovisioning");
     expect(
         (provisionedMinimumPricing.presentationBytesPerPixel -
             applicationMinimumPricing.presentationBytesPerPixel) *
-                minimumVariablePresentationPixels == 99'532'800,
-        "The 4K admission regression must retain the missing three-image cost as an explicit boundary");
+                minimumVariablePresentationPixels == 0,
+        "The RE4 4K admission regression must not charge three duplicate WSI images");
 
     auto fiveXProfile = combinedProfile;
     fiveXProfile.multiplier = 5;
@@ -1552,8 +1552,8 @@ int main() {
     static_cast<void>(applySwapchainCreateProvisioning(
         fiveXProfile, 0, fiveXCreate, true, false, true
     ));
-    expect(fiveXCreate.minImageCount == 7,
-        "A larger generated batch must retain application and ordered-batch capacity");
+    expect(fiveXCreate.minImageCount == 5,
+        "A larger generated batch must raise only a smaller application minimum");
 
     VkSwapchainCreateInfoKHR applicationDominatedCreate{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -1564,8 +1564,8 @@ int main() {
     static_cast<void>(applySwapchainCreateProvisioning(
         combinedProfile, 0, applicationDominatedCreate, true, false, true
     ));
-    expect(applicationDominatedCreate.minImageCount == 7,
-        "A larger application minimum must retain the complete ordered-batch headroom");
+    expect(applicationDominatedCreate.minImageCount == 4,
+        "A larger application minimum must not be inflated by a smaller ordered-batch requirement");
 
     VkSwapchainCreateInfoKHR boundedFiveXCreate{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -1588,12 +1588,12 @@ int main() {
     expect(shouldRetrySwapchainWithApplicationMinimum(
             VK_ERROR_OUT_OF_HOST_MEMORY, 3, 6),
         "A host-memory rejection must retry an inflated minimum once");
-    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 5) == 1,
-        "A five-image swapchain must retain only 2x generation beside a three-image application minimum");
-    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 6) == 2,
-        "A six-image swapchain must retain 3x generation beside a three-image application minimum");
-    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 3) == 0,
-        "An application-minimum compatibility swapchain must expose no additional live-growth headroom");
+    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 5) == 4,
+        "A five-image swapchain must support a 5x ordered batch while sharing the application pool");
+    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 6) == 5,
+        "A six-image swapchain must expose five generated slots beside the ordered real image");
+    expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 3) == 2,
+        "A three-image application pool must support the matching 3x ordered batch without additive reservation");
     expect(generatedFrameCapacitySupportedByExistingSwapchain(3, 2) == 0,
         "A malformed returned-image count must fail closed without unsigned underflow");
     expect(!shouldRetrySwapchainWithApplicationMinimum(

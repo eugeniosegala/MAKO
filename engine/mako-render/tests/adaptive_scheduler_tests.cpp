@@ -698,14 +698,23 @@ namespace {
         const auto start = Clock::time_point{};
 
         ReplacementBackendStabilization coldStart;
-        coldStart.begin(false, start);
+        coldStart.begin(false, true, start);
         const auto coldDecision = coldStart.beforeFrame(start);
         require(!coldStart.active() && !coldDecision.bypassBackend &&
                 !coldDecision.resumed,
             "A cold swapchain was incorrectly given replacement-only backend stabilization");
 
+        ReplacementBackendStabilization disabledReplacement;
+        disabledReplacement.begin(true, false, start);
+        const auto disabledDecision = disabledReplacement.beforeFrame(
+            start + ReplacementBackendStabilization::duration * 2
+        );
+        require(!disabledReplacement.active() &&
+                !disabledDecision.bypassBackend && !disabledDecision.resumed,
+            "A replacement armed private-backend stabilization while Frame Generation was disabled");
+
         ReplacementBackendStabilization replacement;
-        replacement.begin(true, start);
+        replacement.begin(true, true, start);
         const auto first = replacement.beforeFrame(start);
         const auto repeated = replacement.beforeFrame(
             start + ReplacementBackendStabilization::duration / 2

@@ -1031,12 +1031,12 @@ int main() {
         "Generated-capacity growth must use a private rebuild while the old policy remains active");
     expect(generatedFrameCapacityForActivePolicy(adaptiveFourX) == 3,
         "Adaptive 4x active capacity was not selected");
-    const bool privateCapacityFitsFiveImageSwapchain =
+    const bool privateCapacityFitsThreeImageSwapchain =
         generatedFrameCapacityForActivePolicy(adaptiveFourX) <=
-            generatedFrameCapacitySupportedByExistingSwapchain(3, 5);
+            generatedFrameCapacitySupportedByExistingSwapchain(3, 3);
     const auto wsiConstrainedCapacityPlan = planProfileUpdate(
         fixedWithDormantFourX, adaptiveFourX, 2, true, false,
-        privateCapacityFitsFiveImageSwapchain
+        privateCapacityFitsThreeImageSwapchain
     );
     expect(wsiConstrainedCapacityPlan.decision.action ==
                 ProfileUpdateAction::DeferUntilSwapchainRecreation &&
@@ -1049,19 +1049,36 @@ int main() {
     adaptiveTwoX.adaptive_max_multiplier = 2;
     auto adaptiveThreeX = adaptiveTwoX;
     adaptiveThreeX.adaptive_max_multiplier = 3;
-    const bool threeXCapacityFitsFiveImageSwapchain =
+    const bool threeXCapacityFitsThreeImageSwapchain =
         generatedFrameCapacityForActivePolicy(adaptiveThreeX) <=
-            generatedFrameCapacitySupportedByExistingSwapchain(3, 5);
+            generatedFrameCapacitySupportedByExistingSwapchain(3, 3);
     const auto exactLiveGrowthRegressionPlan = planProfileUpdate(
         adaptiveTwoX, adaptiveThreeX, 1, true, false,
-        threeXCapacityFitsFiveImageSwapchain
+        threeXCapacityFitsThreeImageSwapchain
     );
     expect(exactLiveGrowthRegressionPlan.decision.action ==
-                ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+                ProfileUpdateAction::ApplyLive &&
             exactLiveGrowthRegressionPlan.decision.generatedFrameCapacityExceeded &&
-            !exactLiveGrowthRegressionPlan.decision.frameGenerationPrivateRebuild &&
+            exactLiveGrowthRegressionPlan.decision.frameGenerationPrivateRebuild &&
+            !exactLiveGrowthRegressionPlan.decision.swapchainRecreationDeferred &&
             exactLiveGrowthRegressionPlan.appliedProfile.adaptive_max_multiplier == 2,
-        "A live 2x-to-3x request must retain 2x on an exact five-image swapchain");
+        "A live 2x-to-3x request must fit the same three-image pool, rebuild privately, and retain the active policy until replacement completes");
+
+    auto adaptiveFiveX = adaptiveThreeX;
+    adaptiveFiveX.adaptive_max_multiplier = 5;
+    const bool fiveXCapacityFitsThreeImageSwapchain =
+        generatedFrameCapacityForActivePolicy(adaptiveFiveX) <=
+            generatedFrameCapacitySupportedByExistingSwapchain(3, 3);
+    const auto trueWsiGrowthBoundaryPlan = planProfileUpdate(
+        adaptiveThreeX, adaptiveFiveX, 2, true, false,
+        fiveXCapacityFitsThreeImageSwapchain
+    );
+    expect(trueWsiGrowthBoundaryPlan.decision.action ==
+                ProfileUpdateAction::DeferUntilSwapchainRecreation &&
+            trueWsiGrowthBoundaryPlan.decision.generatedFrameCapacityExceeded &&
+            !trueWsiGrowthBoundaryPlan.decision.frameGenerationPrivateRebuild &&
+            trueWsiGrowthBoundaryPlan.appliedProfile.adaptive_max_multiplier == 3,
+        "A live 3x-to-5x request must wait when its five-image requirement exceeds an existing three-image pool");
 
     auto generationDisabled = adaptiveFourX;
     generationDisabled.frame_generation_enabled = false;

@@ -70,15 +70,17 @@ namespace mako::layer {
     /// commonly cycle through several short-lived extents during startup; a
     /// bounded native-history gap prevents one transient replacement from
     /// stalling startup while preserving the existing, longer scheduler
-    /// stabilization window before any generated frame is requested.
+    /// stabilization window before any generated frame is requested. The
+    /// interval is armed only when the replacement's private backend is
+    /// active; a later live enable is owned by configuration stabilization.
     class ReplacementBackendStabilization {
     public:
         using Clock = std::chrono::steady_clock;
         static constexpr auto duration = std::chrono::milliseconds(250);
 
-        void begin(const bool replacement,
+        void begin(const bool replacement, const bool frameGenerationActive,
                 const Clock::time_point now = Clock::now()) {
-            this->until = replacement
+            this->until = replacement && frameGenerationActive
                 ? std::optional<Clock::time_point>{now + duration}
                 : std::nullopt;
             this->diagnosticEmitted = false;

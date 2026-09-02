@@ -643,8 +643,12 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             DiagnosticsClock::now(),
             this->info.replacement ? "swapchain-recreation" : "startup"
         );
+        const bool frameGenerationActive = effectiveFrameGenerationEnabled(
+            this->profile, this->gamescopeRefreshHz
+        ) && this->colorPipeline.generationSupported;
         this->recoveryState.replacementBackendStabilization.begin(
-            this->info.replacement, DiagnosticsClock::now()
+            this->info.replacement, frameGenerationActive,
+            DiagnosticsClock::now()
         );
         if (schedulerEnabled) {
             const auto policy = generationSchedulerPolicy(
