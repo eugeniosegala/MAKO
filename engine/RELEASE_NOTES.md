@@ -1,12 +1,12 @@
 ## What's new in MAKO Renderer v3.0.0
 
-<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/abyssal-fang.png" alt="Abyssal Fang: a Renaissance vision of a colossal mako rising beside a storm-dark fortified harbour" width="100%">
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/sea-rapture.png" alt="Sea Rapture: a Renaissance vision of a mako surging from a storm-cleaved sea into radiant light" width="100%">
 
-### Release codename: Abyssal Fang
+### Release codename: Sea Rapture
 
-> _“The abyss keeps its strength beneath the surface; one fang above the tide is warning enough.”_
+> _“The sea is never still, yet every current keeps its measure; learn that rhythm, and the horizon yields.”_
 >
-> **Severin Voss, _Cartographer of the Drowned Meridian_**
+> **Ilyra Venn, _Navigator of the Radiant Deep_**
 
 ---
 

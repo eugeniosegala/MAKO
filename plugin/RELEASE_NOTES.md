@@ -1,12 +1,12 @@
 ## What's new in MAKO Decky v3.0.0
 
-<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/abyssal-fang.png" alt="Abyssal Fang: a Renaissance vision of a colossal mako rising beside a storm-dark fortified harbour" width="100%">
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/sea-rapture.png" alt="Sea Rapture: a Renaissance vision of a mako surging from a storm-cleaved sea into radiant light" width="100%">
 
-### Release codename: Abyssal Fang
+### Release codename: Sea Rapture
 
-> _“Keep the beacon lit and the harbour still; what hunts below mistakes panic for invitation.”_
+> _“When the tide changes, raise the lantern higher; a clear signal turns rough water into a passage.”_
 >
-> **Marcelline Veyr, _Warden of the Blackwater Gate_**
+> **Cael Orsino, _Keeper of the Rapture Light_**
 
 ---
 
