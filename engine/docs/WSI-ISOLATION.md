@@ -83,6 +83,10 @@ Frame Generation preserves its established healthy queue-depth contract: MAKO ad
 
 The ordered lower swapchain also removes Gamescope's maintenance1 present-mode compatibility node when MAKO changes the lower base mode to FIFO. If that node is nested, MAKO copies each recognized create-chain prefix node and never rewrites caller-owned `const` storage; an unknown prefix fails creation before reaching the driver. Multi-swapchain `VkPresentInfoKHR` batches containing any managed MAKO context similarly fail before shared binary waits or per-swapchain extension arrays are consumed because the current transport has no correct fan-out owner.
 
+## Supported process concurrency boundary
+
+MAKO Renderer's Vulkan interception and dispatch state is process-global and currently supports one active Vulkan instance dispatch domain per process. Applications must externally synchronize host access to each `VkQueue` as Vulkan requires; concurrent presentation through distinct queues or independently active Vulkan instances is not a supported MAKO lane. Multiple swapchains may exist inside the supported instance, but one `VkPresentInfoKHR` batch cannot contain more than one swapchain when any entry is a managed MAKO context. MAKO rejects that batch before consuming its shared binary waits and fills every supplied `pResults` entry with the same failure. Do not claim general Vulkan-layer concurrency until the interception state is instance- and queue-owned and MAKO Gym covers the concurrent paths.
+
 Issue reports show that successful Vulkan presents do not prove image correctness: the curated WSI path can change motion artifacts even when both paths report successful presentation. WSI validation therefore needs a visual A/B check as well as loader and delivery evidence.
 
 ## What remains and what is excluded
