@@ -7,16 +7,18 @@
 
 ### Release codename: Sea Rapture
 
-> _“The captains called it a hunt until the sea chose its champion.”_
+> _“Light the harbour, not for the hunters, but for those the tide returns.”_
 >
-> **Mira Valen, _Last Signal from the Blackwater Gate_**
+> **Cael Orsino, _Keeper of the Rapture Light_**
 
 ---
 
 ### The big Spatial Scaling follow-up
 
-Sea Rapture is MAKO 3.1: a focused follow-up that makes the new scaling pipeline faster, clearer, and more reliable.
+Sea Rapture is MAKO 3.1: a focused follow-up that makes Spatial Scaling faster, clearer, and more resilient across changing resolutions, demanding workloads, and different game swapchain behaviours.
 
-- **Explicit startup compatibility:** The new restart-only **Game Swapchain Images** profile option preserves an affected game's requested swapchain minimum across replacements, with or without scaling and without lifecycle heuristics. MAKO keeps higher-performance generated-frame headroom by default and defers multiplier increases until the game recreates an undersized swapchain.
-- **Improved scaling, monitoring, and Live Status:** Scaling now handles resolution changes and memory limits more safely, monitors available GPU memory headroom, and reports the real Input, Render, and Display resolutions plus any constrained scale factor.
-- **Faster scaling with Frame Generation:** Leaner resource allocation and improved recovery reduce overhead when scaling and Frame Generation run together, increasing combined performance and overall stability.
+- **Clear per-game startup compatibility:** For affected titles such as _Detroit: Become Human_, the new restart-only **Game Swapchain Images** profile option preserves the game's requested swapchain minimum, while MAKO keeps faster generated-frame headroom enabled by default for other games.
+- **Smoother Frame Generation changes:** Multiplier increases wait for a game-owned swapchain recreation when necessary, avoiding repeated timeout recovery and preserving steadier presentation cadence.
+- **Safer scaling transitions:** Resolution changes, supersampling, and GPU-memory constraints now rebuild or fall back more reliably without leaving stale limits behind.
+- **More useful Live Status:** See the real **Input**, **Render**, and **Display** resolutions, available memory headroom, and any constrained scale factor.
+- **Faster combined performance:** Leaner resource allocation and improved recovery reduce overhead when Spatial Scaling and Frame Generation run together.
