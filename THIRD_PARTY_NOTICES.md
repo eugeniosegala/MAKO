@@ -8,7 +8,7 @@ MAKO is an independent open-source project. MAKO source archives, MAKO Renderer 
 
 The open MAKO Scaler works without Lossless Scaling. A user who chooses LSFG frame generation or LS1 scaling must independently obtain a lawful copy of Lossless Scaling and select or permit discovery of its locally installed `Lossless.dll`. The user is responsible for complying with the terms and law applicable to that copy. MAKO grants no license or other rights in Lossless Scaling or its proprietary resources.
 
-When a licensed model is selected, MAKO Renderer reads only the required resources from the user-supplied local DLL at runtime. Translated GPU representations remain process-local. MAKO does not install, upload, include in packages, or persist the DLL or extracted proprietary payloads, and it does not alter the user's DLL file. Repository and release gates reject DLLs, extracted models, raw shaders, and disguised protected binary payloads.
+When a licensed model is selected, MAKO Renderer reads the user-supplied local DLL at runtime and uses the resources needed for the selected LSFG or LS1 feature. MAKO does not install, upload, package, alter, or persist the DLL or extracted proprietary payloads.
 
 Lossless Scaling, LS1, and LSFG are used descriptively and remain the property of their respective owner. MAKO is not affiliated with or endorsed by Lossless Scaling.
 
