@@ -68,7 +68,8 @@ namespace mako::layer {
                 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
             const VkImageUsageFlags imageUsage = 0,
             const VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR,
-            const VkSurfaceKHR surface = VK_NULL_HANDLE) {
+            const VkSurfaceKHR surface = VK_NULL_HANDLE,
+            const bool applicationOldSwapchainProvided = false) {
         const auto signatureMatches = [&](const auto& signature) {
             return signature.requestedMinImages == requestedMinImages &&
                 signature.provisionedMinImages == provisionedMinImages &&
@@ -89,6 +90,17 @@ namespace mako::layer {
             state.zeroReturnProbeObserved = false;
             state.replacementCandidate.reset();
             return SwapchainImageCountCompatibilityObservation::Ignored;
+        }
+        if (applicationOldSwapchainProvided) {
+            const bool clearedStartupEvidence =
+                state.zeroReturnProbeObserved ||
+                state.replacementCandidate.has_value();
+            state.zeroReturnProbeObserved = false;
+            state.replacementCandidate.reset();
+            return clearedStartupEvidence
+                ? SwapchainImageCountCompatibilityObservation::
+                    HealthySurfaceCleared
+                : SwapchainImageCountCompatibilityObservation::Ignored;
         }
 
         if (returnedPresentCount == 0) {
@@ -174,7 +186,8 @@ namespace mako::layer {
                 VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
             const VkImageUsageFlags imageUsage = 0,
             const VkPresentModeKHR presentMode = VK_PRESENT_MODE_FIFO_KHR,
-            const VkSurfaceKHR surface = VK_NULL_HANDLE) {
+            const VkSurfaceKHR surface = VK_NULL_HANDLE,
+            const bool applicationOldSwapchainProvided = false) {
         if (requestedMinImages >= provisionedMinImages)
             return false;
         const auto createSignatureMatches = [&](const auto& signature) {
@@ -194,6 +207,11 @@ namespace mako::layer {
                         signature.establishedSurface == surface;
                 })) {
             return true;
+        }
+        if (applicationOldSwapchainProvided) {
+            state.zeroReturnProbeObserved = false;
+            state.replacementCandidate.reset();
+            return false;
         }
         if (!state.replacementCandidate)
             return false;

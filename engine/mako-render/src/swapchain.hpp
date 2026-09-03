@@ -53,6 +53,11 @@ namespace mako::layer {
         // actionable without changing presentation behavior.
         uint32_t requestedMinImageCount{0};
         uint32_t provisionedMinImageCount{0};
+        // Preserve whether the application supplied the Vulkan replacement
+        // lineage explicitly. A short-lived swapchain in an oldSwapchain
+        // chain is ordinary application-owned recreation, not evidence that
+        // MAKO's image-count reservation prevented startup.
+        bool applicationOldSwapchainProvided{false};
         // Extent the application requested after MAKO virtualized fixed WSI
         // capabilities. The actual swapchain images retain `extent`.
         VkExtent2D applicationExtent;

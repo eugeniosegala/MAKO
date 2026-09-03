@@ -1924,7 +1924,8 @@ namespace {
                                     provisionedMinImages, info->imageExtent,
                                     info->imageFormat, info->imageColorSpace,
                                     info->imageUsage, info->presentMode,
-                                    info->surface
+                                    info->surface,
+                                    info->oldSwapchain != VK_NULL_HANDLE
                                 );
                         }
                         if (compatibilityFallback) {
@@ -2198,6 +2199,8 @@ namespace {
                 .applicationPresentMode = info->presentMode,
                 .requestedMinImageCount = info->minImageCount,
                 .provisionedMinImageCount = newInfo.minImageCount,
+                .applicationOldSwapchainProvided =
+                    info->oldSwapchain != VK_NULL_HANDLE,
                 .applicationExtent = modification.applicationExtent,
                 .extent = newInfo.imageExtent,
                 .gamescopePresentationTarget =
@@ -2595,7 +2598,9 @@ namespace {
                         swapchainMetadata->second.colorSpace,
                         swapchainMetadata->second.applicationImageUsage,
                         swapchainMetadata->second.applicationPresentMode,
-                        swapchainMetadata->second.surface
+                        swapchainMetadata->second.surface,
+                        swapchainMetadata->second
+                            .applicationOldSwapchainProvided
                     );
             }
             const bool compatibilityEvidence = observation ==
@@ -2626,6 +2631,9 @@ namespace {
                           << (returnedPresentEvidence >=
                                 swapchainImageCountShortLivedReturnedPresentMinimum)
                           << " active_ms=" << activeLifetimeMs
+                          << " application_old_swapchain="
+                          << swapchainMetadata->second
+                                .applicationOldSwapchainProvided
                           << " startup_failure_evidence="
                           << (replacementCandidate ? 2 : 1)
                           << " short_lived_present_minimum="

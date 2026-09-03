@@ -1702,7 +1702,7 @@ int main() {
             activateSwapchainImageCountCompatibilityForCreate(
                 surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
                 VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-                0, VK_PRESENT_MODE_FIFO_KHR, provenSurface) &&
+                0, VK_PRESENT_MODE_FIFO_KHR, provenSurface, true) &&
             !activateSwapchainImageCountCompatibilityForCreate(
                 surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
                 VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
@@ -1820,6 +1820,42 @@ int main() {
 
     expect(imageCountCompatibility.applicationMinimumSignatures.size() == 1,
         "The matching-replacement compatibility decision must stay signature-local and persistent");
+
+    SwapchainImageCountCompatibilityState explicitReplacementCompatibility;
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            explicitReplacementCompatibility, 0, 3, 6, {426, 240}, 4) ==
+                SwapchainImageCountCompatibilityObservation::ZeroReturnProbe,
+        "An initial zero-return swapchain must remain eligible for null-old startup detection");
+    expect(!activateSwapchainImageCountCompatibilityForCreate(
+            explicitReplacementCompatibility, 3, 6, {426, 240},
+            VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+            0, VK_PRESENT_MODE_FIFO_KHR, VK_NULL_HANDLE, true) &&
+            !explicitReplacementCompatibility.zeroReturnProbeObserved &&
+            !explicitReplacementCompatibility.replacementCandidate,
+        "An application-provided oldSwapchain must clear pending startup evidence before an intentional replacement");
+    expect(observeDestroyedSwapchainForImageCountCompatibility(
+            explicitReplacementCompatibility, 0, 3, 6, {426, 240}, 4,
+            VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+            0, VK_PRESENT_MODE_FIFO_KHR, VK_NULL_HANDLE, true) ==
+                SwapchainImageCountCompatibilityObservation::Ignored &&
+            !activateSwapchainImageCountCompatibilityForCreate(
+                explicitReplacementCompatibility, 3, 6, {426, 240}),
+        "A zero-return member of an explicit oldSwapchain chain must not seed the application-minimum fallback");
+
+    SwapchainImageCountCompatibilityState pendingExplicitReplacement;
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        pendingExplicitReplacement, 0, 3, 6, {426, 240}, 4
+    ));
+    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
+        pendingExplicitReplacement, 0, 3, 6, {426, 240}, 4
+    ));
+    expect(pendingExplicitReplacement.replacementCandidate &&
+            !activateSwapchainImageCountCompatibilityForCreate(
+                pendingExplicitReplacement, 3, 6, {426, 240},
+                VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
+                0, VK_PRESENT_MODE_FIFO_KHR, VK_NULL_HANDLE, true) &&
+            !pendingExplicitReplacement.replacementCandidate,
+        "An explicit oldSwapchain create must reject stale null-old compatibility evidence rather than starving generated headroom");
 
     SwapchainImageCountCompatibilityState unmodifiedCompatibility;
     expect(observeDestroyedSwapchainForImageCountCompatibility(
