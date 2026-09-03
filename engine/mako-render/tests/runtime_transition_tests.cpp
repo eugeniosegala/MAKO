@@ -90,7 +90,6 @@ int main() {
     expect(isolatedWsi.gamescopeWsiDisabled &&
             isolatedWsi.hdrExposureDisabled,
         "WSI isolation must also close the unavailable HDR bridge");
-
     expect(gamescopeFeedbackPollInterval(false, false) == 1s,
         "ordinary desktop feedback polling should remain idle");
     expect(gamescopeFeedbackPollInterval(true, false) == 250ms,

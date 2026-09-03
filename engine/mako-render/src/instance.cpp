@@ -515,6 +515,8 @@ Root::Root() :
     this->frameGenerationInteropProvisionedAtStartup = frameGenerationLayer;
     this->scalingEngineConfiguredAtStartup =
         this->active_profile->scaling_enabled;
+    this->swapchainImageCountCompatibilityConfiguredAtStartup =
+        this->active_profile->swapchain_image_count_compatibility;
 
     std::cerr << "MAKO Renderer: using profile with name '" << this->active_profile->name << "' ";
     switch (profile->first) {
@@ -541,6 +543,11 @@ Root::Root() :
                   << ls::effectivePerformanceMode(*this->active_profile)
                   << "; resources=active-policy"
                   << "; compatible_profile_reload=live\n";
+    }
+    if (this->active_profile->swapchain_image_count_compatibility) {
+        std::cerr << "MAKO Renderer: Game Swapchain Images compatibility "
+                     "active: policy=application-minimum; lifetime=process; "
+                     "generated-headroom=disabled\n";
     }
     this->publishSurfaceScalingPolicy();
 }
@@ -642,15 +649,19 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
     bool ultraPerformancePending =
         activeUltraPerformance != requestedUltraPerformance;
     bool scalingEnginePending = false;
+    bool swapchainImageCountCompatibilityPending = false;
     if (runtimeProfile && this->active_profile) {
         auto projection = projectProcessStaticProfileForLiveUpdate(
             *this->active_profile, *runtimeProfile,
-            this->scalingEngineConfiguredAtStartup
+            this->scalingEngineConfiguredAtStartup,
+            this->swapchainImageCountCompatibilityConfiguredAtStartup
         );
         *runtimeProfile = std::move(projection.runtimeProfile);
         gpuSelectionPending = projection.gpuSelectionPending;
         ultraPerformancePending = projection.ultraPerformancePending;
         scalingEnginePending = projection.scalingEnginePending;
+        swapchainImageCountCompatibilityPending =
+            projection.swapchainImageCountCompatibilityPending;
         profileProcessRestartRequired = projection.restartRequired();
     } else if (runtimeProfile) {
         if (runtimeProfile->scaling_enabled !=
@@ -658,6 +669,13 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
             runtimeProfile->scaling_enabled =
                 this->scalingEngineConfiguredAtStartup;
             scalingEnginePending = true;
+            profileProcessRestartRequired = true;
+        }
+        if (runtimeProfile->swapchain_image_count_compatibility !=
+                this->swapchainImageCountCompatibilityConfiguredAtStartup) {
+            runtimeProfile->swapchain_image_count_compatibility =
+                this->swapchainImageCountCompatibilityConfiguredAtStartup;
+            swapchainImageCountCompatibilityPending = true;
             profileProcessRestartRequired = true;
         }
     }
@@ -671,6 +689,11 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
         std::cerr << "MAKO Renderer: Scaling Engine toggle deferred; restart "
                      "the game to rebuild the process Vulkan layer chain; "
                      "method and tuning changes remain live\n";
+    }
+    if (swapchainImageCountCompatibilityPending) {
+        std::cerr << "MAKO Renderer: Game Swapchain Images compatibility "
+                     "toggle deferred; restart the game to change its WSI "
+                     "image-count contract\n";
     }
     if (profileProcessRestartRequired) {
         result.processRestartDeferredContexts += this->swapchains.size();
@@ -691,6 +714,8 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
                       << ultraPerformancePending
                       << " scaling_engine_pending="
                       << scalingEnginePending
+                      << " swapchain_image_count_compatibility_pending="
+                      << swapchainImageCountCompatibilityPending
                       << " action=wait-for-process-restart\n";
         }
     }
@@ -938,6 +963,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         liveMemoryBudgetAvailable ? &liveMemoryBudget : nullptr
     );
     const auto contextProfile = profileForLayerContext(*this->active_profile);
+    modification.swapchainImageCountCompatibility =
+        contextProfile.swapchain_image_count_compatibility;
     auto prospectiveCreateInfo = createInfo;
     static_cast<void>(context_ModifySwapchainCreateInfo(
         contextProfile,
@@ -1562,6 +1589,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << info.requestedMinImageCount
                   << " provisioned_min_images="
                   << info.provisionedMinImageCount
+                  << " swapchain_image_count_compatibility="
+                  << info.swapchainImageCountCompatibility
                   << " images=" << info.images.size()
                   << " format=" << static_cast<int>(info.format)
                   << " color_space=" << static_cast<int>(info.colorSpace)

@@ -247,13 +247,14 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             content,
         )
 
-    def test_scaling_settings_remain_toml_only(self):
+    def test_renderer_profile_settings_remain_toml_only(self):
         scaling = {
             **ConfigurationManager.get_defaults(),
             "scaling_enabled": True,
             "scaling_factor": 1.8,
             "scaling_supersampling": True,
             "scaling_sharpness": 0.7,
+            "swapchain_image_count_compatibility": True,
         }
 
         toml_content = ConfigurationManager.generate_toml_content(scaling)
@@ -264,11 +265,15 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertIn("scaling_factor = 1.8", toml_content)
         self.assertIn("scaling_supersampling = true", toml_content)
         self.assertIn("scaling_sharpness = 0.7", toml_content)
+        self.assertIn(
+            "swapchain_image_count_compatibility = true", toml_content
+        )
         for field in (
             "scaling_enabled",
             "scaling_factor",
             "scaling_supersampling",
             "scaling_sharpness",
+            "swapchain_image_count_compatibility",
         ):
             with self.subTest(field=field):
                 self.assertNotIn(field, wrapper_settings)

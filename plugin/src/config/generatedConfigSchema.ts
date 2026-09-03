@@ -126,6 +126,7 @@ export const GPU = "gpu" as const;
 export const DISABLE_MAKO = "disable_mako" as const;
 export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
 export const GAMESCOPE_WSI_COMPATIBILITY = "gamescope_wsi_compatibility" as const;
+export const SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY = "swapchain_image_count_compatibility" as const;
 export const EXTERNAL_VULKAN_LAYER = "external_vulkan_layer" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
@@ -303,6 +304,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: false,
     description: "enable the restart-bound Gamescope WSI compatibility layer independently of scaling"
   },
+  swapchain_image_count_compatibility: {
+    name: "swapchain_image_count_compatibility",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: false,
+    description: "preserve the application's requested swapchain image minimum for games that cannot start with generated-output headroom"
+  },
   external_vulkan_layer: {
     name: "external_vulkan_layer",
     fieldType: ConfigFieldType.STRING,
@@ -358,6 +365,7 @@ export interface ConfigurationData {
   disable_mako: boolean;
   disable_hdr_exposure: boolean;
   gamescope_wsi_compatibility: boolean;
+  swapchain_image_count_compatibility: boolean;
   external_vulkan_layer: string;
   disable_steamdeck_mode: boolean;
   enable_zink: boolean;
@@ -401,6 +409,7 @@ export function getDefaults(): ConfigurationData {
     disable_mako: false,
     disable_hdr_exposure: true,
     gamescope_wsi_compatibility: false,
+    swapchain_image_count_compatibility: false,
     external_vulkan_layer: "",
     disable_steamdeck_mode: false,
     enable_zink: false,
@@ -437,6 +446,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     disable_mako: ConfigFieldType.BOOLEAN,
     disable_hdr_exposure: ConfigFieldType.BOOLEAN,
     gamescope_wsi_compatibility: ConfigFieldType.BOOLEAN,
+    swapchain_image_count_compatibility: ConfigFieldType.BOOLEAN,
     external_vulkan_layer: ConfigFieldType.STRING,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,

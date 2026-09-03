@@ -46,6 +46,8 @@ namespace {
             left.multiplier == right.multiplier &&
             left.frame_generation_enabled == right.frame_generation_enabled &&
             left.scaling_enabled == right.scaling_enabled &&
+            left.swapchain_image_count_compatibility ==
+                right.swapchain_image_count_compatibility &&
             left.scaling_method == right.scaling_method &&
             left.scaling_factor == right.scaling_factor &&
             left.scaling_supersampling == right.scaling_supersampling &&
@@ -79,6 +81,7 @@ active_in = "game"
 removed_profile_option = true
 adaptive = false
 scaling_enabled = true
+swapchain_image_count_compatibility = true
 scaling_method = "ls1"
 scaling_factor = 1.75
 scaling_supersampling = true
@@ -103,6 +106,8 @@ int main() {
                 ls::GameConfDefaults::frameGenerationEnabled &&
             defaults.scaling_enabled ==
                 ls::GameConfDefaults::scalingEnabled &&
+            defaults.swapchain_image_count_compatibility ==
+                ls::GameConfDefaults::swapchainImageCountCompatibility &&
             defaults.scaling_method ==
                 ls::GameConfDefaults::scalingMethod &&
             defaults.scaling_factor == ls::GameConfDefaults::scalingFactor &&
@@ -231,6 +236,8 @@ int main() {
     expect(config.get().profiles().front().frame_generation_refresh_threshold == 60,
         "The accepted configuration must expose the refresh-rate threshold");
     expect(config.get().profiles().front().scaling_enabled &&
+            config.get().profiles().front()
+                .swapchain_image_count_compatibility &&
             config.get().profiles().front().scaling_method ==
                 ls::ScalingMethod::Ls1 &&
             config.get().profiles().front().scaling_factor == 1.75F &&
@@ -392,6 +399,7 @@ scaling_sharpness = 0.5
     setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
     setenv("MAKO_ULTRA_PERFORMANCE", "1", 1);
     setenv("MAKO_SCALING_ENABLED", "1", 1);
+    setenv("MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY", "1", 1);
     setenv("MAKO_SCALING_METHOD", "native", 1);
     setenv("MAKO_SCALING_FACTOR", "2", 1);
     setenv("MAKO_SCALING_SUPERSAMPLING", "1", 1);
@@ -406,6 +414,8 @@ scaling_sharpness = 0.5
             !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap &&
             environmentConfig.get().profiles().front().ultra_performance &&
             environmentConfig.get().profiles().front().scaling_enabled &&
+            environmentConfig.get().profiles().front()
+                .swapchain_image_count_compatibility &&
             environmentConfig.get().profiles().front().scaling_method ==
                 ls::ScalingMethod::Native &&
             ls::spatialScalingRequested(
@@ -419,6 +429,7 @@ scaling_sharpness = 0.5
     unsetenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
     unsetenv("MAKO_ULTRA_PERFORMANCE");
     unsetenv("MAKO_SCALING_ENABLED");
+    unsetenv("MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY");
     unsetenv("MAKO_SCALING_METHOD");
     unsetenv("MAKO_SCALING_FACTOR");
     unsetenv("MAKO_SCALING_SUPERSAMPLING");

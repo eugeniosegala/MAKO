@@ -39,6 +39,7 @@ namespace mako::ui {
         Q_PROPERTY(size_t multiplier READ getMultiplier WRITE multiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool frame_generation_enabled READ getFrameGenerationEnabled WRITE frameGenerationEnabledUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool scaling_enabled READ getScalingEnabled WRITE scalingEnabledUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool swapchain_image_count_compatibility READ getSwapchainImageCountCompatibility WRITE swapchainImageCountCompatibilityUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString scaling_method READ getScalingMethod WRITE scalingMethodUpdated NOTIFY refreshUI)
         Q_PROPERTY(float scaling_factor READ getScalingFactor WRITE scalingFactorUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool scaling_supersampling READ getScalingSupersampling WRITE scalingSupersamplingUpdated NOTIFY refreshUI)
@@ -154,6 +155,12 @@ namespace mako::ui {
         [[nodiscard]] bool getScalingEnabled() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingEnabled)
             return conf.scaling_enabled;
+        }
+        [[nodiscard]] bool getSwapchainImageCountCompatibility() const {
+            VALIDATE_AND_GET_PROFILE(
+                ls::GameConfDefaults::swapchainImageCountCompatibility
+            )
+            return conf.swapchain_image_count_compatibility;
         }
         [[nodiscard]] QString getScalingMethod() const {
             VALIDATE_AND_GET_PROFILE(
@@ -383,6 +390,11 @@ namespace mako::ui {
         void scalingEnabledUpdated(bool scaling_enabled) {
             VALIDATE_AND_GET_PROFILE()
             conf.scaling_enabled = scaling_enabled;
+            MARK_DIRTY()
+        }
+        void swapchainImageCountCompatibilityUpdated(bool enabled) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.swapchain_image_count_compatibility = enabled;
             MARK_DIRTY()
         }
         void scalingMethodUpdated(const QString& scaling_method) {

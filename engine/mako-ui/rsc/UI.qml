@@ -526,6 +526,19 @@ ApplicationWindow {
                     enabled: backend.available
 
                     GroupEntry {
+                        title: t.gameSwapchainImages
+                        description: t.gameSwapchainImagesDesc + "\n\n" + t.gameSwapchainImagesWarning
+                        compactRestartMarker: true
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.swapchain_image_count_compatibility
+                            onToggled: backend.swapchain_image_count_compatibility = checked
+                        }
+                    }
+
+                    GroupEntry {
                         title: t.refreshRateGuard
                         description: t.refreshRateGuardDesc
 

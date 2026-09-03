@@ -292,6 +292,8 @@ class ConfigurationManager:
                 "scaling_supersampling = "
                 f"{str(config['scaling_supersampling']).lower()}",
                 f"scaling_sharpness = {config['scaling_sharpness']}",
+                "swapchain_image_count_compatibility = "
+                f"{str(config['swapchain_image_count_compatibility']).lower()}",
                 f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
                 "frame_generation_refresh_threshold = "
                 f"{config['frame_generation_refresh_threshold']}",

@@ -56,6 +56,9 @@ void test_scaling_properties() {
         "Ultra Performance does not select LS1 Performance for Scaling");
 
     require_property("scaling_enabled", "bool", true, false);
+    require_property(
+        "swapchain_image_count_compatibility", "bool", true, false
+    );
     require_property("scaling_method", "QString", true, false);
     require_property("scaling_factor", "float", true, false);
     require_property("scaling_supersampling", "bool", true, false);
@@ -216,13 +219,34 @@ void test_feature_group_order_and_ownership() {
     require(!scaling_group.contains(
             QStringLiteral("backend.frame_generation_enabled")),
         "Scaling group is coupled to Frame Generation");
+
+    const qsizetype compatibility_group_start = qml.indexOf(
+        QStringLiteral("name: t.compatibilitySettings")
+    );
+    require(compatibility_group_start >= 0,
+        "Compatibility Settings group is missing");
+    qsizetype compatibility_group_end = qml.indexOf(
+        QStringLiteral("\n                Group {"),
+        compatibility_group_start + 1
+    );
+    if (compatibility_group_end < 0)
+        compatibility_group_end = qml.size();
+    const QString compatibility_group = qml.mid(
+        compatibility_group_start,
+        compatibility_group_end - compatibility_group_start
+    );
+    require(compatibility_group.contains(QStringLiteral(
+                "checked: backend.swapchain_image_count_compatibility")) &&
+            compatibility_group.contains(QStringLiteral(
+                "onToggled: backend.swapchain_image_count_compatibility = checked")),
+        "Compatibility Settings does not expose the restart-bound swapchain image policy");
 }
 
 void test_compact_restart_markers() {
     QFile ui_file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(ui_file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString ui_qml = QString::fromUtf8(ui_file.readAll());
-    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 7,
+    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 8,
         "Every restart-bound Renderer control must opt into the compact marker");
 
     QFile entry_file(QString::fromUtf8(MAKO_UI_GROUP_ENTRY_QML_FILE));

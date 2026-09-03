@@ -90,10 +90,6 @@ namespace {
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
         std::unordered_set<VkSwapchainKHR> nativeSwapchains;
-        std::mutex swapchainImageCountCompatibilityMutex;
-        std::unordered_map<
-            VkDevice, SwapchainImageCountCompatibilityState
-        > swapchainImageCountCompatibility;
         struct RetiredSwapchain {
             VkDevice device{VK_NULL_HANDLE};
             VkSurfaceKHR surface{VK_NULL_HANDLE};
@@ -773,12 +769,6 @@ namespace {
         );
         instance_info->nativeDevices.erase(device);
         instance_info->presentRetirementDevices.erase(device);
-        {
-            const std::lock_guard compatibilityLock(
-                instance_info->swapchainImageCountCompatibilityMutex
-            );
-            instance_info->swapchainImageCountCompatibility.erase(device);
-        }
 
         // destroy device
         auto vkDestroyDevice = reinterpret_cast<PFN_vkDestroyDevice>(
@@ -1615,18 +1605,6 @@ namespace {
                 instance_info->surfaceOrigins.erase(surface);
                 instance_info->unprovenSplitSurfacesLogged.erase(surface);
             }
-            {
-                const std::lock_guard compatibilityLock(
-                    instance_info->swapchainImageCountCompatibilityMutex
-                );
-                for (auto& [device, compatibility] :
-                        instance_info->swapchainImageCountCompatibility) {
-                    static_cast<void>(device);
-                    clearSwapchainImageCountCompatibilityForSurface(
-                        compatibility, surface
-                    );
-                }
-            }
         }
         const auto lower = reinterpret_cast<PFN_vkDestroySurfaceKHR>(
             layer_info->GetInstanceProcAddr(instance, "vkDestroySurfaceKHR")
@@ -1905,64 +1883,6 @@ namespace {
                         }
                         const uint32_t provisionedMinImages =
                             newInfo->minImageCount;
-                        bool compatibilityFallback = false;
-                        std::optional<
-                            SwapchainImageCountReplacementCandidate
-                        > compatibilityCandidate;
-                        {
-                            const std::lock_guard compatibilityLock(
-                                instance_info
-                                    ->swapchainImageCountCompatibilityMutex
-                            );
-                            auto& compatibility = instance_info
-                                ->swapchainImageCountCompatibility[device];
-                            compatibilityCandidate =
-                                compatibility.replacementCandidate;
-                            compatibilityFallback =
-                                activateSwapchainImageCountCompatibilityForCreate(
-                                    compatibility, info->minImageCount,
-                                    provisionedMinImages, info->imageExtent,
-                                    info->imageFormat, info->imageColorSpace,
-                                    info->imageUsage, info->presentMode,
-                                    info->surface,
-                                    info->oldSwapchain != VK_NULL_HANDLE
-                                );
-                        }
-                        if (compatibilityFallback) {
-                            newInfo->minImageCount = info->minImageCount;
-                            if (present_diagnostics::enabled()) {
-                                std::cerr << "MAKO Renderer: present diagnostics: "
-                                             "operation=swapchain-image-count-compatibility-fallback"
-                                          << " role=" << layerRoleName
-                                          << " requested_min_images="
-                                          << info->minImageCount
-                                          << " normal_provisioned_min_images="
-                                          << provisionedMinImages
-                                          << " selected_min_images="
-                                          << newInfo->minImageCount
-                                          << " trigger="
-                                          << (compatibilityCandidate
-                                                ? "zero-return-probe-then-matching-short-lived-replacement"
-                                                : "established-session-compatibility")
-                                          << " matching_short_lived_replacement="
-                                          << (compatibilityCandidate ? 1 : 0);
-                                if (compatibilityCandidate) {
-                                    std::cerr << " candidate_width="
-                                              << compatibilityCandidate
-                                                    ->applicationExtent.width
-                                              << " candidate_height="
-                                              << compatibilityCandidate
-                                                    ->applicationExtent.height
-                                              << " candidate_returned_presents="
-                                              << compatibilityCandidate
-                                                    ->returnedPresentCount
-                                              << " candidate_active_ms="
-                                              << compatibilityCandidate
-                                                    ->activeLifetimeMs;
-                                }
-                                std::cerr << '\n';
-                            }
-                        }
                         auto res = it->second.df().CreateSwapchainKHR(
                             device, newInfo, alloc, swapchain);
                         if (shouldRetrySwapchainWithApplicationMinimum(
@@ -2195,10 +2115,10 @@ namespace {
                 .surface = info->surface,
                 .format = newInfo.imageFormat,
                 .colorSpace = newInfo.imageColorSpace,
-                .applicationImageUsage = info->imageUsage,
-                .applicationPresentMode = info->presentMode,
                 .requestedMinImageCount = info->minImageCount,
                 .provisionedMinImageCount = newInfo.minImageCount,
+                .swapchainImageCountCompatibility =
+                    modification.swapchainImageCountCompatibility,
                 .applicationOldSwapchainProvided =
                     info->oldSwapchain != VK_NULL_HANDLE,
                 .applicationExtent = modification.applicationExtent,
@@ -2552,122 +2472,6 @@ namespace {
                       << '\n';
         }
         auto context = layer_info->root.takeSwapchainContext(swapchain);
-        const size_t completedApplicationPresentCount = context
-            ? context->completedApplicationPresentCount()
-            : 0;
-        const uint32_t returnedPresentEvidence = static_cast<uint32_t>(
-            std::min(
-                completedApplicationPresentCount,
-                static_cast<size_t>(
-                    swapchainImageCountShortLivedReturnedPresentMinimum
-                )
-            )
-        );
-        const uint32_t boundedReturnedPresentCount = static_cast<uint32_t>(
-            std::min(
-                completedApplicationPresentCount,
-                static_cast<size_t>(
-                    swapchainImageCountShortLivedReturnedPresentMaximum + 1
-                )
-            )
-        );
-        if (!native && context &&
-                swapchainMetadata != instance_info->swapchainInfos.end()) {
-            const auto now = std::chrono::steady_clock::now();
-            const uint64_t activeLifetimeMs = static_cast<uint64_t>(
-                std::chrono::duration_cast<std::chrono::milliseconds>(
-                    now - context->compatibilityObservationStartedAt()
-                ).count()
-            );
-            SwapchainImageCountCompatibilityObservation observation =
-                SwapchainImageCountCompatibilityObservation::Ignored;
-            {
-                const std::lock_guard compatibilityLock(
-                    instance_info->swapchainImageCountCompatibilityMutex
-                );
-                auto& compatibility = instance_info
-                    ->swapchainImageCountCompatibility[device];
-                observation =
-                    observeDestroyedSwapchainForImageCountCompatibility(
-                        compatibility, boundedReturnedPresentCount,
-                        swapchainMetadata->second.requestedMinImageCount,
-                        swapchainMetadata->second.provisionedMinImageCount,
-                        swapchainMetadata->second.applicationExtent,
-                        activeLifetimeMs,
-                        swapchainMetadata->second.format,
-                        swapchainMetadata->second.colorSpace,
-                        swapchainMetadata->second.applicationImageUsage,
-                        swapchainMetadata->second.applicationPresentMode,
-                        swapchainMetadata->second.surface,
-                        swapchainMetadata->second
-                            .applicationOldSwapchainProvided
-                    );
-            }
-            const bool compatibilityEvidence = observation ==
-                    SwapchainImageCountCompatibilityObservation::
-                        ZeroReturnProbe ||
-                observation == SwapchainImageCountCompatibilityObservation::
-                    ShortLivedReplacementCandidate;
-            if (present_diagnostics::enabled() && compatibilityEvidence) {
-                const bool replacementCandidate = observation ==
-                    SwapchainImageCountCompatibilityObservation::
-                        ShortLivedReplacementCandidate;
-                std::cerr << "MAKO Renderer: present diagnostics: "
-                             "operation=swapchain-image-count-compatibility-evidence"
-                          << " role=" << layerRoleName
-                          << " requested_min_images="
-                          << swapchainMetadata->second.requestedMinImageCount
-                          << " provisioned_min_images="
-                          << swapchainMetadata->second.provisionedMinImageCount
-                          << " width="
-                          << swapchainMetadata->second.applicationExtent.width
-                          << " height="
-                          << swapchainMetadata->second.applicationExtent.height
-                          << " present_entered="
-                          << (returnedPresentEvidence > 0 ? 1 : 0)
-                          << " returned_presents="
-                          << returnedPresentEvidence
-                          << " returned_presents_saturated="
-                          << (returnedPresentEvidence >=
-                                swapchainImageCountShortLivedReturnedPresentMinimum)
-                          << " active_ms=" << activeLifetimeMs
-                          << " application_old_swapchain="
-                          << swapchainMetadata->second
-                                .applicationOldSwapchainProvided
-                          << " startup_failure_evidence="
-                          << (replacementCandidate ? 2 : 1)
-                          << " short_lived_present_minimum="
-                          << swapchainImageCountShortLivedReturnedPresentMinimum
-                          << " short_lived_present_maximum="
-                          << swapchainImageCountShortLivedReturnedPresentMaximum
-                          << " zero_return_probe_ms_limit="
-                          << swapchainImageCountZeroReturnProbeLifetimeLimitMs
-                          << " replacement_ms_limit="
-                          << swapchainImageCountReplacementLifetimeLimitMs
-                          << " action="
-                          << (replacementCandidate
-                                ? "await-matching-replacement"
-                                : "observe-zero-return-probe")
-                          << '\n';
-            } else if (present_diagnostics::enabled() && observation ==
-                    SwapchainImageCountCompatibilityObservation::
-                        HealthySurfaceCleared) {
-                std::cerr << "MAKO Renderer: present diagnostics: "
-                             "operation=swapchain-image-count-compatibility-cleared"
-                          << " role=" << layerRoleName
-                          << " returned_presents="
-                          << returnedPresentEvidence
-                          << " returned_presents_saturated="
-                          << (returnedPresentEvidence >=
-                                swapchainImageCountShortLivedReturnedPresentMinimum)
-                          << " returned_presents_exceeded_maximum="
-                          << (boundedReturnedPresentCount >
-                                swapchainImageCountShortLivedReturnedPresentMaximum)
-                          << " active_ms=" << activeLifetimeMs
-                          << " action=retain-normal-provisioning"
-                          << '\n';
-            }
-        }
         instance_info->swapchainInfos.erase(swapchain);
         instance_info->swapchains.erase(swapchain);
         instance_info->nativeSwapchains.erase(swapchain);

@@ -35,6 +35,7 @@ import {
   FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
   GAMESCOPE_WSI_COMPATIBILITY,
   GPU,
+  SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY,
   ULTRA_PERFORMANCE_FLOW_SCALE,
   type ConfigurationData,
 } from "../config/configSchema";
@@ -474,6 +475,39 @@ export function CompatibilityConfigurationGroup({
               disabled={config.scaling_enabled}
               onChange={(value) =>
                 onConfigChange(GAMESCOPE_WSI_COMPATIBILITY, value)
+              }
+            />
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={
+                <MakoRestartLabel
+                  label={t(
+                    "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY",
+                    "Game Swapchain Images (Restart)",
+                  )}
+                />
+              }
+              description={
+                <>
+                  <div>
+                    {t(
+                      "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC",
+                      "Can fix games that fail to start with Frame Generation by preserving the game's requested swapchain image minimum. Enable it only for affected games.",
+                    )}
+                  </div>
+                  <MakoInlineTip tone="warning">
+                    {t(
+                      "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_WARNING",
+                      "Generated frames may be skipped when the compositor has no spare image, which can reduce smoothness or performance under pressure.",
+                    )}
+                  </MakoInlineTip>
+                </>
+              }
+              checked={config.swapchain_image_count_compatibility}
+              onChange={(value) =>
+                onConfigChange(SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY, value)
               }
             />
           </PanelSectionRow>

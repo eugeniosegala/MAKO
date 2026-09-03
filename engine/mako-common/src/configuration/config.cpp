@@ -43,6 +43,7 @@ active_in = [ # see the wiki for more info
 multiplier = 4
 frame_generation_enabled = true
 scaling_enabled = false
+swapchain_image_count_compatibility = false
 scaling_method = 'ls1'
 scaling_factor = 1.5
 scaling_supersampling = false
@@ -86,6 +87,8 @@ ConfigFile::ConfigFile() {
         .multiplier = 4,
         .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
         .scaling_enabled = GameConfDefaults::scalingEnabled,
+        .swapchain_image_count_compatibility =
+            GameConfDefaults::swapchainImageCountCompatibility,
         .scaling_method = GameConfDefaults::scalingMethod,
         .scaling_factor = GameConfDefaults::scalingFactor,
         .scaling_supersampling = GameConfDefaults::scalingSupersampling,
@@ -283,6 +286,10 @@ namespace {
             .scaling_enabled = tbl["scaling_enabled"].value_or(
                 GameConfDefaults::scalingEnabled
             ),
+            .swapchain_image_count_compatibility =
+                tbl["swapchain_image_count_compatibility"].value_or(
+                    GameConfDefaults::swapchainImageCountCompatibility
+                ),
             .scaling_method = scalingMethodFromString(
                 tbl["scaling_method"].value_or<std::string>(
                     scalingMethodName(GameConfDefaults::scalingMethod)
@@ -367,6 +374,8 @@ namespace {
             .multiplier = GameConfDefaults::multiplier,
             .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
             .scaling_enabled = GameConfDefaults::scalingEnabled,
+            .swapchain_image_count_compatibility =
+                GameConfDefaults::swapchainImageCountCompatibility,
             .scaling_method = GameConfDefaults::scalingMethod,
             .scaling_factor = GameConfDefaults::scalingFactor,
             .scaling_supersampling = GameConfDefaults::scalingSupersampling,
@@ -399,6 +408,12 @@ namespace {
         const char* scaling_enabled = std::getenv("MAKO_SCALING_ENABLED");
         if (scaling_enabled)
             conf.scaling_enabled = std::string(scaling_enabled) != "0";
+        const char* swapchain_image_count_compatibility =
+            std::getenv("MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY");
+        if (swapchain_image_count_compatibility) {
+            conf.swapchain_image_count_compatibility =
+                std::string(swapchain_image_count_compatibility) != "0";
+        }
         const char* scaling_method = std::getenv("MAKO_SCALING_METHOD");
         if (scaling_method)
             conf.scaling_method = scalingMethodFromString(scaling_method);
@@ -524,6 +539,10 @@ void ConfigFile::write(const std::filesystem::path& path) const {
         profile.insert("multiplier", static_cast<int64_t>(conf.multiplier));
         profile.insert("frame_generation_enabled", conf.frame_generation_enabled);
         profile.insert("scaling_enabled", conf.scaling_enabled);
+        profile.insert(
+            "swapchain_image_count_compatibility",
+            conf.swapchain_image_count_compatibility
+        );
         profile.insert("scaling_method", scalingMethodName(conf.scaling_method));
         profile.insert("scaling_factor", conf.scaling_factor);
         profile.insert("scaling_supersampling", conf.scaling_supersampling);

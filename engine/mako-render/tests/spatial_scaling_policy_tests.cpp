@@ -1528,6 +1528,56 @@ int main() {
             frameGenerationOnlyCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
         "Ordered FG-only must restore the release-3.0 three-image plus two-output plus one-relief contract");
 
+    VkSwapchainCreateInfoKHR compatibleFrameGenerationOnlyCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 3,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    const bool compatibleFrameGenerationOnlyTransport =
+        applySwapchainCreateProvisioning(
+            frameGenerationOnlyProfile, 0,
+            compatibleFrameGenerationOnlyCreate,
+            true, false, true, true
+        );
+    expect(compatibleFrameGenerationOnlyTransport &&
+            compatibleFrameGenerationOnlyCreate.minImageCount == 3 &&
+            compatibleFrameGenerationOnlyCreate.presentMode ==
+                VK_PRESENT_MODE_FIFO_KHR &&
+            (compatibleFrameGenerationOnlyCreate.imageUsage &
+                (VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                 VK_IMAGE_USAGE_TRANSFER_DST_BIT)) ==
+                (VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+                 VK_IMAGE_USAGE_TRANSFER_DST_BIT),
+        "Explicit startup compatibility must preserve an FG-only application's image count without removing ordered transport or transfer usage");
+
+    VkSwapchainCreateInfoKHR compatibleCombinedCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 3,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    expect(applySwapchainCreateProvisioning(
+            combinedProfile, 0, compatibleCombinedCreate,
+            true, true, true, true
+        ) && compatibleCombinedCreate.minImageCount == 3 &&
+            compatibleCombinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
+        "Explicit startup compatibility must preserve the same application image contract for combined FG and scaling");
+
+    VkSwapchainCreateInfoKHR compatibleNonOrderedCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 3,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    expect(!applySwapchainCreateProvisioning(
+            frameGenerationOnlyProfile, 0, compatibleNonOrderedCreate,
+            true, false, false, true
+        ) && compatibleNonOrderedCreate.minImageCount == 3 &&
+            compatibleNonOrderedCreate.presentMode ==
+                VK_PRESENT_MODE_MAILBOX_KHR,
+        "Explicit startup compatibility must not invent ordered transport on a non-ordered path");
+
     VkPhysicalDeviceMemoryBudgetPropertiesEXT imageCountPricingBudget{
         .sType =
             VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
@@ -1647,256 +1697,6 @@ int main() {
     expect(!shouldRetrySwapchainWithApplicationMinimum(
             VK_ERROR_INITIALIZATION_FAILED, 3, 3),
         "An unmodified minimum must not be retried identically");
-    SwapchainImageCountCompatibilityState imageCountCompatibility;
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            imageCountCompatibility, 0, 3, 6, {1024, 576}, 0) ==
-                SwapchainImageCountCompatibilityObservation::ZeroReturnProbe &&
-            imageCountCompatibility.zeroReturnProbeObserved &&
-            !imageCountCompatibility.replacementCandidate &&
-            imageCountCompatibility.applicationMinimumSignatures.empty(),
-        "One discarded inflated startup swapchain must be evidence, not a fallback");
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            imageCountCompatibility, 4, 3, 6, {3840, 2160}, 120) ==
-                SwapchainImageCountCompatibilityObservation::
-                    ShortLivedReplacementCandidate &&
-            imageCountCompatibility.replacementCandidate &&
-            imageCountCompatibility.applicationMinimumSignatures.empty(),
-        "A zero-return probe followed by a short multi-present surface must await a matching replacement");
-    expect(activateSwapchainImageCountCompatibilityForCreate(
-            imageCountCompatibility, 3, 6, {3840, 2160}) &&
-            imageCountCompatibility.applicationMinimumSignatures.size() == 1 &&
-            !imageCountCompatibility.replacementCandidate,
-        "A matching third surface must activate the session-local fallback");
-    expect(activateSwapchainImageCountCompatibilityForCreate(
-            imageCountCompatibility, 3, 6, {3840, 2160}),
-        "The proven compatibility fallback must remain stable for the matching signature");
-    expect(!activateSwapchainImageCountCompatibilityForCreate(
-            imageCountCompatibility, 3, 6, {2560, 1440}) &&
-            imageCountCompatibility.applicationMinimumSignatures.size() == 1,
-        "A proven fallback must not change a different extent in the same process");
-
-    constexpr VkImageUsageFlags compatibilityUsage =
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-        VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    SwapchainImageCountCompatibilityState usageIsolatedCompatibility;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        usageIsolatedCompatibility, 0, 3, 6, {1024, 576}, 0,
-        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        compatibilityUsage, VK_PRESENT_MODE_MAILBOX_KHR
-    ));
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        usageIsolatedCompatibility, 4, 3, 6, {3840, 2160}, 120,
-        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        compatibilityUsage, VK_PRESENT_MODE_MAILBOX_KHR
-    ));
-    expect(!activateSwapchainImageCountCompatibilityForCreate(
-            usageIsolatedCompatibility, 3, 6, {3840, 2160},
-            VK_FORMAT_B8G8R8A8_UNORM,
-            VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
-            VK_PRESENT_MODE_MAILBOX_KHR) &&
-            usageIsolatedCompatibility.applicationMinimumSignatures.empty(),
-        "A startup candidate must not reduce queue depth for a different image-usage contract");
-
-    SwapchainImageCountCompatibilityState modeIsolatedCompatibility;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        modeIsolatedCompatibility, 0, 3, 6, {1024, 576}, 0,
-        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        compatibilityUsage, VK_PRESENT_MODE_MAILBOX_KHR
-    ));
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        modeIsolatedCompatibility, 4, 3, 6, {3840, 2160}, 120,
-        VK_FORMAT_B8G8R8A8_UNORM, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-        compatibilityUsage, VK_PRESENT_MODE_MAILBOX_KHR
-    ));
-    expect(!activateSwapchainImageCountCompatibilityForCreate(
-            modeIsolatedCompatibility, 3, 6, {3840, 2160},
-            VK_FORMAT_B8G8R8A8_UNORM,
-            VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-            compatibilityUsage, VK_PRESENT_MODE_FIFO_KHR) &&
-            modeIsolatedCompatibility.applicationMinimumSignatures.empty(),
-        "A startup candidate must not reduce queue depth for a different present-mode contract");
-
-    SwapchainImageCountCompatibilityState surfaceIsolatedCompatibility;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        surfaceIsolatedCompatibility, 0, 3, 6, {1024, 576}, 0
-    ));
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        surfaceIsolatedCompatibility, 4, 3, 6, {3840, 2160}, 120
-    ));
-    const auto provenSurface = reinterpret_cast<VkSurfaceKHR>(uintptr_t{0x10});
-    const auto unrelatedSurface =
-        reinterpret_cast<VkSurfaceKHR>(uintptr_t{0x20});
-    expect(activateSwapchainImageCountCompatibilityForCreate(
-            surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
-            VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-            0, VK_PRESENT_MODE_FIFO_KHR, provenSurface) &&
-            activateSwapchainImageCountCompatibilityForCreate(
-                surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
-                VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-                0, VK_PRESENT_MODE_FIFO_KHR, provenSurface, true) &&
-            !activateSwapchainImageCountCompatibilityForCreate(
-                surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
-                VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-                0, VK_PRESENT_MODE_FIFO_KHR, unrelatedSurface),
-        "An established fallback must remain on its proven surface lineage");
-    clearSwapchainImageCountCompatibilityForSurface(
-        surfaceIsolatedCompatibility, provenSurface
-    );
-    expect(surfaceIsolatedCompatibility.applicationMinimumSignatures.empty() &&
-            !activateSwapchainImageCountCompatibilityForCreate(
-                surfaceIsolatedCompatibility, 3, 6, {3840, 2160},
-                VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-                0, VK_PRESENT_MODE_FIFO_KHR, provenSurface),
-        "Destroying the proven surface must expire its compatibility fallback");
-
-    SwapchainImageCountCompatibilityState isolatedShortLived;
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            isolatedShortLived, 4, 3, 6, {3840, 2160}, 120) ==
-                SwapchainImageCountCompatibilityObservation::Ignored &&
-            !isolatedShortLived.replacementCandidate &&
-            !activateSwapchainImageCountCompatibilityForCreate(
-                isolatedShortLived, 3, 6, {3840, 2160}),
-        "An isolated short multi-present surface must not seed compatibility mode");
-
-    SwapchainImageCountCompatibilityState longZeroReturn;
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            longZeroReturn, 0, 3, 6, {3840, 2160},
-            swapchainImageCountZeroReturnProbeLifetimeLimitMs + 1) ==
-                SwapchainImageCountCompatibilityObservation::Ignored &&
-            !longZeroReturn.zeroReturnProbeObserved,
-        "A long-lived zero-return surface must not seed a startup signature");
-
-    SwapchainImageCountCompatibilityState healthyCompatibility;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        healthyCompatibility, 0, 3, 6, {1024, 576}, 0
-    ));
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            healthyCompatibility, 1, 3, 6, {3840, 2160}, 120) ==
-                SwapchainImageCountCompatibilityObservation::
-                    HealthySurfaceCleared &&
-            !healthyCompatibility.zeroReturnProbeObserved &&
-            !healthyCompatibility.replacementCandidate,
-        "A one-return successor must not satisfy the multi-present signature");
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        healthyCompatibility, 0, 3, 6, {1024, 576}, 0
-    ));
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            healthyCompatibility, 4, 3, 6, {3840, 2160}, 2'208) ==
-                SwapchainImageCountCompatibilityObservation::
-                    ShortLivedReplacementCandidate,
-        "A measured Detroit startup handoff just above two seconds must remain eligible");
-    expect(activateSwapchainImageCountCompatibilityForCreate(
-            healthyCompatibility, 3, 6, {3840, 2160}),
-        "The measured Detroit startup handoff must activate only for its matching replacement");
-
-    SwapchainImageCountCompatibilityState slowStartupCompatibility;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        slowStartupCompatibility, 0, 3, 6, {1024, 576}, 0
-    ));
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            slowStartupCompatibility, 2, 3, 6, {3840, 2160}, 9'000) ==
-                SwapchainImageCountCompatibilityObservation::
-                    ShortLivedReplacementCandidate,
-        "A low-frame-count startup handoff must remain portable to slower devices");
-
-    SwapchainImageCountCompatibilityState runningSuccessorCompatibility;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        runningSuccessorCompatibility, 0, 3, 6, {1024, 576}, 0
-    ));
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            runningSuccessorCompatibility,
-            swapchainImageCountShortLivedReturnedPresentMaximum + 1,
-            3, 6, {3840, 2160}, 1'000) ==
-                SwapchainImageCountCompatibilityObservation::
-                    HealthySurfaceCleared &&
-            !runningSuccessorCompatibility.replacementCandidate,
-        "A normally running successor must not qualify merely because it is recreated within the time window");
-
-    SwapchainImageCountCompatibilityState longSuccessorCompatibility;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        longSuccessorCompatibility, 0, 3, 6, {1024, 576}, 0
-    ));
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            longSuccessorCompatibility, 4, 3, 6, {3840, 2160},
-            swapchainImageCountReplacementLifetimeLimitMs + 1) ==
-                SwapchainImageCountCompatibilityObservation::
-                    HealthySurfaceCleared,
-        "A long-lived successor must clear startup evidence even with few returned presents");
-
-    SwapchainImageCountCompatibilityState mismatchedReplacement;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        mismatchedReplacement, 0, 3, 6, {1024, 576}, 0
-    ));
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        mismatchedReplacement, 4, 3, 6, {3840, 2160}, 120
-    ));
-    expect(!activateSwapchainImageCountCompatibilityForCreate(
-            mismatchedReplacement, 3, 6, {2560, 1440}) &&
-            !mismatchedReplacement.zeroReturnProbeObserved &&
-            !mismatchedReplacement.replacementCandidate &&
-            mismatchedReplacement.applicationMinimumSignatures.empty(),
-        "A different replacement geometry must clear the candidate without changing the normal queue depth");
-
-    SwapchainImageCountCompatibilityState repeatedZeroCompatibility;
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            repeatedZeroCompatibility, 0, 3, 6, {1024, 576}, 0) ==
-                SwapchainImageCountCompatibilityObservation::ZeroReturnProbe &&
-            observeDestroyedSwapchainForImageCountCompatibility(
-                repeatedZeroCompatibility, 0, 3, 6, {3840, 2160}, 0) ==
-                    SwapchainImageCountCompatibilityObservation::
-                        ShortLivedReplacementCandidate &&
-            activateSwapchainImageCountCompatibilityForCreate(
-                repeatedZeroCompatibility, 3, 6, {3840, 2160}),
-        "A repeated zero-return startup handoff must use the same matching-replacement circuit breaker");
-
-    expect(imageCountCompatibility.applicationMinimumSignatures.size() == 1,
-        "The matching-replacement compatibility decision must stay signature-local and persistent");
-
-    SwapchainImageCountCompatibilityState explicitReplacementCompatibility;
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            explicitReplacementCompatibility, 0, 3, 6, {426, 240}, 4) ==
-                SwapchainImageCountCompatibilityObservation::ZeroReturnProbe,
-        "An initial zero-return swapchain must remain eligible for null-old startup detection");
-    expect(!activateSwapchainImageCountCompatibilityForCreate(
-            explicitReplacementCompatibility, 3, 6, {426, 240},
-            VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-            0, VK_PRESENT_MODE_FIFO_KHR, VK_NULL_HANDLE, true) &&
-            !explicitReplacementCompatibility.zeroReturnProbeObserved &&
-            !explicitReplacementCompatibility.replacementCandidate,
-        "An application-provided oldSwapchain must clear pending startup evidence before an intentional replacement");
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            explicitReplacementCompatibility, 0, 3, 6, {426, 240}, 4,
-            VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-            0, VK_PRESENT_MODE_FIFO_KHR, VK_NULL_HANDLE, true) ==
-                SwapchainImageCountCompatibilityObservation::Ignored &&
-            !activateSwapchainImageCountCompatibilityForCreate(
-                explicitReplacementCompatibility, 3, 6, {426, 240}),
-        "A zero-return member of an explicit oldSwapchain chain must not seed the application-minimum fallback");
-
-    SwapchainImageCountCompatibilityState pendingExplicitReplacement;
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        pendingExplicitReplacement, 0, 3, 6, {426, 240}, 4
-    ));
-    static_cast<void>(observeDestroyedSwapchainForImageCountCompatibility(
-        pendingExplicitReplacement, 0, 3, 6, {426, 240}, 4
-    ));
-    expect(pendingExplicitReplacement.replacementCandidate &&
-            !activateSwapchainImageCountCompatibilityForCreate(
-                pendingExplicitReplacement, 3, 6, {426, 240},
-                VK_FORMAT_UNDEFINED, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR,
-                0, VK_PRESENT_MODE_FIFO_KHR, VK_NULL_HANDLE, true) &&
-            !pendingExplicitReplacement.replacementCandidate,
-        "An explicit oldSwapchain create must reject stale null-old compatibility evidence rather than starving generated headroom");
-
-    SwapchainImageCountCompatibilityState unmodifiedCompatibility;
-    expect(observeDestroyedSwapchainForImageCountCompatibility(
-            unmodifiedCompatibility, 0, 3, 3, {3840, 2160}, 0) ==
-                SwapchainImageCountCompatibilityObservation::Ignored &&
-            !unmodifiedCompatibility.zeroReturnProbeObserved &&
-            !unmodifiedCompatibility.replacementCandidate,
-        "An unmodified discarded swapchain must not implicate MAKO's image count");
-
     auto liveDisabledProfile = combinedProfile;
     liveDisabledProfile.frame_generation_enabled = false;
     VkSwapchainCreateInfoKHR retainedInteropCreate{

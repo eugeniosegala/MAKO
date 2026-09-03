@@ -42,21 +42,16 @@ namespace mako::layer {
         VkSurfaceKHR surface;
         VkFormat format;
         VkColorSpaceKHR colorSpace;
-        // Preserve the application's create signature independently from
-        // MAKO's lower-facing usage and present-mode changes. The startup
-        // compatibility policy must not leak across different WSI contracts.
-        VkImageUsageFlags applicationImageUsage{0};
-        VkPresentModeKHR applicationPresentMode{VK_PRESENT_MODE_FIFO_KHR};
         // Preserve the application's requested minimum separately from the
         // bounded minimum forwarded by MAKO and the actual returned count in
-        // `images`. These values make startup compatibility reports
-        // actionable without changing presentation behavior.
+        // `images`. These values expose the selected launch policy and support
+        // generated-capacity admission without changing presentation behavior.
         uint32_t requestedMinImageCount{0};
         uint32_t provisionedMinImageCount{0};
+        bool swapchainImageCountCompatibility{false};
         // Preserve whether the application supplied the Vulkan replacement
-        // lineage explicitly. A short-lived swapchain in an oldSwapchain
-        // chain is ordinary application-owned recreation, not evidence that
-        // MAKO's image-count reservation prevented startup.
+        // lineage explicitly so retirement and replacement stabilization keep
+        // the game's ownership boundary.
         bool applicationOldSwapchainProvided{false};
         // Extent the application requested after MAKO virtualized fixed WSI
         // capabilities. The actual swapchain images retain `extent`.
@@ -184,14 +179,6 @@ namespace mako::layer {
         [[nodiscard]] bool presentRetirementEnabled() const {
             return !this->presentRetirementFences.empty();
         }
-        [[nodiscard]] size_t completedApplicationPresentCount() const {
-            return this->frameState.realFrameIndex;
-        }
-        [[nodiscard]] std::chrono::steady_clock::time_point
-        compatibilityObservationStartedAt() const {
-            return this->compatibilityObservationStarted;
-        }
-
         /// Record a confirmed Gamescope application-HDR state change. Existing
         /// contexts retain their safe encoding until the game naturally
         /// recreates them.
@@ -267,8 +254,6 @@ namespace mako::layer {
             bool backendPending{false};
             size_t historyWarmupRemaining{0};
         };
-
-        std::chrono::steady_clock::time_point compatibilityObservationStarted{};
 
         struct DiagnosticsState {
             std::optional<std::chrono::steady_clock::time_point>

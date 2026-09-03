@@ -41,6 +41,7 @@ namespace mako::layer {
 
     struct SwapchainCreateModification {
         bool privateOrderedTransport{false};
+        bool swapchainImageCountCompatibility{false};
         bool spatialScalingActive{false};
         bool variableSurface{false};
         bool variableFeedbackSuppressed{false};
@@ -160,6 +161,7 @@ namespace mako::layer {
         std::optional<ls::GameConf> active_profile;
         bool frameGenerationInteropProvisionedAtStartup{false};
         bool scalingEngineConfiguredAtStartup{false};
+        bool swapchainImageCountCompatibilityConfiguredAtStartup{false};
 
         ls::lazy<backend::Instance> backend;
         std::optional<ls::GlobalConf> backendGlobal;

@@ -64,11 +64,13 @@ namespace mako::layer {
         bool gpuSelectionPending{false};
         bool ultraPerformancePending{false};
         bool scalingEnginePending{false};
+        bool swapchainImageCountCompatibilityPending{false};
 
         [[nodiscard]] bool restartRequired() const {
             return this->gpuSelectionPending ||
                 this->ultraPerformancePending ||
-                this->scalingEnginePending;
+                this->scalingEnginePending ||
+                this->swapchainImageCountCompatibilityPending;
         }
     };
 
@@ -79,7 +81,8 @@ namespace mako::layer {
     projectProcessStaticProfileForLiveUpdate(
             const ls::GameConf& current,
             const ls::GameConf& requested,
-            const bool scalingEngineConfiguredAtStartup) {
+            const bool scalingEngineConfiguredAtStartup,
+            const bool swapchainImageCountCompatibilityConfiguredAtStartup) {
         ProcessStaticProfileProjection projection{
             .runtimeProfile = requested,
             .gpuSelectionPending = requested.gpu != current.gpu,
@@ -87,6 +90,9 @@ namespace mako::layer {
                 current.ultra_performance,
             .scalingEnginePending = requested.scaling_enabled !=
                 scalingEngineConfiguredAtStartup,
+            .swapchainImageCountCompatibilityPending =
+                requested.swapchain_image_count_compatibility !=
+                    swapchainImageCountCompatibilityConfiguredAtStartup,
         };
         if (projection.gpuSelectionPending)
             projection.runtimeProfile.gpu = current.gpu;
@@ -100,6 +106,10 @@ namespace mako::layer {
         if (projection.scalingEnginePending) {
             projection.runtimeProfile.scaling_enabled =
                 scalingEngineConfiguredAtStartup;
+        }
+        if (projection.swapchainImageCountCompatibilityPending) {
+            projection.runtimeProfile.swapchain_image_count_compatibility =
+                swapchainImageCountCompatibilityConfiguredAtStartup;
         }
         return projection;
     }
@@ -132,6 +142,8 @@ namespace mako::layer {
             const bool generatedFrameCapacityPending = false) {
         auto live = requested;
         live.scaling_enabled = current.scaling_enabled;
+        live.swapchain_image_count_compatibility =
+            current.swapchain_image_count_compatibility;
         live.scaling_method = current.scaling_method;
         live.scaling_factor = current.scaling_factor;
         live.scaling_supersampling = current.scaling_supersampling;

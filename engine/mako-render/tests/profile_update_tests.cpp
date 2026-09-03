@@ -46,18 +46,24 @@ int main() {
     staticRequest.flow_scale = ls::GameConfDefaults::ultraPerformanceFlowScale;
     staticRequest.performance_mode = true;
     staticRequest.target_fps = 120;
+    staticRequest.swapchain_image_count_compatibility = true;
     const auto staticProjection = projectProcessStaticProfileForLiveUpdate(
-        current, staticRequest, current.scaling_enabled
+        current, staticRequest, current.scaling_enabled,
+        current.swapchain_image_count_compatibility
     );
     expect(staticProjection.restartRequired() &&
             staticProjection.gpuSelectionPending &&
             staticProjection.ultraPerformancePending &&
+            staticProjection.swapchainImageCountCompatibilityPending &&
             staticProjection.runtimeProfile.gpu == current.gpu &&
             staticProjection.runtimeProfile.ultra_performance ==
                 current.ultra_performance &&
             staticProjection.runtimeProfile.flow_scale == current.flow_scale &&
             staticProjection.runtimeProfile.performance_mode ==
                 current.performance_mode &&
+            staticProjection.runtimeProfile
+                .swapchain_image_count_compatibility ==
+                    current.swapchain_image_count_compatibility &&
             staticProjection.runtimeProfile.target_fps == 120,
         "Process-static projection must retain construction fields and apply live policy");
     auto scalingEngineRequest = current;
@@ -65,7 +71,8 @@ int main() {
     scalingEngineRequest.scaling_method = ls::ScalingMethod::Native;
     const auto scalingEngineProjection =
         projectProcessStaticProfileForLiveUpdate(
-            current, scalingEngineRequest, current.scaling_enabled
+            current, scalingEngineRequest, current.scaling_enabled,
+            current.swapchain_image_count_compatibility
         );
     expect(scalingEngineProjection.restartRequired() &&
             scalingEngineProjection.scalingEnginePending &&
@@ -78,7 +85,8 @@ int main() {
     scalingOnlyCurrent.frame_generation_enabled = false;
     const auto liveEnableProjection = projectProcessStaticProfileForLiveUpdate(
         scalingOnlyCurrent, current,
-        scalingOnlyCurrent.scaling_enabled
+        scalingOnlyCurrent.scaling_enabled,
+        scalingOnlyCurrent.swapchain_image_count_compatibility
     );
     expect(!liveEnableProjection.restartRequired() &&
             liveEnableProjection.runtimeProfile.frame_generation_enabled,

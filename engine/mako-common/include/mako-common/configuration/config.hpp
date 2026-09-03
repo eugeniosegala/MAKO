@@ -73,6 +73,7 @@ namespace ls {
         static constexpr size_t multiplier = 2;
         static constexpr bool frameGenerationEnabled = true;
         static constexpr bool scalingEnabled = false;
+        static constexpr bool swapchainImageCountCompatibility = false;
         static constexpr ScalingMethod scalingMethod = ScalingMethod::Ls1;
         static constexpr float scalingFactor = 1.5F;
         static constexpr bool scalingSupersampling = false;
@@ -134,6 +135,10 @@ namespace ls {
         bool frame_generation_enabled{GameConfDefaults::frameGenerationEnabled};
         /// provision the scaling engine independently from frame synthesis
         bool scaling_enabled{GameConfDefaults::scalingEnabled};
+        /// preserve the application's requested swapchain image minimum
+        bool swapchain_image_count_compatibility{
+            GameConfDefaults::swapchainImageCountCompatibility
+        };
         /// spatial reconstruction implementation
         ScalingMethod scaling_method{GameConfDefaults::scalingMethod};
         /// ratio between the source and output dimensions when scaling

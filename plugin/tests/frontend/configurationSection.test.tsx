@@ -170,6 +170,7 @@ vi.mock("../../src/i18n/i18n", () => ({
 import { ConfigurationSection } from "../../src/components/ConfigurationSection";
 import {
   GAMESCOPE_WSI_COMPATIBILITY,
+  SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY,
   getDefaults,
 } from "../../src/config/configSchema";
 
@@ -240,6 +241,7 @@ describe("External Tools controls", () => {
       )!,
     );
     expect(screen.getByText("Gamescope WSI (Restart)")).toBeTruthy();
+    expect(screen.getByText("Game Swapchain Images (Restart)")).toBeTruthy();
     expect(screen.getByText("Disable Steam Deck Mode (Restart)")).toBeTruthy();
     expect(
       screen.getByText("Enable Zink for OpenGL Games (Restart)"),
@@ -379,6 +381,36 @@ describe("External Tools controls", () => {
     fireEvent.click(screen.getByText("Gamescope WSI (Restart)"));
     expect(onConfigChange).toHaveBeenCalledWith(
       GAMESCOPE_WSI_COMPATIBILITY,
+      true,
+    );
+  });
+
+  test("exposes the explicit per-profile swapchain image compatibility policy", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const { container } = render(
+      <ConfigurationSection
+        config={getDefaults()}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    fireEvent.click(
+      container.querySelector<HTMLButtonElement>(
+        ".MAKO_WorkaroundsCollapseButton_Container button",
+      )!,
+    );
+
+    expect(
+      screen
+        .getByText(
+          "Generated frames may be skipped when the compositor has no spare image, which can reduce smoothness or performance under pressure.",
+        )
+        .getAttribute("data-tone"),
+    ).toBe("warning");
+    fireEvent.click(screen.getByText("Game Swapchain Images (Restart)"));
+    expect(onConfigChange).toHaveBeenCalledWith(
+      SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY,
       true,
     );
   });

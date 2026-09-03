@@ -211,7 +211,8 @@ bool layer::context_ModifySwapchainCreateInfo(const ls::GameConf& profile,
     return applySwapchainCreateProvisioning(
         profile, maxImages, createInfo,
         frameGenerationProvisioned, spatialScalingActive,
-        orderedFrameGenerationTransport
+        orderedFrameGenerationTransport,
+        profile.swapchain_image_count_compatibility
     );
 }
 
@@ -474,8 +475,6 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
     if (!this->colorPipeline.generationSupported) {
         std::cerr << "MAKO Renderer: frame generation disabled for this swapchain: "
                   << this->colorPipeline.reason << '\n';
-        this->compatibilityObservationStarted =
-            std::chrono::steady_clock::now();
         this->publishRuntimeStatus("swapchain-create");
         return;
     }
@@ -710,8 +709,6 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                   << ": " << e.what() << '\n';
         this->runtimeStatusState.error = e.what();
     }
-    this->compatibilityObservationStarted =
-        std::chrono::steady_clock::now();
     this->publishRuntimeStatus("swapchain-create");
 }
 

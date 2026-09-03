@@ -311,6 +311,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "script"
     },
 
+    "swapchain_image_count_compatibility": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": False,
+        "description": "preserve the application's requested swapchain image minimum for games that cannot start with generated-output headroom",
+        "location": "profile"
+    },
+
     "external_vulkan_layer": {
         "fieldType": ConfigFieldType.STRING,
         "default": "",
