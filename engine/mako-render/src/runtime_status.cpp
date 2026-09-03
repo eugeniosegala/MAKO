@@ -4,6 +4,7 @@
 
 #include "profile_update.hpp"
 
+#include <atomic>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
@@ -14,9 +15,170 @@
 
 #include <fcntl.h>
 #include <sys/file.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
 namespace {
+
+    constexpr std::string_view statusSuffix{".json"};
+    constexpr std::string_view temporaryStatusSuffix{".json.tmp"};
+    constexpr std::string_view livenessSuffix{".json.lock"};
+
+    bool hasSuffix(
+            const std::string_view value, const std::string_view suffix) {
+        return value.size() >= suffix.size() &&
+            value.substr(value.size() - suffix.size()) == suffix;
+    }
+
+    bool isDecimal(const std::string_view value) {
+        if (value.empty())
+            return false;
+        for (const auto character : value) {
+            if (character < '0' || character > '9')
+                return false;
+        }
+        return true;
+    }
+
+    bool matchesManagedStatusStem(
+            const std::string_view stem, const std::string_view roleMarker) {
+        const auto rolePosition = stem.find(roleMarker);
+        if (rolePosition == std::string_view::npos)
+            return false;
+        const auto processIdentity = stem.substr(0, rolePosition);
+        const auto context = stem.substr(rolePosition + roleMarker.size());
+        if (!isDecimal(context))
+            return false;
+
+        const auto identitySeparator = processIdentity.find('-');
+        if (identitySeparator == std::string_view::npos)
+            return isDecimal(processIdentity);
+        return processIdentity.find('-', identitySeparator + 1) ==
+                std::string_view::npos &&
+            isDecimal(processIdentity.substr(0, identitySeparator)) &&
+            isDecimal(processIdentity.substr(identitySeparator + 1));
+    }
+
+    bool isManagedStatusFilename(const std::string_view filename) {
+        size_t suffixSize = 0;
+        if (hasSuffix(filename, livenessSuffix))
+            suffixSize = livenessSuffix.size();
+        else if (hasSuffix(filename, temporaryStatusSuffix))
+            suffixSize = temporaryStatusSuffix.size();
+        else if (hasSuffix(filename, statusSuffix))
+            suffixSize = statusSuffix.size();
+        else
+            return false;
+
+        const auto stem = filename.substr(0, filename.size() - suffixSize);
+        return matchesManagedStatusStem(stem, "-frame-generation-") ||
+            matchesManagedStatusStem(stem, "-spatial-scaling-");
+    }
+
+    void removeManagedFile(const std::filesystem::path& path) noexcept {
+        struct stat status {};
+        if (::lstat(path.c_str(), &status) != 0 ||
+                !S_ISREG(status.st_mode) || status.st_uid != ::geteuid())
+            return;
+        std::error_code error;
+        std::filesystem::remove(path, error);
+    }
+
+    void pruneUnlockedStatusPair(
+            const std::filesystem::path& livenessPath) noexcept {
+        const auto descriptor = ::open(
+            livenessPath.c_str(), O_RDWR | O_CLOEXEC | O_NOFOLLOW
+        );
+        if (descriptor < 0)
+            return;
+
+        struct stat descriptorStatus {};
+        if (::fstat(descriptor, &descriptorStatus) != 0 ||
+                !S_ISREG(descriptorStatus.st_mode) ||
+                descriptorStatus.st_uid != ::geteuid() ||
+                ::flock(descriptor, LOCK_EX | LOCK_NB) != 0) {
+            ::close(descriptor);
+            return;
+        }
+
+        const auto filename = livenessPath.filename().string();
+        const auto statusPath = livenessPath.parent_path() /
+            filename.substr(0, filename.size() - std::string_view{".lock"}.size());
+        auto temporaryPath = statusPath;
+        temporaryPath += ".tmp";
+        removeManagedFile(statusPath);
+        removeManagedFile(temporaryPath);
+        removeManagedFile(livenessPath);
+        ::close(descriptor);
+    }
+
+    bool pathEntryIsMissing(const std::filesystem::path& path) noexcept {
+        std::error_code error;
+        const auto status = std::filesystem::symlink_status(path, error);
+        return status.type() == std::filesystem::file_type::not_found &&
+            (!error ||
+             error == std::errc::no_such_file_or_directory);
+    }
+
+    void pruneInactiveRuntimeStatus(
+            const std::filesystem::path& directory) noexcept {
+        try {
+            struct stat directoryStatus {};
+            if (::lstat(directory.c_str(), &directoryStatus) != 0 ||
+                    !S_ISDIR(directoryStatus.st_mode) ||
+                    directoryStatus.st_uid != ::geteuid())
+                return;
+
+            std::error_code error;
+            for (std::filesystem::directory_iterator iterator(directory, error),
+                    end; iterator != end && !error;
+                    iterator.increment(error)) {
+                const auto filename = iterator->path().filename().string();
+                if (hasSuffix(filename, livenessSuffix) &&
+                        isManagedStatusFilename(filename))
+                    pruneUnlockedStatusPair(iterator->path());
+            }
+
+            error.clear();
+            for (std::filesystem::directory_iterator iterator(directory, error),
+                    end; iterator != end && !error;
+                    iterator.increment(error)) {
+                const auto path = iterator->path();
+                const auto filename = path.filename().string();
+                if (!isManagedStatusFilename(filename))
+                    continue;
+                std::filesystem::path statusPath;
+                if (hasSuffix(filename, statusSuffix)) {
+                    statusPath = path;
+                } else if (hasSuffix(filename, temporaryStatusSuffix)) {
+                    statusPath = path.parent_path() /
+                        filename.substr(
+                            0, filename.size() -
+                                std::string_view{".tmp"}.size()
+                        );
+                } else {
+                    continue;
+                }
+
+                auto livenessPath = statusPath;
+                livenessPath += ".lock";
+                if (pathEntryIsMissing(livenessPath))
+                    removeManagedFile(path);
+            }
+        } catch (...) {
+            // Runtime status cleanup is observational and must never prevent
+            // a game from creating its own status publisher.
+        }
+    }
+
+    void pruneInactiveRuntimeStatusOnce(
+            const std::filesystem::path& directory) noexcept {
+        static std::atomic<pid_t> prunedProcess{0};
+        const auto process = ::getpid();
+        if (prunedProcess.exchange(process, std::memory_order_relaxed) == process)
+            return;
+        pruneInactiveRuntimeStatus(directory);
+    }
 
     uint64_t processStartTicks() {
         std::ifstream input("/proc/self/stat");
@@ -235,6 +397,8 @@ mako::layer::RuntimeStatusPublisher::RuntimeStatusPublisher(
     std::error_code error;
     std::filesystem::create_directories(directory, error);
     if (!error) {
+        if (this->role == "frame-generation")
+            pruneInactiveRuntimeStatusOnce(directory);
         this->livenessDescriptor = ::open(
             this->livenessPath.c_str(), O_CREAT | O_RDWR | O_CLOEXEC, 0600
         );

@@ -124,6 +124,29 @@ namespace mako::layer {
             requestedGeneratedFrames;
     }
 
+    /// Return a tighter Adaptive ceiling only when native-first ordered
+    /// admission proved, during a higher-multiplier evaluation, that part but
+    /// not all of a multi-output batch was available. A miss outside the probe
+    /// may be transient and keeps the existing retry owner; Fixed is an
+    /// explicit policy and never enters this path.
+    [[nodiscard]] inline std::optional<size_t>
+    adaptiveOrderedWsiLimitAfterPartialAdmission(
+            const bool adaptive,
+            const bool orderedTransport,
+            const bool higherMultiplierEvaluationActive,
+            const size_t requestedGeneratedFrames,
+            const size_t admittedGeneratedFrames,
+            const std::optional<size_t> currentLimit) noexcept {
+        if (!adaptive || !orderedTransport ||
+                !higherMultiplierEvaluationActive ||
+                admittedGeneratedFrames == 0 ||
+                admittedGeneratedFrames >= requestedGeneratedFrames ||
+                (currentLimit && admittedGeneratedFrames >= *currentLimit)) {
+            return std::nullopt;
+        }
+        return admittedGeneratedFrames;
+    }
+
     /// Ordered SDR owns one configured acquire-wait budget per application
     /// present, not one full wait for every generated image. Returning zero
     /// means the caller must stop acquiring and retain the real frame; it must
@@ -1030,6 +1053,7 @@ namespace mako::layer {
             size_t validatedGenerationLimit{0};
             double smoothedBaseFps{0.0};
             bool rampEvaluationActive{false};
+            std::optional<size_t> efficiencyProbeGenerationLimit;
             bool rearmRequired{false};
             bool discontinuityRecoveryActive{false};
         };
@@ -1037,17 +1061,51 @@ namespace mako::layer {
         [[nodiscard]] Decision update(const TimePoint now,
                 const bool eligible, const uint32_t targetFps,
                 const SchedulerState scheduler) {
-            const auto previousMultiplier = this->activeMultiplier;
+            const auto previousMultiplier = this->effectiveMultiplier();
+            const auto previousProbeMultiplier = this->probeMultiplier;
             if (!eligible || targetFps == 0 ||
                     scheduler.discontinuityRecoveryActive ||
                     scheduler.rearmRequired || scheduler.rampEvaluationActive) {
                 this->resetCandidate();
                 this->activeMultiplier.reset();
+                this->probeMultiplier.reset();
                 return this->decision(previousMultiplier);
             }
 
+            // A lower-generation efficiency probe must run against the normal
+            // target/(tested generation limit + 1) cadence rather than the
+            // qualified target/N rung it is evaluating. Preserve that rung
+            // while the temporary probe cadence is active so rejection can
+            // restore it immediately.
+            if (scheduler.efficiencyProbeGenerationLimit) {
+                this->resetCandidate();
+                this->probeMultiplier =
+                    *scheduler.efficiencyProbeGenerationLimit + 1;
+                this->activeTargetFps = static_cast<double>(targetFps);
+                return this->decision(previousMultiplier);
+            }
+            this->probeMultiplier.reset();
+
             const size_t desiredMultiplier =
                 scheduler.validatedGenerationLimit + 1;
+            if (previousProbeMultiplier &&
+                    desiredMultiplier == *previousProbeMultiplier) {
+                // The scheduler accepted the tested lower load. Its temporary
+                // cadence is already active, so retain it without another
+                // qualification or pacing transition. Exact 2x falls through
+                // to the normal target/2 automatic cap.
+                this->resetCandidate();
+                if (desiredMultiplier >= 3) {
+                    this->activeMultiplier = desiredMultiplier;
+                    this->activeTargetFps =
+                        static_cast<double>(targetFps);
+                    return this->decision(previousMultiplier);
+                }
+                this->activeMultiplier.reset();
+                return {
+                    .changed = false,
+                };
+            }
             if (desiredMultiplier < 3 || scheduler.smoothedBaseFps <= 0.0) {
                 this->resetCandidate();
                 this->activeMultiplier.reset();
@@ -1091,6 +1149,7 @@ namespace mako::layer {
 
         void reset() {
             this->activeMultiplier.reset();
+            this->probeMultiplier.reset();
             this->resetCandidate();
         }
 
@@ -1100,18 +1159,24 @@ namespace mako::layer {
         }
 
     private:
+        [[nodiscard]] std::optional<size_t> effectiveMultiplier() const {
+            return this->probeMultiplier
+                ? this->probeMultiplier : this->activeMultiplier;
+        }
+
         [[nodiscard]] Decision decision(
                 const std::optional<size_t> previousMultiplier) const {
-            if (!this->activeMultiplier) {
+            const auto currentMultiplier = this->effectiveMultiplier();
+            if (!currentMultiplier) {
                 return {
                     .changed = previousMultiplier.has_value(),
                 };
             }
             return {
                 .framesPerSecond = this->activeTargetFps /
-                    static_cast<double>(*this->activeMultiplier),
-                .multiplier = *this->activeMultiplier,
-                .changed = previousMultiplier != this->activeMultiplier,
+                    static_cast<double>(*currentMultiplier),
+                .multiplier = *currentMultiplier,
+                .changed = previousMultiplier != currentMultiplier,
             };
         }
 
@@ -1121,6 +1186,7 @@ namespace mako::layer {
         }
 
         std::optional<size_t> activeMultiplier;
+        std::optional<size_t> probeMultiplier;
         std::optional<size_t> candidateMultiplier;
         std::optional<TimePoint> candidateSince;
         double activeTargetFps{0.0};

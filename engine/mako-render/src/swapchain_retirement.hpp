@@ -82,6 +82,21 @@ namespace mako::layer {
             retiredNullOldReplacement;
     }
 
+    /// A destroy-before-create replacement intentionally cannot forward its
+    /// retired lower handle through Gamescope WSI. When the replacement also
+    /// owns spatial reconstruction, establish the new lower WSI with one
+    /// direct application-image present before submitting private scaler
+    /// work. Explicit oldSwapchain lineage and cold creates already give the
+    /// driver an unambiguous replacement boundary and need no such prime.
+    [[nodiscard]] constexpr bool
+    nullOldReplacementRequiresDirectPresentPrime(
+            const bool replacement,
+            const bool applicationOldSwapchainProvided,
+            const bool spatialScalingActive) noexcept {
+        return replacement && !applicationOldSwapchainProvided &&
+            spatialScalingActive;
+    }
+
     /// Prefer the promoted extension name when the driver advertises it, then
     /// fall back to the EXT predecessor used by current Gamescope/RADV stacks.
     /// The feature bit is mandatory for either spelling.

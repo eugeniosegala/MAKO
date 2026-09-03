@@ -12,6 +12,7 @@
 #include "present_diagnostics.hpp"
 #include "spatial_scaling_policy.hpp"
 #include "swapchain_create_policy.hpp"
+#include "swapchain_retirement.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -352,6 +353,13 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                       << this->spatialScaler->fallbackReason() << '\n';
         }
     }
+
+    this->replacementWsiPrimePending =
+        nullOldReplacementRequiresDirectPresentPrime(
+            this->info.replacement,
+            this->info.applicationOldSwapchainProvided,
+            this->spatialScaler.has_value()
+        );
 
     bool applicationPackedHdr10Supported = false;
     bool backendPackedHdr10Supported = false;
@@ -865,11 +873,20 @@ bool Swapchain::resetGenerationScheduler(
         return false;
     }
 
+    const size_t schedulerGeneratedFrameCapacity =
+        this->profile.adaptive &&
+            this->adaptiveOrderedWsiGeneratedCapacityLimit
+        ? std::min(
+            this->destinationImages.size(),
+            *this->adaptiveOrderedWsiGeneratedCapacityLimit
+        )
+        : this->destinationImages.size();
+
     this->adaptiveScheduler.emplace(
         AdaptiveSchedulerConfig{
             .targetFps = policy->targetFps,
             .maximumMultiplier = policy->maximumMultiplier,
-            .generatedFrameCapacity = this->destinationImages.size(),
+            .generatedFrameCapacity = schedulerGeneratedFrameCapacity,
             .stableCadence = policy->stableCadence,
             .automaticBaseFpsCap =
                 this->profile.adaptive_auto_base_fps_cap,

@@ -47,6 +47,7 @@ MAKO Renderer: live profile resource change requested a game-owned swapchain rec
 MAKO Renderer: present diagnostics: operation=runtime-transition-recreation-requested context=1 state_revision=2 reason=profile-resources lower_present_result=0 signal=VK_ERROR_OUT_OF_DATE_KHR delivery=one-shot-after-semaphore-consumption
 MAKO Renderer: present diagnostics: operation=original-present-recreation-propagate context=2 frame=10 sequence=20 result=-1000001004 action=application-image-submitted-before-recreation
 MAKO Renderer: present diagnostics: operation=swapchain-recreation-observed context=2 role=frame-generation swapchain=1234 source=upstream-or-driver
+MAKO Renderer: present diagnostics: operation=replacement-wsi-prime context=2 reason=null-old-swapchain spatial_scaling_active=1 wait_semaphores=1 frame=0 sequence=1 action=direct-application-present-before-spatial-work
 MAKO Renderer: present diagnostics: operation=replacement-backend-stabilization context=2 phase=started duration_ms=250 action=scaled-real-frame-only
 MAKO Renderer: present diagnostics: operation=runtime-state-applied context=2 state_revision=2 adaptive=1 target_fps=110 effective_flow_scale=0.75 lighter_model=1 generated_frame_capacity=3 hdr=1
 MAKO Renderer: spatial scaling surface virtualized: source=854x532; presentation=1280x800; policy_revision=4; query_generation=9
@@ -59,6 +60,7 @@ MAKO Renderer: standalone spatial scaling: frame-generation backend and interop 
 MAKO Renderer: multi-swapchain spatial-scaling present rejected before semaphore consumption; batch scaling is not supported
 MAKO Renderer: present diagnostics: operation=adaptive-ramp context=1 old_limit=0 new_limit=1
 MAKO Renderer: present diagnostics: operation=adaptive-plan context=1 base_fps=60 target_fps=90 generated=1 max_generated=1 stable_cadence=0 target_clock=1 target_budget_credit_outputs=0.25 target_deferred_budget_output=1 target_phase_error_ms=-2.1 source_interval_samples=60 source_interval_mean_ms=16.6 source_interval_stddev_ms=1.2 source_interval_p95_ms=18.5 source_interval_p99_ms=20.5 generated_count_changes=29 requested_interval_samples=90 requested_interval_mean_ms=11.1 requested_interval_stddev_ms=1.3 requested_interval_p95_ms=13.5 requested_interval_p99_ms=13.5 target_phase_error_samples=60 target_phase_error_rms_ms=2.2 target_phase_error_max_ms=5.5
+MAKO Renderer: present diagnostics: operation=adaptive-wsi-headroom-limit context=1 requested_min_images=3 images=5 requested_generated=2 admitted_generated=1 previous_generated_capacity=2 effective_generated_capacity=1 evidence=higher-multiplier-partial-admission action=retain-proven-generated-capacity
 MAKO Renderer: present diagnostics: operation=fixed-plan context=2 base_fps=61.2 multiplier=2 generated_per_real=1 observed_output_fps=122.4 generated_presented=61 generated_skipped=0 configured_adaptive_target_fps=110 target_applies=0
 MAKO Renderer: present diagnostics: operation=fixed-cadence-collapse-probe-start context=2 baseline_base_fps=30.1 observed_base_fps=30.1 confirmed_samples=0 consecutive_failures=0 retry_ms=0 action=history-only-probe
 MAKO Renderer: present diagnostics: operation=fixed-cadence-collapse-probe-recovered context=2 baseline_base_fps=30.1 observed_base_fps=60 confirmed_samples=3 consecutive_failures=0 retry_ms=0 action=verify-fixed-resume
@@ -120,6 +122,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
             result = self._run("--log", str(path), "adaptive", "recovery")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("adaptive-ramp", result.stdout)
+        self.assertIn("adaptive-wsi-headroom-limit", result.stdout)
         self.assertIn("runtime-state-applied", result.stdout)
         self.assertIn("skip-generated-frames", result.stdout)
         self.assertIn("ordered-acquire-quarantine", result.stdout)
@@ -228,6 +231,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "generated-delivery-miss",
             "generated-admission-pressure",
             "generated-admission-recovered",
+            "adaptive-wsi-headroom-limit",
             "fixed-cadence-collapse-probe-start",
             "fixed-cadence-collapse-probe-rejected",
             "fixed-cadence-collapse-probe-recovered",
@@ -270,6 +274,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("fingerprint=abc123.dirty.12345678", result.stdout)
                     self.assertIn("operation=process-identity", result.stdout)
                     self.assertIn("operation=swapchain-context-create", result.stdout)
+                    self.assertIn("operation=replacement-wsi-prime", result.stdout)
                     self.assertIn("operation=replacement-backend-stabilization", result.stdout)
                     self.assertIn("frame_generation_width=1280", result.stdout)
                     self.assertIn("spatial_pipeline=pre-frame-generation", result.stdout)

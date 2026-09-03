@@ -349,11 +349,9 @@ class RuntimeStateService(BaseService):
                 self._process_start_ticks(context["pid"])
                 == context["process_start_ticks"]
             )
-            if not process_identity_matches and not self._liveness_lock_held(path):
-                try:
-                    path.unlink()
-                except OSError:
-                    pass
+            if not process_identity_matches:
+                if self._liveness_lock_held(path):
+                    return context
                 return None
             return context
         except (OSError, UnicodeError, json.JSONDecodeError, ValueError):

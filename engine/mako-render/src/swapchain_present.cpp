@@ -615,6 +615,12 @@ VkResult Swapchain::presentNativeFrame(const PresentInvocation& invocation) {
     if (this->spatialScaler)
         return this->presentSpatiallyScaledFrame(invocation);
 
+    return this->presentDirectApplicationFrame(invocation);
+}
+
+VkResult Swapchain::presentDirectApplicationFrame(
+        const PresentInvocation& invocation,
+        const std::string_view healthSource) {
     const VkPresentInfoKHR presentInfo{
         .sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR,
         .pNext = invocation.nextChain,
@@ -638,9 +644,7 @@ VkResult Swapchain::presentNativeFrame(const PresentInvocation& invocation) {
     );
     if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
         throw ls::vulkan_error(result, "vkQueuePresentKHR() failed");
-    this->observeLowerPresentHealth(
-        phases.originalPresent, "native"
-    );
+    this->observeLowerPresentHealth(phases.originalPresent, healthSource);
 
     logSlowPresentOperation(
         "present-total", this->frameState.realFrameIndex,
@@ -1086,6 +1090,48 @@ void Swapchain::preacquireGeneratedImages(
     if (!trackNonblockingAdmission)
         return;
     this->recoveryState.generatedImageAdmission.reportBypassedFrame();
+    const bool higherMultiplierEvaluationActive =
+        this->adaptiveScheduler &&
+        this->adaptiveScheduler->snapshot().rampEvaluationActive;
+    const auto constrainedAdaptiveOrderedWsiCapacity =
+        adaptiveOrderedWsiLimitAfterPartialAdmission(
+            this->profile.adaptive,
+            this->privateOrderedTransport,
+            higherMultiplierEvaluationActive,
+            plan.requestedGeneratedFrames.size(),
+            plan.admittedGeneratedFrameCount,
+            this->adaptiveOrderedWsiGeneratedCapacityLimit
+        );
+    if (constrainedAdaptiveOrderedWsiCapacity) {
+        const size_t previousGeneratedCapacity =
+            this->adaptiveOrderedWsiGeneratedCapacityLimit.value_or(
+                this->destinationImages.size()
+            );
+        this->adaptiveOrderedWsiGeneratedCapacityLimit =
+            *constrainedAdaptiveOrderedWsiCapacity;
+        if (presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=adaptive-wsi-headroom-limit"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " requested_min_images="
+                      << this->info.requestedMinImageCount
+                      << " images=" << this->info.images.size()
+                      << " requested_generated="
+                      << plan.requestedGeneratedFrames.size()
+                      << " admitted_generated="
+                      << plan.admittedGeneratedFrameCount
+                      << " previous_generated_capacity="
+                      << previousGeneratedCapacity
+                      << " effective_generated_capacity="
+                      << *this->adaptiveOrderedWsiGeneratedCapacityLimit
+                      << " evidence=higher-multiplier-partial-admission"
+                      << " action=retain-proven-generated-capacity\n";
+        }
+        this->recoveryState.generatedImageAdmission.reset();
+        static_cast<void>(this->resetGenerationScheduler(
+            DiagnosticsClock::now(), "ordered-wsi-partial-admission"
+        ));
+    }
     if (!this->adaptiveScheduler) {
         this->diagnosticsState.fixedSkippedFrames +=
             plan.requestedGeneratedFrames.size() -
@@ -2031,6 +2077,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                 schedulerSnapshot.validatedGenerationLimit,
             .smoothedBaseFps = schedulerSnapshot.smoothedBaseFps,
             .rampEvaluationActive = schedulerSnapshot.rampEvaluationActive,
+            .efficiencyProbeGenerationLimit =
+                schedulerSnapshot.efficiencyProbeGenerationLimit,
             .rearmRequired = schedulerSnapshot.rearmRequired,
             .discontinuityRecoveryActive =
                 schedulerSnapshot.discontinuityRecoveryActive,
@@ -2091,6 +2139,23 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         .started = startPresentDiagnostic(),
     };
     this->recordPresentCadence(presentNow);
+
+    if (std::exchange(this->replacementWsiPrimePending, false)) {
+        if (presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=replacement-wsi-prime"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " reason=null-old-swapchain"
+                      << " spatial_scaling_active=1"
+                      << " wait_semaphores=" << waitSemaphores.size()
+                      << " frame=" << this->frameState.realFrameIndex
+                      << " sequence=" << this->frameState.sequenceIndex
+                      << " action=direct-application-present-before-spatial-work\n";
+        }
+        return this->presentDirectApplicationFrame(
+            invocation, "replacement-wsi-prime"
+        );
+    }
 
     if (!this->applyPendingColorPipeline(vk))
         return this->presentNativeFrame(invocation);

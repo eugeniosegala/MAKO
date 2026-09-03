@@ -10,6 +10,12 @@ Please do not attach `MAKO-diagnostics.txt` directly to a public GitHub issue. R
 
 This process does not copy `Lossless.dll`, install packages, reset the device, or change operating-system files.
 
+## Log and runtime-state retention
+
+Standalone MAKO Renderer does not create or rotate a private diagnostics log. Steam console logs remain shared logs managed by Steam, while a terminal capture created with `tee` remains at the path chosen in the command until the user removes it. MAKO Decky's separate opt-in diagnostic capture retains at most five sessions as described in its companion guide.
+
+The configuration directory's small `runtime-state/` records are not logs and exist whether presentation diagnostics are enabled or disabled. Normal Renderer context teardown removes only that context's record and liveness lock. After an abnormal exit, one bounded pass before the next Renderer process publishes its first primary context prunes unlocked stale pairs and orphaned regular files with recognized current or legacy MAKO runtime filenames only from the exact runtime-state directory derived from `MAKO_CONFIG`, `XDG_CONFIG_HOME`, or the user-home fallback. The pass does not repeat for setting changes, swapchain recreation, or later contexts in that process. Cleanup is non-recursive and best-effort: held locks, unrelated filenames, symlinks, non-regular or differently owned entries, inaccessible paths, uncertain filesystem results, and deletion failures are preserved and never prevent the game from starting.
+
 ## 1. Prepare the game
 
 Validate the current configuration before testing:

@@ -1503,12 +1503,30 @@ int main() {
     const bool combinedPrivateTransport =
         applySwapchainCreateProvisioning(
             combinedProfile, 0, combinedCreate,
-            true, true, true
-    );
+            true, false, true
+        );
     expect(combinedPrivateTransport &&
             combinedCreate.minImageCount == 5 &&
             combinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
-        "A three-image application minimum must reserve two generated outputs without a duplicate real-frame slot");
+        "A configured combined profile must reserve two generated outputs without a duplicate real-frame slot before the lower scaling relay arrives");
+
+    auto frameGenerationOnlyProfile = combinedProfile;
+    frameGenerationOnlyProfile.scaling_enabled = false;
+    VkSwapchainCreateInfoKHR frameGenerationOnlyCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 3,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    const bool frameGenerationOnlyPrivateTransport =
+        applySwapchainCreateProvisioning(
+            frameGenerationOnlyProfile, 0, frameGenerationOnlyCreate,
+            true, false, true
+        );
+    expect(frameGenerationOnlyPrivateTransport &&
+            frameGenerationOnlyCreate.minImageCount == 6 &&
+            frameGenerationOnlyCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
+        "Ordered FG-only must restore the release-3.0 three-image plus two-output plus one-relief contract");
 
     VkPhysicalDeviceMemoryBudgetPropertiesEXT imageCountPricingBudget{
         .sType =
@@ -1540,7 +1558,7 @@ int main() {
                 minimumVariablePresentationPixels == 66'355'200,
         "The RE4 4K admission regression must charge two generated images without a duplicate real image");
 
-    auto fiveXProfile = combinedProfile;
+    auto fiveXProfile = frameGenerationOnlyProfile;
     fiveXProfile.multiplier = 5;
     fiveXProfile.adaptive_max_multiplier = 5;
     VkSwapchainCreateInfoKHR fiveXCreate{
@@ -1552,8 +1570,8 @@ int main() {
     static_cast<void>(applySwapchainCreateProvisioning(
         fiveXProfile, 0, fiveXCreate, true, false, true
     ));
-    expect(fiveXCreate.minImageCount == 6,
-        "A 5x batch must add four generated outputs without another real-frame slot");
+    expect(fiveXCreate.minImageCount == 7,
+        "Ordered FG-only must retain the release-3.0 FIFO relief image");
 
     VkSwapchainCreateInfoKHR applicationDominatedCreate{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
@@ -1562,10 +1580,24 @@ int main() {
         .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
     };
     static_cast<void>(applySwapchainCreateProvisioning(
-        combinedProfile, 0, applicationDominatedCreate, true, false, true
+        frameGenerationOnlyProfile, 0, applicationDominatedCreate,
+        true, false, true
     ));
-    expect(applicationDominatedCreate.minImageCount == 6,
-        "A larger application minimum must retain the generated-output reservation");
+    expect(applicationDominatedCreate.minImageCount == 7,
+        "A larger FG-only application minimum must retain generated outputs and FIFO relief");
+
+    VkSwapchainCreateInfoKHR nonOrderedFrameGenerationCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 3,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    static_cast<void>(applySwapchainCreateProvisioning(
+        frameGenerationOnlyProfile, 0, nonOrderedFrameGenerationCreate,
+        true, false, false
+    ));
+    expect(nonOrderedFrameGenerationCreate.minImageCount == 5,
+        "Non-ordered Frame Generation must not reserve ordered FIFO relief");
 
     VkSwapchainCreateInfoKHR boundedFiveXCreate{
         .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,

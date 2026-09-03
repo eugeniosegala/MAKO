@@ -370,6 +370,12 @@ AdaptiveSchedulerSnapshot AdaptiveScheduler::snapshot() const {
             ? 1.0 / this->state.cadence.smoothedIntervalSeconds
             : 0.0,
         .rampEvaluationActive = this->state.ramp.evaluationAt.has_value(),
+        .efficiencyProbeGenerationLimit =
+            this->state.efficiencyProbe.evaluationAt
+                ? std::optional<size_t>{
+                    this->state.efficiencyProbe.testedLimit
+                }
+                : std::nullopt,
         .rearmRequired = this->state.rearm.required,
         .discontinuityRecoveryActive =
             this->state.discontinuityRecovery.deadline.has_value(),

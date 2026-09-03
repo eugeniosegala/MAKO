@@ -54,15 +54,19 @@ The vkBasalt toggle activates the host layer and leaves vkBasalt's effects and s
 
 These expert diagnostic commands keep Decky's profile and launch policy but bypass **External Tools**. Turn Gamescope WSI compatibility and both External Tools controls off first so the profile cannot add a second optional layer.
 
-### MangoHud through MAKO Decky without its toggle
+### Enable MangoHud from Steam in Desktop Mode without its toggle
 
-For a host-installed MangoHud with a 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS, the minimal manual setup is:
+Use this path when MAKO Decky's **Enable MangoHud** toggle is off and you want to enable a host-installed MangoHud for one 64-bit native Vulkan or Proton game launched directly by Steam on SteamOS. Do not use it when the profile toggle is already enabled.
+
+In Desktop Mode, open Steam, select the game in **Library**, open **Properties** > **General**, and paste the following complete value into **Launch Options**:
 
 ```text
 /home/deck/.local/bin/mako-run env MANGOHUD=1 NODEVICE_SELECT=1 DISABLE_LAYER_MESA_ANTI_LAG=1 VK_IMPLICIT_LAYER_PATH=/home/deck/.local/share/mako-render/vulkan/implicit_layer.d:/usr/share/vulkan/implicit_layer.d %command%
 ```
 
-Add `MANGOHUD_CONFIG=...` after `MANGOHUD=1` for per-game display options. This changes the overlay, not layer order.
+Close **Properties** and start the game normally from Steam. The `%command%` token is expanded by Steam, so do not paste this value into Konsole or replace `%command%` manually.
+
+To show only FPS and frame time in the top-right corner, add `MANGOHUD_CONFIG=fps,frametime,position=top-right` immediately after `MANGOHUD=1`. `MANGOHUD_CONFIG` changes the overlay contents and position, not layer order.
 
 Use the wrapper path displayed by MAKO Decky on systems whose user home is not `/home/deck`.
 

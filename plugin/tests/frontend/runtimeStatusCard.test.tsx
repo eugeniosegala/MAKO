@@ -148,6 +148,42 @@ describe("authoritative live status", () => {
     expect(screen.queryByText(/1440 × 810 →/)).toBeNull();
   });
 
+  test("uses the abbreviated LS1 Performance label in the compact live card", () => {
+    window.SP_REACT = React;
+    render(
+      <RuntimeStatusCard
+        runtimeState={{
+          ...EMPTY_RUNTIME_SCALING_UI_STATE,
+          hasContext: true,
+          scalingActive: true,
+          scalingEnabled: true,
+          activeMethod: "ls1-performance",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("LS1 Perf")).toBeTruthy();
+    expect(screen.queryByText("LS1 Performance")).toBeNull();
+  });
+
+  test("uses the abbreviated Native Resolution label in the compact live card", () => {
+    window.SP_REACT = React;
+    render(
+      <RuntimeStatusCard
+        runtimeState={{
+          ...EMPTY_RUNTIME_SCALING_UI_STATE,
+          hasContext: true,
+          scalingActive: true,
+          scalingEnabled: true,
+          activeMethod: "native",
+        }}
+      />,
+    );
+
+    expect(screen.getByText("Native")).toBeTruthy();
+    expect(screen.queryByText("Native Resolution")).toBeNull();
+  });
+
   test.each([
     [
       "variable-surface-memory-budget",

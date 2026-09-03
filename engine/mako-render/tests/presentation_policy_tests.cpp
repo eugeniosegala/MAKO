@@ -72,6 +72,24 @@ int main() {
             !orderedGeneratedBatchNeedsNonblockingAdmission(4, 6, 1) &&
             orderedGeneratedBatchNeedsNonblockingAdmission(4, 3, 1),
         "ordered admission did not distinguish a real spare from generated headroom");
+    expect(adaptiveOrderedWsiLimitAfterPartialAdmission(
+                true, true, true, 2, 1, std::nullopt) == 1 &&
+            adaptiveOrderedWsiLimitAfterPartialAdmission(
+                true, true, true, 4, 2, 3) == 2,
+        "partial Adaptive ordered admission did not retain its proven lower capacity");
+    expect(!adaptiveOrderedWsiLimitAfterPartialAdmission(
+                false, true, true, 2, 1, std::nullopt) &&
+            !adaptiveOrderedWsiLimitAfterPartialAdmission(
+                true, false, true, 2, 1, std::nullopt) &&
+            !adaptiveOrderedWsiLimitAfterPartialAdmission(
+                true, true, false, 2, 1, std::nullopt) &&
+            !adaptiveOrderedWsiLimitAfterPartialAdmission(
+                true, true, true, 2, 0, std::nullopt) &&
+            !adaptiveOrderedWsiLimitAfterPartialAdmission(
+                true, true, true, 2, 2, std::nullopt) &&
+            !adaptiveOrderedWsiLimitAfterPartialAdmission(
+                true, true, true, 3, 2, 1),
+        "Adaptive ordered admission limit escaped its partial, tighter, nonzero boundary");
     constexpr uint64_t acquireBudget = 50'000'000;
     expect(remainingGeneratedImageAcquireBudget(
             std::nullopt, 32'805'100) == std::nullopt,

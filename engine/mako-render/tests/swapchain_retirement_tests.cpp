@@ -171,6 +171,13 @@ int main() {
             !swapchainCreateIsReplacement(VK_NULL_HANDLE, false),
         "replacement classification depended on forwarding a retained old handle");
 
+    expect(nullOldReplacementRequiresDirectPresentPrime(true, false, true),
+        "a scaled null-old replacement did not require a direct WSI prime");
+    expect(!nullOldReplacementRequiresDirectPresentPrime(false, false, true) &&
+            !nullOldReplacementRequiresDirectPresentPrime(true, true, true) &&
+            !nullOldReplacementRequiresDirectPresentPrime(true, false, false),
+        "direct WSI priming escaped the scaled null-old replacement boundary");
+
     expect(presentFenceWillSignal(VK_SUCCESS) &&
             presentFenceWillSignal(VK_SUBOPTIMAL_KHR) &&
             presentFenceWillSignal(VK_ERROR_OUT_OF_DATE_KHR) &&

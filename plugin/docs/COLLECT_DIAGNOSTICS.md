@@ -4,6 +4,8 @@ Use this guide when **MAKO Decky** opens in Decky Loader and games launch throug
 
 You will enable diagnostics temporarily, reproduce the problem, create a Desktop report, restore normal launch settings, and upload it through the [MAKO diagnostic report form][diagnostic-form]. MAKO retains the latest five diagnostics-enabled game sessions.
 
+The small `runtime-state/` records used by MAKO Decky's live status display are separate from diagnostic logs and exist whether diagnostics are enabled or disabled. Normal game teardown removes them; after an abnormal exit, one bounded pass before the next Renderer process publishes its first primary context safely prunes unlocked, user-owned regular files with recognized MAKO runtime filenames from the configured runtime-state directory. The pass does not repeat for setting changes, swapchain recreation, or MAKO Decky's recurring 1.5-second status polls; those polls only read and validate the records needed to show asynchronous applied state. A held lock, unrelated filename, different owner, symlink, inaccessible path, or deletion failure leaves the entry untouched and cannot block game startup or status reporting.
+
 Do not attach `MAKO-diagnostics.txt` to a public issue. Review it for usernames, game names, application IDs, ROM names, and paths. Remove details you do not want to share, and never send passwords, credentials, serial numbers, licence keys, or `Lossless.dll`. Google sign-in is required for the form upload.
 
 The process does not copy `Lossless.dll`, install system packages, factory reset the device, or change SteamOS system files.

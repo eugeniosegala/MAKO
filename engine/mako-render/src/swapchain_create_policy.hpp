@@ -284,17 +284,24 @@ namespace mako::layer {
         switch (profile.pacing) {
             case ls::Pacing::None:
                 // Preserve the application's requested WSI ownership and add
-                // one image per generated output. The intercepted real frame
-                // is already one of the application's images, so reserving an
-                // additional real slot would turn a normal three-image 3x
-                // request into the six-image startup regression. Five images
-                // retain the same generated headroom without double-counting.
+                // one image per generated output. Ordered FG-only restores
+                // the release-3.0 relief image which keeps multi-output FIFO
+                // batches off the headroom-tight admission path. Combined
+                // scaling deliberately omits that sixth image: some engines
+                // reject or churn the enlarged lower replacement pool, while
+                // the replacement-prime and native-first paths protect its
+                // real frame without double-counting it.
+                const uint64_t orderedFrameGenerationReliefImages =
+                    orderedFrameGenerationTransport &&
+                        !ls::spatialScalingRequested(profile)
+                    ? 1 : 0;
                 createInfo.minImageCount = static_cast<uint32_t>(std::min(
                     static_cast<uint64_t>(
                         std::numeric_limits<uint32_t>::max()
                     ),
                     static_cast<uint64_t>(createInfo.minImageCount) +
-                        generatedFrameCapacityForProfile(profile)
+                        generatedFrameCapacityForProfile(profile) +
+                        orderedFrameGenerationReliefImages
                 ));
                 if (maxImages && createInfo.minImageCount > maxImages)
                     createInfo.minImageCount = maxImages;

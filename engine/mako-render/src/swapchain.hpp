@@ -382,6 +382,10 @@ namespace mako::layer {
         RuntimeStatusState runtimeStatusState;
         LiveProfileResourceRecreation liveProfileResourceRecreation;
         std::optional<AdaptiveScheduler> adaptiveScheduler;
+        // A partial native-first acquisition proves that this exact ordered
+        // WSI context cannot reliably deliver its larger automatic batch.
+        // Retain the observed lower ceiling until game-owned recreation.
+        std::optional<size_t> adaptiveOrderedWsiGeneratedCapacityLimit;
         size_t configuredFixedGeneratedFrames{0};
 
         bool gamescopeDetected{false};
@@ -393,6 +397,9 @@ namespace mako::layer {
         RealFramePacer realFramePacer;
         SmoothCadenceBaseCap smoothCadenceBaseCap;
         SmoothCadencePacerHandoff smoothCadencePacerHandoff;
+        // A null-old replacement loses the driver's explicit WSI lineage.
+        // Consume this exactly once before any private spatial submission.
+        bool replacementWsiPrimePending{false};
 
         SwapchainColorPipeline colorPipeline;
         std::optional<std::filesystem::path> scalingShaderDll;
@@ -438,6 +445,9 @@ namespace mako::layer {
             size_t presentedGenerated = 0);
         [[nodiscard]] VkResult presentNativeFrame(
             const PresentInvocation& invocation);
+        [[nodiscard]] VkResult presentDirectApplicationFrame(
+            const PresentInvocation& invocation,
+            std::string_view healthSource = "native");
         [[nodiscard]] VkResult presentSpatiallyScaledFrame(
             const PresentInvocation& invocation);
         [[nodiscard]] VkResult presentOriginalImage(

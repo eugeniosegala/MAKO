@@ -22,6 +22,17 @@ function methodLabel(method: string): string {
   }
 }
 
+function liveMethodLabel(method: string): string {
+  switch (method) {
+    case "native":
+      return t("LIVE_STATUS_NATIVE", "Native");
+    case "ls1-performance":
+      return t("LIVE_STATUS_LS1_PERFORMANCE", "LS1 Perf");
+    default:
+      return methodLabel(method);
+  }
+}
+
 function resolution(width: number, height: number): string {
   return width > 0 && height > 0 ? `${width} × ${height}` : "—";
 }
@@ -308,7 +319,7 @@ export function RuntimeStatusCard({
                       <>
                         <StatusDetail
                           label={t("LIVE_STATUS_MODEL", "Model")}
-                          value={methodLabel(runtimeState.activeMethod)}
+                          value={liveMethodLabel(runtimeState.activeMethod)}
                         />
                         <StatusDetail
                           label={t("LIVE_STATUS_ORIGINAL_RESOLUTION", "Input")}

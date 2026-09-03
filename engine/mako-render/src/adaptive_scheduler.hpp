@@ -85,6 +85,7 @@ namespace mako::layer {
         size_t historyWarmupRemaining{0};
         double smoothedBaseFps{0.0};
         bool rampEvaluationActive{false};
+        std::optional<size_t> efficiencyProbeGenerationLimit;
         bool rearmRequired{false};
         bool discontinuityRecoveryActive{false};
         bool nativeCadenceProbeActive{false};

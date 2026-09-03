@@ -177,16 +177,58 @@ class RuntimeStateTests(unittest.TestCase):
         self.assertEqual(status["phase"], "failed")
         self.assertEqual(status["contexts"][0]["error"], "replacement failed")
 
-    def test_stale_pid_identity_is_removed(self):
+    def test_stale_pid_identity_is_ignored_without_mutating_files(self):
         path = self._write(
             "stale.json",
             self._record(process_start_ticks=self.process_start_ticks + 1),
         )
+        lock_path = path.with_name(path.name + ".lock")
+        lock_path.write_text("", encoding="utf-8")
 
         status = self.service.get_status()
 
         self.assertEqual(status["contexts"], [])
-        self.assertFalse(path.exists())
+        self.assertTrue(path.exists())
+        self.assertTrue(lock_path.exists())
+
+    def test_status_poll_does_not_clean_orphaned_files(self):
+        lock_path = self.runtime_directory / "orphan.json.lock"
+        temporary_path = self.runtime_directory / "orphan.json.tmp"
+        lock_path.write_text("", encoding="utf-8")
+        temporary_path.write_text("incomplete", encoding="utf-8")
+
+        first_status = self.service.get_status()
+        second_status = self.service.get_status()
+
+        self.assertTrue(first_status["success"])
+        self.assertTrue(second_status["success"])
+        self.assertTrue(lock_path.exists())
+        self.assertTrue(temporary_path.exists())
+
+    def test_symlinked_runtime_directory_is_not_cleaned(self):
+        target_directory = self.runtime_directory / "target-runtime-state"
+        target_directory.mkdir()
+        path = target_directory / "stale.json"
+        path.write_text(
+            json.dumps(
+                self._record(
+                    process_start_ticks=self.process_start_ticks + 1
+                )
+            ),
+            encoding="utf-8",
+        )
+        lock_path = target_directory / "stale.json.lock"
+        lock_path.write_text("", encoding="utf-8")
+        linked_directory = self.runtime_directory / "linked-runtime-state"
+        linked_directory.symlink_to(target_directory, target_is_directory=True)
+        self.service.runtime_state_dir = linked_directory
+
+        status = self.service.get_status()
+
+        self.assertTrue(status["success"])
+        self.assertEqual(status["contexts"], [])
+        self.assertTrue(path.exists())
+        self.assertTrue(lock_path.exists())
 
     def test_held_liveness_lock_accepts_flatpak_pid_namespace_record(self):
         path = self._write(
@@ -203,6 +245,25 @@ class RuntimeStateTests(unittest.TestCase):
             self.assertEqual(len(status["contexts"]), 1)
             self.assertEqual(status["contexts"][0]["context"], 1)
             self.assertTrue(path.exists())
+        finally:
+            fcntl.flock(descriptor, fcntl.LOCK_UN)
+            os.close(descriptor)
+
+    def test_held_liveness_lock_preserves_unknown_schema_record(self):
+        record = self._record(process_start_ticks=self.process_start_ticks + 1)
+        record["schema_version"] = 6
+        path = self._write("newer.json", record)
+        lock_path = path.with_name(path.name + ".lock")
+        descriptor = os.open(lock_path, os.O_CREAT | os.O_RDWR, 0o600)
+        try:
+            fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+
+            status = self.service.get_status()
+
+            self.assertTrue(status["success"])
+            self.assertEqual(status["contexts"], [])
+            self.assertTrue(path.exists())
+            self.assertTrue(lock_path.exists())
         finally:
             fcntl.flock(descriptor, fcntl.LOCK_UN)
             os.close(descriptor)
@@ -228,6 +289,12 @@ class RuntimeStateTests(unittest.TestCase):
 
         self.assertTrue(status["success"])
         self.assertEqual(status["contexts"], [])
+        self.assertTrue((self.runtime_directory / "malformed.json").exists())
+        self.assertTrue((self.runtime_directory / "oversized.json").exists())
+        self.assertTrue((self.runtime_directory / "linked.json").is_symlink())
+        self.assertTrue(target.exists())
+        self.assertTrue((self.runtime_directory / "invalid-method.json").exists())
+        self.assertTrue((self.runtime_directory / "invalid-pipeline.json").exists())
 
 
 if __name__ == "__main__":
