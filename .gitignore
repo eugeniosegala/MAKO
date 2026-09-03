@@ -54,6 +54,7 @@ htmlcov/
 /engine/.flatpak-builder/
 
 # MAKO Decky plugin (pnpm, generated output, and packaging)
+/node_modules/
 /.pnpm-store/
 /plugin/node_modules/
 /plugin/bower_components/
