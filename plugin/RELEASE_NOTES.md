@@ -1,10 +1,13 @@
 ## What's new in MAKO Decky v3.0.1
 
-<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/sea-rapture.png" alt="Sea Rapture: an epic Renaissance-style pixel-art mako battling sailing ships before a storm-lit fortified city" width="100%">
+<picture>
+  <source srcset="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/sea-rapture.webp" type="image/webp">
+  <img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/sea-rapture.png" alt="Sea Rapture: an epic Renaissance-style pixel-art mako tearing through the ships attacking it as sailors fall into a storm-lit sea before a fortified city" width="100%">
+</picture>
 
 ### Release codename: Sea Rapture
 
-> _“When the tide changes, raise the lantern higher; a clear signal turns rough water into a passage.”_
+> _“Light the harbour, not for the hunters, but for those the tide returns.”_
 >
 > **Cael Orsino, _Keeper of the Rapture Light_**
 
