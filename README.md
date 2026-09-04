@@ -174,7 +174,7 @@ For a step-by-step guide that creates a shareable report on the Desktop, see <a 
 
 The clean update path avoids Decky retaining an older backend or bundled payload:
 
-1. Quit games using `/home/deck/.local/bin/mako-run`.
+1. Quit the games using MAKO.
 2. Uninstall MAKO Decky, then install the newer ZIP through **Developer > Install Plugin from Zip**.
 3. Restart your Steam Deck or Steam Machine.
 4. Open MAKO Decky and select **Install MAKO Renderer** to install the native renderer bundled in the ZIP.
