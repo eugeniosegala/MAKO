@@ -136,6 +136,7 @@ Artifacts are written under `engine/out/`. MAKO Decky packages this engine autom
 
 ## More documentation
 
+- <a href="docs/LIFECYCLE.md" target="_blank" rel="noopener noreferrer">Lifecycle</a>: probes, timers, setting lifetimes, swapchain ownership, pacing policies, recovery, retirement, and heuristic risk.
 - <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>: profiles, frame-generation and scaling controls, Adaptive mode, and environment variables.
 - <a href="docs/SCALING.md" target="_blank" rel="noopener noreferrer">Spatial scaling architecture</a>: pipeline order, surface support, formats, resources, private transitions, and validation.
 - <a href="docs/RUNTIME-TRANSITIONS.md" target="_blank" rel="noopener noreferrer">Runtime configuration transitions</a>: live-safe updates, recreation, and restart boundaries.
