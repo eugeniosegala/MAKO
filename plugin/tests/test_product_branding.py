@@ -117,8 +117,19 @@ class ProductBrandingTests(unittest.TestCase):
             "First-time Heroic or EmuDeck setup",
             decky_publisher,
         )
+        self.assertIn("shared native Renderer", decky_publisher)
+        self.assertNotIn("private native renderer", decky_publisher.lower())
+        self.assertNotIn("private Vulkan layer", decky_publisher)
         self.assertIn(
             "## Updating an existing MAKO Renderer installation",
+            renderer_publisher,
+        )
+        self.assertIn(
+            "Flow Scale and Lighter FG Model normally apply live",
+            renderer_publisher,
+        )
+        self.assertNotIn(
+            "Flow Scale, Performance Mode",
             renderer_publisher,
         )
         self.assertIn(

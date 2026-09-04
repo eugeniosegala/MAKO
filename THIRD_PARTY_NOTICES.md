@@ -24,7 +24,7 @@ Copyright in the incorporated portions remains with the respective lsfg-vk copyr
 
 ## MAKO Decky frontend
 
-MAKO Decky's compiled frontend includes the following third-party code and icon data. Exact dependency versions are recorded in `plugin/package.json` and `plugin/pnpm-lock.yaml`. MAKO Decky packages include copies of the upstream dependency license files under `third_party_licenses/` and retain a frontend source map with the exact bundled dependency source content.
+MAKO Decky's compiled frontend includes the following third-party code and icon data. Declared dependencies are in `plugin/package.json`, and exact resolutions are in `plugin/pnpm-lock.yaml`. MAKO Decky packages include the upstream license files under `third_party_licenses/` and a frontend source map with the bundled dependency source content.
 
 - **@decky/api**, Steam Deck Homebrew, GNU Lesser General Public License version 2.1. Source: <https://github.com/SteamDeckHomebrew/decky-frontend-lib>.
 - **React Icons**, copyright 2018 kamijin_fanta, MIT License. Source: <https://github.com/react-icons/react-icons>.

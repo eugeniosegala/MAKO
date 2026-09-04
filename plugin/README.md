@@ -22,18 +22,17 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 
 ## What it manages
 
-- Installs the private MAKO Renderer Vulkan layer for the current user.
-- Creates a per-game `mako-run` launcher and profile-based configuration.
-- Presents Fixed and Adaptive controls under **Frame Generation**, followed by **Spatial Settings**, shared **Performance Settings**, and **Advanced Rendering Settings**, so the two features remain easy to scan without duplicated controls. Usage, compatibility, external-tool, and manual controls follow the primary feature flow. A compact **Live Status** card reports what the running game is actually using, including separate input, render, and display resolutions during supersampling plus explicit memory and display-headroom limits. Select **Enable Scaling (Restart)** before launch; methods and sharpness remain live, while Scale Factor requests one guarded game-owned recreation on the managed Gamescope path and otherwise waits for a natural resolution change.
-- Provides a per-profile Gamescope WSI compatibility toggle plus host-installed MangoHud or experimental vkBasalt under **External Tools**. Scaling requires and locks its managed WSI path; independently enabling WSI for an FG-only profile is limited to supported 64-bit host launches.
-- Prepares matching Vulkan runtime extensions for selected Flatpak applications.
-- Keeps MAKO activation limited to the selected game process.
+- Installs and updates the per-user MAKO Renderer Vulkan layer and common `mako-run` wrapper.
+- Saves per-game and per-process profiles, then selects them automatically by Steam application ID or process name.
+- Groups Fixed and Adaptive Frame Generation, Spatial Scaling, performance, compatibility, external-tool, and manual controls. **Live Status** reports the active mode, scaler, resolutions, limits, fallbacks, and pending changes for the running game.
+- Provides a per-profile Gamescope WSI compatibility option plus host-installed MangoHud or experimental vkBasalt. Scaling enables its managed WSI path automatically inside a supported Gamescope session.
+- Prepares matching Vulkan runtime extensions and application access for supported Flatpak workflows.
 - Shares one active native Renderer version with the standalone archive installer. Installing either version selects it for both launch workflows; a later MAKO Decky installation adopts a valid standalone Renderer and offers its bundled update when the versions differ.
-- Removes all files supplied by either managed native Renderer installer when you select **Uninstall MAKO Renderer**, while preserving MAKO Decky and profiles so the plugin can offer installation again. Uninstalling MAKO Decky also removes the managed native Renderer; shared Flatpak runtime extensions remain installed.
+- Removes files supplied by either managed native Renderer installer when you select **Uninstall MAKO Renderer**, while preserving MAKO Decky and its profiles. Uninstalling MAKO Decky also removes the managed native Renderer; shared Flatpak runtime extensions remain installed.
 
 ## Development
 
-MAKO Decky lives in the `plugin/` directory of the MAKO monorepo and consumes the sibling `engine/` source tree.
+MAKO Decky lives in the `plugin/` directory of the MAKO monorepo and consumes the sibling `engine/` source tree. Run these commands from `plugin/`:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -54,6 +53,6 @@ After installing the ZIP through Decky developer settings, open MAKO Decky and i
 /home/deck/.local/bin/mako-run %command%
 ```
 
-MAKO Decky's wrapper activates `VK_LAYER_MAKO_render` only for the selected game process.
+The wrapper enables MAKO for the launch. MAKO Renderer selects a saved profile by process identity and uses the Default profile when no saved match exists.
 
 See <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>, <a href="docs/ARMADA.md" target="_blank" rel="noopener noreferrer">Armada and native AArch64 support</a>, <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">Troubleshooting</a>, <a href="docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect MAKO Decky Diagnostics</a>, and <a href="docs/PACKAGING.md" target="_blank" rel="noopener noreferrer">Packaging</a> for detailed workflows.

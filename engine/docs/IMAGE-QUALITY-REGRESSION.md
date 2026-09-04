@@ -1,8 +1,8 @@
 # Procedural image-quality regression
 
-MAKO includes a deterministic procedural renderer and three real-GPU commands for detecting boundary corruption, temporal trails, detail loss, occlusion, disocclusion, parallax, crowds, traffic, particles, and HUD errors. Every source scene is 321×181 so its edges do not align with common compute workgroups. Spatial and combined references are rendered directly at presentation resolution.
+MAKO includes deterministic procedural scenes and three real-GPU commands for catching corruption, temporal trails, detail loss, and disocclusion errors. Default source images are deliberately odd-sized at 321×181; spatial and combined references are rendered directly at the presentation resolution.
 
-The five scenes are `motion-boundary`, `traffic`, `crowd`, `camera-pan`, and `hud-disocclusion`. The original AMD motion-boundary regression remains available through its compatibility entry point and retains its original threshold.
+The available scenes are `motion-boundary`, `traffic`, `crowd`, `camera-pan`, and `hud-disocclusion`.
 
 ## Real-GPU commands
 
@@ -30,7 +30,7 @@ mako-cli spatial-quality-regression \
   --output ./mako-spatial-result
 ```
 
-Run the production spatial-to-LSFG handoff:
+Run the direct pre-Frame Generation spatial-to-LSFG handoff:
 
 ```bash
 mako-cli combined-quality-regression \
@@ -47,19 +47,19 @@ mako-cli combined-quality-regression \
   --output ./mako-combined-result
 ```
 
-Use `--dll /path/to/Lossless.dll` when automatic discovery is unavailable and `--gpu "GPU name"` on a multi-GPU system. `--allow-fp16` permits LSFG acceleration; `--performance-mode` selects the lighter frame-generation model. Spatial method names are `mako`, `ls1`, and `ls1-performance`. Spatial and combined commands accept `--width` and `--height` only as a pair; these select the exact presentation resolution while the production factor policy derives the source extent. Omitting them retains the deliberately odd-sized 321×181 portable regression scene.
+Use `--dll /path/to/Lossless.dll` when automatic discovery is unavailable and `--gpu "GPU name"` on a multi-GPU system. `--allow-fp16` permits LSFG FP16 and `--performance-mode` selects the lighter frame-generation model. Spatial methods are `native`, `mako`, `ls1`, and `ls1-performance`. `--width` and `--height` must be supplied together; they select the exact presentation resolution while the production factor policy derives the source extent.
 
-The spatial command invokes the production `mako-render/src/spatial_scaler.cpp` graph rather than a test implementation. It fails if an LS1 request falls back to MAKO. The combined command scales both low-resolution temporal endpoints into the exported full-resolution source images used by MAKO Renderer, synchronizes them through the shared timeline semaphore, runs the real licensed backend, and scores the final generated frame against a presentation-resolution ideal.
+The spatial command runs the production scaler and fails if an LS1 request falls back to MAKO. The combined command reconstructs each endpoint directly into a presentation-sized LSFG source and scores the generated result against a presentation-resolution reference. It does not exercise the high-resolution post-Frame Generation placement or a WSI swapchain; those remain MAKO Gym boundaries.
 
 ## Scoring
 
-Each command reports normalized whole-frame absolute error, motion/disocclusion focus error, severe focus-pixel fraction, and explicitly marked fine-detail error. Scene-aware focus thresholds preserve the original motion-boundary guardrail while accounting for the deliberately larger disocclusions in the traffic and HUD scenes. Whole-frame, severe-error, and detail limits stay common. The broad guardrails detect corruption, endpoint duplication, destructive ghosting, and catastrophic detail loss; they are not a perceptual ranking of algorithms.
+Each command reports normalized whole-frame error, focus-region error, the fraction of severe focus errors, and fine-detail error. These broad guardrails catch corruption, endpoint duplication, destructive ghosting, and major detail loss; they do not rank visual quality perceptually.
 
 Frame-generation artifacts contain `previous.ppm`, `current.ppm`, `reference.ppm`, and `generated.ppm`. Spatial artifacts contain `source.ppm`, `reference.ppm`, and `generated.ppm`. Combined artifacts contain low-resolution `previous.ppm` and `current.ppm` plus presentation-resolution `reference.ppm` and `generated.ppm`.
 
 ## MAKO Gym hardware validation
 
-Portable CTest owns deterministic scene generation, masks, extents, scoring policy, invalid-input behavior, and perfect/corrupted reference checks without a GPU or licensed input. The private sibling MAKO Gym repository owns the evolving AMD visual inventory, licensed-input discovery, parameter and PPM assertions, sanitization, retained summaries, repeatability sentinels, exact-resolution scaler timing, and synchronization validation. Its documentation is authoritative for current case counts and coverage.
+Portable CTest verifies scene generation, masks, extents, scoring, invalid inputs, and perfect or corrupted references without a GPU or licensed input. The private sibling MAKO Gym repository owns real AMD execution, licensed-input discovery, artifacts, repeatability, scaler timing, and synchronization validation.
 
 After building `mako-cli`, run the MAKO-side bridge from the repository root:
 
@@ -68,9 +68,9 @@ After building `mako-cli`, run the MAKO-side bridge from the repository root:
   --cli "$PWD/engine/build/mako-cli/mako-cli"
 ```
 
-Use `--require` in automation that must not skip when Gym is absent. Forward `--dll /custom/path/Lossless.dll`, `--gpu "exact device name"`, `--filter <regex>`, or `--output-root <path>` to Gym as needed. The authoritative inventory, output shape, and limitations are documented in `MAKO-Gym/docs/AMD-QUALITY-REGRESSION.md`.
+Use `--require` when absence of MAKO Gym must fail. Other arguments, including `--dll`, `--gpu`, `--filter`, and `--output-root`, are forwarded to Gym. `MAKO-Gym/docs/AMD-QUALITY-REGRESSION.md` owns the current cases and limitations.
 
-At startup, the Renderer quality commands report whether `robustImageAccess2` is enabled. MAKO requests this optional Vulkan feature only when the selected device advertises both `VK_EXT_robustness2` and its `robustImageAccess2` feature bit. Unsupported devices retain the existing path.
+The quality commands report whether optional `robustImageAccess2` support was enabled; an unsupported device keeps the normal path.
 
 The synthetic contracts are part of the full CTest build described in the [root testing guide](../../TESTING.md). From `engine/`:
 
@@ -80,4 +80,4 @@ cmake --build build/quality-policy --target mako-device-feature-tests mako-image
 ctest --test-dir build/quality-policy --output-on-failure -R '^(optional-device-features|procedural-image-quality-scene|cli-i18n-contract)$'
 ```
 
-A skipped GPU test is not image-quality evidence. MAKO Gym's offscreen matrix also does not prove WSI presentation, compositor scanout, subjective quality, latency, power, live mutation, another driver or GPU, HDR, DXVK, or VKD3D-Proton; use the corresponding live Vulkan, compositor, Proton, and real-game lanes.
+A skipped GPU test is not image-quality evidence. Offscreen tests also do not prove WSI presentation, compositor scanout, subjective quality, latency, power, HDR, Proton translation, or another GPU and driver.

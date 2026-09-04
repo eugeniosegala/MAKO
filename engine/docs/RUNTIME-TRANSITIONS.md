@@ -1,199 +1,165 @@
 # Runtime configuration transitions
 
-This document defines how saved configuration becomes running process state: live updates, private-context rebuilds, game-owned recreation, process restart, mixed-update behavior, and Ultra Performance's static resource policy.
-
-[Configuration](CONFIGURATION.md) defines settings, [Adaptive validation](ADAPTIVE-VALIDATION.md) owns cadence and frame plans, [HDR pipeline architecture](HDR-PIPELINE.md) owns colour transitions, and [WSI isolation](WSI-ISOLATION.md) owns process-start discovery and transport. This guide owns only their shared lifecycle contract.
+This guide defines how a saved profile becomes running Renderer state. [Configuration](CONFIGURATION.md) defines fields, [Adaptive validation](ADAPTIVE-VALIDATION.md) owns scheduling, [Spatial scaling architecture](SCALING.md) owns extent policy, [HDR pipeline architecture](HDR-PIPELINE.md) owns colour transitions, and [WSI isolation](WSI-ISOLATION.md) owns process-start discovery.
 
 ## Lifetime boundaries
 
-A setting belongs to the earliest lifetime boundary that can safely establish all state it affects. A convenient UI toggle does not make its implementation live-safe.
+A setting belongs to the earliest boundary that can safely establish all state it affects.
 
-| Boundary | State established there | Completion event |
+| Boundary | State | Completion |
 | --- | --- | --- |
-| Process-start discovery | Scaling enablement, swapchain image-count compatibility, implicit-layer membership and order, Gamescope WSI isolation, HDR exposure, launcher compatibility environment | Start a new game process |
-| Process-wide backend | DLL, effective FP16 permission, GPU selection, Ultra Performance backend policy | First backend construction, or a new game process once a backend already exists |
-| Game-owned swapchain resources | Spatial-scaling shape and extent contract | A game-owned recreation; the managed Gamescope upper combined role and compatible non-Gamescope maintenance1 contexts may request one after a retirement-fenced present, while unsupported paths wait for a natural recreation |
-| Game-owned presentation shape | Pacing | A natural game-owned recreation |
-| Private spatial context | Native/MAKO/LS1 method and sharpness | Next presentation boundary; method selections apply immediately and sharpness edits coalesce for 500 ms before rebuilding |
-| Private frame-generation context | Flow Scale, frame-generation model selection, generated-image capacity | A 500 ms last-value-wins preparation, private-work drain, and atomic context handoff while the game-owned swapchain remains active |
-| Live context policy | Generation enable, refresh threshold, Fixed/Adaptive selection within reserved capacity, target, caps, cadence policy | The next successful configuration reload and application-present boundary |
-| Compositor safety feedback | Confirmed refresh rate and HDR application state | A stabilized runtime feedback sample, independently of profile reload |
-| Stored metadata or dormant policy | Values that do not alter current profile selection and values belonging only to an inactive mode | Saved immediately; no running-state reset until the value becomes active |
+| Process start | Scaling enablement, Game Swapchain Images compatibility, layer membership and order, Gamescope WSI isolation, HDR exposure, Zink, and audio compatibility | Start a new game process |
+| Process-wide backend | DLL, FP16 permission, GPU, and Ultra Performance policy | Construct a new backend, normally by restarting the process |
+| Game-owned swapchain | Spatial extents and pacing shape | Natural recreation, or one eligible maintenance1-backed extent request |
+| Private spatial context | Scaling method and sharpness | Prepare, drain MAKO-owned work, and atomically replace |
+| Private FG context | Flow Scale, lighter model, and generated-output capacity | Prepare, drain MAKO-owned work, and atomically replace |
+| Live policy | Frame Generation switch, refresh guard, Fixed/Adaptive policy, target, caps, and cadence controls | Next successful reload and application present |
+| Compositor feedback | Confirmed refresh and application HDR state | Stabilized sample, independent of profile reload |
+| Dormant value | A setting for an inactive mode or unavailable private resource | Save now; apply when its owning mode or resource becomes active |
 
-The process-wide backend is created lazily for the first managed swapchain. Before it exists, the latest configuration can still become its construction input. After construction, the Renderer compares requested DLL, FP16, GPU, and Ultra state against that actual baseline rather than against the previous file contents, so a pending process-static change remains pending across later saves.
+The process-wide backend is created lazily when the first active swapchain needs it. Once built, pending DLL, FP16, GPU, and Ultra changes are compared with the actual construction baseline, not merely the previous file.
 
-## Runtime update pipeline
+## Update flow
 
-`Root::update()` runs from the application-present path, but the expensive parts are bounded and change-driven:
+`Root::update()` is reached from application presentation, but work is bounded and change-driven:
 
-1. Gamescope refresh and HDR feedback are sampled and stabilized as runtime safety inputs. They are not user-profile reloads.
-2. The watched configuration is checked at most once every 250 ms. An unchanged file causes no profile planning, including in an Ultra Performance process.
-3. A changed file is parsed, the process is identified again, and the latest matching profile becomes Root's requested profile.
-4. Toggling Ultra Performance, Scaling, or Game Swapchain Images compatibility is a process-restart transition, but compatible scheduler and scaler-method fields from the same write can still apply at their normal boundaries.
-5. Every existing swapchain context calls `planProfileUpdate()` with its actually applied profile, the requested profile, its reserved generated-image capacity, and current resource availability. A split spatial role receives Frame Generation Off and therefore has zero active generated-image demand; only the frame-generation owner can defer a capacity change.
-6. `Swapchain::updateProfile()` applies the live-safe merged profile and resets only the runtime state invalidated by those applied fields. Deferred values remain requested at Root for their later boundary.
-7. Native/MAKO/LS1 method edits queue a private spatial-context rebuild for the next present. Sharpness-only edits retain a 500 ms quiet period so continuous controls coalesce. Flow Scale, FG model, and generated-capacity edits use the same 500 ms last-value-wins coordinator to build a replacement private FG context before switching, but generated-capacity growth applies live only when the returned WSI pool still satisfies `application minimum + generated capacity`. The intercepted real image already belongs to the application minimum and is not counted again. A headroom-tight batch uses nonblocking pre-admission so compositor waits cannot stall the game's real frame. Growth beyond the measured pool keeps the old active policy and waits for game-owned recreation. Spatial-factor edits first resolve against the active extent contract. A variable surface already capped below the old unconstrained factor applies a new factor without recreation when the new unconstrained extent still reaches that exact presentation envelope. Other factor edits coalesce, then the managed Gamescope upper combined role or a compatible non-Gamescope context may convert one successful maintenance1-fenced present into `VK_ERROR_OUT_OF_DATE_KHR`; the application remains the only owner that destroys and recreates its swapchain. Every application-owned swapchain creation forces one configuration freshness check, outside the present hot path, so the lower spatial role cannot rebuild from the preceding 250 ms polling snapshot after the upper role requests an immediate live replacement. If fixed-surface Gamescope keeps the preceding application window source through that replacement, MAKO retains only the exact preceding source/presentation split and diagnoses the requested factor as constrained until WSI exposes a matching source; arbitrary mismatches still fail closed. The lower Gamescope capability/extent role, a context without retirement proof, and pacing everywhere wait for natural recreation. Scaling waits for process restart. Diagnostics distinguish effective-extent no-op, private application, requested or natural recreation, factor constraint, and process restart. One update may have multiple outcomes.
+1. Compositor refresh and HDR feedback update safety state independently.
+2. Configuration is checked at most every 250 ms; an unchanged file is not reparsed or replanned.
+3. A changed file is parsed and profile matching is repeated.
+4. Process-static fields are projected back to their applied values while compatible fields continue.
+5. Each live swapchain receives a `ProfileUpdatePlan` based on its applied profile, private resources, generated capacity, and current extent support.
+6. The live-safe merge is applied with only the necessary state resets; other values stay pending at their owning boundary.
 
-A single profile write may combine Scale Factor with Fixed/Adaptive mode, multiplier, target, cap, or generated-capacity changes. The upper combined role applies the live-safe policy immediately or retains the old active policy while preparing a larger private context and independently owns the one guarded extent request. If game-owned recreation overtakes a private capacity handoff, both replacement contexts construct directly from the latest requested profile, so the requested Fixed or Adaptive policy is not lost and no second application-visible recreation is emitted. Unsupported paths still retain only the factor until a natural boundary while compatible FG controls continue at their ordinary live or private-context boundary.
-
-MAKO never initiates application swapchain destruction or synthesizes an out-of-date result for a private-resource change. Scale Factor is the narrow exception: after its quiet period, an eligible spatial-resource owner returns one out-of-date result only after the lower present succeeded and a maintenance1 retirement fence was attached. In the current managed split that owner is the upper combined role. The shared `PrivateResourceTransition` coordinator owns last-value-wins debounce, preparation, drain, commit, failure, and retry state. With an active scaler, spatial method changes build a replacement scaler, wait only on MAKO's per-pass completion fences with a total 50 ms transition budget, then swap it in. With no active scaler, method and sharpness are dormant profile values: MAKO saves them without recreating WSI or Frame Generation, and the next eligible natural swapchain creation constructs the latest choice. Scale Factor normally remains extent-bound because it can make an inactive surface eligible, but it is also dormant when the lower split role proved that Gamescope WSI does not own the surface; no factor can repair that process-lifetime geometry, and requesting recreation would only repeat the unsafe boundary. FG changes allocate replacement source/output images, timeline synchronization, and the private backend context while the previous context remains active; presentation temporarily falls back to reconstructed or native real frames until zero-wait polls prove the old backend work and MAKO render fence idle, then the context is atomically switched and temporal history is warmed. Construction failure keeps the old resources active and retries after five seconds. The replacement temporarily increases memory use and its driver allocations may cause a one-time hitch, but the transition never calls a device-wide idle and never replaces WSI-facing binary semaphores or command buffers. If HDR transport changes while an FG replacement is prepared, that candidate is discarded and rebuilt for the new transport before commit.
-
-Game-owned recreation, whether natural or requested once for Scale Factor, removes the old context from live updates immediately but defers lower WSI destruction until a present on the same creating surface, a 50 ms compositor grace, and all retirement fences complete. If an upper WSI destroys its visible object before recreation and consequently supplies no lower `oldSwapchain`, MAKO synchronously completes the exact retained same-device, same-surface lower retirement before forwarding the replacement create with `oldSwapchain = VK_NULL_HANDLE`. This bounded replacement boundary preserves the lifetime proof without exposing Gamescope WSI to its non-null-old recreation deadlock. Surface destruction is the terminal same-surface boundary and drains the same proof before forwarding `vkDestroySurfaceKHR`. Recreation always substitutes the process's actual backend baseline, so it cannot falsely apply pending GPU or Ultra Performance changes.
-
-The upper combined role's one-shot request can occur during either a generated-image present or the final original-image present. In the generated-image case, MAKO submits the already-acquired application image through the lower path before propagating out-of-date. In the original-image case, that submission has already happened, so MAKO propagates the result directly and must not present the same image twice. Both routes return out-of-date to the application exactly once and preserve the normal game-owned recreation boundary.
-
-Each scaling role negotiates KHR swapchain maintenance1, or its EXT predecessor, only when the device exposes both extension and feature. The split chain preserves this contract across the upper MAKO role, Gamescope WSI, and lower spatial role. The upper combined role owns maintenance1 retirement; the lower capability/extent role uses natural retirement. MAKO preserves an upstream `VkSwapchainPresentFenceInfoKHR`; otherwise the upper role attaches preallocated per-image fences. These fences prove retirement and permit the upper role's one-shot Scale Factor request; they never trigger method, model, or sharpness recreation. A caller allocation callback cannot outlive `vkDestroySwapchainKHR`, so that rare path drains synchronously. Surface and device teardown never bypass unsignaled proof or require a worker thread.
+Every application-owned swapchain creation forces one configuration freshness check so a replacement cannot combine new upper-layer policy with a stale lower-layer snapshot.
 
 ## Requested, applied, and pending state
 
-The transition engine deliberately keeps three facts separate:
+The transition engine keeps three facts distinct:
 
 | Fact | Owner | Meaning |
 | --- | --- | --- |
-| Requested profile | `Root::active_profile` | Latest normal-mode profile selected from configuration |
-| Applied context profile | `Swapchain::profile` | Values that are true for that already-created context |
-| Backend construction baseline | `Root::backendGlobal` and `Root::backendProfile` | DLL, FP16, GPU, and Ultra inputs actually used by the process-wide backend |
+| Requested profile | `Root::active_profile` | Latest matching saved profile |
+| Applied profile | `Swapchain::profile` | Values true for this live context |
+| Backend baseline | `Root::backendGlobal`, `Root::backendProfile` | Process-wide inputs used to construct the backend |
 
-`ProfileUpdatePlan::appliedProfile` is a merge, not a copy of either endpoint. It starts with the requested profile, restores every field that cannot cross the current boundary, and then classifies the remaining effective differences. This prevents a pending field from overwriting the context's actual state while allowing unrelated live-safe work to proceed.
+`ProfileUpdatePlan::appliedProfile` is a merge. It starts from the requested profile, restores values that cannot cross the current boundary, then classifies the remaining effective differences. A pending restart or recreation must not block an independent live update.
 
-For example, if one save changes Flow Scale from 1.0 to 0.75 and Base FPS Cap from Off to 45, the cap applies immediately while the private FG replacement is prepared. The old Flow Scale remains reported as applied until the atomic handoff. A later Frame Generation Off change still applies immediately, the replacement request remains pending, and reverting Flow Scale to 1.0 before commit cancels it. If the same save also changes GPU, the process-static projection retains the old backend inputs and reports a process restart without blocking compatible live fields.
+For example, a write that changes Base FPS Cap and Flow Scale applies the cap while preparing a private FG replacement. The old Flow Scale remains applied until handoff. A later Frame Generation Off still applies immediately, and reverting Flow Scale before handoff cancels the replacement.
 
-## Setting transition matrix
+## Transition matrix
 
-| Setting or input | Normal running process | Runtime effect |
+| Setting or input | Boundary | Effect |
 | --- | --- | --- |
-| `frame_generation_enabled = false` | Always live | Resets generation pacing/recovery state and takes the native presentation path; no model scheduling, copies, private fences, generated-image acquisition, or generated presents run |
-| `frame_generation_enabled = true` | Live when startup provisioning succeeded; otherwise process restart | Every matched process requests interop and private resources at construction, then reuses them, resets admission/recovery state, and starts with fresh temporal history where required |
-| Refresh threshold | Live | Updates the stored guard; a change that crosses the effective enable boundary performs the same enable/disable resets |
-| Gamescope refresh feedback | Live safety input | Re-evaluates the threshold and refresh-targeted cadence policy independently of profile reload |
-| Fixed/Adaptive mode | Live; a higher generated-image requirement uses private FG replacement | Resets fixed timing, the real-frame pacer, and generation scheduler policy after any required private capacity handoff |
-| Fixed multiplier | Live when Fixed is or becomes active; capacity growth uses private FG replacement | Updates the configured generated count and resets affected timing/scheduler state; a dormant Fixed multiplier in Adaptive mode is stored without a false runtime reset |
-| Adaptive target, ceiling within capacity, and Smooth Cadence | Live | Resets generation scheduler policy and relevant pacing handoff state |
-| Dynamic Cadence Recovery | Live | Rebuilds generation scheduler policy; the UI/schema contract separately owns its cap exclusivity |
-| Dynamic Cadence probe interval | Live | Reschedules the inactive probe interval without discarding validated cadence or an active confirmation |
-| Base FPS Cap and Adaptive auto-cap | Live while Frame Generation is On; dormant while Off | Resets the real-frame pacer, fixed-window timing, and scheduler policy affected by the effective cap; turning Frame Generation Off releases the cap and turning it back On restores the saved value |
-| Scaling enable (`scaling_enabled`) | Process restart | Existing process retains its actual scaling configuration and WSI membership; Decky provisions or removes the WSI lane only for the next launch |
-| Game Swapchain Images compatibility (`swapchain_image_count_compatibility`) | Process restart | Existing and naturally recreated swapchains retain the process-start policy; the next game process either preserves every application-requested minimum from its first create or uses normal generated-output headroom. No runtime lifecycle pattern changes this choice |
-| Native/MAKO/LS1 method | Live when scaling is provisioned | Rebuilds only the private spatial context at the next present, keeps the WSI objects and extents stable, warms FG history, and retains the old method on failure. Pre-FG drains the spatial passes; post-FG additionally drains the generated render fence and temporarily presents real frames through the old scaler so no command buffer can retain the replaced resources. Diagnostics distinguish a waiting `runtime-transition-draining` present from the final `runtime-transition-drain-ready` ownership proof. Native uses a model-free linear transfer graph. In an Ultra Performance process with Scaling enabled, LS1 Performance is the effective method and a different saved method remains dormant until the preset is disabled at a process restart |
-| Scaling sharpness | Live when scaling is provisioned | Coalesces edits for 500 ms, then uses the same private spatial rebuild without changing WSI ownership |
-| Scaling factor | Effective-extent no-op or game-owned recreation | A variable surface whose active presentation is already constrained applies a factor that still reaches the exact same envelope without replacing WSI or private resources. Other changes retain the existing extent contract until the managed Gamescope upper combined role or a compatible non-Gamescope maintenance1 context requests one recreation after a fenced present; the lower Gamescope capability/extent role and contexts without retirement proof wait for the next natural resolution/surface recreation |
-| Quality Supersampling | Effective-extent no-op or game-owned recreation | On a variable managed Gamescope surface, enabling it may bypass the proven device-output ceiling while retaining Vulkan and memory limits; disabling it restores that ceiling. If the current extents already satisfy the new policy, or the surface is fixed/direct, the value applies without recreation. Otherwise it uses the same guarded upper-role recreation boundary as Scale Factor |
-| Flow Scale and Lighter FG Model | Private FG replacement | Coalesces edits for 500 ms, constructs a complete replacement context, drains only MAKO-owned work, atomically switches, warms history, and retains the old context on failure |
-| Pacing shape | Natural recreation | Existing game-owned swapchain and presentation transport remain unchanged |
-| Generated-image capacity growth | Private FG replacement | Current policy stays within capacity while a larger output set is prepared; the requested mode or multiplier becomes applied only after atomic handoff |
-| GPU | Process restart | Existing and naturally recreated contexts retain the backend's actual GPU identity |
-| DLL and FP16 policy | Process restart | Pending status is measured against the constructed backend, not only the previous configuration file |
-| Ultra Performance | Process restart | Startup FP16, resource policy, and the effective LS1 Performance scaling choice remain active, while unrelated compatible controls from the same write continue through their normal live/recreation boundaries. It does not enable Scaling |
-| Explicit WSI compatibility, post-process layer, HDR exposure, Zink, ALSA, and other launcher compatibility | Process restart | These values affect discovery, environment, or application initialization before the Renderer can reload a profile |
-| Stable HDR application feedback | Live safety transition | May rebuild MAKO's private colour resources after readiness checks, but never changes the immutable game-owned presentation transport |
-| Active profile selection or match result | Live for compatible fields | The selected profile is planned through the same merge; losing the match disables generation immediately, while process-static differences remain pending |
-| Metadata that does not alter current profile selection or inactive-mode-only values | No immediate runtime work | Values remain available for later selection or activation without resetting unrelated scheduling state |
+| Frame Generation Off | Live | Releases the effective base cap, resets relevant scheduler and recovery state, and takes the real-frame path without LSFG work. |
+| Frame Generation On | Live if startup provisioning succeeded; otherwise restart | Reuses retained interop and private resources, then warms temporal history where required. |
+| Refresh threshold and Gamescope refresh | Live | Re-evaluates effective enablement and refresh-targeted scheduling. |
+| Fixed/Adaptive mode or multiplier | Live within current capacity; otherwise private FG replacement or recreation | Dormant mode values are saved without resetting the active mode. |
+| Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler state whose assumptions changed. |
+| Dynamic Cadence probe interval | Live | Reschedules an inactive probe without discarding validated cadence or an active confirmation. |
+| Base FPS Cap and Adaptive auto-cap | Live while generation is active; dormant while Off | Resets the real-frame pacer and affected scheduler policy. |
+| Scaling enable | Restart | Existing and naturally recreated contexts retain process-start scaling and layer membership. |
+| Game Swapchain Images compatibility | Restart | Existing contexts retain the process-start WSI image-count policy. |
+| Scaling method | Private spatial replacement when active; dormant otherwise | Applies at the next present, retains extents and WSI objects, and keeps the old method on failure. |
+| Scaling sharpness | Private spatial replacement when active; dormant otherwise | Coalesces edits for 500 ms before replacement. |
+| Scale Factor | Extent no-op or game-owned recreation | Applies immediately when effective extents stay identical. Otherwise, an eligible spatial owner may request one recreation after a retirement-fenced present; other paths wait for natural recreation. |
+| Quality Supersampling | Extent no-op or game-owned recreation | Uses the same extent boundary as Scale Factor on a variable managed Gamescope surface; fixed and direct geometry are unaffected. |
+| Flow Scale and Lighter FG Model | Private FG replacement | Coalesces for 500 ms, prepares a complete candidate, drains MAKO-owned work, switches atomically, and warms history. |
+| Generated-output capacity | Private FG replacement when the current WSI pool fits; otherwise recreation | Keeps the old active policy until enough resources and WSI headroom exist. Managed Gamescope waits for natural recreation; a compatible non-Gamescope maintenance1 context may request one. |
+| Pacing | Natural recreation | Does not change a live swapchain or its transport. |
+| DLL, FP16, GPU, and Ultra Performance | Restart | Existing contexts retain the actual backend baseline. |
+| WSI compatibility, external layer, HDR exposure, Zink, and ALSA | Restart | These affect discovery or application initialization. |
+| Stable HDR application feedback | Private colour transition | May rebuild MAKO-owned colour and backend resources, never the game-owned transport. |
+| Active profile match | Live for compatible fields | Losing the match disables generation immediately; static differences remain pending. |
 
-When a field's effective value is unchanged, its storage representation may still be updated without runtime work. Effective comparisons matter for presets such as Ultra Performance, auto-cap behavior, and dormant Fixed/Adaptive values.
+Normal profiles reserve capacity for the larger configured Fixed or Adaptive ceiling. Ultra Performance reserves only its startup-active policy. A later capacity increase can still use private replacement when the lower WSI pool has `application minimum + generated capacity` images; otherwise it remains pending for recreation.
 
-## Frame Generation Off resource contract
+## Private replacement contract
 
-Frame Generation Off means no per-frame generation execution and no Base FPS Cap. The saved manual or automatic cap remains part of the profile but is dormant until Frame Generation is turned back on. Compositor safety monitoring remains active.
+Private spatial, FG, and colour changes use one last-value-wins coordinator:
 
-Every matched process provisions Frame Generation interop, backend, private images, and synchronization even when it starts Off. The Off path bypasses those resources: no model scheduling, input copy, generated acquisition, or generated present runs. Retaining them trades startup memory for immediate Off→On. Failed provisioning leaves native or independent scaling active and reports generation as restart-pending. Stable HDR feedback may still update retained colour resources for a later enable.
+1. Coalesce the request when required.
+2. Construct a complete candidate while the old resources remain usable.
+3. Poll only MAKO-owned work; never call `vkDeviceWaitIdle`.
+4. Commit atomically after drain proof.
+5. Warm temporal history when the replacement affects Frame Generation.
+6. Retain the old resources and retry later if construction or drain fails.
 
-Ultra Performance no longer removes the live-switch foundation when Frame Generation starts Off. It retains the same interop and active-policy-sized private resources as an On startup, while the live Off branch performs no generation work. The preset's effective FP16, Flow Scale, lighter-model, and capacity policy is still selected at process construction, so toggling Ultra Performance itself waits for restart.
+Private transitions never destroy the application swapchain or replace its WSI-facing synchronization. During a drain, presentation uses native or reconstructed real frames. A superseded candidate is discarded rather than partially applied.
 
-If a normal running profile stops matching, existing contexts disable generation immediately and retain their resources. A newly started process with no matching profile remains dormant and does not activate MAKO's swapchain path.
+## Recreation and retirement
 
-## Ultra Performance invariants
+On the managed Gamescope split, only a Scale Factor or Quality Supersampling extent change may request application-visible recreation, and only from the upper spatial-resource owner. A compatible non-Gamescope maintenance1 context may also request recreation for another private-resource change that cannot be rebuilt in place, such as generated-capacity growth beyond current WSI headroom. Either path may return `VK_ERROR_OUT_OF_DATE_KHR` once, only after the lower present succeeded with retirement proof. MAKO never destroys the game-owned swapchain itself.
 
-Ultra Performance is a process-start resource policy, not a faster branch inside the live scheduler:
+Natural and requested recreation remove the old context from live updates immediately. Lower WSI destruction waits for same-surface replacement progress, a 50 ms compositor grace, and retirement fences. If Gamescope WSI supplies a null lower `oldSwapchain`, MAKO completes the exact retained same-device, same-surface retirement before forwarding replacement creation. Surface destruction is the terminal same-surface boundary.
 
-- the preset's FP16 choice and resource-sizing policy remain fixed until restart;
-- when Scaling is enabled, LS1 Performance is the effective scaler while the saved ordinary method remains available for a later non-Ultra process; when Scaling is disabled, no scaler is activated;
-- generated-output capacity is sized only for the startup active Fixed or Adaptive policy;
-- explicit Frame Generation Off retains private generation resources and generation-specific application Vulkan modifications but performs no per-frame generation work;
-- compatible scheduler fields and private spatial/FG model changes continue applying live, while extent and pacing retain their game-owned recreation boundary;
-- refresh and HDR feedback, native fallback, bounded waits, recovery, and presentation safety continue because they are compositor/runtime inputs rather than profile toggles; and
-- toggling Ultra Performance itself never partially changes the running backend's static policy.
+A scaled null-old replacement presents its first acquired application image directly before private spatial work. A known replacement with Frame Generation active then presents real frames for 250 ms and warms three new history frames inside scheduler stabilization. A replacement created while Frame Generation is Off does not arm that FG-only interval.
 
-Any new control must explicitly classify both its ordinary lifetime and its behavior inside an already-active Ultra Performance session, with performance evidence on low-end hardware, updated documentation, and focused tests.
+The immutable pre/post-FG spatial placement is selected from source and presentation extents at swapchain creation. A live method, sharpness, mode, multiplier, Flow Scale, or model change cannot alter that geometry.
 
-## State-reset contract
+## State resets
 
-A live update must reset the smallest state set that can contain assumptions invalidated by the applied field:
+Reset only state whose assumptions changed:
 
-- enable/disable transitions clear fixed-window measurements, Fixed cadence-collapse evidence, pacer ownership, generated-image admission, ordered-acquire recovery, and history warm-up state as appropriate;
-- mode, target, ceiling, Smooth Cadence, and cadence-recovery policy changes rebuild the generation scheduler policy;
-- an effective cap change resets both real-frame pacing and scheduler policy that observes the capped cadence;
-- a probe-interval-only change updates the scheduler timer without destroying validated policy;
-- a live scaler/private-resource, mode, Fixed multiplier, refresh, or stronger transport-recovery transition clears Fixed cadence-collapse qualification so old performance evidence cannot cross the changed boundary;
-- a dormant value or metadata-only change performs no scheduler reset; and
-- a deferred value performs no reset until its owning boundary applies it.
+- enable/disable clears affected pacing, admission, acquire recovery, and history state;
+- mode, target, ceiling, Smooth Cadence, or recovery-policy changes rebuild scheduler policy;
+- effective cap changes reset the real-frame pacer and scheduler observations;
+- probe-interval-only changes update only the timer;
+- private-resource, mode, multiplier, refresh, or transport-recovery changes clear Fixed collapse evidence when its baseline is no longer valid; and
+- dormant or deferred values reset nothing until they apply.
 
-Do not use a broad "configuration changed" reset. It would discard validated cadence on harmless edits, increase warm-up and stutter, and make mixed live/deferred writes behave differently from equivalent one-field writes.
+A broad “configuration changed” reset would discard validated cadence after unrelated edits and is not allowed.
 
-## Performance and safety invariants
+## Frame Generation Off and Ultra Performance
 
-- Freeze combined scaling/Frame Generation placement from the source and presentation extents when the swapchain is created. Live method, sharpness, Fixed/Adaptive, multiplier, Flow Scale, and lighter-model changes may rebuild only private resources at that frozen FG extent; only an extent-changing game-owned recreation may select a different pre/post placement.
-- Do not parse or plan configuration on every present. Preserve the bounded watcher interval and unchanged-file fast path.
-- Do not allocate per frame for configuration or generated-frame planning. `ProfileUpdatePlan` is built only for an observed configuration change; `GeneratedFramePlan` remains the separate inline hot-path object.
-- Do not initiate game-owned swapchain destruction or synthesize an out-of-date result for a private-resource edit. The sole requested-recreation exception is a coalesced Scale Factor extent change on an eligible spatial-resource owner after a successful maintenance1-fenced present, and it may signal out-of-date only once. In the current managed split that owner is the upper combined role. Remove a game-destroyed context from live updates immediately, and defer its lower WSI destruction until the replacement-present, grace-period, and fence conditions are all satisfied; only explicit destruction of that swapchain's creating surface may complete fence-proven terminal retirement without a later present.
-- Do not use `vkDeviceWaitIdle` for a private transition. Wait or poll only the MAKO-owned fences and backend context whose resources will be retired, retain stable WSI-facing objects, and use native/reconstructed real-frame presentation while a drain is incomplete.
-- Do not destroy the active private resources until replacement construction and drain proof both succeed. A failed or superseded candidate must roll back by construction, not by trying to reconstruct the previous state.
-- Do not mark a requested field applied unless the running context or backend actually uses it.
-- Do not let a deferred field block Frame Generation Off or another independent live-safe field.
-- Do not run generation work when the effective Frame Generation state is Off.
-- A live memory-budget sample may constrain a larger request, but it must not disable a proven active scaling extent or reject a same-source replacement or monotonic source-resolution downshift solely because the driver's released-allocation accounting lags. Reuse applies only below the deterministic static ceiling, requires both source dimensions to stay unchanged or decrease, and never enlarges the preceding presentation extent; a source-resolution increase receives fresh admission.
-- A known replacement swapchain with Frame Generation active presents only real frames, reconstructed when scaling is active, for a fixed 250 ms before submitting private backend history. It then warms three fresh history frames inside the existing one-second scheduler stabilization window. A replacement created while Frame Generation is disabled does not arm this private-backend interval; a later live enable uses the configuration-update stabilization and history warm-up. This keeps rapid startup resolution churn out of the private backend without delaying generated output beyond the scheduler's established recreation guard.
-- Do not turn compositor safety feedback into a user-profile reload or suppress it under Ultra Performance.
-- Keep diagnostics opt-in and avoid repeated per-frame formatting in the normal path.
+Frame Generation Off submits no LSFG model work, generated-image acquisition, or generated presents. The saved cap is dormant. A matched process still provisions interop, backend, private images, and synchronization when startup succeeds so Off can turn On live. Failed provisioning leaves real-frame or independent scaling active and reports restart pending.
 
-## Diagnostics
+Ultra Performance remains a process-start policy: effective FP16, Flow Scale 0.75, lighter model, active-policy-sized capacity, and LS1 Performance when scaling is enabled. It never enables scaling. Compatible live controls still work, but changing Ultra itself waits for restart and cannot partially mutate the active backend.
 
-With presentation diagnostics enabled, `runtime-transition-pending` distinguishes `rebuild-private-scaler`, `prepare-private-context`, `signal-out-of-date-after-retirement-fenced-present`, `wait-for-natural-swapchain-recreation`, and `wait-for-process-restart`. `runtime-transition-prepared`, `runtime-transition-failed`, and `runtime-transition-applied transition=private-context` expose the private FG/scaler lifecycle, requested capacity/model/Flow state, retry, active capacity, and history warm-up. Low-frequency `renderer-memory operation=private-context-prepared` and `private-context-applied` snapshots expose the intentional replacement overlap and prove that each completed handoff returns to one active allocation set; the diagnostics helper retains them in its `config` and `performance` presets. `runtime-transition-recreation-requested` records the remaining game-owned one-shot request. `generated-present-recreation-drain` proves that a request arriving during a generated present returned the acquired real image, while `original-present-recreation-propagate` proves that a request arriving during the original present submitted that image once and did not attempt a duplicate present. `adaptive-wsi-headroom-limit` proves that a native-first partial generated batch during a higher-multiplier evaluation tightened Adaptive's scheduler capacity for the current WSI context before clean stabilization; an isolated miss after a mode is accepted remains temporary recovery evidence. `swapchain-recreation-observed` identifies whether an out-of-date result came from that guarded request or the upstream game/driver; `swapchain-create-observed` and `swapchain-destroy-observed` bracket the game-owned lifecycle. `replacement-wsi-prime` proves that the first acquired image of a scaled null-old replacement went directly to the recreated lower WSI before private spatial work. For an FG-active replacement, paired `replacement-backend-stabilization` and completion records prove the remaining replacement-only scaled-real-frame interval and fresh history resume; an FG-inactive replacement emits neither backend-stabilization record but still primes a scaled null-old WSI. `swapchain-context-create` records application, presentation, and Frame Generation resource extents plus the immutable spatial pipeline placement; `swapchain-retirement-deferred`, `swapchain-retirement-before-replacement`, and `swapchain-retirement-complete` expose maintenance1 selection, bounded null-old replacement retirement, and completion by replacement creation, same-surface present, surface destruction, or device destruction. A mixed revision may report live application and multiple pending boundaries.
+## Runtime status and diagnostics
 
-`runtime-state-applied transition=live` records the merged live subset. Each context also atomically publishes a schema-versioned requested-versus-applied record under the configuration directory's `runtime-state/` subdirectory. Schema 5 records identify the process by PID plus `/proc` start ticks and include transition phase, pending boundaries, effective Frame Generation activity, actual scaling activity and source/presentation extents, requested and active scaling methods, factor, pre/post-Frame Generation placement, supersampling, fallback reason, active constraint, and effective spatial activation support. An inactive create-time reason is cleared when Scaling is no longer requested, a requested 1.0 factor immediately reports that no upscale is requested instead of retaining an older memory reason, and an active memory constraint is published only while it still reduces the requested factor rather than a display ceiling owning the same clamp. Normal context teardown removes only that context's record and liveness lock. Before the first primary Renderer context publishes status, one process-wide startup pass prunes unlocked stale pairs and orphaned regular files with recognized current or legacy MAKO runtime filenames from that exact user-owned `runtime-state/` directory. The pass never repeats for later contexts, setting changes, swapchain recreation, or recurring MAKO Decky status polls; those polls only read and validate records so the frontend can report asynchronous application, fallback, and failure state. Held locks, unrelated filenames, symlinks, unowned entries, inaccessible paths, and deletion failures remain untouched and never prevent game startup. Malformed, oversized, linked, incompatible-schema, or stale-process records never affect applied state. Status I/O and cleanup are observational and cannot affect presentation. `swapchain-context-create` proves a game-owned context boundary, not reconstruction of process-wide GPU, DLL, or FP16 state.
+With diagnostics enabled, `runtime-transition-pending`, `runtime-transition-prepared`, `runtime-transition-failed`, `runtime-transition-applied`, and `runtime-transition-recreation-requested` identify the boundary and result. Swapchain create, replacement, retirement, WSI-prime, backend-stabilization, and memory records provide lifecycle evidence.
 
-Use these records with the `startup`, `performance`, `recovery`, or `config` diagnostics presets described in [Collect diagnostics](COLLECT_DIAGNOSTICS.md). Diagnostics explain a transition but do not replace Vulkan, driver, compositor, and game validation.
+Each context also publishes an atomic schema-5 requested-versus-applied record under the configuration directory's `runtime-state/`. It includes process identity, transition phase, pending boundaries, effective generation and scaling state, extents, method, factor, placement, fallback, and active constraint. Context teardown removes its own record and lock.
 
-## Adding or changing a setting
+Before the first primary context publishes, one process-wide pass removes only unlocked stale MAKO runtime files from that exact directory. It is non-recursive and best-effort; held locks, unrelated names, symlinks, ownership uncertainty, and failures are preserved and never block startup. Status I/O is observational and cannot change presentation.
 
-Every new setting or semantic change must answer these questions before implementation:
+Use the `config`, `startup`, `recovery`, or `performance` presets in [Collect diagnostics](COLLECT_DIAGNOSTICS.md).
 
-1. Which owner defines and validates the value: Renderer configuration, Decky's shared schema, launcher compatibility, compositor feedback, or another subsystem?
-2. What is the earliest safe lifetime boundary: live policy, private spatial/FG replacement, game-owned swapchain, process-wide backend, or process-start discovery?
-3. What requested, applied, and construction-baseline facts must remain distinct while the value is pending?
-4. Can the live-safe subset of a mixed write still apply, including Frame Generation Off?
-5. Which exact pacer, scheduler, history, recovery, diagnostics, or resource state becomes invalid when the value actually applies?
-6. What happens when the value belongs to an inactive Fixed/Adaptive mode or has the same effective value through a preset?
-7. Is it compatible inside an active Ultra Performance session, does it alter the preset's process-static policy, or does it remain active because it is a runtime safety input?
-8. Can natural recreation apply it without falsely applying a process-wide backend change?
-9. Which diagnostic proves applied versus pending state without adding normal-path overhead?
-10. Which deterministic, sanitizer, Vulkan, hardware, package, and game-matrix evidence is required for the affected boundary?
+## Adding a setting
 
-Extend `ProfileUpdatePlan` and the existing owner instead of adding a second reload path or applying fields directly at call sites. Update the Renderer configuration guide, Decky schema/UI restart semantics where applicable, diagnostics contract, and this matrix in the same change.
+Before adding or changing a field, define:
+
+1. its schema and validation owner;
+2. the earliest safe lifetime boundary;
+3. requested, applied, and construction-baseline state;
+4. behavior in mixed writes and inactive modes;
+5. the smallest scheduler, pacing, history, recovery, or resource reset;
+6. behavior inside an active Ultra Performance process;
+7. diagnostics that prove application; and
+8. portable, sanitizer, Vulkan, hardware, and package evidence.
+
+Extend `ProfileUpdatePlan` and the existing transition owner rather than adding a second reload path.
 
 ## Validation
 
-Portable transition coverage belongs in `mako-render/tests/profile_update_tests.cpp`. At minimum, test the setting alone, mixed with a live-safe setting, mixed with each applicable deferral boundary, followed by a later live edit while the first request remains pending, reverted before its boundary, and applied with insufficient resources where relevant. Capacity tests must distinguish active policy from dormant mode values. Process-static tests must compare against the backend construction baseline rather than only consecutive requested profiles.
-
-Run the portable and sanitizer suites from `engine/`:
+Run portable and sanitizer coverage from `engine/`:
 
 ```bash
 scripts/test-adaptive-scheduler.sh
 MAKO_ENABLE_SANITIZERS=ON scripts/test-adaptive-scheduler.sh
 ```
 
-These tests do not exercise Vulkan presentation. The full suite's `swapchain-retirement` test covers maintenance1 negotiation, pNext discovery, result classification, and compositor grace without a GPU. Swapchain, resource, synchronization, colour, or device-feature changes also need real Vulkan evidence across the applicable native Vulkan, Gamescope, DXVK, VKD3D-Proton, FP32, and FP16 lanes in [Adaptive validation](ADAPTIVE-VALIDATION.md). Retirement changes must prove exactly one deferred and completed lower retirement per game recreation, no duplicate destruction or validation error, continued presentation, and clean terminal Proton/Gamescope shutdown. Mark unavailable hardware rows not tested.
+`profile_update_tests.cpp` must cover a field alone, mixed with live and deferred fields, superseded or reverted requests, insufficient resources, inactive modes, and process-static baselines as applicable. Vulkan-facing changes also need the MAKO Gym suites selected by [Testing MAKO](../../TESTING.md). Mark unavailable hardware rows **not tested**.
 
 ## Code and test ownership
 
 | Responsibility | Source of truth |
 | --- | --- |
-| Configuration parsing, effective presets, and watched-file state | `mako-common/src/configuration/config.cpp`, `mako-common/include/mako-common/configuration/config.hpp` |
-| Runtime polling, profile selection, backend baselines, and context fan-out | `mako-render/src/instance.cpp`, `mako-render/src/instance.hpp` |
-| Requested/applied merge and transition classification | `mako-render/src/profile_update.hpp` |
-| Live context application, private-resource coordination, and minimal state resets | `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain.cpp` |
-| Effective Off/native presentation branch | `mako-render/src/swapchain_present.cpp` |
-| Process-start layer and transport policy | `mako-render/src/presentation_policy.hpp`, `scripts/mako-launch` |
-| HDR safety feedback and private colour transition | `mako-render/src/gamescope_hdr_feedback.cpp`, `mako-render/src/runtime_transition.hpp`, `mako-render/src/color_pipeline.cpp` |
-| Runtime transition diagnostics and requested/applied status | `mako-render/src/entrypoint.cpp`, `mako-render/src/swapchain.cpp`, `mako-render/src/present_diagnostics.*`, `mako-render/src/runtime_status.*` |
-| Deterministic transition tests | `mako-render/tests/profile_update_tests.cpp`, `mako-render/tests/runtime_transition_tests.cpp`, `mako-render/tests/runtime_status_tests.cpp` |
-| Cross-component schema, wrappers, and UI semantics | `../plugin/shared_config.py`, `../plugin/py_modules/mako_plugin/`, `../plugin/src/`, `../plugin/tests/` |
+| Parsing and watched configuration | `mako-common/src/configuration/config.cpp`, `mako-common/include/mako-common/configuration/config.hpp` |
+| Polling, profile selection, and backend baselines | `mako-render/src/instance.*` |
+| Merge and transition classification | `mako-render/src/profile_update.hpp` |
+| Private transitions and live application | `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain.cpp` |
+| Real-frame and generated presentation | `mako-render/src/swapchain_present.cpp` |
+| Process-start transport policy | `mako-render/src/presentation_policy.hpp`, `scripts/mako-launch` |
+| Status and diagnostics | `mako-render/src/runtime_status.*`, `mako-render/src/present_diagnostics.*` |
+| Deterministic tests | `mako-render/tests/profile_update_tests.cpp`, `runtime_transition_tests.cpp`, `runtime_status_tests.cpp` |

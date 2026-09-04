@@ -1,34 +1,26 @@
 # Adaptive validation
 
-Adaptive Frame Generation has two complementary validation layers. The deterministic layer verifies scheduling policy without a Vulkan device. The runtime layer verifies the driver, compositor, game, and GPU interactions that cannot be modeled faithfully in a unit test.
+Adaptive Frame Generation needs two kinds of evidence: deterministic policy tests for scheduler decisions, and real Vulkan tests for drivers, presentation, Gamescope, GPU work, and game behavior. Passing one does not substitute for the other.
 
-## Deterministic policy tests
+## Portable policy tests
 
-Run the portable Renderer policy suite from the `engine/` directory:
+From `engine/`, run:
 
 ```bash
 scripts/test-adaptive-scheduler.sh
-```
-
-The test build disables the Vulkan layer, UI, and CLI. It therefore does not need a Vulkan SDK, GPU, `Lossless.dll`, Gamescope, or a Linux host. Every clock value is supplied by the test, so a cadence trace produces the same decisions on every run.
-
-Run the same policy boundaries under AddressSanitizer and UndefinedBehaviorSanitizer with:
-
-```bash
 MAKO_ENABLE_SANITIZERS=ON scripts/test-adaptive-scheduler.sh
 ```
 
-The suite locks down:
+The script builds only the portable-policy targets. It supplies deterministic clocks and needs no Vulkan device, runtime loader, `Lossless.dll`, Gamescope, or Linux host. Vulkan headers are still required because some policy types use Vulkan declarations. Coverage includes:
 
-- history warm-up, target ramping, multiplier limits, real-only behavior above target, and policy freezing under transport backoff;
-- Fractional near-target native preference, placement credit, bounded deferral, hysteresis, resets, and representative steady/noisy transitions;
-- Smooth Cadence qualification, retention, 2x convergence, efficiency probes, ordered-FIFO pacing handoff, rollback, and retry guards;
-- short-hitch recovery, longer discontinuities, strict-load protection, impossible fast-present rejection, and probe cooldown;
-- Dynamic Cadence Recovery for Adaptive and refresh-targeted Fixed, including true fixed-rate rejection and HDR-transport exclusion;
-- requested/admitted/scheduled ownership, timestamp ordering, inline capacity, full-admission preservation, and partial-admission respacing; and
-- deterministic trace replay, characterization fingerprints, and a broad base/target/ceiling matrix.
+- warm-up, ramping, multiplier ceilings, target behavior, and reset boundaries;
+- Fractional placement, near-target native preference, Smooth Cadence, and cadence recovery;
+- Fixed refresh budgeting and ordered-FIFO collapse recovery;
+- generated-frame request, admission, scheduling, and delivery accounting;
+- acquire and present recovery policy, private-transition state, and swapchain retirement; and
+- trace replay plus the scheduler matrix.
 
-`adaptive-scheduler-matrix` also runs 384 combinations of base cadence, target, multiplier ceiling, and Smooth Cadence. It checks output bounds and near-target native selection and can emit CSV when built in a persistent directory and run directly:
+The matrix runs 384 combinations of source cadence, target, multiplier ceiling, and Smooth Cadence. To keep its CSV output:
 
 ```bash
 cmake -S . -B build/adaptive-policy \
@@ -40,125 +32,98 @@ cmake --build build/adaptive-policy --target mako-adaptive-matrix
 build/adaptive-policy/mako-render/mako-adaptive-matrix > adaptive-policy-matrix.csv
 ```
 
-The CSV includes average generated frames, generated-frame share, frame-count changes, and the final near-target native-preference state. Generated share is useful as an artifact-exposure proxy: 2x, 3x, 4x, and 5x can display up to 50%, 67%, 75%, and 80% generated frames respectively, but it is not a measurement of ghosting or model quality.
+For a same-machine CPU-cost comparison, run `scripts/benchmark-adaptive-scheduler.sh`. Its nanoseconds-per-decision results are not portable performance limits.
 
-The normal Linux packaging script builds and runs both tests before producing an archive. A policy regression therefore blocks local release packaging.
+The Linux package build runs the full registered CTest suite, which includes these policy tests. [Testing MAKO](../../TESTING.md) owns the complete portable checklist.
 
-For a local CPU-cost comparison, run:
+## Scheduling contract
+
+`AdaptiveScheduler::planFrame()` is deterministic. It observes real-frame cadence, selects zero to four generated frames, and returns a `GeneratedFramePlan` whose interpolation timestamps are stored inline without per-frame heap allocation.
+
+The presentation path keeps three facts separate:
+
+1. **Requested:** timestamps chosen by Fixed or Adaptive policy.
+2. **Admitted:** generated images the active transport can accept.
+3. **Scheduled:** timestamps actually sent to the backend.
+
+Full admission preserves requested timestamps. A partial batch is evenly re-spaced across the real-frame interval instead of taking an early prefix. On ordered SDR, partial admission during an Adaptive multiplier evaluation can lower the proven capacity for that WSI context; a new game-owned swapchain starts with fresh evidence. The original real frame is outside the generated plan and keeps priority on failure.
+
+### Fixed mode
+
+Fixed uses the configured 2x–5x multiplier. When Gamescope reports a nonzero refresh, a fractional display budget suppresses outputs that the display cannot consume; without refresh feedback, exact Fixed behavior is retained.
+
+Ordered SDR also has an automatic collapse guard. After a healthy Fixed baseline is established, a sustained cadence loss can trigger a short native-only probe. A clearly faster native cadence rebases timing; a true game or GPU slowdown rejects the probe and uses bounded retry backoff. This guard is independent of optional Dynamic Cadence Recovery.
+
+### Adaptive mode
+
+Adaptive varies generated work toward `target_fps` without exceeding `adaptive_max_multiplier`. Fractional mode owns the long-term output budget and keeps timestamps evenly spaced within each real-frame interval. Near target, it may prefer native presentation when measured interval quality and output coverage are already sufficient.
+
+Smooth Cadence may retain a delivery-validated integer multiplier. On ordered Gamescope SDR with matching refresh, it can also hand pacing to FIFO for a proven 2x cadence or select an exact target/multiplier base cap for validated 3x–5x demand. Load shedding and efficiency probes roll back when a cheaper level preserves output better. Exact thresholds and traces are owned by `adaptive_scheduler.*` and its tests.
+
+`adaptive_auto_base_fps_cap` normally starts at half the target. If ordered SDR proves that this cap is sustaining a severe combined-workload collapse, Adaptive releases only the automatic cap for that swapchain; manual and Fixed caps remain authoritative.
+
+### Dynamic Cadence Recovery
+
+Dynamic Cadence Recovery is an optional per-profile policy for games or emulators that switch native rates. Ordered FIFO can make a native 60 FPS mode look like 30 FPS when generation is active, so MAKO periodically requests a native-only sample. Three consecutive samples at least 25% faster than the captured baseline confirm the new cadence.
+
+Adaptive keeps its configured target and ceiling. Fixed uses confirmed Gamescope refresh as its target and treats its multiplier as a ceiling; without refresh feedback it stays exact Fixed. Enabling recovery disables manual and automatic base caps. The probe does not run on the nonblocking HDR transport.
+
+## Transport recovery
+
+Ordered generated-image acquisition uses one application-present deadline, not one full deadline per generated image. Slow pressure first arms a zero-wait guard. Sustained pressure switches to native presentation, warms temporal history, and makes one bounded single-image probe after backoff. If native cadence already meets the requested target, the probe is deferred until cadence falls.
+
+A later slow lower `QueuePresentKHR` call has a separate stall quarantine. While either recovery owns the context, MAKO submits no synthetic work and retains the real-frame path. Recovery probes are bounded, do not destroy the game swapchain, and do not treat a skipped generated image as corruption. The standalone acquire timeout remains an independent compatibility setting described in [Troubleshooting](TROUBLESHOOTING.md).
+
+`GeneratedDeliveryWindow` compares requested outputs with outputs queued inside MAKO's budget. It does not claim compositor scanout. Diagnostics distinguish requested, admitted, scheduled, and delivered counts.
+
+Private Flow Scale, model, or generated-capacity changes retain the old policy while replacement resources are prepared. Capacity growth that does not fit the current WSI pool remains pending for game-owned recreation. [Runtime configuration transitions](RUNTIME-TRANSITIONS.md) owns that lifecycle. Ultra Performance is a restart-bound resource policy, not a separate scheduler.
+
+## Runtime validation
+
+Use the sibling MAKO Gym checkout between portable policy tests and commercial-game testing. Its manifests own current rows, assertions, and thresholds:
 
 ```bash
-scripts/benchmark-adaptive-scheduler.sh
+scripts/run-mako-gym.sh --suite recovery --list
+scripts/run-mako-gym.sh --suite recovery --filter '(stall|cadence-drop|recreate)$'
 ```
 
-This reports nanoseconds per scheduler decision across representative real-only, Fixed, Fractional, near-target, recovery, and Smooth Cadence workloads. It is not a pass/fail test; compare only on the same machine and toolchain because CPU frequency and host load affect absolute timings.
+Select coverage according to [Testing MAKO](../../TESTING.md#selecting-mako-gym-coverage). Scheduler changes normally begin with `recovery`; external overlay pause/throttle and workload-proven source-return changes use `external-recovery`; construction changes add `vulkan`; Gamescope lifecycle changes add `gamescope-e2e`; translation changes add `proton-e2e` or `proton-compatibility`. A filtered pass proves only its selected rows.
 
-## Scheduler and frame-plan ownership
+For affected changes, cover these runtime boundaries:
 
-`AdaptiveScheduler::planFrame()` is deterministic and advances explicit stages for cadence observation, discontinuity recovery, rescue measurement, stabilization and multiplier validation, Smooth Cadence, near-target native preference, fractional placement-clock planning, optional native-cadence recovery, and strict-load protection. Related mutable values are grouped under one `SchedulerState` by responsibility: history warm-up, cadence, diagnostics throttling, pacing aggregates, fast bursts, fractional workload credit and target-output phase, native-cadence probing, near-target preference, stabilization, ramp, rearm, stable cadence, rescue, strict load, and discontinuity recovery. The snapshot phase remains a derived diagnostic view of that state, not an independent state machine that can drift from the policy.
-
-On MAKO's ordered SDR FIFO path, application-present timing while generation is active cannot distinguish a game that truly runs at 30 FPS from a native 60 FPS menu held to 30 FPS by one generated plus one original FIFO present. Dynamic Cadence Recovery resolves that ambiguity in either generation mode by periodically requesting one native-only frame and requiring three consecutive samples at least 25% faster than the captured baseline before rebasing cadence. Adaptive retains its configured Target FPS and maximum multiplier. Fixed uses the confirmed Gamescope refresh as its target and treats the selected 2x-5x multiplier as a ceiling; without a supported refresh signal, it fails closed to exact Fixed behavior rather than borrowing Adaptive's hidden target. A failed probe resumes the validated generated policy on the next frame and waits the configured 0.1-to-three-second interval before retrying; the default two-second interval balances detection time against the frequency of brief checks, while shorter opt-in values bound a self-hidden native-rate transition and its associated emulator/audio slowdown to approximately the selected interval plus its three confirmation frames. The 0.1-second choice is deliberately aggressive and can make rejected-probe pacing hitches much more frequent. Interval-only live updates reschedule the next inactive probe without discarding cadence history, the validated generation limit, or an already-active confirmation. Because even a rejected probe briefly changes pacing in a genuine fixed-rate game, the compatibility policy is per-profile and off by default. Enabling it clears both base-FPS caps automatically; the probe excludes the nonblocking HDR bridge, where the presentation signal has different ownership.
-
-Every decision returns a `GeneratedFramePlan`, which stores at most four normalized interpolation timestamps inline and performs no per-frame heap allocation. The presentation path keeps three distinct facts: the **requested** plan from Fixed or Adaptive policy, the **admitted** count allowed by the selected transport, and the **scheduled** plan sent to the backend. Full admission preserves the requested timestamps exactly. If the Gamescope HDR transport admits only part of a request, the accepted count is evenly re-spaced across the real-frame interval, preserving the established partial-admission behavior rather than taking an early timestamp prefix. On headroom-tight ordered SDR, a partial Adaptive admission also constrains the scheduler to the admitted generated count for the lifetime of that WSI context. This keeps later planning and the automatic base limiter aligned with the outputs which the transport actually proved it can accept, while a fully admitted batch retains the configured ceiling and a game-owned swapchain replacement starts with fresh evidence. Fixed mode retains its explicitly selected multiplier and existing admission behavior. The native original frame remains outside this generated-frame plan and retains presentation priority on failure.
-
-Multiplier escalation and cadence retention use separate thresholds. A lower validated multiplier continues probing available headroom until its projected output reaches 98% of target; established Smooth Cadence and recovery paths retain their documented 95% stability envelope. This prevents the retention tolerance from stranding a 116 FPS 2x projection below a 120 FPS target when 3x capacity is available. When the configured ceiling remains below the 98% escalation target for two seconds, diagnostics emit one `adaptive-target-constrained` record with the target, base rate, projected output, and maximum multiplier; the scheduler never exceeds that ceiling.
-
-Fixed mode applies a display budget whenever Gamescope confirms a nonzero refresh, on both ordered SDR and nonblocking HDR transports. The selected 2x-5x multiplier is the maximum generated work, not permission to queue outputs above scanout capacity: a smoothed source interval and fractional output credit admit only the synthetic remainder the display can consume. A 69 FPS source on 120 Hz Fixed 2x therefore alternates zero and one generated frame instead of attempting approximately 138 lower presents per second. The first sample, invalid intervals, loading gaps, and refresh changes reset credit without catch-up bursts. Missing refresh feedback preserves exact Fixed behavior, and the once-per-second `fixed-plan` diagnostic distinguishes `target_applies=0` from `display_budget_applies` and reports generated skips.
-
-Ordinary Fixed generation on ordered SDR also has an automatic event-triggered cadence-collapse guard for the no-timeout gap between scheduling and transport recovery. It is inactive at startup until one second of cadence proves that the selected Fixed ceiling can supply at least 95% of the confirmed refresh. A later source cadence must remain below both 88% of that refresh at maximum Fixed output and 90% of the proven source baseline for 250 ms before MAKO sends a history-preserving native-only probe. Three consecutive samples at least 25% faster confirm that ordered FIFO had hidden native headroom; MAKO rebases Fixed timing, resumes the selected multiplier, and requires one healthy generated second before clearing recovery evidence. A true game/GPU slowdown rejects on the first native sample and retries no sooner than 2, 5, 15, then 30 seconds, while a collapse that immediately returns after generation resumes enters the same backoff. Adaptive or Fixed with Dynamic Cadence Recovery remains owned by `AdaptiveScheduler`; HDR/non-ordered presentation, active acquire/present recovery, history warm-up, missing refresh, Frame Generation Off, and zero generated capacity cannot enter this guard. Scaling method and placement are not decision inputs once ordered transport exists, but isolated/non-ordered FG-only presentation cannot enter because it has no ordered-FIFO feedback loop. The guard does not change the frame-generation → Gamescope WSI → spatial-scaling order.
-
-The backend's per-output uniform cache uploads an interpolation timestamp only when that destination's scheduled value changes. Submission boundaries remain unchanged so signal-first backend callers retain prepass and generated-output CPU/GPU overlap. This is an orchestration optimization only: it does not remove or reorder model dispatches, image barriers, generated outputs, timeline milestones, or presentation work.
-
-Ultra Performance is a process-start resource policy, not a scheduler shortcut. It forces 0.75 Flow Scale, the lighter model, FP16 permission where supported, and active-policy-only output capacity. Compatible scheduler and scaling controls retain their normal boundaries, while refresh feedback, waits, load shedding, fallback, and recovery remain active. Hardware validation must compare the same scene with the normal quality profile, measure GPU time and memory, inspect representative artifact-sensitive content, exercise live controls and capacity growth, and prove a saved Ultra toggle remains pending until restart. [Runtime configuration transitions](RUNTIME-TRANSITIONS.md) owns partial application.
-
-`GeneratedDeliveryWindow` records requested frames against frames accepted for presentation during one ramp or Smooth Cadence evaluation window. “Accepted” means queued within MAKO's delivery budget; it does not claim compositor scanout. The established integer tolerance allows at most five percent missed delivery, so windows with fewer than twenty requested generated frames require complete acceptance. This transport observation remains separate from cadence measurement and placement-clock accounting.
-
-Ordered Acquire Recovery is separately owned by the presentation transport and applies to both Adaptive and Fixed generation. The configured generated-image acquire ceiling is one shared application-present anti-freeze budget: every generated image receives only the unspent remainder, cumulative exhaustion stops further acquisition, and a 3x, 4x, or 5x plan cannot multiply the configured ceiling. With known refresh, a single image receives one-and-a-half display periods with an 8 ms floor; unknown-refresh paths retain the historical 25 ms ceiling. This keeps a late 120 Hz image from blocking the application present for 25 ms while healthy multi-image plans continue using their cumulative allowance. Diagnostics report that per-image deadline separately from the application-present budget so a 120 Hz 12.5 ms image timeout is not mistaken for exhaustion of a configured 50 ms cumulative ceiling. Slow and severe successful-acquire pressure remains classified from the longest individual image using the greater of 25 ms and one-and-a-half display periods instead of the sum of normal refresh-sized waits; an actual per-image timeout enters recovery immediately. One successful individual acquisition reaching the slow threshold arms a zero-wait, one-generated-frame guard for the next application present. That guard prevents the transport delay from entering Adaptive's source-cadence clock and prevents the next present from repeating a blocking acquisition. An immediately available guard image resumes retained policy without a stabilization window. A guard miss presents one native relief frame, warms three current temporal-history frames, and then permits normal policy to retry; only another slow individual acquisition, a Vulkan timeout result, cumulative exhaustion of the requested wall-time budget, or an individual acquisition lasting at least twice the slow threshold proves sustained pressure and quarantines generated work. MAKO then presents natively for 250 ms and normally warms three temporal-history frames before making exactly one bounded single-image recovery probe even when retained policy is 3x, 4x, or 5x. When native-only cadence has instead remained at least 95% of Adaptive's requested target or Fixed's confirmed refresh target for 200 ms, the recovery owner defers that probe without repeating temporal warm-up: generation cannot improve a target already supplied natively, and the released FIFO stays free of synthetic churn. A native cadence below 90% of that target for 100 ms exits the hold immediately, warms current history once, and re-arms the bounded probe; the hysteresis prevents a near-target 112–120 FPS stream from chattering while allowing a 30–60 FPS gameplay transition to request generation promptly. Unknown-target paths retain the ordinary finite retry. The probe timeout starts at one display period, expands across repeated failures to at most three periods, never exceeds 25 ms, and never exceeds the configured normal acquire ceiling. Failure is terminal for that probe attempt and returns to native backoff rather than leaving generation permanently probe-pending. A successful drain probe starts one absolute 250 ms transport stabilization interval and concurrently invalidates Adaptive's pre-timeout stable-cadence and FIFO-pacer proof. If the failed Adaptive level had a lower measured load baseline, recovery resumes that proven lower level and delays the failed higher level instead of rebuilding from native output or immediately repeating the overload. Later availability cannot extend the transport interval or intermittently admit synthetic frames. At the deadline MAKO warms three current history frames; Fixed may resume after warm-up, while Adaptive remains native-only for its ordinary one-second fresh-cadence qualification before it resumes the retained lower policy. Repeated pressure backs off to 500 ms, one second, and then a bounded two seconds. The drain and stabilization perform no backend scheduling or synthetic swapchain acquisition, so a Steam overlay transition can release ordered-FIFO images without destroying the game-owned swapchain or resuming from stale cadence evidence.
-
-Lower Present Stall Recovery covers the later transport boundary that acquisition recovery cannot observe. On ordered SDR, MAKO records the longest individual lower `QueuePresentKHR` call in each generated plan. A successful present lasting at least the greater of 50 ms and four display periods begins one absolute two-second native-only stabilization interval. Subsequent application presents perform no backend scheduling, generated-image acquisition, synthetic copy, or synthetic present while the lower FIFO drains; at the fixed deadline MAKO warms three current history frames and retries retained policy. The already-blocked Vulkan call cannot be interrupted, and native presentation may still block in a driver or compositor failure, but MAKO does not immediately add more synthetic pressure. `lower-present-stall-quarantine` and `lower-present-stall-recovered` diagnostics report the observed maximum, threshold, bypass count, and recovery duration.
-
-Strict-load protection compares the active multiplier's target-capped displayed capacity with the previously proven lower multiplier. Because those samples can span different gameplay scenes, Ordered SDR trusts the historical lower-level estimate only when the active level is at or below 75% of target. Within that severe deficit, it returns directly to the cheaper level when that level can preserve the current displayed rate; when both levels are below the threshold, a base-cadence collapse with less than 15% displayed-throughput gain is also treated as presentation saturation so menu/compositor pressure cannot pin the more expensive level. Repeated saturated probes back off from 15 to 30 and then 60 seconds; a sustained 15% base-cadence recovery can retry early. The Gamescope HDR bridge retains its real-only measurement because a collapse there can instead reflect colour-transition or admission pressure.
-
-Ordered SDR also treats a sustained minimum-generated collapse as evidence that Adaptive's automatic half-target pacer has become part of the bottleneck. This specifically covers the Deck-shaped 90 Hz case where a healthy capped 45→90 policy falls to approximately 30 real/60 displayed FPS under combined scaling load and then remains quantized there after the scene becomes lighter. After one second below 80% of the proven base cadence and at or below 75% of target output, the scheduler releases only the automatic cap for that swapchain, keeps generated delivery alive, and lets Fractional Adaptive use recovered native headroom such as 60→90. The same escape is requested immediately when a qualified Smooth Cadence enters severe collapse rescue. Manual `base_fps_cap`, Fixed pacing, HDR transport, profiles without the automatic cap, and the frame-generation → Gamescope WSI → spatial-scaling layer order are unchanged. A scheduler rebuild caused by a new swapchain or relevant live policy change clears the proof and permits the configured automatic cap to qualify again.
-
-After a qualified 3x, 4x, or 5x Smooth Cadence has held at least 98% of the requested target for five seconds, Ordered SDR briefly tests one lower multiplier while retaining the qualified policy for immediate rollback. The lower level becomes the new qualified cadence only when its delivery window remains healthy and its measured capacity still reaches at least 98% of target. The normal evaluation lasts 250 ms; when output is already at least 90% of target and native cadence has risen by at least 20%, MAKO grants one additional 250 ms for ordered-FIFO backpressure to settle while retaining the same 98% acceptance requirement. A failed probe restores the previous multiplier on the same scheduling decision. Delivery pressure or a healthy projection that already reaches at least 90% of target retries after 60 seconds, a 75%-to-90% projection retries after two minutes, and a projection below 75% retries after five minutes. This keeps a plausible recovery responsive without creating minute-period pacing disturbances when the lower multiplier is clearly insufficient, such as a 30-to-60 FPS projection against a 90 FPS target. Recovery-marked history warm-up preserves an existing retry deadline so unrelated acquire or lower-present recovery cannot immediately repeat a proven-insufficient probe; cadence and lifecycle changes still reset it because they can establish a different performance regime. The probe does not run for Fractional placement, 2x, the nonblocking HDR transport, stabilization, discontinuity or rescue recovery, ramp or rearm evaluation, or a native-cadence probe; generated-image backoff and impossible fast-present bursts pause its clock. This closes the local optimum where a higher multiplier can hold a game below its cleaner 2x cadence even though removing generated outputs lets the game recover to a higher real-frame rate.
-
-Smooth Cadence also has one guarded Ordered-SDR 2x convergence path when Gamescope confirms that the display refresh matches the Adaptive target within two percent, with a one-Hz minimum tolerance. A stable Fractional source whose current 2x projection is no more than approximately 14.3% above target may qualify for two seconds and then test one generated frame per real frame for one second. The test is retained only when generated delivery remains healthy and FIFO backpressure settles projected output between 98% and 102% of target; otherwise Fractional placement resumes and the convergence probe waits 60 seconds before retrying. This path deliberately trades some real-frame cadence and input freshness for a constant midpoint sequence only after the actual transport proves the smoother cadence rather than assuming that target-matching refresh will enforce it.
-
-When the same validated constant 2x policy belongs to Steady Adaptive, the explicit half-target real-frame pacer hands pacing to ordered FIFO so the settled path has the same single pacing owner as Fixed 2x. The handoff requires target-matching Gamescope refresh, a completed Smooth Cadence evaluation, and no Ordered Acquire Recovery. Losing any guard restores the explicit cap on the next application present and waits 60 seconds before another handoff, preventing an unsuitable game from receiving a periodic pacing disturbance. Profile, mode, target, cap, and refresh changes reset this local handoff state.
-
-Steady Adaptive also has a guarded integer-cap ladder for proven 3x-5x demand. On ordered Gamescope SDR with target-matching refresh, a validated multiplier whose measured base cadence is at least 95% of its exact `target / multiplier` rung and below 98% of the previous rung must hold for one second before the real-frame pacer adopts that exact cap. For example, a validated 3x level can align 45 FPS source demand to 40 → 120 FPS instead of leaving a fractional 45 → 120 sequence. This path cannot select an unvalidated multiplier, does not run in Fractional mode or HDR, and restores the half-target cap during ramp evaluation, rearm, discontinuity recovery, transport recovery, or any lost eligibility.
-
-## Fractional Adaptive placement clock
-
-When a source is already close to target, alternating zero and one generated frame can preserve the target average while making requested intervals less regular than the undelayed native sequence. MAKO predicts both outcomes from the smoothed source cadence before starting a 0-to-1 ramp. For the native path, the prediction is the source interval's RMS error from one target period. For Fractional placement, the prediction weights undivided source intervals and the two equal subintervals created by each earned generated frame, then compares their RMS error with the same target period. The quality comparison is eligible for native preference only when real cadence already supplies at least 95% of the requested target. Below that target-scaled floor, Fractional remains responsible for approaching Target FPS even if sparse generation would have a higher theoretical interval RMS; a 95-110 FPS source can therefore no longer remain native indefinitely against a 120 FPS target.
-
-Native preference requires both the 95% output floor and the derived comparison to remain favourable for one second. Once active, falling below that floor or producing a Fractional-favourable prediction for one second resumes generation; the same evidence accumulator prevents brief resolution-change or gameplay excursions from chattering the policy. An already-started qualification survives one noisy smoothed sample above target, while a genuinely above-target stream keeps the established real-only path without creating a redundant preference transition. Disabling the preference credits its completed hold to the normal target-deficit delay, so the proven output deficit begins its measured 0-to-1 ramp immediately rather than waiting a second time. The preference owns no timer thread, allocation, sleep, image, swapchain transition, or presentation call, and the hot path rejects clearly below-floor cadence before evaluating the full prediction.
-
-This state is explicitly enabled only for Adaptive and applies only to its unqualified Active Fractional policy. Fixed with Dynamic Cadence Recovery shares the scheduler but leaves this policy disabled, preserving its established refresh-targeted multiplier ceiling. Smooth Cadence, ramp evaluation, rearm, discontinuity and rescue recovery, efficiency probes, native-cadence probes, and acquisition backoff keep their existing ownership. Entering native preference clears fractional phase credit, validated generated load, and load-monitoring baselines; leaving it returns through the ordinary delivery-validated ramp. Cadence recovery and explicit policy restoration reset the preference instead of inheriting a quality decision across a discontinuity.
-
-Fractional Adaptive separates workload budgeting from temporal placement. The established smoothed-cadence credit remains the only owner of the long-term output rate and multiplier-ceiling behavior. When a Fractional target clock activates, its workload credit starts at half one output so cumulative demand rounds to the nearest output instead of always trailing the target; this changes the bounded prefix phase by at most half an output without adding recurring work. Ordered SDR uses that centered workload plan directly because application-present intervals can already include FIFO backpressure, and deferring an earned output behind the queue would risk starving the presentation cadence. For the nonblocking HDR transport, each observed raw source interval independently advances a bounded target-output phase by `interval × target_fps`. When the workload budget has already earned multiple outputs, at least one quarter output per source frame of ceiling headroom remains, and both that phase and the local spacing error show that the current interval is materially better left with one fewer output, MAKO moves exactly one earned output into a separate deferred-output ledger. A deferral must improve spacing by more than five percent of one target period and may not exceed the running worst requested spacing of the unmodified workload plan, preventing ordinary high-base cadence noise from relocating work for a negligible gain. MAKO repays that output only on a later frame with spare capacity whose squared spacing cost does not consume more than the benefit saved by the deferral. Raw timing can therefore move already-budgeted nonblocking work away from a clearly short interval, but it can never mint additional work after a compositor-delayed frame, increase the running maximum requested interval, or make cumulative requested-spacing cost worse than the previous smoothed-budget plan.
-
-The raw placement residual is normalized to half one output in either direction. A separate rounding epsilon handles floating-point boundaries. The placement ledger carries at most one already-earned output and never repays above the multiplier ceiling. Separately, impossible whole-output credit created by multiplier saturation retains the established no-backlog rule and is discarded rather than producing a later catch-up burst. The smoothed budget, initial half-output phase, raw phase, and bounded deferred output reset together on timing discontinuities, history recovery, multiplier changes, Smooth Cadence transitions, native-cadence probes, load shedding, and acquisition bypasses, so stale state cannot cross a policy boundary.
-
-Generated timestamps remain evenly spaced inside the selected source interval. With every original frame mandatory, ordered, and undelayed, equal subdivision minimizes the largest and total within-interval spacing error. Positioning only the generated timestamp on an absolute tick would increase local variance without controlling when the compositor scans out either image. Steady integer relationships such as 45-to-90 and 60-to-120 remain constant midpoint cadences, and the tested alternating-noise integer case retains its previous target average. Bursty source timing can still exercise the established smoothed-budget and ceiling rules. Genuine fractional relationships below the 95% native-output floor, such as 60-to-90, 80-to-120, and 100-to-120, still alternate counts, and the placement clock can keep an earned extra output off a clearly shorter interval. Inside the final five percent, the held quality decision can avoid a less regular sparse generated sequence. A target-scaled half-percent interval-RMS tolerance keeps normal measurement drift on that native path without suppressing a material target deficit.
-
-Smooth Cadence remains the constant-ratio classifier and takes precedence over the fractional clock. The normal path must qualify within 98% of the target before MAKO adopts a constant integer ratio; the target-matched Ordered-SDR 2x convergence path is the bounded exception and must prove 98–102% output during its evaluation. Once validated, normal retention extends down to 95%. The two-second qualification, one-second delivery evaluation, 500 ms exit grace, bounded retry, and collapse recovery remain in force. MAKO does not force an unproven constant multiplier merely because source timing is noisy: that could overshoot the target, increase GPU work and generated-frame share, or lower real-frame responsiveness.
-
-With presentation diagnostics enabled, `adaptive-plan` reports Smooth Cadence and target-clock state, workload credit, bounded deferral, source and requested-spacing aggregates, phase error, and generated-count changes for one contiguous policy window. Near-target, ordered-2x convergence, Steady integer-cap, Steady pacing-handoff, and multiplier-ceiling states have explicit transition records. `adaptive-wsi-headroom-limit` records the exact requested and partially admitted generated batch plus the previous and retained per-context capacities only when that evidence occurs during a higher-multiplier evaluation; an isolated miss in an already accepted mode remains owned by temporary recovery and cannot permanently lower the context ceiling. Metrics are captured before transport admission; policy transitions and skipped frames start a new window. Bucketed p95/p99 values are A/B measurements, not scheduler invariants or compositor scanout timestamps. Process and swapchain records provide executable, profile, build, extent, format, present mode, and transport identity. Recovery records distinguish cumulative acquire budget from longest-image classification and emit a phase breakdown only for slow presents. Diagnostics are opt-in and can perturb pacing; disable them for final subjective comparisons, then capture a separate diagnostic run.
-
-There is no explicit added-delay mechanism: this clock adds no sleep, buffering, generated work beyond the smoothed budget, real-frame drop, content reorder, worker thread, or presentation owner. Native presentation and the existing failure path remain unchanged. Redistributing one generated output can still change per-frame GPU work, FIFO backpressure, and end-to-end latency, so cadence, base FPS, and latency remain hardware measurements rather than deterministic guarantees. Ordered-FIFO application-present intervals can include backpressure from prior presentation work; preventing raw timing from creating budget avoids amplifying that pre-existing estimator coupling, but fixed-refresh hardware traces must still confirm that fractional policy does not settle at a lower real cadence. Perfect fractional scanout regularity is outside this contract because every real frame must still be shown. The optional [`VK_EXT_present_timing`](https://docs.vulkan.org/features/latest/features/proposals/VK_EXT_present_timing.html) path remains future hardware work: its device and surface features, FIFO-only scheduling semantics, dynamic timing properties, feedback queue, and failure behavior require capability probing and asynchronous validation, and current SteamOS support cannot be assumed.
-
-Deterministic tests sweep steady and noisy source cadence across target-scaled crossover, placement, hysteresis, saturation, reset, convergence, transport-exclusion, and pacing-handoff boundaries. The source tests are authoritative for exact traces and thresholds. Hardware validation must repeat representative cases on fixed-refresh and VRR displays in real DXVK, VKD3D-Proton, and native Vulkan games. AMD likewise treats equal display time, precise presentation, a stable base limiter, and VRR as separate concerns; see the [FidelityFX Frame Interpolation Swapchain documentation](https://gpuopen.com/manuals/fidelityfx_sdk/techniques/frame-interpolation-swap-chain/).
-
-## Runtime compatibility matrix
-
-Deterministic tests cannot validate Vulkan synchronization, generated-image availability, compositor pacing, model quality, or game behavior during private FG context replacement or game-owned swapchain recreation. Record those results separately and retain the diagnostic trace for every failure.
-
-Use `scripts/run-mako-gym.sh` with the private sibling MAKO Gym checkout between deterministic policy tests and commercial-game validation. Gym owns finite-cube construction, scripted recovery, native Gamescope WSI, direct non-Gamescope native/Steam sentinels, Proton E2E, and multi-family Proton compatibility. Its manifests and docs are authoritative for current rows, cadence traces, resolutions, scalers, multipliers, and assertions. These lanes prove only their recorded host/runtime contracts, not subjective pacing, scanout timing, commercial-title compatibility, device-loss recovery, or another GPU.
-
-A cold process start retains the three-second stabilization guard because launcher and splash-screen cadence is not gameplay evidence. When the upper WSI creates a replacement with a live `oldSwapchain`, or destroys first and MAKO completes the exact retained same-device, same-surface lower retirement before a null-old replacement create, MAKO marks the new context as `replacement=1`, performs the normal three-frame temporal-history warm-up, and uses the one-second recovery settling window before the measured ramp. MAKO Gym requires Adaptive and LS1-plus-Adaptive generation to resume within its three-second post-replacement phase; a context without either an explicit old swapchain or a proven retained-lower pre-create retirement remains a cold start and cannot use this shortened path.
-
-For a ghosting-sensitive comparison, capture the same repeatable scene with Fixed 2x, Adaptive capped at 2x, and Adaptive at the intended higher ceiling. Compare moving edges after startup, overlay recovery, and a short hitch. A higher target is not a quality win if it increases generated share, cadence switches, or interpolation distance enough to worsen visible trails. The three-frame history warm-up and history-only fallback should remain enabled; they are correctness work, not optional performance overhead.
-
-When Adaptive or its runtime integration changed, use this minimum release-candidate matrix. A release with no affected Adaptive boundary does not select it automatically:
-
-| Platform | API path | Required scenarios |
-| --- | --- | --- |
-| Steam Deck / AMD RDNA2 / Gamescope | DXVK (DX11) | Fixed baseline, Adaptive steady target, Steam overlay, live Off → On, normal MAKO Decky 0.90 quality model versus Ultra Performance 0.75 lighter model after restart |
-| Steam Deck / AMD RDNA2 / Gamescope | Native Vulkan emulator | Adaptive and Fixed 2x 30 FPS gameplay ↔ 60 FPS menu with Dynamic Cadence Recovery, true fixed-30 rejection |
-| Steam Deck / AMD RDNA2 / Gamescope | VKD3D-Proton (DX12) | Menu transition, fast-present burst, 100–250 ms hitch, longer interruption |
-| Desktop AMD or Intel / Wayland compositor | Native Vulkan or DXVK | Fractional target, Smooth Cadence, unreachable target, resize/recreation |
-| Desktop NVIDIA / current proprietary driver | Native Vulkan or DXVK | Fixed regression baseline, Adaptive ramp/load shedding, resize/recreation |
-
-If hardware for a row is unavailable, mark it **not tested** rather than inferring compatibility from another driver.
-
-For each run, capture:
-
-| Field | Value |
+| Boundary | Minimum evidence |
 | --- | --- |
-| Release commit | Git commit and build version |
-| Device | CPU, GPU, handheld/desktop |
-| Software | Kernel, Mesa/NVIDIA driver, compositor, Proton version |
-| Game path | Game, renderer/API, resolution, quality settings |
-| Policy | Fixed/Adaptive, target, maximum multiplier, Smooth Cadence, Dynamic Cadence Recovery, Ultra Performance, effective Flow Scale and model |
-| Baseline | Real FPS and frame-time percentiles with generation off |
-| Result | Real FPS, displayed FPS, average generated ratio, p95/p99 frame time |
-| Transitions | Startup, menu/overlay, focus, hitch, resize, Off → On |
-| Recovery | Acquire timeouts, bypassed frames, rebuilds, time to stable output |
-| Quality | Visible artifacts, latency impression, stutter/flicker |
-| Evidence | Diagnostic-log path and benchmark capture |
-| Verdict | Pass, conditional, fail, or not tested |
+| Generation modes | Frame Generation Off, Fixed 2x and affected higher multipliers, Fractional Adaptive, Smooth Cadence, and unreachable targets. |
+| Cadence changes | Startup, gameplay/menu rate changes, true fixed-rate rejection, short hitches, long interruptions, and fast-present bursts. |
+| Presentation | Ordered SDR, acquire pressure, lower-present stalls, focus and overlays, resize, recreation, and shutdown. |
+| Resource transitions | Live Off/On, Flow Scale or model replacement, capacity growth with and without WSI headroom, and history warm-up. |
+| API/runtime | Affected native Vulkan, DXVK, VKD3D-Proton, Gamescope, direct desktop, Flatpak, architecture, and Proton-family paths. |
+| Quality/performance | Real FPS, displayed FPS, frame-time percentiles, generated share, visible artifacts, latency impression, GPU time, and memory where relevant. |
+
+Record the commit and build identity, hardware, driver, compositor, runtime, game and resolution, policy settings, transitions, diagnostic path, and verdict. Mark unavailable hardware or paths **not tested**.
+
+Presentation diagnostics are opt-in and can perturb pacing. Use `adaptive`, `recovery`, and `performance` presets for a separate diagnostic run, then disable them for subjective comparison. Their timestamps describe MAKO policy and queueing, not compositor scanout.
 
 ## Release gates
 
-A candidate is ready for broader testing when:
+An affected candidate is ready for broader testing when:
 
-1. deterministic tests and all policy-matrix cases pass;
-2. Fixed 2x/3x/4x/5x behavior has no observed regression;
-3. no scenario enters an unbounded wait, recreate loop, or permanent real-only state;
-4. generation never exceeds its configured ceiling;
-5. Off → On starts from fresh temporal and recovery state;
-6. every runtime failure has a context-correlated diagnostic trace;
-7. unsupported matrix rows and known game-specific failures are documented in the release notes.
+1. portable and sanitizer policy tests pass;
+2. affected Fixed and Adaptive modes stay within their ceilings;
+3. no case enters an unexpected indefinite wait, recreation loop, or permanent unintended native-only state;
+4. Off/On and recreation restart from valid temporal and recovery state;
+5. failures have context-correlated diagnostics; and
+6. unavailable rows and known title-specific failures are recorded.
 
-These gates deliberately separate **policy correctness** from **runtime compatibility**. Passing the deterministic suite is necessary, but it is not a claim that every Vulkan driver or game has been validated.
+## Code and test ownership
+
+| Responsibility | Source of truth |
+| --- | --- |
+| Adaptive policy and state | `mako-render/src/adaptive_scheduler.*` |
+| Generated-frame plan | `mako-render/src/generated_frame_plan.hpp` |
+| Delivery windows | `mako-render/src/generated_frame_delivery.hpp` |
+| Fixed budgets and presentation recovery | `mako-render/src/presentation_policy.hpp`, `mako-render/src/swapchain_present.cpp` |
+| Private-resource transitions | `mako-render/src/profile_update.hpp`, `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain.cpp` |
+| Diagnostics | `mako-render/src/present_diagnostics.*` |
+| Portable policy tests and matrix | `mako-render/tests/`, `scripts/test-adaptive-scheduler.sh` |
+| Real hardware and runtime evidence | Sibling MAKO Gym checkout |

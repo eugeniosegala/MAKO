@@ -6,7 +6,7 @@ These instructions apply to published ZIPs and local development builds.
 
 HDR frame generation and scaling are disabled in this release. **Disable HDR** is checked and read-only, and MAKO removes inherited `DXVK_HDR` activation.
 
-Profiles without Scaling or explicit Gamescope WSI use MAKO's isolated top-role manifest. **Enable Scaling (Restart)** uses MAKO frame generation → validated Gamescope WSI → MAKO spatial scaling; Native Resolution keeps that path provisioned without a model scaler. **Gamescope WSI (Restart)** exposes the guarded MAKO → WSI path for supported 64-bit FG-only native profiles but does not enable HDR. MangoHud or vkBasalt may follow the MAKO roles without exposing the host's full implicit-layer directory.
+Inside a supported Gamescope session, **Enable Scaling (Restart)** uses the managed Frame Generation → Gamescope WSI → Spatial Scaling order. **Gamescope WSI (Restart)** provides the same guarded presentation path for affected 64-bit Frame Generation-only profiles. MangoHud or vkBasalt can follow MAKO's roles without exposing the host's complete implicit-layer directory.
 
 See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md), and the [HDR pipeline](../../engine/docs/HDR-PIPELINE.md).
 
@@ -19,9 +19,9 @@ See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics inte
     ```
 
 2. Open MAKO Decky and select **Install MAKO Renderer**. Installing the ZIP alone does not install its bundled Renderer.
-3. Check the selected profile's `Lossless.dll` path, GPU override, and **Matched Processes**. Start with Fixed 2x.
+3. If using Frame Generation or LS1, check the selected profile's `Lossless.dll` path. Clear an unnecessary **GPU** override and verify **Matched Processes**. Start with Fixed 2x.
 4. Compare the game's V-Sync on and off; its limiter, VRR, and compositor can change pacing.
-5. Use **Disable MAKO Renderer on Next Launch** and restart once to isolate whether MAKO causes the failure.
+5. Select **Disable MAKO Renderer on Next Launch**, restart the game, and compare once. Turn the option off after the test.
 
 For Heroic, use the displayed MAKO wrapper as **Wrapper**, leave **Arguments** empty, and do not add `%command%`. For an EmuDeck Flatpak, prepare the emulator in **Flatpak Setup**, use the wrapper as the Steam shortcut **Target**, and preserve EmuDeck's existing Launch Options. See the [installation workflows](../../README.md#heroic-and-other-flatpak-applications).
 
@@ -30,6 +30,8 @@ For Heroic, use the displayed MAKO wrapper as **Wrapper**, leave **Arguments** e
 Use the **Wrapper path for this device** shown by MAKO; do not hardcode `/home/deck` when the device uses another home path.
 
 With no **GPU** override, MAKO follows the Vulkan device selected by the game. On a multi-GPU failure, clear the override first, then collect diagnostics. Dual-GPU frame generation is unsupported.
+
+If the install control reports an unsupported native AArch64 or Armada host, see [Armada and native AArch64 support](ARMADA.md). The current x86_64 Renderer payload is intentionally not activated there.
 
 ## Updates and Flatpak runtimes
 

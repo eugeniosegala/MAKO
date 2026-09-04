@@ -1,8 +1,8 @@
-# MAKO Decky Does Not Install or Load
+# MAKO Decky does not install or load
 
 Use this guide when Decky Loader cannot install **MAKO Decky**, reports an error such as `Installation Failed: [Errno 13] Permission denied`, or finishes the installation but the plugin never appears or opens.
 
-This is a Decky installation or loading failure, so neither MAKO component needs to be running. If the plugin appears and opens in Decky Loader, use its [diagnostics guide](https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/COLLECT_DIAGNOSTICS.md) instead.
+Neither MAKO component needs to be running for this report. If the plugin appears and opens in Decky Loader, use [Collect MAKO Decky Diagnostics](COLLECT_DIAGNOSTICS.md) instead.
 
 Do not try to bypass a permission error with `sudo`, `chmod -R 777`, or a broad recursive `chown`. It normally means that one exact Decky path is not writable by the logged-in user. Changing unrelated paths can break Decky or other plugins.
 
@@ -33,7 +33,7 @@ Do not try to bypass a permission error with `sudo`, `chmod -R 777`, or a broad 
     } > "$HOME/Desktop/MAKO-Decky-load-report.txt"
     ```
 
-    Konsole normally shows no report text because the command sends all output to the Desktop file. It is normal for the report to say that the legacy `Mako` folder or plugin log was not found when Decky could not install or start the plugin.
+    Konsole normally shows no report text because the command sends all output to the Desktop file. It is normal for the report to say that the `Mako` plugin folder or log was not found when Decky could not install or start the plugin.
 
 4. Open `MAKO-Decky-load-report.txt` from the **Desktop** folder and review it before sharing. It can contain usernames, plugin names, filesystem paths, and recent Decky log lines. Remove personal path components you do not want to share, and never send passwords, account credentials, device serial numbers, or licence keys.
 5. Submit the report through the [MAKO diagnostic report form][diagnostic-form]. Include the exact error text, whether the failure happened during installation or while opening the plugin, and the MAKO Decky version or ZIP filename if known.

@@ -44,6 +44,10 @@ while IFS= read -r suite_name; do
     echo "Hardware workflow must handle MAKO Gym suite '$suite_name' exactly once." >&2
     exit 1
   fi
+  if ! grep -Fq "\`$suite_name\`" "$repo_root/TESTING.md"; then
+    echo "TESTING.md must route MAKO Gym suite '$suite_name'." >&2
+    exit 1
+  fi
 done < <("$bridge" --list-suites)
 
 echo "MAKO Gym selection contract tests passed."

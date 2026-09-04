@@ -1,14 +1,12 @@
 # Collect MAKO Decky Diagnostics
 
-Use this guide when **MAKO Decky** opens in Decky Loader and games launch through `mako-run`. Standalone `mako-launch` installations use the [MAKO Renderer guide](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/COLLECT_DIAGNOSTICS.md).
+Use this guide when **MAKO Decky** opens in Decky Loader and games launch through `mako-run`. Standalone `mako-launch` installations use the [MAKO Renderer guide](../../engine/docs/COLLECT_DIAGNOSTICS.md).
 
-You will enable diagnostics temporarily, reproduce the problem, create a Desktop report, restore normal launch settings, and upload it through the [MAKO diagnostic report form][diagnostic-form]. MAKO retains the latest five diagnostics-enabled game sessions.
+This guide walks you through temporarily enabling diagnostics, reproducing the problem, creating a Desktop report, restoring your launch settings, and submitting the report. MAKO keeps the latest five diagnostics-enabled game sessions.
 
-The small `runtime-state/` records used by MAKO Decky's live status display are separate from diagnostic logs and exist whether diagnostics are enabled or disabled. Normal game teardown removes them; after an abnormal exit, one bounded pass before the next Renderer process publishes its first primary context safely prunes unlocked, user-owned regular files with recognized MAKO runtime filenames from the configured runtime-state directory. The pass does not repeat for setting changes, swapchain recreation, or MAKO Decky's recurring 1.5-second status polls; those polls only read and validate the records needed to show asynchronous applied state. A held lock, unrelated filename, different owner, symlink, inaccessible path, or deletion failure leaves the entry untouched and cannot block game startup or status reporting.
+MAKO Decky's **Live Status** data is separate from these diagnostic logs and is managed automatically. You do not need to delete or change it.
 
-Do not attach `MAKO-diagnostics.txt` to a public issue. Review it for usernames, game names, application IDs, ROM names, and paths. Remove details you do not want to share, and never send passwords, credentials, serial numbers, licence keys, or `Lossless.dll`. Google sign-in is required for the form upload.
-
-The process does not copy `Lossless.dll`, install system packages, factory reset the device, or change SteamOS system files.
+Before submitting `MAKO-diagnostics.txt`, review it for usernames, game names, application IDs, ROM names, and paths, and remove anything you do not want to share. Never post it in a public issue or include passwords, credentials, serial numbers, licence keys, or `Lossless.dll`. The process does not copy `Lossless.dll`, install system packages, reset the device, or change SteamOS system files. Google sign-in is required to upload the report through the form.
 
 These commands use the standard SteamOS home directory, `/home/deck`. If MAKO Decky shows a different **Wrapper path for this device**, use that home directory in the wrapper, diagnostics-helper, and Desktop paths below.
 
@@ -64,7 +62,7 @@ If the emulator is a native application or AppImage instead of a Flatpak, use th
 3. Fully exit the game. Do not merely suspend it.
 4. Wait a few seconds for the game and emulator processes to close.
 
-Each diagnostics-enabled MAKO Decky launch starts a fresh private session log. The latest session remains `present-diagnostics.log`, and the four previous sessions become `present-diagnostics.log.1` through `present-diagnostics.log.4`, with `.4` the oldest retained session. Starting a sixth diagnostics-enabled game replaces the oldest retained session. Fully exit one game before starting the next so each log represents one completed run.
+Each diagnostics-enabled launch starts a fresh private session log. MAKO keeps the current session and four earlier sessions, replacing the oldest when a sixth starts. Fully exit one game before starting another so each log represents one run.
 
 ## 3. Create the Desktop report
 
@@ -86,25 +84,15 @@ Each diagnostics-enabled MAKO Decky launch starts a fresh private session log. T
 
 The `all` preset is the best first report when the cause is unknown. It does not copy the entire Steam log: it filters for relevant MAKO, Vulkan-loader, and Gamescope lines. `--lines 2000` keeps the most recent 2,000 matching lines, which normally provides enough startup and failure context without creating an unnecessarily large attachment.
 
-The standard command deliberately omits `--session`, so it always reports the latest session. When the maintainer asks for an earlier retained run, use one of these commands:
+The standard command reports the latest session. If the maintainer asks for an earlier run, replace `SESSION` and the output filename in this command:
 
 ```bash
-# Immediately previous session
-/home/deck/.local/bin/mako-diagnostics --session previous --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-previous.txt 2>&1
-
-# Oldest of the five retained sessions
-/home/deck/.local/bin/mako-diagnostics --session oldest --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-oldest.txt 2>&1
-
-# Two immediately previous sessions, ordered chronologically
-/home/deck/.local/bin/mako-diagnostics --session previous-two --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-previous-two.txt 2>&1
-
-# Every available retained session, ordered from oldest to latest
-/home/deck/.local/bin/mako-diagnostics --session all --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-all.txt 2>&1
+/home/deck/.local/bin/mako-diagnostics --session SESSION --lines 2000 all > /home/deck/Desktop/MAKO-diagnostics-SESSION.txt 2>&1
 ```
 
-In these commands, `--session all` selects the retained sessions while the final `all` selects the diagnostic preset. A combined report applies `--lines 2000` separately to every available session, includes a source and session label for each one, and preserves chronological session order. Until all five slots have been recorded, `--session all` includes only the sessions that are available.
+Use `previous` for the immediately previous run, `previous-two` for the two previous runs, or `all` for every available run in chronological order. Use `oldest` only when all five slots have been recorded. In `--session all ... all`, the first `all` selects sessions and the final `all` selects the diagnostic preset; `--lines 2000` applies separately to each session.
 
-Focused presets include `startup`, `errors`, `scaling`, `adaptive`, `recovery`, `performance`, `layers`, and `hdr`. Use them only for a requested follow-up; the first report should remain `all`. Presets retain process and swapchain identity, including the bounded backend-stabilization phase after a known swapchain replacement. `scaling` records policy, extents, format/queue selection, live recreation, capacity, and failures, not image quality; `active=0`, `source_presentation_split=0`, or an `inactive_reason` other than `none` means the spatial model did not run. `adaptive` records scheduler state rather than scanout timestamps, `recovery` records ordered recovery phases and delivery counts, and `performance` adds phase timing for slow presents.
+Use `all` for the first report. Focused presets such as `startup`, `errors`, `scaling`, `adaptive`, `recovery`, `performance`, `layers`, and `hdr` are intended for requested follow-ups. Run `/home/deck/.local/bin/mako-diagnostics --list` to see the complete preset list.
 
 ## 4. Restore normal launch settings
 

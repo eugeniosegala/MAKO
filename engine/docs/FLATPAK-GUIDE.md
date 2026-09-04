@@ -1,17 +1,18 @@
 # Flatpak guide
 
-MAKO Renderer ships separate Vulkan runtime extensions for Freedesktop 23.08, 24.08, and 25.08. Install the bundle matching the target application's runtime.
+MAKO Renderer ships Vulkan runtime extensions for Freedesktop 23.08, 24.08, and 25.08. Install the branch matching the target application's runtime; a host Renderer library cannot cross the Flatpak sandbox by itself.
 
 ## Packaged extensions
 
-Extract a MAKO Renderer Flatpak archive and install the matching bundle:
+Check the application runtime, then extract a MAKO Renderer Flatpak archive and install the matching branch:
 
 ```bash
+flatpak info --show-runtime APP_ID
 tar -xJf MAKO-Renderer-v<version>-flatpaks.tar.xz
 flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.flatpak
 ```
 
-The extension ID is `org.freedesktop.Platform.VulkanLayer.makorender` and uses its own dedicated installation path.
+The example installs branch 24.08; use the version reported after `org.freedesktop.Platform/<architecture>/`. The extension ID is `org.freedesktop.Platform.VulkanLayer.makorender` and uses its own dedicated installation path.
 
 ### Graphical extension installation
 
@@ -28,7 +29,7 @@ cd engine
 ./scripts/package-flatpaks.sh
 ```
 
-The script builds and verifies both 64-bit and 32-bit MAKO Renderer libraries for every supported runtime. The resulting archive is written under `engine/out/`.
+The script builds and verifies both Renderer roles for 64-bit and 32-bit processes on every supported runtime. The resulting archive is written under `engine/out/`.
 
 `dist/flatpak/mako-render/runtime-versions.txt` owns the ordered Renderer build matrix. Each listed version must have a matching standalone manifest in that directory; MAKO Decky's shared runtime contract is regression-tested against the same ordered versions.
 

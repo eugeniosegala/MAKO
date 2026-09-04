@@ -19,7 +19,7 @@ Portable MAKO tests must not require MAKO Gym, `Lossless.dll`, an AMD GPU, Games
 | Portable change gates | Deterministic Renderer, Decky, schema, package-policy, sanitizer, and producer behavior | Real Vulkan presentation, AMD image quality, or installation |
 | Direct device iteration | A focused change works on the current development installation | Archive layout, clean-checkout reproducibility, 32-bit, or Flatpak behavior unless selected |
 | Complete tester ZIP | Local source packages and installs as one self-contained build | A clean pushed commit, hardware release gate, or public asset |
-| SteamOS hardware gate | A pushed commit rebuilds and passes the AMD, loader, Gym, dual-bitness, Flatpak, and package boundaries | The complete commercial-game matrix or published download |
+| SteamOS hardware gate | A pushed commit rebuilds the candidate and validates AMD loading, dual-bitness, Flatpak, package, and explicitly selected Gym boundaries | The complete commercial-game matrix or published download |
 | Manual release-candidate matrix | Selected games survive relevant presentation, focus, overlay, hitch, and recreation scenarios | Untested games and hardware |
 | Published-package check | The exact GitHub asset installs through the user-facing path | Universal compatibility |
 
@@ -29,34 +29,26 @@ Use [MAKO Decky packaging](plugin/docs/PACKAGING.md) for development and tester 
 
 The `Tests` workflow runs on every pull request and push to `main`:
 
-- MAKO Decky Python tests, frontend behavior and coverage, type checking, localization/configuration freshness, production bundle, package notices, dependency-license payloads, and bundled-dependency source-map coverage;
-- MAKO Renderer CTest with GCC and Clang, including the optional Qt UI and localization contract;
-- portable Renderer scheduling, frame-plan, presentation, scaling, transition, profile, and colour boundaries under ASan and UBSan;
-- synthetic unlicensed PE/DXBC/SPIR-V inspection, fingerprint invalidation, per-model capability isolation, and harmless-extension acceptance;
-- trace-producer staging, sanitization, metadata, checksums, containment, rollback, and no-clobber behavior on Linux and macOS;
-- protected-input rejection for licensed model content and disguised binary, shader, dump, or archive payloads; and
+- MAKO Decky backend/frontend tests, type checking, coverage, generated-contract freshness, localization, production bundling, and package-license contracts;
+- MAKO Renderer CTest with GCC and Clang, including Qt, localization, synthetic model inspection, launch policy, and generated-SPIR-V freshness;
+- portable Renderer policy tests under ASan and UBSan;
+- protected-input, trace-producer, and Gym-selection contracts on their supported hosts; and
 - Markdown formatting.
 
-The Renderer suite also validates `mako-launch`, generated SPIR-V freshness, and the optional/required MAKO Gym bridge. Decky tests cover installation, typed RPC/configuration contracts, profile transactions, generated wrapper and sidecar bytes, centralized frontend writes, localization, Flatpak/runtime boundaries, and fail-closed Armada behavior. See the owning component documentation for detailed invariants rather than duplicating them here.
+The owning component tests remain authoritative for their detailed invariants.
 
-Run `just test` for the default repository-wide test umbrella: protected-input and Gym-selection contracts, Renderer CTest, Decky backend/frontend behavior, and the trace producer. For the complete local portable checklist, including formatting, generated-contract freshness, frontend type checking and coverage, a production bundle, and sanitized Renderer policy coverage, run:
+Run `just test` for protected-input and Gym-selection contracts, Renderer CTest, Decky backend/frontend tests, and the trace producer. Add the checks below for the complete local portable gate:
 
 ```bash
 just check-markdown-format
-./scripts/test-protected-inputs.sh
-./scripts/test-gym-selection.sh
-./scripts/test-capture-trace.sh
-npm --prefix plugin run check:generated-config
-npm --prefix plugin run check:i18n
-npm --prefix plugin test
-npm --prefix plugin run test:frontend:typecheck
-npm --prefix plugin run test:frontend:coverage
-npm --prefix plugin run build
-(cd engine && ./scripts/test-adaptive-scheduler.sh)
-(cd engine && MAKO_ENABLE_SANITIZERS=ON ./scripts/test-adaptive-scheduler.sh)
+just test
+pnpm --dir plugin run test:frontend:typecheck
+pnpm --dir plugin run test:frontend:coverage
+pnpm --dir plugin run build
+just test-engine-sanitized
 ```
 
-The full Renderer suite additionally needs the Vulkan and X11 development headers:
+The focused Renderer policy script compiles Vulkan-facing policy headers, so it needs Vulkan headers even though it does not need a Vulkan device or runtime. The full Renderer suite additionally needs the Vulkan loader and X11 development files:
 
 ```bash
 cmake -S engine -B engine/build/local -DBUILD_TESTING=ON -DMAKO_BUILD_UI=OFF
@@ -72,19 +64,18 @@ MAKO Gym is an optional sibling checkout for local development and a required re
 
 Before any hardware run, validate Gym's portable contracts with `(cd ../MAKO-Gym && ./scripts/check.sh)` or `just check` from its checkout.
 
-The bridge exposes one consistent selection pattern. `--list-suites` discovers every suite; `--all-suites --validate` validates all fourteen suite inventories without hardware; `--suite NAME --list` discovers rows; `--filter REGEX` runs a focused subset; and omitting `--filter` runs the complete selected suite:
+The bridge exposes one selection pattern. `--list-suites` discovers suites, `--all-suites --validate` validates their inventories without hardware, `--suite NAME --list` discovers rows, and `--filter REGEX` runs a subset. Omitting `--filter` runs the complete selected suite:
 
 ```bash
 ./engine/scripts/run-mako-gym.sh --list-suites
 ./engine/scripts/run-mako-gym.sh --require --all-suites --validate
 ./engine/scripts/run-mako-gym.sh --suite recovery --list
-./engine/scripts/run-mako-gym.sh --suite recovery --filter '(stall|recreate)$'
 ./engine/scripts/run-mako-gym.sh --suite recovery
 ```
 
 Run the smallest suite and filter that can observe a change. A filtered pass is evidence only for its selected rows. Widen to the complete affected suite when a shared production owner changes. A release does not automatically select every suite; run all suites only for a genuinely cross-cutting change or an explicit maintainer request.
 
-Retained evidence may be reused instead of duplicated only when the exact Renderer/package identity, host and driver, Gym commit, configuration, and required rows match the candidate. Record the prior run identifier in the release rationale. A code, package, driver, scenario, or assertion change invalidates the affected evidence.
+Retained evidence may be reused instead of duplicated only when the exact gate-built Renderer/package identity and source commit, host and driver, Gym commit, configuration, and required rows match the candidate. Record the prior run identifier in the release rationale. A code, package, driver, scenario, or assertion change invalidates the affected evidence.
 
 | Change boundary | Start with |
 | --- | --- |
@@ -93,60 +84,20 @@ Retained evidence may be reused instead of duplicated only when the exact Render
 | LSFG/spatial pixels, shaders, colour, precision, Flow Scale, model selection, or combined handoff | `quality`; add `vulkan` for lifecycle changes |
 | LSFG dispatch cost, model/precision/Flow throughput, or generated capacity | `performance` |
 | Spatial graph, copy, factor, resolution, or combined GPU cost | `spatial-performance` |
-| Present/frame tails, process CPU/RSS, Vulkan allocations, or “feels heavy” reports | `runtime-overhead --tier fast` |
+| Present/frame tails, process CPU/RSS, Vulkan allocations, or “feels heavy” reports | `runtime-overhead` |
 | Barriers, image transitions, command recording, or exported-resource synchronization | `sync-validation` |
 | Initialization or unexplained pixel instability | `repeatability` |
 | Cadence, Steady/Fractional Adaptive, recovery, stalls, or swapchain lifetime | `recovery`; add `vulkan` if construction changed |
+| External full-cover overlay pause/throttle or workload-proven source-return recovery | `external-recovery` |
 | Native compositor, WSI, cross-layer live transition, or resolution lifecycle | `gamescope-e2e` |
 | Native direct scaling/Frame Generation or Steam Desktop Proton Frame Generation and extent-override fallback | `direct-desktop-e2e` |
-| Repeated private-resource memory plateau or sustained thermal/performance health | `sustained-health --filter '^sustained-deck-'` |
+| Repeated private-resource memory plateau or sustained thermal/performance health | `sustained-health` |
 | D3D11/DXVK or D3D12/VKD3D-Proton translation | `proton-e2e` |
-| Proton-family/version behavior | `proton-compatibility --runtime-tier core --case-tier fast` |
-
-Common commands:
-
-```bash
-./engine/scripts/run-mako-gym.sh --suite vulkan --list
-./engine/scripts/run-mako-gym.sh --suite vulkan --filter '^(fixed-|adaptive-)'
-./engine/scripts/run-mako-gym.sh --suite quality --filter '^combined-.*traffic' --cli "$PWD/engine/build/mako-cli/mako-cli"
-./engine/scripts/run-mako-gym.sh --suite performance --cli "$PWD/engine/build/mako-cli/mako-cli"
-./engine/scripts/run-mako-gym.sh --suite spatial-performance --cli "$PWD/engine/build/mako-cli/mako-cli"
-./engine/scripts/run-mako-gym.sh --suite runtime-overhead --tier fast --launcher /path/to/mako-launch
-./engine/scripts/run-mako-gym.sh --suite sync-validation --cli "$PWD/engine/build/mako-cli/mako-cli"
-./engine/scripts/run-mako-gym.sh --suite repeatability --cli "$PWD/engine/build/mako-cli/mako-cli"
-./engine/scripts/run-mako-gym.sh --suite recovery --filter '(stall|cadence-drop|recreate)$'
-./engine/scripts/run-mako-gym.sh --suite external-recovery --filter '^external-pause-adaptive-mako$'
-./engine/scripts/run-mako-gym.sh --suite gamescope-e2e --filter '^gamescope-live-'
-./engine/scripts/run-mako-gym.sh --suite direct-desktop-e2e --filter '^(direct-native-adaptive-combined|steam-desktop-dxvk-)'
-./engine/scripts/run-mako-gym.sh --suite sustained-health --filter '^sustained-deck-'
-./engine/scripts/run-mako-gym.sh --suite proton-e2e --filter '^proton-vkd3d-hud-'
-./engine/scripts/run-mako-gym.sh --suite proton-compatibility --runtime-tier core --case-tier fast
-```
+| Proton-family/version behavior | `proton-compatibility` |
 
 `just test-engine-gym-*` provides equivalent shortcuts. Set `MAKO_GYM_REPO` or pass `--gym-repo <path>` when the checkout is not a sibling.
 
-### Suite inventory
-
-The manifests and guides in MAKO Gym are authoritative for row semantics, thresholds, prerequisites, artifacts, and claim limits.
-
-| Suite | Rows | Primary evidence | Guide |
-| --- | --: | --- | --- |
-| `vulkan` | 54 | Real Vulkan construction, Disable-MAKO loader bypass, and configured Fixed/Adaptive/scaler/option combinations | `docs/VULKAN-FEATURE-MATRIX.md` |
-| `quality` | 74 | Procedural LSFG, spatial, and combined output against references | `docs/AMD-QUALITY-REGRESSION.md` |
-| `performance` | 18 | Repeated LSFG throughput and variance through 5120×2160 | `docs/RENDER-PERFORMANCE.md` |
-| `spatial-performance` | 36 | Pixel-qualified production spatial graphs with Vulkan timestamps | `docs/SPATIAL-PERFORMANCE.md` |
-| `runtime-overhead` | 14 | Paired idle/active present, frame, CPU, RSS, and MAKO allocation budgets | `docs/RUNTIME-OVERHEAD.md` |
-| `sync-validation` | 8 | Khronos synchronization validation on canonical quality paths | `docs/SYNCHRONIZATION-VALIDATION.md` |
-| `repeatability` | 9 | Byte-identical output across three independent initializations | `docs/QUALITY-REPEATABILITY.md` |
-| `recovery` | 37 | Scripted cadence, hitch, stall, live-scaling, and swapchain lifecycle | `docs/RUNTIME-RECOVERY-MATRIX.md` |
-| `external-recovery` | 5 | Focused full-cover overlay pause/throttle, Fixed genuine-slowdown rejection, workload-proven source return, and bounded 120 FPS recovery through Gamescope WSI | `docs/EXTERNAL-RECOVERY.md` |
-| `gamescope-e2e` | 56 | Native and disposable-Flatpak Gamescope WSI, exact candidate split-chain order and private-PID live-status visibility, live-policy/restart-pending/profile-match journeys, fixed/variable surfaces, genuine 32-bit fixed-surface native-override, live-factor relay, and unowned-surface regressions, managed multi-swapchain rejection before shared binary-wait consumption with complete `pResults`, variable effective-extent, cold/new-source memory admission, pressure-release re-admission, same-source live-memory retention and multi-resolution downshift under controlled pressure, Deck 1280×800 output-ceiling coverage, Deck-shaped Fixed 3× scaling throughput and automatic-cap recovery, guarded Scale Factor recreation alone and combined with Fixed/Adaptive FG policy and capacity changes, private FG resource replacement, resolution transitions, Adaptive multiplier-ceiling reporting, and efficiency-backoff endurance | `docs/GAMESCOPE-END-TO-END.md` |
-| `direct-desktop-e2e` | 8 | Six native positive scaling/Frame Generation lifecycle rows plus DXVK Frame Generation and VKD3D-Proton scaling-request fallback sentinels in a graphical session outside Gamescope | `docs/DIRECT-DESKTOP-END-TO-END.md` |
-| `sustained-health` | 3 | Repeated private-resource RSS/allocation plateaus plus Deck and opt-in docked thermal/performance soaks | `docs/SUSTAINED-HEALTH.md` |
-| `proton-e2e` | 12 | Six deterministic scenes through both DXVK and VKD3D-Proton | `docs/PROTON-END-TO-END.md` |
-| `proton-compatibility` | 10 | Stratified sentinels across provenance-checked Proton families | `docs/PROTON-COMPATIBILITY.md` |
-
-When selected, a complete suite runs all of its rows; the extended Proton compatibility selection uses at least four runtime families. Portable validators prove inventory correctness only. GPU suites do not prove subjective quality, input-to-photon latency, power, scanout timing, arbitrary games, other GPUs/drivers, 32-bit presentation, Flatpak behavior, or HDR unless the owning row explicitly covers that boundary. Record unselected and unavailable coverage as **not tested**.
+MAKO Gym's manifests and guides are authoritative for current rows, thresholds, prerequisites, artifacts, and claim limits. Portable validation proves inventory correctness only. A GPU suite does not prove subjective quality, input-to-photon latency, power, scanout timing, arbitrary games, other GPUs or drivers, 32-bit presentation, Flatpak behavior, or HDR unless a selected row covers that boundary. Record unselected and unavailable coverage as **not tested**.
 
 Spatial changes must also follow the surface, extent, queue, format, startup, live-transition, synchronization, and quality matrix in [Spatial scaling architecture](engine/docs/SCALING.md). Scheduler and presentation changes must follow [Adaptive validation](engine/docs/ADAPTIVE-VALIDATION.md). A successful `vulkaninfo` or finite `vkcube` run proves only its narrow loader or presentation boundary.
 
@@ -169,11 +120,11 @@ When an explicit maintainer request or genuinely cross-cutting change requires e
   --gym-reason 'Explicit complete Renderer hardware audit'
 ```
 
-The launcher requires exactly one explicit selection mode: repeat `--gym-suite`, pass `--no-gym-suites` when no Renderer-facing hardware boundary changed or exact matching evidence is being reused, or pass `--all-gym-suites` for a genuinely cross-cutting or explicitly requested broad audit. `--gym-reason` is always required and must identify reused evidence. The workflow validates every Gym manifest and runner portably, but executes only the selected hardware suites; portable validation is not hardware evidence. The normal host/Flatpak build prerequisites, `vulkaninfo`, `vkcube`, Gamescope, local licensed `Lossless.dll`, and a clean compatible MAKO Gym checkout remain required.
+Choose exactly one mode: repeat `--gym-suite`, use `--no-gym-suites` when no Renderer-facing boundary changed or exact evidence is reused, or use `--all-gym-suites` for a genuinely cross-cutting or explicitly requested audit. `--gym-reason` is always required and must identify reused evidence. Inventory validation is portable; only selected suites produce hardware evidence. The host still needs the package prerequisites, `vulkaninfo`, `vkcube`, Gamescope, a local licensed `Lossless.dll`, and a clean compatible MAKO Gym checkout.
 
-The gate creates a disposable one-job GitHub Actions runner, verifies the official runner archive, and rebuilds the complete dual-bitness/Flatpak package regardless of Gym selection. Selected quality, LSFG/spatial performance, synchronization, and repeatability suites run against the clean source-built `mako-cli`; selected feature, runtime-overhead, recovery, external recovery, Gamescope, direct desktop, sustained-health, Proton E2E, and Proton-compatibility suites use the exact extracted Renderer package. Direct desktop selection requires launching the one-job runner from a graphical desktop session outside Gamescope. The gate records selected and omitted suites, the rationale, Gym commit, and contract version; retains sanitized evidence and the verified ZIP for 14 days; and removes runner credentials and staging afterward.
+The gate creates a disposable one-job GitHub Actions runner and always rebuilds the complete dual-bitness/Flatpak package. CLI suites use the clean source-built `mako-cli`; runtime suites use the extracted candidate package. Direct-desktop coverage must start from a graphical session outside Gamescope. The gate records the selection, rationale, Gym identity, and sanitized results, retains the evidence and ZIP for 14 days, then removes credentials and staging. Publication later makes its own release-version and pin commits and independently rebuilds in the enforced order rather than promoting this ZIP byte-for-byte, so the published-package check remains separate.
 
-Pass `--deploy-to-decky` only on the dedicated MAKO Decky test installation. It deploys the already-verified ZIP and invokes the production installer; it does not rebuild through a separate CI path. The hardware gate does not replace the manual DXVK, VKD3D-Proton, Gamescope, focus, overlay, hitch, recreation, and supported desktop matrix in the Renderer guides, nor the final published-package installation check.
+Pass `--deploy-to-decky` only on the dedicated MAKO Decky test installation. It deploys the verified ZIP through the production installer. The gate does not replace the applicable manual game matrix or final published-package installation check.
 
 ## Real-game traces
 

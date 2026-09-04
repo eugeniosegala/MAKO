@@ -9,9 +9,9 @@ usage() {
 Usage: ./scripts/publish-release.sh X.Y.Z
 
 Publishes the matching MAKO Renderer and MAKO Decky releases. The workflow is
-resumable: a component whose tag, GitHub release, assets, version, and Renderer
-pins are already complete is verified and skipped. Both component
-RELEASE_NOTES.md files must be prepared and committed for X.Y.Z first.
+resumable: it checksum-verifies complete Renderer state, while Decky is skipped
+when its version, tag, release, and expected asset name are present. Both
+component RELEASE_NOTES.md files must be prepared and committed for X.Y.Z first.
 EOF
 }
 
@@ -42,6 +42,18 @@ node scripts/read-release-notes.mjs \
   engine/RELEASE_NOTES.md "MAKO Renderer" "$version" >/dev/null
 node scripts/read-release-notes.mjs \
   plugin/RELEASE_NOTES.md "MAKO Decky" "$version" >/dev/null
+renderer_codename="$(
+  node plugin/scripts/read-release-info.mjs \
+    engine/RELEASE_NOTES.md "MAKO Renderer" --codename
+)"
+decky_codename="$(
+  node plugin/scripts/read-release-info.mjs \
+    plugin/RELEASE_NOTES.md "MAKO Decky" --codename
+)"
+if [[ "$renderer_codename" != "$decky_codename" ]]; then
+  echo "Paired release notes must use the same codename: Renderer '$renderer_codename', Decky '$decky_codename'." >&2
+  exit 1
+fi
 
 if command -v sha256sum >/dev/null 2>&1; then
   checksum_command=(sha256sum)
@@ -82,9 +94,9 @@ if [[ "$github_repository" != */* ]]; then
   exit 1
 fi
 
-git fetch origin main --tags --quiet
-if [[ "$(git rev-list --count HEAD..origin/main)" != "0" ]]; then
-  echo "Local main is behind origin/main. Update it before publishing." >&2
+git fetch origin refs/heads/main:refs/remotes/origin/main --tags --quiet
+if [[ "$(git rev-parse HEAD)" != "$(git rev-parse refs/remotes/origin/main)" ]]; then
+  echo "Local main must exactly match origin/main before publishing. Push or synchronize the release commit first." >&2
   exit 1
 fi
 
@@ -258,7 +270,7 @@ rm -rf --one-file-system -- \
   "$repository_root/engine/build/work" \
   "$repository_root/plugin/dist" \
   "$repository_root/plugin/coverage"
-echo "Removed reproducible release outputs and staging; reusable build caches were preserved."
+echo "Removed rebuildable release outputs and staging; reusable build caches were preserved."
 
 echo "Published and verified MAKO v$version:"
 echo "  Renderer: https://github.com/$github_repository/releases/tag/$renderer_tag"
