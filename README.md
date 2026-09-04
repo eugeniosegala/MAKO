@@ -80,7 +80,7 @@ Every game and display behaves differently. Compare one setting at a time; fulls
 3. Open the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a> and download its ZIP under **Assets**.
 4. In Decky's settings, enable **Developer Mode**, then select **Developer > Install Plugin from Zip**.
 5. Open **MAKO Decky** and select **Install MAKO Renderer**. Installing the ZIP alone does not install its bundled Renderer.
-6. Leave the defaults in place unless a game needs adjustment. Fixed 2x is the normal frame-generation starting point; Adaptive Frame Generation and scaling are independent options.
+6. Experiment with the settings to find what works best for each game. Try Fixed or Adaptive Frame Generation, and enable or tune scaling independently.
 7. For a native Steam or Proton game, add this under **Steam Properties > Launch Options**:
 
     ```text
