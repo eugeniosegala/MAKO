@@ -622,6 +622,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                                  maximumRecoveryAcquireTimeout
                              ) / 1'000'000.0
                           << " recovery_probe_failure=backoff"
+                          << " recovery_retry_ceiling_ms="
+                          << std::chrono::duration<double, std::milli>(
+                                 OrderedAcquireRecovery::maximumRetryDelay()
+                             ).count()
                           << " post_probe_policy=native-only"
                           << " stabilization_ms="
                           << std::chrono::duration<double, std::milli>(

@@ -367,6 +367,10 @@ namespace mako::layer {
             return std::chrono::milliseconds{250};
         }
 
+        [[nodiscard]] static constexpr auto maximumRetryDelay() {
+            return std::chrono::milliseconds{30000};
+        }
+
         [[nodiscard]] static constexpr auto
         nativeCadenceSaturationQualificationDuration() {
             return std::chrono::milliseconds{200};
@@ -443,8 +447,11 @@ namespace mako::layer {
                     };
                 }
 
-                if (now >= *this->retryAt &&
-                        this->nativeCadenceSaturationSince &&
+                // Qualify native cadence while the retry timer is running.
+                // Otherwise a menu-to-gameplay transition during a long
+                // backoff cannot re-arm a probe until that timer expires.
+                // Probe failure still retains the acquisition failure count.
+                if (this->nativeCadenceSaturationSince &&
                         now - *this->nativeCadenceSaturationSince >=
                             nativeCadenceSaturationQualificationDuration()) {
                     this->nativeCadenceSaturated = true;
@@ -826,6 +833,9 @@ namespace mako::layer {
                 std::chrono::milliseconds{500},
                 std::chrono::milliseconds{1000},
                 std::chrono::milliseconds{2000},
+                std::chrono::milliseconds{5000},
+                std::chrono::milliseconds{15000},
+                maximumRetryDelay(),
             };
             return delays.at(std::min(failures, delays.size()) - 1);
         }

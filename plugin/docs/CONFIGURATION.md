@@ -74,7 +74,7 @@ Renderer fields live in `conf.toml`; profile identity and launcher-only compatib
 
 `scaling_enabled`, `scaling_method`, `scaling_factor`, `scaling_supersampling`, `scaling_sharpness`, and `swapchain_image_count_compatibility` never become wrapper environment exports. The method values are `native`, `mako`, `ls1`, and `ls1-performance`. The Renderer reads these values from the selected profile in `conf.toml`; the wrapper derives only the process-start layer chain from Scaling and the independent `gamescope_wsi_compatibility` setting. A missing dependency fails closed to top-only MAKO with scaling suppressed.
 
-Decky sends typed field patches through one 250 ms, last-value-wins writer with one backend update in flight. It preserves the profile selected for each edit and flushes pending changes when the quick-access panel closes, preventing rapid controls or profile changes from creating stale write queues.
+Decky sends typed field patches through one last-value-wins writer with one backend update in flight. Ordinary edits use a 250 ms trailing window, while Base FPS Cap changes use one second so a slider drag does not apply transient low caps to a running game. The writer preserves the profile selected for each edit and flushes pending changes when the quick-access panel closes, preventing rapid controls or profile changes from creating stale write queues.
 
 ## Performance and quality
 

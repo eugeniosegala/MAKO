@@ -2,6 +2,7 @@ import { act, cleanup, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { getDefaults } from "../../src/config/configSchema";
 import {
+  BASE_FPS_CAP_SAVE_DELAY_MS,
   PROFILE_CONFIG_SAVE_DELAY_MS,
   useProfileConfigWriter,
 } from "../../src/hooks/useProfileConfigWriter";
@@ -68,6 +69,64 @@ describe("profile configuration writer", () => {
     });
     expect(replaceConfig).toHaveBeenCalledWith(canonicalConfig);
     expect(loadProfileConfig).not.toHaveBeenCalled();
+  });
+
+  test("restarts the Base FPS Cap trailing window for edits spaced over time", async () => {
+    const updateProfileConfigFields = vi.fn().mockResolvedValue({
+      success: true,
+      config: {
+        ...getDefaults(),
+        base_fps_cap: 80,
+        dynamic_cadence_recovery: false,
+      },
+      message: "updated",
+      error: null,
+    });
+    const { result } = renderHook(() =>
+      useProfileConfigWriter({
+        editingProfile: "game",
+        getEditingProfile: () => "game",
+        updateProfileConfigFields,
+        loadProfileConfig: vi.fn(async () => undefined),
+        applyConfigPatch: vi.fn(),
+        replaceConfig: vi.fn(),
+      }),
+    );
+
+    // Each pause exceeds the ordinary 250 ms delay, and the complete drag
+    // exceeds one second. Only a full quiet second after the final edit saves.
+    for (const baseFpsCap of [1, 9, 10, 53]) {
+      act(() => {
+        void result.current.saveConfigChanges({
+          base_fps_cap: baseFpsCap,
+          dynamic_cadence_recovery: false,
+        });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(300);
+      });
+      expect(updateProfileConfigFields).not.toHaveBeenCalled();
+    }
+    act(() => {
+      void result.current.saveConfigChanges({
+        base_fps_cap: 80,
+        dynamic_cadence_recovery: false,
+      });
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(BASE_FPS_CAP_SAVE_DELAY_MS - 1);
+    });
+    expect(updateProfileConfigFields).not.toHaveBeenCalled();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(updateProfileConfigFields).toHaveBeenCalledOnce();
+    expect(updateProfileConfigFields).toHaveBeenCalledWith("game", {
+      base_fps_cap: 80,
+      dynamic_cadence_recovery: false,
+    });
   });
 
   test("does not clear supersampling when a later factor edit is saved", async () => {

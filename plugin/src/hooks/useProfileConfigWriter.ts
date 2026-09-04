@@ -6,6 +6,7 @@ import type {
 } from "../config/configSchema";
 
 export const PROFILE_CONFIG_SAVE_DELAY_MS = 250;
+export const BASE_FPS_CAP_SAVE_DELAY_MS = 1000;
 
 type UpdateProfileConfigFields = (
   profileName: string,
@@ -23,6 +24,22 @@ interface ProfileConfigWriterOptions {
 
 interface PendingProfileWrite {
   changes: ConfigurationPatch;
+  delayMs: number;
+}
+
+function saveDelayForChanges(changes: ConfigurationPatch): number {
+  const keys = Object.keys(changes) as (keyof ConfigurationData)[];
+  const baseFpsCapDrag =
+    keys.includes("base_fps_cap") &&
+    keys.every(
+      (key) =>
+        key === "base_fps_cap" ||
+        (key === "dynamic_cadence_recovery" &&
+          changes.dynamic_cadence_recovery === false),
+    );
+  return baseFpsCapDrag
+    ? BASE_FPS_CAP_SAVE_DELAY_MS
+    : PROFILE_CONFIG_SAVE_DELAY_MS;
 }
 
 /**
@@ -116,7 +133,11 @@ export function useProfileConfigWriter({
         if (flushImmediately.current || !mounted.current) {
           flushNextWriteRef.current();
         } else {
-          scheduleWrite();
+          const nextProfile = pendingOrder.current[0];
+          scheduleWrite(
+            pendingWrites.current.get(nextProfile)?.delayMs ??
+              PROFILE_CONFIG_SAVE_DELAY_MS,
+          );
         }
       } else {
         flushImmediately.current = false;
@@ -153,17 +174,23 @@ export function useProfileConfigWriter({
       }
 
       let pendingWrite = pendingWrites.current.get(targetProfile);
+      const requestedDelay = saveDelayForChanges(ownedChanges);
       if (!pendingWrite) {
-        pendingWrite = { changes: {} };
+        pendingWrite = { changes: {}, delayMs: requestedDelay };
         pendingWrites.current.set(targetProfile, pendingWrite);
         pendingOrder.current.push(targetProfile);
+      } else {
+        pendingWrite.delayMs = Math.min(
+          pendingWrite.delayMs,
+          requestedDelay,
+        );
       }
       pendingWrite.changes = {
         ...pendingWrite.changes,
         ...ownedChanges,
       };
 
-      scheduleWrite();
+      scheduleWrite(pendingWrite.delayMs);
       return Promise.resolve();
     },
     [applyConfigPatch, editingProfile, getEditingProfile, scheduleWrite],
