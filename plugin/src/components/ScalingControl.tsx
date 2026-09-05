@@ -218,14 +218,14 @@ export function ScalingControl({
                     <div>
                       {t(
                         "SCALING_SUPERSAMPLING_DESC",
-                        "Allows scaling beyond the display's native output for higher-quality downsampling. This increases GPU and memory load, especially on low-power devices.",
+                        "Allows exceeding a Gamescope output limit for higher-quality downsampling, increasing GPU and memory use. Does not change scaling on other desktop surfaces.",
                       )}
                     </div>
                     {config.scaling_supersampling && (
                       <MakoInlineTip tone="warning">
                         {t(
                           "SCALING_SUPERSAMPLING_WARNING",
-                          "Supersampling is enabled. MAKO can render above the display target for a sharper downsampled image.",
+                          "Supersampling is enabled. Where a Gamescope output limit applies, MAKO may exceed it for a sharper downsampled image.",
                         )}
                       </MakoInlineTip>
                     )}
@@ -248,7 +248,7 @@ export function ScalingControl({
                   <span style={{ display: "block", paddingTop: "3px" }}>
                     {t(
                       "SCALING_FACTOR_DESC",
-                      "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels.",
+                      "Sets the output-to-input size ratio for every method. With a fixed output size, higher values lower the source resolution. When the game controls the window size, lower its resolution in the game first; higher factors enlarge MAKO's output and can increase GPU cost.",
                     )}
                   </span>
                   {factorLimited && (

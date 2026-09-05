@@ -297,7 +297,7 @@ describe("Scaling controls", () => {
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels.",
+        /When the game controls the window size, lower its resolution in the game first;/,
       ),
     ).toBeTruthy();
     expect(screen.queryByText(/guarded game-owned recreation/)).toBeNull();
@@ -392,7 +392,7 @@ describe("Scaling controls", () => {
     expect(expanded.getAttribute("data-maximum")).toBe("2");
     expect(
       screen.getByText(
-        "Supersampling is enabled. MAKO can render above the display target for a sharper downsampled image.",
+        /Where a Gamescope output limit applies, MAKO may exceed it/,
       ),
     ).toBeTruthy();
   });

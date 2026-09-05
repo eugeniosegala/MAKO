@@ -79,7 +79,7 @@ For a direct desktop command, pass the executable and arguments to the same laun
 
 MAKO operates on Vulkan: native Vulkan and Proton games through DXVK or VKD3D-Proton are supported, while OpenGL requires the optional Zink launcher setting. If no profile matches the game process, MAKO remains dormant and presentation stays native.
 
-Direct desktop scaling is supported, but Gamescope/Game Mode is recommended. Without Gamescope, MAKO applies the configured scale factor without an authoritative display target, so the desktop compositor may add another scaling step or make MAKO fall back safely to native presentation after a recreation. Frame Generation remains supported.
+Direct desktop scaling is supported, but Gamescope is recommended and can also run nested in Desktop Mode. MAKO reads the game's source image size from Vulkan. Without Gamescope, it may lack an authoritative display target, so the desktop compositor may add another scaling step or make MAKO fall back safely to native presentation after a recreation. On a variable desktop surface, lower the resolution in the game first: raising Scale Factor enlarges MAKO's output rather than reducing the game's source size. Frame Generation remains supported. See <a href="docs/CONFIGURATION.md#desktop-scaling-and-resolution" target="_blank" rel="noopener noreferrer">desktop scaling and resolution</a> for setup and limitations.
 
 Want to use Frame Generation or scaling with videos? See <a href="docs/VIDEOS_WITH_MAKO.md" target="_blank" rel="noopener noreferrer">Videos with MAKO</a>.
 

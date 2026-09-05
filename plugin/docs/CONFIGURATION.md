@@ -10,7 +10,7 @@ MAKO Decky presents its controls in one continuous flow: **Frame Generation**, *
 
 Select **Enable Scaling (Restart)** before starting the game, choose an in-game resolution below the display resolution, then switch methods while playing. Frame Generation and Scaling are independent and can run alone or together.
 
-Gamescope/Game Mode is the recommended scaling path because it supplies an authoritative output target and stable source/presentation ownership. Direct desktop scaling remains supported through the combined MAKO Renderer, but without Gamescope it applies the configured scale factor without a proven display target; the desktop compositor may add another scaling step or make MAKO fall back safely to native presentation after a recreation. Frame Generation remains supported.
+Gamescope/Game Mode is the recommended scaling path because it supplies an authoritative output target and stable source/presentation ownership. Direct desktop scaling remains supported through the combined MAKO Renderer, but without Gamescope it applies the configured scale factor without a proven display target; the desktop compositor may add another scaling step or make MAKO fall back safely to native presentation after a recreation. Frame Generation remains supported. On a variable desktop surface, lower the resolution in the game first: raising Scale Factor enlarges MAKO's output and can increase GPU cost. Quality Supersampling off only enforces a proven Gamescope output limit; it does not infer a desktop monitor cap. See [desktop scaling and resolution](../../engine/docs/CONFIGURATION.md#desktop-scaling-and-resolution).
 
 | Method | Behavior | Requirement |
 | --- | --- | --- |

@@ -57,6 +57,16 @@ frame_generation_refresh_threshold = 0
 
 MAKO Decky uses safer UI defaults for a 90 FPS Adaptive target and Smooth Cadence when it creates a profile. Its 0.90 Flow Scale now matches the direct Renderer default.
 
+## Desktop scaling and resolution
+
+MAKO reads the game's requested image size directly from Vulkan when it creates a swapchain. This is the image presented by the game, which may already include the game's own upscaling; it is not necessarily the game's internal 3D rendering resolution. There is no desktop resolution scan in the per-frame scaling path and no need to enter that source size separately in `mako-ui` or the configuration file.
+
+Scale Factor has two effects depending on the surface. With a fixed presentation size, a 1920×1080 surface at 1.5× advertises a 1280×720 source for the game to render. On a variable desktop surface, MAKO retains the game's requested source size: set the game to 1280×720 and use 1.5× to request a 1920×1080 output. Raising the factor alone on that surface enlarges MAKO's output rather than lowering the game's resolution, and can increase GPU and memory use. Surface and memory limits may reduce the effective factor.
+
+Outside Gamescope, MAKO does not infer the destination monitor size from an arbitrary desktop window. Choose the factor to fit the intended output; the desktop compositor may otherwise scale the result again. Turning Quality Supersampling off does not provide a monitor-size cap on this path. Diagnostics report the actual `source` and `presentation` sizes when scaling activates. If the game ignores MAKO's advertised smaller source and requests the full presentation size, MAKO keeps native presentation with `application-extent-override-no-source-presentation-split`. A manual source-size field would not make the game render a smaller image and could crop its output instead.
+
+[Gamescope also supports nested use on X11 and Wayland desktops](https://github.com/ValveSoftware/gamescope#examples); Game Mode is not required. Its `-w`/`-h` options select the virtual game resolution and `-W`/`-H` select the nested output size. When using standalone MAKO with it, start Gamescope outside `mako-launch` and put only the game command through the launcher. The launcher's Gamescope WSI isolation disables the extra Vulkan layer, not the compositor. Nested Gamescope can provide a controlled virtual display, but games still need to respect the source/presentation contract for MAKO's own scaling to activate. See [extent ownership](SCALING.md#extent-ownership) for the supported paths and safe fallbacks.
+
 ## Profile compatibility
 
 `version = 2` is the current configuration format. MAKO accepts only a format version it understands; a future structural change must use a new version and an explicit migration.
