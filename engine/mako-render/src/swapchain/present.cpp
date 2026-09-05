@@ -883,8 +883,8 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         : GeneratedFramePlan::evenlySpaced(
             effectiveFixedGeneratedFrameCount
         );
-    if (orderedAcquireRecoveryProbe && !plan.historyWarmupActive &&
-            !plan.requestedGeneratedFrames.empty()) {
+    if (orderedAcquireProbeEligible(orderedAcquireRecoveryProbe,
+            plan.historyWarmupActive, plan.requestedGeneratedFrames.size())) {
         // A successful native drain proves only that one image can traverse
         // the ordered FIFO again. Do not turn that narrow observation into a
         // full normal plan before the recovery state has seen it complete.
@@ -2470,7 +2470,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         return this->presentNativeFrame(invocation);
     }
 
-    if (orderedAcquireRecoveryProbe && !plan.historyWarmupActive) {
+    if (orderedAcquireProbeEligible(orderedAcquireRecoveryProbe,
+            plan.historyWarmupActive, plan.requestedGeneratedFrames.size())) {
         // The first-slow guard remains nonblocking. After a genuine native
         // drain, one single-image probe may wait across a small number of
         // display periods; failure is terminal for this attempt and returns

@@ -203,6 +203,16 @@ namespace mako::layer {
             : recoveryTimeout;
     }
 
+    /// Recovery can probe only when the current policy requests generated work.
+    /// A display-budget or Adaptive real-only frame is not a failed acquisition
+    /// and must leave the pending probe available for the next eligible frame.
+    [[nodiscard]] constexpr bool orderedAcquireProbeEligible(
+            const bool probeRequested, const bool historyWarmupActive,
+            const size_t requestedGeneratedFrames) noexcept {
+        return probeRequested && !historyWarmupActive &&
+            requestedGeneratedFrames > 0;
+    }
+
     /// Once a lower-swapchain image has been acquired, transport ownership is
     /// independent of HDR classification. A caught backend failure must retire
     /// every owned image before the application's original image can be

@@ -38,6 +38,59 @@ namespace {
         return now;
     }
 
+    void testEmptyFixedBudgetDoesNotFailPendingAcquireProbe() {
+        // A slightly early 45 FPS frame at 90 Hz can legitimately spend the
+        // display's fractional credit on only the real image, immediately
+        // after recovery history has warmed. No Vulkan acquire runs then.
+        for (const bool nativeDrain : {false, true}) {
+            OrderedAcquireRecovery recovery;
+            auto now = OrderedAcquireRecovery::TimePoint{};
+            const auto miss = recovery.observe(now,
+                nativeDrain ? 50ms : 17ms, 25ms, true);
+            if (nativeDrain)
+                now += miss.retryDelay;
+            auto decision = recovery.beforePresent(now);
+            expect(decision.limitGeneratedFrames &&
+                    decision.boundedAcquireProbe == nativeDrain,
+                "empty-budget scenario did not arm the expected probe");
+
+            FixedRefreshBudget budget;
+            expect(budget.plan(now, 90, 1) == 0,
+                "fresh display budget must start with the real frame");
+            for (size_t frame = 0; frame < 2; ++frame) {
+                now += 22'400us;
+                const auto generated = budget.plan(now, 90, 1);
+                expect(generated == 1 &&
+                        !orderedAcquireProbeEligible(true, true, generated),
+                    "history warm-up attempted a recovery acquire");
+            }
+            now += 21'600us;
+            const auto empty = budget.plan(now, 90, 1);
+            expect(empty == 0,
+                "early 45 FPS frame did not reproduce an empty Fixed budget");
+            expect(!orderedAcquireProbeEligible(
+                    decision.limitGeneratedFrames, false, empty),
+                "empty display budget manufactured an acquire-probe failure");
+
+            now += 22'400us;
+            decision = recovery.beforePresent(now);
+            const auto generated = budget.plan(now, 90, 1);
+            expect(generated == 1 && orderedAcquireProbeEligible(
+                    decision.limitGeneratedFrames, false, generated) &&
+                    decision.boundedAcquireProbe == nativeDrain &&
+                    decision.consecutiveFailures == (nativeDrain ? 1U : 0U),
+                "real-only frame lost its pending probe or increased backoff");
+            const auto resumed = recovery.observe(now, 0ns, 25ms, false,
+                false, decision.boundedAcquireProbe);
+            expect(resumed.recovered && resumed.guardCleared == !nativeDrain,
+                "next eligible generated frame did not complete recovery");
+        }
+        for (size_t generated = 0; generated <= 4; ++generated) {
+            expect(!orderedAcquireProbeEligible(false, false, generated),
+                "ordinary generation incorrectly entered the recovery probe path");
+        }
+    }
+
     void testLongAcquireBackoffResumesOnNativeDemand() {
         OrderedAcquireRecovery recovery;
         auto now = enterMaximumAcquireBackoff(recovery);
@@ -160,6 +213,7 @@ namespace {
 }
 
 int main() {
+    testEmptyFixedBudgetDoesNotFailPendingAcquireProbe();
     testLongAcquireBackoffResumesOnNativeDemand();
     testLongAcquireBackoffRequiresQualifiedNativeCadence();
     expect(!shouldRejectManagedMultiSwapchainPresent(1, true) &&
