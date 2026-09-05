@@ -4,6 +4,7 @@ export const DEFAULT_PROFILE_NAME = "mako" as const;
 export const MAKO_WRAPPER_RELATIVE_PATH = ".local/bin/mako-run" as const;
 export const PER_GAME_WRAPPER_FLATPAK_APP_IDS = [
   "com.heroicgameslauncher.hgl",
+  "net.lutris.Lutris",
 ] as const;
 export const PROFILE_KIND_DEFAULT = "default" as const;
 export const PROFILE_KIND_GAME = "game" as const;

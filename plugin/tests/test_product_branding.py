@@ -114,7 +114,7 @@ class ProductBrandingTests(unittest.TestCase):
             self.assertIn(heading, renderer_publisher)
 
         self.assertIn(
-            "First-time Heroic or EmuDeck setup",
+            "https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/LAUNCHERS.md",
             decky_publisher,
         )
         self.assertIn(

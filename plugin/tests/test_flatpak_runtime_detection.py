@@ -270,10 +270,14 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
 
         self.assertEqual(self.service._get_app_runtime_version(self.app_id), "25.08")
 
-    def test_kde_runtime_uses_inherited_freedesktop_vulkan_layer_version(self):
-        kde_runtime = "org.kde.Platform/x86_64/6.10"
-        kde_metadata = """[Runtime]
-name=org.kde.Platform
+    def test_kde_and_lutris_gnome_runtimes_use_inherited_layer_version(self):
+        for app_id, runtime in (
+            ("org.DolphinEmu.dolphin-emu", "org.kde.Platform/x86_64/6.10"),
+            ("net.lutris.Lutris", "org.gnome.Platform/x86_64/49"),
+        ):
+            with self.subTest(app_id=app_id):
+                metadata = f"""[Runtime]
+name={runtime.split("/")[0]}
 
 [Extension org.freedesktop.Platform.GL]
 version=25.08
@@ -283,20 +287,20 @@ version=25.08
 directory=lib/extensions/vulkan
 subdirectories=true
 
-[Extension org.kde.KStyle]
-version=6.10
+[Extension org.example.Unrelated]
+version={runtime.rsplit("/", 1)[1]}
 """
 
-        def run(args, **_kwargs):
-            if args == ["info", "--show-runtime", self.app_id]:
-                return _result(f"{kde_runtime}\n")
-            if args == ["info", "--show-metadata", kde_runtime]:
-                return _result(kde_metadata)
-            self.fail(f"unexpected Flatpak command: {args}")
+                def run(args, **_kwargs):
+                    if args == ["info", "--show-runtime", app_id]:
+                        return _result(f"{runtime}\n")
+                    if args == ["info", "--show-metadata", runtime]:
+                        return _result(metadata)
+                    self.fail(f"unexpected Flatpak command: {args}")
 
-        self.service._run_flatpak_command = run
+                self.service._run_flatpak_command = run
 
-        self.assertEqual(self.service._get_app_runtime_version(self.app_id), "25.08")
+                self.assertEqual(self.service._get_app_runtime_version(app_id), "25.08")
 
     def test_inherited_vulkan_layer_version_must_be_supported(self):
         runtime = "org.kde.Platform/x86_64/6.11"
@@ -470,57 +474,126 @@ versions=26.08;25.08;24.08
                 calls,
             )
 
-    def test_heroic_preparation_keeps_environment_per_game(self):
-        app_id = "com.heroicgameslauncher.hgl"
-        with tempfile.TemporaryDirectory() as temp_dir:
-            temporary_path = Path(temp_dir)
-            wrapper = temporary_path / "mako-run"
-            wrapper.touch()
-            self.service.config_dir = temporary_path / "config"
-            self.service.mako_launch_script_path = wrapper
-            self.service.check_flatpak_available = lambda: True
-            self.service._get_app_runtime_version = lambda _app_id: "25.08"
-            self.service._is_extension_installed = lambda _version: True
-            calls = []
+    def test_launcher_preparation_keeps_environment_per_game(self):
+        for app_id in ("com.heroicgameslauncher.hgl", "net.lutris.Lutris"):
+            with self.subTest(app_id=app_id), tempfile.TemporaryDirectory() as temp_dir:
+                temporary_path = Path(temp_dir)
+                wrapper = temporary_path / "mako-run"
+                wrapper.touch()
+                self.service.config_dir = temporary_path / "config"
+                self.service.mako_launch_script_path = wrapper
+                self.service.check_flatpak_available = lambda: True
+                self.service._get_app_runtime_version = lambda _app_id: "25.08"
+                self.service._is_extension_installed = lambda _version: True
+                calls = []
 
-            def run(args, **_kwargs):
-                calls.append(args)
-                return _result()
+                def run(args, **_kwargs):
+                    calls.append(args)
+                    return _result()
 
-            self.service._run_flatpak_command = run
+                self.service._run_flatpak_command = run
 
-            response = self.service.set_app_override(app_id)
+                response = self.service.set_app_override(app_id)
 
-            self.assertTrue(response["success"])
-            self.assertIn(
-                ["override", "--user", "--unset-env=MAKO_CONFIG", app_id],
-                calls,
-            )
-            self.assertNotIn(
-                [
-                    "override",
-                    "--user",
-                    f"--env=MAKO_CONFIG={self.service.config_dir}/conf.toml",
-                    app_id,
-                ],
-                calls,
-            )
-            for variable in (
-                "MAKO_CONFIG",
-                "ENABLE_MAKO",
-                "DISABLE_LSFG",
-                "DISABLE_LSFGVK",
-                "DISABLE_GAMESCOPE_WSI",
-                "ENABLE_GAMESCOPE_WSI",
-                "MAKO_DISABLE_HDR_EXPOSURE",
-                "DXVK_HDR",
-                "VK_IMPLICIT_LAYER_PATH",
-                "VK_ADD_IMPLICIT_LAYER_PATH",
-            ):
+                self.assertTrue(response["success"])
                 self.assertIn(
-                    ["override", "--user", f"--unset-env={variable}", app_id],
+                    ["override", "--user", "--unset-env=MAKO_CONFIG", app_id],
                     calls,
                 )
+                self.assertNotIn(
+                    [
+                        "override",
+                        "--user",
+                        f"--env=MAKO_CONFIG={self.service.config_dir}/conf.toml",
+                        app_id,
+                    ],
+                    calls,
+                )
+                for variable in (
+                    "MAKO_CONFIG",
+                    "ENABLE_MAKO",
+                    "DISABLE_LSFG",
+                    "DISABLE_LSFGVK",
+                    "DISABLE_GAMESCOPE_WSI",
+                    "ENABLE_GAMESCOPE_WSI",
+                    "MAKO_DISABLE_HDR_EXPOSURE",
+                    "DXVK_HDR",
+                    "VK_IMPLICIT_LAYER_PATH",
+                    "VK_ADD_IMPLICIT_LAYER_PATH",
+                ):
+                    self.assertIn(
+                        ["override", "--user", f"--unset-env={variable}", app_id],
+                        calls,
+                    )
+
+    def test_launcher_repreparation_removes_old_app_wide_activation(self):
+        for app_id in ("com.heroicgameslauncher.hgl", "net.lutris.Lutris"):
+            with self.subTest(app_id=app_id), tempfile.TemporaryDirectory() as temp_dir:
+                wrapper = Path(temp_dir) / "mako-run"
+                wrapper.touch()
+                self.service.mako_launch_script_path = wrapper
+                self.service.gamescope_wsi_compatibility_dir = Path("/wsi")
+                self.service._get_mako_paths = lambda: ("/config", "/dll")
+                self.service.check_flatpak_available = lambda: True
+                self.service._get_app_runtime_version = lambda _app: "25.08"
+                self.service._is_extension_installed = lambda _version: True
+                # Emulate an app prepared by a release that treated launchers
+                # as direct Flatpak games. Keep unrelated user settings intact.
+                environment = {
+                    "ENABLE_MAKO": "1",
+                    "MAKO_CONFIG": "/config/conf.toml",
+                    "VK_IMPLICIT_LAYER_PATH": FLATPAK_IMPLICIT_LAYER_DIR,
+                    "MANGOHUD": "1",
+                }
+                filesystems = {"/unrelated:ro", "/config:rw", "/dll:ro", str(wrapper) + ":ro", "/wsi:ro"}
+
+                def run(args, **_kwargs):
+                    self.assertEqual(args[:2], ["override", "--user"])
+                    self.assertEqual(args[-1], app_id)
+                    option = args[2]
+                    if option == "--show":
+                        return _result(
+                            "[Context]\nfilesystems=" + ";".join(filesystems) + ";\n"
+                            "[Environment]\n" + "\n".join(f"{key}={value}" for key, value in environment.items())
+                        )
+                    if option.startswith("--filesystem="):
+                        filesystems.add(option.split("=", 1)[1])
+                    elif option.startswith("--unset-env="):
+                        environment.pop(option.split("=", 1)[1], None)
+                    elif option.startswith("--env="):
+                        key, value = option.removeprefix("--env=").split("=", 1)
+                        environment[key] = value
+                    else:
+                        self.fail(f"Unexpected override: {option}")
+                    return _result()
+
+                self.service._run_flatpak_command = run
+                self.assertFalse(self.service._check_app_override_status(app_id)["required_env"])
+                for _ in range(2):  # Repeated preparation is idempotent.
+                    self.assertTrue(self.service.set_app_override(app_id)["success"])
+                    self.assertEqual(environment, {"MANGOHUD": "1"})
+                    self.assertIn("/unrelated:ro", filesystems)
+                    status = self.service._check_app_override_status(app_id)
+                    self.assertTrue(status["filesystem"])
+                    self.assertTrue(status["wrapper"])
+                    self.assertTrue(status["required_env"])
+                    self.assertFalse(status["legacy_env"])
+
+    def test_lutris_preparation_reports_failed_activation_cleanup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            wrapper = Path(temp_dir) / "mako-run"
+            wrapper.touch()
+            self.service.mako_launch_script_path = wrapper
+            self.service.check_flatpak_available = lambda: True
+            self.service._get_app_runtime_version = lambda _app: "25.08"
+            self.service._is_extension_installed = lambda _version: True
+            self.service._run_flatpak_command = lambda args, **_kwargs: (
+                _result(stderr="Permission denied", returncode=1)
+                if "--unset-env=ENABLE_MAKO" in args else _result()
+            )
+            response = self.service.set_app_override("net.lutris.Lutris")
+            self.assertFalse(response["success"])
+            self.assertIn("ENABLE_MAKO", response["error"])
 
     def test_direct_override_status_requires_complete_activation_environment(self):
         app_id = "org.DolphinEmu.dolphin-emu"

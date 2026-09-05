@@ -24,16 +24,16 @@ Temporarily replace the game's normal **Steam Properties > Launch Options** with
 MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 /home/deck/.local/bin/mako-run %command%
 ```
 
-### Heroic game
+### Heroic or Lutris game
 
-Keep the game's normal **Wrapper** and **Arguments** fields unchanged. In that game's Heroic settings, add these two environment variables:
+Keep the normal per-game wrapper from the [launcher setup guide](LAUNCHERS.md). Add these two environment variables in Heroic's game settings or Lutris's **Configure > System options > Environment variables**:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1
 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25
 ```
 
-Do not add `%command%` to Heroic.
+Keep Heroic's **Wrapper** and **Arguments**, or Lutris's **Command prefix**, unchanged. Do not add `%command%` in either launcher.
 
 ### EmuDeck Flatpak shortcut
 
@@ -59,7 +59,7 @@ If the emulator is a native application or AppImage instead of a Flatpak, use th
 
 ## 2. Reproduce the problem
 
-1. Start the affected game using the same Steam or Heroic entry that normally shows the problem.
+1. Start the affected game using the same Steam, Heroic, or Lutris entry that normally shows the problem.
 2. Reproduce the problem. Note what you did and, if possible, the approximate time it happened.
 3. Fully exit the game. Do not merely suspend it.
 4. Wait a few seconds for the game and emulator processes to close.
@@ -116,7 +116,7 @@ After creating the report:
     /home/deck/.local/bin/mako-run %command%
     ```
 
-- **Heroic:** remove `MAKO_PRESENT_DIAGNOSTICS` and `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS` from the game's environment. Keep the normal Wrapper and Arguments.
+- **Heroic or Lutris:** remove `MAKO_PRESENT_DIAGNOSTICS` and `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS` from the game's environment. Keep the normal per-game Wrapper or Command prefix.
 - **EmuDeck Flatpak:** restore the exact original **Target** and **Launch Options** saved before testing.
 
 All builds keep diagnostics off after these temporary settings are removed. Local development ZIPs and direct `dev:*` deployments also require explicit opt-in so synchronous log traffic cannot distort performance testing.

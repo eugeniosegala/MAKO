@@ -82,6 +82,7 @@ describe("generated cross-language contracts", () => {
   test("shares Flatpak apps that require per-game wrapper setup", () => {
     expect([...PER_GAME_WRAPPER_FLATPAK_APP_IDS]).toEqual([
       "com.heroicgameslauncher.hgl",
+      "net.lutris.Lutris",
     ]);
   });
 

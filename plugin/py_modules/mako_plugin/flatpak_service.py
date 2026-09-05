@@ -46,9 +46,9 @@ _SUPPORTED_VERSION_ERROR = (
 _FREEDESKTOP_VULKAN_LAYER_EXTENSION = (
     "org.freedesktop.Platform.VulkanLayer"
 )
-# Heroic starts each game in a child compatibility environment. Its per-game
-# wrapper must set MAKO values there, rather than enabling the layer for the
-# entire Heroic UI. Direct Flatpak launches (such as EmuDeck's Dolphin
+# Heroic and Lutris start each game in a child compatibility environment.
+# Their per-game wrappers set MAKO values inside the sandbox, keeping the
+# launcher UI inactive. Direct Flatpak launches (such as EmuDeck's Dolphin
 # shortcuts) do not have that child boundary: Flatpak's persisted
 # ``unset-environment`` rules otherwise clear the wrapper's config and Vulkan
 # path before the app starts.
@@ -683,8 +683,9 @@ class FlatpakService(BaseService):
                 and not environment_values.get(VK_ADD_IMPLICIT_LAYER_PATH_ENV)
             )
             required_env_override = (
-                app_id in PER_GAME_WRAPPER_FLATPAK_APPS
-                or (
+                not legacy_env_override
+                if app_id in PER_GAME_WRAPPER_FLATPAK_APPS
+                else (
                     environment_values.get(MAKO_CONFIG_ENV) ==
                     f"{config_path}/{CONFIG_FILENAME}"
                     and environment_values.get(MAKO_LAYER_ENABLE_ENV) == "1"
@@ -900,9 +901,8 @@ class FlatpakService(BaseService):
                                               app_id=app_id, operation="set")
 
             if app_id in PER_GAME_WRAPPER_FLATPAK_APPS:
-                # Heroic starts each game in a child compatibility environment.
-                # Keep its layer activation in the selected game's wrapper so
-                # preparing Heroic cannot enable frame generation in every game.
+                # Keep activation in each selected game's wrapper. Preparing
+                # a launcher also clears any older app-wide MAKO activation.
                 environment_overrides = [
                     f"--unset-env={variable}"
                     for variable in _LAYER_ENVIRONMENT_VARIABLES

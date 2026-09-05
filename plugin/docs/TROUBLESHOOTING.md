@@ -23,7 +23,7 @@ See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics inte
 4. Compare the game's V-Sync on and off; its limiter, VRR, and compositor can change pacing.
 5. Use **Disable MAKO Renderer on Next Launch** and restart once to isolate whether MAKO causes the failure.
 
-For Heroic, use the displayed MAKO wrapper as **Wrapper**, leave **Arguments** empty, and do not add `%command%`. For an EmuDeck Flatpak, prepare the emulator in **Flatpak Setup**, use the wrapper as the Steam shortcut **Target**, and preserve EmuDeck's existing Launch Options. See the [installation workflows](../../README.md#heroic-and-other-flatpak-applications).
+Use the [launcher setup guide](LAUNCHERS.md) for Heroic, Lutris, EmuDeck, and manually added Flatpak shortcuts. Heroic uses its per-game **Wrapper** field; Lutris uses **Command prefix**. Flatpak launchers also need preparation in **Flatpak Setup**. If an older Lutris preparation shows **Partial**, prepare it again and restart Lutris to clear app-wide activation.
 
 ### Ubisoft Connect closes before the game starts
 

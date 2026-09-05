@@ -30,7 +30,7 @@ Published archives target x86_64 Linux hosts and include Vulkan layers for both 
 /home/deck/.local/bin/mako-run %command%
 ```
 
-See the <a href="../README.md#install-and-use" target="_blank" rel="noopener noreferrer">main installation guide</a> for Decky, Heroic, and EmuDeck setup.
+See the <a href="../README.md#install-and-use" target="_blank" rel="noopener noreferrer">main installation guide</a> for Decky, Heroic, Lutris, and EmuDeck setup.
 
 ### Direct Linux installation
 
