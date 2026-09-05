@@ -391,7 +391,7 @@ export default function Home() {
 
           <div className="requirement-note">
             <span>IMPORTANT / LICENSED INPUT</span>
-            <p>MAKO is an independent project, unaffiliated with Lossless Scaling. It does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO Scaler does not require it. MAKO does not alter the user’s DLL file or save extracted resources as standalone files. Users are responsible for complying with the terms applicable to their copy. See <a href={`${links.repository}/blob/main/THIRD_PARTY_NOTICES.md`} {...newTabProps}>third-party notices</a>.</p>
+            <p>MAKO is independent and unaffiliated with Lossless Scaling. Frame generation and LS1 require your own separately purchased <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO Scaler does not. MAKO does not distribute Lossless Scaling or its proprietary resources, alter your DLL, or save extracted resources as standalone files. Your copy’s terms apply. See <a href={`${links.repository}/blob/main/THIRD_PARTY_NOTICES.md`} {...newTabProps}>third-party notices</a>.</p>
           </div>
         </section>
 
