@@ -977,15 +977,30 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         false
     ));
     auto policySnapshot = this->surfaceScalingPolicySnapshot();
-    const auto resourceAdmission = variablePresentationResourceAdmission(
-        memoryAdmission,
-        createInfo.imageExtent,
-        createInfo.imageFormat,
-        prospectiveCreateInfo.minImageCount,
-        generatedFrameCapacityForProfile(*this->active_profile)
-    );
-    const uint64_t presentationPixelBudget =
-        resourceAdmission.effectivePixelBudget;
+    const auto postFrameGenerationAdmission =
+        variablePresentationResourceAdmission(
+            memoryAdmission,
+            createInfo.imageExtent,
+            createInfo.imageFormat,
+            prospectiveCreateInfo.minImageCount,
+            generatedFrameCapacityForProfile(*this->active_profile)
+        );
+    const auto preFrameGenerationAdmission =
+        variablePresentationResourceAdmission(
+            memoryAdmission,
+            createInfo.imageExtent,
+            createInfo.imageFormat,
+            prospectiveCreateInfo.minImageCount,
+            generatedFrameCapacityForProfile(*this->active_profile),
+            SpatialFramePipelinePlacement::PreFrameGeneration
+        );
+    const VariablePresentationPixelBudgets presentationPixelBudgets{
+        .preFrameGeneration = preFrameGenerationAdmission.effectivePixelBudget,
+        .postFrameGeneration = postFrameGenerationAdmission.effectivePixelBudget,
+        // Source growth is charged at the conservative combined-resource
+        // rate, never at the cheaper output-only WSI bytes-per-pixel rate.
+        .sourceGrowth = memoryAdmission.effectivePixelBudget,
+    };
     const bool spatialCapabilityRelay =
         spatialScalingCapabilityRelayByLayer();
     const bool spatialResourceOwner = spatialScalingOwnedByLayer();
@@ -1008,7 +1023,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             createInfo.imageExtent,
             previousVariableExtents,
             fixedSurfaceContract,
-            presentationPixelBudget,
+            presentationPixelBudgets,
             this->gamescopePresentationTarget,
             gamescopePresentationTargetRequired,
             memoryAdmission.staticPixelBudget,
@@ -1138,6 +1153,13 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             (spatialResourceOwner || spatialExtentOwner) &&
             !awaitingLowerCreateRelay) {
         const auto advertised = scalingDecision.fixedContract;
+        const auto admissionPlacement = scalingDecision.memoryAdmissionPlacement.
+            value_or(selectSpatialFramePipelinePlacement(
+                modification.applicationExtent, modification.presentationExtent
+            ));
+        const auto& resourceAdmission = admissionPlacement ==
+                SpatialFramePipelinePlacement::PreFrameGeneration
+            ? preFrameGenerationAdmission : postFrameGenerationAdmission;
         std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
                   << "role=" << layerRoleName
                   << "; requested=" << modification.applicationExtent.width
@@ -1161,7 +1183,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << "; variable_presentation_live_pixel_budget="
                   << resourceAdmission.livePixelBudget.value_or(0)
                   << "; variable_presentation_pixel_budget="
-                  << presentationPixelBudget
+                  << resourceAdmission.effectivePixelBudget
                   << "; variable_presentation_fixed_source_mib="
                   << (resourceAdmission.fixedSourceBytes / (1024 * 1024))
                   << "; variable_presentation_bytes_per_pixel="
