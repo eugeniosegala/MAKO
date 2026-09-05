@@ -1694,14 +1694,19 @@ VkResult Swapchain::presentGeneratedFrames(
 
         if (plan.configuredAcquireTimeout &&
                 (result == VK_TIMEOUT || result == VK_NOT_READY)) {
+            // Record this normal batch's delivery loss before recovery arms
+            // its guard and freezes observations. Otherwise intermittent
+            // timeouts separated by healthy batches disappear from Adaptive's
+            // multiplier evaluation even though generated outputs were lost.
+            this->reportAdaptiveDelivery(plan, i);
             reportOrderedAcquire(
                 !acquireBudgetExhausted, acquireBudgetExhausted, i
             );
             // The explicit legacy timeout is an anti-freeze ceiling. Backend
             // work is already scheduled on this ordered path, so drain its
             // final timeline value without reclassifying the miss as an
-            // Adaptive timing discontinuity. Cross-frame native quarantine is
-            // already armed above for the next application present.
+            // Adaptive timing discontinuity. The next application present is
+            // already protected by a zero-wait guard or native quarantine.
             const size_t skippedFrames =
                 plan.scheduledGeneratedFrames.size() - i;
             if (!this->adaptiveScheduler)
@@ -1709,9 +1714,6 @@ VkResult Swapchain::presentGeneratedFrames(
             const uint64_t finalGeneratedTimelineValue =
                 this->frameState.backendTimelineIndex + skippedFrames - 1;
             auto& fallbackSemaphore = postCopy.second;
-            if (this->adaptiveScheduler) {
-                this->reportAdaptiveDelivery(plan, i);
-            }
 
             const auto fallbackSubmitStarted = startPresentDiagnostic();
             auto& fallbackCommandBuffer = pass.commandBuffer;

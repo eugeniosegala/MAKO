@@ -578,6 +578,88 @@ namespace {
             "transport recovery did not request one fresh cadence qualification");
     }
 
+    void testIsolatedAcquireTimeoutPreservesValidatedCadence() {
+        // Issue #47: a 90 Hz image deadline of 16.7 ms returned VK_TIMEOUT
+        // after 17-19 ms, despite a 50 ms application-present budget. Replay
+        // sparse misses against both the reported 60 FPS cap and the 45 FPS
+        // cadence observed under ordered FIFO, using the production owners.
+        for (const size_t maximumMultiplier : {2U, 4U}) {
+            for (const double baseFps : {45.0, 60.0}) {
+                Harness harness(
+                    90, maximumMultiplier, false,
+                    AdaptiveRecoveryPolicy::OrderedSdr
+                );
+                OrderedAcquireRecovery recovery;
+                harness.start();
+                harness.runAtFps(baseFps, 12s);
+                const auto validated = harness.scheduler.snapshot();
+                require(validated.validatedGenerationLimit == 1,
+                    "precondition failed: 90 FPS delivery was not validated");
+                const size_t stabilizations =
+                    harness.diagnostics.count("stabilization");
+
+                for (const auto wait : {17'248'900ns, 18'443'100ns,
+                        17'750'300ns, 18'854'000ns, 17'977'300ns}) {
+                    harness.runAtFps(baseFps, 30s);
+                    auto plan = harness.frameAtFps(baseFps);
+                    for (size_t frame = 0; plan.empty() && frame < 4; ++frame)
+                        plan = harness.frameAtFps(baseFps);
+                    require(!plan.empty(),
+                        "precondition failed: no generated delivery before timeout");
+                    harness.scheduler.reportGeneratedFrameDelivery({
+                        .requested = plan.size(),
+                        .acceptedForPresentation = 0,
+                    });
+                    const auto miss = recovery.observe(
+                        harness.now + wait, wait,
+                        OrderedAcquireRecovery::slowAcquireDuration(90),
+                        true
+                    );
+                    require(miss.guardArmed && !miss.quarantined,
+                        "isolated 90 Hz deadline miss started a native drain");
+                    const auto guard = recovery.beforePresent(
+                        harness.now + wait + 1ms
+                    );
+                    require(guard.limitGeneratedFrames &&
+                            guard.preacquireGeneratedFrame &&
+                            !guard.boundedAcquireProbe &&
+                            !guard.bypassGeneration,
+                        "deadline miss did not constrain the next acquire to zero wait");
+                    // The presentation path freezes the scheduler while its
+                    // forced single-image guard excludes transport delay.
+                    static_cast<void>(harness.frame(wait + 1ms, true));
+                    const auto ready = recovery.observe(
+                        harness.now, 0ns,
+                        OrderedAcquireRecovery::slowAcquireDuration(90),
+                        false
+                    );
+                    if (ready.stabilizing)
+                        harness.scheduler.beginTransportRecovery(harness.now);
+                    require(ready.guardCleared && !recovery.active(),
+                        "available guard image did not end isolated recovery");
+                    size_t generated = 0;
+                    for (size_t frame = 0; frame < 4; ++frame) {
+                        const auto resumed = harness.frameAtFps(baseFps);
+                        generated += resumed.size();
+                        if (!resumed.empty()) {
+                            static_cast<void>(recovery.observe(
+                                harness.now, 1ms,
+                                OrderedAcquireRecovery::slowAcquireDuration(90),
+                                false
+                            ));
+                        }
+                    }
+                    require(generated > 0 &&
+                            harness.scheduler.snapshot().validatedGenerationLimit ==
+                                validated.validatedGenerationLimit &&
+                            harness.diagnostics.count("stabilization") ==
+                                stabilizations,
+                        "sparse acquire misses discarded accepted generation or restarted Adaptive");
+                }
+            }
+        }
+    }
+
     void testBusyWarmupNotificationIsIdempotent() {
         Harness harness(120, 3);
         harness.scheduler.consumeHistoryWarmupFrame(harness.now + 16ms);
@@ -3423,6 +3505,7 @@ int main() {
         {"startup warm-up is explicit", testStartupWarmupIsExplicit},
         {"swapchain recreation settles promptly", testSwapchainRecreationUsesBoundedSettlingGuard},
         {"transport recovery invalidates stable cadence", testTransportRecoveryInvalidatesStableCadence},
+        {"isolated acquire timeouts preserve validated cadence", testIsolatedAcquireTimeoutPreservesValidatedCadence},
         {"busy warm-up notification is idempotent", testBusyWarmupNotificationIsIdempotent},
         {"transient busy frame does not rearm warm-up", testTransientBusyFrameDoesNotRearmCompletedWarmup},
         {"invalid configuration is rejected", testInvalidConfigurationIsRejectedAtBoundary},

@@ -578,17 +578,23 @@ namespace mako::layer {
                 this->consecutiveSlowFrames++;
                 const size_t observedSlowFrames =
                     this->consecutiveSlowFrames;
-                if (!timedOut && !severe && !this->guardPending &&
+                const bool isolatedDeadlineMiss = timedOut &&
+                    acquireDuration < slowAcquireThreshold;
+                if ((!timedOut || isolatedDeadlineMiss) && !severe &&
+                        !this->guardPending &&
                         !this->probePending &&
                         observedSlowFrames < slowFrameThreshold) {
-                    // One slow successful acquire can still be ordinary FIFO
-                    // pressure, but the next application present must not
+                    // One slow successful acquire or a short per-image
+                    // deadline miss can be transient FIFO pressure. Neither
+                    // proves exhaustion of the cumulative present budget.
+                    // The next application present must not
                     // repeat a blocking acquire or feed that transport delay
-                    // back into Adaptive's source-cadence clock. Constrain a
-                    // short zero-wait guard first; a miss escalates through
-                    // the existing native-drain recovery below.
+                    // back into Adaptive's source-cadence clock. Reuse the
+                    // zero-wait guard; repeated or severe pressure still
+                    // enters native-drain recovery below.
                     this->guardPending = true;
                     return {
+                        .timedOut = timedOut,
                         .guardArmed = true,
                         .consecutiveSlowFrames = observedSlowFrames,
                         .consecutiveFailures = this->consecutiveFailures,
@@ -602,8 +608,13 @@ namespace mako::layer {
                 );
             }
 
-            this->consecutiveSlowFrames = 0;
             const bool guardCleared = this->guardPending;
+            // A guard tests only one immediately available image. It permits
+            // a normal batch retry, but cannot prove that a 3x/4x/5x batch is
+            // healthy. Retain pressure until an unrestricted acquire succeeds
+            // so timeout/guard-success cycles cannot avoid native recovery.
+            if (!guardCleared)
+                this->consecutiveSlowFrames = 0;
             const bool drainProbeRecovered = this->probePending;
             const bool recovered = guardCleared || drainProbeRecovered;
             if (recovered) {

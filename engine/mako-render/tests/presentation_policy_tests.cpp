@@ -350,6 +350,91 @@ int main() {
             !acquireDecision.limitGeneratedFrames,
         "successful slow-acquire protection retained recovery constraints");
 
+    // A refresh-relative delivery deadline is shorter than the pressure
+    // threshold on 90/120 Hz displays. An isolated miss must not turn one
+    // dropped synthetic output into a multi-frame native drain.
+    for (const uint32_t refresh : {90U, 120U, 240U}) {
+        acquireRecovery.reset();
+        const auto threshold =
+            OrderedAcquireRecovery::slowAcquireDuration(refresh);
+        const auto wait = std::chrono::nanoseconds{
+            orderedGeneratedImageAcquireTimeout(refresh, acquireBudget)
+        } + 1ms;
+        observation = acquireRecovery.observe(
+            acquireStart, wait, threshold, true
+        );
+        acquireDecision = acquireRecovery.beforePresent(acquireStart + 20ms);
+        expect(observation.guardArmed && observation.timedOut &&
+                !observation.quarantined &&
+                acquireDecision.preacquireGeneratedFrame &&
+                !acquireDecision.boundedAcquireProbe &&
+                !acquireDecision.bypassGeneration,
+            "short image deadline miss did not use zero-wait protection");
+        const auto missedGuard =
+            acquireRecovery.reportNonblockingProbeUnavailable(
+                acquireStart + 21ms
+            );
+        expect(missedGuard.guardBypassed && !missedGuard.quarantined,
+            "short deadline guard miss skipped native relief");
+        // Temporal warm-up sends no synthetic acquire observation. The next
+        // failed normal acquire must retain the first miss as pressure proof.
+        observation = acquireRecovery.observe(
+            acquireStart + 90ms, wait, threshold, true
+        );
+        expect(observation.quarantined && observation.timedOut &&
+                observation.retryDelay == 250ms,
+            "repeated short timeouts escaped native-drain recovery");
+    }
+
+    acquireRecovery.reset();
+    static_cast<void>(acquireRecovery.observe(
+        acquireStart, 18ms, 25ms, true
+    ));
+    observation = acquireRecovery.observe(
+        acquireStart + 17ms, 0ms, 25ms, false
+    );
+    expect(observation.guardCleared && !acquireRecovery.active(),
+        "successful timeout guard did not permit a normal batch retry");
+    observation = acquireRecovery.observe(
+        acquireStart + 50ms, 18ms, 25ms, true
+    );
+    expect(observation.quarantined && observation.retryDelay == 250ms,
+        "successful single-image guard erased repeated normal-batch timeouts");
+
+    acquireRecovery.reset();
+    static_cast<void>(acquireRecovery.observe(
+        acquireStart, 18ms, 25ms, true
+    ));
+    static_cast<void>(acquireRecovery.observe(
+        acquireStart + 17ms, 0ms, 25ms, false
+    ));
+    // Only an unrestricted healthy batch proves normal transport capacity.
+    // A later isolated timeout must not inherit the earlier pressure count.
+    observation = acquireRecovery.observe(
+        acquireStart + 50ms, 5ms, 25ms, false
+    );
+    expect(!observation.quarantined && !acquireRecovery.active(),
+        "healthy normal batch introduced a recovery constraint");
+    observation = acquireRecovery.observe(
+        acquireStart + 100ms, 18ms, 25ms, true
+    );
+    expect(observation.guardArmed && !observation.quarantined,
+        "healthy normal batch did not clear earlier timeout evidence");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 18ms, 25ms, true, true
+    );
+    expect(observation.quarantined && observation.deadlineExceeded &&
+            !observation.guardArmed,
+        "short final image hid cumulative acquire-budget exhaustion");
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 25ms, 25ms, true
+    );
+    expect(observation.quarantined && !observation.guardArmed,
+        "timeout at the slow threshold bypassed native-drain recovery");
+
     acquireRecovery.reset();
     observation = acquireRecovery.observe(
         acquireStart + 32ms, 50ms, 25ms, true
