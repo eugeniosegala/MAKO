@@ -5,6 +5,7 @@
 #include "mako-backend/mako.hpp"
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/helpers/errors.hpp"
+#include "mako-common/helpers/file_descriptors.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/image.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
@@ -483,8 +484,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             this->spatialFramePipelinePlacement,
             this->info.applicationExtent, this->info.extent
         );
-        std::vector<int> sourceFds(2);
-        std::vector<int> destinationFds(generatedFrameCapacity(this->profile));
+        std::vector<int> sourceFds(2, -1);
+        ls::FileDescriptorScope sourceScope{sourceFds};
+        std::vector<int> destinationFds(generatedFrameCapacity(this->profile), -1);
+        ls::FileDescriptorScope destinationScope{destinationFds};
         const auto sourceImageUsage = frameGenerationSourceImageUsage(
             this->spatialFramePipelinePlacement,
             directSpatialFrameGenerationOutputSupported(
@@ -508,13 +511,16 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                 std::nullopt, &fd);
 
-        int syncFd{};
+        int syncFd{-1};
+        ls::FileDescriptorScope syncScope{{&syncFd, 1}};
         this->syncSemaphore.emplace(vk, 0, std::nullopt, &syncFd);
 
         try {
             this->ctx = ls::owned_ptr<ls::R<backend::Context>>(
                 new ls::R<backend::Context>(backend->openContext(
-                    { sourceFds.at(0), sourceFds.at(1) }, destinationFds, syncFd,
+                    (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
+                    (destinationScope.release(), destinationFds),
+                    (syncScope.release(), syncFd),
                     generationExtent.width, generationExtent.height,
                     this->colorPipeline.encoding,
                     1.0F / ls::effectiveFlowScale(this->profile),
@@ -951,10 +957,10 @@ Swapchain::buildFrameGenerationResources(const vk::Vulkan& vk,
         this->spatialFramePipelinePlacement,
         this->info.applicationExtent, this->info.extent
     );
-    std::vector<int> sourceFds(2);
-    std::vector<int> destinationFds(
-        generatedFrameCapacity(resourceProfile)
-    );
+    std::vector<int> sourceFds(2, -1);
+    ls::FileDescriptorScope sourceScope{sourceFds};
+    std::vector<int> destinationFds(generatedFrameCapacity(resourceProfile), -1);
+    ls::FileDescriptorScope destinationScope{destinationFds};
     FrameGenerationResources resources;
     resources.sourceImages.reserve(sourceFds.size());
     resources.destinationImages.reserve(destinationFds.size());
@@ -979,11 +985,14 @@ Swapchain::buildFrameGenerationResources(const vk::Vulkan& vk,
             std::nullopt, &fd);
     }
 
-    int syncFd{};
+    int syncFd{-1};
+    ls::FileDescriptorScope syncScope{{&syncFd, 1}};
     resources.syncSemaphore.emplace(vk, 0, std::nullopt, &syncFd);
     resources.context = ls::owned_ptr<ls::R<backend::Context>>(
         new ls::R<backend::Context>(backendInstance.openContext(
-            {sourceFds.at(0), sourceFds.at(1)}, destinationFds, syncFd,
+            (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
+            (destinationScope.release(), destinationFds),
+            (syncScope.release(), syncFd),
             extent.width, extent.height, pipeline.encoding,
             1.0F / ls::effectiveFlowScale(resourceProfile),
             ls::effectivePerformanceMode(resourceProfile)

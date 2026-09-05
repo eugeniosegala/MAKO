@@ -28,6 +28,10 @@ target_include_directories(mako-common SYSTEM
     PRIVATE thirdparty/include)
 
 if(BUILD_TESTING)
+    add_executable(mako-external-fd-tests "tests/external_fd_tests.cpp")
+    target_link_libraries(mako-external-fd-tests PRIVATE mako-common)
+    add_test(NAME external-fd-ownership COMMAND mako-external-fd-tests)
+
     add_executable(mako-dll-paths-tests "tests/paths_tests.cpp")
     target_link_libraries(mako-dll-paths-tests PRIVATE mako-common)
     add_test(NAME lossless-dll-discovery COMMAND mako-dll-paths-tests)

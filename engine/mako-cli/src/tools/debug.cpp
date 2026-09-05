@@ -4,6 +4,7 @@
 #include "i18n.hpp"
 #include "mako-backend/mako.hpp"
 #include "mako-common/helpers/errors.hpp"
+#include "mako-common/helpers/file_descriptors.hpp"
 #include "mako-common/helpers/paths.hpp"
 #include "mako-common/vulkan/buffer.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"
@@ -125,30 +126,32 @@ int debug::run(const Options& opts, const i18n::Language language) {
             }
         };
 
-        std::pair<int, int> srcfds{};
+        std::array<int, 2> srcfds{-1, -1};
+        ls::FileDescriptorScope sourceScope{srcfds};
         const vk::Image frame_0{vk,
             extent, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            std::nullopt, &srcfds.first};
+            std::nullopt, &srcfds[0]};
         const vk::Image frame_1{vk,
             extent, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            std::nullopt, &srcfds.second};
+            std::nullopt, &srcfds[1]};
 
         std::vector<vk::Image> destimgs{};
-        std::vector<int> destfds{};
-        for (int i = 0; i < (opts.multiplier - 1); i++) {
-            int fd{};
+        std::vector<int> destfds(opts.multiplier - 1, -1);
+        ls::FileDescriptorScope destinationScope{destfds};
+        destimgs.reserve(destfds.size());
+        for (int& fd : destfds) {
             destimgs.emplace_back(vk,
                 extent, VK_FORMAT_R8G8B8A8_UNORM,
                 VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
                 std::nullopt,
                 &fd
             );
-            destfds.push_back(fd);
         }
 
-        int syncfd{};
+        int syncfd{-1};
+        ls::FileDescriptorScope syncScope{{&syncfd, 1}};
         const vk::TimelineSemaphore sync{vk, 0, std::nullopt, &syncfd};
 
         // initialize backend
@@ -168,8 +171,9 @@ int debug::run(const Options& opts, const i18n::Language language) {
             dll, opts.allow_fp16
         };
         mako::backend::Context& mako_ctx = mako.openContext(
-            srcfds, destfds,
-            syncfd, extent.width, extent.height,
+            (sourceScope.release(), std::pair{srcfds[0], srcfds[1]}),
+            (destinationScope.release(), destfds),
+            (syncScope.release(), syncfd), extent.width, extent.height,
             mako::backend::FrameEncoding::Sdr8,
             1.0F / opts.flow, opts.performance_mode
         );

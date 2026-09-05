@@ -21,6 +21,8 @@ namespace vk {
         /// @param extent extent of the image in pixels
         /// @param format vulkan format of the image
         /// @param usage usage flags
+        /// Import consumes the descriptor on success and failure. Export gives
+        /// the caller an owned descriptor only after construction succeeds.
         /// @param importFd optional file descriptor for shared memory
         /// @param exportFd optional pointer to an integer where the file descriptor will be stored
         /// @throws ls::vulkan_error on failure

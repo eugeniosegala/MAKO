@@ -2,6 +2,7 @@
 
 #include "mako-common/vulkan/timeline_semaphore.hpp"
 #include "mako-common/helpers/errors.hpp"
+#include "mako-common/helpers/file_descriptors.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 
@@ -9,7 +10,6 @@
 #include <optional>
 
 #include <vulkan/vulkan_core.h>
-#include <unistd.h>
 
 using namespace vk;
 
@@ -17,6 +17,8 @@ namespace {
     /// create a timeline semaphore
     ls::owned_ptr<VkSemaphore> createTimelineSemaphore(const vk::Vulkan& vk, uint32_t initial,
             std::optional<int> importFd, std::optional<int*> exportFd) {
+        const int incomingFd = importFd.value_or(-1);
+        ls::FileDescriptorScope imported{{&incomingFd, 1}};
         VkSemaphore handle{};
 
         const VkExportSemaphoreCreateInfo exportInfo{
@@ -34,11 +36,8 @@ namespace {
             .pNext = &typeInfo,
         };
         auto res = vk.df().CreateSemaphore(vk.dev(), &semaphoreInfo, VK_NULL_HANDLE, &handle);
-        if (res != VK_SUCCESS) {
-            if (importFd)
-                static_cast<void>(::close(*importFd));
+        if (res != VK_SUCCESS)
             throw ls::vulkan_error(res, "vkCreateSemaphore() failed");
-        }
 
         auto semaphore = ls::owned_ptr<VkSemaphore>(
             new VkSemaphore(handle),
@@ -56,10 +55,9 @@ namespace {
                 .fd = *importFd // closes the fd
             };
             res = vk.df().ImportSemaphoreFdKHR(vk.dev(), &importInfo);
-            if (res != VK_SUCCESS) {
-                static_cast<void>(::close(*importFd));
+            if (res != VK_SUCCESS)
                 throw ls::vulkan_error(res, "vkImportSemaphoreFdKHR() failed");
-            }
+            imported.release();
         }
 
         if (exportFd.has_value()) {

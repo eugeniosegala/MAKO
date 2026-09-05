@@ -197,3 +197,7 @@ These tests do not exercise Vulkan presentation. The full suite's `swapchain-ret
 | Runtime transition diagnostics and requested/applied status | `mako-render/src/entrypoint.cpp`, `mako-render/src/swapchain.cpp`, `mako-render/src/present_diagnostics.*`, `mako-render/src/runtime_status.*` |
 | Deterministic transition tests | `mako-render/tests/profile_update_tests.cpp`, `mako-render/tests/runtime_transition_tests.cpp`, `mako-render/tests/runtime_status_tests.cpp` |
 | Cross-component schema, wrappers, and UI semantics | `../plugin/shared_config.py`, `../plugin/py_modules/mako_plugin/`, `../plugin/src/`, `../plugin/tests/` |
+
+### External descriptor ownership during resource construction
+
+Exported image-memory and timeline-semaphore descriptors are scoped until the backend context call. The backend consumes the complete batch on entry, including early rejection, and closes every descriptor it has not yet handed to an importing Vulkan wrapper when construction fails. Each wrapper closes its current descriptor on failure before import succeeds; successful Vulkan import transfers ownership to the driver, so later bind/view failures must not close the descriptor number again. Image export happens after image-view construction succeeds. This covers initial provisioning, failed live private replacements, and CLI setup without changing present-loop work, retirement limits, or synchronization policy. Portable fault tests exercise partial export/import and descriptor-number reuse; MAKO Gym owns the repeated real-resource plateau evidence.

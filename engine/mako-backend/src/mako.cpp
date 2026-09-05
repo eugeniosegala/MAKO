@@ -8,6 +8,7 @@
 #include "helpers/utils.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/helpers/pointers.hpp"
+#include "mako-common/helpers/file_descriptors.hpp"
 #include "mako-common/vulkan/buffer.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"
 #include "mako-common/vulkan/fence.hpp"
@@ -103,8 +104,8 @@ namespace mako::backend {
         /// create a context
         /// (see mako documentation)
         ContextImpl(const InstanceImpl& instance,
-            std::pair<int, int> sourceFds, const std::vector<int>& destFds, int syncFd,
-            VkExtent2D extent, FrameEncoding encoding, float flow, bool perf);
+            ls::FileDescriptorScope& sourceFds, ls::FileDescriptorScope& destFds,
+            ls::FileDescriptorScope& syncFd, VkExtent2D extent, FrameEncoding encoding, float flow, bool perf);
 
         /// schedule frames
         /// (see mako documentation)
@@ -344,6 +345,13 @@ InstanceImpl::InstanceImpl(vk::PhysicalDeviceSelector selectPhysicalDevice,
 Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<int>& destFds,
         int syncFd, uint32_t width, uint32_t height,
         const FrameEncoding encoding, float flow, bool perf) {
+    // Take the complete batch before any operation that can fail. Individual
+    // import wrappers consume their descriptor even on failure; unattempted
+    // descriptors remain here until construction succeeds or unwinds.
+    const std::array sourceDescriptors{sourceFds.first, sourceFds.second};
+    ls::FileDescriptorScope sourceScope{sourceDescriptors};
+    ls::FileDescriptorScope destinationScope{destFds};
+    ls::FileDescriptorScope syncScope{{&syncFd, 1}};
     this->collectRetiredContexts();
     if (this->m_retiredContexts.size() >= maximumRetiredContextCount) {
         throw backend::error(
@@ -354,7 +362,7 @@ Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<
     const auto& vulkan = this->m_impl->getVulkan();
     const auto before = vulkan.deviceMemorySnapshot();
     auto context = std::make_unique<ContextImpl>(*this->m_impl,
-        sourceFds, destFds, syncFd,
+        sourceScope, destinationScope, syncScope,
         extent, encoding, flow, perf
     );
     const auto after = vulkan.deviceMemorySnapshot();
@@ -385,31 +393,31 @@ Context& Instance::openContext(std::pair<int, int> sourceFds, const std::vector<
 
 namespace {
     /// import source images
-    std::pair<vk::Image, vk::Image> importImages(const vk::Vulkan& vk,
-            const std::pair<int, int>& sourceFds,
+    std::pair<vk::Image, vk::Image> importSourceImages(const vk::Vulkan& vk,
+            ls::FileDescriptorScope& sourceFds,
             VkExtent2D extent, VkFormat format) {
         try {
             return {
                 vk::Image(vk, extent, format,
-                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, sourceFds.first),
+                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, sourceFds.take()),
                 vk::Image(vk, extent, format,
-                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, sourceFds.second)
+                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, sourceFds.take())
             };
         } catch (const std::exception& e) {
             throw backend::error("Unable to import destination images", e);
         }
     }
     /// import destination images
-    std::vector<vk::Image> importImages(const vk::Vulkan& vk,
-            const std::vector<int>& destFds,
+    std::vector<vk::Image> importDestinationImages(const vk::Vulkan& vk,
+            ls::FileDescriptorScope& destFds,
             VkExtent2D extent, VkFormat format) {
         try {
             std::vector<vk::Image> destImages;
             destImages.reserve(destFds.size());
 
-            for (const auto& fd : destFds)
+            for (size_t index = 0; index < destFds.size(); ++index)
                 destImages.emplace_back(vk, extent, format,
-                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, fd);
+                    VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, destFds.take());
 
             return destImages;
         } catch (const std::exception& e) {
@@ -596,11 +604,11 @@ namespace {
 }
 
 ContextImpl::ContextImpl(const InstanceImpl& instance,
-            std::pair<int, int> sourceFds, const std::vector<int>& destFds, int syncFd,
-            VkExtent2D extent, const FrameEncoding encoding, float flow, bool perf) :
-        sourceImages(importImages(instance.getVulkan(), sourceFds,
+            ls::FileDescriptorScope& sourceFds, ls::FileDescriptorScope& destFds,
+            ls::FileDescriptorScope& syncFd, VkExtent2D extent, const FrameEncoding encoding, float flow, bool perf) :
+        sourceImages(importSourceImages(instance.getVulkan(), sourceFds,
             extent, transportFormat(encoding))),
-        destImages(importImages(instance.getVulkan(), destFds,
+        destImages(importDestinationImages(instance.getVulkan(), destFds,
             extent, transportFormat(encoding))),
         workingSourceImages(createWorkingSourceImages(
             instance.getVulkan(), extent, encoding
@@ -609,7 +617,7 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
             instance.getVulkan(), extent, encoding, destFds.size()
         )),
         blackImage(createBlackImage(instance.getVulkan())),
-        syncSemaphore(importTimelineSemaphore(instance.getVulkan(), syncFd)),
+        syncSemaphore(importTimelineSemaphore(instance.getVulkan(), syncFd.take())),
         prepassSemaphore(createPrepassSemaphore(instance.getVulkan())),
         cmdbufs(createCommandBuffers(instance.getVulkan(), destFds.size() + 1)),
         cmdbufFence(instance.getVulkan()),
