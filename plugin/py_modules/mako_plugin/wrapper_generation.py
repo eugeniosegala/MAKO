@@ -61,7 +61,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 57
+WRAPPER_FORMAT_VERSION = 58
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -255,6 +255,10 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
     if PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT < 1:
         raise ValueError("managed diagnostics must retain at least one session")
     diagnostics_log_path = context.config_dir / PRESENT_DIAGNOSTICS_LOG_FILENAME
+    diagnostics_history_paths = " ".join(
+        '"$mako_diagnostics_log' + (f".{index}" if index else "") + '"'
+        for index in range(PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT)
+    )
     diagnostics_rotation_lines: list[str] = []
     for retained_index in range(
             PRESENT_DIAGNOSTICS_RETAINED_SESSION_COUNT - 1,
@@ -266,7 +270,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         diagnostics_rotation_lines.extend([
             (
                 '        if [ "$mako_diagnostics_rotation_ready" = 1 ] && '
-                f'[ -f "$mako_diagnostics_log{source_suffix}" ] && ! mv -f -- '
+                f'[ -f "$mako_diagnostics_log{source_suffix}" ] && ! mv -fT -- '
                 f'"$mako_diagnostics_log{source_suffix}" '
                 f'"$mako_diagnostics_log{target_suffix}" 2>/dev/null; then'
             ),
@@ -481,16 +485,23 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f'if [ "${{{PRESENT_DIAGNOSTICS_ENV}:-0}}" != "0" ]; then',
         f'    mako_diagnostics_log="${{{PRESENT_DIAGNOSTICS_LOG_ENV}:-$mako_diagnostics_default}}"',
         "    mako_diagnostics_rotation_ready=1",
-        '    if [ -f "$mako_diagnostics_log" ]; then',
+        f"    for mako_diagnostics_entry in {diagnostics_history_paths}; do",
+        '        if [ -L "$mako_diagnostics_entry" ] || { [ -e "$mako_diagnostics_entry" ] && { [ ! -f "$mako_diagnostics_entry" ] || [ ! -O "$mako_diagnostics_entry" ]; }; }; then',
+        "            mako_diagnostics_rotation_ready=0",
+        "            break",
+        "        fi",
+        "    done",
+        '    if [ "$mako_diagnostics_rotation_ready" = 1 ] && [ -f "$mako_diagnostics_log" ]; then',
         *diagnostics_rotation_lines,
         "    fi",
         (
             '    if [ "$mako_diagnostics_rotation_ready" = 1 ] && '
-            ': > "$mako_diagnostics_log" 2>/dev/null; then'
+            '(set -C; : > "$mako_diagnostics_log") 2>/dev/null; then'
         ),
         '        exec 2>> "$mako_diagnostics_log"',
         "    fi",
         "fi",
+        "unset mako_diagnostics_entry",
         'if [ -n "${mako_gamescope_wsi_skip_log:-}" ]; then',
         '    printf "%s\\n" "$mako_gamescope_wsi_skip_log" >&2',
         "fi",

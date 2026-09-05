@@ -1330,6 +1330,48 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     f"previous-{index}\n",
                 )
 
+    def test_diagnostics_preserves_unsafe_paths_and_still_launches(self):
+        for slot in range(5):
+            for kind in ("directory", "symlink", "dangling-symlink", "fifo"):
+                with self.subTest(slot=slot, kind=kind), tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    log = root / "present-diagnostics.log"
+                    history = [log, *(Path(f"{log}.{index}") for index in range(1, 5))]
+                    for index, path in enumerate(history):
+                        path.write_text(f"session-{index}\n")
+                    unsafe = history[slot]
+                    unsafe.unlink()
+                    target = root / "unrelated"
+                    if kind == "directory":
+                        unsafe.mkdir()
+                    elif kind == "fifo":
+                        os.mkfifo(unsafe)
+                    else:
+                        if kind == "symlink":
+                            target.write_text("keep\n")
+                        unsafe.symlink_to(target)
+                    script = "\n".join([
+                        *self.service._generate_layer_environment_lines(),
+                        'printf "game-launched\\n" >&2',
+                    ])
+                    result = subprocess.run(
+                        ["bash", "-c", script], capture_output=True, text=True,
+                        timeout=5,
+                        env={**os.environ, "MAKO_PRESENT_DIAGNOSTICS": "1",
+                             "MAKO_PRESENT_DIAGNOSTICS_LOG": str(log)},
+                    )
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn("game-launched", result.stderr)
+                    for index, path in enumerate(history):
+                        if index != slot:
+                            self.assertEqual(path.read_text(), f"session-{index}\n")
+                    if kind == "symlink":
+                        self.assertEqual(target.read_text(), "keep\n")
+                    elif kind == "dangling-symlink":
+                        self.assertFalse(target.exists())
+                    elif kind == "directory":
+                        self.assertEqual(list(unsafe.iterdir()), [])
+
     def test_development_wrapper_keeps_diagnostics_opt_in(self):
         service = ConfigurationService(
             logger=_Logger(),

@@ -66,6 +66,8 @@ If the emulator is a native application or AppImage instead of a Flatpak, use th
 
 Each diagnostics-enabled MAKO Decky launch starts a fresh private session log. The latest session remains `present-diagnostics.log`, and the four previous sessions become `present-diagnostics.log.1` through `present-diagnostics.log.4`, with `.4` the oldest retained session. Starting a sixth diagnostics-enabled game replaces the oldest retained session. Fully exit one game before starting the next so each log represents one completed run.
 
+Rotation checks every history slot first and skips private capture when it encounters a symlink, directory, pipe, or file owned by another user. Rotation or file-creation failures leave the game using its original stderr destination. Retention limits the number of sessions, not their byte size: keep diagnostics enabled only while reproducing the problem. After closing the game, you can delete these five named log files without removing profiles or `runtime-state/`; ordinary Renderer uninstall preserves them. Decky Loader owns the plugin service log, and Steam owns its shared console logs; MAKO does not rotate or delete those logs.
+
 ## 3. Create the Desktop report
 
 1. Switch the Steam Deck or Steam Machine to **Desktop Mode**.
