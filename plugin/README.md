@@ -31,6 +31,8 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 - Shares one active native Renderer version with the standalone archive installer. Installing either version selects it for both launch workflows; a later MAKO Decky installation adopts a valid standalone Renderer and offers its bundled update when the versions differ.
 - Removes all files supplied by either managed native Renderer installer when you select **Uninstall MAKO Renderer**, while preserving MAKO Decky and profiles so the plugin can offer installation again. Uninstalling MAKO Decky also removes the managed native Renderer; shared Flatpak runtime extensions remain installed.
 
+Close games using MAKO before installing or updating the Renderer. A failed install restores the previous native files, selected Renderer identity, and configuration; if restoration encounters another filesystem error, the error identifies retained recovery backups. Invalid, unreadable, read-only, or newer configuration formats stop installation without replacing profiles with defaults. Generated files retain the owner's required permissions and respect a more restrictive host umask without repeated rewrites.
+
 ## Development
 
 MAKO Decky lives in the `plugin/` directory of the MAKO monorepo and consumes the sibling `engine/` source tree.

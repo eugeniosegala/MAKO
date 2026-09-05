@@ -142,7 +142,7 @@ class BaseService:
         Raises:
             OSError: If removal fails
         """
-        if path.exists():
+        if path.exists() or path.is_symlink():
             try:
                 path.unlink()
                 self.log.info(f"Removed {path}")

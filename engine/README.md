@@ -38,6 +38,8 @@ For frame generation or LS1 scaling, first install <a href="https://store.steamp
 
 Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.1.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. It verifies the archive, preserves profiles, opens **MAKO Renderer Configuration**, and shows the Steam/Proton launch option. Reopen the UI from the application launcher or with `~/.local/bin/mako-ui`; run the installer again to update or use **Uninstall MAKO Renderer** to remove it. The included `README.txt` contains complete offline instructions.
 
+Close games using MAKO before updating. The installer validates and stages the complete payload before replacing files and restores the previous installation if a later step fails. It reports permission or storage failures without requesting root access. If restoration also fails, it retains recovery backups beside the affected files and reports their locations. Profiles and diagnostics remain untouched unless you explicitly choose to remove configuration during uninstall.
+
 For a manual installation, extract the archive into your user-local prefix:
 
 ```bash

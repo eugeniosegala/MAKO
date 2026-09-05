@@ -3,6 +3,7 @@
 import io
 import hashlib
 import json
+import os
 from pathlib import Path
 import sys
 import tarfile
@@ -154,6 +155,8 @@ class DualArchInstallationTests(unittest.TestCase):
         )
         self.service.config_dir = self.root / "config"
         self.service.config_file_path = self.service.config_dir / "conf.toml"
+        self.service.wrapper_profile_settings_path = self.service.config_dir / "wrapper-profiles.json"
+        self.service.profile_metadata_path = self.service.config_dir / "profile-metadata.json"
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -1052,6 +1055,61 @@ class DualArchInstallationTests(unittest.TestCase):
 
         self.assertEqual(unmanaged_file.read_text(encoding="utf-8"), "keep")
 
+    def test_install_transaction_restores_symlinks_deleted_and_new_files(self):
+        target = self.root / "unrelated"
+        target.write_text("keep")
+        managed_link = self.root / "managed-link"
+        managed_link.symlink_to(target)
+        deleted = self.root / "deleted-file"
+        deleted.write_text("previous")
+        created = self.root / "new-file"
+        with self.assertRaisesRegex(OSError, "late failure"):
+            with managed_files_module.managed_install_transaction(
+                [managed_link, deleted, created], self.service.log,
+            ):
+                managed_files_module.write_managed_text_atomically(
+                    managed_link, "new", 0o644, self.service.log,
+                )
+                deleted.unlink()
+                created.write_text("new")
+                raise OSError("late failure")
+        self.assertTrue(managed_link.is_symlink())
+        self.assertEqual(managed_link.readlink(), target)
+        self.assertEqual(target.read_text(), "keep")
+        self.assertEqual(deleted.read_text(), "previous")
+        self.assertFalse(created.exists())
+        self.assertEqual(list(self.root.glob(".mako-rollback-*")), [])
+
+    def test_failed_install_restoration_keeps_a_readable_recovery_backup(self):
+        destination = self.root / "managed"
+        destination.write_text("previous")
+        with self.assertRaisesRegex(OSError, "Recovery backups retained at") as raised:
+            with managed_files_module.managed_install_transaction([destination], self.service.log):
+                managed_files_module.write_managed_text_atomically(
+                    destination, "new", 0o644, self.service.log,
+                )
+                # A conflicting directory prevents restoration without deleting it.
+                destination.unlink()
+                destination.mkdir()
+                raise OSError("late failure")
+        backups = list(self.root.glob(".mako-rollback-*/managed"))
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(backups[0].read_text(), "previous")
+        self.assertIn(str(backups[0].parent), str(raised.exception))
+
+    def test_uninstall_removes_broken_managed_symlinks_only(self):
+        self.service.lib_file.parent.mkdir(parents=True)
+        missing_target = self.root / "missing-target"
+        self.service.lib_file.symlink_to(missing_target)
+        self.service.config_dir.mkdir()
+        self.service.config_file_path.write_text("preserve configuration")
+        result = self.service.uninstall()
+        self.assertTrue(result["success"], result)
+        self.assertIn(str(self.service.lib_file), result["removed_files"])
+        self.assertFalse(self.service.lib_file.is_symlink())
+        self.assertFalse(missing_target.exists())
+        self.assertEqual(self.service.config_file_path.read_text(), "preserve configuration")
+
     def test_install_reports_read_only_user_configuration(self):
         self.service.config_dir = self.root / "config"
         self.service.config_file_path = self.service.config_dir / "conf.toml"
@@ -1069,6 +1127,74 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.config_file_path.read_text(encoding="utf-8"),
             "version = 2\n",
         )
+
+    def test_install_preserves_invalid_and_newer_user_configuration(self):
+        self.service.config_dir.mkdir(parents=True)
+        for content in ('version = [broken\n', 'version = 999\n# user profiles\n'):
+            with self.subTest(content=content):
+                self.service.config_file_path.write_text(content, encoding="utf-8")
+                with self.assertRaisesRegex(OSError, "preserv.*configuration"):
+                    self.service._create_config_file()
+                self.assertEqual(self.service.config_file_path.read_text(), content)
+
+    def test_generated_files_remain_current_under_private_umask(self):
+        destination = self.root / "private-wrapper"
+        previous_umask = os.umask(0o077)
+        try:
+            self.assertTrue(managed_files_module.write_managed_text_atomically(
+                destination, "#!/bin/sh\n", 0o755, self.service.log,
+            ))
+            inode = destination.stat().st_ino
+            with patch.object(managed_files_module.os, "fsync") as fsync:
+                self.assertFalse(managed_files_module.write_managed_text_atomically(
+                    destination, "#!/bin/sh\n", 0o755, self.service.log,
+                ))
+            fsync.assert_not_called()
+            self.assertEqual(destination.stat().st_ino, inode)
+            self.assertEqual(destination.stat().st_mode & 0o777, 0o700)
+        finally:
+            os.umask(previous_umask)
+
+    def test_failed_update_restores_shared_renderer_and_configuration(self):
+        archive = self._archive()
+        self.service._extract_and_install_files(archive)
+        self.service._register_layer_manifests()
+        self.service.config_dir.mkdir(parents=True)
+        self.service.config_file_path.write_text(
+            ConfigurationManager.generate_toml_content(ConfigurationManager.get_defaults()),
+            encoding="utf-8",
+        )
+        self.service.active_renderer_state_file.write_text('{"owner":"standalone"}\n')
+        # Preserve the exact selected manifests and old binary, including its mode.
+        self.service.lib_file.write_bytes(b"previous-renderer")
+        self.service.lib_file.chmod(0o444)
+        existing = [path for path in self.root.rglob("*") if path.is_file() and path != archive]
+        before = {path: (path.read_bytes(), path.stat().st_mode & 0o777) for path in existing}
+        metadata = {"name": archive.name, "version": "test", "sha256hash": "0" * 64}
+        extract = self.service._extract_and_install_files
+        with (
+            patch.object(installation_module, "PLUGIN_ROOT", self.root),
+            patch.object(self.service, "_bundled_archive_metadata", return_value=metadata),
+            patch.object(self.service, "_validate_host_architecture"),
+            patch.object(self.service, "_validate_archive_checksum"),
+            patch.object(self.service, "_extract_and_install_files", side_effect=lambda _: extract(archive)),
+            patch.object(self.service, "migrate_gamescope_wsi_compatibility_manifest_if_needed"),
+            patch.object(self.service, "refresh_guarded_postprocess_manifests_if_needed"),
+            patch.object(self.service, "_install_diagnostics_helper", side_effect=PermissionError("diagnostics destination denied")),
+        ):
+            # The production install expects its archive under bin/.
+            (self.root / "bin").mkdir(exist_ok=True)
+            (self.root / "bin" / archive.name).symlink_to(archive)
+            result = self.service.install()
+
+        self.assertFalse(result["success"])
+        self.assertIn("diagnostics destination denied", result["error"])
+        for path, (content, mode) in before.items():
+            self.assertEqual(path.read_bytes(), content, str(path))
+            self.assertEqual(path.stat().st_mode & 0o777, mode, str(path))
+        self.assertFalse(self.service.mako_script_path.exists())
+        self.assertFalse(self.service.engine_state_file.exists())
+        self.assertEqual(list(self.root.rglob(".mako-rollback-*")), [])
 
 
 if __name__ == "__main__":
