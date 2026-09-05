@@ -25,6 +25,12 @@ See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics inte
 
 For Heroic, use the displayed MAKO wrapper as **Wrapper**, leave **Arguments** empty, and do not add `%command%`. For an EmuDeck Flatpak, prepare the emulator in **Flatpak Setup**, use the wrapper as the Steam shortcut **Target**, and preserve EmuDeck's existing Launch Options. See the [installation workflows](../../README.md#heroic-and-other-flatpak-applications).
 
+### Ubisoft Connect closes before the game starts
+
+Use the normal Steam/Proton launch option above. MAKO leaves `UbisoftConnect.exe`, `upc.exe`, and `UplayWebCore.exe` on its inactive native-presentation path while retaining the game's inherited launch environment. This avoids applying Frame Generation or Scaling to the launcher's own windows; it does not establish the cause of every Ubisoft or Proton crash.
+
+If the failure persists, collect [MAKO Renderer diagnostics for the failing Steam launch](COLLECT_DIAGNOSTICS.md) and a Proton log from that same attempt. Decky's plugin lifecycle log records installation and profile edits but cannot show which executable crashed or whether MAKO created a rendering context there. Capture a game profile after gameplay loads so **Matched Processes** describes the game rather than its launcher.
+
 ## Bazzite and multi-GPU systems
 
 Use the **Wrapper path for this device** shown by MAKO; do not hardcode `/home/deck` when the device uses another home path.

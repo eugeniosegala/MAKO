@@ -70,6 +70,8 @@ A restart-bound or private-resource edit does not block unrelated compatible con
 
 Start a Steam game or shortcut, then choose **Save profile for <game>** after gameplay loads. MAKO records the Steam app ID and safe game-process names; repeating the action updates the profile. Linux binary and Windows `.exe` names are supported. Launchers and emulators use the same capture flow. Edit **Matched Processes** only when a launcher needs another alias.
 
+Ubisoft Connect's own launcher and web UI executables are excluded from profile capture, including their truncated Linux process names. MAKO Renderer also leaves those exact executables inactive even when they inherit a game profile or an older profile contains their names. The child game retains MAKO's launch environment and matches normally; no separate Flatpak setup or Ubisoft wrapper is required for a Steam/Proton launch.
+
 The profile dropdown selects what Decky edits; it is not a runtime override. During a game, MAKO follows the matching profile or Default. Outside a game, an offline selection remains available for editing until another game starts.
 
 Renderer fields live in `conf.toml`; profile identity and launcher-only compatibility settings live in versioned sidecars. `profile_storage.py` owns sidecar normalization, `configuration.py` owns transactions and regeneration, and `wrapper_generation.py` converts normalized inputs into disposable wrapper text. Unknown profile keys are inert and removed by the next canonical write.

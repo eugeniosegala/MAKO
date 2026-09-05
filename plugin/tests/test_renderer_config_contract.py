@@ -30,6 +30,7 @@ from shared_config import (
     ULTRA_PERFORMANCE_FLOW_SCALE,
 )
 from py_modules.mako_plugin.config_schema import CONFIG_FORMAT_VERSION
+from py_modules.mako_plugin.process_detection import _EXCLUDED_WINDOWS_LAUNCHERS
 from py_modules.mako_plugin.constants import (
     CONFIG_DIR,
     CONFIG_FILENAME,
@@ -60,6 +61,18 @@ RENDERER_CONFIG_SOURCE = (
 
 
 class RendererConfigContractTests(unittest.TestCase):
+    def test_launcher_exclusions_match_renderer_activation_guard(self):
+        source = (REPOSITORY_ROOT /
+                  "engine/mako-common/src/configuration/detection.cpp").read_text()
+        declaration = re.search(
+            r"excludedWindowsLauncherExecutables\s*\{(.*?)\n    \};",
+            source, re.DOTALL,
+        )
+        self.assertIsNotNone(declaration)
+        names = re.findall(r'std::string_view\{"([^"\n]+)"\}', declaration[1])
+        self.assertTrue(names)
+        self.assertEqual(set(names), _EXCLUDED_WINDOWS_LAUNCHERS)
+
     def test_decky_toml_fields_match_renderer_parser_and_writer(self):
         source = RENDERER_CONFIG_SOURCE.read_text(encoding="utf-8")
         decky_fields = {

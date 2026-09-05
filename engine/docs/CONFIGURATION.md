@@ -8,6 +8,8 @@ The optional desktop UI supports English, Brazilian Portuguese, European Portugu
 
 Each `[[profile]]` section is a game profile. `active_in` can match a Linux binary name, Windows executable, process name, or the end of an executable path. Use `MAKO_PROFILE` when you need to select a profile explicitly instead of matching it automatically.
 
+Ubisoft Connect's `UbisoftConnect.exe`, `upc.exe`, and `UplayWebCore.exe` stay on MAKO's inactive native-presentation path even when they inherit `MAKO_PROFILE`, `MAKO_PROFILE_FALLBACK`, or `MAKO_ENV`, or appear in an older profile's `active_in`. The guard compares the exact executable basename without case sensitivity, preferring the mapped Windows executable under Wine; a launcher directory or thread name does not exclude the game. It changes no environment variables, so the launched game can still select its profile normally. This excludes MAKO's own rendering work in the launcher, not other Vulkan layers or Proton behavior.
+
 ```toml
 [[profile]]
 name = "My game"

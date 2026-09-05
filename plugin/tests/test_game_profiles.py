@@ -1011,6 +1011,30 @@ class GameProfileTests(unittest.TestCase):
 
 
 class ProcessDetectionTests(unittest.TestCase):
+    def test_ubisoft_launchers_are_not_captured_as_game_aliases(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            proc_root = Path(temp_dir)
+            for pid, executable in enumerate((
+                    "UbisoftConnect.exe", "upc.exe", "UplayWebCore.exe",
+                    "UBISOFTCONNECT.EXE", "TheCrewMotorfest.exe",
+                    "MyUbisoftConnect.exe",
+            ), 101):
+                process = proc_root / str(pid)
+                process.mkdir()
+                (process / "environ").write_bytes(b"SteamAppId=2698940\0")
+                (process / "exe").symlink_to("/proton/wine64-preloader")
+                # Linux comm truncates names to 15 bytes.
+                (process / "comm").write_text(executable[:15] + "\n")
+                (process / "cmdline").write_bytes(
+                    ("wine\0C:\\Ubisoft\\" + executable + "\0").encode()
+                )
+                (process / "maps").write_text("/Ubisoft/" + executable + "\n")
+            detected = detect_processes_for_steam_app("2698940", proc_root)
+        self.assertEqual(detected, [
+            "MyUbisoftConnec", "MyUbisoftConnect.exe",
+            "TheCrewMotorfes", "TheCrewMotorfest.exe",
+        ])
+
     def test_scanner_only_returns_processes_with_the_requested_app_id(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             proc_root = Path(temp_dir)

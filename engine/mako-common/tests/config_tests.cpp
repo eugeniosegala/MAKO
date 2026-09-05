@@ -390,6 +390,65 @@ scaling_sharpness = 0.5
             detectedProfile->second.name == "mako",
         "An explicit caller profile must remain a hard override");
 
+    // Launchers inherit exactly the same profile environment as their game.
+    // Neither that environment nor an older captured launcher alias may make
+    // MAKO change the launcher's Vulkan device or presentation resources.
+    const auto gameIdentification = identification;
+    for (const auto* launcher : {
+            "UbisoftConnect.exe", "upc.exe", "UplayWebCore.exe",
+            "UBISOFTCONNECT.EXE", "UPC.EXE", "uplaywebcore.EXE",
+        }) {
+        detectionConfig.profiles()[1].active_in.emplace_back(launcher);
+        const ls::Identification launcherIdentification{
+            .override = "captured",
+            .fallback = "mako",
+            .executable = "/proton/files/bin/wine64-preloader",
+            .wine_executable = std::string("C:\\Ubisoft\\") + launcher,
+            .process_name = "GameThread",
+        };
+        expect(!ls::findProfile(detectionConfig, launcherIdentification),
+            "A Ubisoft launcher must stay native despite an inherited override");
+        auto fallbackLauncher = launcherIdentification;
+        fallbackLauncher.override.reset();
+        expect(!ls::findProfile(detectionConfig, fallbackLauncher),
+            "Captured launcher aliases and the default fallback must not activate MAKO");
+        auto fallbackOnlyConfig = detectionConfig;
+        fallbackOnlyConfig.profiles()[1].active_in.clear();
+        expect(!ls::findProfile(fallbackOnlyConfig, fallbackLauncher),
+            "An uncaptured launcher must not activate through the default fallback");
+        auto matchedLauncher = fallbackLauncher;
+        matchedLauncher.fallback.reset();
+        expect(!ls::findProfile(detectionConfig, matchedLauncher),
+            "An explicit launcher alias alone must not activate MAKO");
+        auto directLauncher = launcherIdentification;
+        directLauncher.wine_executable.reset();
+        directLauncher.executable = std::string("/Ubisoft/") + launcher;
+        expect(!ls::findProfile(detectionConfig, directLauncher),
+            "An exact launcher executable must stay native without a Wine path");
+        setenv("MAKO_ENV", "1", 1);
+        expect(!ls::findProfile(detectionConfig, launcherIdentification),
+            "Environment-only profiles must not activate MAKO in a launcher");
+        expect(std::getenv("MAKO_ENV") &&
+                std::string_view(std::getenv("MAKO_ENV")) == "1",
+            "Launcher exclusion must not strip the child's inherited activation");
+        expect(ls::findProfile(detectionConfig, gameIdentification).has_value(),
+            "Skipping a launcher must leave its child's environment profile active");
+        unsetenv("MAKO_ENV");
+    }
+    for (const auto* executable : {
+            "/Ubisoft/UbisoftConnect.exe/TheCrewMotorfest.exe",
+            "/games/MyUbisoftConnect.exe", "/games/upc.exe.backup",
+            "/games/UplayWebCoreGame.exe", "/games/UnknownGame",
+        }) {
+        auto game = gameIdentification;
+        game.executable = "/proton/files/bin/wine64-preloader";
+        game.wine_executable = executable;
+        game.process_name = "upc.exe"; // A thread name is not executable proof.
+        const auto childProfile = ls::findProfile(detectionConfig, game);
+        expect(childProfile && childProfile->second.name == "mako",
+            "Launcher directories, partial names, and inherited thread names must not block a game");
+    }
+
     setenv("MAKO_ENV", "1", 1);
     setenv("MAKO_ADAPTIVE", "0", 1);
     setenv("MAKO_BASE_FPS_CAP", "30", 1);
