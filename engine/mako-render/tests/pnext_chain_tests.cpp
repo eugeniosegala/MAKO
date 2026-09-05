@@ -15,9 +15,127 @@ namespace {
         std::cerr << "FAIL: " << message << '\n';
         std::exit(1);
     }
+
+    void testPresentTimingPrefix() {
+        // Issue #48: vkd3d-proton prepends EXT timing ahead of the present ID,
+        // maintenance1 mode override and fence. Keep borrowed payloads opaque:
+        // filtering a link must not drop, rewrite or dereference their data.
+        constexpr uint64_t timingPayload[]{0x1122334455667788ULL, 90'000'000};
+        constexpr uint64_t presentIds[]{0x123456789abcdef0ULL};
+        constexpr VkPresentModeKHR modes[]{VK_PRESENT_MODE_MAILBOX_KHR};
+        const VkFence fences[]{VK_NULL_HANDLE};
+        const VkSwapchainPresentFenceInfoEXT fence{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT,
+            .pNext = nullptr,
+            .swapchainCount = 1,
+            .pFences = fences,
+        };
+        const VkSwapchainPresentModeInfoEXT mode{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT,
+            .pNext = &fence,
+            .swapchainCount = 1,
+            .pPresentModes = modes,
+        };
+        const VkPresentIdKHR id{
+            .sType = VK_STRUCTURE_TYPE_PRESENT_ID_KHR,
+            .pNext = &mode,
+            .swapchainCount = 1,
+            .pPresentIds = presentIds,
+        };
+        const detail::PresentTimingsInfoExtLayout timings{
+            .sType = detail::presentTimingsInfoExtType,
+            .pNext = &id,
+            .swapchainCount = 1,
+            .pTimingInfos = timingPayload,
+        };
+        const FilteredPresentPNextChain filtered(&timings, true, false);
+        expect(filtered.valid(),
+            "EXT present timing prefix rejected the first Proton present");
+        const auto* copied = static_cast<
+            const detail::PresentTimingsInfoExtLayout*>(filtered.head());
+        expect(copied != &timings && copied->sType == timings.sType &&
+                copied->swapchainCount == 1 &&
+                copied->pTimingInfos == timingPayload,
+            "copied timing node lost its type, count or borrowed payload");
+        const auto* copiedId = static_cast<const VkPresentIdKHR*>(copied->pNext);
+        expect(copiedId != &id && copiedId->sType == id.sType &&
+                copiedId->swapchainCount == 1 &&
+                copiedId->pPresentIds == presentIds &&
+                copiedId->pNext == &fence,
+            "timing filter lost the present ID or its unchanged fence suffix");
+        expect(timings.pNext == &id && id.pNext == &mode &&
+                mode.pNext == &fence && modes[0] == VK_PRESENT_MODE_MAILBOX_KHR &&
+                timingPayload[0] == 0x1122334455667788ULL &&
+                presentIds[0] == 0x123456789abcdef0ULL,
+            "present filtering modified caller-owned links or payloads");
+
+        const VkPresentRegionsKHR regions{
+            .sType = VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR,
+            .pNext = &fence,
+            .swapchainCount = 1,
+            .pRegions = nullptr,
+        };
+        // Null pTimingInfos is legal. Exercise timing between two removals,
+        // and a scaling-only removal that must retain the dynamic mode node.
+        const detail::PresentTimingsInfoExtLayout nullTimings{
+            .sType = detail::presentTimingsInfoExtType,
+            .pNext = &regions,
+            .swapchainCount = 1,
+            .pTimingInfos = nullptr,
+        };
+        auto modeHead = mode;
+        modeHead.pNext = &nullTimings;
+        for (const bool removeMode : {false, true}) {
+            const FilteredPresentPNextChain spatial(
+                &modeHead, removeMode, true
+            );
+            expect(spatial.valid(),
+                "EXT timing between filtered present nodes was rejected");
+            const void* timingHead = spatial.head();
+            if (!removeMode) {
+                const auto* keptMode = static_cast<
+                    const VkSwapchainPresentModeInfoEXT*>(timingHead);
+                expect(keptMode != &modeHead &&
+                        keptMode->sType == modeHead.sType &&
+                        keptMode->pPresentModes == modes,
+                    "scaling-only filter removed the retained mode override");
+                timingHead = keptMode->pNext;
+            }
+            const auto* keptTiming = static_cast<
+                const detail::PresentTimingsInfoExtLayout*>(timingHead);
+            expect(keptTiming != &nullTimings &&
+                    keptTiming->sType == nullTimings.sType &&
+                    keptTiming->swapchainCount == 1 &&
+                    keptTiming->pTimingInfos == nullptr &&
+                    keptTiming->pNext == &fence,
+                "region filtering changed a null timing payload or suffix");
+        }
+        const FilteredPresentPNextChain suffix(&modeHead, true, false);
+        expect(suffix.valid() && suffix.head() == &nullTimings,
+            "timing in an untouched suffix was unnecessarily copied");
+        const FilteredPresentPNextChain absent(&timings, false, true);
+        const FilteredPresentPNextChain disabled(&timings, false, false);
+        expect(absent.valid() && absent.head() == &timings &&
+                disabled.valid() && disabled.head() == &timings,
+            "passthrough timing chain changed without a removal target");
+
+        const VkBaseInStructure unknown{
+            .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
+            .pNext = reinterpret_cast<const VkBaseInStructure*>(&mode),
+        };
+        auto unknownTimings = timings;
+        unknownTimings.pNext = &unknown;
+        const FilteredPresentPNextChain rejected(&unknownTimings, true, false);
+        expect(!rejected.valid() && rejected.head() == &unknownTimings &&
+                rejected.unsupportedStructureType() == unknown.sType &&
+                unknownTimings.pNext == &unknown &&
+                unknown.pNext == reinterpret_cast<const VkBaseInStructure*>(&mode),
+            "timing support weakened unknown-prefix rejection or input ownership");
+    }
 }
 
 int main() {
+    testPresentTimingPrefix();
     const VkBaseInStructure tail{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,
         .pNext = nullptr,
