@@ -128,7 +128,7 @@ export default function Home() {
           <div className="hero-copy">
             <p className="eyebrow"><span /> Frame generation + spatial scaling / Linux</p>
             <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
-            <p className="hero-intro">MAKO brings LSFG frame generation, proprietary Lossless Scaling LS1, and the built-in open MAKO Scaler to Steam Deck, Steam Machine, SteamOS, and Linux.</p>
+            <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. LSFG frame generation and LS1 require a separate Lossless Scaling purchase; the built-in open MAKO Scaler works without it. <a href={`${links.repository}/blob/main/THIRD_PARTY_NOTICES.md`} {...newTabProps}>Third-party notices</a>.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
               <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Contribute. Fork it. Change it. Make it yours.</span></span>
@@ -332,7 +332,7 @@ export default function Home() {
             <ol className="steps">
               <li>
                 <span>01</span>
-                <div><strong>Choose your pipeline</strong><p>The open MAKO Scaler runs independently. For frame generation or LS1 scaling, install Lossless Scaling through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
+                <div><strong>Choose your pipeline</strong><p>The open MAKO Scaler runs independently. For frame generation or LS1 scaling, purchase and install Lossless Scaling separately through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
               </li>
               <li>
                 <span>02</span>
@@ -391,7 +391,7 @@ export default function Home() {
 
           <div className="requirement-note">
             <span>IMPORTANT / LICENSED INPUT</span>
-            <p>MAKO is an independent project and does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO Scaler does not require it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.</p>
+            <p>MAKO is an independent project, unaffiliated with Lossless Scaling. It does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href={links.losslessScaling} {...newTabProps}>Lossless Scaling</a> installation; the open MAKO Scaler does not require it. MAKO does not alter the user’s DLL file or save extracted resources as standalone files. Users are responsible for complying with the terms applicable to their copy. See <a href={`${links.repository}/blob/main/THIRD_PARTY_NOTICES.md`} {...newTabProps}>third-party notices</a>.</p>
           </div>
         </section>
 
@@ -407,7 +407,7 @@ export default function Home() {
             </details>
             <details>
               <summary><span>02</span> Does MAKO include Lossless Scaling?<i>+</i></summary>
-              <p>No. MAKO does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling require your own lawful Lossless Scaling installation from Steam, then MAKO discovers or lets you select its local DLL. The open MAKO Scaler does not need it.</p>
+              <p>No. MAKO does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling require a separate Lossless Scaling purchase and installation from Steam, then MAKO discovers or lets you select its local DLL. The open MAKO Scaler does not need it.</p>
             </details>
             <details>
               <summary><span>03</span> Can frame generation and scaling run together?<i>+</i></summary>

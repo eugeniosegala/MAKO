@@ -3,14 +3,14 @@ import './globals.css';
 
 export const metadata: Metadata = {
   title: 'MAKO - Frame Generation & Spatial Scaling on SteamOS/Linux',
-  description: 'MAKO brings LSFG frame generation plus Vulkan spatial scaling with proprietary LS1 and the open MAKO Scaler to Steam Deck, Steam Machine, SteamOS, and Linux.',
+  description: 'Independent Linux frame generation and scaling, unaffiliated with Lossless Scaling. LSFG and LS1 require a separate purchase; MAKO Scaler does not.',
   metadataBase: new URL('https://eugeniosegala.github.io/MAKO/'),
   icons: {
     icon: 'assets/mako-discord-icon.webp',
   },
   openGraph: {
     title: 'MAKO - Frame Generation & Spatial Scaling on SteamOS/Linux',
-    description: 'MAKO brings LSFG frame generation plus Vulkan spatial scaling with proprietary LS1 and the open MAKO Scaler to Steam Deck, Steam Machine, SteamOS, and Linux.',
+    description: 'Independent Linux frame generation and scaling, unaffiliated with Lossless Scaling. LSFG and LS1 require a separate purchase; MAKO Scaler does not.',
     url: 'https://eugeniosegala.github.io/MAKO/',
     siteName: 'MAKO',
     type: 'website',
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'MAKO - Frame Generation & Spatial Scaling on SteamOS/Linux',
-    description: 'MAKO brings LSFG frame generation plus Vulkan spatial scaling with proprietary LS1 and the open MAKO Scaler to Steam Deck, Steam Machine, SteamOS, and Linux.',
+    description: 'Independent Linux frame generation and scaling, unaffiliated with Lossless Scaling. LSFG and LS1 require a separate purchase; MAKO Scaler does not.',
     images: ['og.png'],
   },
 };
