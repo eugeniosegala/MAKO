@@ -1,15 +1,24 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "backend.hpp"
+#include "utils.hpp"
 
+#include <QCoreApplication>
+#include <QEventLoop>
 #include <QFile>
 #include <QMetaObject>
 #include <QMetaProperty>
 #include <QString>
+#include <QTemporaryDir>
 
 #include <cstring>
 #include <iostream>
 #include <stdexcept>
+
+// GPU discovery is unrelated to persistence and must not require a Vulkan host.
+QStringList mako::ui::getAvailableGPUs() {
+    return {QStringLiteral("Default")};
+}
 
 namespace {
 
@@ -260,15 +269,74 @@ void test_compact_restart_markers() {
         "Restart marker is not rendered at the compact size");
 }
 
+void test_save_lifetime() {
+    QTemporaryDir directory;
+    require(directory.isValid(), "temporary configuration directory failed");
+    const auto configPath = directory.filePath("conf.toml").toStdString();
+    const auto launchPath = directory.filePath("launcher.conf").toStdString();
+    const auto previousConfig = qgetenv("MAKO_CONFIG");
+    const auto previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    qputenv("MAKO_CONFIG", QByteArray::fromStdString(configPath));
+    qputenv("MAKO_LAUNCH_CONFIG", QByteArray::fromStdString(launchPath));
+    {
+        mako::ui::Backend backend;
+        backend.targetFPSUpdated(90);
+        backend.targetFPSUpdated(144);
+        backend.enableZinkUpdated(true);
+        require(!std::filesystem::exists(configPath), "UI edit was not debounced");
+        QEventLoop events;
+        QTimer::singleShot(700, &events, &QEventLoop::quit);
+        events.exec();
+        require(ls::ConfigFile(configPath).profiles().front().target_fps == 144,
+            "UI timer did not save the latest edit");
+        require(ls::LaunchConfigFile(launchPath).settings().enable_zink,
+            "UI timer did not save launcher settings");
+        const auto timestamp = std::filesystem::last_write_time(configPath);
+        QTimer::singleShot(700, &events, &QEventLoop::quit);
+        events.exec();
+        require(std::filesystem::last_write_time(configPath) == timestamp,
+            "Idle UI rewrote the configuration");
+        backend.targetFPSUpdated(165);
+        backend.forceAlsaAudioUpdated(true);
+        // No event loop: closing before the debounce must still save both files.
+    }
+    require(ls::ConfigFile(configPath).profiles().front().target_fps == 165,
+        "Closing the UI lost the pending profile edit");
+    require(ls::LaunchConfigFile(launchPath).settings().force_alsa_audio,
+        "Closing the UI lost the pending launcher edit");
+    QFile invalid(QString::fromStdString(configPath));
+    require(invalid.open(QIODevice::WriteOnly | QIODevice::Truncate), "Invalid fixture could not be written");
+    invalid.write("version = [broken");
+    invalid.close();
+    QFile backup(QString::fromStdString(configPath + ".old"));
+    require(backup.open(QIODevice::WriteOnly), "Backup fixture could not be written");
+    backup.write("previous backup");
+    backup.close();
+    bool refused = false;
+    try { mako::ui::Backend backend; }
+    catch (const std::exception&) { refused = true; }
+    require(refused, "UI accepted an invalid configuration without preserving its backup");
+    require(invalid.open(QIODevice::ReadOnly) && invalid.readAll() == "version = [broken",
+        "UI changed the invalid configuration after backup failed");
+    require(backup.open(QIODevice::ReadOnly) && backup.readAll() == "previous backup",
+        "UI overwrote an earlier configuration backup");
+    if (previousConfig.isNull()) qunsetenv("MAKO_CONFIG");
+    else qputenv("MAKO_CONFIG", previousConfig);
+    if (previousLaunch.isNull()) qunsetenv("MAKO_LAUNCH_CONFIG");
+    else qputenv("MAKO_LAUNCH_CONFIG", previousLaunch);
+}
+
 } // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
+    const QCoreApplication application(argc, argv);
     try {
         test_scaling_properties();
         test_multiplier_limits();
         test_fractional_adaptive_preset();
         test_feature_group_order_and_ownership();
         test_compact_restart_markers();
+        test_save_lifetime();
     } catch (const std::exception& error) {
         std::cerr << "mako-ui backend contract test failed: "
                   << error.what() << '\n';

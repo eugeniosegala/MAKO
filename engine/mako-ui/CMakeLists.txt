@@ -51,7 +51,6 @@ if(BUILD_TESTING)
     add_executable(mako-ui-backend-contract-tests
         "tests/backend_contract_tests.cpp"
         "src/backend.cpp"
-        "src/utils.cpp"
         "src/backend.hpp")
     set_target_properties(mako-ui-backend-contract-tests PROPERTIES AUTOMOC ON)
     target_include_directories(mako-ui-backend-contract-tests PRIVATE "src")

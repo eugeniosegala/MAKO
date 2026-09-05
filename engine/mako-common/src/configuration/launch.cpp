@@ -1,12 +1,15 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "mako-common/configuration/launch.hpp"
+#include "atomic_write.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <sstream>
 #include <string_view>
 
 using namespace ls;
@@ -81,23 +84,15 @@ LaunchConfigFile::LaunchConfigFile(const std::filesystem::path& path) {
 
 void LaunchConfigFile::write(const std::filesystem::path& path) const {
     try {
-        std::filesystem::create_directories(path.parent_path());
-        if (!std::filesystem::exists(path.parent_path()))
-            throw ls::error("unable to create launcher configuration directory");
-
-        std::ofstream output(path, std::ios::trunc);
-        if (!output.is_open())
-            throw ls::error("unable to open launcher configuration for writing");
+        std::ostringstream output;
 
         output << "version=" << LaunchConfigFile::formatVersion << '\n'
             << "enable_zink="
             << static_cast<int>(this->launchConf.enable_zink) << '\n'
             << "force_alsa_audio="
             << static_cast<int>(this->launchConf.force_alsa_audio) << '\n';
-        output.close();
-        if (!output)
-            throw ls::error("unable to write launcher configuration");
-    } catch (const std::filesystem::filesystem_error& error) {
+        detail::writeConfigurationAtomically(path, output.str());
+    } catch (const std::exception& error) {
         throw ls::error("unable to write launcher configuration", error);
     }
 }

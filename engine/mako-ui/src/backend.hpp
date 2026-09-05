@@ -6,12 +6,12 @@
 #include <QStringListModel>
 #include <QString>
 #include <QVariantList>
+#include <QTimer>
 
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/launch.hpp"
 
 #include <algorithm>
-#include <atomic>
 #include <cmath>
 #include <utility>
 
@@ -82,6 +82,7 @@ namespace mako::ui {
 
     public:
         explicit Backend();
+        ~Backend() override;
 
         [[nodiscard]] static bool isFractionalAdaptivePresetEnabled(
                 const ls::GameConf& conf) noexcept {
@@ -339,11 +340,13 @@ namespace mako::ui {
         }
 
 #define MARK_DIRTY() \
-    this->m_config_dirty.store(true, std::memory_order_relaxed); \
+    this->m_config_dirty = true; \
+    this->m_save_timer.start(); \
     emit refreshUI();
 
 #define MARK_LAUNCH_DIRTY() \
-    this->m_launch_dirty.store(true, std::memory_order_relaxed); \
+    this->m_launch_dirty = true; \
+    this->m_save_timer.start(); \
     emit refreshUI();
 
         void dllUpdated(const QString& dll) {
@@ -636,8 +639,12 @@ namespace mako::ui {
 
         QStringList m_gpu_list;
 
-        std::atomic_bool m_config_dirty{false};
-        std::atomic_bool m_launch_dirty{false};
+        void savePendingChanges();
+        std::filesystem::path m_config_path;
+        std::filesystem::path m_launch_path;
+        QTimer m_save_timer{this};
+        bool m_config_dirty{false};
+        bool m_launch_dirty{false};
     };
 
 }

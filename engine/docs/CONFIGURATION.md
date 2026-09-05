@@ -2,6 +2,8 @@
 
 Configure MAKO Renderer with `mako-ui` or `~/.config/mako-render/conf.toml`; both use the same profile format. See [Spatial scaling architecture](SCALING.md) for scaler internals and validation.
 
+The UI saves after edits have settled for 500 ms and flushes pending profile and launcher edits when it closes. Saving runs on the UI's owning thread, with no background polling when idle. Renderer configuration writers stage and synchronize complete files before replacing the previous version, preserving it on permission or short-write failures; existing configuration symlinks keep pointing to their updated target. Edit shared profiles in one editor at a time when using both MAKO Decky and the standalone UI. If the UI cannot parse `conf.toml`, it preserves it as `.old`; it refuses to overwrite an existing backup and leaves both files in place for repair.
+
 The optional desktop UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, Ukrainian, and Simplified Chinese, matching MAKO Decky's supported language inventory. It selects a matching system language on first run and stores later language choices as an interface preference, separately from Renderer profiles and `conf.toml`. CLI output currently supports English, Brazilian Portuguese, European Portuguese, and Spanish; place `--lang en`, `--lang pt-BR`, `--lang pt-PT`, or `--lang es` before the command, such as `mako-cli --lang es validate`.
 
 ## Profiles

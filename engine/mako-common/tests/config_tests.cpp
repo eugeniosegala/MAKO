@@ -2,9 +2,11 @@
 
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/detection.hpp"
+#include "mako-common/configuration/launch.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -16,6 +18,7 @@
 #include <utility>
 
 #include <unistd.h>
+#include <sys/resource.h>
 
 namespace {
     void expect(const bool condition, const std::string_view message) {
@@ -267,6 +270,64 @@ int main() {
             config.get().profiles(), canonicalConfig.profiles(), sameGameConf
         ),
         "A canonical Renderer write must preserve scaling configuration");
+
+    // Real short writes must preserve the previous file, including when the
+    // process has permission to open it. Exercise every configuration writer.
+    for (const int writer : {0, 1, 2}) {
+        const auto failurePath = directory / "write-failure.conf";
+        writeText(failurePath, "previous configuration\n");
+        struct rlimit previousLimit {};
+        expect(::getrlimit(RLIMIT_FSIZE, &previousLimit) == 0,
+            "Could not read file-size limit for write failure test");
+        auto limited = previousLimit;
+        limited.rlim_cur = 16;
+        const auto previousSignal = std::signal(SIGXFSZ, SIG_IGN);
+        expect(::setrlimit(RLIMIT_FSIZE, &limited) == 0,
+            "Could not constrain file writes for failure test");
+        bool failed = false;
+        try {
+            if (writer == 0) canonicalConfig.write(failurePath);
+            else if (writer == 1) ls::ConfigFile::createDefaultConfigFile(failurePath);
+            else ls::LaunchConfigFile{}.write(failurePath);
+        } catch (const std::exception&) {
+            failed = true;
+        }
+        const auto restored = ::setrlimit(RLIMIT_FSIZE, &previousLimit);
+        std::signal(SIGXFSZ, previousSignal);
+        expect(restored == 0, "Could not restore file-size limit");
+        expect(failed, "Configuration writer silently accepted a short write");
+        expect(readText(failurePath) == "previous configuration\n",
+            "A failed configuration write damaged the previous file");
+        for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+            expect(!entry.path().filename().string().starts_with(".write-failure.conf."),
+                "A failed configuration write left a temporary file");
+        }
+    }
+
+    const auto linkedPath = directory / "linked.toml";
+    std::filesystem::create_symlink(canonicalPath, linkedPath);
+    canonicalConfig.write(linkedPath);
+    expect(std::filesystem::is_symlink(linkedPath) &&
+            readText(canonicalPath) == canonicalConfiguration,
+        "Atomic configuration writes must preserve configured symlinks");
+    const auto missingTarget = directory / "new-target.toml";
+    const auto danglingPath = directory / "new-link.toml";
+    std::filesystem::create_symlink(missingTarget.filename(), danglingPath);
+    canonicalConfig.write(danglingPath);
+    expect(std::filesystem::is_symlink(danglingPath) &&
+            readText(missingTarget) == canonicalConfiguration,
+        "First-time configuration writes must preserve dangling relative symlinks");
+    std::filesystem::permissions(canonicalPath, std::filesystem::perms::owner_read);
+    bool readOnlyRejected = false;
+    try {
+        canonicalConfig.write(canonicalPath);
+    } catch (const std::exception&) {
+        readOnlyRejected = true;
+    }
+    expect(readOnlyRejected && readText(canonicalPath) == canonicalConfiguration,
+        "A read-only configuration must be preserved without changing permissions");
+    std::filesystem::permissions(canonicalPath,
+        std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
 
     const auto fixedMultiplierPath = directory / "fixed-multiplier.toml";
     writeText(fixedMultiplierPath, R"(version = 2
