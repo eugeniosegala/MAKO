@@ -39,6 +39,7 @@ from py_modules.mako_plugin.types import (  # noqa: E402
     RuntimeProfileSnapshot,
     RuntimeSpatialScalingState,
     RuntimeStatusResponse,
+    ScalingModelStatusResponse,
 )
 
 
@@ -113,6 +114,7 @@ class RpcContractTests(unittest.TestCase):
             InstallationResult: "InstallationResult",
             InstallationCheckResponse: "InstallationStatus",
             DllDetectionResponse: "DllDetectionResult",
+            ScalingModelStatusResponse: "ScalingModelStatusResult",
             DllStatsResponse: "DllStatsResult",
             ConfigurationResponse: "ConfigResult",
             ConfigSchemaResponse: "ConfigSchemaResult",

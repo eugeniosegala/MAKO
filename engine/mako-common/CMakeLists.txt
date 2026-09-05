@@ -28,6 +28,10 @@ target_include_directories(mako-common SYSTEM
     PRIVATE thirdparty/include)
 
 if(BUILD_TESTING)
+    add_executable(mako-dll-paths-tests "tests/paths_tests.cpp")
+    target_link_libraries(mako-dll-paths-tests PRIVATE mako-common)
+    add_test(NAME lossless-dll-discovery COMMAND mako-dll-paths-tests)
+
     add_executable(mako-config-tests
         "tests/config_tests.cpp")
     target_link_libraries(mako-config-tests

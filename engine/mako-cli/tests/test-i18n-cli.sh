@@ -66,6 +66,21 @@ run_failure "$cli" inspect-dll --dll /tmp/mako-cli-missing-lossless.dll
 [[ $command_output == *'MAKO model DLL inspection failed: failed to stat dll file'* ]] ||
     fail "missing DLL inspection did not fail cleanly: $command_output"
 
+for method in ls1 ls1-performance; do
+    for sharpness in 0 0.25 0.5 0.75 1; do
+        run_failure "$cli" inspect-dll --dll /tmp/mako-cli-missing-lossless.dll \
+            --ls1 "$method" --sharpness "$sharpness"
+        [[ $command_output == *'{"schema_version":1,"compatible":false}'* ]] ||
+            fail "selected LS1 inspection did not emit its status contract: $command_output"
+    done
+done
+run_failure "$cli" inspect-dll --dll /tmp/mako-cli-missing-lossless.dll --ls1 unrelated
+[[ $command_output == 'error: --ls1 requires ls1 or ls1-performance' ]] ||
+    fail "unknown LS1 method was not rejected: $command_output"
+run_failure "$cli" inspect-dll --dll /tmp/mako-cli-missing-lossless.dll --ls1 ls1 --sharpness nan
+[[ $command_output == *'requires a valid finite number'* ]] ||
+    fail "non-finite LS1 sharpness was not rejected: $command_output"
+
 run_failure "$cli" spatial-quality-regression --method unknown-method
 [[ $command_output == 'error: unknown spatial quality method: unknown-method' ]] ||
     fail "unknown spatial method did not fail closed: $command_output"

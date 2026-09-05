@@ -4,19 +4,104 @@ DLL detection service for Lossless Scaling.
 
 import os
 import re
+import json
+import math
+import subprocess
+import threading
+import time
 from pathlib import Path
 from typing import Dict, Any, List
 
 from .base_service import BaseService
 from .constants import (
     ENV_MAKO_DLL_PATH, ENV_XDG_DATA_HOME,
-    STEAM_COMMON_PATH, LOSSLESS_DLL_NAME
+    STEAM_COMMON_PATH, LOSSLESS_DLL_NAME, CLI_DIR, CLI_FILENAME,
 )
-from .types import DllDetectionResponse
+from .types import DllDetectionResponse, ScalingModelStatusResponse
 
 
 class DllDetectionService(BaseService):
     """Service for detecting Lossless Scaling DLL"""
+
+    def __init__(self, logger=None):
+        super().__init__(logger)
+        self._model_lock = threading.Lock()
+        self._model_cache_key = None
+        self._model_cache_time = 0.0
+        self._model_cache: ScalingModelStatusResponse | None = None
+
+    def check_scaling_model(
+        self, dll: str, method: str, sharpness: float,
+    ) -> ScalingModelStatusResponse:
+        """Inspect the selected graph through the installed Renderer, without saving profiles.
+
+        The one-entry, process-local cache avoids repeated translations. File
+        replacement invalidates it even when size and mtime are preserved; the
+        bounded lifetime also retries after translator/runtime updates.
+        """
+        unknown: ScalingModelStatusResponse = {
+            "compatible": None, "reason": "inspection-unavailable",
+        }
+        if (not isinstance(dll, str) or method not in ("ls1", "ls1-performance")
+                or isinstance(sharpness, bool)
+                or not isinstance(sharpness, (int, float))
+                or not math.isfinite(sharpness) or not 0 <= sharpness <= 1):
+            return {"compatible": None, "reason": "invalid-selection"}
+        if not self._model_lock.acquire(blocking=False):
+            return unknown
+        try:
+            # An explicit path is authoritative, just as it is in the Renderer.
+            # Do not conceal a broken configured DLL by inspecting a different one.
+            if dll:
+                path = Path(dll)
+            else:
+                detected = self.check_lossless_scaling_dll()
+                if detected["error"]:
+                    return unknown
+                if not detected["path"]:
+                    return {"compatible": False, "reason": "dll-unavailable"}
+                path = Path(detected["path"])
+            cli = self.user_home / CLI_DIR / CLI_FILENAME
+            try:
+                if not path.is_file():
+                    return {"compatible": False, "reason": "dll-unavailable"}
+                def identity(candidate: Path):
+                    status = candidate.stat()
+                    return (str(candidate.resolve()), status.st_dev, status.st_ino,
+                            status.st_size, status.st_mtime_ns, status.st_ctime_ns)
+                key = (identity(path), identity(cli), method, sharpness)
+                if (key == self._model_cache_key and self._model_cache is not None
+                        and time.monotonic() - self._model_cache_time < 300):
+                    return self._model_cache.copy()
+                completed = subprocess.run(
+                    [str(cli), "inspect-dll", "--dll", str(path),
+                     "--ls1", method, "--sharpness", str(sharpness)],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                    text=True, timeout=15, check=False,
+                )
+                # Old inspectors, crashes, timeouts, and malformed responses are
+                # unknown, not proof that a user's model has disappeared.
+                result = json.loads(completed.stdout)
+                if (not isinstance(result, dict)
+                        or type(result.get("schema_version")) is not int
+                        or result["schema_version"] != 1
+                        or type(result.get("compatible")) is not bool
+                        or completed.returncode != (0 if result["compatible"] else 1)):
+                    return unknown
+                if key != (identity(path), identity(cli), method, sharpness):
+                    return unknown
+                response: ScalingModelStatusResponse = {
+                    "compatible": result["compatible"],
+                    "reason": None if result["compatible"] else "ls1-unavailable",
+                }
+                self._model_cache_key = key
+                self._model_cache_time = time.monotonic()
+                self._model_cache = response.copy()
+                return response
+            except (OSError, ValueError, subprocess.SubprocessError):
+                return unknown
+        finally:
+            self._model_lock.release()
 
     def check_lossless_scaling_dll(self) -> DllDetectionResponse:
         """Check if Lossless Scaling DLL is available at the expected paths
@@ -75,7 +160,7 @@ class DllDetectionService(BaseService):
         dll_path = os.getenv(ENV_MAKO_DLL_PATH)
         if dll_path and dll_path.strip():
             dll_path_obj = Path(dll_path.strip())
-            if dll_path_obj.exists():
+            if dll_path_obj.is_file():
                 self.log.info(f"Found DLL via {ENV_MAKO_DLL_PATH}: {dll_path_obj}")
                 return {
                     "detected": True,
@@ -95,7 +180,7 @@ class DllDetectionService(BaseService):
         data_dir = os.getenv(ENV_XDG_DATA_HOME)
         if data_dir and data_dir.strip():
             dll_path = Path(data_dir.strip()) / "Steam" / STEAM_COMMON_PATH / LOSSLESS_DLL_NAME
-            if dll_path.exists():
+            if dll_path.is_file():
                 self.log.info(f"Found DLL via {ENV_XDG_DATA_HOME}: {dll_path}")
                 return {
                     "detected": True,
@@ -113,7 +198,7 @@ class DllDetectionService(BaseService):
             DllDetectionResponse if found, None otherwise
         """
         dll_path = self.user_home / ".local" / "share" / "Steam" / STEAM_COMMON_PATH / LOSSLESS_DLL_NAME
-        if dll_path.exists():
+        if dll_path.is_file():
             self.log.info(f"Found DLL in the Decky user's Steam directory: {dll_path}")
             return {
                 "detected": True,
@@ -137,7 +222,7 @@ class DllDetectionService(BaseService):
 
         for library_path in steam_libraries:
             dll_path = Path(library_path) / STEAM_COMMON_PATH / LOSSLESS_DLL_NAME
-            if dll_path.exists():
+            if dll_path.is_file():
                 self.log.info(f"Found DLL in Steam library: {dll_path}")
                 return {
                     "detected": True,

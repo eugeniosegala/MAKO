@@ -21,11 +21,10 @@ std::filesystem::path ls::findShaderDll() {
     if (xdgPath && *xdgPath != '\0') {
         auto base = std::filesystem::path(xdgPath);
 
-        for (const auto& frag : FRAGMENTS) {
-            auto full = base / frag / "Lossless Scaling" / "Lossless.dll";
-            if (std::filesystem::exists(full))
-                return full;
-        }
+        auto full = base / "Steam/steamapps/common" / "Lossless Scaling" / "Lossless.dll";
+        std::error_code error;
+        if (std::filesystem::is_regular_file(full, error))
+            return full;
     }
 
     // check home directory
@@ -35,14 +34,16 @@ std::filesystem::path ls::findShaderDll() {
 
         for (const auto& frag : FRAGMENTS) {
             auto full = base / frag / "Lossless Scaling" / "Lossless.dll";
-            if (std::filesystem::exists(full))
+            std::error_code error;
+            if (std::filesystem::is_regular_file(full, error))
                 return full;
         }
     }
 
     // fallback to same directory
     auto local = std::filesystem::current_path() / "Lossless.dll";
-    if (std::filesystem::exists(local))
+    std::error_code error;
+    if (std::filesystem::is_regular_file(local, error))
         return local;
 
     throw ls::error("unable to locate Lossless.dll, please set the path in the configuration");

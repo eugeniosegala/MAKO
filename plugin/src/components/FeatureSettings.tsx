@@ -11,6 +11,7 @@ interface FeatureSettingsProps {
   config: ConfigurationData;
   disabled?: boolean;
   runtimeState: RuntimeScalingUiState;
+  scalingModelCompatible?: boolean | null;
   onConfigChange: (
     fieldName: keyof ConfigurationData,
     value: boolean | number | string,
@@ -22,6 +23,7 @@ export function FeatureSettings({
   config,
   disabled = false,
   runtimeState,
+  scalingModelCompatible = null,
   onConfigChange,
   onConfigUpdate,
 }: FeatureSettingsProps) {
@@ -44,6 +46,16 @@ export function FeatureSettings({
         runtimeActivationSupported={runtimeState.scalingActivationSupported}
         runtimeInactiveReason={runtimeState.inactiveReason}
         runtimeFactorCeiling={runtimeState.nonSupersamplingFactorCeiling}
+        modelCompatible={scalingModelCompatible}
+        runtimeRequestedMethod={runtimeState.requestedMethod}
+        runtimeActiveMethod={
+          runtimeState.scalingActive ? runtimeState.activeMethod : null
+        }
+        runtimeMakoFallback={
+          runtimeState.scalingActive &&
+          runtimeState.activeMethod === "mako" &&
+          Boolean(runtimeState.fallbackReason)
+        }
         onConfigChange={onConfigChange}
       />
 

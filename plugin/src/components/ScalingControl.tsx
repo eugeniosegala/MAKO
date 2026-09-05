@@ -22,6 +22,7 @@ import {
   type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
+import { effectiveScalingMethod as resolveScalingMethod } from "../config/ultraPerformancePreset";
 import { MakoExperimentalSettingLabel, MakoInlineTip } from "./MakoUi";
 
 interface ScalingControlProps {
@@ -30,6 +31,10 @@ interface ScalingControlProps {
   runtimeActivationSupported?: boolean | null;
   runtimeInactiveReason?: string | null;
   runtimeFactorCeiling?: number | null;
+  modelCompatible?: boolean | null;
+  runtimeRequestedMethod?: string | null;
+  runtimeMakoFallback?: boolean;
+  runtimeActiveMethod?: string | null;
   onConfigChange: (
     fieldName: keyof ConfigurationData,
     value: boolean | number | string,
@@ -42,13 +47,21 @@ export function ScalingControl({
   runtimeActivationSupported = null,
   runtimeInactiveReason = null,
   runtimeFactorCeiling = null,
+  modelCompatible = null,
+  runtimeRequestedMethod = null,
+  runtimeMakoFallback = false,
+  runtimeActiveMethod = null,
   onConfigChange,
 }: ScalingControlProps) {
-  const effectiveScalingMethod =
-    config.scaling_enabled && config.ultra_performance
-      ? SCALING_METHOD_LS1_PERFORMANCE
-      : config.scaling_method;
+  const effectiveScalingMethod = resolveScalingMethod(config);
   const scalerActive = effectiveScalingMethod !== SCALING_METHOD_NATIVE;
+  const ls1Selected =
+    effectiveScalingMethod === SCALING_METHOD_LS1 ||
+    effectiveScalingMethod === SCALING_METHOD_LS1_PERFORMANCE;
+  const activeFallback =
+    runtimeMakoFallback && runtimeRequestedMethod === effectiveScalingMethod;
+  const modelUnavailable =
+    modelCompatible === false && runtimeActiveMethod !== effectiveScalingMethod;
   const runningSurfaceUnsupported =
     runtimeActivationSupported === false ||
     runtimeInactiveReason === "gamescope-wsi-surface-unproven";
@@ -175,6 +188,26 @@ export function ScalingControl({
                   onConfigChange(SCALING_METHOD, String(option.data))
                 }
               />
+              {ls1Selected && (
+                <MakoInlineTip
+                  tone={activeFallback || modelUnavailable ? "warning" : "info"}
+                >
+                  {activeFallback
+                    ? t(
+                        "SCALING_LS1_ACTIVE_FALLBACK",
+                        "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
+                      )
+                    : modelUnavailable
+                      ? t(
+                          "SCALING_LS1_UNAVAILABLE",
+                          "The selected LS1 model could not be loaded during the availability check. MAKO Scaler is used automatically if LS1 cannot load. Your LS1 selection is preserved.",
+                        )
+                      : t(
+                          "SCALING_LS1_FALLBACK_INFO",
+                          "If LS1 is unavailable, MAKO Scaler is used automatically. Your LS1 selection is preserved.",
+                        )}
+                </MakoInlineTip>
+              )}
             </Field>
           </PanelSectionRow>
 

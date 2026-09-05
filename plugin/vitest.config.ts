@@ -26,6 +26,7 @@ export default defineConfig({
         "src/hooks/useProfileEditorModel.ts",
         "src/hooks/useProfileManagement.ts",
         "src/hooks/useProfileSession.ts",
+        "src/hooks/useScalingModelStatus.ts",
       ],
     },
   },

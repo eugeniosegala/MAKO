@@ -6,6 +6,7 @@ Vulkan layer for frame generation and scaling on SteamOS.
 """
 
 import os
+import asyncio
 import subprocess
 import hashlib
 import shlex
@@ -39,6 +40,7 @@ from .types import (
     ProfileResponse,
     ProfilesResponse,
     RuntimeStatusResponse,
+    ScalingModelStatusResponse,
 )
 
 
@@ -114,6 +116,14 @@ class Plugin:
             DllDetectionResponse dict with detection status and path info
         """
         return self.dll_detection_service.check_lossless_scaling_dll()
+
+    async def check_scaling_model(
+        self, dll: str, method: str, sharpness: float,
+    ) -> ScalingModelStatusResponse:
+        """Read-only selected-model preflight outside Decky's event loop."""
+        return await asyncio.to_thread(
+            self.dll_detection_service.check_scaling_model, dll, method, sharpness,
+        )
 
     async def get_dll_stats(self) -> DllStatsResponse:
         """Get detailed statistics about the detected DLL

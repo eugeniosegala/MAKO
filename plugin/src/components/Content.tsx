@@ -18,6 +18,7 @@ import { useProfileConfigWriter } from "../hooks/useProfileConfigWriter";
 import { StatusDisplay } from "./StatusDisplay";
 import { InstallationButton } from "./InstallationButton";
 import { ConfigurationSection } from "./ConfigurationSection";
+import { useScalingModelStatus } from "../hooks/useScalingModelStatus";
 import { ProfileManagement } from "./ProfileManagement";
 import { UsageInstructions } from "./UsageInstructions";
 import { FgmodClipboardButton } from "./FgmodClipboardButton";
@@ -74,6 +75,7 @@ export function Content() {
     editingProfile,
     Boolean(isInstalled && mainRunningApp),
   );
+  const scalingModelCompatible = useScalingModelStatus(config, isInstalled);
   const {
     saveConfigChanges: handleConfigChanges,
     saveConfigField: handleConfigChange,
@@ -197,6 +199,7 @@ export function Content() {
               config={config}
               disabled={engineUpdateRequired}
               runtimeState={scalingRuntimeState}
+              scalingModelCompatible={scalingModelCompatible}
               onConfigChange={handleConfigChange}
               onConfigUpdate={handleConfigChanges}
             />

@@ -134,6 +134,106 @@ import {
 afterEach(cleanup);
 
 describe("Scaling controls", () => {
+  test.each(["ls1", "ls1-performance"])(
+    "preserves unavailable saved %s selections with fallback guidance",
+    (method) => {
+      window.SP_REACT = React;
+      const saved = {
+        ...getDefaults(),
+        scaling_enabled: true,
+        scaling_method: method,
+      };
+      const onConfigChange = vi.fn(async () => undefined);
+      render(
+        <ScalingControl
+          config={saved}
+          modelCompatible={false}
+          onConfigChange={onConfigChange}
+        />,
+      );
+      expect(
+        screen
+          .getByRole("button", { name: "Scaling Method" })
+          .getAttribute("data-selected"),
+      ).toBe(method);
+      expect(
+        screen.getByText(/selected LS1 model could not be loaded/),
+      ).toBeTruthy();
+      expect(onConfigChange).not.toHaveBeenCalled();
+      expect(saved.scaling_method).toBe(method);
+    },
+  );
+
+  test("distinguishes a live fallback from a host preflight and ignores a previous model", () => {
+    window.SP_REACT = React;
+    const props = {
+      config: {
+        ...getDefaults(),
+        scaling_enabled: true,
+        scaling_method: "ls1",
+      },
+      modelCompatible: true,
+      runtimeRequestedMethod: "ls1",
+      runtimeMakoFallback: true,
+      runtimeActiveMethod: "mako",
+      onConfigChange: vi.fn(async () => undefined),
+    };
+    const { rerender } = render(<ScalingControl {...props} />);
+    expect(screen.getByText(/MAKO Scaler is active/)).toBeTruthy();
+    rerender(
+      <ScalingControl
+        {...props}
+        config={{ ...props.config, scaling_method: "ls1-performance" }}
+      />,
+    );
+    expect(screen.queryByText(/MAKO Scaler is active/)).toBeNull();
+    expect(screen.getByText(/If LS1 is unavailable/)).toBeTruthy();
+    rerender(
+      <ScalingControl
+        {...props}
+        modelCompatible={false}
+        runtimeMakoFallback={false}
+        runtimeActiveMethod="ls1"
+      />,
+    );
+    expect(
+      screen.queryByText(/selected LS1 model could not be loaded/),
+    ).toBeNull();
+    expect(props.onConfigChange).not.toHaveBeenCalled();
+  });
+
+  test("fallback notices follow Ultra Performance and disappear for model-free scaling", () => {
+    window.SP_REACT = React;
+    const props = {
+      config: {
+        ...getDefaults(),
+        scaling_enabled: true,
+        scaling_method: "mako",
+        ultra_performance: true,
+      },
+      modelCompatible: false,
+      onConfigChange: vi.fn(async () => undefined),
+    };
+    const { rerender } = render(<ScalingControl {...props} />);
+    expect(
+      screen
+        .getByRole("button", { name: "Scaling Method" })
+        .getAttribute("data-selected"),
+    ).toBe("ls1-performance");
+    expect(
+      screen.getByText(/selected LS1 model could not be loaded/),
+    ).toBeTruthy();
+    rerender(
+      <ScalingControl
+        {...props}
+        config={{ ...props.config, ultra_performance: false }}
+      />,
+    );
+    expect(
+      screen.queryByText(/selected LS1 model could not be loaded/),
+    ).toBeNull();
+  });
+
   test("the master toggle hides and shows every dependent control", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
