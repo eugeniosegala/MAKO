@@ -77,11 +77,13 @@ choose_bundle() {
         done
         requested_version="$(zenity --list --title="MAKO Flatpak extension" --text="Choose your game's Flatpak runtime." --column="Runtime" --column="Description" "${options[@]}")" || exit 0
     else
-        printf 'Available MAKO Flatpak runtimes:\n'
+        printf 'Available MAKO Flatpak runtimes:\n' >&2
         select requested_version in "${bundles[@]##*-}"; do
+            [[ -n "$requested_version" ]] || continue
             requested_version="${requested_version%.flatpak}"
             break
         done
+        [[ -n "$requested_version" ]] || return 0
     fi
     for bundle in "${bundles[@]}"; do
         if [[ "$bundle" == *"-$requested_version.flatpak" ]]; then
@@ -101,11 +103,13 @@ shopt -u nullglob
 ((${#bundles[@]} > 0)) || fail "No MAKO Flatpak extension bundles were found next to this installer."
 
 selected_bundle="$(choose_bundle)"
+[[ -n "$selected_bundle" ]] || exit 0
 selected_runtime="${selected_bundle##*-}"
 selected_runtime="${selected_runtime%.flatpak}"
 if ! confirm "Install the MAKO Renderer Flatpak extension for runtime $selected_runtime for this user?"; then
     exit 0
 fi
 
-flatpak install --user --noninteractive "$selected_bundle"
+flatpak install --user --noninteractive "$selected_bundle" ||
+    fail "The MAKO Renderer Flatpak extension could not be installed. Check Flatpak's error, available disk space, and user installation permissions before retrying."
 notice "The MAKO Renderer Flatpak extension for runtime $selected_runtime is installed. Configure the target Flatpak application before launching it with MAKO."

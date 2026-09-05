@@ -39,4 +39,23 @@ expected="install --user --noninteractive $package_root_physical/org.freedesktop
 [[ "$(<"$invocation_log")" == "$expected" ]] ||
     fail "installer did not invoke the selected user-scoped Flatpak bundle"
 
+touch "$package_root/org.freedesktop.Platform.VulkanLayer.makorender-25.08.flatpak"
+printf '1\n' | env -u DISPLAY -u WAYLAND_DISPLAY -u MAKO_FLATPAK_RUNTIME \
+    PATH="$fake_bin:$PATH" \
+    MAKO_TEST_FLATPAK_LOG="$invocation_log" \
+    MAKO_INSTALLER_ASSUME_YES=1 \
+    "$package_root/Install MAKO Flatpak Extensions" >"$test_root/terminal.log" 2>&1
+[[ "$(<"$invocation_log")" == "$expected" ]] ||
+    fail "terminal runtime menu polluted the selected bundle path"
+
+rm "$invocation_log"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 1' > "$fake_bin/kdialog"
+chmod 0755 "$fake_bin/kdialog"
+env -u MAKO_FLATPAK_RUNTIME \
+    PATH="$fake_bin:$PATH" DISPLAY=:test \
+    MAKO_TEST_FLATPAK_LOG="$invocation_log" \
+    MAKO_INSTALLER_ASSUME_YES=1 \
+    "$package_root/Install MAKO Flatpak Extensions" >/dev/null
+[[ ! -e "$invocation_log" ]] || fail "cancelling the runtime menu still invoked Flatpak"
+
 printf '%s\n' 'mako-flatpak-installer contract test passed'
