@@ -331,7 +331,7 @@ class RendererConfigContractTests(unittest.TestCase):
             MAKO_PROFILE_FALLBACK_ENV: (
                 "engine/mako-common/src/configuration/detection.cpp"
             ),
-            PRESENT_ACQUIRE_TIMEOUT_ENV: "engine/mako-render/src/swapchain.cpp",
+            PRESENT_ACQUIRE_TIMEOUT_ENV: "engine/mako-render/src/swapchain/create.cpp",
             PRESENT_DIAGNOSTICS_ENV: (
                 "engine/mako-render/src/present_diagnostics.cpp"
             ),

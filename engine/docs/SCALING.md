@@ -227,7 +227,7 @@ Scaling teardown follows the natural replacement and surface-terminal retirement
 | Surface-capability interception and preflight | `mako-render/src/entrypoint.cpp` |
 | Swapchain extent and format activation | `mako-render/src/instance.cpp` |
 | Spatial resources and command recording | `mako-render/src/spatial_scaler.cpp` |
-| Scaling-only and combined presentation | `mako-render/src/swapchain_present.cpp` |
+| Scaling-only and combined presentation | `mako-render/src/swapchain/present.cpp` |
 | Open compute algorithm | `mako-render/src/shaders/spatial_scaling.comp` |
 | LS1 resource extraction and DXBC translation | `mako-backend/src/extraction/ls1_shader_set.cpp` |
 | DLL identity and compatibility inspection | `mako-backend/src/extraction/dll_reader.cpp`, `mako-backend/src/extraction/model_resource_validation.cpp`, `mako-cli inspect-dll` |

@@ -4,8 +4,11 @@ set(LAYER_SOURCES
     "src/instance.cpp"
     "src/present_diagnostics.cpp"
     "src/runtime_status.cpp"
-    "src/swapchain.cpp"
-    "src/swapchain_present.cpp")
+    "src/swapchain/create.cpp"
+    "src/swapchain/present.cpp"
+    "src/swapchain/profile.cpp"
+    "src/swapchain/resources.cpp"
+    "src/swapchain/status.cpp")
 
 add_library(mako-adaptive STATIC
     "src/adaptive_scheduler.cpp")

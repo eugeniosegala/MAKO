@@ -1,3 +1,4 @@
+import type { ConfigurationControlProps } from "./settings/types";
 import {
   Dropdown,
   Field,
@@ -19,14 +20,12 @@ import {
   SCALING_SHARPNESS,
   SCALING_SHARPNESS_MAX,
   SCALING_SHARPNESS_MIN,
-  type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
 import { effectiveScalingMethod as resolveScalingMethod } from "../config/ultraPerformancePreset";
 import { MakoExperimentalSettingLabel, MakoInlineTip } from "./MakoUi";
 
-interface ScalingControlProps {
-  config: ConfigurationData;
+interface ScalingControlProps extends ConfigurationControlProps {
   disabled?: boolean;
   runtimeActivationSupported?: boolean | null;
   runtimeInactiveReason?: string | null;
@@ -35,10 +34,6 @@ interface ScalingControlProps {
   runtimeRequestedMethod?: string | null;
   runtimeMakoFallback?: boolean;
   runtimeActiveMethod?: string | null;
-  onConfigChange: (
-    fieldName: keyof ConfigurationData,
-    value: boolean | number | string,
-  ) => Promise<void>;
 }
 
 export function ScalingControl({

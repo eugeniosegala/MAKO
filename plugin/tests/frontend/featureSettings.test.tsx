@@ -28,7 +28,7 @@ vi.mock("../../src/components/FpsMultiplierControl", () => ({
 vi.mock("../../src/components/ScalingControl", () => ({
   ScalingControl: () => <div>Upscaling controls</div>,
 }));
-vi.mock("../../src/components/ConfigurationSectionGroups", () => ({
+vi.mock("../../src/components/settings/PerformanceConfigurationGroup", () => ({
   PerformanceConfigurationGroup: () => <div>FG performance controls</div>,
 }));
 vi.mock("../../src/components/ConfigurationSection", () => ({

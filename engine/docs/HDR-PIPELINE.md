@@ -168,8 +168,8 @@ Look specifically for washed-out or crushed output, purple/green motion artifact
 | Gamescope X11 discovery, evidence, and diagnostics | `mako-render/src/gamescope_hdr_feedback.cpp` |
 | Feedback stabilization | `mako-render/src/runtime_transition.hpp` |
 | Format and colour-space classification | `mako-render/src/color_pipeline.cpp` |
-| Swapchain mutation and private resource transitions | `mako-render/src/swapchain.cpp` |
-| Native-first HDR presentation behavior | `mako-render/src/swapchain_present.cpp` |
+| Swapchain mutation and private resource transitions | `mako-render/src/swapchain/create.cpp`, `mako-render/src/swapchain/resources.cpp` |
+| Native-first HDR presentation behavior | `mako-render/src/swapchain/present.cpp` |
 | Backend encoding and conversion passes | `mako-backend/src/mako.cpp` |
 | PQ/scRGB shaders | `mako-backend/src/shaders/` |
 | Embedded conversion SPIR-V generation and source/payload freshness | `scripts/generate-color-conversion-spirv.py`, exercised by the portable CTest suite |

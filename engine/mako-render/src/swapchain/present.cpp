@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-#include "swapchain.hpp"
-#include "swapchain_retirement.hpp"
+#include "swapchain/swapchain.hpp"
+#include "swapchain/retirement.hpp"
 #include "adaptive_scheduler.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"

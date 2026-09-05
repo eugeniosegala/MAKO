@@ -1,22 +1,16 @@
-import type { ConfigurationData } from "../config/configSchema";
+import type { ConfigurationEditorProps } from "./settings/types";
 import type { RuntimeScalingUiState } from "../utils/runtimeScalingUtils";
 import t from "../i18n/i18n";
 import { FpsMultiplierControl } from "./FpsMultiplierControl";
 import { ScalingControl } from "./ScalingControl";
-import { PerformanceConfigurationGroup } from "./ConfigurationSectionGroups";
+import { PerformanceConfigurationGroup } from "./settings/PerformanceConfigurationGroup";
 import { FrameGenerationConfigurationSection } from "./ConfigurationSection";
 import { MakoSectionHeader } from "./MakoUi";
 
-interface FeatureSettingsProps {
-  config: ConfigurationData;
+interface FeatureSettingsProps extends ConfigurationEditorProps {
   disabled?: boolean;
   runtimeState: RuntimeScalingUiState;
   scalingModelCompatible?: boolean | null;
-  onConfigChange: (
-    fieldName: keyof ConfigurationData,
-    value: boolean | number | string,
-  ) => Promise<void>;
-  onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
 }
 
 export function FeatureSettings({

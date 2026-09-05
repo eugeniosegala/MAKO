@@ -35,6 +35,8 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 
 MAKO Decky lives in the `plugin/` directory of the MAKO monorepo and consumes the sibling `engine/` source tree.
 
+`components/FeatureSettings.tsx` and `components/ConfigurationSection.tsx` compose the editor. Independent performance, advanced rendering, compatibility, external-tool, and manual-override sections live under `components/settings/`, alongside the shared collapse control and editor prop types. Their renderers forward edits through the existing callbacks; `hooks/useProfileEditorModel.ts` and `hooks/useProfileConfigWriter.ts` remain the state and persistence owners. Keep translations in the source catalogs and keep save/debounce effects out of section components.
+
 ```bash
 pnpm install --frozen-lockfile
 pnpm run test

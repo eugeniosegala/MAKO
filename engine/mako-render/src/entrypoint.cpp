@@ -7,9 +7,9 @@
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 #include "present_diagnostics.hpp"
-#include "swapchain.hpp"
-#include "swapchain_create_policy.hpp"
-#include "swapchain_retirement.hpp"
+#include "swapchain/swapchain.hpp"
+#include "swapchain/create_policy.hpp"
+#include "swapchain/retirement.hpp"
 
 #include <algorithm>
 #include <atomic>

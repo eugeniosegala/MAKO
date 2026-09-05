@@ -7,7 +7,7 @@
 #include "pnext_chain.hpp"
 #include "present_diagnostics.hpp"
 #include "spatial_scaling_policy.hpp"
-#include "swapchain.hpp"
+#include "swapchain/swapchain.hpp"
 
 #include "mako-common/configuration/detection.hpp"
 #include "mako-common/helpers/errors.hpp"

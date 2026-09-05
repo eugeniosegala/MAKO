@@ -134,6 +134,21 @@ Build local host archives and Flatpak extensions with:
 
 Artifacts are written under `engine/out/`. MAKO Decky packages this engine automatically through `pnpm run package:local-engine` in the sibling `plugin/` directory.
 
+### Renderer source layout
+
+`mako-render/src/entrypoint.cpp` owns Vulkan interception and `instance.*` owns process/device state and context routing. Swapchain implementation files share one `Swapchain` class and remain compiled into both isolated layer roles through the same `LAYER_SOURCES` list:
+
+| File under `mako-render/src/swapchain/` | Responsibility |
+| --- | --- |
+| `swapchain.hpp` | Context state, lifetime order, and method declarations |
+| `create.cpp`, `create_policy.hpp` | Initial construction and application swapchain provisioning |
+| `resources.cpp` | Private FG/scaler resources, replacement preparation and commit, and HDR reclassification |
+| `profile.cpp` | Live profile application, scheduler resets, refresh feedback, and guarded recreation requests |
+| `present.cpp`, `retirement.hpp` | Presentation execution and retirement proof |
+| `status.cpp` | Assemble requested/applied live status from current state |
+
+The pure scheduling, presentation, scaling, and transition policies retain their existing focused headers and portable tests. Shader algorithms and generated payloads stay with their generators. Keep new work in its existing owner; splitting a translation unit must not introduce another state store, change destruction order, or move work across present and recreation boundaries.
+
 ## More documentation
 
 - <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>: profiles, frame-generation and scaling controls, Adaptive mode, and environment variables.

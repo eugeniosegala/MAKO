@@ -224,7 +224,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
             path.read_text(encoding="utf-8")
             for path in (
                 REPOSITORY_ROOT / "engine/mako-render/src"
-            ).glob("*.cpp")
+            ).rglob("*.cpp")
         )
         current_operations = {
             "skip-generated-frames",

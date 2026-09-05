@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-#include "swapchain_retirement.hpp"
+#include "swapchain/retirement.hpp"
 
 #include <array>
 #include <cstdint>

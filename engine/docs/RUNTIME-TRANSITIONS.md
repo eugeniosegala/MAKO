@@ -190,11 +190,12 @@ These tests do not exercise Vulkan presentation. The full suite's `swapchain-ret
 | Configuration parsing, effective presets, and watched-file state | `mako-common/src/configuration/config.cpp`, `mako-common/include/mako-common/configuration/config.hpp` |
 | Runtime polling, profile selection, backend baselines, and context fan-out | `mako-render/src/instance.cpp`, `mako-render/src/instance.hpp` |
 | Requested/applied merge and transition classification | `mako-render/src/profile_update.hpp` |
-| Live context application, private-resource coordination, and minimal state resets | `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain.cpp` |
-| Effective Off/native presentation branch | `mako-render/src/swapchain_present.cpp` |
+| Live profile application and minimal policy resets | `mako-render/src/swapchain/profile.cpp` |
+| Private-resource preparation, drain, commit, and HDR reclassification | `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain/resources.cpp` |
+| Effective Off/native presentation branch | `mako-render/src/swapchain/present.cpp` |
 | Process-start layer and transport policy | `mako-render/src/presentation_policy.hpp`, `scripts/mako-launch` |
 | HDR safety feedback and private colour transition | `mako-render/src/gamescope_hdr_feedback.cpp`, `mako-render/src/runtime_transition.hpp`, `mako-render/src/color_pipeline.cpp` |
-| Runtime transition diagnostics and requested/applied status | `mako-render/src/entrypoint.cpp`, `mako-render/src/swapchain.cpp`, `mako-render/src/present_diagnostics.*`, `mako-render/src/runtime_status.*` |
+| Runtime transition diagnostics and requested/applied status | `mako-render/src/entrypoint.cpp`, `mako-render/src/swapchain/profile.cpp`, `mako-render/src/swapchain/resources.cpp`, `mako-render/src/swapchain/status.cpp`, `mako-render/src/present_diagnostics.*`, `mako-render/src/runtime_status.*` |
 | Deterministic transition tests | `mako-render/tests/profile_update_tests.cpp`, `mako-render/tests/runtime_transition_tests.cpp`, `mako-render/tests/runtime_status_tests.cpp` |
 | Cross-component schema, wrappers, and UI semantics | `../plugin/shared_config.py`, `../plugin/py_modules/mako_plugin/`, `../plugin/src/`, `../plugin/tests/` |
 

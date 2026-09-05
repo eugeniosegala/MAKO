@@ -34,7 +34,7 @@ class ProductBrandingTests(unittest.TestCase):
         self.assertIn('{" · MAKO Renderer "}', content)
 
         configuration = (
-            PLUGIN_DIR / "src/components/ConfigurationSectionGroups.tsx"
+            PLUGIN_DIR / "src/components/settings/AdvancedRenderingConfigurationGroup.tsx"
         ).read_text(encoding="utf-8")
         self.assertIn("Advanced Rendering Settings", configuration)
 
@@ -132,7 +132,7 @@ class ProductBrandingTests(unittest.TestCase):
         source_files = [
             *(
                 REPOSITORY_ROOT / "engine/mako-render/src"
-            ).glob("*.cpp"),
+            ).rglob("*.cpp"),
             *(
                 REPOSITORY_ROOT / "engine/mako-backend/src"
             ).rglob("*.cpp"),

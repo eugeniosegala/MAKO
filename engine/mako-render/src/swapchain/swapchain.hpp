@@ -191,6 +191,18 @@ namespace mako::layer {
         /// Stop generation in place when the active profile disappears.
         void disableFrameGeneration();
     private:
+        // Shared construction/replacement support; no independent resource owner.
+        [[nodiscard]] static bool directSpatialFrameGenerationOutputSupported(
+            const vk::Vulkan& vk, VkFormat format,
+            SpatialFramePipelinePlacement placement, bool spatialScalingActive);
+        [[nodiscard]] static SwapchainColorPipeline initialColorPipeline(
+            VkFormat format, VkColorSpaceKHR colorSpace,
+            std::optional<bool> gamescopeHdrActive, bool gamescopeDetected,
+            bool hdrExposureDisabled);
+        static void selectPackedHdr10Transport(const vk::Vulkan& vk,
+            backend::Instance& backendInstance, SwapchainColorPipeline& pipeline,
+            bool& applicationSupported, bool& backendSupported);
+
         struct PresentInvocation {
             const vk::Vulkan& vk;
             VkQueue queue;

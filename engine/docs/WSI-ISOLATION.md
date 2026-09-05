@@ -202,11 +202,11 @@ A skipped GPU test proves no GPU behavior. A unit test cannot prove layer orderi
 | Private manifest generation/install | `mako-render/CMakeLists.txt` |
 | Package layout verification | `scripts/package-local.sh` |
 | Process-start policy and transport choice | `mako-render/src/presentation_policy.hpp` |
-| Ordered-SDR generated-image starvation quarantine and retry policy | `mako-render/src/presentation_policy.hpp`, `mako-render/src/swapchain_present.cpp` |
-| Swapchain creation/pNext filtering | `mako-render/src/instance.cpp`, `mako-render/src/swapchain.cpp` |
+| Ordered-SDR generated-image starvation quarantine and retry policy | `mako-render/src/presentation_policy.hpp`, `mako-render/src/swapchain/present.cpp` |
+| Swapchain creation/pNext filtering | `mako-render/src/instance.cpp`, `mako-render/src/swapchain/create.cpp` |
 | Generated-frame plan representation and partial-admission policy | `mako-render/src/generated_frame_plan.hpp` |
 | Adaptive requested/accepted delivery-window policy | `mako-render/src/generated_frame_delivery.hpp`, `mako-render/src/adaptive_scheduler.*` |
-| Requested/admitted/scheduled handoff and generated/original presentation | `mako-render/src/swapchain_present.cpp` |
+| Requested/admitted/scheduled handoff and generated/original presentation | `mako-render/src/swapchain/present.cpp` |
 | Standalone deterministic test | `scripts/test-mako-launch.sh` |
 | Renderer transport and plan tests | `mako-render/tests/presentation_policy_tests.cpp`, `mako-render/tests/generated_frame_plan_tests.cpp` |
 | Decky wrapper and Flatpak equivalents | `../plugin/py_modules/mako_plugin/` and `../plugin/tests/` |

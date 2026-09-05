@@ -10,7 +10,7 @@
 #include "gamescope_hdr_feedback.hpp"
 #include "runtime_transition.hpp"
 #include "spatial_scaling_policy.hpp"
-#include "swapchain.hpp"
+#include "swapchain/swapchain.hpp"
 
 #include <atomic>
 #include <chrono>

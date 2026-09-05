@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "profile_update.hpp"
-#include "swapchain_create_policy.hpp"
+#include "swapchain/create_policy.hpp"
 
 #include <cstdlib>
 #include <iostream>
