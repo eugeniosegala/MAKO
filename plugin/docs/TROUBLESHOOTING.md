@@ -31,6 +31,10 @@ Use the normal Steam/Proton launch option above. MAKO leaves `UbisoftConnect.exe
 
 If the failure persists, collect [MAKO Renderer diagnostics for the failing Steam launch](COLLECT_DIAGNOSTICS.md) and a Proton log from that same attempt. Decky's plugin lifecycle log records installation and profile edits but cannot show which executable crashed or whether MAKO created a rendering context there. Capture a game profile after gameplay loads so **Matched Processes** describes the game rather than its launcher.
 
+## XR Gaming / Breezy lag
+
+XR Gaming's Gamescope effect and its Vulkan-only mode use different presentation paths. MAKO's Gamescope WSI toggle does not select between them. See the [XR Gaming compatibility notes](../../engine/docs/LAYER-CHAINING.md#xr-gaming--breezy) for the current evidence limits and the short off/on/off capture needed to investigate Anchor/Follow lag. Keep the actual Breezy runtime archive; its plugin installation log cannot identify a rendering slowdown.
+
 ## Bazzite and multi-GPU systems
 
 Use the **Wrapper path for this device** shown by MAKO; do not hardcode `/home/deck` when the device uses another home path.
