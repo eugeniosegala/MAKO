@@ -119,6 +119,10 @@ test-engine-gym-proton-e2e *args:
 test-engine-gym-proton-compatibility *args:
     ./engine/scripts/run-mako-gym.sh --suite proton-compatibility {{args}}
 
+# Qualify a bounded set of Renderer cases under mandatory resource constraints.
+test-engine-gym-constraints *args:
+    ./engine/scripts/run-mako-gym.sh --suite constraints {{args}}
+
 # Build the Decky frontend.
 build-plugin:
     pnpm --dir plugin run build

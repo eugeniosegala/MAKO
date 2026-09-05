@@ -30,7 +30,7 @@ branch, waits for the result, and removes the runner and its complete checkout.
 Options:
   --branch NAME          Branch to validate (default: current branch).
   --gym-suite NAME      Run one affected MAKO Gym hardware suite. Repeat to
-                        select multiple suites.
+                        select multiple suites; resource constraints are added once.
   --all-gym-suites      Run every Gym hardware suite after an explicit broad
                         validation decision.
   --no-gym-suites       Run no new Gym hardware suite when no boundary changed

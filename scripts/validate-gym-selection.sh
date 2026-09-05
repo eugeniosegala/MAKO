@@ -70,6 +70,11 @@ case "$selection" in
       fi
       selected_names+=("$requested_name")
     done
+    # Resource qualification is a dependency of selected Renderer hardware
+    # coverage. Append it once; Gym owns the affected areas and case inventory.
+    if [[ ",$selection," != *,constraints,* ]]; then
+      selected_names+=(constraints)
+    fi
     for suite_name in "${suite_names[@]}"; do
       selected=false
       for selected_name in "${selected_names[@]}"; do

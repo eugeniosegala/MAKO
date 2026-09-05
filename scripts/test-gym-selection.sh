@@ -17,13 +17,23 @@ expect_failure() {
 
 "$validator" recovery "Adaptive recovery changed" "$test_root/selected.txt" >/dev/null
 grep -Fxq 'selection=recovery' "$test_root/selected.txt"
-grep -Fxq 'selected=recovery' "$test_root/selected.txt"
+grep -Fxq 'selected=recovery,constraints' "$test_root/selected.txt"
 grep -Fxq 'omitted=vulkan,quality,repeatability,performance,spatial-performance,runtime-overhead,sync-validation,external-recovery,gamescope-e2e,direct-desktop-e2e,sustained-health,proton-e2e,proton-compatibility' "$test_root/selected.txt"
 grep -Fxq 'reason=Adaptive recovery changed' "$test_root/selected.txt"
 
 "$validator" quality,gamescope-e2e "Pixels and WSI changed" >/dev/null
 "$validator" none "Documentation-only release" >/dev/null
 "$validator" all "Explicit maintainer-requested broad audit" >/dev/null
+"$validator" recovery,constraints "Explicit dependency" "$test_root/explicit.txt" >/dev/null
+grep -Fxq 'selected=recovery,constraints' "$test_root/explicit.txt"
+"$validator" none "Portable-only change" "$test_root/none.txt" >/dev/null
+grep -Fxq 'selected=none' "$test_root/none.txt"
+while IFS= read -r suite_name; do
+  "$validator" "$suite_name" "Affected boundary" "$test_root/dependency.txt" >/dev/null
+  selected="$(sed -n 's/^selected=//p' "$test_root/dependency.txt")"
+  [[ ",$selected," == *,constraints,* ]]
+  [[ "$(tr ',' '\n' <<<"$selected" | grep -c '^constraints$')" == 1 ]]
+done < <("$bridge" --list-suites)
 
 expect_failure "" "Missing selection"
 expect_failure recovery ""
@@ -35,6 +45,9 @@ expect_failure recovery $'Two\nlines'
 
 grep -Fq './scripts/validate-gym-selection.sh' "$workflow"
 grep -Fq 'engine/out/mako-gym-selection.txt' "$workflow"
+grep -Fq 'echo "MAKO_GYM_SUITES=$selected" >> "$GITHUB_ENV"' "$workflow"
+grep -Fq -- '--affected-suites "$MAKO_GYM_SUITES" --require-complete' "$workflow"
+grep -Fq -- '--cli "$matrix_prefix/bin/mako-cli"' "$workflow"
 while IFS= read -r suite_name; do
   handled_count="$({
     grep -F -- "--suite $suite_name" "$workflow" || true

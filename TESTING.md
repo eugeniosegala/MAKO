@@ -72,7 +72,7 @@ MAKO Gym is an optional sibling checkout for local development and a required re
 
 Before any hardware run, validate Gym's portable contracts with `(cd ../MAKO-Gym && ./scripts/check.sh)` or `just check` from its checkout.
 
-The bridge exposes one consistent selection pattern. `--list-suites` discovers every suite; `--all-suites --validate` validates all fourteen suite inventories without hardware; `--suite NAME --list` discovers rows; `--filter REGEX` runs a focused subset; and omitting `--filter` runs the complete selected suite:
+The bridge exposes one consistent selection pattern. `--list-suites` discovers every suite; `--all-suites --validate` validates all fifteen suite inventories without hardware; `--suite NAME --list` discovers rows; `--filter REGEX` runs a focused subset; and omitting `--filter` runs the complete selected suite:
 
 ```bash
 ./engine/scripts/run-mako-gym.sh --list-suites
@@ -82,7 +82,7 @@ The bridge exposes one consistent selection pattern. `--list-suites` discovers e
 ./engine/scripts/run-mako-gym.sh --suite recovery
 ```
 
-Run the smallest suite and filter that can observe a change. A filtered pass is evidence only for its selected rows. Widen to the complete affected suite when a shared production owner changes. A release does not automatically select every suite; run all suites only for a genuinely cross-cutting change or an explicit maintainer request.
+Run the smallest suite and filter that can observe a change. Complete hardware qualification additionally requires Gym's bounded `constraints` suite for the selected boundaries; the compact Gym hardware runner and the release gate enforce this automatically. Direct filtered suite runs remain development evidence and cannot substitute for that qualification. A filtered pass is evidence only for its selected rows. Widen to the complete affected suite when a shared production owner changes. A release does not automatically select every suite; run all suites only for a genuinely cross-cutting change or an explicit maintainer request.
 
 Retained evidence may be reused instead of duplicated only when the exact Renderer/package identity, host and driver, Gym commit, configuration, and required rows match the candidate. Record the prior run identifier in the release rationale. A code, package, driver, scenario, or assertion change invalidates the affected evidence.
 
@@ -144,6 +144,7 @@ The manifests and guides in MAKO Gym are authoritative for row semantics, thresh
 | `direct-desktop-e2e` | 8 | Six native positive scaling/Frame Generation lifecycle rows plus DXVK Frame Generation and VKD3D-Proton scaling-request fallback sentinels in a graphical session outside Gamescope | `docs/DIRECT-DESKTOP-END-TO-END.md` |
 | `sustained-health` | 3 | Repeated private-resource RSS/allocation plateaus plus Deck and opt-in docked thermal/performance soaks | `docs/SUSTAINED-HEALTH.md` |
 | `proton-e2e` | 12 | Six deterministic scenes through both DXVK and VKD3D-Proton | `docs/PROTON-END-TO-END.md` |
+| `constraints` | ≤12 | Canonical Fixed/Adaptive recovery under normal, two-CPU and competing-GPU conditions; FP32/FP16 throughput and real memory-pressure release under normal/two-CPU conditions | `docs/RESOURCE-CONSTRAINTS.md` |
 | `proton-compatibility` | 10 | Stratified sentinels across provenance-checked Proton families | `docs/PROTON-COMPATIBILITY.md` |
 
 When selected, a complete suite runs all of its rows; the extended Proton compatibility selection uses at least four runtime families. Portable validators prove inventory correctness only. GPU suites do not prove subjective quality, input-to-photon latency, power, scanout timing, arbitrary games, other GPUs/drivers, 32-bit presentation, Flatpak behavior, or HDR unless the owning row explicitly covers that boundary. Record unselected and unavailable coverage as **not tested**.
@@ -169,7 +170,7 @@ When an explicit maintainer request or genuinely cross-cutting change requires e
   --gym-reason 'Explicit complete Renderer hardware audit'
 ```
 
-The launcher requires exactly one explicit selection mode: repeat `--gym-suite`, pass `--no-gym-suites` when no Renderer-facing hardware boundary changed or exact matching evidence is being reused, or pass `--all-gym-suites` for a genuinely cross-cutting or explicitly requested broad audit. `--gym-reason` is always required and must identify reused evidence. The workflow validates every Gym manifest and runner portably, but executes only the selected hardware suites; portable validation is not hardware evidence. The normal host/Flatpak build prerequisites, `vulkaninfo`, `vkcube`, Gamescope, local licensed `Lossless.dll`, and a clean compatible MAKO Gym checkout remain required.
+The launcher requires exactly one explicit selection mode: repeat `--gym-suite`, pass `--no-gym-suites` when no Renderer-facing hardware boundary changed or exact matching evidence is being reused, or pass `--all-gym-suites` for a genuinely cross-cutting or explicitly requested broad audit. `--gym-reason` is always required and must identify reused evidence. The selection validator automatically adds `constraints` once to named Renderer hardware selections. The workflow uses that expanded selection and runs the applicable mandatory resource combinations with the exact packaged CLI and launcher and `--require-complete`. `none` adds no hardware work. The workflow validates every Gym manifest and runner portably, but executes only the selected hardware suites plus this bounded dependency; portable validation is not hardware evidence. The normal host/Flatpak build prerequisites, `vulkaninfo`, `vkcube`, Gamescope, local licensed `Lossless.dll`, and a clean compatible MAKO Gym checkout remain required.
 
 The gate creates a disposable one-job GitHub Actions runner, verifies the official runner archive, and rebuilds the complete dual-bitness/Flatpak package regardless of Gym selection. Selected quality, LSFG/spatial performance, synchronization, and repeatability suites run against the clean source-built `mako-cli`; selected feature, runtime-overhead, recovery, external recovery, Gamescope, direct desktop, sustained-health, Proton E2E, and Proton-compatibility suites use the exact extracted Renderer package. Direct desktop selection requires launching the one-job runner from a graphical desktop session outside Gamescope. The gate records selected and omitted suites, the rationale, Gym commit, and contract version; retains sanitized evidence and the verified ZIP for 14 days; and removes runner credentials and staging afterward.
 
