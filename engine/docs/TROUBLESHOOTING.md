@@ -21,9 +21,8 @@
 
 Use `VK_LOADER_DEBUG=layer` with the normal launch command when you need to see Vulkan-loader decisions. Look for `VK_LAYER_MAKO_render` and the `MAKO Renderer: render layer active` message.
 
-## The layer loads but frame generation does not start
+## The layer loads but a feature does not start
 
-- Confirm that Lossless Scaling is installed through Steam and that MAKO can find `Lossless.dll`. Set `dll` in the configuration if the library is in a non-standard Steam location.
 - Validate the configuration:
 
     ```bash
@@ -32,6 +31,8 @@ Use `VK_LOADER_DEBUG=layer` with the normal launch command when you need to see 
 
 - Check the active profile. `active_in` must match the actual Linux binary, Windows executable, process name, or path suffix. Set `MAKO_PROFILE` to a known profile name to test profile matching explicitly.
 - On multi-GPU systems, the profile's `gpu` must identify the same GPU used by the game.
+- For Frame Generation, confirm that Lossless Scaling is installed through Steam and that MAKO can find `Lossless.dll`. Set `dll` in the configuration if the library is in a non-standard Steam location.
+- For scaling, enable it before launching the game. Native Resolution and MAKO Scaler need no licensed model; LS1 also needs `Lossless.dll` and an architecture-matched `libvkd3d-shader.so.1`. Check Live Status or `mako-diagnostics scaling` for the effective factor and any inactive reason.
 - Test the game's V-Sync both on and off. Also check its own FPS limiter, VRR, and compositor settings before changing MAKO options.
 
 For a Flatpak game or emulator, the host layer is not visible inside the sandbox. Install the matching MAKO Flatpak extension and application overrides as described in the [Flatpak guide](FLATPAK-GUIDE.md). MAKO Decky manages those steps through **Flatpak Setup**.

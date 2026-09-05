@@ -123,7 +123,13 @@ manual_release_notes="$(
     "$project_dir/RELEASE_NOTES.md" "MAKO Decky" "$notes_version"
 )"
 
-git -C "$project_dir" fetch origin --tags --quiet
+git -C "$project_dir" fetch origin \
+  refs/heads/main:refs/remotes/origin/main --tags --quiet
+remote_main_commit="$(git -C "$project_dir" rev-parse refs/remotes/origin/main)"
+if [[ "$(git -C "$project_dir" rev-parse HEAD)" != "$remote_main_commit" ]]; then
+  echo "Local main must exactly match origin/main before publishing. Push or synchronize the release commit first." >&2
+  exit 1
+fi
 
 if [[ -n "$requested_version" ]]; then
   read -r current_package_version pinned_engine_version < <(
@@ -148,6 +154,7 @@ if [[ -n "$requested_version" ]]; then
     ' "$project_dir/package.json" "$requested_version"
     git -C "$repository_root" add plugin/package.json
     git -C "$repository_root" commit -m "Release MAKO Decky v$requested_version"
+    git -C "$repository_root" push origin "$current_branch"
   fi
 fi
 
@@ -265,7 +272,7 @@ printf '%s\n' \
   '> [!IMPORTANT]' \
   '> MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. Frame Generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied Lossless Scaling installation. The open MAKO Scaler does not use it. MAKO does not alter the user’s DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy.' \
   '' \
-  '> ⚠️ **Required MAKO Renderer update:** Installing the ZIP updates MAKO Decky, but does **not** replace its private Vulkan layer. Open the plugin and select **Install MAKO Renderer** afterwards.' \
+  '> ⚠️ **Required MAKO Renderer update:** Installing the ZIP updates MAKO Decky, but does **not** replace the shared native Renderer. Open the plugin and select **Install MAKO Renderer** afterwards.' \
   '' \
   > "$notes_file"
 
@@ -301,7 +308,7 @@ printf '%s\n' \
   '5. ⚠️ **Required:** Open MAKO Decky and select **Install MAKO Renderer** to install the version bundled in the new ZIP.' \
   '6. In **Flatpak Setup**, select **Update** for every prepared application’s matching runtime extension. This replaces its Flatpak layer with the engine bundled in the new ZIP while preserving its preparation and per-game Wrapper commands.' \
   '' \
-  'Existing profiles and Steam launch options are retained. The private native renderer and launcher are re-created in step 5; shared Flatpak extensions are retained, then refreshed in step 6.' \
+  'Existing profiles and Steam launch options are retained. The shared native Renderer and launcher are re-created in step 5; shared Flatpak extensions are retained, then refreshed in step 6.' \
   '' \
   '## Known limitation' \
   '' \
@@ -326,12 +333,13 @@ git -C "$project_dir" push origin "$current_branch"
 git -C "$project_dir" push origin "$plugin_release_tag"
 
 if gh release view "$plugin_release_tag" --repo "$github_repository" >/dev/null 2>&1; then
+  node "$repository_root/scripts/upload-release-assets.mjs" \
+    "$github_repository" "$plugin_release_tag" "$output_path"
   gh release edit "$plugin_release_tag" --repo "$github_repository" \
     --title "MAKO Decky v$package_version" \
     --notes-file "$notes_file" \
     --prerelease=false \
     --latest
-  gh release upload "$plugin_release_tag" "$output_path" --repo "$github_repository" --clobber
 else
   gh release create "$plugin_release_tag" "$output_path" --repo "$github_repository" \
     --title "MAKO Decky v$package_version" \

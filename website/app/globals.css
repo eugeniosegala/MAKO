@@ -301,7 +301,7 @@ code { padding: 2px 5px; border: 1px solid rgba(0, 217, 255, .13); border-radius
 .requirement-note { display: grid; grid-template-columns: .3fr 1fr; gap: 50px; align-items: center; margin-top: 20px; padding: 24px 30px; border: 1px solid rgba(255, 106, 0, .18); border-radius: 9px; background: rgba(255, 106, 0, .025); }
 .requirement-note > span { color: var(--orange); font: 600 9px var(--font-mono), ui-monospace, monospace; letter-spacing: .12em; }
 .requirement-note p { margin: 0; color: #768d9b; font-size: 12px; line-height: 1.6; }
-.requirement-note a { color: #d9edf8; text-decoration: underline; text-decoration-color: rgba(0, 217, 255, .4); text-underline-offset: 3px; }
+.hero-intro a, .requirement-note a { color: #d9edf8; text-decoration: underline; text-decoration-color: rgba(0, 217, 255, .4); text-underline-offset: 3px; }
 
 .faq-section { display: grid; grid-template-columns: .65fr 1fr; gap: 100px; padding: 70px 0 165px; }
 .faq-section header .section-kicker { margin-bottom: clamp(24px, 2.5vw, 34px); }

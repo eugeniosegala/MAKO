@@ -8,7 +8,7 @@ MAKO is an independent open-source project. MAKO source archives, MAKO Renderer 
 
 The open MAKO Scaler works without Lossless Scaling. A user who chooses LSFG frame generation or LS1 scaling must independently obtain a lawful copy of Lossless Scaling and select or permit discovery of its locally installed `Lossless.dll`. The user is responsible for complying with the terms and law applicable to that copy. MAKO grants no license or other rights in Lossless Scaling or its proprietary resources.
 
-When a licensed model is selected, MAKO Renderer reads the user-supplied local DLL at runtime and uses the resources needed for the selected LSFG or LS1 feature. MAKO does not install, upload, package, alter, or persist the DLL or extracted proprietary payloads.
+When a licensed model is selected, MAKO Renderer reads the user-supplied local DLL at runtime and uses the resources needed for the selected LSFG or LS1 feature. MAKO does not install, upload, package, or alter the DLL, or save extracted resources as standalone files.
 
 Lossless Scaling, LS1, and LSFG are used descriptively and remain the property of their respective owner. MAKO is not affiliated with or endorsed by Lossless Scaling.
 
@@ -24,7 +24,7 @@ Copyright in the incorporated portions remains with the respective lsfg-vk copyr
 
 ## MAKO Decky frontend
 
-MAKO Decky's compiled frontend includes the following third-party code and icon data. Exact dependency versions are recorded in `plugin/package.json` and `plugin/pnpm-lock.yaml`. MAKO Decky packages include copies of the upstream dependency license files under `third_party_licenses/` and retain a frontend source map with the exact bundled dependency source content.
+MAKO Decky's compiled frontend includes the following third-party code and icon data. Declared dependencies are in `plugin/package.json`, and exact resolutions are in `plugin/pnpm-lock.yaml`. MAKO Decky packages include the upstream license files under `third_party_licenses/` and a frontend source map with the bundled dependency source content.
 
 - **@decky/api**, Steam Deck Homebrew, GNU Lesser General Public License version 2.1. Source: <https://github.com/SteamDeckHomebrew/decky-frontend-lib>.
 - **React Icons**, copyright 2018 kamijin_fanta, MIT License. Source: <https://github.com/react-icons/react-icons>.

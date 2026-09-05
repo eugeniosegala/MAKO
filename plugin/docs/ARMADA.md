@@ -32,20 +32,13 @@ package.json host_architectures
         +-- archive architectures: 64-bit/32-bit Vulkan client payloads
 ```
 
-The boundary is centralized in `host_environment.py`. Host installation, startup migration, generated wrappers, Flatpak activation, backend status, and the Decky install button all consume the same decision. Do not add a second Armada detector or infer native support solely from `platform.machine()`.
+## Safety constraints
 
-The generated wrapper checks the host before setting `ENABLE_MAKO`, Vulkan manifest paths, WSI/HDR policy, diagnostics, profile settings, or competitor guards. This ordering is a safety invariant: an unsupported process must leave through the passthrough branch without inheriting a partial MAKO environment.
+`host_environment.py` owns native-host detection for installation, startup, wrapper generation, Flatpak activation, backend status, and the install button. Do not add a second Armada detector or rely only on `platform.machine()`, which may describe a translated process rather than the host.
 
-## What was retained from the upstream work
+The wrapper checks compatibility before setting MAKO, Vulkan, WSI/HDR, diagnostic, profile, or conflict-guard variables. On Armada it preserves `armada-game-launch` exactly once. Staging remains deterministic and user-owned rather than crossing a translated `/tmp` boundary.
 
-The useful, bounded parts of the original Armada integration remain:
-
-- a stable root-owned Armada marker instead of trusting a translated process;
-- deterministic user-owned staging and permissions rather than crossing a translated `/tmp` boundary;
-- `armada-game-launch` preservation with double-wrapping protection; and
-- an explicit native-host declaration in package metadata.
-
-MAKO does not carry the unfinished global platform/overlay framework proposed upstream, does not rewrite FEX's global `Config.json`, and does not download an opaque AArch64 layer binary. Those approaches expand the failure surface and do not establish that the Vulkan layer is reproducible or correct on Armada.
+MAKO must not rewrite FEX's global `Config.json`, install an always-on system layer, or download an opaque AArch64 binary. Native support requires a reviewable package built and validated through MAKO's normal release path.
 
 ## Requirements for enabling Armada
 
@@ -54,7 +47,7 @@ Armada must remain disabled until one release candidate satisfies all of these a
 1. Produce the native AArch64 Renderer from reviewable source in MAKO's normal build and release workflow, with immutable version and checksum metadata.
 2. Define the required native-host and Vulkan client-process payload matrix; do not assume the existing x86_64 `64`/`32` archive labels prove FEX or Turnip compatibility.
 3. Prove Vulkan loader activation and clean teardown on Armada without global FEX configuration edits or an always-on system layer.
-4. Validate `armada-game-launch`, direct Steam/Proton games, relevant Flatpak launchers, and one-launch bypass behavior.
+4. Validate `armada-game-launch`, direct Steam/Proton games, relevant Flatpak launchers, and the explicitly selected Renderer bypass.
 5. Run FP32 and FP16 image-quality comparisons, fixed and adaptive scheduling, swapchain recreation, overlays, focus changes, and representative games on real Armada/Turnip hardware.
 6. Ship a tested rollback: an unsupported or failed native package must return to the same passthrough behavior documented above.
 

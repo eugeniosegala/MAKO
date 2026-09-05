@@ -20,5 +20,5 @@ Sea Rapture is MAKO 3.1: a focused follow-up that makes Spatial Scaling faster, 
 - **Clear per-game startup compatibility:** For affected titles such as _Detroit: Become Human_, the new restart-only **Game Swapchain Images** toggle preserves the game's requested swapchain minimum, while MAKO keeps faster generated-frame headroom enabled by default for other games.
 - **Smoother Frame Generation changes:** Multiplier increases wait for a game-owned swapchain recreation when necessary, avoiding repeated timeout recovery and preserving steadier presentation cadence.
 - **Safer scaling transitions:** Resolution changes, supersampling, and GPU-memory constraints now rebuild or fall back more reliably without leaving stale limits behind.
-- **More useful Live Status:** See the real **Input**, **Render**, and **Display** resolutions, available memory headroom, and any constrained scale factor.
+- **More useful Live Status:** See the real **Input**, **Render**, and **Display** resolutions, plus whether display or memory limits constrain the requested scale factor.
 - **Faster combined performance:** Leaner resource allocation and improved recovery reduce overhead when Spatial Scaling and Frame Generation run together.

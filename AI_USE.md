@@ -1,20 +1,18 @@
 # AI use in MAKO
 
-MAKO uses AI-assisted development openly and extensively. AI is part of the engineering workflow, but it does not replace technical ownership, review, or release accountability.
+MAKO uses AI-assisted development openly. AI can accelerate engineering work, but it does not replace technical ownership, review, or release accountability.
 
 ## What AI is used for
 
-Coding agents help accelerate work such as:
+Coding agents may help with:
 
-- exploring implementation options and tracing existing code paths;
-- drafting routine implementation and refactoring work;
-- writing and extending automated tests;
-- adding diagnostics and instrumentation;
-- analysing logs, performance data, and regressions;
-- maintaining documentation and release tooling; and
-- coordinating focused investigations across development and test environments.
+- tracing code and exploring implementation options;
+- drafting focused changes and refactors;
+- writing tests and diagnostics;
+- analysing logs, performance data, and regressions; and
+- maintaining documentation and tooling.
 
-The amount and type of assistance varies by task. An agent may draft a routine change or help investigate a difficult edge case. A percentage of "AI-written code" would therefore say little about how the software was designed, reviewed, or validated.
+The amount of assistance varies by task, so a percentage of "AI-written code" would say little about how the software was designed, reviewed, or validated.
 
 ## Human ownership and judgement
 
@@ -27,23 +25,19 @@ The project maintainer remains responsible for:
 - defining the evidence required for validation; and
 - deciding whether a change is ready to release.
 
-Agent output is a proposed contribution, not proof of correctness. The maintainer reviews it in context and may rework or reject it.
+Agent output is a proposed contribution, not proof of correctness. The maintainer reviews it in context and may change or reject it.
 
 ## Validation
 
-MAKO changes are validated according to their risk and scope. The process can include code review, automated tests, native and Flatpak builds, targeted instrumentation, log analysis, performance measurements, regression checks, and testing on real SteamOS hardware.
+MAKO validates changes according to their risk and scope. Evidence can include review, automated tests, native and Flatpak builds, instrumentation, performance measurements, regression checks, and real SteamOS hardware.
 
-Graphics and frame-timing work must account for changing frame rates, GPU pressure, overlays, hitches, swapchain recreation, compositor behavior, and recovery after unstable presentation. AI can help collect and analyse this evidence, but evidence rather than agent confidence determines acceptance.
+Graphics and frame-timing work must also account for changing frame rates, GPU pressure, overlays, hitches, swapchain recreation, compositor behavior, and recovery. Evidence rather than agent confidence determines acceptance.
 
 ## Agent workflow
 
-Development may use multiple focused agents and event-driven automation across local, virtual, and real-device environments. Their results feed the same implementation, measurement, review, and validation loop.
+Repository agents follow [AGENTS.md](AGENTS.md) for ownership, generated files, compatibility, and mutation limits, then use [TESTING.md](TESTING.md) to select proportionate evidence. They preserve unrelated work and report any hardware or runtime coverage not exercised.
 
-Repository agents follow [the repository guide](AGENTS.md) for directory placement, source-of-truth ownership, compatibility boundaries, generated files, and mutation limits, then use [the testing guide](TESTING.md) to select evidence in proportion to the affected boundary. They inspect the current worktree before editing, preserve unrelated changes, extend an existing owner instead of creating parallel constants or serialization paths, and report any hardware or runtime matrix that was not exercised.
-
-Local implementation, refactoring, testing, or packaging does not by itself authorize a branch change, commit, push, deployment, tag, or release. Those mutations remain explicit maintainer decisions, and the release scripts enforce a clean, reviewed, hardware-validated path from Renderer publication through the pinned MAKO Decky package.
-
-The current toolset includes Claude Code and Codex alongside conventional engineering, build, test, profiling, and source-control tools. Tools may change; human accountability and evidence requirements do not.
+Local implementation, testing, or packaging does not authorize a branch change, commit, push, deployment, tag, or release. Those actions require an explicit maintainer decision. The separate release process in [HOW_TO_RELEASE.md](HOW_TO_RELEASE.md) requires clean source, an explicit hardware-evidence decision, ordered publication, and final public-package verification.
 
 ## Further reading
 

@@ -47,7 +47,7 @@ build-engine:
 test-engine: build-engine
     ctest --test-dir engine/build --output-on-failure
 
-# Run the portable Renderer policy tests without a Vulkan SDK or GPU.
+# Run the portable Renderer policy tests with Vulkan headers but without a Vulkan device.
 test-engine-portable:
     cd engine && ./scripts/test-adaptive-scheduler.sh
 

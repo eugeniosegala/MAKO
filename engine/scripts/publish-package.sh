@@ -103,7 +103,13 @@ if ! gh auth status >/dev/null 2>&1; then
     exit 1
 fi
 
-git fetch "$release_remote" --tags --quiet
+git fetch "$release_remote" \
+    "refs/heads/main:refs/remotes/$release_remote/main" --tags --quiet
+remote_main_commit="$(git rev-parse "refs/remotes/$release_remote/main")"
+if [[ "$(git rev-parse HEAD)" != "$remote_main_commit" ]]; then
+    echo "Local main must exactly match $release_remote/main before publishing. Push or synchronize the release commit first." >&2
+    exit 1
+fi
 
 if [[ -n "$requested_version" ]]; then
     current_version="$(tr -d '[:space:]' < VERSION)"
@@ -111,6 +117,7 @@ if [[ -n "$requested_version" ]]; then
         printf '%s\n' "$requested_version" > VERSION
         git add VERSION
         git commit -m "Release MAKO Renderer v$requested_version"
+        git push "$release_remote" "$release_branch"
     fi
 fi
 
@@ -155,7 +162,7 @@ $manual_release_notes
 > [!TIP]
 > **Try the game’s V-Sync setting both on and off.** It can make frame delivery feel steadier, but may also add input lag or clash with the game’s FPS cap, VRR, or compositor. Every game is different: compare both options and keep the one that feels smoother and more responsive.
 
-Every game, renderer, and display setup behaves differently. Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling-only operation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart after major display, DLL, GPU, Flow Scale, Performance Mode, model, or Scaling enablement changes.
+Every game, renderer, and display setup behaves differently. Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling-only operation one setting at a time. Fullscreen is usually the best starting point for performance and frame pacing. Restart after changing a setting labelled **(Restart)**. Flow Scale and Lighter FG Model normally apply live and may cause one brief hitch while MAKO replaces their private resources.
 
 - **Adaptive target behaviour:** Adaptive varies the generated-frame count toward an average target. It cannot reduce a native frame rate already above that target, and the result still depends on the selected multiplier plus available GPU and compositor capacity.
 - **Quality and latency tuning:** Higher multipliers and lower real-frame rates can increase ghosting and input latency. Smooth Cadence may improve motion consistency while reducing responsiveness, so compare the available choices per game.
@@ -229,14 +236,13 @@ git push "$release_remote" "$release_branch"
 git push "$release_remote" "$tag"
 
 if gh release view "$tag" --repo "$release_repository" >/dev/null 2>&1; then
+    node "$repository_root/scripts/upload-release-assets.mjs" \
+        "$release_repository" "$tag" "$archive" "$flatpak_archive"
     gh release edit "$tag" \
         --repo "$release_repository" \
         --title "MAKO Renderer v$version" \
         --notes-file "$notes_file" \
         --latest=false
-    gh release upload "$tag" "$archive" "$flatpak_archive" \
-        --repo "$release_repository" \
-        --clobber
 else
     gh release create "$tag" "$archive" "$flatpak_archive" \
         --repo "$release_repository" \

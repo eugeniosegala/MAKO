@@ -1,6 +1,6 @@
-# Building MAKO Renderer from Source
+# Building MAKO Renderer from source
 
-This guide covers development builds, distributable archives, and installation from source.
+This guide covers local development, source installation, and distributable Renderer packages.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
@@ -22,8 +22,9 @@ Install:
 - A C++ compiler that supports C++20 or later
 - CMake (version 3.10 or higher)
 - Ninja (recommended; other CMake generators may work)
-- Vulkan SDK
+- Vulkan headers and loader development files
 - X11 headers (`libx11` and `xorgproto` on Arch/SteamOS)
+- Python 3 when building the registered tests
 - A multilib C++ toolchain when building the 32-bit Vulkan layer
 - Qt 6.2 or newer and Qt6Quick (only needed when building `mako-ui`)
 
@@ -32,10 +33,10 @@ Package names vary by distribution. These commands cover common Debian/Ubuntu an
 ```bash
 # On Debian/Ubuntu, use:
 sudo apt-get install -y \
-    git curl \
+    git curl python3 \
     llvm clang clang-tools clang-tidy \
     cmake ninja-build pkg-config g++-multilib \
-    libvulkan-dev \
+    libvulkan-dev libx11-dev \
     mesa-common-dev \
     qt6-base-dev qt6-base-dev-tools \
     qt6-tools-dev qt6-tools-dev-tools \
@@ -43,14 +44,14 @@ sudo apt-get install -y \
 
 # On Arch Linux, use:
 sudo pacman -S --needed \
-    git curl \
+    git curl python \
     llvm clang ccache lib32-glibc \
     cmake ninja \
     vulkan-headers vulkan-icd-loader libx11 xorgproto \
     qt6-base qt6-declarative
 ```
 
-The release packager builds the normal 64-bit application, CLI, UI, launcher, and layer, then builds a second layer with `-m32`. It installs the two layer libraries in `lib` and `lib32` with architecture-tagged Vulkan manifests. Direct CMake builds produce one layer for the compiler architecture selected for that build.
+The release packager builds the 64-bit CLI, UI, launcher, and both Renderer roles, then builds both roles again with `-m32`. It installs the libraries in `lib` and `lib32` with architecture-tagged manifests. A direct CMake build targets only the selected compiler architecture.
 
 ## Choose the right build path
 
@@ -59,22 +60,20 @@ The release packager builds the normal 64-bit application, CLI, UI, launcher, an
 | Incremental native Renderer work on SteamOS | `engine/scripts/build-steamos-dev.sh` | Reuses a development tree and builds the 64-bit layer and CLI; no distributable archive |
 | Standalone Renderer archive | `engine/scripts/package-local.sh` | Tests and packages the host Renderer payload; does not build MAKO Decky or publish |
 | Complete MAKO Decky tester package from current Renderer source | `pnpm --dir plugin run package:local-engine` from the repository root | Builds and embeds the native and Flatpak Renderer payloads in a self-contained local ZIP |
-| SteamOS/AMD release candidate | `scripts/run-steamos-hardware-validation.sh --gym-suite <affected-suite> --gym-reason '<why>' --deploy-to-decky` from the repository root | Rebuilds a clean, pushed commit, runs explicitly selected Gym hardware coverage, and optionally deploys the already-verified ZIP; publishes nothing |
+| SteamOS/AMD release candidate | `scripts/run-steamos-hardware-validation.sh --gym-suite <affected-suite> --gym-reason '<why>' --deploy-to-decky` from the repository root | Rebuilds a clean, pushed commit, runs explicitly selected Gym hardware coverage, and optionally deploys the gate-built ZIP; publishes nothing and does not promote that ZIP into the later release |
 | Matched public release | `scripts/publish-release.sh X.Y.Z` from the repository root | Publishes MAKO Renderer first, pins it by checksum, then publishes MAKO Decky |
 
-Use the fast paths for iteration, the complete local package for testers, and the dedicated hardware workflow for the release candidate. Publication is a separate, explicitly invoked cycle described in [How to release MAKO](../../HOW_TO_RELEASE.md).
+Use the incremental script for iteration, the local package for testers, and the hardware workflow for a release candidate. Publication is a separate workflow that applies version and pin commits and rebuilds the public artifacts, as described in [How to release MAKO](../../HOW_TO_RELEASE.md).
 
-Distributable Renderer archives and Flatpak extensions carry the project license, third-party notices, and asset-provenance record. The packaging scripts fail closed when those files are absent from the source tree or final payload.
-
-The standalone host installer rewrites the configuration and uninstall desktop entries to the absolute executables under the selected installation prefix, so KDE launchers do not depend on `~/.local/bin` being present in their inherited `PATH`. Flatpak exports retain their runtime-owned command names.
+Distributable archives and Flatpak extensions include the project license, third-party notices, and asset-provenance record. Packaging fails if those files or another required payload entry is missing. The standalone installer also rewrites its desktop entries to the selected installation prefix.
 
 ## Reusable SteamOS release-build SDK
 
-`scripts/package-local.sh` normally uses the host Qt development installation. On a Pacman-based SteamOS host where Qt appears installed but its headers or CMake files are missing, the packager automatically downloads the exact `qt6-base`, `qt6-declarative`, and `libglvnd` packages selected by Pacman into `engine/build/cache/native-sdk/`. It extracts and reuses that isolated SDK on later release builds, without Docker, Podman, root access, or changes to the SteamOS installation. The first fallback build needs network access; later builds reuse the cached files.
+`scripts/package-local.sh` normally uses the host Qt development installation. On Pacman-based SteamOS, if the Qt headers or CMake files are unavailable, it caches an isolated SDK under `build/cache/native-sdk/`. The first fallback build needs network access; later builds reuse the cache without changing the host installation.
 
 This fallback applies only to `scripts/package-local.sh`. Manual CMake builds still use the system development packages. Set `MAKO_NATIVE_SDK_DIR` to place that SDK somewhere else, or set `MAKO_BUILD_CACHE_ROOT` to relocate all MAKO build caches together.
 
-Native Linux packaging does not require a container. The packager verifies that the resulting `mako-ui` does not require a Qt ABI newer than 6.4, which keeps published host archives compatible with Ubuntu 24.04. If the host distribution only provides a newer Qt, rerun with `MAKO_PORTABLE_PACKAGE=1`; that optional mode uses Docker or Podman and builds the UI against Ubuntu 22.04's Qt 6.2 baseline. Non-Linux packaging continues to require one of those container runtimes.
+Native Linux packaging does not require a container. The package check rejects a UI that needs symbols newer than Qt 6.4. If the host provides only a newer Qt, set `MAKO_PORTABLE_PACKAGE=1` to build against Ubuntu 22.04's Qt 6.2 baseline with Docker or Podman. Non-Linux packaging also requires one of those runtimes.
 
 ## Fast SteamOS development build
 
@@ -84,39 +83,39 @@ For native Steam-game iteration, use the persistent incremental build instead of
 ./scripts/build-steamos-dev.sh
 ```
 
-It builds the 64-bit Vulkan layer and CLI and keeps `build/steamos-dev` between runs. When the private sibling MAKO Gym checkout is available, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli` from `engine/` for real AMD validation. MAKO Gym owns its current quality, performance, synchronization, repeatability, and resolution matrices; the SteamOS release workflow runs only the lanes selected for the changed boundaries or by an explicit maintainer request. To retain a second incremental tree for genuine 32-bit games, run:
+It builds both 64-bit Renderer roles and the CLI, retaining `build/steamos-dev` between runs. For real AMD validation with a sibling MAKO Gym checkout, run `./scripts/run-mako-gym.sh --suite quality --cli build/steamos-dev/mako-cli/mako-cli`. To retain a second tree for genuine 32-bit games, run:
 
 ```bash
 ./scripts/build-steamos-dev.sh --with-32-bit
 ```
 
-The 32-bit tree defaults to `build/steamos-dev-32`. Both commands intentionally skip the Qt UI, Flatpak extensions, general test suite, archives, Decky ZIP, and private hardware QA. MAKO Gym accepts `--dll` for a nonstandard Lossless Scaling installation and `--gpu` for an exact AMD device name. Subsequent builds compile only changed source and its dependants. When available, `ccache` is enabled automatically and stored under `build/cache/ccache`; install it with the rest of the Arch build prerequisites to retain compiler results across larger rebuilds.
+The 32-bit tree defaults to `build/steamos-dev-32`. This development path skips the UI, Flatpak extensions, tests, archives, Decky ZIP, and hardware QA. It uses `ccache` under `build/cache/ccache` when available.
 
 ## SteamOS Flatpak development cache
 
-MAKO keeps all reusable build data under `build/cache` by default. The plugin's `dev:flatpaks` and `dev:e2e` commands retain their isolated Flatpak SDK/runtime downloads under `build/cache/flatpak` and use `build/work/flatpak` for self-cleaning staging. Nothing in these locations is installed into `/root` or the host system. To inspect all repository-local build storage safely, run:
+Reusable package data lives under `build/cache`; disposable staging lives under `build/work`. Inspect both without deleting anything:
 
 ```bash
 ./scripts/prune-build-cache.sh
 ```
 
-That command is a dry run. Add `--confirm` only when you want to remove all reusable Qt, Flatpak, and compiler caches plus disposable work trees. Native incremental builds, release artifacts, installed MAKO data, and profiles remain untouched.
+Add `--confirm` to remove those two trees. Native incremental builds, release artifacts, installed MAKO files, and profiles are not removed.
 
-To inspect or remove only the Flatpak portion, run:
+To inspect only the Flatpak cache and staging area, run:
 
 ```bash
 ./scripts/prune-steamos-flatpak-cache.sh
 ```
 
-To delete only the Flatpak cache and work directory, add the explicit confirmation flag:
+Add `--confirm` to remove only those Flatpak directories:
 
 ```bash
 ./scripts/prune-steamos-flatpak-cache.sh --confirm
 ```
 
-For safety, both pruners target only the default repo-local locations. If you set `MAKO_BUILD_CACHE_ROOT`, `MAKO_BUILD_WORK_ROOT`, or a component-specific override, manage that custom location yourself.
+Both pruners target only the default repository-local paths. They do not remove custom locations selected through environment overrides.
 
-Use `MAKO_BUILD_JOBS=4` to cap parallelism on a memory-constrained Deck, or `MAKO_BUILD_DIR=/path/to/build` to keep the build tree elsewhere. This is a native host-test workflow only; use `scripts/package-local.sh` for a distributable archive and `scripts/package-flatpaks.sh` for Flatpak runtime bundles.
+For `scripts/build-steamos-dev.sh`, use `MAKO_BUILD_JOBS=4` to cap parallelism on a memory-constrained Deck or `MAKO_BUILD_DIR=/path/to/build` to keep the build tree elsewhere. That script is a native development workflow only; use `scripts/package-local.sh` for a distributable archive and `scripts/package-flatpaks.sh` for Flatpak runtime bundles.
 
 ## Build and install MAKO Renderer
 
@@ -155,10 +154,11 @@ Useful CMake options:
 - `MAKO_BUILD_CLI`: Set to `On` to build the command-line interface (default is `On`).
 - `MAKO_INSTALL_DEVELOP`: Set to `On` to install development files like headers and libraries (default is `Off`).
 - `MAKO_INSTALL_XDG_FILES`: Set to `On` to install XDG desktop files and icons (default is `Off`).
-- `MAKO_LAYER_LIBRARY_PATH`: Override the path to the Vulkan layer library (by default, Vulkan will search the systems library path).
+- `MAKO_LAYER_LIBRARY_PATH`: Override the frame-generation role library path stored in its manifest.
+- `MAKO_SCALING_LAYER_LIBRARY_PATH`: Override the spatial role library path stored in its manifest.
 - `MAKO_LAYER_MANIFEST_SUFFIX`: Add a suffix to the installed manifest filename when packaging multiple architectures.
 
-For a non-system prefix, set `MAKO_LAYER_LIBRARY_PATH` to the manifest-relative library path, for example `../../../lib/libmako-render.so`.
+For a non-system prefix, set both paths relative to their installed manifests, for example `../../../lib/libmako-render.so` and `../../../lib/libmako-render-scaling.so`.
 
 3. **Build**
 
@@ -174,4 +174,4 @@ The default build produces both split-chain Vulkan DSOs. A targeted `--target ma
 sudo cmake --install build
 ```
 
-The installed manifests are launch-scoped. Start a native game with `mako-launch <command>`. The helper selects the install prefix's private MAKO-only implicit-layer directory, activates MAKO for that process, prevents Steam's Vulkan hooks or another installed LSFG-VK frame-generation layer from bypassing the same swapchain, suppresses Gamescope WSI's conflicting presentation policy for that child, and selects the supported SDR boundary. It is installed alongside `mako-cli` whenever the Vulkan layer is installed. Read [WSI isolation](WSI-ISOLATION.md) before changing manifests, discovery paths, or Gamescope variables.
+Start a native game with `mako-launch <command>`. The helper selects the install prefix's private manifests, activates MAKO for that child, excludes competing frame generation and Gamescope WSI, and selects the supported SDR boundary. Read [WSI isolation](WSI-ISOLATION.md) before changing manifests or launch variables.
