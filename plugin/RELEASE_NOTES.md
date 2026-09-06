@@ -1,24 +1,23 @@
-## What's new in MAKO Decky v3.1.0
+## What's new in MAKO Decky v3.2.0
 
-<picture>
-  <source srcset="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/sea-rapture.webp" type="image/webp">
-  <img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/sea-rapture.png" alt="Sea Rapture: an epic Renaissance-style pixel-art mako tearing through the ships attacking it as sailors fall into a storm-lit sea before a fortified city" width="100%">
-</picture>
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/the-captain.png" alt="The Captain: a Renaissance-style pixel-art captain and crew plotting an attack over a nautical chart aboard their ship, while a colossal mako looms over the fleet in the stormy sea behind them" width="100%">
 
-### Release codename: Sea Rapture
+### Release codename: The Captain
 
-> _“The captains called it a hunt until the sea chose its champion.”_
+> _“Mark every ship upon the chart. Leave room for what moves beneath it.”_
 >
-> **Mira Valen, _Last Signal from the Blackwater Gate_**
+> **Mira Valen, _At the Captain's Table_**
 
 ---
 
-### The big Spatial Scaling follow-up
+### A steadier course through troubled waters
 
-Sea Rapture is MAKO 3.1: a focused follow-up that makes Spatial Scaling faster, clearer, and more resilient across changing resolutions, demanding workloads, and different game swapchain behaviours.
+The Captain is MAKO 3.2: a focused update to Frame Generation recovery, launcher compatibility, and the safeguards that protect your settings and installation.
 
-- **Clear per-game startup compatibility:** For affected titles such as _Detroit: Become Human_, the new restart-only **Game Swapchain Images** toggle preserves the game's requested swapchain minimum, while MAKO keeps faster generated-frame headroom enabled by default for other games.
-- **Smoother Frame Generation changes:** Multiplier increases wait for a game-owned swapchain recreation when necessary, avoiding repeated timeout recovery and preserving steadier presentation cadence.
-- **Safer scaling transitions:** Resolution changes, supersampling, and GPU-memory constraints now rebuild or fall back more reliably without leaving stale limits behind.
-- **More useful Live Status:** See the real **Input**, **Render**, and **Display** resolutions, plus whether display or memory limits constrain the requested scale factor.
-- **Faster combined performance:** Leaner resource allocation and improved recovery reduce overhead when Spatial Scaling and Frame Generation run together.
+- **Per-game Lutris setup:** Enable MAKO through each game's **Command prefix**, with dedicated Flatpak preparation and clearer launcher guides. Previously prepared Flatpak Lutris installations can be prepared again to remove old app-wide activation.
+- **Cleaner Ubisoft Connect launches:** Launcher and web UI processes are excluded from profile capture and Renderer activation, while the game keeps its normal MAKO profile.
+- **Clearer LS1 availability:** Checks the selected LS1 model and explains when MAKO Scaler is being used as a fallback, while preserving your saved LS1 choice.
+- **More honest Live Status:** Missing live metrics now explain that MAKO may still be active, instead of telling you the game is not using it.
+- **Smoother Base FPS Cap edits:** Slider changes wait for a brief pause before saving, avoiding temporary low caps while you drag.
+- **Safer Renderer installation:** Failed native installs restore the previous files and selected version. Invalid, unreadable, read-only, or newer configuration formats stop installation without replacing your profiles with defaults.
+- **Updated MAKO Renderer:** Includes the recovery and uneven-cadence fixes, newer VKD3D-Proton presentation compatibility, more accurate scaling memory limits, and cleanup after failed graphics-resource setup.
