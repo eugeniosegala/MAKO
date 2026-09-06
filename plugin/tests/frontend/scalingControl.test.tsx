@@ -135,7 +135,7 @@ afterEach(cleanup);
 
 describe("Scaling controls", () => {
   test.each(["ls1", "ls1-performance"])(
-    "preserves unavailable saved %s selections with fallback guidance",
+    "shows fallback guidance only for unavailable saved %s selections",
     (method) => {
       window.SP_REACT = React;
       const saved = {
@@ -144,7 +144,7 @@ describe("Scaling controls", () => {
         scaling_method: method,
       };
       const onConfigChange = vi.fn(async () => undefined);
-      render(
+      const { rerender } = render(
         <ScalingControl
           config={saved}
           modelCompatible={false}
@@ -161,6 +161,18 @@ describe("Scaling controls", () => {
       ).toBeTruthy();
       expect(onConfigChange).not.toHaveBeenCalled();
       expect(saved.scaling_method).toBe(method);
+      for (const modelCompatible of [true, null]) {
+        rerender(
+          <ScalingControl
+            config={saved}
+            modelCompatible={modelCompatible}
+            onConfigChange={onConfigChange}
+          />,
+        );
+        expect(
+          screen.queryByText(/Your LS1 selection is preserved/),
+        ).toBeNull();
+      }
     },
   );
 
@@ -187,7 +199,7 @@ describe("Scaling controls", () => {
       />,
     );
     expect(screen.queryByText(/MAKO Scaler is active/)).toBeNull();
-    expect(screen.getByText(/If LS1 is unavailable/)).toBeTruthy();
+    expect(screen.queryByText(/Your LS1 selection is preserved/)).toBeNull();
     rerender(
       <ScalingControl
         {...props}
@@ -196,9 +208,7 @@ describe("Scaling controls", () => {
         runtimeActiveMethod="ls1"
       />,
     );
-    expect(
-      screen.queryByText(/selected LS1 model could not be loaded/),
-    ).toBeNull();
+    expect(screen.queryByText(/Your LS1 selection is preserved/)).toBeNull();
     expect(props.onConfigChange).not.toHaveBeenCalled();
   });
 

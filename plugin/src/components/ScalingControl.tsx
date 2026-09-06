@@ -183,24 +183,17 @@ export function ScalingControl({
                   onConfigChange(SCALING_METHOD, String(option.data))
                 }
               />
-              {ls1Selected && (
-                <MakoInlineTip
-                  tone={activeFallback || modelUnavailable ? "warning" : "info"}
-                >
+              {ls1Selected && (activeFallback || modelUnavailable) && (
+                <MakoInlineTip tone="warning">
                   {activeFallback
                     ? t(
                         "SCALING_LS1_ACTIVE_FALLBACK",
                         "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
                       )
-                    : modelUnavailable
-                      ? t(
-                          "SCALING_LS1_UNAVAILABLE",
-                          "The selected LS1 model could not be loaded during the availability check. MAKO Scaler is used automatically if LS1 cannot load. Your LS1 selection is preserved.",
-                        )
-                      : t(
-                          "SCALING_LS1_FALLBACK_INFO",
-                          "If LS1 is unavailable, MAKO Scaler is used automatically. Your LS1 selection is preserved.",
-                        )}
+                    : t(
+                        "SCALING_LS1_UNAVAILABLE",
+                        "The selected LS1 model could not be loaded during the availability check. MAKO Scaler is used automatically if LS1 cannot load. Your LS1 selection is preserved.",
+                      )}
                 </MakoInlineTip>
               )}
             </Field>

@@ -9,7 +9,6 @@
   "SCALING_METHOD_DESC": "스케일링 모델을 선택합니다. 게임 실행 중에도 변경할 수 있습니다.",
   "SCALING_LS1_ACTIVE_FALLBACK": "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
   "SCALING_LS1_UNAVAILABLE": "The selected LS1 model could not be loaded during the availability check. MAKO Scaler is used automatically if LS1 cannot load. Your LS1 selection is preserved.",
-  "SCALING_LS1_FALLBACK_INFO": "If LS1 is unavailable, MAKO Scaler is used automatically. Your LS1 selection is preserved.",
   "SCALING_METHOD_COMPARISON_TIP": "스케일링 작동 방식:\n1. Steam에서 게임 해상도를 디스플레이의 최대 해상도로 설정하세요(Steam Deck: 1280 × 800, Steam Machine: 3840 × 2160).\n2. 게임에서는 480p, 720p 또는 그 이상의 낮은 해상도를 선택하세요.\n3. 스케일 팩터로 이미지를 확대하세요. 2x는 해상도를 두 배로 만듭니다.\n\n게임의 렌더링 해상도를 낮춘 뒤 다시 확대하면 화질의 절충은 있지만 성능을 크게 향상할 수 있습니다.",
   "SCALING_METHOD_NATIVE": "네이티브 해상도",
   "SCALING_METHOD_MAKO": "MAKO Scaler",

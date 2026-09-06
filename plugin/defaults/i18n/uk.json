@@ -9,7 +9,6 @@
   "SCALING_METHOD_DESC": "Виберіть модель масштабування. Її можна змінювати під час роботи гри.",
   "SCALING_LS1_ACTIVE_FALLBACK": "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
   "SCALING_LS1_UNAVAILABLE": "The selected LS1 model could not be loaded during the availability check. MAKO Scaler is used automatically if LS1 cannot load. Your LS1 selection is preserved.",
-  "SCALING_LS1_FALLBACK_INFO": "If LS1 is unavailable, MAKO Scaler is used automatically. Your LS1 selection is preserved.",
   "SCALING_METHOD_COMPARISON_TIP": "Як працює масштабування:\n1. У Steam установіть роздільну здатність гри на максимальну роздільну здатність дисплея (Steam Deck: 1280 × 800; Steam Machine: 3840 × 2160).\n2. У грі виберіть нижчу роздільну здатність, наприклад 480p, 720p або більше.\n3. Використайте коефіцієнт масштабування, щоб збільшити зображення. 2x подвоює роздільну здатність.\n\nЗменшення роздільної здатності гри з подальшим масштабуванням може значно підвищити продуктивність, але з компромісом у якості зображення.",
   "SCALING_METHOD_NATIVE": "Нативна роздільна здатність",
   "SCALING_METHOD_MAKO": "MAKO Scaler",
