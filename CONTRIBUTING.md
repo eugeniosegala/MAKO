@@ -21,3 +21,7 @@ Generated files must be updated through their owning generator. Do not edit gene
 ## Validation
 
 Follow [AGENTS.md](AGENTS.md) and [TESTING.md](TESTING.md) for architecture, formatting, test selection, package verification, and real-hardware evidence. A contribution should state what passed and what was not tested without presenting skipped hardware coverage as evidence.
+
+## Inactive bug reports
+
+The [MAKO Cleaner workflow](.github/workflows/close-inactive-issues.yml) closes open issues labeled `bug` after more than seven days without activity. It leaves unlabeled issues, other issue categories, and pull requests untouched. Issues labeled `enhancement` or `question` are exempt even when they also carry `bug`; labels and activity are checked again before closure.

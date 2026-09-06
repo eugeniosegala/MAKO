@@ -15,18 +15,27 @@ jobs:
   mako-cleaner:
     runs-on: ubuntu-latest
     steps:
-      - name: Close issues inactive for more than seven days
+      - name: Close bug reports inactive for more than seven days
         uses: actions/github-script@v9
         with:
           script: |
             const inactiveForMs = 7 * 24 * 60 * 60 * 1000;
             const inactiveBefore = Date.now() - inactiveForMs;
+            const isBugReport = (issue) => {
+              const labels = issue.labels.map((label) =>
+                (typeof label === 'string' ? label : label.name).toLowerCase()
+              );
+              // Feature requests and questions are protected even if also labeled bug.
+              return labels.includes('bug') &&
+                !labels.includes('enhancement') && !labels.includes('question');
+            };
             const mascotUrl = `https://raw.githubusercontent.com/${context.repo.owner}/${context.repo.repo}/${context.payload.repository.default_branch}/plugin/assets/mako-cleaner.webp`;
             const mascot = `<p align="center"><img src="${mascotUrl}" alt="MAKO Cleaner, a cyberpunk shark wearing a green police-style cap" width="160" /></p>`;
             const issues = await github.paginate(github.rest.issues.listForRepo, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
+              labels: 'bug',
               sort: 'updated',
               direction: 'asc',
               per_page: 100,
@@ -35,7 +44,7 @@ jobs:
             let closed = 0;
 
             for (const issue of issues) {
-              if (issue.pull_request || new Date(issue.updated_at).getTime() >= inactiveBefore) {
+              if (issue.pull_request || !isBugReport(issue) || new Date(issue.updated_at).getTime() >= inactiveBefore) {
                 continue;
               }
 
@@ -48,6 +57,7 @@ jobs:
               if (
                 currentIssue.state !== 'open' ||
                 currentIssue.pull_request ||
+                !isBugReport(currentIssue) ||
                 new Date(currentIssue.updated_at).getTime() >= inactiveBefore
               ) {
                 continue;
@@ -61,7 +71,7 @@ jobs:
                   '<!-- mako-cleaner-inactive-issue -->',
                   mascot,
                   '🧹 **MAKO Cleaner** here.',
-                  'This issue was automatically closed because it has had no activity for more than seven days. Reply with new information if it should be reopened.',
+                  'This bug report was automatically closed because it has had no activity for more than seven days. Reply with new information if it should be reopened.',
                   '_This is an automated reply from MAKO Cleaner._',
                 ].join('\n\n'),
               });
@@ -76,4 +86,4 @@ jobs:
               closed += 1;
             }
 
-            core.info(`Closed ${closed} inactive issue(s).`);
+            core.info(`Closed ${closed} inactive bug report(s).`);
