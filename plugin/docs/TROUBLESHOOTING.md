@@ -23,7 +23,7 @@ See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics inte
 4. Compare the game's V-Sync on and off; its limiter, VRR, and compositor can change pacing.
 5. Select **Disable MAKO Renderer on Next Launch**, restart the game, and compare once. Turn the option off after the test.
 
-Use the [Heroic setup](../../README.md#heroic) or the [launcher setup guide](LAUNCHERS.md) for Lutris, EmuDeck, and manually added Flatpak shortcuts. Heroic uses its per-game **Wrapper** field; Lutris uses **Command prefix**. Flatpak launchers also need preparation in **Flatpak Setup**.
+Use the [launcher setup guide](LAUNCHERS.md) for Heroic, Lutris, EmuDeck, and manually added Flatpak shortcuts. Heroic uses its per-game **Wrapper** field; Lutris uses **Command prefix**. Flatpak launchers also need preparation in **Flatpak Setup**.
 
 ### Ubisoft Connect closes before the game starts
 

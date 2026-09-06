@@ -10,14 +10,15 @@
 
 ---
 
-### A steadier course through troubled waters
+### Stability, frame pacing, and compatibility
 
-The Captain is MAKO 3.2: a focused update to Frame Generation recovery, launcher compatibility, and the safeguards that protect your settings and installation.
+MAKO 3.2 addresses uneven frame delivery and unnecessary recovery resets, updates launcher compatibility, and protects saved settings during failed writes and updates.
 
-- **Per-game Lutris setup:** Enable MAKO through each game's **Command prefix**, with dedicated Flatpak preparation and clearer launcher guides. Previously prepared Flatpak Lutris installations can be prepared again to remove old app-wide activation.
-- **Cleaner Ubisoft Connect launches:** Launcher and web UI processes are excluded from profile capture and Renderer activation, while the game keeps its normal MAKO profile.
-- **Clearer LS1 availability:** Checks the selected LS1 model and explains when MAKO Scaler is being used as a fallback, while preserving your saved LS1 choice.
-- **More honest Live Status:** Missing live metrics now explain that MAKO may still be active, instead of telling you the game is not using it.
-- **Smoother Base FPS Cap edits:** Slider changes wait for a brief pause before saving, avoiding temporary low caps while you drag.
-- **Safer Renderer installation:** Failed native installs restore the previous files, selected version, and configuration. Installation retains valid profiles and recreates defaults when the existing configuration cannot be read or validated; read-only configurations still stop installation.
-- **Updated MAKO Renderer:** Includes the recovery and uneven-cadence fixes, newer VKD3D-Proton presentation compatibility, more accurate scaling memory limits, and cleanup after failed graphics-resource setup.
+- **Stability and frame-pacing fixes:** Includes the Renderer fixes for uneven game cadence and brief presentation timeouts, helping avoid unnecessary recovery resets and keeping generated-frame delivery steadier.
+- **Per-game Lutris setup:** Enable MAKO through each game's **Command prefix**, with dedicated Flatpak preparation and launcher-specific setup instructions. Previously prepared Flatpak Lutris installations can be prepared again to remove old app-wide activation.
+- **Ubisoft Connect launcher exclusion:** Launcher and web UI processes are excluded from profile capture and Renderer activation, while the game keeps its normal MAKO profile.
+- **LS1 availability and fallback status:** Checks the selected LS1 model and explains when MAKO Scaler is being used as a fallback, while preserving your saved LS1 choice.
+- **Unavailable Live Status metrics:** The panel now states that MAKO may still be active when a game or emulator does not report live metrics.
+- **Base FPS Cap slider saving:** Slider changes wait for a brief pause before saving, avoiding temporary low caps while you drag.
+- **Renderer installation recovery:** Failed native installs restore the previous files, selected version, and configuration. Installation retains valid profiles and recreates defaults when the existing configuration cannot be read or validated; read-only configurations still stop installation.
+- **Renderer compatibility and resource fixes:** Also includes newer VKD3D-Proton presentation compatibility, corrected scaling memory limits, and cleanup after failed graphics-resource setup.

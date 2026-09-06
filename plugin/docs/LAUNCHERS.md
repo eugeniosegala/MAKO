@@ -13,7 +13,24 @@ Flatpak Heroic and Lutris run MAKO from the selected game's wrapper inside their
 
 ## Heroic
 
-Follow the [Heroic setup in the main README](../../README.md#heroic) for Flatpak preparation, the per-game **Wrapper** field, and runtime updates.
+Configure Flatpak Heroic through **Flatpak Setup**. Native Heroic skips the first step.
+
+1. In MAKO Decky's **Flatpak Setup**, prepare **Heroic** and install the matching runtime extension when prompted.
+2. In each game you want to use with MAKO, open **Settings > Advanced** and set the first **Wrapper** field to the path shown by MAKO. On standard SteamOS it is:
+
+    ```text
+    /home/deck/.local/bin/mako-run
+    ```
+
+    Leave **Arguments** empty and do not use `%command%`.
+
+3. Start the game normally from Heroic or its Steam shortcut.
+
+Preparing Heroic makes MAKO available inside its sandbox; the per-game Wrapper decides which games use it. Remove the game's Wrapper to stop using MAKO for that game.
+
+<!-- prettier-ignore -->
+> [!IMPORTANT]
+> After installing a newer MAKO ZIP, return to **Flatpak Setup** and select **Update** for Heroic's matching runtime extension, then restart Heroic. Updating MAKO Decky or the shared native Renderer does not update Flatpak extensions.
 
 ## Lutris
 

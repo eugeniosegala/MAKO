@@ -99,39 +99,16 @@ MAKO Decky provides a per-profile **Gamescope WSI** option and host-installed Ma
 
 ### Third-party launchers
 
-<a id="emudeck"></a> <a id="manually-added-flatpak-shortcuts"></a>
+<a id="heroic"></a> <a id="heroic-and-other-flatpak-applications"></a> <a id="emudeck"></a> <a id="manually-added-flatpak-shortcuts"></a>
 
 | Launcher | Quick setup guide |
 | --- | --- |
-| **Heroic** | [Per-game Wrapper setup](#heroic) |
+| **Heroic** | [Per-game Wrapper setup](plugin/docs/LAUNCHERS.md#heroic) |
 | **Lutris** | [Per-game Command prefix, with Flatpak preparation when needed](plugin/docs/LAUNCHERS.md#lutris) |
 | **EmuDeck** | [Emulator preparation and Steam shortcuts](plugin/docs/LAUNCHERS.md#emudeck) |
 | **Other Flatpak apps** | [Manually added Steam shortcuts](plugin/docs/LAUNCHERS.md#manually-added-flatpak-shortcuts) |
 
 For a step-by-step guide that creates a shareable report on the Desktop, see <a href="plugin/docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect MAKO Decky Diagnostics</a>.
-
-<a id="heroic-and-other-flatpak-applications"></a>
-
-#### Heroic
-
-Configure Flatpak Heroic through **Flatpak Setup**. Native Heroic skips the first step.
-
-1. In MAKO Decky's **Flatpak Setup**, prepare **Heroic** and install the matching runtime extension when prompted.
-2. In each game you want to use with MAKO, open **Settings > Advanced** and set the first **Wrapper** field to the path shown by MAKO. On standard SteamOS it is:
-
-    ```text
-    /home/deck/.local/bin/mako-run
-    ```
-
-    Leave **Arguments** empty and do not use `%command%`.
-
-3. Start the game normally from Heroic or its Steam shortcut.
-
-Preparing Heroic makes MAKO available inside its sandbox; the per-game Wrapper decides which games use it. Remove the game's Wrapper to stop using MAKO for that game.
-
-<!-- prettier-ignore -->
-> [!IMPORTANT]
-> After installing a newer MAKO ZIP, return to **Flatpak Setup** and select **Update** for Heroic's matching runtime extension, then restart Heroic. Updating MAKO Decky or the shared native Renderer does not update Flatpak extensions.
 
 ### Updating MAKO Decky
 

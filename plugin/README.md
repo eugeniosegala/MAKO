@@ -59,6 +59,6 @@ After installing the ZIP through Decky developer settings, open MAKO Decky and i
 
 The wrapper enables MAKO for the launch. MAKO Renderer selects a saved profile by process identity and uses the Default profile when no saved match exists.
 
-For Heroic, follow the [Heroic setup in the main README](../README.md#heroic). For Lutris, EmuDeck, and other Flatpak applications, follow the [launcher setup guide](docs/LAUNCHERS.md).
+For Heroic, Lutris, EmuDeck, and other Flatpak applications, follow the [launcher setup guide](docs/LAUNCHERS.md).
 
 See <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>, <a href="docs/ARMADA.md" target="_blank" rel="noopener noreferrer">Armada and native AArch64 support</a>, <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">Troubleshooting</a>, <a href="docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect MAKO Decky Diagnostics</a>, and <a href="docs/PACKAGING.md" target="_blank" rel="noopener noreferrer">Packaging</a> for detailed workflows.

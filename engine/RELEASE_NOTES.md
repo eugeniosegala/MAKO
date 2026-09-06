@@ -10,14 +10,14 @@
 
 ---
 
-### A steadier course through troubled waters
+### Stability, frame pacing, and compatibility
 
-The Captain is MAKO 3.2: a focused update to Frame Generation recovery, launcher compatibility, and the safeguards that protect your settings and installation.
+MAKO 3.2 addresses uneven frame delivery and unnecessary recovery resets, updates launcher compatibility, and protects saved settings during failed writes and updates.
 
-- **Steadier Frame Generation recovery:** Brief generated-frame timeouts avoid unnecessary full recovery, pending retries survive frames with no generated output, and Adaptive keeps slow samples from uneven game cadence instead of overestimating the source FPS.
-- **Newer Proton compatibility:** Preserves extended presentation timing used by newer VKD3D-Proton clients, fixing a rejection that could stop presentation on the first frame.
-- **Cleaner Ubisoft Connect launches:** Ubisoft Connect and its web UI stay outside MAKO activation, while the child game keeps its normal profile matching.
-- **More accurate scaling memory limits:** Budgets now account for where scaling runs relative to Frame Generation and the larger 5x workload. Failed graphics-resource setup also releases exported handles instead of leaking them.
-- **More reliable Lossless Scaling discovery:** Fixes DLL lookup in Steam installations under a custom XDG data directory and adds an availability check for the selected LS1 model and sharpness.
-- **Safer desktop configuration saves:** Closing the configuration window flushes pending edits, and failed writes preserve the previous configuration.
-- **Safer installation and updates:** The standalone installer restores the previous native installation if an update fails. The Flatpak installer also fixes terminal runtime selection and handles cancellation cleanly.
+- **Stability and frame-pacing fixes:** Adaptive now accounts for slow frames in uneven game cadence, avoiding inflated source-FPS estimates that could suppress generated frames. Isolated brief timeouts retain the established cadence estimate, recovery retries remain pending through frames with no generated output, and renewed demand after a menu can restart generation sooner.
+- **VKD3D-Proton compatibility:** Preserves extended presentation timing used by newer VKD3D-Proton clients, fixing a rejection that could stop presentation on the first frame.
+- **Ubisoft Connect launcher exclusion:** Ubisoft Connect and its web UI stay outside MAKO activation, while the child game keeps its normal profile matching.
+- **Scaling memory accounting:** Budgets now account for where scaling runs relative to Frame Generation and the larger 5x workload. Failed graphics-resource setup also releases exported handles instead of leaking them.
+- **Lossless Scaling DLL detection:** Fixes DLL lookup in Steam installations under a custom XDG data directory and adds an availability check for the selected LS1 model and sharpness.
+- **Configuration save fixes:** Closing the configuration window flushes pending edits, and failed writes preserve the previous configuration.
+- **Installer recovery and Flatpak fixes:** The standalone installer restores the previous native installation if an update fails. The Flatpak installer also fixes terminal runtime selection and exits without installing when cancelled.
