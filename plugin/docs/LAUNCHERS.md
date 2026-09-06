@@ -13,14 +13,7 @@ Flatpak Heroic and Lutris run MAKO from the selected game's wrapper inside their
 
 ## Heroic
 
-For **Flatpak Heroic**, first prepare **Heroic** (`com.heroicgameslauncher.hgl`) in MAKO Decky's **Flatpak Setup**. Install the matching runtime extension when prompted. Preparation grants access to MAKO; each game still needs its own wrapper. Native Heroic skips Flatpak Setup.
-
-1. In each chosen Heroic game, open **Settings > Advanced**.
-2. Set the first **Wrapper** field to your MAKO wrapper path, usually `/home/deck/.local/bin/mako-run`.
-3. Leave **Arguments** empty. Heroic supplies the game command; do not add `%command%`.
-4. Start the game from Heroic or its existing Steam shortcut.
-
-Remove the game's Wrapper to stop using MAKO for that game.
+Follow the [Heroic setup in the main README](../../README.md#heroic) for Flatpak preparation, the per-game **Wrapper** field, and runtime updates.
 
 ## Lutris
 
@@ -39,8 +32,6 @@ For **Flatpak Lutris**, first prepare **Lutris** (`net.lutris.Lutris`) in MAKO D
 4. Use Vulkan for native games or emulators, or DXVK/VKD3D for compatible Direct3D games running through Wine/Proton. MAKO does not process OpenGL output.
 
 Remove MAKO from that game's Command prefix to disable it. Games delegated to an already-running Steam client need the [normal Steam launch option](../../README.md#install-and-use) in Steam itself.
-
-**Previously prepared Lutris:** older MAKO versions treated it as an app-wide Flatpak application. If Flatpak Setup now shows **Partial**, prepare it again to clear the old MAKO activation, then configure the per-game prefix. Quit and reopen Lutris after changing preparation so running processes do not retain the old environment. Unrelated Flatpak settings are preserved.
 
 Lutris's [system option definition](https://github.com/lutris/lutris/blob/master/lutris/sysoptions.py) and [launch command builder](https://github.com/lutris/lutris/blob/master/lutris/runner_interpreter.py) own the Command prefix behavior. Individual games and runner versions still need compatibility testing.
 

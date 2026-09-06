@@ -545,6 +545,7 @@ versions=26.08;25.08;24.08
                     "VK_IMPLICIT_LAYER_PATH": FLATPAK_IMPLICIT_LAYER_DIR,
                     "MANGOHUD": "1",
                 }
+                unset_environment = set()
                 filesystems = {"/unrelated:ro", "/config:rw", "/dll:ro", str(wrapper) + ":ro", "/wsi:ro"}
 
                 def run(args, **_kwargs):
@@ -554,15 +555,21 @@ versions=26.08;25.08;24.08
                     if option == "--show":
                         return _result(
                             "[Context]\nfilesystems=" + ";".join(filesystems) + ";\n"
+                            "unset-environment=" + ";".join(unset_environment) + ";\n"
                             "[Environment]\n" + "\n".join(f"{key}={value}" for key, value in environment.items())
                         )
                     if option.startswith("--filesystem="):
                         filesystems.add(option.split("=", 1)[1])
                     elif option.startswith("--unset-env="):
-                        environment.pop(option.split("=", 1)[1], None)
+                        # Flatpak writes both an empty compatibility entry and
+                        # a Context unset-environment entry for --unset-env.
+                        key = option.split("=", 1)[1]
+                        environment[key] = ""
+                        unset_environment.add(key)
                     elif option.startswith("--env="):
                         key, value = option.removeprefix("--env=").split("=", 1)
                         environment[key] = value
+                        unset_environment.discard(key)
                     else:
                         self.fail(f"Unexpected override: {option}")
                     return _result()
@@ -571,13 +578,34 @@ versions=26.08;25.08;24.08
                 self.assertFalse(self.service._check_app_override_status(app_id)["required_env"])
                 for _ in range(2):  # Repeated preparation is idempotent.
                     self.assertTrue(self.service.set_app_override(app_id)["success"])
-                    self.assertEqual(environment, {"MANGOHUD": "1"})
+                    self.assertEqual(environment["MANGOHUD"], "1")
+                    self.assertEqual(
+                        {key for key in environment if key != "MANGOHUD"},
+                        unset_environment,
+                    )
+                    self.assertTrue(all(environment[key] == "" for key in unset_environment))
                     self.assertIn("/unrelated:ro", filesystems)
                     status = self.service._check_app_override_status(app_id)
                     self.assertTrue(status["filesystem"])
                     self.assertTrue(status["wrapper"])
                     self.assertTrue(status["required_env"])
                     self.assertFalse(status["legacy_env"])
+
+    def test_launcher_status_distinguishes_unset_from_empty_environment(self):
+        for app_id in ("com.heroicgameslauncher.hgl", "net.lutris.Lutris"):
+            for value in ("", "1"):
+                for unset in (False, True):
+                    with self.subTest(app_id=app_id, value=value, unset=unset):
+                        self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
+                            f"[Environment]\nENABLE_MAKO={value}\n"
+                            "[Context]\nunset-environment="
+                            + ("ENABLE_MAKO;" if unset else "UNRELATED;")
+                            + "\nfilesystems=/unrelated;\n"
+                        )
+                        status = self.service._check_app_override_status(app_id)
+                        self.assertEqual(status["required_env"], unset)
+                        self.assertEqual(status["legacy_env"], not unset)
+                        self.assertEqual(status["mako_env"], not unset)
 
     def test_lutris_preparation_reports_failed_activation_cleanup(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -634,6 +662,14 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
 
         self.assertTrue(status["legacy_env"])
         self.assertFalse(status["required_env"])
+
+        explicitly_unset_activation = complete_override.replace(
+            "[Context]\n", "[Context]\nunset-environment=ENABLE_MAKO;\n"
+        )
+        self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
+            explicitly_unset_activation
+        )
+        self.assertFalse(self.service._check_app_override_status(app_id)["required_env"])
 
         legacy_additive_path = complete_override.replace(
             f"VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",

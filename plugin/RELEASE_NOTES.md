@@ -19,5 +19,5 @@ The Captain is MAKO 3.2: a focused update to Frame Generation recovery, launcher
 - **Clearer LS1 availability:** Checks the selected LS1 model and explains when MAKO Scaler is being used as a fallback, while preserving your saved LS1 choice.
 - **More honest Live Status:** Missing live metrics now explain that MAKO may still be active, instead of telling you the game is not using it.
 - **Smoother Base FPS Cap edits:** Slider changes wait for a brief pause before saving, avoiding temporary low caps while you drag.
-- **Safer Renderer installation:** Failed native installs restore the previous files and selected version. Invalid, unreadable, read-only, or newer configuration formats stop installation without replacing your profiles with defaults.
+- **Safer Renderer installation:** Failed native installs restore the previous files, selected version, and configuration. Installation retains valid profiles and recreates defaults when the existing configuration cannot be read or validated; read-only configurations still stop installation.
 - **Updated MAKO Renderer:** Includes the recovery and uneven-cadence fixes, newer VKD3D-Proton presentation compatibility, more accurate scaling memory limits, and cleanup after failed graphics-resource setup.

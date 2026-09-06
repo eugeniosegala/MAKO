@@ -1128,14 +1128,55 @@ class DualArchInstallationTests(unittest.TestCase):
             "version = 2\n",
         )
 
-    def test_install_preserves_invalid_and_newer_user_configuration(self):
+    def test_install_replaces_unusable_configuration_with_defaults(self):
         self.service.config_dir.mkdir(parents=True)
-        for content in ('version = [broken\n', 'version = 999\n# user profiles\n'):
+        defaults = ConfigurationManager.get_defaults()
+        for content in (
+            'version = [broken\n',
+            'version = 999\n# user profiles\n',
+            'version = 2\n[[profile]]\nname = "Good"\nmultiplier = 3\n'
+            '[[profile]]\nname = "Bad"\nmultiplier = 0\n',
+        ):
             with self.subTest(content=content):
                 self.service.config_file_path.write_text(content, encoding="utf-8")
-                with self.assertRaisesRegex(OSError, "preserv.*configuration"):
+                with patch.object(
+                    ConfigurationManager, "get_defaults_with_dll_detection",
+                    return_value=defaults,
+                ):
                     self.service._create_config_file()
-                self.assertEqual(self.service.config_file_path.read_text(), content)
+                restored = ConfigurationManager.parse_toml_content_multi_profile(
+                    self.service.config_file_path.read_text(),
+                )
+                self.assertEqual(list(restored["profiles"]), [DEFAULT_PROFILE_NAME])
+                self.assertEqual(restored["profiles"][DEFAULT_PROFILE_NAME], defaults)
+
+    def test_install_keeps_valid_profiles_with_unknown_options(self):
+        self.service.config_dir.mkdir(parents=True)
+        self.service.config_file_path.write_text(
+            'version = 2\n[[profile]]\nname = "Good"\nmultiplier = 3\n'
+            'unknown_option = "ignored"\n',
+        )
+        self.service._create_config_file()
+        content = self.service.config_file_path.read_text()
+        restored = ConfigurationManager.parse_toml_content_multi_profile(content)
+        self.assertIn("Good", restored["profiles"])
+        self.assertEqual(restored["profiles"]["Good"]["multiplier"], 3)
+        self.assertNotIn("unknown_option", content)
+
+    def test_failed_install_restores_configuration_after_default_fallback(self):
+        self.service.config_dir.mkdir(parents=True)
+        original = 'version = [broken\n'
+        self.service.config_file_path.write_text(original)
+        with self.assertRaisesRegex(OSError, "later install step failed"):
+            with managed_files_module.managed_install_transaction(
+                [self.service.config_file_path], self.service.log,
+            ):
+                self.service._create_config_file()
+                ConfigurationManager.parse_toml_content_multi_profile(
+                    self.service.config_file_path.read_text(),
+                )
+                raise OSError("later install step failed")
+        self.assertEqual(self.service.config_file_path.read_text(), original)
 
     def test_generated_files_remain_current_under_private_umask(self):
         destination = self.root / "private-wrapper"

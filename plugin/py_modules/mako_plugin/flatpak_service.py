@@ -626,6 +626,7 @@ class FlatpakService(BaseService):
             wrapper_path = str(self.mako_script_path)
 
             filesystem_section = ""
+            unset_environment = set()
             in_context = False
 
             for line in output.split('\n'):
@@ -636,7 +637,12 @@ class FlatpakService(BaseService):
                     in_context = False
                 elif in_context and line.startswith("filesystems="):
                     filesystem_section = line
-                    break
+                elif in_context and line.startswith("unset-environment="):
+                    unset_environment.update(
+                        variable.strip()
+                        for variable in line.partition("=")[2].split(";")
+                        if variable.strip()
+                    )
 
             has_config_fs = self._filesystem_override_present(filesystem_section, config_path)
             has_dll_fs = self._filesystem_override_present(filesystem_section, dll_directory)
@@ -663,6 +669,12 @@ class FlatpakService(BaseService):
                     key, separator, value = line.partition("=")
                     if separator:
                         environment_values[key] = value
+
+            # Flatpak serializes --unset-env as both an empty [Environment]
+            # entry (for older readers) and [Context] unset-environment. The
+            # latter takes precedence; empty values alone are still settings.
+            for variable in unset_environment:
+                environment_values.pop(variable, None)
 
             legacy_env_override = any(
                 variable in environment_values

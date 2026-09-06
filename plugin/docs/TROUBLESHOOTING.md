@@ -23,7 +23,7 @@ See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics inte
 4. Compare the game's V-Sync on and off; its limiter, VRR, and compositor can change pacing.
 5. Select **Disable MAKO Renderer on Next Launch**, restart the game, and compare once. Turn the option off after the test.
 
-Use the [launcher setup guide](LAUNCHERS.md) for Heroic, Lutris, EmuDeck, and manually added Flatpak shortcuts. Heroic uses its per-game **Wrapper** field; Lutris uses **Command prefix**. Flatpak launchers also need preparation in **Flatpak Setup**. If an older Lutris preparation shows **Partial**, prepare it again and restart Lutris to clear app-wide activation.
+Use the [Heroic setup](../../README.md#heroic) or the [launcher setup guide](LAUNCHERS.md) for Lutris, EmuDeck, and manually added Flatpak shortcuts. Heroic uses its per-game **Wrapper** field; Lutris uses **Command prefix**. Flatpak launchers also need preparation in **Flatpak Setup**.
 
 ### Ubisoft Connect closes before the game starts
 
@@ -45,7 +45,9 @@ If the install control reports an unsupported native AArch64 or Armada host, see
 
 ## Updates and Flatpak runtimes
 
-Follow the root [clean update workflow](../../README.md#updating-mako-decky). It preserves profiles and launch options while explicitly replacing the native Renderer and each prepared Flatpak runtime.
+Follow the root [clean update workflow](../../README.md#updating-mako-decky). It preserves valid profiles and launch options while explicitly replacing the native Renderer and each prepared Flatpak runtime.
+
+If invalid configuration prevents profiles from loading or saving, close games using MAKO and select **Install MAKO Renderer** in MAKO Decky. Installation recreates an unreadable or invalid `conf.toml` with defaults, replacing its saved profiles. Read-only files require owner write permission before retrying.
 
 ## Diagnostics
 

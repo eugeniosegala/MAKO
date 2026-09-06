@@ -941,7 +941,7 @@ class InstallationService(BaseService):
     def _create_config_file(self) -> None:
         """Create or update this plugin's private TOML config with detected DLL path.
 
-        If a config file already exists, preserve existing profiles and only update global settings like DLL path.
+        Preserve valid profiles; recreate defaults if the existing file cannot be read or validated.
         """
         if (
             self.config_file_path.exists()
@@ -973,12 +973,14 @@ class InstallationService(BaseService):
                 # Generate TOML content with merged profiles
                 toml_content = ConfigurationManager.generate_toml_content_multi_profile(merged_profile_data)
 
-            except (OSError, ValueError, TypeError, AttributeError) as error:
-                raise OSError(
-                    f"Installation preserved your configuration at {self.config_file_path}: "
-                    f"it could not be read or merged ({error}). Repair it or restore a "
-                    "supported configuration before retrying."
-                ) from error
+            except Exception as error:
+                self.log.warning(
+                    "MAKO Decky: Could not read or merge configuration at %s: %s; "
+                    "replacing it with defaults",
+                    self.config_file_path, error,
+                )
+                config = ConfigurationManager.get_defaults_with_dll_detection(dll_service)
+                toml_content = ConfigurationManager.generate_toml_content(config)
         else:
             # No existing config file, create a new one with defaults
             config = ConfigurationManager.get_defaults_with_dll_detection(dll_service)
