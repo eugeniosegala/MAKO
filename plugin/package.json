@@ -88,21 +88,21 @@
   "remote_binary_bundling": true,
   "remote_binary": [
     {
-      "name": "MAKO-Renderer-v3.1.0-linux.tar.xz",
-      "version": "3.1.0",
-      "lineage_version": "3.1.0",
+      "name": "MAKO-Renderer-v3.2.0-linux.tar.xz",
+      "version": "3.2.0",
+      "lineage_version": "3.2.0",
       "source_repository": "https://github.com/eugeniosegala/MAKO",
-      "release_tag": "render-v3.1.0",
-      "source_commit": "feaeddab7746bacb2e05201e86112f817b932d28",
-      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v3.1.0/MAKO-Renderer-v3.1.0-linux.tar.xz",
-      "sha256hash": "6e170458a7f1f0f8f09dedebea4156fe277dd1cd2b695d7246690f453ba20216",
+      "release_tag": "render-v3.2.0",
+      "source_commit": "ebab0aa2172dcac7bea6201e0b9e91cc1ee492f7",
+      "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v3.2.0/MAKO-Renderer-v3.2.0-linux.tar.xz",
+      "sha256hash": "d8e3b4a6d81ad2c5dc65911105747eb9f64d89b7b466ea706af2d68bbb0db018",
       "host_architectures": [
         "x86_64"
       ],
       "flatpak_bundle": {
-        "name": "MAKO-Renderer-v3.1.0-flatpaks.tar.xz",
-        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v3.1.0/MAKO-Renderer-v3.1.0-flatpaks.tar.xz",
-        "sha256hash": "f85732db11bde88a6d204a3a09635a87aa2da5f3cbb7b7ed90e4ed163c89142d"
+        "name": "MAKO-Renderer-v3.2.0-flatpaks.tar.xz",
+        "url": "https://github.com/eugeniosegala/MAKO/releases/download/render-v3.2.0/MAKO-Renderer-v3.2.0-flatpaks.tar.xz",
+        "sha256hash": "5cf61b0538cb0e062215675a7090efb96d322938fa3fcc8dda9d26189367248e"
       }
     }
   ]
