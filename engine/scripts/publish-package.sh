@@ -7,6 +7,10 @@ cd "$repo_root"
 
 release_remote="${MAKO_RELEASE_REMOTE:-origin}"
 requested_version=""
+ci_skip_suffix=""
+if [[ "${MAKO_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
+    ci_skip_suffix=" [skip ci]"
+fi
 
 usage() {
     cat <<'EOF'
@@ -116,7 +120,7 @@ if [[ -n "$requested_version" ]]; then
     if [[ "$current_version" != "$requested_version" ]]; then
         printf '%s\n' "$requested_version" > VERSION
         git add VERSION
-        git commit -m "Release MAKO Renderer v$requested_version"
+        git commit -m "Release MAKO Renderer v$requested_version$ci_skip_suffix"
         git push "$release_remote" "$release_branch"
     fi
 fi
@@ -268,7 +272,7 @@ node "$repository_root/scripts/update-release-links.mjs" \
 release_metadata_paths=(plugin/package.json README.md plugin/README.md engine/README.md)
 if ! git -C "$repository_root" diff --quiet -- "${release_metadata_paths[@]}"; then
     git -C "$repository_root" add "${release_metadata_paths[@]}"
-    git -C "$repository_root" commit -m "Pin MAKO Renderer v$version"
+    git -C "$repository_root" commit -m "Pin MAKO Renderer v$version$ci_skip_suffix"
     git -C "$repository_root" push "$release_remote" "$release_branch"
 fi
 

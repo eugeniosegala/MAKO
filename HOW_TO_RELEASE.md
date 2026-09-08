@@ -68,6 +68,12 @@ The publisher:
 
 Do not manually edit generated version links or pins.
 
+### Maintainer-directed hotfix without automated validation
+
+Only when the maintainer explicitly requests skipping automated validation, run the publisher with `MAKO_RELEASE_SKIP_TESTS=1`. This omits Renderer CTest/launcher tests and Decky suites, and adds `[skip ci]` to release-owned commits. Build, ABI, archive-layout, package-contract, and checksum verification still run. The hardware workflow remains a separate action and is omitted only when the maintainer also requests that exception. Record the skipped validation in the release evidence; this path does not establish game or hardware validation.
+
+To reproduce a tester's native build environment, use the same packaging path. `MAKO_PORTABLE_PACKAGE=1` selects the Ubuntu 22.04 builder with Clang 14, Qt 6.2, and Vulkan headers 1.4.328. A new release still has new version metadata and binaries; matching runtime source and toolchain is not a claim of byte-identical artifacts. `[skip ci]` also suppresses automatic Pages deployment, which can be dispatched separately when a website refresh is required.
+
 ## Resume an interrupted release
 
 The top-level command is resumable: it checksum-verifies complete Renderer state and skips a Decky release when its version, tag, release, and expected asset name are present. Fix the reported cause and rerun the same command.

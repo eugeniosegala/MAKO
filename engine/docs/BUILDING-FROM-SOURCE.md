@@ -65,6 +65,8 @@ The release packager builds the 64-bit CLI, UI, launcher, and both Renderer role
 
 Use the incremental script for iteration, the local package for testers, and the hardware workflow for a release candidate. Publication is a separate workflow that applies version and pin commits and rebuilds the public artifacts, as described in [How to release MAKO](../../HOW_TO_RELEASE.md).
 
+For an explicitly requested maintainer exception, `MAKO_RELEASE_SKIP_TESTS=1` omits test compilation, CTest, and launcher tests while retaining build, ABI, archive, and checksum verification. See the [hotfix exception](../../HOW_TO_RELEASE.md#maintainer-directed-hotfix-without-automated-validation). Portable packaging uses Ubuntu 22.04, Clang 14, Qt 6.2, and Vulkan headers 1.4.328; native builds use the configured host SDK, which can change support controlled by Vulkan extension macros.
+
 Distributable archives and Flatpak extensions include the project license, third-party notices, and asset-provenance record. Packaging fails if those files or another required payload entry is missing. The standalone installer also rewrites its desktop entries to the selected installation prefix.
 
 ## Reusable SteamOS release-build SDK

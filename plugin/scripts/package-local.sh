@@ -394,8 +394,12 @@ trap cleanup EXIT
 echo "Generating configuration bindings..."
 python3 "$project_dir/scripts/generate_ts_schema.py"
 
-echo "Testing launch-wrapper environment..."
-npm --prefix "$project_dir" test
+if [[ "${MAKO_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
+  echo "Automated tests skipped by maintainer request; package verification remains enabled."
+else
+  echo "Testing launch-wrapper environment..."
+  npm --prefix "$project_dir" test
+fi
 
 echo "Building frontend..."
 if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then

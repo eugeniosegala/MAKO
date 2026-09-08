@@ -52,6 +52,8 @@ Artifacts are keyed by the Renderer commit and dirty-worktree fingerprint, allow
 
 Local package identity comes from the current component release notes without changing the tracked release pin. Package tests remain necessary because unit tests do not prove archive layout, manifest activation, permissions, or embedded checksums.
 
+`MAKO_RELEASE_SKIP_TESTS=1` omits automated Decky and native Renderer tests only for an explicitly requested maintainer exception. It retains build freshness and package verification. See [the hotfix exception](../../HOW_TO_RELEASE.md#maintainer-directed-hotfix-without-automated-validation) for publication and evidence requirements.
+
 ## Direct SteamOS iteration
 
 Install a package and select **Install MAKO Renderer** once, then use the narrowest scope:

@@ -4,6 +4,12 @@ set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$repository_root"
 
+ci_skip_suffix=""
+if [[ "${MAKO_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
+  ci_skip_suffix=" [skip ci]"
+  echo "Maintainer-requested hotfix: automated tests and push CI are skipped; package verification remains enabled."
+fi
+
 usage() {
   cat <<'EOF'
 Usage: ./scripts/publish-release.sh X.Y.Z
@@ -241,7 +247,7 @@ node scripts/update-release-links.mjs decky "$version" "$github_repository"
 release_link_readmes=(README.md plugin/README.md engine/README.md)
 if ! git diff --quiet -- "${release_link_readmes[@]}"; then
   git add "${release_link_readmes[@]}"
-  git commit -m "docs: sync MAKO v$version release links"
+  git commit -m "docs: sync MAKO v$version release links$ci_skip_suffix"
 fi
 
 latest_tag="$(gh api "repos/$github_repository/releases/latest" --jq '.tag_name')"
@@ -266,7 +272,11 @@ rm -f -- \
   "$repository_root/engine/out/$renderer_archive" \
   "$repository_root/engine/out/$flatpak_archive" \
   "$repository_root/plugin/out/$decky_archive"
-rm -rf --one-file-system -- \
+cleanup_rm_args=(-rf)
+if [[ "$(uname -s)" == "Linux" ]]; then
+  cleanup_rm_args+=(--one-file-system)
+fi
+rm "${cleanup_rm_args[@]}" -- \
   "$repository_root/engine/build/work" \
   "$repository_root/plugin/dist" \
   "$repository_root/plugin/coverage"

@@ -7,6 +7,10 @@ repository_root="$(cd "$project_dir/.." && pwd)"
 output_path=""
 output_path_set=false
 requested_version=""
+ci_skip_suffix=""
+if [[ "${MAKO_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
+  ci_skip_suffix=" [skip ci]"
+fi
 
 usage() {
   cat <<'EOF'
@@ -153,7 +157,7 @@ if [[ -n "$requested_version" ]]; then
       fs.writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
     ' "$project_dir/package.json" "$requested_version"
     git -C "$repository_root" add plugin/package.json
-    git -C "$repository_root" commit -m "Release MAKO Decky v$requested_version"
+    git -C "$repository_root" commit -m "Release MAKO Decky v$requested_version$ci_skip_suffix"
     git -C "$repository_root" push origin "$current_branch"
   fi
 fi
@@ -353,7 +357,7 @@ node "$repository_root/scripts/update-release-links.mjs" \
 release_link_readmes=(README.md plugin/README.md engine/README.md)
 if ! git -C "$repository_root" diff --quiet -- "${release_link_readmes[@]}"; then
   git -C "$repository_root" add "${release_link_readmes[@]}"
-  git -C "$repository_root" commit -m "docs: link MAKO Decky v$package_version"
+  git -C "$repository_root" commit -m "docs: link MAKO Decky v$package_version$ci_skip_suffix"
   git -C "$repository_root" push origin "$current_branch"
 fi
 

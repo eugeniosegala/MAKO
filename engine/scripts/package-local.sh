@@ -91,6 +91,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
     exec "$container_runtime" run --rm --platform linux/amd64 \
         -e MAKO_PACKAGE_64_ONLY="$docker_64_only" \
         -e MAKO_PACKAGE_CONTAINERIZED=1 \
+        -e MAKO_RELEASE_SKIP_TESTS="${MAKO_RELEASE_SKIP_TESTS:-0}" \
         -v "$monorepo_root:/workspace" \
         -w /workspace/engine \
         ubuntu:22.04 \
@@ -252,11 +253,17 @@ build32_dir="$build_root/build32"
 install_dir="$build_root/target"
 mkdir -p "$(dirname "$output_path")"
 
+build_testing=ON
+if [[ "${MAKO_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
+    build_testing=OFF
+    echo "Automated tests skipped by maintainer request; package verification remains enabled."
+fi
 cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
     -DCMAKE_BUILD_TYPE=Release \
     -DCMAKE_INSTALL_PREFIX="$install_dir" \
     -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_INSTALL_LIBDIR=lib \
+    -DBUILD_TESTING="$build_testing" \
     -DMAKO_BUILD_VK_LAYER=ON \
     -DMAKO_BUILD_UI=ON \
     -DMAKO_BUILD_CLI=ON \
@@ -267,7 +274,9 @@ cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
 # Build the complete configured tree before CTest so CMake remains the single
 # authority for every registered test executable and production dependency.
 cmake --build "$build64_dir"
-ctest --test-dir "$build64_dir" --output-on-failure
+if [[ "${MAKO_RELEASE_SKIP_TESTS:-0}" != "1" ]]; then
+    ctest --test-dir "$build64_dir" --output-on-failure
+fi
 # Release archives do not need local symbol tables. CMake's install-time strip
 # preserves the dynamic entrypoints required by the Vulkan loader while
 # keeping both the installed payload and compressed archive smaller.
@@ -379,7 +388,9 @@ if [[ ! -x "$install_dir/bin/mako-installer" ]]; then
     exit 1
 fi
 bash -n "$install_dir/bin/mako-launch"
-bash "$repo_root/scripts/test-mako-launch.sh" "$install_dir/bin/mako-launch"
+if [[ "${MAKO_RELEASE_SKIP_TESTS:-0}" != "1" ]]; then
+    bash "$repo_root/scripts/test-mako-launch.sh" "$install_dir/bin/mako-launch"
+fi
 
 verify_elf_class() {
     local path="$1"
