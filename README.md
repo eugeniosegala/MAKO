@@ -97,7 +97,7 @@ Every game and display behaves differently. Compare one setting at a time; fulls
 
 MAKO Decky provides a per-profile **Gamescope WSI** option and host-installed MangoHud or vkBasalt integrations. Inside a supported Gamescope session, scaling enables its managed WSI path automatically. The optional WSI path is limited to supported 64-bit launches, and vkBasalt remains experimental. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
 
-### Third-party launchers
+### How to configure MAKO with third-party launchers
 
 <a id="heroic"></a> <a id="heroic-and-other-flatpak-applications"></a> <a id="emudeck"></a> <a id="manually-added-flatpak-shortcuts"></a>
 
