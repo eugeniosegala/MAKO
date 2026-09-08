@@ -16,7 +16,7 @@ Scaling must be enabled before the game starts. In a provisioned process, Frame 
 
 ## Downloads
 
-Standalone Linux and Flatpak archives are published on the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.2.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>. Steam Deck and Steam Machine users who prefer a managed workflow should install the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a>.
+Standalone Linux and Flatpak archives are published on the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.2.1" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>. Steam Deck and Steam Machine users who prefer a managed workflow should install the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a>.
 
 Published archives target x86_64 Linux hosts and include Vulkan layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages require a separately built and validated Renderer and are not part of this release.
 
@@ -36,7 +36,7 @@ See the <a href="../README.md#install-and-use" target="_blank" rel="noopener nor
 
 For frame generation or LS1 scaling, first install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO Scaler works without `Lossless.dll`.
 
-Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.2.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. It verifies the archive, preserves profiles, opens **MAKO Renderer Configuration**, and shows the Steam/Proton launch option. Run the installer again to update; use **Uninstall MAKO Renderer** to remove the shared native installation. The included `README.txt` contains offline instructions.
+Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.2.1" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. It verifies the archive, preserves profiles, opens **MAKO Renderer Configuration**, and shows the Steam/Proton launch option. Run the installer again to update; use **Uninstall MAKO Renderer** to remove the shared native installation. The included `README.txt` contains offline instructions.
 
 Close games using MAKO before updating. The installer validates and stages the complete payload before replacing files and restores the previous installation if a later step fails. It reports permission or storage failures without requesting root access. If restoration also fails, it retains recovery backups beside the affected files and reports their locations. Profiles and diagnostics remain untouched unless you explicitly choose to remove configuration during uninstall.
 
