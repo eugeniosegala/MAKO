@@ -72,7 +72,7 @@ vi.mock("../../src/i18n/i18n", () => ({
   default: (_key: string, fallback: string) => fallback,
 }));
 
-import { PerformanceConfigurationGroup } from "../../src/components/ConfigurationSectionGroups";
+import { PerformanceConfigurationGroup } from "../../src/components/settings/PerformanceConfigurationGroup";
 import { getDefaults } from "../../src/config/configSchema";
 
 afterEach(cleanup);

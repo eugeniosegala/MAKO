@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
-#include "swapchain.hpp"
-#include "swapchain_retirement.hpp"
+#include "swapchain/swapchain.hpp"
+#include "swapchain/retirement.hpp"
 #include "adaptive_scheduler.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"
@@ -883,8 +883,8 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         : GeneratedFramePlan::evenlySpaced(
             effectiveFixedGeneratedFrameCount
         );
-    if (orderedAcquireRecoveryProbe && !plan.historyWarmupActive &&
-            !plan.requestedGeneratedFrames.empty()) {
+    if (orderedAcquireProbeEligible(orderedAcquireRecoveryProbe,
+            plan.historyWarmupActive, plan.requestedGeneratedFrames.size())) {
         // A successful native drain proves only that one image can traverse
         // the ordered FIFO again. Do not turn that narrow observation into a
         // full normal plan before the recovery state has seen it complete.
@@ -1694,14 +1694,19 @@ VkResult Swapchain::presentGeneratedFrames(
 
         if (plan.configuredAcquireTimeout &&
                 (result == VK_TIMEOUT || result == VK_NOT_READY)) {
+            // Record this normal batch's delivery loss before recovery arms
+            // its guard and freezes observations. Otherwise intermittent
+            // timeouts separated by healthy batches disappear from Adaptive's
+            // multiplier evaluation even though generated outputs were lost.
+            this->reportAdaptiveDelivery(plan, i);
             reportOrderedAcquire(
                 !acquireBudgetExhausted, acquireBudgetExhausted, i
             );
             // The explicit legacy timeout is an anti-freeze ceiling. Backend
             // work is already scheduled on this ordered path, so drain its
             // final timeline value without reclassifying the miss as an
-            // Adaptive timing discontinuity. Cross-frame native quarantine is
-            // already armed above for the next application present.
+            // Adaptive timing discontinuity. The next application present is
+            // already protected by a zero-wait guard or native quarantine.
             const size_t skippedFrames =
                 plan.scheduledGeneratedFrames.size() - i;
             if (!this->adaptiveScheduler)
@@ -1709,9 +1714,6 @@ VkResult Swapchain::presentGeneratedFrames(
             const uint64_t finalGeneratedTimelineValue =
                 this->frameState.backendTimelineIndex + skippedFrames - 1;
             auto& fallbackSemaphore = postCopy.second;
-            if (this->adaptiveScheduler) {
-                this->reportAdaptiveDelivery(plan, i);
-            }
 
             const auto fallbackSubmitStarted = startPresentDiagnostic();
             auto& fallbackCommandBuffer = pass.commandBuffer;
@@ -2468,7 +2470,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         return this->presentNativeFrame(invocation);
     }
 
-    if (orderedAcquireRecoveryProbe && !plan.historyWarmupActive) {
+    if (orderedAcquireProbeEligible(orderedAcquireRecoveryProbe,
+            plan.historyWarmupActive, plan.requestedGeneratedFrames.size())) {
         // The first-slow guard remains nonblocking. After a genuine native
         // drain, one single-image probe may wait across a small number of
         // display periods; failure is terminal for this attempt and returns

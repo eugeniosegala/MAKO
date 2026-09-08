@@ -1,3 +1,4 @@
+import type { ConfigurationEditorProps } from "./settings/types";
 import { useState } from "react";
 import {
   PanelSectionRow,
@@ -21,7 +22,6 @@ import {
   TARGET_FPS,
   TARGET_FPS_MAX,
   TARGET_FPS_MIN,
-  type ConfigurationData,
 } from "../config/configSchema";
 import {
   adaptiveModeChanges,
@@ -39,20 +39,11 @@ import {
 
 const DEFAULT_CONFIGURATION = getDefaults();
 
-interface FpsMultiplierControlProps {
-  config: ConfigurationData;
-  onConfigChange: (
-    fieldName: keyof ConfigurationData,
-    value: boolean | number | string,
-  ) => Promise<void>;
-  onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
-}
-
 export function FpsMultiplierControl({
   config,
   onConfigChange,
   onConfigUpdate,
-}: FpsMultiplierControlProps) {
+}: ConfigurationEditorProps) {
   const [focusedControl, setFocusedControl] = useState<
     "decrease" | "increase" | null
   >(null);

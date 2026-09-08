@@ -21,6 +21,7 @@ describe("Decky RPC contract", () => {
       "uninstall_mako",
       "check_mako_installed",
       "check_lossless_scaling_dll",
+      "check_scaling_model",
       "get_dll_stats",
       "get_mako_config",
       "get_profile_config",

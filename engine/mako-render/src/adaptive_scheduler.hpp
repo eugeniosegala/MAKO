@@ -338,6 +338,10 @@ namespace mako::layer {
                 std::optional<TimePoint> lastRealFrame;
                 double smoothedIntervalSeconds{0.0};
                 size_t dropFrames{0};
+                // Shadow estimate while a sustained drop is unconfirmed.
+                // Read only when dropFrames is nonzero; a rejected candidate
+                // must not discard the slower half of a bursty source stream.
+                double pendingDropIntervalSeconds{0.0};
                 // Ordered SDR keeps updating temporal history while native
                 // frames are presented. Once a hard cadence stall has already
                 // requested that refresh, do not restart the same warm-up on

@@ -3,11 +3,13 @@
 #include "mako-common/configuration/detection.hpp"
 #include "mako-common/configuration/config.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstdlib>
 #include <fstream>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <unistd.h>
 #include <utility>
 #include <vector>
@@ -17,6 +19,41 @@
 using namespace ls;
 
 namespace {
+    // Launcher UI processes inherit the game's profile environment. Keep
+    // their own Vulkan presentation native without changing that environment
+    // or denying the game they start. Decky's capture filter mirrors this
+    // bounded list, enforced by test_renderer_config_contract.py.
+    constexpr std::array excludedWindowsLauncherExecutables{
+        std::string_view{"ubisoftconnect.exe"},
+        std::string_view{"upc.exe"},
+        std::string_view{"uplaywebcore.exe"},
+    };
+
+    constexpr char asciiLower(const char value) noexcept {
+        return value >= 'A' && value <= 'Z'
+            ? static_cast<char>(value + ('a' - 'A')) : value;
+    }
+
+    bool asciiEqual(const std::string_view left,
+                    const std::string_view right) noexcept {
+        return std::equal(left.begin(), left.end(), right.begin(), right.end(),
+            [](const char a, const char b) { return asciiLower(a) == asciiLower(b); });
+    }
+
+    bool excludedLauncher(const Identification& id) noexcept {
+        // A mapped Windows executable is authoritative. Never inspect its
+        // parent directory, command-line arguments, or mutable thread name.
+        std::string_view executable = id.wine_executable &&
+                !id.wine_executable->empty()
+            ? *id.wine_executable : id.executable;
+        const auto separator = executable.find_last_of("/\\");
+        if (separator != std::string_view::npos)
+            executable.remove_prefix(separator + 1);
+        return std::any_of(excludedWindowsLauncherExecutables.begin(),
+            excludedWindowsLauncherExecutables.end(),
+            [&](const auto name) { return asciiEqual(executable, name); });
+    }
+
     // try to match a profile by name
     std::optional<GameConf> matchByName(const std::vector<GameConf>& profiles, const std::string& id) {
         for (const auto& profile : profiles)
@@ -72,7 +109,8 @@ Identification ls::identify() {
         std::ifstream maps("/proc/self/maps");
         std::string line;
         while (maps.is_open() && std::getline(maps, line)) {
-            if (!line.ends_with(".exe"))
+            if (line.size() < 4 || !asciiEqual(
+                    std::string_view(line).substr(line.size() - 4), ".exe"))
                 continue;
 
             size_t pos = line.find_first_of('/');
@@ -107,6 +145,9 @@ Identification ls::identify() {
 
 std::optional<std::pair<IdentType, GameConf>> ls::findProfile(
         const ConfigFile& config, const Identification& id) {
+    if (excludedLauncher(id))
+        return std::nullopt;
+
     const auto& profiles = config.profiles();
 
     // check for the environment option first

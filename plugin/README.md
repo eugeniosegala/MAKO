@@ -30,9 +30,13 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 - Shares one active native Renderer version with the standalone archive installer. Installing either version selects it for both launch workflows; a later MAKO Decky installation adopts a valid standalone Renderer and offers its bundled update when the versions differ.
 - Removes files supplied by either managed native Renderer installer when you select **Uninstall MAKO Renderer**, while preserving MAKO Decky and its profiles. Uninstalling MAKO Decky also removes the managed native Renderer; shared Flatpak runtime extensions remain installed.
 
+Close games using MAKO before installing or updating the Renderer. Installation preserves valid profiles. If the existing configuration cannot be read or validated, including an unsupported format version, installation recreates `conf.toml` with defaults and replaces the profiles stored in that file. Read-only configurations still stop installation. A failed install restores the previous native files, selected Renderer identity, and configuration; if restoration encounters another filesystem error, the error identifies retained recovery backups. Generated files retain the owner's required permissions and respect a more restrictive host umask without repeated rewrites.
+
 ## Development
 
 MAKO Decky lives in the `plugin/` directory of the MAKO monorepo and consumes the sibling `engine/` source tree. Run these commands from `plugin/`:
+
+`components/FeatureSettings.tsx` and `components/ConfigurationSection.tsx` compose the editor. Independent performance, advanced rendering, compatibility, external-tool, and manual-override sections live under `components/settings/`, alongside the shared collapse control and editor prop types. Their renderers forward edits through the existing callbacks; `hooks/useProfileEditorModel.ts` and `hooks/useProfileConfigWriter.ts` remain the state and persistence owners. Keep translations in the source catalogs and keep save/debounce effects out of section components.
 
 ```bash
 pnpm install --frozen-lockfile
@@ -54,5 +58,7 @@ After installing the ZIP through Decky developer settings, open MAKO Decky and i
 ```
 
 The wrapper enables MAKO for the launch. MAKO Renderer selects a saved profile by process identity and uses the Default profile when no saved match exists.
+
+For Heroic, Lutris, EmuDeck, and other Flatpak applications, follow the [launcher setup guide](docs/LAUNCHERS.md).
 
 See <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>, <a href="docs/ARMADA.md" target="_blank" rel="noopener noreferrer">Armada and native AArch64 support</a>, <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">Troubleshooting</a>, <a href="docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect MAKO Decky Diagnostics</a>, and <a href="docs/PACKAGING.md" target="_blank" rel="noopener noreferrer">Packaging</a> for detailed workflows.

@@ -2,9 +2,11 @@
 
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/detection.hpp"
+#include "mako-common/configuration/launch.hpp"
 
 #include <algorithm>
 #include <chrono>
+#include <csignal>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -16,6 +18,7 @@
 #include <utility>
 
 #include <unistd.h>
+#include <sys/resource.h>
 
 namespace {
     void expect(const bool condition, const std::string_view message) {
@@ -268,6 +271,64 @@ int main() {
         ),
         "A canonical Renderer write must preserve scaling configuration");
 
+    // Real short writes must preserve the previous file, including when the
+    // process has permission to open it. Exercise every configuration writer.
+    for (const int writer : {0, 1, 2}) {
+        const auto failurePath = directory / "write-failure.conf";
+        writeText(failurePath, "previous configuration\n");
+        struct rlimit previousLimit {};
+        expect(::getrlimit(RLIMIT_FSIZE, &previousLimit) == 0,
+            "Could not read file-size limit for write failure test");
+        auto limited = previousLimit;
+        limited.rlim_cur = 16;
+        const auto previousSignal = std::signal(SIGXFSZ, SIG_IGN);
+        expect(::setrlimit(RLIMIT_FSIZE, &limited) == 0,
+            "Could not constrain file writes for failure test");
+        bool failed = false;
+        try {
+            if (writer == 0) canonicalConfig.write(failurePath);
+            else if (writer == 1) ls::ConfigFile::createDefaultConfigFile(failurePath);
+            else ls::LaunchConfigFile{}.write(failurePath);
+        } catch (const std::exception&) {
+            failed = true;
+        }
+        const auto restored = ::setrlimit(RLIMIT_FSIZE, &previousLimit);
+        std::signal(SIGXFSZ, previousSignal);
+        expect(restored == 0, "Could not restore file-size limit");
+        expect(failed, "Configuration writer silently accepted a short write");
+        expect(readText(failurePath) == "previous configuration\n",
+            "A failed configuration write damaged the previous file");
+        for (const auto& entry : std::filesystem::directory_iterator(directory)) {
+            expect(!entry.path().filename().string().starts_with(".write-failure.conf."),
+                "A failed configuration write left a temporary file");
+        }
+    }
+
+    const auto linkedPath = directory / "linked.toml";
+    std::filesystem::create_symlink(canonicalPath, linkedPath);
+    canonicalConfig.write(linkedPath);
+    expect(std::filesystem::is_symlink(linkedPath) &&
+            readText(canonicalPath) == canonicalConfiguration,
+        "Atomic configuration writes must preserve configured symlinks");
+    const auto missingTarget = directory / "new-target.toml";
+    const auto danglingPath = directory / "new-link.toml";
+    std::filesystem::create_symlink(missingTarget.filename(), danglingPath);
+    canonicalConfig.write(danglingPath);
+    expect(std::filesystem::is_symlink(danglingPath) &&
+            readText(missingTarget) == canonicalConfiguration,
+        "First-time configuration writes must preserve dangling relative symlinks");
+    std::filesystem::permissions(canonicalPath, std::filesystem::perms::owner_read);
+    bool readOnlyRejected = false;
+    try {
+        canonicalConfig.write(canonicalPath);
+    } catch (const std::exception&) {
+        readOnlyRejected = true;
+    }
+    expect(readOnlyRejected && readText(canonicalPath) == canonicalConfiguration,
+        "A read-only configuration must be preserved without changing permissions");
+    std::filesystem::permissions(canonicalPath,
+        std::filesystem::perms::owner_read | std::filesystem::perms::owner_write);
+
     const auto fixedMultiplierPath = directory / "fixed-multiplier.toml";
     writeText(fixedMultiplierPath, R"(version = 2
 [[profile]]
@@ -389,6 +450,65 @@ scaling_sharpness = 0.5
             detectedProfile->first == ls::IdentType::OVERRIDE &&
             detectedProfile->second.name == "mako",
         "An explicit caller profile must remain a hard override");
+
+    // Launchers inherit exactly the same profile environment as their game.
+    // Neither that environment nor an older captured launcher alias may make
+    // MAKO change the launcher's Vulkan device or presentation resources.
+    const auto gameIdentification = identification;
+    for (const auto* launcher : {
+            "UbisoftConnect.exe", "upc.exe", "UplayWebCore.exe",
+            "UBISOFTCONNECT.EXE", "UPC.EXE", "uplaywebcore.EXE",
+        }) {
+        detectionConfig.profiles()[1].active_in.emplace_back(launcher);
+        const ls::Identification launcherIdentification{
+            .override = "captured",
+            .fallback = "mako",
+            .executable = "/proton/files/bin/wine64-preloader",
+            .wine_executable = std::string("C:\\Ubisoft\\") + launcher,
+            .process_name = "GameThread",
+        };
+        expect(!ls::findProfile(detectionConfig, launcherIdentification),
+            "A Ubisoft launcher must stay native despite an inherited override");
+        auto fallbackLauncher = launcherIdentification;
+        fallbackLauncher.override.reset();
+        expect(!ls::findProfile(detectionConfig, fallbackLauncher),
+            "Captured launcher aliases and the default fallback must not activate MAKO");
+        auto fallbackOnlyConfig = detectionConfig;
+        fallbackOnlyConfig.profiles()[1].active_in.clear();
+        expect(!ls::findProfile(fallbackOnlyConfig, fallbackLauncher),
+            "An uncaptured launcher must not activate through the default fallback");
+        auto matchedLauncher = fallbackLauncher;
+        matchedLauncher.fallback.reset();
+        expect(!ls::findProfile(detectionConfig, matchedLauncher),
+            "An explicit launcher alias alone must not activate MAKO");
+        auto directLauncher = launcherIdentification;
+        directLauncher.wine_executable.reset();
+        directLauncher.executable = std::string("/Ubisoft/") + launcher;
+        expect(!ls::findProfile(detectionConfig, directLauncher),
+            "An exact launcher executable must stay native without a Wine path");
+        setenv("MAKO_ENV", "1", 1);
+        expect(!ls::findProfile(detectionConfig, launcherIdentification),
+            "Environment-only profiles must not activate MAKO in a launcher");
+        expect(std::getenv("MAKO_ENV") &&
+                std::string_view(std::getenv("MAKO_ENV")) == "1",
+            "Launcher exclusion must not strip the child's inherited activation");
+        expect(ls::findProfile(detectionConfig, gameIdentification).has_value(),
+            "Skipping a launcher must leave its child's environment profile active");
+        unsetenv("MAKO_ENV");
+    }
+    for (const auto* executable : {
+            "/Ubisoft/UbisoftConnect.exe/TheCrewMotorfest.exe",
+            "/games/MyUbisoftConnect.exe", "/games/upc.exe.backup",
+            "/games/UplayWebCoreGame.exe", "/games/UnknownGame",
+        }) {
+        auto game = gameIdentification;
+        game.executable = "/proton/files/bin/wine64-preloader";
+        game.wine_executable = executable;
+        game.process_name = "upc.exe"; // A thread name is not executable proof.
+        const auto childProfile = ls::findProfile(detectionConfig, game);
+        expect(childProfile && childProfile->second.name == "mako",
+            "Launcher directories, partial names, and inherited thread names must not block a game");
+    }
 
     setenv("MAKO_ENV", "1", 1);
     setenv("MAKO_ADAPTIVE", "0", 1);

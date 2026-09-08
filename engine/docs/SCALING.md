@@ -15,6 +15,8 @@ MAKO never packages, uploads, or modifies `Lossless.dll`. It reads the selected 
 
 If LS1 discovery, translation, format support, or pipeline creation fails, the swapchain falls back to MAKO Scaler and records the requested method, active method, and reason. Native Resolution and MAKO Scaler do not require the licensed file or translator.
 
+For one saved selection, `mako-cli inspect-dll --dll <path> --ls1 ls1 --sharpness 0.8` (or `--ls1 ls1-performance`) calls the same selected-variant loader as the runtime and emits only `{"schema_version":1,"compatible":true|false}` on stdout. Exit 0 means the selected resources translated; exit 1 with a valid status means LS1 setup failed. Command errors, absent inspectors, and malformed output are unknown to consumers. Unrelated LSFG families or other LS1 variants do not veto this probe. MAKO Decky runs it off its event loop after a 500 ms control debounce, checks file identities every 30 seconds while the LS1 controls are present, and caches one result for at most five minutes. DLL or inspector replacement invalidates that cache immediately at the next check, including same-size/restored-mtime replacements; expiry also retries translator changes. No probe writes a profile or persists licensed resources. Actual runtime fallback retains the requested LS1 method, constructs MAKO Scaler, and publishes the requested/active distinction. A working fallback remains active until another private-scaler construction boundary, avoiding periodic translation in the frame path.
+
 ## Activation and ownership
 
 Scaling must be enabled before the process starts because it changes layer membership and swapchain geometry. Once a scaled process is provisioned, method and sharpness changes replace only private scaler resources. A factor or supersampling change may need a game-owned swapchain recreation when it changes the effective source/presentation pair.
@@ -55,6 +57,8 @@ The threshold is a pixel budget, not a width/height clamp. It keeps Deck and 108
 
 The pre-Frame Generation path can write directly into the exported Frame Generation source when the device proves the required usage and format support. Otherwise it uses the private-output copy path. This is an optimization only; failure does not change the source/presentation contract.
 
+<a id="extent-ownership"></a>
+
 ## Extent policy
 
 Each active scaled swapchain has two extents:
@@ -79,6 +83,10 @@ For a surface whose `currentExtent` is variable, the application request is the 
 Managed Gamescope scaling also requires a positively identified output target from the server-zero feedback resolver and treats it as the normal presentation ceiling. If the source already fills that target, scaling stays native with `inactive_reason=gamescope-presentation-target-no-headroom`. Quality Supersampling may exceed the target, but it cannot bypass Vulkan limits, memory admission, or the requirement to prove the Gamescope target. Direct non-Gamescope operation applies the factor without inventing a compositor target.
 
 The memory policy admits a presentation extent from device-local heap size and, when available, the driver's live budget and usage. It preserves already proven envelopes across safe live transitions and fails closed when the enlarged swapchain and private resources do not fit. Runtime status reports the requested and effective factor plus the active constraint or inactive reason; it does not promise an exact free-memory measurement.
+
+The static memory envelope keeps a 3840×2160 compatibility floor for unified-memory apertures; the live budget has no such floor. Separate graph estimates charge Frame Generation at presentation resolution through 1920×1200 pixels and source resolution above it. Both retain a conservative full-Flow Quality allowance for live changes, and 5× reserves four generated outputs. FP16 changes arithmetic rather than these SDR allocation formats. Proven-envelope reuse requires the same Frame Generation placement; a post-FG-to-pre-FG downshift needs fresh admission even when its dimensions shrink. Source growth is charged at the conservative 256-byte resource rate independently of cheaper output-only pixels.
+
+Memory admission is a conservative allocation estimate, not a measurement of spare GPU execution time or a promise that a scaling factor will sustain the target FPS. It uses the selected application's Vulkan device and its largest device-local heap, not GPU-name tiers, clock rates, or total system RAM. The [Vulkan memory-budget contract](https://docs.vulkan.org/refpages/latest/refpages/source/VkPhysicalDeviceMemoryBudgetPropertiesEXT.html) defines budget and usage as changing estimates; the reserve and static fallback cannot guarantee allocation success, predict driver-specific tiling/alignment, or model every multi-heap/cross-device topology. Actual resource creation and the existing failure handling remain authoritative. MAKO Gym compares the cold graph estimate against observed private Vulkan allocations plus nominal WSI bytes, and exercises live memory pressure separately from performance tests.
 
 ## Swapchain and queue requirements
 
@@ -123,7 +131,7 @@ Positive managed-scaling evidence requires the ordered three-role loader chain, 
 | Extent, placement, format, queue, and memory policy | `mako-render/src/spatial_scaling_policy.hpp` |
 | Surface interception and split-role relays | `mako-render/src/entrypoint.cpp` |
 | Swapchain activation and resources | `mako-render/src/instance.cpp`, `mako-render/src/spatial_scaler.cpp` |
-| Scaling-only and combined presentation | `mako-render/src/swapchain_present.cpp` |
+| Scaling-only and combined presentation | `mako-render/src/swapchain/present.cpp` |
 | MAKO shader source and generated payload | `mako-render/src/shaders/`, `scripts/generate-spatial-scaling-spirv.py` |
 | LS1 extraction, validation, and translation | `mako-backend/src/extraction/`, `mako-cli inspect-dll` |
 | Portable policy and transition coverage | `mako-render/tests/spatial_scaling_policy_tests.cpp`, `mako-render/tests/profile_update_tests.cpp` |

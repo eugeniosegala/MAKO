@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "spatial_scaling_policy.hpp"
-#include "swapchain_create_policy.hpp"
+#include "swapchain/create_policy.hpp"
 
 #include <cstdlib>
 #include <iostream>
@@ -15,6 +15,11 @@ namespace {
             return;
         std::cerr << message << '\n';
         std::exit(1);
+    }
+
+    VariablePresentationPixelBudgets uniformPresentationBudgets(
+            const uint64_t pixels) {
+        return {pixels, pixels, pixels};
     }
 
     VkSurfaceCapabilitiesKHR fixedCapabilities(
@@ -44,7 +49,182 @@ namespace {
     }
 }
 
+namespace {
+    void testVariableMemoryGraphAdmission() {
+        constexpr VkDeviceSize mib = 1024 * 1024;
+        constexpr VkDeviceSize gib = 1024 * mib;
+        constexpr auto pre = SpatialFramePipelinePlacement::PreFrameGeneration;
+        constexpr auto post = SpatialFramePipelinePlacement::PostFrameGeneration;
+        const auto properties = memoryProperties(8 * gib);
+        VkPhysicalDeviceMemoryBudgetPropertiesEXT budget{
+            .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_MEMORY_BUDGET_PROPERTIES_EXT,
+        };
+        budget.heapBudget[0] = gib;
+        budget.heapUsage[0] = 312 * mib; // 200 MiB after the 512 MiB reserve.
+        const auto memory = variablePresentationMemoryAdmission(properties, &budget);
+        const auto preGraph = variablePresentationResourceAdmission(
+            memory, {960, 540}, VK_FORMAT_B8G8R8A8_UNORM, 5, 2, pre
+        );
+        const auto postGraph = variablePresentationResourceAdmission(
+            memory, {960, 540}, VK_FORMAT_B8G8R8A8_UNORM, 5, 2, post
+        );
+        const VariablePresentationPixelBudgets limits{
+            preGraph.effectivePixelBudget, postGraph.effectivePixelBudget,
+            memory.effectivePixelBudget,
+        };
+        expect(preGraph.fixedSourceBytes == 16 * mib + 960 * 540 * 24 &&
+                preGraph.presentationBytesPerPixel == 100,
+            "Pre-FG must price both transport sources and private FG at presentation resolution");
+        expect(postGraph.fixedSourceBytes == 16 * mib + 960 * 540 * 96 &&
+                postGraph.presentationBytesPerPixel == 28,
+            "Post-FG must retain source-resolution FG and output-resolution WSI pricing");
+        expect(limits.preFrameGeneration < 1920 * 1080 &&
+                limits.postFrameGeneration > 1920 * 1080,
+            "200 MiB cannot admit the pre-FG 1080p graph using the cheaper post-FG pixel limit");
+        VkSurfaceCapabilitiesKHR caps{
+            .currentExtent = {UINT32_MAX, UINT32_MAX},
+            .minImageExtent = {16, 16},
+            .maxImageExtent = {8192, 8192},
+        };
+        SpatialScalingPolicy policy{.enabled = true, .factor = 2.0F, .supersampling = true};
+        const auto cold = scalingDecisionForCreate(
+            policy, true, 1, caps, {960, 540}, std::nullopt, std::nullopt,
+            limits, std::nullopt, false, memory.staticPixelBudget
+        );
+        expect(!cold.extents && cold.memoryAdmissionPlacement == pre && cold.inactiveReason ==
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+            "A cold pre-FG create must reject a graph that would consume the reserved headroom");
+        const SpatialScalingExtents previous{{1280, 720}, {2560, 1440}};
+        const auto downshift = scalingDecisionForCreate(
+            policy, true, 2, caps, {960, 540}, previous, std::nullopt,
+            limits, std::nullopt, false, memory.staticPixelBudget
+        );
+        expect(!downshift.extents && !downshift.reusedPreviousPresentationBudget,
+            "A smaller source/output crossing from post-FG to pre-FG needs fresh admission");
+        policy.factor = 1.5F;
+        const auto rollback = scalingDecisionForCreate(
+            policy, true, 3, caps, {1280, 720}, previous, std::nullopt,
+            limits, std::nullopt, false, memory.staticPixelBudget, previous
+        );
+        expect(!rollback.extents && !rollback.reusedRollbackPresentationBudget,
+            "Factor rollback proof cannot authorize a different frame-generation placement");
+
+        // The old output-pixel allowance could exceed the source-growth
+        // allowance several times over. Keep these quantities independent.
+        const auto growthMemory = variablePresentationMemoryAdmission(properties, &budget);
+        const auto growthGraph = variablePresentationResourceAdmission(
+            growthMemory, {2560, 1440}, VK_FORMAT_B8G8R8A8_UNORM, 5, 2, post
+        );
+        const VariablePresentationPixelBudgets growthLimits{
+            .preFrameGeneration = 8'000'000,
+            .postFrameGeneration = 8'000'000,
+            .sourceGrowth = growthMemory.effectivePixelBudget,
+        };
+        policy.factor = 2.0F;
+        const auto growth = scalingDecisionForCreate(
+            policy, true, 4, caps, {2560, 1440},
+            SpatialScalingExtents{{1920, 1080}, {3840, 2160}}, std::nullopt,
+            growthLimits, std::nullopt, false, memory.staticPixelBudget
+        );
+        expect(!growth.extents && growth.memoryAdmissionPlacement == post &&
+                !growth.reusedPreviousSourceGrowthHeadroom &&
+                growthGraph.effectivePixelBudget == 0,
+            "Source growth must not spend an output-only pixel allowance as source memory");
+
+        // Exercise device sizes and live pressure without pretending these
+        // synthetic heaps measure a GPU's processing speed or memory layout.
+        for (const auto heapGiB : {1, 2, 4, 8, 16, 24, 48}) {
+            const auto device = memoryProperties(static_cast<VkDeviceSize>(heapGiB) * gib);
+            budget.heapBudget[0] = device.memoryHeaps[0].size;
+            for (const auto source : {VkExtent2D{640, 360}, VkExtent2D{960, 540},
+                    VkExtent2D{1920, 1080}, VkExtent2D{2560, 1440}, VkExtent2D{3840, 2160}}) {
+                for (const auto format : {VK_FORMAT_B8G8R8A8_UNORM, VK_FORMAT_R16G16B16A16_SFLOAT}) {
+                    for (const uint32_t imageCount : {3U, 5U, 7U}) {
+                        for (const size_t capacity : {1U, 2U, 4U}) {
+                            uint64_t previousPre = UINT64_MAX;
+                            uint64_t previousPost = UINT64_MAX;
+                            for (const auto usagePercent : {0, 25, 50, 75, 90, 100, 110}) {
+                                budget.heapUsage[0] = budget.heapBudget[0] * usagePercent / 100;
+                                const auto live = variablePresentationMemoryAdmission(device, &budget);
+                                for (const auto placement : {pre, post}) {
+                                    const auto graph = variablePresentationResourceAdmission(
+                                        live, source, format, imageCount, capacity, placement
+                                    );
+                                    auto& preceding = placement == pre ? previousPre : previousPost;
+                                    expect(graph.livePixelBudget && graph.effectivePixelBudget <= preceding &&
+                                            graph.effectivePixelBudget <= live.staticPixelBudget,
+                                        "Rising usage must never increase admission or exceed the static ceiling");
+                                    preceding = graph.effectivePixelBudget;
+                                    const auto available = budget.heapBudget[0] > budget.heapUsage[0]
+                                        ? budget.heapBudget[0] - budget.heapUsage[0] : 0;
+                                    const auto spendable = available > live.reservedHeadroomBytes
+                                        ? available - live.reservedHeadroomBytes : 0;
+                                    if (graph.effectivePixelBudget > 0) {
+                                        expect(graph.fixedSourceBytes + graph.effectivePixelBudget *
+                                                graph.presentationBytesPerPixel <= spendable,
+                                            "Every admitted graph must fit without consuming the non-MAKO reserve");
+                                    } else if (usagePercent >= 100) {
+                                        expect(*graph.livePixelBudget == 0,
+                                            "At or above budget, unsigned subtraction must not invent free memory");
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Equal factors on either side of the exact placement boundary
+        // can have different costs; admission must use the matching graph.
+        budget.heapBudget[0] = gib;
+        budget.heapUsage[0] = 312 * mib;
+        for (const auto source : {VkExtent2D{960, 600}, VkExtent2D{962, 600}}) {
+            const auto edgePre = variablePresentationResourceAdmission(
+                memory, source, VK_FORMAT_B8G8R8A8_UNORM, 5, 2, pre
+            );
+            const auto edgePost = variablePresentationResourceAdmission(
+                memory, source, VK_FORMAT_B8G8R8A8_UNORM, 5, 2, post
+            );
+            const auto edge = scalingDecisionForCreate(
+                policy, true, 5, caps, source, std::nullopt, std::nullopt,
+                VariablePresentationPixelBudgets{
+                    edgePre.effectivePixelBudget, edgePost.effectivePixelBudget,
+                    memory.effectivePixelBudget,
+                }, std::nullopt, false, memory.staticPixelBudget
+            );
+            expect(edge.extents.has_value() == (source.width == 962),
+                "The exact 1920x1200 boundary must price pre-FG; the next larger output must price post-FG");
+        }
+        auto multipleHeaps = memoryProperties(16 * gib);
+        multipleHeaps.memoryHeaps[0].flags = 0; // System RAM is not VRAM.
+        multipleHeaps.memoryHeapCount = 3;
+        multipleHeaps.memoryHeaps[1] = {2 * gib, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT};
+        multipleHeaps.memoryHeaps[2] = {8 * gib, VK_MEMORY_HEAP_DEVICE_LOCAL_BIT};
+        budget.heapBudget[0] = 16 * gib;
+        budget.heapBudget[1] = gib;
+        budget.heapBudget[2] = 7 * gib;
+        budget.heapUsage[2] = 6 * gib;
+        const auto selectedHeap = variablePresentationMemoryAdmission(multipleHeaps, &budget);
+        expect(selectedHeap.heapBytes == 8 * gib && selectedHeap.heapBudgetBytes == 7 * gib &&
+                selectedHeap.heapUsageBytes == 6 * gib &&
+                selectedHeap.effectivePixelBudget < selectedHeap.staticPixelBudget,
+            "Static size and live usage must come from the same local heap, never aggregate unrelated RAM");
+        const auto maximal = variablePresentationResourceAdmission(
+            memory, {UINT32_MAX, UINT32_MAX}, VK_FORMAT_R16G16B16A16_SFLOAT,
+            UINT32_MAX, std::numeric_limits<size_t>::max(), post
+        );
+        expect(maximal.effectivePixelBudget == 0 && maximal.fixedSourceBytes == UINT64_MAX,
+            "Pathological sizes and capacities must saturate and reject, never wrap into cheap allocations");
+        const auto fourOutputs = variablePresentationResourceAdmission(
+            memory, {960, 540}, VK_FORMAT_B8G8R8A8_UNORM, 7, 4, pre
+        );
+        expect(fourOutputs.presentationBytesPerPixel == 132,
+            "5x must reserve its larger full-Flow Quality backend as well as four transport outputs");
+    }
+}
+
 int main() {
+    testVariableMemoryGraphAdmission();
     expect(spatialScalingProcessSupported(false, false, false),
         "An ordinary desktop process must permit spatial scaling");
     expect(!spatialScalingProcessSupported(true, false, false),
@@ -1082,7 +1262,7 @@ int main() {
     const auto fourKUnderPressure = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {1920, 1080},
         std::nullopt, std::nullopt,
-        exhaustedResourceAdmission.effectivePixelBudget
+        uniformPresentationBudgets(exhaustedResourceAdmission.effectivePixelBudget)
     );
     expect(!fourKUnderPressure.extents &&
             fourKUnderPressure.inactiveReason ==
@@ -1119,7 +1299,7 @@ int main() {
     const auto observedRe4FourK = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {2560, 1440},
         std::nullopt, std::nullopt,
-        observedRe4ResourceAdmission.effectivePixelBudget,
+        uniformPresentationBudgets(observedRe4ResourceAdmission.effectivePixelBudget),
         VkExtent2D{3840, 2160}, true,
         observedRe4MemoryAdmission.staticPixelBudget
     );
@@ -1149,7 +1329,7 @@ int main() {
     const auto raisedFactorRetainsProvenFourK = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {2560, 1440},
         provenFourK, std::nullopt,
-        exhaustedAdmission.effectivePixelBudget,
+        uniformPresentationBudgets(exhaustedAdmission.effectivePixelBudget),
         std::nullopt, false, exhaustedAdmission.staticPixelBudget
     );
     expect(raisedFactorRetainsProvenFourK.extents &&
@@ -1164,7 +1344,7 @@ int main() {
     const auto reducedFactorShrinksInsideProvenFourK = scalingDecisionForCreate(
         profile, true, 8, largeVariableCreate, {2560, 1440},
         provenFourK, std::nullopt,
-        exhaustedAdmission.effectivePixelBudget,
+        uniformPresentationBudgets(exhaustedAdmission.effectivePixelBudget),
         std::nullopt, false, exhaustedAdmission.staticPixelBudget
     );
     expect(reducedFactorShrinksInsideProvenFourK.extents &&
@@ -1187,7 +1367,7 @@ int main() {
     const auto factorRoundTripRestoresProvenFourK = scalingDecisionForCreate(
         profile, true, 9, largeVariableCreate, {1920, 1080},
         currentSameSourceDownshift, std::nullopt,
-        exhaustedAdmission.effectivePixelBudget,
+        uniformPresentationBudgets(exhaustedAdmission.effectivePixelBudget),
         std::nullopt, false, exhaustedAdmission.staticPixelBudget,
         sameSourceFourK
     );
@@ -1204,7 +1384,7 @@ int main() {
         "A 2x to 1.5x to 2x same-source round trip must restore its one-step proven 4K envelope while live accounting lags");
     const auto lowerSourceReusesProvenFourK = scalingDecisionForCreate(
         profile, true, 9, largeVariableCreate, {1920, 1080},
-        provenFourK, std::nullopt, exhaustedAdmission.effectivePixelBudget,
+        provenFourK, std::nullopt, uniformPresentationBudgets(exhaustedAdmission.effectivePixelBudget),
         std::nullopt, false, exhaustedAdmission.staticPixelBudget
     );
     expect(lowerSourceReusesProvenFourK.extents &&
@@ -1223,7 +1403,7 @@ int main() {
         scalingDecisionForCreate(
             profile, true, 9, largeVariableCreate, {2560, 1080},
             provenFourK, std::nullopt,
-            exhaustedAdmission.effectivePixelBudget,
+            uniformPresentationBudgets(exhaustedAdmission.effectivePixelBudget),
             std::nullopt, false, exhaustedAdmission.staticPixelBudget
         );
     expect(ultrawideDownshiftFitsInsideProvenFourK.extents &&
@@ -1244,7 +1424,7 @@ int main() {
             .source = {1920, 1080},
             .presentation = {3840, 2160},
         },
-        std::nullopt, exhaustedAdmission.effectivePixelBudget,
+        std::nullopt, uniformPresentationBudgets(exhaustedAdmission.effectivePixelBudget),
         std::nullopt, false, exhaustedAdmission.staticPixelBudget
     );
     expect(!largerSourceRequiresFreshAdmission.extents &&
@@ -1261,7 +1441,7 @@ int main() {
         scalingDecisionForCreate(
             profile, true, 10, largeVariableCreate, {2560, 1440},
             sameSourceFourK, std::nullopt,
-            measuredTransitionLivePixelBudget,
+            uniformPresentationBudgets(measuredTransitionLivePixelBudget),
             VkExtent2D{3840, 2160}, true,
             variablePresentationPixelBudget(eightGiB)
         );
@@ -1289,7 +1469,7 @@ int main() {
         scalingDecisionForCreate(
             profile, true, 10, largeVariableCreate, {2560, 1440},
             std::nullopt, std::nullopt,
-            measuredTransitionLivePixelBudget,
+            uniformPresentationBudgets(measuredTransitionLivePixelBudget),
             VkExtent2D{3840, 2160}, true,
             variablePresentationPixelBudget(eightGiB)
         );
@@ -1308,7 +1488,7 @@ int main() {
     const auto measuredNativeToPreviousFactor = scalingDecisionForCreate(
         profile, true, 11, largeVariableCreate, {2560, 1440},
         measuredCurrentDownshift, std::nullopt,
-        measuredTransitionLivePixelBudget,
+        uniformPresentationBudgets(measuredTransitionLivePixelBudget),
         VkExtent2D{3840, 2160}, true,
         variablePresentationPixelBudget(eightGiB), provenFourK
     );
@@ -1324,7 +1504,7 @@ int main() {
     const auto measuredIntermediateFactor = scalingDecisionForCreate(
         profile, true, 12, largeVariableCreate, {2560, 1440},
         measuredCurrentDownshift, std::nullopt,
-        measuredTransitionLivePixelBudget,
+        uniformPresentationBudgets(measuredTransitionLivePixelBudget),
         VkExtent2D{3840, 2160}, true,
         variablePresentationPixelBudget(eightGiB), provenFourK
     );
@@ -1351,7 +1531,7 @@ int main() {
             .source = {2560, 1440},
             .presentation = {3326, 1870},
         },
-        std::nullopt, measuredTransitionLivePixelBudget,
+        std::nullopt, uniformPresentationBudgets(measuredTransitionLivePixelBudget),
         VkExtent2D{3840, 2160}, true,
         variablePresentationPixelBudget(eightGiB), measuredRetainedMaximum
     );
@@ -1375,7 +1555,7 @@ int main() {
     const auto fourKPresentation = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {1920, 1080},
         std::nullopt, std::nullopt,
-        variablePresentationPixelBudget(eightGiB)
+        uniformPresentationBudgets(variablePresentationPixelBudget(eightGiB))
     );
     expect(fourKPresentation.extents && sameExtent(
             fourKPresentation.extents->presentation, {3840, 2160}),
@@ -1383,7 +1563,7 @@ int main() {
     const auto coldFiveKUsesBaseline = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {2560, 1440},
         std::nullopt, std::nullopt,
-        variablePresentationPixelBudget(eightGiB)
+        uniformPresentationBudgets(variablePresentationPixelBudget(eightGiB))
     );
     expect(coldFiveKUsesBaseline.extents &&
             coldFiveKUsesBaseline.usedBaselinePresentationBudget &&
@@ -1418,7 +1598,7 @@ int main() {
             .presentation = {3840, 2160},
         },
         std::nullopt,
-        variablePresentationPixelBudget(eightGiB)
+        uniformPresentationBudgets(variablePresentationPixelBudget(eightGiB))
     );
     expect(fiveKAfterFourKIsIdentical.extents &&
             fiveKAfterFourKIsIdentical.usedBaselinePresentationBudget &&
@@ -1434,7 +1614,7 @@ int main() {
     const auto eightKRejected = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {3840, 2160},
         std::nullopt, std::nullopt,
-        variablePresentationPixelBudget(eightGiB)
+        uniformPresentationBudgets(variablePresentationPixelBudget(eightGiB))
     );
     expect(!eightKRejected.extents && eightKRejected.inactiveReason ==
             SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
@@ -1442,7 +1622,7 @@ int main() {
     const auto nonWidescreen = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {1280, 1024},
         std::nullopt, std::nullopt,
-        variablePresentationPixelBudget(eightGiB)
+        uniformPresentationBudgets(variablePresentationPixelBudget(eightGiB))
     );
     expect(nonWidescreen.extents && sameExtent(
             nonWidescreen.extents->presentation, {2560, 2048}),
@@ -1450,7 +1630,7 @@ int main() {
     const auto eightKPresentation = scalingDecisionForCreate(
         profile, true, 7, largeVariableCreate, {3840, 2160},
         std::nullopt, std::nullopt,
-        variablePresentationPixelBudget(twentyFourGiB)
+        uniformPresentationBudgets(variablePresentationPixelBudget(twentyFourGiB))
     );
     expect(eightKPresentation.extents && sameExtent(
             eightKPresentation.extents->presentation, {7680, 4320}),

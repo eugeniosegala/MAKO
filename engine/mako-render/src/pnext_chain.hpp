@@ -10,6 +10,37 @@
 
 namespace mako::layer {
 
+    namespace detail {
+        // Packaged builds may use Vulkan headers older than EXT_present_timing
+        // while the game's driver exposes it. Only this outer node is copied;
+        // its per-swapchain timing array remains opaque and caller-owned.
+        // ABI: https://docs.vulkan.org/refpages/latest/refpages/source/VkPresentTimingsInfoEXT.html
+        inline constexpr auto presentTimingsInfoExtType =
+            static_cast<VkStructureType>(1000208003);
+        struct PresentTimingsInfoExtLayout {
+            VkStructureType sType;
+            const void* pNext;
+            uint32_t swapchainCount;
+            const void* pTimingInfos;
+        };
+#if defined(VK_EXT_present_timing)
+        static_assert(presentTimingsInfoExtType ==
+            VK_STRUCTURE_TYPE_PRESENT_TIMINGS_INFO_EXT);
+        static_assert(sizeof(PresentTimingsInfoExtLayout) ==
+            sizeof(VkPresentTimingsInfoEXT));
+        static_assert(alignof(PresentTimingsInfoExtLayout) ==
+            alignof(VkPresentTimingsInfoEXT));
+        static_assert(offsetof(PresentTimingsInfoExtLayout, sType) ==
+            offsetof(VkPresentTimingsInfoEXT, sType));
+        static_assert(offsetof(PresentTimingsInfoExtLayout, pNext) ==
+            offsetof(VkPresentTimingsInfoEXT, pNext));
+        static_assert(offsetof(PresentTimingsInfoExtLayout, swapchainCount) ==
+            offsetof(VkPresentTimingsInfoEXT, swapchainCount));
+        static_assert(offsetof(PresentTimingsInfoExtLayout, pTimingInfos) ==
+            offsetof(VkPresentTimingsInfoEXT, pTimingInfos));
+#endif
+    }
+
     /// Build a lower-facing VkSwapchainCreateInfoKHR pNext chain without
     /// modifying any caller-owned input node. Gamescope normally puts the
     /// maintenance1 present-mode node at the head, but a legal caller may put
@@ -245,6 +276,8 @@ namespace mako::layer {
         static_assert(sizeof(VkPresentIdKHR) <= maximumNodeBytes);
         static_assert(sizeof(VkPresentRegionsKHR) <= maximumNodeBytes);
         static_assert(sizeof(VkPresentTimesInfoGOOGLE) <= maximumNodeBytes);
+        static_assert(sizeof(detail::PresentTimingsInfoExtLayout) <=
+            maximumNodeBytes);
         static_assert(sizeof(VkSwapchainPresentFenceInfoEXT) <= maximumNodeBytes);
         static_assert(sizeof(VkSwapchainPresentModeInfoEXT) <= maximumNodeBytes);
 #if defined(VK_EXT_frame_boundary)
@@ -266,6 +299,8 @@ namespace mako::layer {
 
         [[nodiscard]] static size_t presentStructureSize(
                 const VkStructureType type) noexcept {
+            if (type == detail::presentTimingsInfoExtType)
+                return sizeof(detail::PresentTimingsInfoExtLayout);
             switch (type) {
                 case VK_STRUCTURE_TYPE_DEVICE_GROUP_PRESENT_INFO_KHR:
                     return sizeof(VkDeviceGroupPresentInfoKHR);

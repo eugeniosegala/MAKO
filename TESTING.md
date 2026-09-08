@@ -37,6 +37,8 @@ The `Tests` workflow runs on every pull request and push to `main`:
 
 The owning component tests remain authoritative for their detailed invariants.
 
+Decky's backend suite includes `plugin/tests/test_flatpak_override_integration.py`, which uses the real Linux `flatpak override` command in a temporary `FLATPAK_USER_DIR`. It checks preparation, repeated app-list refreshes, removal, and preservation of unrelated settings for Heroic, Lutris, and Dolphin. Application/runtime inventory is simulated; no installed apps, runtime downloads, licensed inputs, or GPU are required. The test skips when Linux or Flatpak is unavailable locally; the Decky CI job installs Flatpak before running it. Actual sandbox launches and rendering remain MAKO Gym evidence.
+
 Run `just test` for protected-input and Gym-selection contracts, Renderer CTest, Decky backend/frontend tests, and the trace producer. Add the checks below for the complete local portable gate:
 
 ```bash
@@ -73,7 +75,7 @@ The bridge exposes one selection pattern. `--list-suites` discovers suites, `--a
 ./engine/scripts/run-mako-gym.sh --suite recovery
 ```
 
-Run the smallest suite and filter that can observe a change. A filtered pass is evidence only for its selected rows. Widen to the complete affected suite when a shared production owner changes. A release does not automatically select every suite; run all suites only for a genuinely cross-cutting change or an explicit maintainer request.
+Run the smallest suite and filter that can observe a change. Complete hardware qualification additionally requires Gym's bounded `constraints` suite for the selected boundaries; the compact Gym hardware runner and the release gate enforce this automatically. Direct filtered suite runs remain development evidence and cannot substitute for that qualification. A filtered pass is evidence only for its selected rows. Widen to the complete affected suite when a shared production owner changes. A release does not automatically select every suite; run all suites only for a genuinely cross-cutting change or an explicit maintainer request.
 
 Retained evidence may be reused instead of duplicated only when the exact gate-built Renderer/package identity and source commit, host and driver, Gym commit, configuration, and required rows match the candidate. Record the prior run identifier in the release rationale. A code, package, driver, scenario, or assertion change invalidates the affected evidence.
 
@@ -121,6 +123,8 @@ When an explicit maintainer request or genuinely cross-cutting change requires e
 ```
 
 Choose exactly one mode: repeat `--gym-suite`, use `--no-gym-suites` when no Renderer-facing boundary changed or exact evidence is reused, or use `--all-gym-suites` for a genuinely cross-cutting or explicitly requested audit. `--gym-reason` is always required and must identify reused evidence. Inventory validation is portable; only selected suites produce hardware evidence. The host still needs the package prerequisites, `vulkaninfo`, `vkcube`, Gamescope, a local licensed `Lossless.dll`, and a clean compatible MAKO Gym checkout.
+
+The selection validator adds `constraints` once to named Renderer hardware selections. The gate runs the applicable resource combinations with the exact packaged CLI and launcher and `--require-complete`; `--no-gym-suites` adds no hardware work. The bounded matrix covers normal execution, reduced CPU availability, competing GPU work, and live memory pressure only where relevant. Gym owns the case/profile mapping in `docs/RESOURCE-CONSTRAINTS.md`.
 
 The gate creates a disposable one-job GitHub Actions runner and always rebuilds the complete dual-bitness/Flatpak package. CLI suites use the clean source-built `mako-cli`; runtime suites use the extracted candidate package. Direct-desktop coverage must start from a graphical session outside Gamescope. The gate records the selection, rationale, Gym identity, and sanitized results, retains the evidence and ZIP for 14 days, then removes credentials and staging. Publication later makes its own release-version and pin commits and independently rebuilds in the enforced order rather than promoting this ZIP byte-for-byte, so the published-package check remains separate.
 

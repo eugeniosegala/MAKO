@@ -17,6 +17,7 @@ namespace vk {
         /// create a timeline semaphore
         /// @param vk the vulkan instance
         /// @param initial initial value of the timeline semaphore
+        /// Import consumes the descriptor on success and failure.
         /// @param importFd optional file descriptor to import from
         /// @param exportFd optional file descriptor to export to
         /// @throws ls::vulkan_error on failure

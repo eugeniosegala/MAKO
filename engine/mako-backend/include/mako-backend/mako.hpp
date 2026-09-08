@@ -99,6 +99,10 @@ namespace mako::backend {
         /// - Library signals N -> N-th frame between (curr, next) is ready
         /// - Application signals N+1 -> Start generating with (next, curr) source images
         ///
+        /// Takes ownership of every supplied descriptor on entry, including when
+        /// construction fails before an import. Pass distinct owned descriptors;
+        /// the caller must neither close nor reuse them after this call.
+        ///
         /// @param sourceFds Pair of file descriptors for the source images alternated between.
         /// @param destFds Vector with file descriptors to import output images from.
         /// @param syncFd File descriptor for the timeline semaphore used for synchronization.

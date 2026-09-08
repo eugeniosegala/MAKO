@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "mako-common/configuration/config.hpp"
+#include "atomic_write.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <cstdint>
@@ -9,6 +10,7 @@
 #include <filesystem>
 #include <fstream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <utility>
 #include <vector>
@@ -19,13 +21,7 @@ using namespace ls;
 
 void ConfigFile::createDefaultConfigFile(const std::filesystem::path& path) {
     try {
-        std::filesystem::create_directories(path.parent_path());
-        if (!std::filesystem::exists(path.parent_path()))
-            throw ls::error("unable to create configuration directory");
-
-        std::ofstream ofs(path);
-        if (!ofs.is_open())
-            throw ls::error("unable to create default configuration file");
+        std::ostringstream ofs;
 
         ofs << "version = " << ConfigFile::formatVersion << R"(
 
@@ -68,8 +64,8 @@ active_in = 'GenshinImpact.exe'
 gpu = 'NVIDIA GeForce RTX 5080'
 multiplier = 2
 )";
-        ofs.close();
-    } catch (const std::filesystem::filesystem_error& e) {
+        detail::writeConfigurationAtomically(path, ofs.str());
+    } catch (const std::exception& e) {
         throw ls::error("unable to create default configuration file", e);
     }
 }
@@ -578,15 +574,13 @@ void ConfigFile::write(const std::filesystem::path& path) const {
     table.insert("profile", profiles);
 
     try {
-        std::ofstream ofs(path);
-        if (!ofs.is_open())
-            throw ls::error("unable to open configuration file for writing");
+        std::ostringstream ofs;
 
         ofs << toml::toml_formatter {
             table,
             toml::v3::format_flags::relaxed_float_precision
         } << '\n';
-        ofs.close();
+        detail::writeConfigurationAtomically(path, ofs.str());
     } catch (const std::exception& e) {
         throw ls::error("unable to write configuration file", e);
     }

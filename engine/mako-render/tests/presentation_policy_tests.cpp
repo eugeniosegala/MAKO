@@ -22,9 +22,200 @@ namespace {
         std::cerr << "FAIL: " << message << '\n';
         std::exit(1);
     }
+
+    OrderedAcquireRecovery::TimePoint enterMaximumAcquireBackoff(
+            OrderedAcquireRecovery& recovery) {
+        auto now = OrderedAcquireRecovery::TimePoint{};
+        auto delay = recovery.observe(now, 50ms, 25ms, true).retryDelay;
+        for (size_t failure = 1; failure < 7; ++failure) {
+            now += delay;
+            expect(recovery.beforePresent(now).boundedAcquireProbe,
+                "backoff setup did not permit its scheduled bounded probe");
+            delay = recovery.reportNonblockingProbeUnavailable(now).retryDelay;
+        }
+        expect(delay == 30s,
+            "backoff setup did not reach the persistent-pressure ceiling");
+        return now;
+    }
+
+    void testEmptyFixedBudgetDoesNotFailPendingAcquireProbe() {
+        // A slightly early 45 FPS frame at 90 Hz can legitimately spend the
+        // display's fractional credit on only the real image, immediately
+        // after recovery history has warmed. No Vulkan acquire runs then.
+        for (const bool nativeDrain : {false, true}) {
+            OrderedAcquireRecovery recovery;
+            auto now = OrderedAcquireRecovery::TimePoint{};
+            const auto miss = recovery.observe(now,
+                nativeDrain ? 50ms : 17ms, 25ms, true);
+            if (nativeDrain)
+                now += miss.retryDelay;
+            auto decision = recovery.beforePresent(now);
+            expect(decision.limitGeneratedFrames &&
+                    decision.boundedAcquireProbe == nativeDrain,
+                "empty-budget scenario did not arm the expected probe");
+
+            FixedRefreshBudget budget;
+            expect(budget.plan(now, 90, 1) == 0,
+                "fresh display budget must start with the real frame");
+            for (size_t frame = 0; frame < 2; ++frame) {
+                now += 22'400us;
+                const auto generated = budget.plan(now, 90, 1);
+                expect(generated == 1 &&
+                        !orderedAcquireProbeEligible(true, true, generated),
+                    "history warm-up attempted a recovery acquire");
+            }
+            now += 21'600us;
+            const auto empty = budget.plan(now, 90, 1);
+            expect(empty == 0,
+                "early 45 FPS frame did not reproduce an empty Fixed budget");
+            expect(!orderedAcquireProbeEligible(
+                    decision.limitGeneratedFrames, false, empty),
+                "empty display budget manufactured an acquire-probe failure");
+
+            now += 22'400us;
+            decision = recovery.beforePresent(now);
+            const auto generated = budget.plan(now, 90, 1);
+            expect(generated == 1 && orderedAcquireProbeEligible(
+                    decision.limitGeneratedFrames, false, generated) &&
+                    decision.boundedAcquireProbe == nativeDrain &&
+                    decision.consecutiveFailures == (nativeDrain ? 1U : 0U),
+                "real-only frame lost its pending probe or increased backoff");
+            const auto resumed = recovery.observe(now, 0ns, 25ms, false,
+                false, decision.boundedAcquireProbe);
+            expect(resumed.recovered && resumed.guardCleared == !nativeDrain,
+                "next eligible generated frame did not complete recovery");
+        }
+        for (size_t generated = 0; generated <= 4; ++generated) {
+            expect(!orderedAcquireProbeEligible(false, false, generated),
+                "ordinary generation incorrectly entered the recovery probe path");
+        }
+    }
+
+    void testLongAcquireBackoffResumesOnNativeDemand() {
+        OrderedAcquireRecovery recovery;
+        auto now = enterMaximumAcquireBackoff(recovery);
+        const auto originalRetryAt = now + 30s;
+        size_t nativeHoldEntries = 0;
+        // Reproduce the review case: a target-rate menu during a long drain
+        // must qualify the native hold before its retry deadline expires.
+        for (size_t frame = 0; frame < 600; ++frame) {
+            now += 8'333'333ns;
+            const auto decision = recovery.beforePresent(
+                now, 8'333'333ns, 120.0
+            );
+            nativeHoldEntries += decision.nativeCadenceSaturationEntered;
+            expect(decision.bypassGeneration &&
+                    !decision.beginHistoryWarmup &&
+                    !decision.preacquireGeneratedFrame,
+                "target-rate native hold scheduled synthetic work");
+        }
+        expect(nativeHoldEntries == 1,
+            "long backoff postponed native qualification until its retry deadline");
+
+        // Near-target variation and isolated slow frames must not accumulate
+        // into a sustained demand signal or repeatedly skip the cooldown.
+        for (size_t burst = 0; burst < 10; ++burst) {
+            now += 16'666'667ns;
+            expect(recovery.beforePresent(now, 16'666'667ns, 120.0).
+                    bypassGeneration,
+                "one slow native frame released long backoff");
+            for (size_t frame = 0; frame < 30; ++frame) {
+                const auto interval = frame % 2 == 0
+                    ? 8'333'333ns : 8'928'571ns; // 120 / 112 FPS
+                now += interval;
+                const auto decision = recovery.beforePresent(
+                    now, interval, 120.0
+                );
+                expect(decision.nativeCadenceSaturated &&
+                        decision.bypassGeneration &&
+                        !decision.beginHistoryWarmup &&
+                        !decision.nativeCadenceSaturationEntered,
+                    "brief native fluctuations escaped the qualified hold");
+            }
+        }
+
+        const auto gameplayReturnedAt = now;
+        bool resumed = false;
+        for (size_t frame = 0; frame < 15; ++frame) {
+            now += 16'666'667ns;
+            const auto decision = recovery.beforePresent(
+                now, 16'666'667ns, 120.0
+            );
+            if (!decision.nativeCadenceDemandResumed)
+                continue;
+            expect(now < originalRetryAt &&
+                    now - gameplayReturnedAt >= 100ms &&
+                    !decision.bypassGeneration &&
+                    decision.beginHistoryWarmup &&
+                    decision.limitGeneratedFrames &&
+                    decision.preacquireGeneratedFrame &&
+                    decision.boundedAcquireProbe,
+                "native demand did not re-arm one bounded probe with fresh history");
+            resumed = true;
+            break;
+        }
+        expect(resumed,
+            "gameplay return waited for long backoff instead of qualified demand");
+
+        // An early probe is one opportunity, not proof of transport health.
+        // Its failure must retain the full backoff and require new evidence.
+        now += 1ms;
+        const auto failedAt = now;
+        const auto miss = recovery.reportNonblockingProbeUnavailable(now);
+        expect(miss.quarantined && miss.boundedProbeFailed &&
+                miss.retryDelay == 30s && miss.consecutiveFailures == 8,
+            "failed demand probe erased persistent acquisition pressure");
+        for (size_t frame = 0; frame < 120; ++frame) {
+            now += 16'666'667ns;
+            const auto decision = recovery.beforePresent(
+                now, 16'666'667ns, 120.0
+            );
+            expect(decision.bypassGeneration &&
+                    !decision.preacquireGeneratedFrame,
+                "failed demand probe left an early-retry permission active");
+        }
+        expect(recovery.beforePresent(failedAt + 30s, 16'666'667ns, 120.0).
+                boundedAcquireProbe,
+            "persistent pressure lost its eventual bounded retry");
+    }
+
+    void testLongAcquireBackoffRequiresQualifiedNativeCadence() {
+        // A persistently low native rate and a brief target-rate burst both
+        // retain the long backoff; neither establishes a changed workload.
+        for (const size_t targetRateFrames : {0U, 18U}) {
+            OrderedAcquireRecovery recovery;
+            auto now = enterMaximumAcquireBackoff(recovery);
+            const auto retryAt = now + 30s;
+            for (size_t frame = 0; frame < targetRateFrames; ++frame) {
+                now += 8'333'333ns;
+                const auto decision = recovery.beforePresent(
+                    now, 8'333'333ns, 120.0
+                );
+                expect(!decision.nativeCadenceSaturated &&
+                        decision.bypassGeneration,
+                    "brief native burst qualified an early recovery hold");
+            }
+            while (now + 16'666'667ns < retryAt) {
+                now += 16'666'667ns;
+                const auto decision = recovery.beforePresent(
+                    now, 16'666'667ns, 120.0
+                );
+                expect(decision.bypassGeneration &&
+                        !decision.preacquireGeneratedFrame &&
+                        !decision.nativeCadenceSaturated,
+                    "unqualified native cadence bypassed persistent backoff");
+            }
+            expect(recovery.beforePresent(retryAt, 16'666'667ns, 120.0).
+                    boundedAcquireProbe,
+                "ordinary persistent-pressure retry did not remain finite");
+        }
+    }
 }
 
 int main() {
+    testEmptyFixedBudgetDoesNotFailPendingAcquireProbe();
+    testLongAcquireBackoffResumesOnNativeDemand();
+    testLongAcquireBackoffRequiresQualifiedNativeCadence();
     expect(!shouldRejectManagedMultiSwapchainPresent(1, true) &&
             !shouldRejectManagedMultiSwapchainPresent(2, false) &&
             shouldRejectManagedMultiSwapchainPresent(2, true),
@@ -173,6 +364,8 @@ int main() {
         "120 Hz ordered acquire pressure threshold changed");
     expect(OrderedAcquireRecovery::slowAcquireDuration(60) == 25ms,
         "60 Hz ordered acquire pressure threshold changed");
+    expect(OrderedAcquireRecovery::maximumRetryDelay() == 30s,
+        "ordered acquire recovery must cap persistent retry delay at 30 seconds");
     expect(OrderedAcquireRecovery::slowAcquireDuration(40) >= 37ms &&
             OrderedAcquireRecovery::slowAcquireDuration(40) < 38ms,
         "40 Hz ordered acquire pressure threshold lost display scaling");
@@ -210,6 +403,91 @@ int main() {
     expect(!acquireDecision.bypassGeneration &&
             !acquireDecision.limitGeneratedFrames,
         "successful slow-acquire protection retained recovery constraints");
+
+    // A refresh-relative delivery deadline is shorter than the pressure
+    // threshold on 90/120 Hz displays. An isolated miss must not turn one
+    // dropped synthetic output into a multi-frame native drain.
+    for (const uint32_t refresh : {90U, 120U, 240U}) {
+        acquireRecovery.reset();
+        const auto threshold =
+            OrderedAcquireRecovery::slowAcquireDuration(refresh);
+        const auto wait = std::chrono::nanoseconds{
+            orderedGeneratedImageAcquireTimeout(refresh, acquireBudget)
+        } + 1ms;
+        observation = acquireRecovery.observe(
+            acquireStart, wait, threshold, true
+        );
+        acquireDecision = acquireRecovery.beforePresent(acquireStart + 20ms);
+        expect(observation.guardArmed && observation.timedOut &&
+                !observation.quarantined &&
+                acquireDecision.preacquireGeneratedFrame &&
+                !acquireDecision.boundedAcquireProbe &&
+                !acquireDecision.bypassGeneration,
+            "short image deadline miss did not use zero-wait protection");
+        const auto missedGuard =
+            acquireRecovery.reportNonblockingProbeUnavailable(
+                acquireStart + 21ms
+            );
+        expect(missedGuard.guardBypassed && !missedGuard.quarantined,
+            "short deadline guard miss skipped native relief");
+        // Temporal warm-up sends no synthetic acquire observation. The next
+        // failed normal acquire must retain the first miss as pressure proof.
+        observation = acquireRecovery.observe(
+            acquireStart + 90ms, wait, threshold, true
+        );
+        expect(observation.quarantined && observation.timedOut &&
+                observation.retryDelay == 250ms,
+            "repeated short timeouts escaped native-drain recovery");
+    }
+
+    acquireRecovery.reset();
+    static_cast<void>(acquireRecovery.observe(
+        acquireStart, 18ms, 25ms, true
+    ));
+    observation = acquireRecovery.observe(
+        acquireStart + 17ms, 0ms, 25ms, false
+    );
+    expect(observation.guardCleared && !acquireRecovery.active(),
+        "successful timeout guard did not permit a normal batch retry");
+    observation = acquireRecovery.observe(
+        acquireStart + 50ms, 18ms, 25ms, true
+    );
+    expect(observation.quarantined && observation.retryDelay == 250ms,
+        "successful single-image guard erased repeated normal-batch timeouts");
+
+    acquireRecovery.reset();
+    static_cast<void>(acquireRecovery.observe(
+        acquireStart, 18ms, 25ms, true
+    ));
+    static_cast<void>(acquireRecovery.observe(
+        acquireStart + 17ms, 0ms, 25ms, false
+    ));
+    // Only an unrestricted healthy batch proves normal transport capacity.
+    // A later isolated timeout must not inherit the earlier pressure count.
+    observation = acquireRecovery.observe(
+        acquireStart + 50ms, 5ms, 25ms, false
+    );
+    expect(!observation.quarantined && !acquireRecovery.active(),
+        "healthy normal batch introduced a recovery constraint");
+    observation = acquireRecovery.observe(
+        acquireStart + 100ms, 18ms, 25ms, true
+    );
+    expect(observation.guardArmed && !observation.quarantined,
+        "healthy normal batch did not clear earlier timeout evidence");
+
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 18ms, 25ms, true, true
+    );
+    expect(observation.quarantined && observation.deadlineExceeded &&
+            !observation.guardArmed,
+        "short final image hid cumulative acquire-budget exhaustion");
+    acquireRecovery.reset();
+    observation = acquireRecovery.observe(
+        acquireStart, 25ms, 25ms, true
+    );
+    expect(observation.quarantined && !observation.guardArmed,
+        "timeout at the slow threshold bypassed native-drain recovery");
 
     acquireRecovery.reset();
     observation = acquireRecovery.observe(
@@ -301,10 +579,13 @@ int main() {
     expect(observation.quarantined &&
             observation.retryDelay == 250ms,
         "native-saturation scenario did not begin with a finite drain");
+    size_t initialNativeHoldEntries = 0;
     for (size_t frame = 1; frame < 31; ++frame) {
         acquireDecision = nativeSaturationRecovery.beforePresent(
             acquireStart + 8ms * frame, 8ms, 120.0
         );
+        initialNativeHoldEntries +=
+            acquireDecision.nativeCadenceSaturationEntered;
         expect(acquireDecision.bypassGeneration &&
                 !acquireDecision.beginHistoryWarmup,
             "native-saturation qualification attempted generation early");
@@ -312,9 +593,11 @@ int main() {
     acquireDecision = nativeSaturationRecovery.beforePresent(
         acquireStart + 250ms, 8ms, 120.0
     );
+    initialNativeHoldEntries +=
+        acquireDecision.nativeCadenceSaturationEntered;
     expect(acquireDecision.bypassGeneration &&
             acquireDecision.nativeCadenceSaturated &&
-            acquireDecision.nativeCadenceSaturationEntered &&
+            initialNativeHoldEntries == 1 &&
             !acquireDecision.beginHistoryWarmup &&
             !acquireDecision.boundedAcquireProbe &&
             acquireDecision.nativeBaseFps >= 119.0 &&
@@ -432,7 +715,7 @@ int main() {
     );
     auto probeRetryAt = acquireStart + observation.retryDelay;
     constexpr std::array boundedProbeRetryDelays{
-        500ms, 1000ms, 2000ms, 2000ms,
+        500ms, 1000ms, 2000ms, 5000ms, 15000ms, 30000ms, 30000ms,
     };
     for (const auto expectedDelay : boundedProbeRetryDelays) {
         acquireDecision = acquireRecovery.beforePresent(probeRetryAt);
@@ -458,7 +741,8 @@ int main() {
     acquireRecovery.reset();
     auto repeatedFailureAt = acquireStart;
     constexpr std::array expectedRetryDelays{
-        250ms, 500ms, 1000ms, 2000ms, 2000ms,
+        250ms, 500ms, 1000ms, 2000ms, 5000ms, 15000ms, 30000ms,
+        30000ms,
     };
     for (size_t failure = 0; failure < expectedRetryDelays.size(); ++failure) {
         observation = acquireRecovery.observe(

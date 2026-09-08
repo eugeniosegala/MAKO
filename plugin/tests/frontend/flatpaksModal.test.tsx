@@ -1,5 +1,11 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 const api = vi.hoisted(() => ({
@@ -75,7 +81,15 @@ vi.mock("../../src/utils/toastUtils", () => ({
   showSuccessToast: vi.fn(),
 }));
 vi.mock("../../src/i18n/i18n", () => ({
-  default: (_key: string, fallback: string) => fallback,
+  default: (
+    _key: string,
+    fallback: string,
+    values: Record<string, string> = {},
+  ) =>
+    fallback.replace(
+      /\{(\w+)\}/g,
+      (_match, key: string) => values[key] ?? `{${key}}`,
+    ),
 }));
 
 import { FlatpaksModal } from "../../src/components/FlatpaksModal";
@@ -156,7 +170,130 @@ describe("Flatpak application preparation", () => {
     resolveUpdate!({ success: false, message: "", error: "Unavailable" });
   });
 
-  test("separates manual shortcuts from app-wide preparation and links the README", async () => {
+  test.each([
+    ["com.heroicgameslauncher.hgl", "Heroic"],
+    ["net.lutris.Lutris", "Lutris"],
+    ["org.DolphinEmu.dolphin-emu", "Dolphin"],
+  ])(
+    "keeps %s prepared after refresh and reopening, then allows removal",
+    async (appId, appName) => {
+      window.SP_REACT = React;
+      const wrapperPath = "/home/deck/.local/bin/mako-run";
+      const partialApp = {
+        app_id: appId,
+        app_name: appName,
+        wrapper_path: wrapperPath,
+        has_filesystem_override: true,
+        has_wrapper_override: true,
+        has_env_override: true,
+        has_required_env_override: false,
+      };
+      const preparedApp = {
+        ...partialApp,
+        has_env_override: appName === "Dolphin",
+        has_required_env_override: true,
+      };
+      api.checkFlatpakExtensionStatus.mockResolvedValue({
+        success: true,
+        installed_25_08: true,
+      });
+      api.getLaunchOption.mockResolvedValue({ wrapper_path: wrapperPath });
+      api.getFlatpakApps
+        .mockResolvedValueOnce({ success: true, apps: [partialApp] })
+        .mockResolvedValue({ success: true, apps: [preparedApp] });
+      api.setFlatpakAppOverride.mockResolvedValue({ success: true });
+      api.removeFlatpakAppOverride.mockResolvedValue({ success: true });
+
+      const modal = render(<FlatpaksModal />);
+      const toggle = await screen.findByRole("button", {
+        name: "Flatpak application toggle",
+      });
+      expect(toggle.textContent).toBe("Disabled");
+      fireEvent.click(toggle);
+      await waitFor(() => expect(toggle.textContent).toBe("Enabled"));
+      expect(api.setFlatpakAppOverride).toHaveBeenCalledWith(appId);
+      expect(api.getFlatpakApps).toHaveBeenCalledTimes(2);
+      expect(screen.queryByText(/ - Partial\./)).toBeNull();
+
+      modal.unmount();
+      render(<FlatpaksModal />);
+      const reopenedToggle = await screen.findByRole("button", {
+        name: "Flatpak application toggle",
+      });
+      expect(reopenedToggle.textContent).toBe("Enabled");
+      expect(api.getFlatpakApps).toHaveBeenCalledTimes(3);
+
+      api.getFlatpakApps.mockResolvedValue({
+        success: true,
+        apps: [
+          {
+            ...partialApp,
+            has_filesystem_override: false,
+            has_wrapper_override: false,
+            has_env_override: false,
+          },
+        ],
+      });
+      fireEvent.click(reopenedToggle);
+      await waitFor(() => expect(reopenedToggle.textContent).toBe("Disabled"));
+      expect(api.removeFlatpakAppOverride).toHaveBeenCalledWith(appId);
+      expect(api.setFlatpakAppOverride).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  test.each([
+    ["com.heroicgameslauncher.hgl", "Heroic"],
+    ["net.lutris.Lutris", "Lutris"],
+  ])(
+    "re-prepares stale %s activation with per-game instructions",
+    async (appId, appName) => {
+      window.SP_REACT = React;
+      const wrapperPath = "/var/home/test user/.local/bin/mako-run";
+      api.checkFlatpakExtensionStatus.mockResolvedValue({
+        success: true,
+        installed_25_08: true,
+      });
+      api.getLaunchOption.mockResolvedValue({ wrapper_path: wrapperPath });
+      api.getFlatpakApps.mockResolvedValue({
+        success: true,
+        apps: [
+          {
+            app_id: appId,
+            app_name: appName,
+            wrapper_path: wrapperPath,
+            has_filesystem_override: true,
+            has_wrapper_override: true,
+            has_env_override: true,
+            has_required_env_override: false,
+          },
+        ],
+      });
+      api.setFlatpakAppOverride.mockResolvedValue({
+        success: false,
+        error: "Unavailable",
+      });
+
+      render(<FlatpaksModal />);
+      const toggle = await screen.findByRole("button", {
+        name: "Flatpak application toggle",
+      });
+      expect(toggle.textContent).toBe("Disabled");
+      expect(
+        screen.getByText(
+          `${appId} - Partial. Enable MAKO per game using ${wrapperPath}. See the launcher setup guide for the correct field.`,
+        ),
+      ).toBeTruthy();
+      expect(
+        screen.queryByText(/Preparation applies to this entire Flatpak app/),
+      ).toBeNull();
+      fireEvent.click(toggle);
+      expect(api.setFlatpakAppOverride).toHaveBeenCalledWith(appId);
+      expect(api.removeFlatpakAppOverride).not.toHaveBeenCalled();
+      await screen.findByText("Unavailable");
+    },
+  );
+
+  test("separates manual shortcuts from app-wide preparation and links the guide", async () => {
     window.SP_REACT = React;
     api.checkFlatpakExtensionStatus.mockResolvedValue({
       success: true,
@@ -205,13 +342,13 @@ describe("Flatpak application preparation", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        /Heroic and EmuDeck use different per-game steps; check the MAKO README on GitHub/,
+        /Heroic, Lutris, and EmuDeck have separate steps in the launcher setup guide/,
       ),
     ).toBeTruthy();
 
-    fireEvent.click(screen.getByText("Open Heroic and EmuDeck guide"));
+    fireEvent.click(screen.getByText("Open launcher setup guide"));
     expect(navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
-      "https://github.com/eugeniosegala/MAKO#heroic-and-other-flatpak-applications",
+      "https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/LAUNCHERS.md",
     );
   });
 });

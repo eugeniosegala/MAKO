@@ -134,6 +134,116 @@ import {
 afterEach(cleanup);
 
 describe("Scaling controls", () => {
+  test.each(["ls1", "ls1-performance"])(
+    "shows fallback guidance only for unavailable saved %s selections",
+    (method) => {
+      window.SP_REACT = React;
+      const saved = {
+        ...getDefaults(),
+        scaling_enabled: true,
+        scaling_method: method,
+      };
+      const onConfigChange = vi.fn(async () => undefined);
+      const { rerender } = render(
+        <ScalingControl
+          config={saved}
+          modelCompatible={false}
+          onConfigChange={onConfigChange}
+        />,
+      );
+      expect(
+        screen
+          .getByRole("button", { name: "Scaling Method" })
+          .getAttribute("data-selected"),
+      ).toBe(method);
+      expect(
+        screen.getByText(/selected LS1 model could not be loaded/),
+      ).toBeTruthy();
+      expect(onConfigChange).not.toHaveBeenCalled();
+      expect(saved.scaling_method).toBe(method);
+      for (const modelCompatible of [true, null]) {
+        rerender(
+          <ScalingControl
+            config={saved}
+            modelCompatible={modelCompatible}
+            onConfigChange={onConfigChange}
+          />,
+        );
+        expect(
+          screen.queryByText(/Your LS1 selection is preserved/),
+        ).toBeNull();
+      }
+    },
+  );
+
+  test("distinguishes a live fallback from a host preflight and ignores a previous model", () => {
+    window.SP_REACT = React;
+    const props = {
+      config: {
+        ...getDefaults(),
+        scaling_enabled: true,
+        scaling_method: "ls1",
+      },
+      modelCompatible: true,
+      runtimeRequestedMethod: "ls1",
+      runtimeMakoFallback: true,
+      runtimeActiveMethod: "mako",
+      onConfigChange: vi.fn(async () => undefined),
+    };
+    const { rerender } = render(<ScalingControl {...props} />);
+    expect(screen.getByText(/MAKO Scaler is active/)).toBeTruthy();
+    rerender(
+      <ScalingControl
+        {...props}
+        config={{ ...props.config, scaling_method: "ls1-performance" }}
+      />,
+    );
+    expect(screen.queryByText(/MAKO Scaler is active/)).toBeNull();
+    expect(screen.queryByText(/Your LS1 selection is preserved/)).toBeNull();
+    rerender(
+      <ScalingControl
+        {...props}
+        modelCompatible={false}
+        runtimeMakoFallback={false}
+        runtimeActiveMethod="ls1"
+      />,
+    );
+    expect(screen.queryByText(/Your LS1 selection is preserved/)).toBeNull();
+    expect(props.onConfigChange).not.toHaveBeenCalled();
+  });
+
+  test("fallback notices follow Ultra Performance and disappear for model-free scaling", () => {
+    window.SP_REACT = React;
+    const props = {
+      config: {
+        ...getDefaults(),
+        scaling_enabled: true,
+        scaling_method: "mako",
+        ultra_performance: true,
+      },
+      modelCompatible: false,
+      onConfigChange: vi.fn(async () => undefined),
+    };
+    const { rerender } = render(<ScalingControl {...props} />);
+    expect(
+      screen
+        .getByRole("button", { name: "Scaling Method" })
+        .getAttribute("data-selected"),
+    ).toBe("ls1-performance");
+    expect(
+      screen.getByText(/selected LS1 model could not be loaded/),
+    ).toBeTruthy();
+    rerender(
+      <ScalingControl
+        {...props}
+        config={{ ...props.config, ultra_performance: false }}
+      />,
+    );
+    expect(
+      screen.queryByText(/selected LS1 model could not be loaded/),
+    ).toBeNull();
+  });
+
   test("the master toggle hides and shows every dependent control", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
@@ -197,7 +307,7 @@ describe("Scaling controls", () => {
     expect(screen.getByText("LS1 Performance")).toBeTruthy();
     expect(
       screen.getByText(
-        "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels.",
+        /When the game controls the window size, lower its resolution in the game first;/,
       ),
     ).toBeTruthy();
     expect(screen.queryByText(/guarded game-owned recreation/)).toBeNull();
@@ -292,7 +402,7 @@ describe("Scaling controls", () => {
     expect(expanded.getAttribute("data-maximum")).toBe("2");
     expect(
       screen.getByText(
-        "Supersampling is enabled. MAKO can render above the display target for a sharper downsampled image.",
+        /Where a Gamescope output limit applies, MAKO may exceed it/,
       ),
     ).toBeTruthy();
   });

@@ -1,3 +1,4 @@
+import type { ConfigurationControlProps } from "./settings/types";
 import {
   Dropdown,
   Field,
@@ -19,21 +20,20 @@ import {
   SCALING_SHARPNESS,
   SCALING_SHARPNESS_MAX,
   SCALING_SHARPNESS_MIN,
-  type ConfigurationData,
 } from "../config/configSchema";
 import t from "../i18n/i18n";
+import { effectiveScalingMethod as resolveScalingMethod } from "../config/ultraPerformancePreset";
 import { MakoExperimentalSettingLabel, MakoInlineTip } from "./MakoUi";
 
-interface ScalingControlProps {
-  config: ConfigurationData;
+interface ScalingControlProps extends ConfigurationControlProps {
   disabled?: boolean;
   runtimeActivationSupported?: boolean | null;
   runtimeInactiveReason?: string | null;
   runtimeFactorCeiling?: number | null;
-  onConfigChange: (
-    fieldName: keyof ConfigurationData,
-    value: boolean | number | string,
-  ) => Promise<void>;
+  modelCompatible?: boolean | null;
+  runtimeRequestedMethod?: string | null;
+  runtimeMakoFallback?: boolean;
+  runtimeActiveMethod?: string | null;
 }
 
 export function ScalingControl({
@@ -42,13 +42,21 @@ export function ScalingControl({
   runtimeActivationSupported = null,
   runtimeInactiveReason = null,
   runtimeFactorCeiling = null,
+  modelCompatible = null,
+  runtimeRequestedMethod = null,
+  runtimeMakoFallback = false,
+  runtimeActiveMethod = null,
   onConfigChange,
 }: ScalingControlProps) {
-  const effectiveScalingMethod =
-    config.scaling_enabled && config.ultra_performance
-      ? SCALING_METHOD_LS1_PERFORMANCE
-      : config.scaling_method;
+  const effectiveScalingMethod = resolveScalingMethod(config);
   const scalerActive = effectiveScalingMethod !== SCALING_METHOD_NATIVE;
+  const ls1Selected =
+    effectiveScalingMethod === SCALING_METHOD_LS1 ||
+    effectiveScalingMethod === SCALING_METHOD_LS1_PERFORMANCE;
+  const activeFallback =
+    runtimeMakoFallback && runtimeRequestedMethod === effectiveScalingMethod;
+  const modelUnavailable =
+    modelCompatible === false && runtimeActiveMethod !== effectiveScalingMethod;
   const runningSurfaceUnsupported =
     runtimeActivationSupported === false ||
     runtimeInactiveReason === "gamescope-wsi-surface-unproven";
@@ -175,6 +183,19 @@ export function ScalingControl({
                   onConfigChange(SCALING_METHOD, String(option.data))
                 }
               />
+              {ls1Selected && (activeFallback || modelUnavailable) && (
+                <MakoInlineTip tone="warning">
+                  {activeFallback
+                    ? t(
+                        "SCALING_LS1_ACTIVE_FALLBACK",
+                        "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
+                      )
+                    : t(
+                        "SCALING_LS1_UNAVAILABLE",
+                        "The selected LS1 model could not be loaded during the availability check. MAKO Scaler is used automatically if LS1 cannot load. Your LS1 selection is preserved.",
+                      )}
+                </MakoInlineTip>
+              )}
             </Field>
           </PanelSectionRow>
 
@@ -190,14 +211,14 @@ export function ScalingControl({
                     <div>
                       {t(
                         "SCALING_SUPERSAMPLING_DESC",
-                        "Allows scaling beyond the display's native output for higher-quality downsampling. This increases GPU and memory load, especially on low-power devices.",
+                        "Allows exceeding a Gamescope output limit for higher-quality downsampling, increasing GPU and memory use. Does not change scaling on other desktop surfaces.",
                       )}
                     </div>
                     {config.scaling_supersampling && (
                       <MakoInlineTip tone="warning">
                         {t(
                           "SCALING_SUPERSAMPLING_WARNING",
-                          "Supersampling is enabled. MAKO can render above the display target for a sharper downsampled image.",
+                          "Supersampling is enabled. Where a Gamescope output limit applies, MAKO may exceed it for a sharper downsampled image.",
                         )}
                       </MakoInlineTip>
                     )}
@@ -220,7 +241,7 @@ export function ScalingControl({
                   <span style={{ display: "block", paddingTop: "3px" }}>
                     {t(
                       "SCALING_FACTOR_DESC",
-                      "Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels.",
+                      "Sets the output-to-input size ratio for every method. With a fixed output size, higher values lower the source resolution. When the game controls the window size, lower its resolution in the game first; higher factors enlarge MAKO's output and can increase GPU cost.",
                     )}
                   </span>
                   {factorLimited && (

@@ -419,7 +419,7 @@ export function ContentNotices({
                 )}`}{" "}
               {t(
                 "CONTENT_ENGINE_UPDATE_DESC",
-                "Reinstall the private engine to apply this plugin release's pinned payload. If you use Heroic, refresh its matching runtime extension in Flatpak Extensions afterwards.",
+                "Reinstall MAKO Renderer to apply the version bundled with this plugin. Then update the matching runtime extensions for prepared Flatpak apps.",
               )}
             </div>
             <div className="Mako_BrandButton">

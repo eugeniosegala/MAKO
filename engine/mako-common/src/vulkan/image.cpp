@@ -2,6 +2,7 @@
 
 #include "mako-common/vulkan/image.hpp"
 #include "mako-common/helpers/errors.hpp"
+#include "mako-common/helpers/file_descriptors.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/image_memory_pool.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
@@ -12,7 +13,6 @@
 #include <stdexcept>
 
 #include <vulkan/vulkan_core.h>
-#include <unistd.h>
 
 using namespace vk;
 
@@ -20,9 +20,8 @@ namespace {
     /// create a image
     ls::owned_ptr<VkImage> createImage(const vk::Vulkan& vk,
             VkExtent2D extent, VkFormat format, VkImageUsageFlags usage,
-            std::optional<int> importFd, bool exportable) {
+            bool external) {
         VkImage handle{};
-        const bool external = importFd.has_value() || exportable;
 
         const VkExternalMemoryImageCreateInfo externalInfo{
             .sType = VK_STRUCTURE_TYPE_EXTERNAL_MEMORY_IMAGE_CREATE_INFO,
@@ -45,11 +44,8 @@ namespace {
             .sharingMode = VK_SHARING_MODE_EXCLUSIVE
         };
         auto res = vk.df().CreateImage(vk.dev(), &imageInfo, VK_NULL_HANDLE, &handle);
-        if (res != VK_SUCCESS) {
-            if (importFd)
-                static_cast<void>(::close(*importFd));
+        if (res != VK_SUCCESS)
             throw ls::vulkan_error(res, "vkCreateImage() failed");
-        }
 
         return ls::owned_ptr<VkImage>(
             new VkImage(handle),
@@ -60,7 +56,8 @@ namespace {
     }
     /// allocate memory for a image
     ls::owned_ptr<VkDeviceMemory> allocateMemory(const vk::Vulkan& vk, VkImage image,
-            std::optional<int> importFd, std::optional<int*> exportFd) {
+            std::optional<int> importFd, bool exportable,
+            ls::FileDescriptorScope& imported) {
         VkDeviceMemory handle{};
 
         VkMemoryRequirements reqs{};
@@ -70,11 +67,8 @@ namespace {
             reqs.memoryTypeBits,
             false
         );
-        if (!mti.has_value()) {
-            if (importFd)
-                static_cast<void>(::close(*importFd));
+        if (!mti.has_value())
             throw ls::vulkan_error("no suitable memory type found for image");
-        }
 
         const VkMemoryDedicatedAllocateInfoKHR dedicatedInfo{
             .sType = VK_STRUCTURE_TYPE_MEMORY_DEDICATED_ALLOCATE_INFO_KHR,
@@ -94,7 +88,7 @@ namespace {
         const void* pNextAlloc{};
         if (importFd.has_value())
             pNextAlloc = &importInfo;
-        else if (exportFd.has_value())
+        else if (exportable)
             pNextAlloc = &exportInfo;
         const VkMemoryAllocateInfo memoryInfo{
             .sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO,
@@ -103,18 +97,18 @@ namespace {
             .memoryTypeIndex = *mti
         };
         auto res = vk.df().AllocateMemory(vk.dev(), &memoryInfo, VK_NULL_HANDLE, &handle);
-        if (res != VK_SUCCESS) {
-            if (importFd)
-                static_cast<void>(::close(*importFd));
+        if (res != VK_SUCCESS)
             throw ls::vulkan_error(res, "vkAllocateMemory() failed");
-        }
+        // A successful import transfers FD ownership to Vulkan, even if a
+        // later bind or view creation fails. Never close that number again.
+        imported.release();
         if (handle == VK_NULL_HANDLE)
             throw ls::vulkan_error(VK_ERROR_OUT_OF_DEVICE_MEMORY,
                 "vkAllocateMemory() succeeded but returned a null handle");
 
         const auto memoryKind = importFd.has_value()
             ? DeviceMemoryKind::Imported
-            : exportFd.has_value()
+            : exportable
                 ? DeviceMemoryKind::Exported
                 : DeviceMemoryKind::Internal;
         const auto memoryAccounting = vk.deviceMemoryAccounting();
@@ -133,20 +127,20 @@ namespace {
         if (res != VK_SUCCESS)
             throw ls::vulkan_error(res, "vkBindImageMemory() failed");
 
-        if (exportFd.has_value()) {
-            const VkMemoryGetFdInfoKHR fdInfo{
-                .sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
-                .memory = handle,
-                .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR
-            };
-            int fd{};
-            res = vk.df().GetMemoryFdKHR(vk.dev(), &fdInfo, &fd);
-            if (res != VK_SUCCESS)
-                throw ls::vulkan_error(res, "vkGetMemoryFdKHR() failed");
-            **exportFd = fd;
-        }
-
         return memory;
+    }
+    /// export only after the complete image is ready for its caller
+    void exportMemory(const vk::Vulkan& vk, VkDeviceMemory memory, int& fd) {
+        const VkMemoryGetFdInfoKHR fdInfo{
+            .sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
+            .memory = memory,
+            .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT_KHR
+        };
+        int exportedFd{-1};
+        const auto res = vk.df().GetMemoryFdKHR(vk.dev(), &fdInfo, &exportedFd);
+        if (res != VK_SUCCESS)
+            throw ls::vulkan_error(res, "vkGetMemoryFdKHR() failed");
+        fd = exportedFd;
     }
     /// create an image view
     ls::owned_ptr<VkImageView> createImageView(const vk::Vulkan& vk,
@@ -186,21 +180,24 @@ Image::Image(const vk::Vulkan& vk,
             std::optional<int> importFd,
             std::optional<int*> exportFd,
             std::shared_ptr<ImageMemoryPool> internalPool) :
-        image(createImage(vk,
-            extent, format, usage,
-            importFd, exportFd.has_value()
-        )),
         extent(extent) {
+    const int incomingFd = importFd.value_or(-1);
+    ls::FileDescriptorScope imported{{&incomingFd, 1}};
     if (internalPool && (importFd || exportFd))
         throw std::invalid_argument(
             "external Vulkan images cannot use the internal image pool"
         );
+    this->image = createImage(vk, extent, format, usage,
+        importFd.has_value() || exportFd.has_value());
     if (internalPool) {
         this->pooledMemory = internalPool->bind(*this->image);
     } else {
-        this->memory = allocateMemory(vk, *this->image, importFd, exportFd);
+        this->memory = allocateMemory(vk, *this->image, importFd,
+            exportFd.has_value(), imported);
     }
     this->view = createImageView(vk, *this->image, format);
+    if (exportFd)
+        exportMemory(vk, *this->memory, **exportFd);
 }
 
 Image::Image(const vk::Vulkan& vk,

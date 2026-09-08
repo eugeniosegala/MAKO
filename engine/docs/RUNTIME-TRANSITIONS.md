@@ -151,6 +151,10 @@ MAKO_ENABLE_SANITIZERS=ON scripts/test-adaptive-scheduler.sh
 
 `profile_update_tests.cpp` must cover a field alone, mixed with live and deferred fields, superseded or reverted requests, insufficient resources, inactive modes, and process-static baselines as applicable. Vulkan-facing changes also need the MAKO Gym suites selected by [Testing MAKO](../../TESTING.md). Mark unavailable hardware rows **not tested**.
 
+### External descriptor ownership during resource construction
+
+Exported image-memory and timeline-semaphore descriptors are scoped until the backend context call. The backend consumes the complete batch on entry, including early rejection, and closes every descriptor it has not yet handed to an importing Vulkan wrapper when construction fails. Each wrapper closes its current descriptor on failure before import succeeds; successful Vulkan import transfers ownership to the driver, so later bind/view failures must not close the descriptor number again. Image export happens after image-view construction succeeds. This covers initial provisioning, failed live private replacements, and CLI setup without changing present-loop work, retirement limits, or synchronization policy. Portable fault tests exercise partial export/import and descriptor-number reuse; MAKO Gym owns the repeated real-resource plateau evidence.
+
 ## Code and test ownership
 
 | Responsibility | Source of truth |
@@ -158,8 +162,8 @@ MAKO_ENABLE_SANITIZERS=ON scripts/test-adaptive-scheduler.sh
 | Parsing and watched configuration | `mako-common/src/configuration/config.cpp`, `mako-common/include/mako-common/configuration/config.hpp` |
 | Polling, profile selection, and backend baselines | `mako-render/src/instance.*` |
 | Merge and transition classification | `mako-render/src/profile_update.hpp` |
-| Private transitions and live application | `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain.cpp` |
-| Real-frame and generated presentation | `mako-render/src/swapchain_present.cpp` |
+| Private transitions and live application | `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain/resources.cpp`, `mako-render/src/swapchain/profile.cpp` |
+| Real-frame and generated presentation | `mako-render/src/swapchain/present.cpp` |
 | Process-start transport policy | `mako-render/src/presentation_policy.hpp`, `scripts/mako-launch` |
 | Status and diagnostics | `mako-render/src/runtime_status.*`, `mako-render/src/present_diagnostics.*` |
 | Deterministic tests | `mako-render/tests/profile_update_tests.cpp`, `runtime_transition_tests.cpp`, `runtime_status_tests.cpp` |

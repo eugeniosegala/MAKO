@@ -5,13 +5,15 @@
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QUrl>
+#include <exception>
+#include <iostream>
 
 #include "backend.hpp"
 #include "localization.hpp"
 
 using namespace mako::ui;
 
-int main(int argc, char* argv[]) {
+int main(int argc, char* argv[]) try {
     const QGuiApplication app(argc, argv);
     QGuiApplication::setWindowIcon(QIcon(":/rsc/io.github.eugeniosegala.mako.png"));
     QGuiApplication::setOrganizationName("MAKO");
@@ -28,4 +30,7 @@ int main(int argc, char* argv[]) {
     engine.load("qrc:/rsc/UI.qml");
 
     return QGuiApplication::exec();
+} catch (const std::exception& error) {
+    std::cerr << "MAKO Renderer: configuration UI failed: " << error.what() << '\n';
+    return 1;
 }

@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { randomInt } from "node:crypto";
 
 const DEFAULT_DECKY_URL = "http://127.0.0.1:1337";
 const DEFAULT_PLUGIN_NAME = "MAKO - Frame Generation";
@@ -60,6 +61,9 @@ export async function callDeckyRoute(
   args = [],
   { timeoutMs = 15_000, operation = route } = {},
 ) {
+  // Decky can retain responses across WebSocket connections. IDs must also
+  // differ between separate invocations of the deployment scripts.
+  const requestId = randomInt(1, 2 ** 48);
   const deckyUrl = process.env.DECKY_LOADER_URL || DEFAULT_DECKY_URL;
   const tokenResponse = await fetch(new URL("/auth/token", deckyUrl));
   if (!tokenResponse.ok) {
@@ -90,7 +94,7 @@ export async function callDeckyRoute(
       socket.send(
         JSON.stringify({
           type: 0,
-          id: 1,
+          id: requestId,
           route,
           args,
         }),
@@ -105,7 +109,7 @@ export async function callDeckyRoute(
         finish(() => reject(new Error(`Invalid response from Decky: ${error}`)));
         return;
       }
-      if (message.id !== 1 || (message.type !== 1 && message.type !== -1)) {
+      if (message.id !== requestId || (message.type !== 1 && message.type !== -1)) {
         return;
       }
       if (message.type === -1) {

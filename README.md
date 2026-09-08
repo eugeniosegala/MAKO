@@ -54,7 +54,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 | 🛡️ | **Gamescope recovery** | Bounded presentation recovery preserves native presentation and resumes generation only after the game cadence becomes stable again. |
 | ⏯️ | **Live frame-generation switch** | Turns frame generation on or off without discarding the selected Fixed or Adaptive settings. |
 | 🗂️ | **Dedicated game/process profiles** | Capture a running game once and keep its renderer and compatibility settings. MAKO automatically selects it by Steam app ID or process, with isolated per-profile controls including ALSA audio. |
-| 🎮 | **Heroic and EmuDeck integration** | Gives Heroic games a per-game wrapper and prepares Flatpak emulators for Steam-shortcut profile selection, including the same ordered 64-bit frame-generation and scaling chain used by native Steam games. |
+| 🎮 | **Third-party launchers** | Per-game setup for Heroic and Lutris, plus EmuDeck emulator preparation and Steam shortcuts. See the quick guides below. |
 
 ## What MAKO is
 
@@ -97,79 +97,20 @@ Every game and display behaves differently. Compare one setting at a time; fulls
 
 MAKO Decky provides a per-profile **Gamescope WSI** option and host-installed MangoHud or vkBasalt integrations. Inside a supported Gamescope session, scaling enables its managed WSI path automatically. The optional WSI path is limited to supported 64-bit launches, and vkBasalt remains experimental. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
 
-### Heroic and other Flatpak applications
+### Third-party launchers
 
-Configure Heroic through **Flatpak Setup**:
+<a id="heroic"></a> <a id="heroic-and-other-flatpak-applications"></a> <a id="emudeck"></a> <a id="manually-added-flatpak-shortcuts"></a>
 
-1. Prepare **Heroic** and install the matching runtime extension when prompted.
-2. In each enabled game, open **Settings > Advanced** and set the first **Wrapper** field to the path shown by MAKO. On standard SteamOS it is:
+| Launcher | Quick setup guide |
+| --- | --- |
+| **Heroic** | [Per-game Wrapper setup](plugin/docs/LAUNCHERS.md#heroic) |
+| **Lutris** | [Per-game Command prefix, with Flatpak preparation when needed](plugin/docs/LAUNCHERS.md#lutris) |
+| **EmuDeck** | [Emulator preparation and Steam shortcuts](plugin/docs/LAUNCHERS.md#emudeck) |
+| **Other Flatpak apps** | [Manually added Steam shortcuts](plugin/docs/LAUNCHERS.md#manually-added-flatpak-shortcuts) |
 
-    ```text
-    /home/deck/.local/bin/mako-run
-    ```
-
-    Leave **Arguments** empty and do not use `%command%`.
-
-3. Start the game normally from Heroic or its Steam shortcut.
-
-Preparing Heroic makes MAKO available inside its sandbox; the per-game Wrapper decides which games use it.
-
-<!-- prettier-ignore -->
-> [!IMPORTANT]
-> After installing a newer MAKO ZIP, return to **Flatpak Setup** and select **Update** for Heroic's matching runtime extension. Updating MAKO Decky or the shared native Renderer does not update Flatpak extensions.
-
-### EmuDeck
-
-For any EmuDeck emulator installed as a Flatpak:
-
-1. In **Flatpak Setup**, prepare the emulator and install its matching runtime extension. Preparation applies to the entire emulator Flatpak.
-2. Select **Vulkan** as that emulator's graphics backend when it offers one.
-3. In Desktop Mode, edit each game's **Properties > Shortcut**:
-
-    - **Target**
-
-        ```text
-        /home/deck/.local/bin/mako-run
-        ```
-
-        Use the path shown by MAKO when it differs.
-
-    - **Start In**
-
-        ```text
-        /usr/bin
-        ```
-
-    - **Launch Options:** leave the EmuDeck-generated value unchanged.
-
-Steam shortcuts choose the game profile, but Flatpak preparation is app-wide. Disable preparation to remove MAKO from that emulator.
-
-If EmuDeck installed an emulator as a native application or AppImage instead, it is not a Flatpak workflow: use the normal Steam launch option `/home/deck/.local/bin/mako-run %command%` for that shortcut.
-
-<!-- prettier-ignore -->
-> [!IMPORTANT]
-> After updating MAKO, return to **Flatpak Setup** and select **Update** for every prepared emulator's matching runtime extension. Updating MAKO Decky or the shared native Renderer does not update Flatpak extensions.
-
-### Manually added Flatpak shortcuts
-
-Use this only when a non-Steam shortcut's original **Target** is `/usr/bin/flatpak`. Heroic and EmuDeck use the workflows above.
-
-1. In **Flatpak Setup**, install the matching runtime extension and prepare the Flatpak application.
-2. In the shortcut's **Properties > Shortcut**, replace **Target** with:
-
-    ```text
-    "/home/deck/.local/bin/mako-run" "/usr/bin/flatpak"
-    ```
-
-    Use MAKO's displayed wrapper path when it differs.
-
-3. Leave **Start In** and **Launch Options** unchanged so the original Flatpak application ID, command, and flags are preserved.
-
-**Flatpak Setup** does not modify Steam shortcuts automatically.
+For a step-by-step guide that creates a shareable report on the Desktop, see <a href="plugin/docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect MAKO Decky Diagnostics</a>.
 
 ### Updating MAKO Decky
-
-Use this clean update path:
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]
@@ -181,7 +122,7 @@ Use this clean update path:
 4. Open MAKO Decky and select **Install MAKO Renderer** to install the version bundled in the ZIP.
 5. If you use prepared Flatpak applications, open **Flatpak Setup** and select **Update** for each matching runtime extension shown by MAKO.
 
-Profiles and Steam launch options are retained. Uninstalling MAKO Decky removes the shared native Renderer, while Flatpak extensions remain installed separately; step 5 updates them.
+Valid profiles and Steam launch options are retained. If the saved Renderer configuration cannot be read or validated, installation recreates it with defaults. Uninstalling MAKO Decky removes the shared native Renderer, while Flatpak extensions remain installed separately; step 5 updates them.
 
 ## Use MAKO Renderer directly
 

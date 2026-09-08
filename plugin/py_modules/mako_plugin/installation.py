@@ -45,6 +45,7 @@ from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
 from .host_environment import detect_host_environment
 from .managed_files import (
     copy_managed_file_atomically,
+    managed_install_transaction,
     write_managed_text_atomically,
 )
 from .types import InstallationResponse, UninstallationResponse, InstallationCheckResponse
@@ -169,26 +170,29 @@ class InstallationService(BaseService):
 
             self._ensure_directories()
 
-            self._extract_and_install_files(archive_path)
+            with managed_install_transaction(
+                self._decky_renderer_files() + [self.config_file_path], self.log,
+            ):
+                self._extract_and_install_files(archive_path)
 
-            # Register a uniquely named, wrapper-scoped manifest in Vulkan's normal
-            # per-user discovery directory. Steam's Pressure Vessel snapshots
-            # that directory before the per-game wrapper starts, so relying on
-            # a wrapper-only additive search path can miss the private payload.
-            self._register_layer_manifests()
+                # Register a uniquely named, wrapper-scoped manifest in Vulkan's normal
+                # per-user discovery directory. Steam's Pressure Vessel snapshots
+                # that directory before the per-game wrapper starts, so relying on
+                # a wrapper-only additive search path can miss the private payload.
+                self._register_layer_manifests()
 
-            self.migrate_gamescope_wsi_compatibility_manifest_if_needed()
-            self.refresh_guarded_postprocess_manifests_if_needed()
+                self.migrate_gamescope_wsi_compatibility_manifest_if_needed()
+                self.refresh_guarded_postprocess_manifests_if_needed()
 
-            self._create_config_file()
+                self._create_config_file()
 
-            self._create_mako_launch_script()
+                self._create_mako_launch_script()
 
-            self._install_diagnostics_helper(PLUGIN_ROOT)
+                self._install_diagnostics_helper(PLUGIN_ROOT)
 
-            self._write_engine_state(archive_metadata)
+                self._write_engine_state(archive_metadata)
 
-            self._write_active_renderer_state(archive_metadata)
+                self._write_active_renderer_state(archive_metadata)
 
             self.log.info("MAKO Renderer installed successfully")
             return self._success_response(InstallationResponse, "MAKO Renderer installed successfully")
@@ -937,7 +941,7 @@ class InstallationService(BaseService):
     def _create_config_file(self) -> None:
         """Create or update this plugin's private TOML config with detected DLL path.
 
-        If a config file already exists, preserve existing profiles and only update global settings like DLL path.
+        Preserve valid profiles; recreate defaults if the existing file cannot be read or validated.
         """
         if (
             self.config_file_path.exists()
@@ -969,9 +973,12 @@ class InstallationService(BaseService):
                 # Generate TOML content with merged profiles
                 toml_content = ConfigurationManager.generate_toml_content_multi_profile(merged_profile_data)
 
-            except Exception as e:
-                self.log.warning(f"Failed to parse existing config file: {str(e)}, creating new one")
-                # Fall back to creating a new config file
+            except Exception as error:
+                self.log.warning(
+                    "MAKO Decky: Could not read or merge configuration at %s: %s; "
+                    "replacing it with defaults",
+                    self.config_file_path, error,
+                )
                 config = ConfigurationManager.get_defaults_with_dll_detection(dll_service)
                 toml_content = ConfigurationManager.generate_toml_content(config)
         else:
@@ -981,7 +988,9 @@ class InstallationService(BaseService):
             self.log.info(f"Creating new config file")
 
         # Write config file
-        self._write_file(self.config_file_path, toml_content, 0o644)
+        write_managed_text_atomically(
+            self.config_file_path, toml_content, 0o644, self.log,
+        )
         self.log.info(f"Created config file at {self.config_file_path}")
 
         # Log detected DLL path if found - USE GENERATED CONSTANTS

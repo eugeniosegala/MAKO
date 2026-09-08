@@ -2,11 +2,15 @@
 
 Configure MAKO Renderer with `mako-ui` or by editing `~/.config/mako-render/conf.toml`. Both use configuration format `version = 2`. [Runtime configuration transitions](RUNTIME-TRANSITIONS.md) defines when each setting reaches a running game; [Spatial scaling architecture](SCALING.md) covers scaler internals and limits.
 
+The UI saves after edits have settled for 500 ms and flushes pending profile and launcher edits when it closes. Saving runs on the UI's owning thread, with no background polling when idle. Renderer configuration writers stage and synchronize complete files before replacing the previous version, preserving it on permission or short-write failures; existing configuration symlinks keep pointing to their updated target. Edit shared profiles in one editor at a time when using both MAKO Decky and the standalone UI. If the UI cannot parse `conf.toml`, it preserves it as `.old`; it refuses to overwrite an existing backup and leaves both files in place for repair.
+
 The UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Korean, Japanese, Ukrainian, and Simplified Chinese. CLI output supports English, Brazilian Portuguese, European Portuguese, and Spanish; place `--lang en`, `--lang pt-BR`, `--lang pt-PT`, or `--lang es` before the command.
 
 ## Profiles
 
 Each `[[profile]]` is selected by `active_in`. Entries may match a Linux executable, Windows executable, process name, or executable-path suffix. `MAKO_PROFILE` selects a profile by its exact `name` and takes precedence over automatic matching.
+
+Ubisoft Connect's `UbisoftConnect.exe`, `upc.exe`, and `UplayWebCore.exe` stay on MAKO's inactive native-presentation path even when they inherit `MAKO_PROFILE`, `MAKO_PROFILE_FALLBACK`, or `MAKO_ENV`, or appear in an older profile's `active_in`. The guard compares the exact executable basename without case sensitivity, preferring the mapped Windows executable under Wine; a launcher directory or thread name does not exclude the game. It changes no environment variables, so the launched game can still select its profile normally. This excludes MAKO's own rendering work in the launcher, not other Vulkan layers or Proton behavior.
 
 ```toml
 version = 2
@@ -64,6 +68,16 @@ scaling_sharpness = 0.8
 | `gpu` | GPU name, vendor/device ID, or PCI bus ID | Unset | Selects the application's GPU. MAKO does not support cross-GPU Frame Generation. |
 
 MAKO Decky creates profiles with product-level defaults that may differ from the direct Renderer defaults, including a 90 FPS Adaptive target and Smooth Cadence.
+
+## Desktop scaling and resolution
+
+MAKO reads the game's requested image size directly from Vulkan when it creates a swapchain. This is the image presented by the game, which may already include the game's own upscaling; it is not necessarily the game's internal 3D rendering resolution. There is no desktop resolution scan in the per-frame scaling path and no need to enter that source size separately in `mako-ui` or the configuration file.
+
+Scale Factor has two effects depending on the surface. With a fixed presentation size, a 1920×1080 surface at 1.5× advertises a 1280×720 source for the game to render. On a variable desktop surface, MAKO retains the game's requested source size: set the game to 1280×720 and use 1.5× to request a 1920×1080 output. Raising the factor alone on that surface enlarges MAKO's output rather than lowering the game's resolution, and can increase GPU and memory use. Surface and memory limits may reduce the effective factor.
+
+Outside Gamescope, MAKO does not infer the destination monitor size from an arbitrary desktop window. Choose the factor to fit the intended output; the desktop compositor may otherwise scale the result again. Turning Quality Supersampling off does not provide a monitor-size cap on this path. Diagnostics report the actual `source` and `presentation` sizes when scaling activates. If the game ignores MAKO's advertised smaller source and requests the full presentation size, MAKO keeps native presentation with `application-extent-override-no-source-presentation-split`. A manual source-size field would not make the game render a smaller image and could crop its output instead.
+
+[Gamescope also supports nested use on X11 and Wayland desktops](https://github.com/ValveSoftware/gamescope#examples); Game Mode is not required. Its `-w`/`-h` options select the virtual game resolution and `-W`/`-H` select the nested output size. When using standalone MAKO with it, start Gamescope outside `mako-launch` and put only the game command through the launcher. The launcher's Gamescope WSI isolation disables the extra Vulkan layer, not the compositor. Nested Gamescope can provide a controlled virtual display, but games still need to respect the source/presentation contract for MAKO's own scaling to activate. See [extent ownership](SCALING.md#extent-ownership) for the supported paths and safe fallbacks.
 
 ## Applying changes
 

@@ -203,6 +203,16 @@ namespace mako::layer {
             : recoveryTimeout;
     }
 
+    /// Recovery can probe only when the current policy requests generated work.
+    /// A display-budget or Adaptive real-only frame is not a failed acquisition
+    /// and must leave the pending probe available for the next eligible frame.
+    [[nodiscard]] constexpr bool orderedAcquireProbeEligible(
+            const bool probeRequested, const bool historyWarmupActive,
+            const size_t requestedGeneratedFrames) noexcept {
+        return probeRequested && !historyWarmupActive &&
+            requestedGeneratedFrames > 0;
+    }
+
     /// Once a lower-swapchain image has been acquired, transport ownership is
     /// independent of HDR classification. A caught backend failure must retire
     /// every owned image before the application's original image can be
@@ -367,6 +377,10 @@ namespace mako::layer {
             return std::chrono::milliseconds{250};
         }
 
+        [[nodiscard]] static constexpr auto maximumRetryDelay() {
+            return std::chrono::milliseconds{30000};
+        }
+
         [[nodiscard]] static constexpr auto
         nativeCadenceSaturationQualificationDuration() {
             return std::chrono::milliseconds{200};
@@ -443,8 +457,11 @@ namespace mako::layer {
                     };
                 }
 
-                if (now >= *this->retryAt &&
-                        this->nativeCadenceSaturationSince &&
+                // Qualify native cadence while the retry timer is running.
+                // Otherwise a menu-to-gameplay transition during a long
+                // backoff cannot re-arm a probe until that timer expires.
+                // Probe failure still retains the acquisition failure count.
+                if (this->nativeCadenceSaturationSince &&
                         now - *this->nativeCadenceSaturationSince >=
                             nativeCadenceSaturationQualificationDuration()) {
                     this->nativeCadenceSaturated = true;
@@ -571,17 +588,23 @@ namespace mako::layer {
                 this->consecutiveSlowFrames++;
                 const size_t observedSlowFrames =
                     this->consecutiveSlowFrames;
-                if (!timedOut && !severe && !this->guardPending &&
+                const bool isolatedDeadlineMiss = timedOut &&
+                    acquireDuration < slowAcquireThreshold;
+                if ((!timedOut || isolatedDeadlineMiss) && !severe &&
+                        !this->guardPending &&
                         !this->probePending &&
                         observedSlowFrames < slowFrameThreshold) {
-                    // One slow successful acquire can still be ordinary FIFO
-                    // pressure, but the next application present must not
+                    // One slow successful acquire or a short per-image
+                    // deadline miss can be transient FIFO pressure. Neither
+                    // proves exhaustion of the cumulative present budget.
+                    // The next application present must not
                     // repeat a blocking acquire or feed that transport delay
-                    // back into Adaptive's source-cadence clock. Constrain a
-                    // short zero-wait guard first; a miss escalates through
-                    // the existing native-drain recovery below.
+                    // back into Adaptive's source-cadence clock. Reuse the
+                    // zero-wait guard; repeated or severe pressure still
+                    // enters native-drain recovery below.
                     this->guardPending = true;
                     return {
+                        .timedOut = timedOut,
                         .guardArmed = true,
                         .consecutiveSlowFrames = observedSlowFrames,
                         .consecutiveFailures = this->consecutiveFailures,
@@ -595,8 +618,13 @@ namespace mako::layer {
                 );
             }
 
-            this->consecutiveSlowFrames = 0;
             const bool guardCleared = this->guardPending;
+            // A guard tests only one immediately available image. It permits
+            // a normal batch retry, but cannot prove that a 3x/4x/5x batch is
+            // healthy. Retain pressure until an unrestricted acquire succeeds
+            // so timeout/guard-success cycles cannot avoid native recovery.
+            if (!guardCleared)
+                this->consecutiveSlowFrames = 0;
             const bool drainProbeRecovered = this->probePending;
             const bool recovered = guardCleared || drainProbeRecovered;
             if (recovered) {
@@ -826,6 +854,9 @@ namespace mako::layer {
                 std::chrono::milliseconds{500},
                 std::chrono::milliseconds{1000},
                 std::chrono::milliseconds{2000},
+                std::chrono::milliseconds{5000},
+                std::chrono::milliseconds{15000},
+                maximumRetryDelay(),
             };
             return delays.at(std::min(failures, delays.size()) - 1);
         }

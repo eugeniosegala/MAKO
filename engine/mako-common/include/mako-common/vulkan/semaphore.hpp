@@ -15,6 +15,7 @@ namespace vk {
     public:
         /// create a semaphore
         /// @param vk the vulkan instance
+        /// Import consumes the descriptor on success and failure.
         /// @param fd optional file descriptor to import the semaphore from
         /// @throws ls::vulkan_error on failure
         Semaphore(const vk::Vulkan& vk, std::optional<int> fd = std::nullopt);

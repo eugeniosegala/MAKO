@@ -116,8 +116,8 @@ Keep these invariants:
 | Gamescope discovery, feedback, and diagnostics | `mako-render/src/gamescope_hdr_feedback.cpp` |
 | Feedback stabilization | `mako-render/src/runtime_transition.hpp` |
 | Format and colour-space classification | `mako-render/src/color_pipeline.cpp` |
-| Swapchain resources and private transitions | `mako-render/src/swapchain.cpp` |
-| Native-first experimental presentation | `mako-render/src/swapchain_present.cpp` |
+| Swapchain resources and private transitions | `mako-render/src/swapchain/resources.cpp` |
+| Native-first experimental presentation | `mako-render/src/swapchain/present.cpp` |
 | Backend encodings and conversion shaders | `mako-backend/src/mako.cpp`, `mako-backend/src/shaders/` |
 | Embedded shader generation and freshness | `scripts/generate-color-conversion-spirv.py`, portable CTest |
 | Deterministic policy coverage | `mako-render/tests/color_pipeline_tests.cpp`, `mako-render/tests/presentation_policy_tests.cpp`, related Renderer tests |

@@ -62,6 +62,8 @@ Smooth Cadence may retain a delivery-validated integer multiplier. On ordered Ga
 
 `adaptive_auto_base_fps_cap` normally starts at half the target. If ordered SDR proves that this cap is sustaining a severe combined-workload collapse, Adaptive releases only the automatic cap for that swapchain; manual and Fixed caps remain authoritative.
 
+Cadence-drop detection holds the proven interval while confirming three consecutive samples at least twice as long. It also accumulates those candidate samples in a shadow smoothed estimate: if the next sample rejects the sustained-drop hypothesis, the estimator incorporates the delayed observations before the current interval. Discarding them instead can lock onto only the fast half of a bursty stream, for example reporting 125 FPS for alternating 8/32 ms intervals whose actual rate is 50 FPS, and suppress useful generated work. Timing resets, impossible fast bursts, and transport backoff discard pending drop evidence. The existing hard-stall, history, delivery, load-protection, and multiplier bounds still apply. Portable tests cover both recovery policies and Smooth Cadence settings; Gym's `adaptive-bursty-source` row exercises a 75 → noisy 50 → 75 FPS round trip with a 150 FPS target and 240 Hz headless Gamescope. This is source-cadence evidence relevant to mouse-stutter investigation, not a simulation of HID polling, game input, or physical scanout.
+
 ### Dynamic Cadence Recovery
 
 Dynamic Cadence Recovery is an optional per-profile policy for games or emulators that switch native rates. Ordered FIFO can make a native 60 FPS mode look like 30 FPS when generation is active, so MAKO periodically requests a native-only sample. Three consecutive samples at least 25% faster than the captured baseline confirm the new cadence.
@@ -71,6 +73,10 @@ Adaptive keeps its configured target and ceiling. Fixed uses confirmed Gamescope
 ## Transport recovery
 
 Ordered generated-image acquisition uses one application-present deadline, not one full deadline per generated image. Slow pressure first arms a zero-wait guard. Sustained pressure switches to native presentation, warms temporal history, and makes one bounded single-image probe after backoff. If native cadence already meets the requested target, the probe is deferred until cadence falls.
+
+An isolated short acquire timeout below the slow-pressure threshold uses the same zero-wait guard without discarding validated cadence. Only a healthy unrestricted generated batch clears repeated-pressure evidence; a successful guard or temporal warm-up cannot clear it. Repeated failures back off through 250 ms, 500 ms, one, two, five, 15, and 30 seconds. Native cadence qualifies during backoff, so confirmed renewed demand after a target-satisfying menu can re-arm one probe early; a failed demand probe retains the failure count.
+
+A recovery probe runs only when temporal history is ready and the current Fixed or Adaptive policy requests generated work. A real-only policy frame performs no generated-image acquisition and leaves the pending probe intact for the next eligible frame; it cannot count as a probe failure or increase recovery backoff.
 
 A later slow lower `QueuePresentKHR` call has a separate stall quarantine. While either recovery owns the context, MAKO submits no synthetic work and retains the real-frame path. Recovery probes are bounded, do not destroy the game swapchain, and do not treat a skipped generated image as corruption. The standalone acquire timeout remains an independent compatibility setting described in [Troubleshooting](TROUBLESHOOTING.md).
 
@@ -122,8 +128,8 @@ An affected candidate is ready for broader testing when:
 | Adaptive policy and state | `mako-render/src/adaptive_scheduler.*` |
 | Generated-frame plan | `mako-render/src/generated_frame_plan.hpp` |
 | Delivery windows | `mako-render/src/generated_frame_delivery.hpp` |
-| Fixed budgets and presentation recovery | `mako-render/src/presentation_policy.hpp`, `mako-render/src/swapchain_present.cpp` |
-| Private-resource transitions | `mako-render/src/profile_update.hpp`, `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain.cpp` |
+| Fixed budgets and presentation recovery | `mako-render/src/presentation_policy.hpp`, `mako-render/src/swapchain/present.cpp` |
+| Private-resource transitions | `mako-render/src/profile_update.hpp`, `mako-render/src/runtime_transition.hpp`, `mako-render/src/swapchain/resources.cpp` |
 | Diagnostics | `mako-render/src/present_diagnostics.*` |
 | Portable policy tests and matrix | `mako-render/tests/`, `scripts/test-adaptive-scheduler.sh` |
 | Real hardware and runtime evidence | Sibling MAKO Gym checkout |

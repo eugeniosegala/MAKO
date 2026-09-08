@@ -84,6 +84,8 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 - Put Decky Python tests in `plugin/tests/`, frontend tests in `plugin/tests/frontend/`, and Renderer tests with their CMake component. Cross-component static contracts belong in `plugin/tests/`; independently deployed components must not import each other at runtime.
 - When independently deployed components cannot share one runtime owner, keep native declarations and add a focused cross-component contract test instead of duplicating utility or serialization layers.
 
+- Keep swapchain construction, resource replacement, profile application, presentation, and status assembly together under `engine/mako-render/src/swapchain/`, with one `Swapchain` state owner. Keep Decky's settings-section renderers and shared editor prop types in `plugin/src/components/settings/`; profile persistence and effects remain in their existing hooks.
+
 ## Structured mappings and localization contracts
 
 - Give every persisted or public RPC mapping a named Python `TypedDict` or generated schema type at its boundary. Builders and normalizers must populate required keys, copy mutable inputs, and distinguish optional presence from nullability. Use open dictionaries only for untrusted input, then validate and normalize them.
@@ -101,7 +103,7 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 | Build Renderer from source | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/CMakeLists.txt`, `engine/scripts/build-steamos-dev.sh` |
 | Run portable Renderer tests | `TESTING.md` | `engine/scripts/test-adaptive-scheduler.sh` |
 | Change native spatial scaling | `engine/docs/SCALING.md`, `engine/docs/WSI-ISOLATION.md`, `engine/docs/HDR-PIPELINE.md` | `engine/mako-render/src/spatial_scaler.*`, `engine/mako-render/src/spatial_scaling_policy.hpp`, `engine/scripts/generate-spatial-scaling-spirv.py` |
-| Change runtime configuration transitions or setting lifetimes | `engine/docs/RUNTIME-TRANSITIONS.md`, `engine/docs/CONFIGURATION.md` | `engine/mako-render/src/profile_update.hpp`, `engine/mako-render/src/instance.cpp`, `engine/mako-render/src/swapchain.cpp` |
+| Change runtime configuration transitions or setting lifetimes | `engine/docs/RUNTIME-TRANSITIONS.md`, `engine/docs/CONFIGURATION.md` | `engine/mako-render/src/profile_update.hpp`, `engine/mako-render/src/instance.cpp`, `engine/mako-render/src/swapchain/profile.cpp`, `engine/mako-render/src/swapchain/resources.cpp` |
 | Change Adaptive scheduling or generated-frame plans | `engine/docs/ADAPTIVE-VALIDATION.md` | `engine/mako-render/src/adaptive_scheduler.*`, `engine/mako-render/src/generated_frame_plan.hpp`, `engine/mako-render/src/generated_frame_delivery.hpp` |
 | Build host Renderer archives | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/scripts/package-local.sh` |
 | Build Flatpak runtime extensions | `engine/docs/FLATPAK-GUIDE.md` | `engine/scripts/package-flatpaks.sh` |
@@ -137,6 +139,8 @@ Use `TESTING.md` to choose proportionate evidence. Renderer C++ changes need por
 
 The SteamOS release gate must use a compatible MAKO Gym checkout, build and verify the complete dual-bitness/Flatpak package from a clean pushed candidate, smoke-test its packaged native Renderer, retain evidence, and record an explicit risk-based suite selection. That gate package is not the later public byte stream: publication rebuilds after release-owned metadata commits, and the published-asset install check is separate. Run every suite only for a genuinely cross-cutting change or explicit maintainer request. Armada remains fail-closed under `plugin/docs/ARMADA.md`; enabling it requires source-built AArch64 packages and real-hardware evidence, not an opaque binary, second detector, or global FEX mutation.
 
+Selected Renderer hardware suites also require the bounded MAKO Gym resource-constraint qualification, automatically included once by the selection validator and run against the exact packaged CLI and launcher. Its case/profile mapping remains owned by Gym.
+
 A skipped GPU test is not evidence, and the automated AMD scene does not replace the game/runtime matrix. State which hardware, driver, architecture, Flatpak runtime, and rows were not tested.
 
 Read `TRACES.md` before archiving a completed session. MAKO owns trace extraction, sanitization, metadata, initial checksums, and producer tests; MAKO Traces owns stored evidence and archive validation. MAKO Gym owns hardware manifests, orchestration, assertions, and local evidence; MAKO owns only its bridge contract and release integration. Update both repositories when either cross-repository contract changes. Never copy private inventories, licensed inputs, or generated evidence into MAKO, and never make portable workflows depend on them.
@@ -147,7 +151,7 @@ Read `TRACES.md` before archiving a completed session. MAKO owns trace extractio
 - `plugin/docs/COLLECT_DIAGNOSTICS.md` owns the managed Decky workflow.
 - `engine/docs/COLLECT_DIAGNOSTICS.md` owns standalone Renderer collection.
 - `scripts/mako-diagnostics` filters current and legacy Renderer logs into a focused report; its deterministic coverage is in `plugin/tests/test_diagnostics_helper.py`.
-- `engine/mako-render/src/present_diagnostics.cpp` and `.hpp` own structured presentation records. Related state is emitted from `instance.cpp`, `swapchain.cpp`, and `swapchain_present.cpp`.
+- `engine/mako-render/src/present_diagnostics.cpp` and `.hpp` own structured presentation records. Related state is emitted from `instance.cpp` and the owning files under `swapchain/`; `swapchain/status.cpp` assembles live status without applying transitions.
 - `plugin/py_modules/mako_plugin/wrapper_generation.py` owns the generated wrapper environment, including opt-in wrapper-side log capture; `configuration.py` orchestrates canonical state, migrations, and atomic regeneration; and `installation.py` installs and migrates the helper.
 
 Keep diagnostic operation names and fields machine-filterable. If a current log format changes, update the collector, its tests, and both user guides together.

@@ -80,6 +80,16 @@ Do not generalize the manual MangoHud command to a support claim. Every Vulkan l
 
 Adding a supported integration requires one exact manifest path and intended order, portable launcher/wrapper/package tests, then real native Vulkan, DXVK, VKD3D-Proton, Gamescope, focus/overlay, recreation, shutdown, architecture, and sandbox evidence. A game starting successfully proves discovery, not image or synchronization compatibility.
 
+## XR Gaming / Breezy
+
+XR Gaming has two distinct rendering paths. Its [Gamescope integration](https://github.com/wheaney/XRLinuxDriver/blob/3e0132f67bba17709e16286a1f8dce88bcf65adc/src/plugins/gamescope_reshade_wayland.c) loads a ReShade effect in the compositor through Wayland. This runs outside the game's Vulkan layer chain, so MAKO's private manifest isolation does not disable it. MAKO Decky's **Gamescope WSI (Restart)** setting controls a different, application-side layer; enabling it is not an established XR fix.
+
+XR Gaming's [**Disable gamescope integration** control](https://github.com/wheaney/decky-XRGaming/blob/main/src/index.tsx) instead selects its Vulkan-only path, which uses Breezy's vkBasalt fork. That layer is excluded by MAKO's default isolation. Selecting MAKO's experimental vkBasalt control is not proof of compatibility with Breezy's fork, its transforms, or head-tracking timing. Neither XR path currently has validated MAKO compatibility on glasses.
+
+[Issue #24](https://github.com/eugeniosegala/MAKO/issues/24) reports severe lag only when Frame Generation and Anchor/Follow run together. The supplied MAKO 2.1.0 logs show successful Renderer startup and Gamescope compiling a `Transform` effect, but contain neither presentation-timing diagnostics nor Vulkan loader order. They do not establish whether the slowdown comes from game cadence, generated-image waits, shared GPU load, or compositor/head-tracking timing. Missing-texture warnings alone do not establish a shader failure, and the recorded Gamescope abort follows session shutdown.
+
+For a useful comparison, keep resolution, refresh rate, game scene, and MAKO settings fixed. First compare MAKO alone, XR alone, and both without diagnostics. Then follow the owning [Decky](../../plugin/docs/COLLECT_DIAGNOSTICS.md) or [standalone](COLLECT_DIAGNOSTICS.md) diagnostic guide for one short run: start with XR effects off, enable the affected mode after 30 seconds, disable it again after 30 seconds, and note both times. Include the actual Renderer build, glasses model, selected refresh rate, and whether XR Gaming's Gamescope integration is enabled. Provide the actual archive produced by `breezy_vulkan_logs` alongside the MAKO report; the Decky plugin's installation log does not contain XR runtime evidence. Review and send these files privately. Enable `VK_LOADER_DEBUG=layer` for a separate short capture only when investigating the Vulkan-only path, and retain its unfiltered log because the MAKO collector intentionally filters unrelated layer records.
+
 ## Game-local Proton integrations
 
 ReShade and OptiScaler are usually injected through Windows proxy DLLs and Wine/Proton DLL overrides rather than `VK_IMPLICIT_LAYER_PATH`. MAKO's host layer isolation does not remove those files or overrides.

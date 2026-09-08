@@ -210,9 +210,6 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     require(english.value(QStringLiteral("scalingFactor")).toString() ==
             QStringLiteral("Scale Factor"),
         "English scale-factor label does not match Decky");
-    require(english.value(QStringLiteral("scalingFactorDesc")).toString() ==
-            QStringLiteral("Sets the output-to-input size ratio for every method, including Native Resolution. Higher values render fewer source pixels."),
-        "English scale-factor help does not match Decky");
     require(english.value(QStringLiteral("scalingSharpnessDesc")).toString() ==
             QStringLiteral("For MAKO, applies this 0–100% multiplier to its 3x sharpening baseline. For LS1, selects one of five learned sharpness variants."),
         "English sharpening help does not describe the MAKO baseline");

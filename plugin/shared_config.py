@@ -33,7 +33,10 @@ SUPPORTED_FLATPAK_RUNTIME_VERSIONS = ("23.08", "24.08", "25.08")
 # Flatpak frontends whose games start in a child compatibility environment and
 # therefore require MAKO's wrapper to be configured per game rather than on the
 # launcher process itself.
-PER_GAME_WRAPPER_FLATPAK_APP_IDS = ("com.heroicgameslauncher.hgl",)
+PER_GAME_WRAPPER_FLATPAK_APP_IDS = (
+    "com.heroicgameslauncher.hgl",
+    "net.lutris.Lutris",
+)
 
 # Cross-language validation limits. Keep the deliberately narrower Decky UI
 # ceiling separate from the canonical profile validation range.

@@ -81,6 +81,13 @@ class DllStatsRequiredResponse(BaseResponse):
     error: Optional[str]
 
 
+class ScalingModelStatusResponse(TypedDict):
+    """Host preflight only; null means the inspector could not establish support."""
+
+    compatible: Optional[bool]
+    reason: Optional[str]
+
+
 class DllStatsResponse(DllStatsRequiredResponse, total=False):
     """Public hash and source details for the detected DLL."""
 

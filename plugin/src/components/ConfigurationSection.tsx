@@ -1,24 +1,15 @@
-import type { ConfigurationData } from "../config/configSchema";
+import type { ConfigurationEditorProps } from "./settings/types";
 import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
-import {
-  AdvancedRenderingConfigurationGroup,
-  CompatibilityConfigurationGroup,
-  ExternalToolsConfigurationGroup,
-  ManualOverridesConfigurationGroup,
-} from "./ConfigurationSectionGroups";
+import { AdvancedRenderingConfigurationGroup } from "./settings/AdvancedRenderingConfigurationGroup";
+import { CompatibilityConfigurationGroup } from "./settings/CompatibilityConfigurationGroup";
+import { ExternalToolsConfigurationGroup } from "./settings/ExternalToolsConfigurationGroup";
+import { ManualOverridesConfigurationGroup } from "./settings/ManualOverridesConfigurationGroup";
 
-interface ConfigurationSectionProps {
-  config: ConfigurationData;
-  onConfigChange: (
-    fieldName: keyof ConfigurationData,
-    value: boolean | number | string,
-  ) => Promise<void>;
-  onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
+interface ConfigurationSectionProps extends ConfigurationEditorProps {
   includeAdvancedRendering?: boolean;
 }
 
-interface FrameGenerationConfigurationSectionProps
-  extends ConfigurationSectionProps {
+interface FrameGenerationConfigurationSectionProps extends ConfigurationSectionProps {
   initiallyCollapsed?: boolean;
 }
 

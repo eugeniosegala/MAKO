@@ -578,6 +578,88 @@ namespace {
             "transport recovery did not request one fresh cadence qualification");
     }
 
+    void testIsolatedAcquireTimeoutPreservesValidatedCadence() {
+        // Issue #47: a 90 Hz image deadline of 16.7 ms returned VK_TIMEOUT
+        // after 17-19 ms, despite a 50 ms application-present budget. Replay
+        // sparse misses against both the reported 60 FPS cap and the 45 FPS
+        // cadence observed under ordered FIFO, using the production owners.
+        for (const size_t maximumMultiplier : {2U, 4U}) {
+            for (const double baseFps : {45.0, 60.0}) {
+                Harness harness(
+                    90, maximumMultiplier, false,
+                    AdaptiveRecoveryPolicy::OrderedSdr
+                );
+                OrderedAcquireRecovery recovery;
+                harness.start();
+                harness.runAtFps(baseFps, 12s);
+                const auto validated = harness.scheduler.snapshot();
+                require(validated.validatedGenerationLimit == 1,
+                    "precondition failed: 90 FPS delivery was not validated");
+                const size_t stabilizations =
+                    harness.diagnostics.count("stabilization");
+
+                for (const auto wait : {17'248'900ns, 18'443'100ns,
+                        17'750'300ns, 18'854'000ns, 17'977'300ns}) {
+                    harness.runAtFps(baseFps, 30s);
+                    auto plan = harness.frameAtFps(baseFps);
+                    for (size_t frame = 0; plan.empty() && frame < 4; ++frame)
+                        plan = harness.frameAtFps(baseFps);
+                    require(!plan.empty(),
+                        "precondition failed: no generated delivery before timeout");
+                    harness.scheduler.reportGeneratedFrameDelivery({
+                        .requested = plan.size(),
+                        .acceptedForPresentation = 0,
+                    });
+                    const auto miss = recovery.observe(
+                        harness.now + wait, wait,
+                        OrderedAcquireRecovery::slowAcquireDuration(90),
+                        true
+                    );
+                    require(miss.guardArmed && !miss.quarantined,
+                        "isolated 90 Hz deadline miss started a native drain");
+                    const auto guard = recovery.beforePresent(
+                        harness.now + wait + 1ms
+                    );
+                    require(guard.limitGeneratedFrames &&
+                            guard.preacquireGeneratedFrame &&
+                            !guard.boundedAcquireProbe &&
+                            !guard.bypassGeneration,
+                        "deadline miss did not constrain the next acquire to zero wait");
+                    // The presentation path freezes the scheduler while its
+                    // forced single-image guard excludes transport delay.
+                    static_cast<void>(harness.frame(wait + 1ms, true));
+                    const auto ready = recovery.observe(
+                        harness.now, 0ns,
+                        OrderedAcquireRecovery::slowAcquireDuration(90),
+                        false
+                    );
+                    if (ready.stabilizing)
+                        harness.scheduler.beginTransportRecovery(harness.now);
+                    require(ready.guardCleared && !recovery.active(),
+                        "available guard image did not end isolated recovery");
+                    size_t generated = 0;
+                    for (size_t frame = 0; frame < 4; ++frame) {
+                        const auto resumed = harness.frameAtFps(baseFps);
+                        generated += resumed.size();
+                        if (!resumed.empty()) {
+                            static_cast<void>(recovery.observe(
+                                harness.now, 1ms,
+                                OrderedAcquireRecovery::slowAcquireDuration(90),
+                                false
+                            ));
+                        }
+                    }
+                    require(generated > 0 &&
+                            harness.scheduler.snapshot().validatedGenerationLimit ==
+                                validated.validatedGenerationLimit &&
+                            harness.diagnostics.count("stabilization") ==
+                                stabilizations,
+                        "sparse acquire misses discarded accepted generation or restarted Adaptive");
+                }
+            }
+        }
+    }
+
     void testBusyWarmupNotificationIsIdempotent() {
         Harness harness(120, 3);
         harness.scheduler.consumeHistoryWarmupFrame(harness.now + 16ms);
@@ -2098,6 +2180,89 @@ namespace {
             "isolated SDR gameplay hitches entered cadence recovery");
     }
 
+    void testUnconfirmedCadenceDropRetainsSlowSamples() {
+        for (const auto recovery : {AdaptiveRecoveryPolicy::OrderedSdr,
+                AdaptiveRecoveryPolicy::ConservativeHdr}) {
+            Harness harness(150, 3, false, recovery);
+            harness.start();
+            harness.runAtFps(75.0, 7s);
+            require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+                "precondition failed: 75-to-150 generation was not validated");
+
+            // Hold the old baseline while two slow samples could still become
+            // a three-frame discontinuity. Once that candidate is rejected,
+            // those samples remain part of the real source cadence.
+            harness.frame(40ms);
+            harness.frame(40ms);
+            requireNear(harness.scheduler.snapshot().smoothedBaseFps,
+                75.0F, 0.01F, "unconfirmed drop changed its comparison baseline");
+            harness.frameAtFps(75.0);
+            const auto measured = harness.scheduler.snapshot().smoothedBaseFps;
+            require(measured > 40.0 && measured < 55.0,
+                "rejected cadence drop discarded its slow source samples");
+            require(!harness.scheduler.historyWarmupActive(),
+                "two slow frames triggered discontinuity recovery");
+
+            // Pending observations cannot cross a timing reset.
+            harness.frame(60ms);
+            harness.scheduler.resetTiming(harness.now);
+            harness.frame(20ms);
+            requireNear(harness.scheduler.snapshot().smoothedBaseFps,
+                50.0F, 0.01F, "timing reset inherited pending slow samples");
+
+            harness.frame(60ms);
+            harness.frame(20ms, true);
+            harness.frame(20ms);
+            requireNear(harness.scheduler.snapshot().smoothedBaseFps,
+                50.0F, 0.01F, "acquire backoff inherited pending slow samples");
+        }
+    }
+
+    void testBurstySourceCadenceDoesNotLockOntoFastSamples() {
+        for (const auto recovery : {AdaptiveRecoveryPolicy::OrderedSdr,
+                AdaptiveRecoveryPolicy::ConservativeHdr}) {
+            for (const bool automaticCap : {false, true}) {
+                for (const bool stableCadence : {false, true}) {
+                    Harness harness(150, 3, stableCadence, recovery, false, 2s,
+                        240, true, automaticCap);
+                    harness.start();
+                    harness.runAtFps(75.0, 12s);
+                    require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+                        "precondition failed: burst trace had no proven generation");
+
+                    // A 50 FPS source alternates 8/32 ms. The slow half alone is
+                    // not a sustained drop. Previously it was discarded forever,
+                    // reporting 125 FPS and suppressing most generated work. The
+                    // capped variant uses 14/30 ms: both intervals respect the
+                    // reporter's automatic 75 FPS cap, but previously only the
+                    // 14 ms half contributed to the estimate.
+                    size_t outputs = 0;
+                    for (size_t frame = 0; frame < 1200; ++frame) {
+                        const auto shortInterval = automaticCap ? 14ms : 8ms;
+                        const auto longInterval = automaticCap ? 30ms : 32ms;
+                        const auto plan = harness.frame(
+                            frame % 2 ? longInterval : shortInterval);
+                        requireValidTimestamps(plan, 2);
+                        require(!harness.scheduler.historyWarmupActive(),
+                            "alternating sub-stall intervals restarted history");
+                        harness.scheduler.reportGeneratedFrameDelivery(
+                            {plan.size(), plan.size()});
+                        if (frame >= 1000)
+                            outputs += 1 + plan.size();
+                    }
+                    const auto snapshot = harness.scheduler.snapshot();
+                    require(snapshot.smoothedBaseFps > 40.0 &&
+                            snapshot.smoothedBaseFps < 60.0,
+                        "bursty source cadence locked onto only the fast samples");
+                    require(outputs >= 540 && outputs <= 600,
+                        "bursty source lost useful generation or exceeded its ceiling");
+                    require(harness.diagnostics.count("cadence-refresh") == 0,
+                        "bursty source was mistaken for a sustained cadence drop");
+                }
+            }
+        }
+    }
+
     void testSdrCadenceDropRefreshesHistoryWithoutFullStabilization() {
         Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
         harness.start();
@@ -3423,6 +3588,7 @@ int main() {
         {"startup warm-up is explicit", testStartupWarmupIsExplicit},
         {"swapchain recreation settles promptly", testSwapchainRecreationUsesBoundedSettlingGuard},
         {"transport recovery invalidates stable cadence", testTransportRecoveryInvalidatesStableCadence},
+        {"isolated acquire timeouts preserve validated cadence", testIsolatedAcquireTimeoutPreservesValidatedCadence},
         {"busy warm-up notification is idempotent", testBusyWarmupNotificationIsIdempotent},
         {"transient busy frame does not rearm warm-up", testTransientBusyFrameDoesNotRearmCompletedWarmup},
         {"invalid configuration is rejected", testInvalidConfigurationIsRejectedAtBoundary},
@@ -3465,6 +3631,8 @@ int main() {
         {"gameplay cadence drop rebases", testSustainedCadenceDropRebasesWithoutMenuRecovery},
         {"SDR long hitch keeps validated level", testSdrLongHitchRefreshesHistoryWithoutDroppingValidatedLevel},
         {"SDR stable 2x bridges isolated hitch", testSdrStableTwoXBridgesIsolatedGameplayHitch},
+        {"unconfirmed cadence drop retains slow samples", testUnconfirmedCadenceDropRetainsSlowSamples},
+        {"bursty cadence retains both interval populations", testBurstySourceCadenceDoesNotLockOntoFastSamples},
         {"SDR cadence drop uses short refresh", testSdrCadenceDropRefreshesHistoryWithoutFullStabilization},
         {"SDR hard stall avoids refresh loop", testSdrSustainedHardStallDoesNotRestartHistoryRefresh},
         {"fast-present burst preserves cadence", testImpossibleFastBurstDoesNotCorruptCadence},

@@ -4,6 +4,7 @@
 #include "mako-backend/mako.hpp"
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/helpers/errors.hpp"
+#include "mako-common/helpers/file_descriptors.hpp"
 #include "mako-common/helpers/paths.hpp"
 #include "mako-common/quality/image_quality.hpp"
 #include "mako-common/vulkan/buffer.hpp"
@@ -623,26 +624,29 @@ int quality::run(const Options& opts) {
         const vk::Vulkan vk = makeVulkan(opts.gpu, "mako-quality-regression");
         const std::string selectedGpu = selectedDeviceName(vk);
 
-        std::pair<int, int> sourceFds{};
+        std::array<int, 2> sourceFds{-1, -1};
+        ls::FileDescriptorScope sourceScope{sourceFds};
         const vk::Image previousImage{
             vk, extent, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            std::nullopt, &sourceFds.first
+            std::nullopt, &sourceFds[0]
         };
         const vk::Image currentImage{
             vk, extent, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            std::nullopt, &sourceFds.second
+            std::nullopt, &sourceFds[1]
         };
-        int destinationFd{};
+        std::vector<int> destinationFds(1, -1);
+        ls::FileDescriptorScope destinationScope{destinationFds};
         const vk::Image destinationImage{
             vk, extent, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            std::nullopt, &destinationFd
+            std::nullopt, &destinationFds[0]
         };
         initializeExternalImageLayout(vk, destinationImage);
 
-        int syncFd{};
+        int syncFd{-1};
+        ls::FileDescriptorScope syncScope{{&syncFd, 1}};
         const vk::TimelineSemaphore sync{vk, 0, std::nullopt, &syncFd};
         const auto dll = configuredDll(opts.dll, true);
         mako::backend::Instance backend{
@@ -654,7 +658,9 @@ int quality::run(const Options& opts) {
             dll->string(), opts.allow_fp16
         };
         mako::backend::Context& context = backend.openContext(
-            sourceFds, {destinationFd}, syncFd,
+            (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
+            (destinationScope.release(), destinationFds),
+            (syncScope.release(), syncFd),
             extent.width, extent.height,
             mako::backend::FrameEncoding::Sdr8,
             1.0F / opts.flow_scale, opts.performance_mode
@@ -1138,31 +1144,34 @@ int quality::runCombined(const CombinedOptions& opts) {
         const vk::Image currentApplication{
             vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM, applicationUsage
         };
-        std::pair<int, int> sourceFds{};
+        std::array<int, 2> sourceFds{-1, -1};
+        ls::FileDescriptorScope sourceScope{sourceFds};
         const auto frameSourceUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT |
             VK_IMAGE_USAGE_STORAGE_BIT;
         const vk::Image previousFrameSource{
             vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
-            frameSourceUsage, std::nullopt, &sourceFds.first
+            frameSourceUsage, std::nullopt, &sourceFds[0]
         };
         const vk::Image currentFrameSource{
             vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
-            frameSourceUsage, std::nullopt, &sourceFds.second
+            frameSourceUsage, std::nullopt, &sourceFds[1]
         };
         const std::array directOutputs{
             std::cref(previousFrameSource),
             std::cref(currentFrameSource),
         };
         scaler.configureDirectFrameGenerationOutputs(vk, directOutputs);
-        int destinationFd{};
+        std::vector<int> destinationFds(1, -1);
+        ls::FileDescriptorScope destinationScope{destinationFds};
         const vk::Image destinationImage{
             vk, presentationExtent, VK_FORMAT_R8G8B8A8_UNORM,
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
-            std::nullopt, &destinationFd
+            std::nullopt, &destinationFds[0]
         };
         initializeExternalImageLayout(vk, destinationImage);
-        int syncFd{};
+        int syncFd{-1};
+        ls::FileDescriptorScope syncScope{{&syncFd, 1}};
         const vk::TimelineSemaphore sync{vk, 0, std::nullopt, &syncFd};
         mako::backend::Instance backend{
             [&selectedGpu](const std::string& gpuName,
@@ -1173,7 +1182,9 @@ int quality::runCombined(const CombinedOptions& opts) {
             dll->string(), opts.allow_fp16
         };
         mako::backend::Context& context = backend.openContext(
-            sourceFds, {destinationFd}, syncFd,
+            (sourceScope.release(), std::pair{sourceFds[0], sourceFds[1]}),
+            (destinationScope.release(), destinationFds),
+            (syncScope.release(), syncFd),
             presentationExtent.width, presentationExtent.height,
             mako::backend::FrameEncoding::Sdr8,
             1.0F / opts.flow_scale, opts.performance_mode

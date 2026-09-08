@@ -261,6 +261,17 @@ namespace {
                 first->resourceLayoutSha256 != replaced->resourceLayoutSha256,
             "same-size, restored-mtime DLL replacement reused stale resources");
 
+        require(mako::backend::loadDllResourceArchive(firstPath) == replaced,
+            "unchanged DLL should reuse its process-local archive");
+        std::filesystem::remove(firstPath);
+        requireFailure([&] {
+            static_cast<void>(mako::backend::loadDllResourceArchive(firstPath));
+        }, "removed DLL reused stale resources");
+        writeFile(firstPath, {0U, 1U});
+        requireFailure([&] {
+            static_cast<void>(mako::backend::loadDllResourceArchive(firstPath));
+        }, "truncated replacement reused stale resources");
+
         const auto pe32Path = temporary.path / "pe32.dll";
         writeFile(pe32Path, syntheticPe(
             {4U, 5U, 6U}, {.pe32 = true, .additionalLanguage = true}
@@ -313,6 +324,28 @@ namespace {
         mako::backend::detail::validateDxbcComputeShader(
             syntheticDxbc(), "synthetic DXBC"
         );
+        // New vendor metadata is harmless; aliasing/truncated chunk tables
+        // are not. None of these fixtures contains proprietary bytecode.
+        auto extraChunk = syntheticDxbc();
+        extraChunk.resize(60U);
+        writeInteger<uint32_t>(extraChunk, 24U, 56U);
+        writeInteger<uint32_t>(extraChunk, 28U, 2U);
+        writeInteger<uint32_t>(extraChunk, 32U, 40U);
+        writeInteger<uint32_t>(extraChunk, 36U, 48U);
+        writeInteger<uint32_t>(extraChunk, 40U, 0x58454853U);
+        writeInteger<uint32_t>(extraChunk, 44U, 0U);
+        writeInteger<uint32_t>(extraChunk, 48U, 0x54534554U);
+        writeInteger<uint32_t>(extraChunk, 52U, 0U);
+        mako::backend::detail::validateDxbcComputeShader(extraChunk, "extra vendor chunk");
+        writeInteger<uint32_t>(extraChunk, 36U, 40U);
+        requireFailure([&] {
+            mako::backend::detail::validateDxbcComputeShader(extraChunk, "aliased chunks");
+        }, "aliased DXBC chunks were accepted");
+        writeInteger<uint32_t>(extraChunk, 36U, 48U);
+        writeInteger<uint32_t>(extraChunk, 52U, 100U);
+        requireFailure([&] {
+            mako::backend::detail::validateDxbcComputeShader(extraChunk, "truncated chunk");
+        }, "out-of-range DXBC chunk was accepted");
         requireFailure(
             [&] { mako::backend::detail::validateDxbcComputeShader(
                 syntheticDxbc(false), "missing shader chunk"); },
@@ -353,6 +386,20 @@ namespace {
         for (uint32_t id = 141U; id <= 161U; ++id)
             ls1Resources.emplace(id, syntheticDxbc());
         ls1Resources.emplace(9999U, std::vector<uint8_t>{1U});
+        for (uint32_t removed = 141U; removed <= 161U; ++removed) {
+            auto changed = ls1Resources;
+            changed.erase(removed);
+            for (const auto mode : {mako::backend::Ls1Mode::Quality,
+                    mako::backend::Ls1Mode::Performance}) {
+                const bool required = removed == 146U ||
+                    (mode == mako::backend::Ls1Mode::Quality ? removed >= 147U : removed <= 145U);
+                const auto validate = [&] {
+                    mako::backend::detail::validateLs1ModelResources(changed, mode);
+                };
+                if (required) requireFailure(validate, "missing selected LS1 graph resource accepted");
+                else validate();
+            }
+        }
         mako::backend::detail::validateLs1ModelResources(
             ls1Resources, mako::backend::Ls1Mode::Quality
         );

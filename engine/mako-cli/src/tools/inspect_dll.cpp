@@ -36,6 +36,24 @@ namespace {
 }
 
 int mako::cli::inspect_dll::run(const Options& options) {
+    if (options.ls1Mode) {
+        // Use exactly the runtime loader and selected sharpness variant. An
+        // unrelated LSFG family or LS1 variant must not veto this selection.
+        // Only status leaves the process; no licensed payload is serialized.
+        bool compatible = false;
+        try {
+            static_cast<void>(mako::backend::loadLs1ShaderSet(
+                options.dll, *options.ls1Mode, options.sharpness
+            ));
+            compatible = true;
+        } catch (const std::exception& error) {
+            std::cerr << "MAKO Renderer: LS1 availability inspection failed: "
+                      << error.what() << '\n';
+        }
+        std::cout << "{\"schema_version\":1,\"compatible\":"
+                  << (compatible ? "true" : "false") << "}\n";
+        return compatible ? 0 : 1;
+    }
     try {
         const auto inspection = mako::backend::inspectLosslessDll(options.dll);
         const auto qualityTranslation = inspectTranslation(

@@ -23,7 +23,17 @@ See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics inte
 4. Compare the game's V-Sync on and off; its limiter, VRR, and compositor can change pacing.
 5. Select **Disable MAKO Renderer on Next Launch**, restart the game, and compare once. Turn the option off after the test.
 
-For Heroic, use the displayed MAKO wrapper as **Wrapper**, leave **Arguments** empty, and do not add `%command%`. For an EmuDeck Flatpak, prepare the emulator in **Flatpak Setup**, use the wrapper as the Steam shortcut **Target**, and preserve EmuDeck's existing Launch Options. See the [installation workflows](../../README.md#heroic-and-other-flatpak-applications).
+Use the [launcher setup guide](LAUNCHERS.md) for Heroic, Lutris, EmuDeck, and manually added Flatpak shortcuts. Heroic uses its per-game **Wrapper** field; Lutris uses **Command prefix**. Flatpak launchers also need preparation in **Flatpak Setup**.
+
+### Ubisoft Connect closes before the game starts
+
+Use the normal Steam/Proton launch option above. MAKO leaves `UbisoftConnect.exe`, `upc.exe`, and `UplayWebCore.exe` on its inactive native-presentation path while retaining the game's inherited launch environment. This avoids applying Frame Generation or Scaling to the launcher's own windows; it does not establish the cause of every Ubisoft or Proton crash.
+
+If the failure persists, collect [MAKO Renderer diagnostics for the failing Steam launch](COLLECT_DIAGNOSTICS.md) and a Proton log from that same attempt. Decky's plugin lifecycle log records installation and profile edits but cannot show which executable crashed or whether MAKO created a rendering context there. Capture a game profile after gameplay loads so **Matched Processes** describes the game rather than its launcher.
+
+## XR Gaming / Breezy lag
+
+XR Gaming's Gamescope effect and its Vulkan-only mode use different presentation paths. MAKO's Gamescope WSI toggle does not select between them. See the [XR Gaming compatibility notes](../../engine/docs/LAYER-CHAINING.md#xr-gaming--breezy) for the current evidence limits and the short off/on/off capture needed to investigate Anchor/Follow lag. Keep the actual Breezy runtime archive; its plugin installation log cannot identify a rendering slowdown.
 
 ## Bazzite and multi-GPU systems
 
@@ -35,7 +45,9 @@ If the install control reports an unsupported native AArch64 or Armada host, see
 
 ## Updates and Flatpak runtimes
 
-Follow the root [clean update workflow](../../README.md#updating-mako-decky). It preserves profiles and launch options while explicitly replacing the native Renderer and each prepared Flatpak runtime.
+Follow the root [clean update workflow](../../README.md#updating-mako-decky). It preserves valid profiles and launch options while explicitly replacing the native Renderer and each prepared Flatpak runtime.
+
+If invalid configuration prevents profiles from loading or saving, close games using MAKO and select **Install MAKO Renderer** in MAKO Decky. Installation recreates an unreadable or invalid `conf.toml` with defaults, replacing its saved profiles. Read-only files require owner write permission before retrying.
 
 ## Diagnostics
 

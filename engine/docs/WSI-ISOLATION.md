@@ -120,6 +120,8 @@ Use `VK_LOADER_DEBUG=layer` only for a short reproduction because it is verbose.
 
 Any discovery, ordering, present-mode, pNext, image-reservation, or transport change needs its portable launcher/wrapper/package/Flatpak contracts plus applicable MAKO Gym Gamescope, native Vulkan, Proton, synchronization, recovery, and runtime-family evidence. Loader success or `vkcube` does not prove real-game pacing or image correctness. Record untested architectures, sandboxes, GPUs, drivers, and hardware paths explicitly.
 
+Present-chain filtering also preserves `VkPresentTimingsInfoEXT` (`VK_EXT_present_timing`) when a newer application or Proton runtime places it before a removed maintenance1 mode override or scaling damage region. `FilteredPresentPNextChain` in `mako-render/src/pnext_chain.hpp` copies the complete outer timing node and retains its caller-owned timing array, present IDs, fences, and untouched suffix. The fixed ABI layout remains recognized when MAKO is built with older Vulkan headers, with compile-time layout checks against SDKs that expose the extension. This does not disable the extension, rewrite timing values, change which output owns application-present metadata, or weaken rejection of unknown prefix structures. `pnext-chain` tests cover immutable input, interleaved removals, null timing arrays, passthrough, and unknown-node rejection.
+
 ## Code and test ownership
 
 | Responsibility | Source of truth |
@@ -129,7 +131,7 @@ Any discovery, ordering, present-mode, pNext, image-reservation, or transport ch
 | Host archive verification | `scripts/package-local.sh` |
 | Process-start policy, transport, and admission helpers | `mako-render/src/presentation_policy.hpp` |
 | Surface and split-role interception | `mako-render/src/entrypoint.cpp` |
-| Swapchain creation and pNext filtering | `mako-render/src/instance.cpp`, `mako-render/src/swapchain.cpp` |
-| Generated/real delivery | `mako-render/src/swapchain_present.cpp` |
+| Swapchain creation and pNext filtering | `mako-render/src/instance.cpp`, `mako-render/src/swapchain/create.cpp` |
+| Generated/real delivery | `mako-render/src/swapchain/present.cpp` |
 | Launcher and portable Renderer tests | `scripts/test-mako-launch.sh`, `mako-render/tests/` |
 | MAKO Decky wrapper, manifests, and Flatpak contracts | `../plugin/py_modules/mako_plugin/`, `../plugin/tests/` |

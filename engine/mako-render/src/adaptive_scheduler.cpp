@@ -438,6 +438,7 @@ AdaptiveScheduler::observeCadence(
                 *this->state.efficiencyProbe.evaluationAt += bypassDuration;
         }
         this->state.cadence.lastRealFrame = now;
+        this->state.cadence.dropFrames = 0;
         this->state.outputPlanner.resetTargetClock();
         return {
             .terminalPlan = AdaptiveFramePlan::evenlySpaced(1),
@@ -668,8 +669,18 @@ AdaptiveScheduler::observeCadence(
     if (cadenceDropCandidate) {
         this->state.rearm.stableSince.reset();
         this->state.rearm.improvementSince.reset();
+        if (this->state.cadence.dropFrames == 0)
+            this->state.cadence.pendingDropIntervalSeconds =
+                this->state.cadence.smoothedIntervalSeconds;
+        this->state.cadence.pendingDropIntervalSeconds =
+            (1.0 - adaptiveIntervalSmoothing) *
+                this->state.cadence.pendingDropIntervalSeconds +
+            adaptiveIntervalSmoothing * rawIntervalSeconds;
         this->state.cadence.dropFrames++;
     } else {
+        if (this->state.cadence.dropFrames > 0)
+            this->state.cadence.smoothedIntervalSeconds =
+                this->state.cadence.pendingDropIntervalSeconds;
         this->state.cadence.dropFrames = 0;
     }
     if (this->state.cadence.dropFrames >= adaptiveCadenceDropFrameCount) {
@@ -686,7 +697,8 @@ AdaptiveScheduler::observeCadence(
     } else if (!cadenceDropCandidate) {
         // Keep the pre-disruption baseline while confirming a sustained drop.
         // Otherwise smoothing the first slow samples raises the comparison
-        // threshold and can hide the third confirming frame.
+        // threshold and can hide the third confirming frame. A rejected drop
+        // restores the shadow estimate above before adding this next sample.
         this->state.cadence.smoothedIntervalSeconds =
             (1.0 - adaptiveIntervalSmoothing) * this->state.cadence.smoothedIntervalSeconds +
             adaptiveIntervalSmoothing * rawIntervalSeconds;
@@ -2171,6 +2183,7 @@ void AdaptiveScheduler::resetTiming(
         const std::chrono::steady_clock::time_point now) {
     this->state.cadence.lastRealFrame = now;
     this->state.cadence.smoothedIntervalSeconds = 0.0;
+    this->state.cadence.dropFrames = 0;
     if (this->state.fastBurst.startedAt) {
         this->diagnostics->fastCadenceBurstComplete(
             this->state.fastBurst.frames,

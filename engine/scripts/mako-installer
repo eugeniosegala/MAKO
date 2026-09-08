@@ -178,7 +178,7 @@ rewrite_desktop_exec() {
     local relative_path="$1"
     local executable="$2"
     local arguments="$3"
-    local desktop_path="$install_prefix/$relative_path"
+    local desktop_path="${4:-$install_prefix}/$relative_path"
     local temporary_path="${desktop_path}.mako-install.$$"
     local quoted_executable line
     local exec_lines=0
@@ -204,26 +204,29 @@ rewrite_desktop_exec() {
 }
 
 write_installed_state_manifest() {
-    local temporary_path="$state_manifest.mako-install.$$"
+    local payload_root="$1"
+    local output_manifest="$2"
+    local temporary_path="$output_manifest.mako-install.$$"
     local line installed_path installed_hash
     : > "$temporary_path"
     while IFS= read -r line || [[ -n "$line" ]]; do
         parse_manifest_line "$line"
-        installed_path="$install_prefix/$manifest_path"
+        installed_path="$payload_root/$manifest_path"
         [[ -f "$installed_path" ]] || fail "The installed payload is missing $manifest_path."
         installed_hash="$(hash_file "$installed_path")"
         printf '%s  %s\n' "$installed_hash" "$manifest_path" >> "$temporary_path"
     done < "$payload_manifest"
-    mv -f -- "$temporary_path" "$state_manifest"
+    mv -fT -- "$temporary_path" "$output_manifest"
 }
 
 write_active_renderer_state() {
     local version="$1"
-    local temporary_path="$active_renderer_state.mako-install.$$"
+    local output_state="$2"
+    local temporary_path="$output_state.mako-install.$$"
     printf '{\n  "schema_version": 1,\n  "owner": "standalone",\n  "version": "%s"\n}\n' \
         "$version" > "$temporary_path"
     chmod 0644 "$temporary_path"
-    mv -f -- "$temporary_path" "$active_renderer_state"
+    mv -fT -- "$temporary_path" "$output_state"
 }
 
 remove_if_managed() {
@@ -260,6 +263,60 @@ warn_decky_installation() {
     confirm "$message"
 }
 
+# These backups exist only during an explicit install, never in a game path.
+install_staging=
+install_replacing=0
+install_committed=0
+install_destinations=()
+install_backups=()
+
+finish_install() {
+    local status=$? index directory destination restore_failed=0
+    trap - EXIT HUP INT TERM
+    if [[ "$install_replacing" == 1 && "$install_committed" != 1 ]]; then
+        for ((index=${#install_destinations[@]}-1; index>=0; index--)); do
+            destination="${install_destinations[index]}"
+            directory="${install_backups[index]}"
+            if [[ -e "$directory/previous" || -L "$directory/previous" ]]; then
+                if ! mv -fT -- "$directory/previous" "$destination"; then
+                    printf 'MAKO Renderer: recovery backup retained at %s\n' "$directory" >&2
+                    install_backups[index]=
+                    restore_failed=1
+                fi
+            elif ! rm -f -- "$destination"; then
+                restore_failed=1
+            fi
+        done
+    fi
+    for directory in "${install_backups[@]}" "$install_staging"; do
+        [[ -n "$directory" ]] || continue
+        rm -rf -- "$directory" || printf 'MAKO Renderer: could not remove staging directory %s\n' "$directory" >&2
+    done
+    if ((status != 0)); then
+        if ((restore_failed)); then
+            fail "The Renderer update failed and some files could not be restored. Recovery backups were retained beside the affected files. Check destination permissions and free space before retrying."
+        fi
+        fail "The Renderer update failed. The previous installation was preserved. Check the package, destination permissions, and free space before retrying."
+    fi
+}
+
+prepare_install_destination() {
+    local destination="$1" source="${2:-}" directory
+    if [[ -e "$destination" && ! -f "$destination" && ! -L "$destination" ]]; then
+        fail "The installation destination is not a file: $destination"
+    fi
+    mkdir -p -- "$(dirname -- "$destination")"
+    directory="$(mktemp -d "$(dirname -- "$destination")/.mako-install-XXXXXX")"
+    install_backups+=("$directory")
+    install_destinations+=("$destination")
+    if [[ -e "$destination" || -L "$destination" ]]; then
+        cp -Pp -- "$destination" "$directory/previous"
+    fi
+    if [[ -n "$source" ]]; then
+        cp -p -- "$source" "$directory/replacement"
+    fi
+}
+
 install_payload() {
     [[ -f "$payload_manifest" && -f "$version_file" ]] ||
         fail "Open ‘Install MAKO Renderer’ from the extracted MAKO Renderer archive."
@@ -283,38 +340,60 @@ install_payload() {
         exit 0
     fi
 
-    local source_path destination_path temporary_path line old_path old_hash
+    trap finish_install EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+    mkdir -p -- "$install_prefix"
+    install_staging="$(mktemp -d "$install_prefix/.mako-install-XXXXXX")"
+
+    local source_path staged_path line old_path old_hash index
+    # Validate and rewrite every payload before touching the selected Renderer.
     while IFS= read -r line || [[ -n "$line" ]]; do
         parse_manifest_line "$line"
         source_path="$script_dir/$manifest_path"
         [[ -f "$source_path" ]] || fail "The package is missing $manifest_path."
-        [[ "$(hash_file "$source_path")" == "$manifest_hash" ]] ||
+        staged_path="$install_staging/payload/$manifest_path"
+        mkdir -p -- "$(dirname -- "$staged_path")"
+        cp -p -- "$source_path" "$staged_path"
+        [[ "$(hash_file "$staged_path")" == "$manifest_hash" ]] ||
             fail "The package file $manifest_path does not match its recorded checksum."
-        destination_path="$install_prefix/$manifest_path"
-        mkdir -p -- "$(dirname -- "$destination_path")"
-        temporary_path="${destination_path}.mako-install.$$"
-        rm -f -- "$temporary_path"
-        cp -p -- "$source_path" "$temporary_path"
-        mv -f -- "$temporary_path" "$destination_path"
     done < "$payload_manifest"
 
-    rewrite_desktop_exec "$configuration_desktop_path" "$install_prefix/bin/mako-ui" "%U"
-    rewrite_desktop_exec "$uninstaller_desktop_path" "$install_prefix/bin/mako-installer" "--uninstall"
+    rewrite_desktop_exec "$configuration_desktop_path" "$install_prefix/bin/mako-ui" "%U" "$install_staging/payload"
+    rewrite_desktop_exec "$uninstaller_desktop_path" "$install_prefix/bin/mako-installer" "--uninstall" "$install_staging/payload"
+    write_installed_state_manifest "$install_staging/payload" "$install_staging/installed-files.sha256"
+    write_active_renderer_state "$version" "$install_staging/active-renderer.json"
 
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        parse_manifest_line "$line"
+        prepare_install_destination "$install_prefix/$manifest_path" "$install_staging/payload/$manifest_path"
+    done < "$payload_manifest"
     if [[ -f "$state_manifest" ]]; then
         while IFS= read -r line || [[ -n "$line" ]]; do
             parse_manifest_line "$line"
             old_path="$manifest_path"
             old_hash="$manifest_hash"
             if ! manifest_contains_path "$payload_manifest" "$old_path"; then
-                remove_if_managed "$install_prefix/$old_path" "$old_hash"
+                if [[ -f "$install_prefix/$old_path" && "$(hash_file "$install_prefix/$old_path")" == "$old_hash" ]]; then
+                    prepare_install_destination "$install_prefix/$old_path"
+                fi
             fi
         done < "$state_manifest"
     fi
+    prepare_install_destination "$state_manifest" "$install_staging/installed-files.sha256"
+    prepare_install_destination "$active_renderer_state" "$install_staging/active-renderer.json"
 
-    mkdir -p -- "$state_dir"
-    write_installed_state_manifest
-    write_active_renderer_state "$version"
+    install_replacing=1
+    for ((index=0; index<${#install_destinations[@]}; index++)); do
+        if [[ -f "${install_backups[index]}/replacement" ]]; then
+            mv -fT -- "${install_backups[index]}/replacement" "${install_destinations[index]}"
+        else
+            rm -f -- "${install_destinations[index]}"
+        fi
+    done
+    install_committed=1
+    finish_install
 
     notice "MAKO Renderer $version is installed. MAKO Renderer Configuration will open now.
 
@@ -322,7 +401,10 @@ For a native Steam or Proton game, use this Steam launch option:
 \"$install_prefix/bin/mako-launch\" %command%"
     if [[ "${MAKO_INSTALLER_NO_LAUNCH:-0}" != "1" ]]; then
         if [[ -x "$install_prefix/bin/mako-ui" ]]; then
-            "$install_prefix/bin/mako-ui" >/dev/null 2>&1 &
+            (
+                "$install_prefix/bin/mako-ui" ||
+                    fail "MAKO Renderer is installed, but its configuration app exited with an error. Run \"$install_prefix/bin/mako-ui\" from a terminal to see the error and check configuration permissions or missing Qt dependencies."
+            ) &
         else
             notice "MAKO Renderer was installed, but mako-ui is missing. Re-extract the archive and run the installer again."
         fi

@@ -27,6 +27,8 @@ Update
 
 Download and fully extract the newer MAKO Renderer archive, close games using MAKO, and run its "Install MAKO Renderer" file. The installer replaces only the managed payload and preserves your profiles and settings.
 
+The complete payload is verified and staged before any installed file is replaced. If a later update step fails, the installer restores the previous files and selected Renderer version. Check destination permissions and available disk space before retrying; do not run the user-local installer with sudo. If restoration also fails, the installer reports where it retained recovery backups.
+
 Uninstall
 ---------
 

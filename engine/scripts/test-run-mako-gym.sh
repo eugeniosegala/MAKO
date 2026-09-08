@@ -8,7 +8,7 @@ temporary_root="$(mktemp -d)"
 trap 'rm -rf -- "$temporary_root"' EXIT
 
 listed_suites="$($bridge --list-suites)"
-expected_suites=$'vulkan\nquality\nrepeatability\nperformance\nspatial-performance\nruntime-overhead\nsync-validation\nrecovery\nexternal-recovery\ngamescope-e2e\ndirect-desktop-e2e\nsustained-health\nproton-e2e\nproton-compatibility'
+expected_suites=$'vulkan\nquality\nrepeatability\nperformance\nspatial-performance\nruntime-overhead\nsync-validation\nrecovery\nexternal-recovery\ngamescope-e2e\ndirect-desktop-e2e\nsustained-health\nproton-e2e\nproton-compatibility\nconstraints'
 if [[ "$listed_suites" != "$expected_suites" ]]; then
     echo "Gym bridge suite inventory is not canonical." >&2
     exit 1
@@ -74,6 +74,9 @@ chmod +x "$fake_gym/scripts/run-proton-end-to-end.sh"
 printf '%s\n' '#!/usr/bin/env bash' 'printf "proton-compatibility:%s\\n" "$@"' \
     > "$fake_gym/scripts/run-proton-compatibility-matrix.sh"
 chmod +x "$fake_gym/scripts/run-proton-compatibility-matrix.sh"
+printf '%s\n' '#!/usr/bin/env bash' 'printf "constraints:%s\\n" "$@"' \
+    > "$fake_gym/scripts/run-resource-constraints.sh"
+chmod +x "$fake_gym/scripts/run-resource-constraints.sh"
 
 forwarded="$($bridge --gym-repo "$fake_gym" --list --filter '^fixed-')"
 expected=$'--list\n--filter\n^fixed-'
@@ -160,10 +163,17 @@ if [[ "$proton_compatibility_forwarded" != "$proton_compatibility_expected" ]]; 
     echo "Gym Proton compatibility arguments were not forwarded exactly." >&2
     exit 1
 fi
+constraints_forwarded="$($bridge --gym-repo "$fake_gym" --suite constraints --affected-suites recovery --require-complete)"
+constraints_expected=$'constraints:--affected-suites\nconstraints:recovery\nconstraints:--require-complete'
+if [[ "$constraints_forwarded" != "$constraints_expected" ]]; then
+    echo "Gym mandatory constraint arguments were not forwarded exactly." >&2
+    exit 1
+fi
+
 all_suites_forwarded="$($bridge --gym-repo "$fake_gym" --all-suites --validate)"
-all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate\nexternal-recovery:--validate\ngamescope-e2e:--validate\ndirect-desktop-e2e:--validate\nsustained-health:--validate\nproton-e2e:--validate\nproton-compatibility:--validate'
+all_suites_expected=$'--validate\nquality:--validate\nrepeatability:--validate\nperformance:--validate\nspatial-performance:--validate\nruntime-overhead:--validate\nsync-validation:--validate\nrecovery:--validate\nexternal-recovery:--validate\ngamescope-e2e:--validate\ndirect-desktop-e2e:--validate\nsustained-health:--validate\nproton-e2e:--validate\nproton-compatibility:--validate\nconstraints:--validate'
 if [[ "$all_suites_forwarded" != "$all_suites_expected" ]]; then
-    echo "Gym all-suites validation did not invoke all fourteen runners exactly once." >&2
+    echo "Gym all-suites validation did not invoke all fifteen runners exactly once." >&2
     exit 1
 fi
 if "$bridge" --gym-repo "$fake_gym" --all-suites --suite quality --validate >/dev/null 2>&1; then

@@ -195,4 +195,91 @@ MAKO_INSTALLER_ASSUME_YES=1 \
 [[ ! -e "$test_root/.local/share/mako-render" ]] ||
     fail "default uninstaller left the managed Renderer data directory"
 
+# An invalid late payload must not partially update an existing installation.
+rollback_prefix="$test_root/rollback"
+export MAKO_INSTALL_PREFIX="$rollback_prefix" MAKO_INSTALLER_ASSUME_YES=1 MAKO_INSTALLER_NO_LAUNCH=1
+printf 'obsolete payload\n' > "$package_root/bin/obsolete"
+(
+    cd "$package_root"
+    find bin share -type f -print | LC_ALL=C sort | xargs sha256sum
+) > "$package_root/MAKO-Renderer-install-manifest.txt"
+"$package_root/Install MAKO Renderer" --install >/dev/null
+cp "$rollback_prefix/share/mako-render/installer/installed-files.sha256" "$test_root/before.sha256"
+rm "$package_root/bin/obsolete"
+printf 'new payload\n' > "$package_root/bin/new-file"
+printf '%s\n' '#!/usr/bin/env bash' 'exit 77' > "$package_root/bin/mako-ui"
+(
+    cd "$package_root"
+    find bin share -type f -print | LC_ALL=C sort | xargs sha256sum
+) > "$package_root/MAKO-Renderer-install-manifest.txt"
+late_payload="$package_root/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
+cp "$late_payload" "$test_root/late-payload"
+printf '%s\n' 'corrupt late file' > "$late_payload"
+if "$package_root/Install MAKO Renderer" --install >"$test_root/rejected.log" 2>&1; then
+    fail "installer accepted a corrupted late package file"
+fi
+(
+    cd "$rollback_prefix"
+    sha256sum --check --status "$test_root/before.sha256"
+) || fail "failed package verification partially replaced the old installation"
+cp "$test_root/late-payload" "$late_payload"
+
+# Fail the last identity rename once, after binaries and manifests changed.
+mkdir -p "$test_root/failing-bin"
+cat > "$test_root/failing-bin/mv" <<'EOF'
+#!/usr/bin/env bash
+if [[ "${@: -1}" == "$MAKO_TEST_FAIL_DESTINATION" && ! -e "$MAKO_TEST_FAILURE_MARKER" ]]; then
+    touch "$MAKO_TEST_FAILURE_MARKER"
+    exit 1
+fi
+exec /usr/bin/mv "$@"
+EOF
+chmod 0755 "$test_root/failing-bin/mv"
+cp "$rollback_prefix/share/mako-render/active-renderer.json" "$test_root/before-active.json"
+if PATH="$test_root/failing-bin:$PATH" \
+        MAKO_TEST_FAIL_DESTINATION="$rollback_prefix/share/mako-render/active-renderer.json" \
+        MAKO_TEST_FAILURE_MARKER="$test_root/failed-once" \
+        "$package_root/Install MAKO Renderer" --install >"$test_root/rollback.log" 2>&1; then
+    fail "installer reported success after the active identity rename failed"
+fi
+[[ -f "$test_root/failed-once" ]] || fail "test never reached the final identity write"
+(
+    cd "$rollback_prefix"
+    sha256sum --check --status "$test_root/before.sha256"
+) || fail "late failure did not roll back installed files and their ownership record"
+[[ ! -e "$rollback_prefix/bin/new-file" ]] || fail "late failure left a new payload file behind"
+cmp "$test_root/before-active.json" "$rollback_prefix/share/mako-render/active-renderer.json" ||
+    fail "late failure changed the selected Renderer owner"
+[[ -z "$(find "$rollback_prefix" -name '.mako-install-*' -o -name '*.mako-install.*')" ]] ||
+    fail "installer left transaction files after rollback"
+
+if ((EUID != 0)); then
+    chmod 0500 "$rollback_prefix"
+    if "$package_root/Install MAKO Renderer" --install >"$test_root/prefix-permissions.log" 2>&1; then
+        fail "installer ignored a non-writable installation prefix"
+    fi
+    chmod 0755 "$rollback_prefix"
+    grep -Fq 'previous installation was preserved' "$test_root/prefix-permissions.log" ||
+        fail "installer did not report a staging permission failure"
+    chmod 0500 "$rollback_prefix/bin"
+    if "$package_root/Install MAKO Renderer" --install >"$test_root/permissions.log" 2>&1; then
+        fail "installer ignored a non-writable destination directory"
+    fi
+    chmod 0755 "$rollback_prefix/bin"
+    (
+        cd "$rollback_prefix"
+        sha256sum --check --status "$test_root/before.sha256"
+    ) || fail "permission failure damaged the existing installation"
+fi
+
+ui_result="$(MAKO_INSTALLER_NO_LAUNCH=0 "$package_root/Install MAKO Renderer" --install 2>&1)"
+[[ "$ui_result" == *'configuration app exited with an error'* ]] ||
+    fail "installer hid the configuration app startup failure"
+[[ ! -e "$rollback_prefix/bin/obsolete" && -f "$rollback_prefix/bin/new-file" ]] ||
+    fail "successful retry did not update the obsolete and new payloads"
+(
+    cd "$rollback_prefix"
+    sha256sum --check --status share/mako-render/installer/installed-files.sha256
+) || fail "successful retry left an incorrect ownership record"
+
 printf '%s\n' 'mako-installer contract test passed'

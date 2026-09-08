@@ -8,7 +8,7 @@ Controls are grouped under **Frame Generation**, **Spatial Settings**, **Perform
 
 ## Spatial Scaling
 
-Select **Enable Scaling (Restart)** before the game starts. Frame Generation and Scaling can run independently or together. Gamescope/Game Mode is recommended because it provides a reliable display target; direct desktop scaling uses the configured factor without a proven display target, so the compositor may scale it again or MAKO may fall back safely to native presentation after recreation.
+Select **Enable Scaling (Restart)** before the game starts. Frame Generation and Scaling can run independently or together. Gamescope/Game Mode is recommended because it provides a reliable display target; direct desktop scaling uses the configured factor without a proven display target, so the compositor may scale it again or MAKO may fall back safely to native presentation after recreation. On a variable desktop surface, lower the resolution in the game first: raising Scale Factor enlarges MAKO's output and can increase GPU cost. Quality Supersampling off only enforces a proven Gamescope output limit; it does not infer a desktop monitor cap. See [desktop scaling and resolution](../../engine/docs/CONFIGURATION.md#desktop-scaling-and-resolution).
 
 | Method | Behavior | Requirement |
 | --- | --- | --- |
@@ -22,7 +22,7 @@ Select **Enable Scaling (Restart)** before the game starts. Frame Generation and
 - **Quality Supersampling:** On a supported variable Gamescope surface, allows rendering beyond the proven display target before downsampling. It can improve quality but increases GPU and memory use. It does not change fixed-surface or direct non-Gamescope geometry.
 - **Scaling Sharpness:** Runs from 0–100%, with an 80% default. MAKO Scaler applies bounded local sharpening; LS1 selects the nearest of five learned variants. It is hidden for Native Resolution.
 
-Method and sharpness changes rebuild only MAKO's private scaler. Factor or supersampling changes apply without recreation when the effective extents stay the same; otherwise MAKO requests one guarded game-owned swapchain recreation when supported, or waits for a natural resolution change or restart. Unsupported surfaces stay native-sized, and memory-limited requests are reduced or rejected safely; Frame Generation remains available.
+Method and sharpness changes rebuild only MAKO's private scaler. Factor or supersampling changes apply without recreation when the effective extents stay the same; otherwise MAKO requests one guarded game-owned swapchain recreation when supported, or waits for a natural resolution change or restart. Unsupported surfaces stay native-sized, and memory-limited requests are reduced or rejected safely; Frame Generation remains available. An unavailable LS1 model never rewrites a saved profile. MAKO Scaler takes over when LS1 setup fails, while the dropdown retains the selected LS1 method and explains the fallback. MAKO Decky checks only that method's selected sharpness variant through the installed Renderer's GPU-independent loader, including Ultra Performance's effective LS1 Performance choice. A missing or older inspector leaves availability unknown. The warning below Scaling Method appears only for a failed availability check or a live fallback; selecting LS1 alone shows no fallback notice. This host check cannot prove a game's GPU or Flatpak runtime; live Renderer status takes precedence and identifies when MAKO Scaler is actually active. After repairing or updating Lossless Scaling, restart the game or rebuild its private scaler by changing the method; an existing fallback does not continuously retry LS1 in the frame loop.
 
 ## Frame Generation
 
@@ -65,11 +65,13 @@ A restart-bound change does not block unrelated live-safe changes. **Live Status
 
 Start a Steam game or shortcut, then select **Save profile for <game>** after gameplay loads. MAKO records its Steam app ID and safe Linux or Windows process names; selecting the action again updates the profile. Use **Matched Processes** only when a launcher or emulator needs another alias.
 
+Ubisoft Connect's own launcher and web UI executables are excluded from profile capture, including their truncated Linux process names. MAKO Renderer also leaves those exact executables inactive even when they inherit a game profile or an older profile contains their names. The child game retains MAKO's launch environment and matches normally; no separate Flatpak setup or Ubisoft wrapper is required for a Steam/Proton launch.
+
 The profile dropdown chooses which profile Decky edits; it does not override runtime matching. During play, MAKO follows the matched profile or Default. Outside a game, the selected profile remains available for editing.
 
 Renderer settings are stored in `conf.toml`; profile identity and launcher-only settings use versioned sidecars. Unknown keys are ignored and removed by the next canonical write. Scaling fields and **Game Swapchain Images** stay in Renderer configuration rather than becoming wrapper environment exports; the wrapper derives only the process-start layer chain from Scaling and launcher compatibility settings.
 
-Decky coalesces rapid edits through one last-value-wins writer and flushes pending changes when the quick-access panel closes.
+Decky sends typed field patches through one last-value-wins writer with one backend update in flight. Ordinary edits use a 250 ms trailing window, while Base FPS Cap changes use one second so a slider drag does not apply transient low caps to a running game. The writer preserves the profile selected for each edit and flushes pending changes when the quick-access panel closes, preventing rapid controls or profile changes from creating stale write queues.
 
 ## Performance and quality
 

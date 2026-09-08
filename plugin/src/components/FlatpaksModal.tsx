@@ -46,7 +46,7 @@ interface FlatpaksModalProps {
 }
 
 const MAKO_FLATPAK_GUIDE_URL =
-  "https://github.com/eugeniosegala/MAKO#heroic-and-other-flatpak-applications";
+  "https://github.com/eugeniosegala/MAKO/blob/main/plugin/docs/LAUNCHERS.md";
 
 function translateFlatpakRuntime(version: FlatpakRuntimeVersion): string {
   return t("FLATPAK_RUNTIME_VERSION", "Runtime {version}", { version });
@@ -471,7 +471,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               </div>
               {t(
                 "FLATPAK_PREPARE_APPLICATION_DESC",
-                "Install its matching runtime extension, then prepare the app here. Heroic preparation only grants access; enable MAKO per game in Heroic. Direct apps and emulators are prepared app-wide. Use the MAKO README for Heroic, EmuDeck, and Steam shortcut steps.",
+                "Install the matching runtime extension, then prepare the app. Heroic and Lutris need a per-game wrapper; emulators are prepared app-wide. Open the launcher setup guide for steps.",
               )}
             </div>
 
@@ -507,8 +507,8 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                     (appId) => appId === app.app_id,
                   )
                     ? t(
-                        "FLATPAK_HEROIC_APP_DESC",
-                        "{app_id} - {status}. Heroic remains per game: set {wrapper_path} in each chosen game's first Wrapper field, leave Arguments empty, and follow the MAKO README.",
+                        "FLATPAK_PER_GAME_APP_DESC",
+                        "{app_id} - {status}. Enable MAKO per game using {wrapper_path}. See the launcher setup guide for the correct field.",
                         {
                           app_id: app.app_id,
                           status: statusText,
@@ -517,7 +517,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                       )
                     : t(
                         "FLATPAK_DIRECT_APP_DESC",
-                        "{app_id} - {status}. Preparation applies to this entire Flatpak app. Follow the MAKO README for EmuDeck and Steam shortcut per-game steps.",
+                        "{app_id} - {status}. Preparation applies to this entire Flatpak app. Follow the launcher setup guide for EmuDeck and Steam shortcuts.",
                         {
                           app_id: app.app_id,
                           status: statusText,
@@ -695,7 +695,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
               >
                 {t(
                   "FLATPAK_STEAM_CONFIG_DESC",
-                  "Use this only for a manually added Steam shortcut whose original Target is /usr/bin/flatpak. Prepare that Flatpak application above first, then leave Start In and Launch Options unchanged. Heroic and EmuDeck use different per-game steps; check the MAKO README on GitHub.",
+                  "Use this only for a manually added Steam shortcut whose original Target is /usr/bin/flatpak. Prepare that Flatpak application above first, then leave Start In and Launch Options unchanged. Heroic, Lutris, and EmuDeck have separate steps in the launcher setup guide.",
                 )}
               </div>
               <div
@@ -732,7 +732,7 @@ export const FlatpaksModal: FC<FlatpaksModalProps> = ({ closeModal }) => {
                     Navigation.NavigateToExternalWeb(MAKO_FLATPAK_GUIDE_URL)
                   }
                 >
-                  {t("FLATPAK_OPEN_README", "Open Heroic and EmuDeck guide")}
+                  {t("FLATPAK_OPEN_README", "Open launcher setup guide")}
                 </ButtonItem>
               </div>
             </div>

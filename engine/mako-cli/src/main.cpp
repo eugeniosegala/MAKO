@@ -93,6 +93,8 @@ SUBCOMMAND OPTIONS:
 
     inspect-dll
         -d, --dll <PATH>                Path to Lossless.dll
+            --ls1 <METHOD>             Probe only ls1 or ls1-performance; emits JSON
+            --sharpness <FLOAT>        Selected LS1 sharpness from 0 to 1 (default 0.8)
 
     benchmark
         -t, --duration <SECONDS>        Benchmark duration in seconds
@@ -188,8 +190,10 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_inspect_dll(
             int argc, char** argv, const std::string& program) {
         inspect_dll::Options opts{};
-        const std::array<option, 2> GETOPT {{
+        const std::array<option, 4> GETOPT {{
             { "dll", required_argument, nullptr, 'd' },
+            { "ls1", required_argument, nullptr, 'l' },
+            { "sharpness", required_argument, nullptr, 's' },
             { nullptr, no_argument, nullptr, 0 }
         }};
         int option{0};
@@ -199,13 +203,27 @@ SUBCOMMAND OPTIONS:
                 case 'd':
                     opts.dll = optarg;
                     break;
+                case 'l':
+                    if (std::string_view(optarg) == "ls1")
+                        opts.ls1Mode = mako::backend::Ls1Mode::Quality;
+                    else if (std::string_view(optarg) == "ls1-performance")
+                        opts.ls1Mode = mako::backend::Ls1Mode::Performance;
+                    else {
+                        std::cerr << "error: --ls1 requires ls1 or ls1-performance\n";
+                        std::exit(EXIT_FAILURE);
+                    }
+                    break;
+                case 's':
+                    opts.sharpness = numericArgument<float>(optarg, "--sharpness");
+                    break;
                 case '?':
                 default:
                     usage(program);
                     std::exit(EXIT_FAILURE);
             }
         }
-        if (optind < argc || opts.dll.empty()) {
+        if (optind < argc || opts.dll.empty() ||
+                opts.sharpness < 0.0F || opts.sharpness > 1.0F) {
             usage(program);
             std::exit(EXIT_FAILURE);
         }

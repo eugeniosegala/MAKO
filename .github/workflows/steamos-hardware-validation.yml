@@ -99,11 +99,12 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Record selected MAKO Gym hardware coverage
-        run: >-
-          ./scripts/validate-gym-selection.sh
-          "$MAKO_GYM_SUITES"
-          "$MAKO_GYM_REASON"
-          engine/out/mako-gym-selection.txt
+        run: |
+          ./scripts/validate-gym-selection.sh \
+            "$MAKO_GYM_SUITES" "$MAKO_GYM_REASON" \
+            engine/out/mako-gym-selection.txt
+          selected="$(sed -n 's/^selected=//p' engine/out/mako-gym-selection.txt)"
+          echo "MAKO_GYM_SUITES=$selected" >> "$GITHUB_ENV"
 
       - name: Install locked Decky dependencies
         working-directory: plugin
@@ -281,6 +282,9 @@ jobs:
           run_packaged_suite proton-compatibility mako-gym-proton-compatibility \
             --runtime-tier extended --case-tier extended --minimum-runtimes 4
           run_packaged_suite runtime-overhead mako-gym-runtime-overhead
+          run_packaged_suite constraints mako-gym-constraints \
+            --cli "$matrix_prefix/bin/mako-cli" \
+            --affected-suites "$MAKO_GYM_SUITES" --require-complete
 
       - name: Deploy to the dedicated Decky test installation
         if: inputs.deploy_to_decky
@@ -312,6 +316,7 @@ jobs:
             engine/out/mako-gym-sustained-health
             engine/out/mako-gym-proton-e2e
             engine/out/mako-gym-proton-compatibility
+            engine/out/mako-gym-constraints
             plugin/out/*.zip
           if-no-files-found: warn
           retention-days: 14

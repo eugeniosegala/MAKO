@@ -25,6 +25,7 @@ suite_names=(
     sustained-health
     proton-e2e
     proton-compatibility
+    constraints
 )
 
 usage() {
@@ -37,8 +38,8 @@ Bridge options:
   --suite NAME     Select vulkan (default), quality, repeatability, performance,
                    spatial-performance, runtime-overhead, sync-validation, recovery,
                    external-recovery, gamescope-e2e, direct-desktop-e2e,
-                   sustained-health, proton-e2e, or proton-compatibility.
-  --all-suites     Run all fourteen suites sequentially with the forwarded Gym options.
+                   sustained-health, proton-e2e, proton-compatibility, or constraints.
+  --all-suites     Run all fifteen suites sequentially with the forwarded Gym options.
   --list-suites    Print the canonical bridge suite names without requiring Gym.
   -h, --help       Show this bridge help.
 
@@ -142,6 +143,7 @@ resolve_runner() {
         sustained-health) runner="$gym_repo/scripts/run-sustained-health.sh" ;;
         proton-e2e) runner="$gym_repo/scripts/run-proton-end-to-end.sh" ;;
         proton-compatibility) runner="$gym_repo/scripts/run-proton-compatibility-matrix.sh" ;;
+        constraints) runner="$gym_repo/scripts/run-resource-constraints.sh" ;;
         *) return 1 ;;
     esac
 }

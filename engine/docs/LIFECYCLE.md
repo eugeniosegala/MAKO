@@ -112,7 +112,7 @@ This table centralizes lifecycle timers. Frame-count gates are included because 
 | Efficiency retry | 60, 120, or 300 seconds according to failure severity | Make damaging efficiency experiments increasingly rare |
 | Adaptive collapse rescue | 1 second collapse measurement; 15-second rescue cooldown; 2 seconds healthy evidence clears failure state | Shed generated load after severe base/output collapse without repeatedly toggling it |
 | Conservative discontinuity recovery | 1 second recovered evidence; at most 5 seconds before resuming from zero generated load | Bound HDR or other conservative real-only recovery after a cadence discontinuity |
-| Generated-image drain | 250, 500, 1000, then 2000 ms | Back off acquisition pressure before a bounded probe |
+| Generated-image drain | 250, 500, 1000, 2000, 5000, 15000, then 30000 ms | Back off repeated acquisition pressure before a bounded probe; confirmed renewed native demand can re-arm one probe early |
 | Recovery success | 250 ms native-only stabilization, then three history frames | Re-enter interpolation without stale temporal history |
 | Pipeline busy | 250 ms uninterrupted busy state | Treat a single busy frame as harmless but reset history after sustained pressure |
 | Lower-present stall quarantine | 2, 10, 30, then 60 seconds; consecutive count clears after 30 seconds healthy | Keep generated delivery away from a repeatedly blocking lower presentation path |
@@ -215,10 +215,10 @@ Dynamic Cadence Recovery is an opt-in native-only probe with a configurable 0.1�
 MAKO uses a ladder rather than one global health timer:
 
 1. **Pre-admission:** remove synthetic outputs before backend work when headroom, policy, or nonblocking image acquisition says they cannot be delivered.
-2. **Single-frame guard:** one slow generated-image acquisition arms a zero-wait guard for the next present. A guard miss produces one native relief frame and refreshes history.
-3. **Native drain:** timeout, repeated slowness, severe acquisition, or budget exhaustion stops generated acquisition for 250, 500, 1000, then 2000 ms.
-4. **Bounded probe:** after drain, one generated image is tested within an 8–25 ms refresh-derived budget and any tighter user budget. Success still requires 250 ms real-only stabilization and three history frames.
-5. **Target-aware deferral:** if native cadence already reaches at least 95% of target for 200 ms, acquisition probes stay deferred; they resume only after cadence remains below 90% for 100 ms.
+2. **Single-frame guard:** one slow successful generated-image acquisition or isolated timeout below the slow-pressure threshold arms a zero-wait guard for the next present. A guard miss produces one native relief frame and refreshes history. Only a healthy unrestricted generated batch clears the pressure count.
+3. **Native drain:** a timeout reaching the slow-pressure threshold, repeated short timeout or slowness, severe acquisition, or budget exhaustion stops generated acquisition for 250, 500, 1000, 2000, 5000, 15000, then 30000 ms.
+4. **Bounded probe:** after drain, one generated image is tested within an 8–25 ms refresh-derived budget and any tighter user budget. A real-only policy frame leaves the probe pending without acquisition or a failure count. Success still requires 250 ms real-only stabilization and three history frames.
+5. **Target-aware deferral:** if native cadence already reaches at least 95% of target for 200 ms, acquisition probes stay deferred; they resume only after cadence remains below 90% for 100 ms. Qualification continues during retry backoff, allowing confirmed renewed demand to re-arm one probe early without clearing failures.
 6. **Backend recovery:** a 150 ms render-fence miss or backend failure switches to real frames while readiness is polled with zero-time waits. Recovery resets temporal history before generation resumes.
 7. **Lower-present quarantine:** a returned lower present slower than the larger of 50 ms or four refresh periods quarantines generation for 2, 10, 30, then 60 seconds.
 

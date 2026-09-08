@@ -1,27 +1,23 @@
-import type { ConfigurationData } from "../config/configSchema";
+import type { ConfigurationEditorProps } from "./settings/types";
 import type { RuntimeScalingUiState } from "../utils/runtimeScalingUtils";
 import t from "../i18n/i18n";
 import { FpsMultiplierControl } from "./FpsMultiplierControl";
 import { ScalingControl } from "./ScalingControl";
-import { PerformanceConfigurationGroup } from "./ConfigurationSectionGroups";
+import { PerformanceConfigurationGroup } from "./settings/PerformanceConfigurationGroup";
 import { FrameGenerationConfigurationSection } from "./ConfigurationSection";
 import { MakoSectionHeader } from "./MakoUi";
 
-interface FeatureSettingsProps {
-  config: ConfigurationData;
+interface FeatureSettingsProps extends ConfigurationEditorProps {
   disabled?: boolean;
   runtimeState: RuntimeScalingUiState;
-  onConfigChange: (
-    fieldName: keyof ConfigurationData,
-    value: boolean | number | string,
-  ) => Promise<void>;
-  onConfigUpdate: (changes: Partial<ConfigurationData>) => Promise<void>;
+  scalingModelCompatible?: boolean | null;
 }
 
 export function FeatureSettings({
   config,
   disabled = false,
   runtimeState,
+  scalingModelCompatible = null,
   onConfigChange,
   onConfigUpdate,
 }: FeatureSettingsProps) {
@@ -44,6 +40,16 @@ export function FeatureSettings({
         runtimeActivationSupported={runtimeState.scalingActivationSupported}
         runtimeInactiveReason={runtimeState.inactiveReason}
         runtimeFactorCeiling={runtimeState.nonSupersamplingFactorCeiling}
+        modelCompatible={scalingModelCompatible}
+        runtimeRequestedMethod={runtimeState.requestedMethod}
+        runtimeActiveMethod={
+          runtimeState.scalingActive ? runtimeState.activeMethod : null
+        }
+        runtimeMakoFallback={
+          runtimeState.scalingActive &&
+          runtimeState.activeMethod === "mako" &&
+          Boolean(runtimeState.fallbackReason)
+        }
         onConfigChange={onConfigChange}
       />
 

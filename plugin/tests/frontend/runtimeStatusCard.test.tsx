@@ -219,12 +219,17 @@ describe("authoritative live status", () => {
     ).toBe(false);
   });
 
-  test("states clearly when a running game is not using MAKO", () => {
+  test("explains that missing live status does not confirm MAKO is inactive", () => {
     window.SP_REACT = React;
     render(<RuntimeStatusCard runtimeState={EMPTY_RUNTIME_SCALING_UI_STATE} />);
 
     expect(screen.getByText("Waiting for MAKO")).toBeTruthy();
-    expect(screen.getByText(/running game is not using MAKO yet/)).toBeTruthy();
+    expect(
+      screen.getByText(/Live status is unavailable, but MAKO may still be active/),
+    ).toBeTruthy();
+    expect(
+      screen.getByText(/Check Frame Generation or Scaling manually/),
+    ).toBeTruthy();
   });
 
   test("states when scaling is unavailable for the running surface", () => {

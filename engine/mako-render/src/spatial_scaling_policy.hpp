@@ -366,6 +366,9 @@ namespace mako::layer {
     }
 
     struct SpatialScalingCreateDecision {
+        // Preserve the attempted graph for diagnostics when memory admission
+        // rejects scaling and the selected extent returns to native size.
+        std::optional<SpatialFramePipelinePlacement> memoryAdmissionPlacement;
         std::optional<SpatialScalingExtents> extents;
         std::optional<FixedSurfaceScalingContract> fixedContract;
         bool retainedPreviousFixedSource{false};
@@ -616,8 +619,9 @@ namespace mako::layer {
     /// extent. Bound their requested lower swapchain using a conservative
     /// fraction of the largest device-local heap so a high source resolution
     /// cannot multiply into a pathological allocation. The fixed 4K floor
-    /// retains the baseline display tier on unified-memory devices whose
-    /// driver exposes only a small device-local aperture. The 768-byte ratio
+    /// is a compatibility allowance for unified-memory devices whose
+    /// driver exposes only a small device-local aperture, not a device-type
+    /// classifier or a guarantee that 4K fits. The 768-byte ratio
     /// reserves one third of the heap against a 256-byte-per-presentation-
     /// pixel combined active/retired spatial + frame-generation envelope.
     /// When VK_EXT_memory_budget is available, additionally require the
@@ -641,7 +645,11 @@ namespace mako::layer {
     inline constexpr VkDeviceSize
         variablePresentationFrameTransportBytesPerPixel = 8;
     inline constexpr VkDeviceSize
-        variablePresentationBackendSourceBytesPerPixel = 40;
+        minimumVariablePresentationBackendBytesPerPixel = 40;
+    inline constexpr VkDeviceSize
+        variablePresentationBackendBaseBytesPerPixel = 16;
+    inline constexpr VkDeviceSize
+        variablePresentationBackendOutputBytesPerPixel = 8;
     inline constexpr VkDeviceSize variablePresentationFixedAllocationBytes =
         VkDeviceSize{16} * 1024 * 1024;
     inline constexpr VkDeviceSize minimumVariablePresentationLiveReserve =
@@ -663,6 +671,21 @@ namespace mako::layer {
         VkDeviceSize presentationBytesPerPixel{0};
         std::optional<uint64_t> livePixelBudget;
         uint64_t effectivePixelBudget{0};
+    };
+
+    /// FG resources follow the presentation below the placement threshold,
+    /// and the source above it. These limits are not interchangeable: a
+    /// smaller output can switch to the more expensive pre-FG graph.
+    struct VariablePresentationPixelBudgets {
+        uint64_t preFrameGeneration{0};
+        uint64_t postFrameGeneration{0};
+        uint64_t sourceGrowth{0};
+
+        [[nodiscard]] constexpr uint64_t forPresentation(
+                const uint64_t pixels) const noexcept {
+            return pixels <= preFrameGenerationPresentationPixelBudget
+                ? preFrameGeneration : postFrameGeneration;
+        }
     };
 
     [[nodiscard]] constexpr VkDeviceSize saturatingDeviceSizeMultiply(
@@ -766,30 +789,51 @@ namespace mako::layer {
     /// Convert live heap headroom into a presentation-pixel limit using the
     /// resources the replacement will actually allocate. Source-sized costs
     /// are paid once, while presentation-sized costs scale with the candidate
-    /// lower WSI extent. Constants intentionally round above the measured FP16
-    /// LS1/FG allocations; the separate non-MAKO reserve remains untouched.
+    /// lower WSI extent. Pre-FG interpolation and transport instead follow
+    /// the presentation. The SDR image formats are independent of shader
+    /// arithmetic precision; reserve for Quality/full Flow even when a lighter
+    /// model is selected so private live edits retain the same envelope.
     [[nodiscard]] constexpr VariablePresentationResourceAdmission
     variablePresentationResourceAdmission(
             const VariablePresentationMemoryAdmission& memory,
             const VkExtent2D sourceExtent,
             const VkFormat swapchainFormat,
             const uint32_t swapchainImageCount,
-            const size_t generatedFrameCapacity) noexcept {
+            const size_t generatedFrameCapacity,
+            const SpatialFramePipelinePlacement placement =
+                SpatialFramePipelinePlacement::PostFrameGeneration) noexcept {
         const VkDeviceSize sourcePixels = saturatingDeviceSizeMultiply(
             sourceExtent.width, sourceExtent.height
         );
         const VkDeviceSize transportImageCount = saturatingDeviceSizeAdd(
             2, generatedFrameCapacity
         );
-        const VkDeviceSize sourceBytesPerPixel = saturatingDeviceSizeAdd(
+        // The SDR Quality shaderchains allocate approximately 13.25 shared
+        // bytes plus 6.96 bytes per generated output per full-Flow pixel.
+        // Round these up to 16 + 8/output and keep the established minimum
+        // 40-byte allowance. Four outputs exceed that old flat allowance.
+        const VkDeviceSize backendBytesPerPixel = std::max(
+            minimumVariablePresentationBackendBytesPerPixel,
             saturatingDeviceSizeAdd(
-                variablePresentationSpatialSourceBytesPerPixel,
-                variablePresentationBackendSourceBytesPerPixel
-            ),
+                variablePresentationBackendBaseBytesPerPixel,
+                saturatingDeviceSizeMultiply(
+                    variablePresentationBackendOutputBytesPerPixel,
+                    generatedFrameCapacity
+                )
+            )
+        );
+        const VkDeviceSize generationBytesPerPixel = saturatingDeviceSizeAdd(
+            backendBytesPerPixel,
             saturatingDeviceSizeMultiply(
                 variablePresentationFrameTransportBytesPerPixel,
                 transportImageCount
             )
+        );
+        const bool preFrameGeneration = placement ==
+            SpatialFramePipelinePlacement::PreFrameGeneration;
+        const VkDeviceSize sourceBytesPerPixel = saturatingDeviceSizeAdd(
+            variablePresentationSpatialSourceBytesPerPixel,
+            preFrameGeneration ? 0 : generationBytesPerPixel
         );
         const VkDeviceSize fixedSourceBytes = saturatingDeviceSizeAdd(
             variablePresentationFixedAllocationBytes,
@@ -799,7 +843,10 @@ namespace mako::layer {
         );
         const VkDeviceSize presentationBytesPerPixel =
             saturatingDeviceSizeAdd(
-                variablePresentationSpatialOutputBytesPerPixel,
+                saturatingDeviceSizeAdd(
+                    variablePresentationSpatialOutputBytesPerPixel,
+                    preFrameGeneration ? generationBytesPerPixel : 0
+                ),
                 saturatingDeviceSizeMultiply(
                     variablePresentationSwapchainBytesPerPixel(
                         swapchainFormat
@@ -977,8 +1024,8 @@ namespace mako::layer {
                 previousVariableExtents = std::nullopt,
             const std::optional<FixedSurfaceScalingContract>&
                 fixedContract = std::nullopt,
-            const std::optional<uint64_t>
-                variablePresentationPixels = std::nullopt,
+            const std::optional<VariablePresentationPixelBudgets>&
+                variablePresentationBudgets = std::nullopt,
             const std::optional<VkExtent2D>&
                 gamescopePresentationTarget = std::nullopt,
             const bool gamescopePresentationTargetRequired = false,
@@ -1159,11 +1206,15 @@ namespace mako::layer {
             return decision;
         }
         const VkExtent2D requestedPresentation = presentation;
+        decision.memoryAdmissionPlacement = selectSpatialFramePipelinePlacement(
+            requestedExtent, presentation
+        );
         const uint64_t presentationPixels =
             static_cast<uint64_t>(presentation.width) *
             static_cast<uint64_t>(presentation.height);
-        if (variablePresentationPixels &&
-                presentationPixels > *variablePresentationPixels) {
+        if (variablePresentationBudgets &&
+                presentationPixels > variablePresentationBudgets->
+                    forPresentation(presentationPixels)) {
             // VK_EXT_memory_budget can lag immediately released WSI and
             // private allocations. When a split extent was already running
             // on this surface, it is safe to retain that proven envelope or
@@ -1174,14 +1225,17 @@ namespace mako::layer {
             // admission remains independent of launch history.
             const bool liveBudgetTightenedStaticCeiling =
                 variablePresentationStaticPixels &&
-                *variablePresentationPixels <
+                variablePresentationBudgets->
+                    forPresentation(presentationPixels) <
                     *variablePresentationStaticPixels;
             // A deliberate same-source factor downshift may be followed by
             // an immediate return to the larger extent which was already
             // allocated successfully on this surface. Reuse that one-step
             // rollback proof before consulting the smaller current extent;
             // it is cleared after the next successful upshift and can never
-            // enlarge the proven source or presentation envelope.
+            // enlarge the proven source or presentation envelope. Crossing
+            // the FG placement threshold still needs fresh admission: a
+            // smaller output can allocate larger interpolation images.
             if (liveBudgetTightenedStaticCeiling &&
                     variableSurfaceRollbackExtents &&
                     sameExtent(
@@ -1222,7 +1276,13 @@ namespace mako::layer {
                         retainedPresentation.height &= ~uint32_t{1};
                     if (retainedPresentation.width > requestedExtent.width &&
                             retainedPresentation.height >
-                                requestedExtent.height) {
+                                requestedExtent.height &&
+                            selectSpatialFramePipelinePlacement(
+                                requestedExtent, retainedPresentation
+                            ) == selectSpatialFramePipelinePlacement(
+                                variableSurfaceRollbackExtents->source,
+                                variableSurfaceRollbackExtents->presentation
+                            )) {
                         presentation = retainedPresentation;
                         decision.reusedPreviousPresentationBudget = true;
                         decision.reusedRollbackPresentationBudget = true;
@@ -1261,12 +1321,14 @@ namespace mako::layer {
             // fits the driver's remaining live headroom. Charging the growth
             // at the same conservative bytes-per-pixel rate leaves the full
             // non-MAKO reserve untouched and never refunds unattributed heap
-            // usage. Cold creates and any presentation growth still require
-            // ordinary admission.
+            // usage. The output-only pixel limit is not a source-growth
+            // allowance: its bytes-per-pixel cost is different. Cold creates
+            // and any presentation growth still require ordinary admission.
             const bool sourceTransitionFitsLiveHeadroom =
                 sourceDidNotGrow ||
                 (sourceFitsPreviousPresentation &&
-                    additionalSourcePixels <= *variablePresentationPixels);
+                    additionalSourcePixels <=
+                        variablePresentationBudgets->sourceGrowth);
             if (!decision.reusedPreviousPresentationBudget &&
                     liveBudgetTightenedStaticCeiling &&
                     previousVariableExtents &&
@@ -1305,7 +1367,13 @@ namespace mako::layer {
                         retainedPresentation.height &= ~uint32_t{1};
                     if (retainedPresentation.width > requestedExtent.width &&
                             retainedPresentation.height >
-                                requestedExtent.height) {
+                                requestedExtent.height &&
+                            selectSpatialFramePipelinePlacement(
+                                requestedExtent, retainedPresentation
+                            ) == selectSpatialFramePipelinePlacement(
+                                previousVariableExtents->source,
+                                previousVariableExtents->presentation
+                            )) {
                         presentation = retainedPresentation;
                         decision.reusedPreviousPresentationBudget = true;
                         decision.reusedPreviousDownshiftEnvelope =
@@ -1362,7 +1430,8 @@ namespace mako::layer {
                         static_cast<uint64_t>(baselineFit.height);
                     if (baselineFit.width > requestedExtent.width &&
                             baselineFit.height > requestedExtent.height &&
-                            baselinePixels <= *variablePresentationPixels) {
+                            baselinePixels <= variablePresentationBudgets->
+                                forPresentation(baselinePixels)) {
                         presentation = baselineFit;
                         decision.usedBaselinePresentationBudget = true;
                         decision.memoryBudgetConstrained = !sameExtent(
@@ -1383,6 +1452,9 @@ namespace mako::layer {
             .source = requestedExtent,
             .presentation = presentation,
         };
+        decision.memoryAdmissionPlacement = selectSpatialFramePipelinePlacement(
+            requestedExtent, presentation
+        );
         return decision;
     }
 
@@ -1397,8 +1469,8 @@ namespace mako::layer {
                 previousVariableExtents = std::nullopt,
             const std::optional<FixedSurfaceScalingContract>&
                 fixedContract = std::nullopt,
-            const std::optional<uint64_t>
-                variablePresentationPixels = std::nullopt,
+            const std::optional<VariablePresentationPixelBudgets>&
+                variablePresentationBudgets = std::nullopt,
             const std::optional<VkExtent2D>&
                 gamescopePresentationTarget = std::nullopt,
             const bool gamescopePresentationTargetRequired = false,
@@ -1418,7 +1490,7 @@ namespace mako::layer {
             requestedExtent,
             previousVariableExtents,
             fixedContract,
-            variablePresentationPixels,
+            variablePresentationBudgets,
             gamescopePresentationTarget,
             gamescopePresentationTargetRequired,
             variablePresentationStaticPixels,

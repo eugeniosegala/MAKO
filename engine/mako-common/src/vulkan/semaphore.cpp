@@ -2,19 +2,21 @@
 
 #include "mako-common/vulkan/semaphore.hpp"
 #include "mako-common/helpers/errors.hpp"
+#include "mako-common/helpers/file_descriptors.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
 
 #include <optional>
 
 #include <vulkan/vulkan_core.h>
-#include <unistd.h>
 
 using namespace vk;
 
 namespace {
     /// create a semaphore
     ls::owned_ptr<VkSemaphore> createSemaphore(const vk::Vulkan& vk, std::optional<int> fd) {
+        const int incomingFd = fd.value_or(-1);
+        ls::FileDescriptorScope imported{{&incomingFd, 1}};
         VkSemaphore handle{};
 
         const VkExportSemaphoreCreateInfo exportInfo{
@@ -26,11 +28,8 @@ namespace {
             .pNext = fd.has_value() ? &exportInfo : nullptr
         };
         auto res = vk.df().CreateSemaphore(vk.dev(), &semaphoreInfo, VK_NULL_HANDLE, &handle);
-        if (res != VK_SUCCESS) {
-            if (fd)
-                static_cast<void>(::close(*fd));
+        if (res != VK_SUCCESS)
             throw ls::vulkan_error(res, "vkCreateSemaphore() failed");
-        }
 
         auto semaphore = ls::owned_ptr<VkSemaphore>(
             new VkSemaphore(handle),
@@ -48,10 +47,9 @@ namespace {
                 .fd = *fd // closes the fd
             };
             res = vk.df().ImportSemaphoreFdKHR(vk.dev(), &importInfo);
-            if (res != VK_SUCCESS) {
-                static_cast<void>(::close(*fd));
+            if (res != VK_SUCCESS)
                 throw ls::vulkan_error(res, "vkImportSemaphoreFdKHR() failed");
-            }
+            imported.release();
         }
 
         return semaphore;

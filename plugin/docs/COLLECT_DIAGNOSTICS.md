@@ -22,16 +22,16 @@ Temporarily replace the game's normal **Steam Properties > Launch Options** with
 MAKO_PRESENT_DIAGNOSTICS=1 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25 /home/deck/.local/bin/mako-run %command%
 ```
 
-### Heroic game
+### Heroic or Lutris game
 
-Keep the game's normal **Wrapper** and **Arguments** fields unchanged. In that game's Heroic settings, add these two environment variables:
+Keep the normal per-game wrapper from the [launcher setup guide](LAUNCHERS.md). Add these two environment variables in Heroic's game settings or Lutris's **Configure > System options > Environment variables**:
 
 ```text
 MAKO_PRESENT_DIAGNOSTICS=1
 MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS=25
 ```
 
-Do not add `%command%` to Heroic.
+Keep Heroic's **Wrapper** and **Arguments**, or Lutris's **Command prefix**, unchanged. Do not add `%command%` in either launcher.
 
 ### EmuDeck Flatpak shortcut
 
@@ -57,12 +57,14 @@ If the emulator is a native application or AppImage instead of a Flatpak, use th
 
 ## 2. Reproduce the problem
 
-1. Start the affected game using the same Steam or Heroic entry that normally shows the problem.
+1. Start the affected game using the same Steam, Heroic, or Lutris entry that normally shows the problem.
 2. Reproduce the problem. Note what you did and, if possible, the approximate time it happened.
 3. Fully exit the game. Do not merely suspend it.
 4. Wait a few seconds for the game and emulator processes to close.
 
 Each diagnostics-enabled launch starts a fresh private session log. MAKO keeps the current session and four earlier sessions, replacing the oldest when a sixth starts. Fully exit one game before starting another so each log represents one run.
+
+Rotation checks every history slot first and skips private capture when it encounters a symlink, directory, pipe, or file owned by another user. Rotation or file-creation failures leave the game using its original stderr destination. Retention limits the number of sessions, not their byte size: keep diagnostics enabled only while reproducing the problem. After closing the game, you can delete these five named log files without removing profiles or `runtime-state/`; ordinary Renderer uninstall preserves them. Decky Loader owns the plugin service log, and Steam owns its shared console logs; MAKO does not rotate or delete those logs.
 
 ## 3. Create the Desktop report
 
@@ -104,7 +106,7 @@ After creating the report:
     /home/deck/.local/bin/mako-run %command%
     ```
 
-- **Heroic:** remove `MAKO_PRESENT_DIAGNOSTICS` and `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS` from the game's environment. Keep the normal Wrapper and Arguments.
+- **Heroic or Lutris:** remove `MAKO_PRESENT_DIAGNOSTICS` and `MAKO_PRESENT_DIAGNOSTICS_THRESHOLD_MS` from the game's environment. Keep the normal per-game Wrapper or Command prefix.
 - **EmuDeck Flatpak:** restore the exact original **Target** and **Launch Options** saved before testing.
 
 All builds keep diagnostics off after these temporary settings are removed. Local development ZIPs and direct `dev:*` deployments also require explicit opt-in so synchronous log traffic cannot distort performance testing.

@@ -30,13 +30,15 @@ Published archives target x86_64 Linux hosts and include Vulkan layers for both 
 /home/deck/.local/bin/mako-run %command%
 ```
 
-See the <a href="../README.md#install-and-use" target="_blank" rel="noopener noreferrer">main installation guide</a> for Decky, Heroic, and EmuDeck setup.
+See the <a href="../README.md#install-and-use" target="_blank" rel="noopener noreferrer">main installation guide</a> for Decky, Heroic, Lutris, and EmuDeck setup.
 
 ### Direct Linux installation
 
 For frame generation or LS1 scaling, first install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO Scaler works without `Lossless.dll`.
 
 Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.1.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. It verifies the archive, preserves profiles, opens **MAKO Renderer Configuration**, and shows the Steam/Proton launch option. Run the installer again to update; use **Uninstall MAKO Renderer** to remove the shared native installation. The included `README.txt` contains offline instructions.
+
+Close games using MAKO before updating. The installer validates and stages the complete payload before replacing files and restores the previous installation if a later step fails. It reports permission or storage failures without requesting root access. If restoration also fails, it retains recovery backups beside the affected files and reports their locations. Profiles and diagnostics remain untouched unless you explicitly choose to remove configuration during uninstall.
 
 For a manual installation, extract the archive into your user-local prefix:
 
@@ -79,7 +81,7 @@ For a direct desktop command, pass the executable and arguments to the same laun
 
 MAKO operates on Vulkan: native Vulkan and Proton games through DXVK or VKD3D-Proton are supported, while OpenGL requires the optional Zink launcher setting. If no profile matches the game process, MAKO remains dormant and presentation stays native.
 
-Direct desktop scaling is supported, but it has no authoritative Gamescope output target. MAKO applies the configured factor within the surface limits; the desktop compositor may add another scaling step, and an unsupported recreation falls back to native presentation.
+Direct desktop scaling is supported, but Gamescope is recommended and can also run nested in Desktop Mode. MAKO reads the game's source image size from Vulkan. Without Gamescope, it may lack an authoritative display target, so the desktop compositor may add another scaling step or make MAKO fall back safely to native presentation after a recreation. On a variable desktop surface, lower the resolution in the game first: raising Scale Factor enlarges MAKO's output rather than reducing the game's source size. Frame Generation remains supported. See <a href="docs/CONFIGURATION.md#desktop-scaling-and-resolution" target="_blank" rel="noopener noreferrer">desktop scaling and resolution</a> for setup and limitations.
 
 Want to use Frame Generation or scaling with videos? See <a href="docs/VIDEOS_WITH_MAKO.md" target="_blank" rel="noopener noreferrer">Videos with MAKO</a>.
 
@@ -133,6 +135,21 @@ Build local host archives and Flatpak extensions with:
 ```
 
 Artifacts are written under `engine/out/`. MAKO Decky packages this engine automatically through `pnpm run package:local-engine` in the sibling `plugin/` directory.
+
+### Renderer source layout
+
+`mako-render/src/entrypoint.cpp` owns Vulkan interception and `instance.*` owns process/device state and context routing. Swapchain implementation files share one `Swapchain` class and remain compiled into both isolated layer roles through the same `LAYER_SOURCES` list:
+
+| File under `mako-render/src/swapchain/` | Responsibility |
+| --- | --- |
+| `swapchain.hpp` | Context state, lifetime order, and method declarations |
+| `create.cpp`, `create_policy.hpp` | Initial construction and application swapchain provisioning |
+| `resources.cpp` | Private FG/scaler resources, replacement preparation and commit, and HDR reclassification |
+| `profile.cpp` | Live profile application, scheduler resets, refresh feedback, and guarded recreation requests |
+| `present.cpp`, `retirement.hpp` | Presentation execution and retirement proof |
+| `status.cpp` | Assemble requested/applied live status from current state |
+
+The pure scheduling, presentation, scaling, and transition policies retain their existing focused headers and portable tests. Shader algorithms and generated payloads stay with their generators. Keep new work in its existing owner; splitting a translation unit must not introduce another state store, change destruction order, or move work across present and recreation boundaries.
 
 ## More documentation
 
