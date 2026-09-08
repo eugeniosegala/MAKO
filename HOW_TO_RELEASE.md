@@ -7,7 +7,7 @@ MAKO Renderer and MAKO Decky normally ship as a matched `X.Y.Z` pair. Release fr
 | Stage | Command | Result |
 | --- | --- | --- |
 | Focused local iteration | The `dev:*` commands in [MAKO Decky packaging](plugin/docs/PACKAGING.md) | Updates the local development installation; no package or release |
-| Complete tester package | `pnpm --dir plugin run package:local-engine` | Self-contained ZIP for trusted testing; no tag or release |
+| Complete tester package | `MAKO_PORTABLE_PACKAGE=1 pnpm --dir plugin run package:local-engine` | Self-contained ZIP using the release native builder for trusted testing; no tag or release |
 | Release-candidate gate | `./scripts/run-steamos-hardware-validation.sh --gym-suite <affected-suite> --gym-reason '<why>' --deploy-to-decky` | Clean SteamOS/AMD rebuild, explicitly selected MAKO Gym evidence, retained validation ZIP/evidence that is not promoted to the GitHub release, and optional deployment |
 | Publication | `./scripts/publish-release.sh X.Y.Z` | Publishes Renderer, records immutable checksums, then publishes Decky |
 | Public-asset check | Download the released Decky ZIP and select **Install MAKO Renderer** | Verifies the actual public artifact and installation path |
@@ -22,7 +22,17 @@ Fast native-only packages and direct deployments are intentionally incomplete an
 - Prepare the dedicated SteamOS/AMD host described in [Testing](TESTING.md). The launcher creates a disposable one-job runner; do not leave a persistent public-repository runner online.
 - Keep a clean private `MAKO-Gym` checkout beside MAKO. Its `./scripts/check.sh` and contract version must pass before runner registration.
 
-Published host archives must remain compatible with Qt 6.4. Linux hosts with Qt 6.2–6.4 need no container; a complete release from a non-Linux host needs Docker because Flatpak packaging uses its Linux builder. On a rolling Linux host with newer Qt, set `MAKO_PORTABLE_PACKAGE=1` to build against the Ubuntu 22.04 Qt 6.2 baseline.
+Published host archives must remain compatible with Qt 6.4. Publication always selects the portable native builder in `engine/scripts/package-local.sh`, matching the SteamOS release gate: Ubuntu 22.04, Clang 14, Qt 6.2, and Vulkan headers 1.4.328. Docker or Podman is required for native publication on Linux as well as other hosts. Flatpak extensions retain their separate runtime-specific SDKs and verification.
+
+## Keep tester and release builds aligned
+
+Source identity alone is insufficient: Vulkan extension macros can change compiled presentation handling. In 3.2.0, older native build headers omitted `VkPresentId2KHR` support that was present in the earlier tester binary. The 3.2.1 hotfix restored the tester's native build setup; the exact cause of every reported game failure was not confirmed.
+
+- Build complete tester ZIPs with `MAKO_PORTABLE_PACKAGE=1`. If the builder or SDK changes, move the matching cached native archive out of `engine/out/` before rebuilding; local Decky cache keys track source identity, not the host toolchain. Publication and the hardware gate already rebuild native archives independently.
+- Keep the native package header check enabled for both 64-bit and 32-bit builds. `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON` requires headers 1.4.328 or newer with `VK_KHR_present_id2`, even when tests are skipped. It checks build-time declarations and does not raise the game's Vulkan runtime requirement. Do not turn required compatibility support into an optional compile-time path without an equivalent fallback or a package failure.
+- Retain the exact tester ZIP, its SHA-256, embedded Renderer hashes and binary fingerprint, source commit and dirty state, build log, compiler/Qt/Vulkan header versions, and Flatpak SDK/runtime identities. Record the devices, driver, Proton version, games, and results against that artifact. Do not identify tested content by filename or source commit alone.
+- Treat any builder, header, compiler, build-option, or runtime SDK change as a new candidate requiring affected compatibility coverage. The container recipe fixes the baseline but still receives distribution package updates; it does not guarantee reproducible bytes. Record the resolved versions from each build.
+- After publication, download and verify the actual public assets, check that Decky's embedded Renderer matches the standalone archive, and complete the public installation and affected-game checks below. A successful build or checksum check does not establish game compatibility.
 
 ## Prepare the release
 
@@ -72,7 +82,7 @@ Do not manually edit generated version links or pins.
 
 Only when the maintainer explicitly requests skipping automated validation, run the publisher with `MAKO_RELEASE_SKIP_TESTS=1`. This omits Renderer CTest/launcher tests and Decky suites, and adds `[skip ci]` to release-owned commits. Build, ABI, archive-layout, package-contract, and checksum verification still run. The hardware workflow remains a separate action and is omitted only when the maintainer also requests that exception. Record the skipped validation in the release evidence; this path does not establish game or hardware validation.
 
-To reproduce a tester's native build environment, use the same packaging path. `MAKO_PORTABLE_PACKAGE=1` selects the Ubuntu 22.04 builder with Clang 14, Qt 6.2, and Vulkan headers 1.4.328. A new release still has new version metadata and binaries; matching runtime source and toolchain is not a claim of byte-identical artifacts. `[skip ci]` also suppresses automatic Pages deployment, which can be dispatched separately when a website refresh is required.
+The publisher still uses the mandatory portable native builder and header checks on this path. Match the tester evidence as described above; a new release has new version metadata and binaries, so matching runtime source and toolchain is not a claim of byte-identical artifacts. `[skip ci]` also suppresses automatic Pages deployment, which can be dispatched separately when a website refresh is required.
 
 ## Resume an interrupted release
 
@@ -90,3 +100,5 @@ Maintain **Renderer → pin → Decky**. Never move an existing tag or replace a
 ## Verify the public package
 
 After the command reports success, confirm the Decky release is **Latest**, download its published ZIP rather than the retained candidate, install it on a test SteamOS device, and select **Install MAKO Renderer**. This final check validates the public download and normal user-facing installation path.
+
+Verify the downloaded host and Flatpak archives against the checksums pinned in `plugin/package.json`, verify the ZIP integrity and embedded payload hashes, and confirm the installed Renderer reports the expected build fingerprint. Close games before updating the Renderer. For a launch-compatibility hotfix, repeat the affected game launches and retain the diagnostics; include 64-bit/32-bit and native/Flatpak paths when affected. Record unavailable rows explicitly. Keep the prior working artifacts for comparison; never replace a published asset to correct a mismatch.

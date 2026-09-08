@@ -35,6 +35,35 @@ endif()
 if(MAKO_BUILD_VK_LAYER)
     find_package(Threads REQUIRED)
 
+    if(MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS)
+        # Run for each architecture even when tests are disabled. Compile the
+        # actual filtering header with this build's compiler/include flags so
+        # an older SDK cannot silently remove required presentation handling.
+        include(CheckCXXSourceCompiles)
+        function(mako_check_native_package_headers)
+            set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+            unset(MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED CACHE)
+            check_cxx_source_compiles("
+                #include \"${CMAKE_CURRENT_SOURCE_DIR}/src/pnext_chain.hpp\"
+                #ifndef VK_KHR_present_id2
+                #error Native packages require VK_KHR_present_id2
+                #endif
+                static_assert(VK_HEADER_VERSION_COMPLETE >=
+                    VK_MAKE_API_VERSION(0, 1, 4, 328));
+                static_assert(sizeof(VkPresentId2KHR) > 0);
+                int main() { return 0; }
+            " MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED)
+            if(NOT MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED)
+                message(FATAL_ERROR
+                    "Native MAKO Renderer packages require Vulkan headers "
+                    "1.4.328 or newer with VK_KHR_present_id2. Use "
+                    "MAKO_PORTABLE_PACKAGE=1 with scripts/package-local.sh; "
+                    "do not bypass this check. See the CMake compile log.")
+            endif()
+        endfunction()
+        mako_check_native_package_headers()
+    endif()
+
     add_library(mako-color STATIC
         "src/color_pipeline.cpp")
     target_include_directories(mako-color

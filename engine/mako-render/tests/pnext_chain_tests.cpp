@@ -16,6 +16,55 @@ namespace {
         std::exit(1);
     }
 
+#if defined(VK_KHR_present_id2)
+    void testPresentId2Prefix() {
+        constexpr uint64_t ids[]{0x123456789abcdef0ULL};
+        constexpr VkPresentModeKHR modes[]{VK_PRESENT_MODE_FIFO_KHR};
+        const VkSwapchainPresentFenceInfoEXT fence{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_FENCE_INFO_EXT,
+        };
+        const VkPresentRegionsKHR regions{
+            .sType = VK_STRUCTURE_TYPE_PRESENT_REGIONS_KHR,
+            .pNext = &fence,
+        };
+        const VkSwapchainPresentModeInfoEXT mode{
+            .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_PRESENT_MODE_INFO_EXT,
+            .pNext = &regions,
+            .swapchainCount = 1,
+            .pPresentModes = modes,
+        };
+        const VkPresentId2KHR id{
+            .sType = VK_STRUCTURE_TYPE_PRESENT_ID_2_KHR,
+            .pNext = &mode,
+            .swapchainCount = 1,
+            .pPresentIds = ids,
+        };
+        for (const bool removeMode : {false, true}) {
+            const FilteredPresentPNextChain filtered(&id, removeMode, true);
+            expect(filtered.valid(), "present ID2 prefix was rejected");
+            const auto* copied = static_cast<const VkPresentId2KHR*>(
+                filtered.head());
+            expect(copied != &id && copied->sType == id.sType &&
+                    copied->swapchainCount == 1 && copied->pPresentIds == ids,
+                "present ID2 filtering lost its count or borrowed IDs");
+            const void* tail = copied->pNext;
+            if (!removeMode) {
+                const auto* keptMode = static_cast<
+                    const VkSwapchainPresentModeInfoEXT*>(tail);
+                expect(keptMode != &mode && keptMode->sType == mode.sType &&
+                        keptMode->swapchainCount == 1 &&
+                        keptMode->pPresentModes == modes,
+                    "present ID2 filtering lost the retained mode");
+                tail = keptMode->pNext;
+            }
+            expect(tail == &fence && id.pNext == &mode &&
+                    mode.pNext == &regions && regions.pNext == &fence &&
+                    ids[0] == 0x123456789abcdef0ULL,
+                "present ID2 filtering changed caller data or the fence suffix");
+        }
+    }
+#endif
+
     void testPresentTimingPrefix() {
         // Issue #48: vkd3d-proton prepends EXT timing ahead of the present ID,
         // maintenance1 mode override and fence. Keep borrowed payloads opaque:
@@ -135,6 +184,9 @@ namespace {
 }
 
 int main() {
+#if defined(VK_KHR_present_id2)
+    testPresentId2Prefix();
+#endif
     testPresentTimingPrefix();
     const VkBaseInStructure tail{
         .sType = VK_STRUCTURE_TYPE_APPLICATION_INFO,

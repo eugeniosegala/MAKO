@@ -264,6 +264,7 @@ cmake -S "$repo_root" -B "$build64_dir" -G Ninja \
     -DCMAKE_CXX_COMPILER=clang++ \
     -DCMAKE_INSTALL_LIBDIR=lib \
     -DBUILD_TESTING="$build_testing" \
+    -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON \
     -DMAKO_BUILD_VK_LAYER=ON \
     -DMAKO_BUILD_UI=ON \
     -DMAKO_BUILD_CLI=ON \
@@ -294,6 +295,7 @@ if [[ "$build_32_bit" == true ]]; then
         -DCMAKE_SHARED_LINKER_FLAGS=-m32 \
         -DCMAKE_INSTALL_LIBDIR=lib32 \
         -DBUILD_TESTING=OFF \
+        -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON \
         -DMAKO_BUILD_VK_LAYER=ON \
         -DMAKO_BUILD_UI=OFF \
         -DMAKO_BUILD_CLI=OFF \

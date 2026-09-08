@@ -178,6 +178,8 @@ Qt is used only by the optional `mako-ui`; the Vulkan layer, backend, and CLI do
 
 Published host archives must remain runnable with Ubuntu 24.04's Qt 6.4. The ABI checks in `engine/scripts/package-local.sh` reject Qt 6.5-or-newer symbols and the Qt 6.8 `libQt6QmlMeta` dependency. On hosts with newer Qt, use `MAKO_PORTABLE_PACKAGE=1`; the portable Ubuntu 22.04 builder links against Qt 6.2 and produces an archive that also runs with newer compatible Qt 6 releases. Do not raise the CMake minimum or relax the package ABI guard without updating the build documentation and testing the oldest supported runtime.
 
+Native publication always selects that portable builder, matching the SteamOS release gate. Host packaging requires Vulkan headers 1.4.328 or newer with `VK_KHR_present_id2` for both architectures, independently of test selection; direct development and Flatpak builds retain their separate SDK contracts. Follow [tester/release build alignment](HOW_TO_RELEASE.md#keep-tester-and-release-builds-aligned): retain artifact hashes and resolved toolchain identities, invalidate stale native package caches when the builder changes, and verify the public asset rather than assuming identical source means identical compiled support.
+
 ## Packaging, deployment, and release boundaries
 
 Local packaging does not publish. Direct development deployment does mutate an installed Decky test environment, and engine replacement requires games using the layer to be closed. Run deployment/reload actions only when the task calls for changing that installed environment.
