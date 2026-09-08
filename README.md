@@ -101,12 +101,10 @@ MAKO Decky provides a per-profile **Gamescope WSI** option and host-installed Ma
 
 <a id="heroic"></a> <a id="heroic-and-other-flatpak-applications"></a> <a id="emudeck"></a> <a id="manually-added-flatpak-shortcuts"></a>
 
-| Launcher | Quick setup guide |
-| --- | --- |
-| **Heroic** | [Per-game Wrapper setup](plugin/docs/LAUNCHERS.md#heroic) |
-| **Lutris** | [Per-game Command prefix, with Flatpak preparation when needed](plugin/docs/LAUNCHERS.md#lutris) |
-| **EmuDeck** | [Emulator preparation and Steam shortcuts](plugin/docs/LAUNCHERS.md#emudeck) |
-| **Other Flatpak apps** | [Manually added Steam shortcuts](plugin/docs/LAUNCHERS.md#manually-added-flatpak-shortcuts) |
+- [Heroic](plugin/docs/LAUNCHERS.md#heroic)
+- [Lutris](plugin/docs/LAUNCHERS.md#lutris)
+- [EmuDeck](plugin/docs/LAUNCHERS.md#emudeck)
+- [Other Flatpak apps](plugin/docs/LAUNCHERS.md#manually-added-flatpak-shortcuts)
 
 For a step-by-step guide that creates a shareable report on the Desktop, see <a href="plugin/docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect MAKO Decky Diagnostics</a>.
 
