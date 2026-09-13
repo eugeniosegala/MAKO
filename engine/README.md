@@ -57,25 +57,54 @@ For Flatpak games or emulators, install the matching MAKO Vulkan runtime extensi
 
 ## Usage
 
+**A standalone native or Proton game needs a MAKO launch command as well as a matching profile.** Installing MAKO Renderer or opening its configuration window does not enable it for every game. Complete both steps below, then restart the game. You can close the configuration window after editing; it does not need to stay open during play.
+
+| How the game runs | How to activate MAKO |
+| --- | --- |
+| Native Steam or Proton, with standalone MAKO Renderer | Add `~/.local/bin/mako-launch %command%` to that game's Steam Launch Options. |
+| Native desktop game, emulator, or launcher | Start the game through `mako-launch`, as shown below. |
+| Flatpak game, launcher, or emulator | Install the matching extension and prepare that application using the [Flatpak guide](docs/FLATPAK-GUIDE.md), then launch it normally. |
+| MAKO Decky manages the game | Use Decky's `mako-run` and its [launcher setup](../plugin/docs/LAUNCHERS.md). |
+
+### 1. Prepare a game or program profile
+
 Open **MAKO Renderer Configuration** from the application launcher (the MAKO-logo icon), or run:
 
 ```bash
 ~/.local/bin/mako-ui
 ```
 
-Create a profile, match it to the game's executable or process name, and select its settings. For spatial scaling, select **Enable Scaling (Restart)** before launch, choose a lower game resolution, and select Native Resolution, MAKO Scaler, LS1 Quality, or LS1 Performance. Fixed and Adaptive Frame Generation remain independent. See <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a> for settings, profile matching, and environment overrides.
+1. Select **Create New Profile** and give it a name, for example `My game`.
+2. Under **Profile Matching > Matched Processes > Edit...**, enter the actual game executable or process name, for example `Game.exe` for a Proton game or `dolphin-emu` for Dolphin, then press **+**. Use the process that renders the game, rather than its launcher, Steam display title, ROM filename, or Flatpak application ID.
+3. For Frame Generation or LS1, set **Lossless.dll Path (Restart)** if automatic discovery does not find your Steam installation. For open MAKO Scaler use without the DLL, turn **Frame Generation** off and select **MAKO Scaler**.
+4. Select Fixed or Adaptive Frame Generation and/or **Enable Scaling (Restart)**. For scaling, choose the method and factor and lower the game's resolution as described in [desktop scaling and resolution](docs/CONFIGURATION.md#desktop-scaling-and-resolution).
+5. Changes save automatically. Close the window to flush pending edits, then follow the launch instructions below.
 
-Launch only the selected game through MAKO:
+Selecting a profile in the UI chooses which settings you edit; **Matched Processes** chooses which program uses them. With no match, MAKO remains dormant. You can also select a profile explicitly with `MAKO_PROFILE`, as shown below. See [Configuration](docs/CONFIGURATION.md) for all settings and matching rules.
+
+### 2. Launch the game with MAKO
+
+For a **native Steam or Proton game**, open **Steam Library > right-click the game > Properties > General > Launch Options** and enter:
 
 ```text
 ~/.local/bin/mako-launch %command%
 ```
 
-For a direct desktop command, pass the executable and arguments to the same launcher:
+Keep `%command%` exactly as written: Steam replaces it with the game's normal launch command, including Proton when applicable. Set this once for each game, then use Steam's **Play** button as usual. If the installer used a custom prefix, use the launcher path from its completion message. Remove the MAKO prefix to return to the normal native launch.
+
+To use the profile named `My game` explicitly, use this launch option instead:
+
+```text
+MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
+```
+
+For a **direct desktop command**, pass the executable and its arguments to the same launcher. Replace the example path with your installed game:
 
 ```bash
-~/.local/bin/mako-launch your-game-command
+~/.local/bin/mako-launch "/path/to/your-game"
 ```
+
+`%command%` is a Steam placeholder; do not use it in a terminal. For native Heroic or Lutris, put the absolute `mako-launch` path in the game's Wrapper or Command prefix field and let the launcher supply the game command; see [third-party launchers](../plugin/docs/LAUNCHERS.md). For an emulator, select its Vulkan graphics backend before playing.
 
 `mako-launch` enables MAKO only for that process and establishes the supported standalone Vulkan-layer boundary. Use one Frame Generation implementation per game. Gamescope WSI, MangoHud, and vkBasalt profile controls remain MAKO Decky features because they require managed manifest staging.
 
@@ -85,17 +114,30 @@ Direct desktop scaling is supported, but Gamescope is recommended and can also r
 
 Want to use Frame Generation or scaling with videos? See <a href="docs/VIDEOS_WITH_MAKO.md" target="_blank" rel="noopener noreferrer">Videos with MAKO</a>.
 
+### Flatpak games, launchers, and emulators
+
+**Flatpak preparation is a separate one-time setup for each application.** The standalone configuration window edits Renderer profiles; it does not install runtime extensions or prepare Flatpak programs. The archive's **Install MAKO Flatpak Extensions** helper installs extensions only. MAKO Decky's **Flatpak Setup** provides the managed preparation workflow.
+
+Without Decky, follow the [standalone Flatpak guide](docs/FLATPAK-GUIDE.md) to identify the app and runtime, install its matching extension, grant configuration and DLL access, and set the sandbox environment. Then restart the application and launch it normally or with `flatpak run APP_ID`. A host `mako-launch` prefix around `flatpak run` does not prepare the sandbox. The guide also covers Heroic/Lutris games, EmuDeck emulators, verification, updates, and disabling MAKO.
+
 ### Manual configuration and validation
 
-You can configure MAKO without the UI by editing `~/.config/mako-render/conf.toml`. This minimal profile matches a Windows executable and enables 2x Frame Generation:
+You can configure MAKO without the UI by editing `~/.config/mako-render/conf.toml`. This complete minimal file matches a Windows executable and enables 2x Frame Generation; replace `Game.exe` with the game's executable name:
 
 ```toml
+version = 2
+
+[global]
+allow_fp16 = true
+
 [[profile]]
 name = "My game"
 active_in = ["Game.exe"]
 multiplier = 2
 frame_generation_enabled = true
 ```
+
+When adding a profile to an existing file, append only the `[[profile]]` block and keep the existing `version` and `[global]` settings. Manual configuration still requires the native launch command or Flatpak preparation above.
 
 Validate the configuration or run the built-in benchmark with:
 
@@ -106,6 +148,8 @@ Validate the configuration or run the built-in benchmark with:
 ```
 
 `inspect-dll` validates LSFG and LS1 resources independently without changing the user-owned file. Run `mako-cli` without a subcommand to see all commands and options. Use `mako-diagnostics` for a focused standalone report.
+
+The Renderer and CLI's LSFG commands default to FP16 when the selected GPU supports it, with FP32 on unsupported devices. To select FP32 explicitly, set `allow_fp16 = false` under `[global]` and restart the game, or pass `--no-fp16` to a CLI benchmark, debug, or LSFG quality command. The CLI's precision options are independent of the Renderer configuration file; see [global settings](docs/CONFIGURATION.md#global-settings).
 
 ## In-game considerations
 

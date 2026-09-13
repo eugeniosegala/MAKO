@@ -83,7 +83,8 @@ SUBCOMMAND OPTIONS:
 
     benchmark & debug
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Allow FP16 acceleration
+        -a, --allow-fp16                Allow FP16 when supported (default)
+            --no-fp16                  Use FP32 LSFG shaders
         -w, --width <INT>               Width of the input frames
         -h, --height <INT>              Height of the input frames
         -f, --flow <FLOAT>              Flow scale
@@ -104,7 +105,8 @@ SUBCOMMAND OPTIONS:
 
     quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Include FP16 acceleration in the test
+        -a, --allow-fp16                Allow FP16 when supported (default)
+            --no-fp16                  Use FP32 LSFG shaders
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -s, --scene <NAME>              Procedural scene name
@@ -141,7 +143,8 @@ SUBCOMMAND OPTIONS:
 
     combined-quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Include FP16 LSFG acceleration
+        -a, --allow-fp16                Allow FP16 when supported (default)
+            --no-fp16                  Use FP32 LSFG shaders
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -c, --scene <NAME>              Procedural scene name
@@ -235,9 +238,10 @@ SUBCOMMAND OPTIONS:
             const i18n::Language language, const std::string& program) {
         benchmark::Options opts{};
 
-        const std::array<option, 10> GETOPT {{
+        const std::array<option, 11> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "no-fp16",          no_argument,       nullptr, 'A' },
             { "width",            required_argument, nullptr, 'w' },
             { "height",           required_argument, nullptr, 'h' },
             { "flow",             required_argument, nullptr, 'f' },
@@ -256,6 +260,9 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'a':
                     opts.allow_fp16 = true;
+                    break;
+                case 'A':
+                    opts.allow_fp16 = false;
                     break;
                 case 'w':
                     opts.width = numericArgument<int>(optarg, "--width");
@@ -300,9 +307,10 @@ SUBCOMMAND OPTIONS:
             const i18n::Language language, const std::string& program) {
         debug::Options opts{};
 
-        const std::array<option, 9> GETOPT {{
+        const std::array<option, 10> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "no-fp16",          no_argument,       nullptr, 'A' },
             { "width",            required_argument, nullptr, 'w' },
             { "height",           required_argument, nullptr, 'h' },
             { "flow",             required_argument, nullptr, 'f' },
@@ -320,6 +328,9 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'a':
                     opts.allow_fp16 = true;
+                    break;
+                case 'A':
+                    opts.allow_fp16 = false;
                     break;
                 case 'w':
                     opts.width = numericArgument<int>(optarg, "--width");
@@ -362,9 +373,10 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::Options opts{};
-        const std::array<option, 9> GETOPT {{
+        const std::array<option, 10> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "no-fp16",          no_argument,       nullptr, 'A' },
             { "gpu",              required_argument, nullptr, 'g' },
             { "output",           required_argument, nullptr, 'o' },
             { "scene",            required_argument, nullptr, 's' },
@@ -383,6 +395,9 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'a':
                     opts.allow_fp16 = true;
+                    break;
+                case 'A':
+                    opts.allow_fp16 = false;
                     break;
                 case 'g':
                     opts.gpu.emplace(optarg);
@@ -594,9 +609,10 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_combined_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::CombinedOptions opts{};
-        const std::array<option, 14> GETOPT {{
+        const std::array<option, 15> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "no-fp16",          no_argument,       nullptr, 'A' },
             { "gpu",              required_argument, nullptr, 'g' },
             { "output",           required_argument, nullptr, 'o' },
             { "scene",            required_argument, nullptr, 'c' },
@@ -620,6 +636,9 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'a':
                     opts.allow_fp16 = true;
+                    break;
+                case 'A':
+                    opts.allow_fp16 = false;
                     break;
                 case 'g':
                     opts.gpu.emplace(optarg);

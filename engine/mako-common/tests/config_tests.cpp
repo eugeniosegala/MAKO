@@ -181,6 +181,10 @@ int main() {
     ls::ConfigFile::createDefaultConfigFile(defaultPath);
     const ls::ConfigFile generatedDefaults(defaultPath);
     const ls::ConfigFile inMemoryDefaults;
+    expect(ls::GlobalConf{}.allow_fp16 &&
+            generatedDefaults.global().allow_fp16 &&
+            inMemoryDefaults.global().allow_fp16,
+        "Renderer defaults must allow FP16 on supported hardware");
     expect(generatedDefaults.global().dll == inMemoryDefaults.global().dll &&
             generatedDefaults.global().allow_fp16 ==
                 inMemoryDefaults.global().allow_fp16 &&
@@ -189,6 +193,20 @@ int main() {
                 sameGameConf
             ),
         "The documented default TOML and in-memory examples must stay equivalent");
+
+    const auto precisionPath = directory / "precision.toml";
+    for (const std::string_view global : {"", "[global]\n", "[global]\nallow_fp16 = true\n"}) {
+        writeText(precisionPath, "version = 2\n" + std::string(global) + "[[profile]]\n");
+        expect(ls::ConfigFile(precisionPath).global().allow_fp16,
+            "Omitting the global section or FP16 setting must still allow FP16");
+    }
+    writeText(precisionPath, "version = 2\n[global]\nallow_fp16 = false\n[[profile]]\n");
+    const ls::ConfigFile fp32Config(precisionPath);
+    expect(!fp32Config.global().allow_fp16,
+        "An explicit FP32 setting must override the FP16 default");
+    fp32Config.write(precisionPath);
+    expect(!ls::ConfigFile(precisionPath).global().allow_fp16,
+        "Saving an existing FP32 configuration must preserve its precision");
 
     const auto path = directory / "conf.toml";
     writeText(path, validConfiguration);
@@ -512,6 +530,16 @@ scaling_sharpness = 0.5
 
     setenv("MAKO_ENV", "1", 1);
     setenv("MAKO_ADAPTIVE", "0", 1);
+    unsetenv("MAKO_NO_FP16");
+    expect(ls::WatchedConfig{}.get().global().allow_fp16,
+        "Environment-only configuration must allow FP16 by default");
+    setenv("MAKO_NO_FP16", "1", 1);
+    expect(!ls::WatchedConfig{}.get().global().allow_fp16,
+        "MAKO_NO_FP16=1 must preserve the explicit FP32 override");
+    setenv("MAKO_NO_FP16", "0", 1);
+    expect(ls::WatchedConfig{}.get().global().allow_fp16,
+        "MAKO_NO_FP16=0 must allow FP16");
+    unsetenv("MAKO_NO_FP16");
     setenv("MAKO_BASE_FPS_CAP", "30", 1);
     setenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);

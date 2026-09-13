@@ -128,7 +128,18 @@ Decky is optional. Desktop Linux users can install MAKO Renderer directly:
 
 1. To use frame generation or LS1 scaling, purchase and install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO Scaler does not use `Lossless.dll`.
 2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.2.1" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. The installer opens **MAKO Renderer Configuration** and shows the launch option.
-3. Run the installer again to update. See the <a href="engine/README.md#direct-linux-installation" target="_blank" rel="noopener noreferrer">MAKO Renderer guide</a> for manual installation, Flatpak setup, configuration, and removal.
+3. In **MAKO Renderer Configuration**, create a profile and add the game's executable under **Profile Matching > Matched Processes**. Select Frame Generation and/or scaling; enable scaling before starting the game.
+4. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**, then start the game normally:
+
+    ```text
+    ~/.local/bin/mako-launch %command%
+    ```
+
+    Installation and profile editing alone do not activate MAKO. The launch option is required for each standalone native/Proton game; the configuration window can be closed during play. For direct desktop commands, see [Renderer usage](engine/README.md#usage).
+
+5. For Flatpak games, launchers, or emulators, follow the [standalone Flatpak guide](engine/docs/FLATPAK-GUIDE.md) to install the matching extension and prepare each app, then launch it normally. The Renderer configuration window does not prepare Flatpaks, and the host `mako-launch` command cannot replace sandbox setup.
+
+Run the installer again to update. See the <a href="engine/README.md#direct-linux-installation" target="_blank" rel="noopener noreferrer">MAKO Renderer guide</a> for manual installation and removal.
 
 <!-- prettier-ignore -->
 > [!IMPORTANT]

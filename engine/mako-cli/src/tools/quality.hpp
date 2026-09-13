@@ -12,7 +12,7 @@ namespace mako::cli::quality {
     /// options for the "quality-regression" command
     struct Options {
         std::optional<std::string> dll;
-        bool allow_fp16{false};
+        bool allow_fp16{true};
         std::optional<std::string> gpu;
         std::optional<std::filesystem::path> output;
         std::string scene{"motion-boundary"};
@@ -70,7 +70,7 @@ namespace mako::cli::quality {
     /// Options for the production spatial-scaling-to-LSFG handoff.
     struct CombinedOptions {
         std::optional<std::string> dll;
-        bool allow_fp16{false};
+        bool allow_fp16{true};
         std::optional<std::string> gpu;
         std::optional<std::filesystem::path> output;
         std::string scene{"motion-boundary"};

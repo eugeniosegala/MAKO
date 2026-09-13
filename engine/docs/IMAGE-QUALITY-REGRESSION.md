@@ -43,11 +43,10 @@ mako-cli combined-quality-regression \
   --interpolation 0.67 \
   --flow 0.75 \
   --performance-mode \
-  --allow-fp16 \
   --output ./mako-combined-result
 ```
 
-Use `--dll /path/to/Lossless.dll` when automatic discovery is unavailable and `--gpu "GPU name"` on a multi-GPU system. `--allow-fp16` permits LSFG FP16 and `--performance-mode` selects the lighter frame-generation model. Spatial methods are `native`, `mako`, `ls1`, and `ls1-performance`. `--width` and `--height` must be supplied together; they select the exact presentation resolution while the production factor policy derives the source extent.
+Use `--dll /path/to/Lossless.dll` when automatic discovery is unavailable and `--gpu "GPU name"` on a multi-GPU system. LSFG and combined commands allow FP16 by default when supported by the selected GPU, otherwise they use FP32. Pass `--no-fp16` for an explicit FP32 run; `--allow-fp16` remains available for explicit FP16 permission. Precision comparisons must specify the intended flag for each run and check the backend's `precision=fp16` or `precision=fp32` inspection record; `FP16 allowed` alone does not prove hardware support. `--performance-mode` selects the lighter frame-generation model. Spatial methods are `native`, `mako`, `ls1`, and `ls1-performance`. `--width` and `--height` must be supplied together; they select the exact presentation resolution while the production factor policy derives the source extent.
 
 The spatial command runs the production scaler and fails if an LS1 request falls back to MAKO. The combined command reconstructs each endpoint directly into a presentation-sized LSFG source and scores the generated result against a presentation-resolution reference. It does not exercise the high-resolution post-Frame Generation placement or a WSI swapchain; those remain MAKO Gym boundaries.
 

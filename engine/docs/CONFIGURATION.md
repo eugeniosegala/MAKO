@@ -36,7 +36,9 @@ scaling_sharpness = 0.8
 | Setting | Meaning |
 | --- | --- |
 | `dll` | Optional absolute path to `Lossless.dll`. When omitted, MAKO searches the normal Steam library locations. LSFG and LS1 need this user-supplied file; Native Resolution and MAKO Scaler do not. |
-| `allow_fp16` | Permits LSFG FP16 on supported hardware. The generated configuration defaults to `true`; disable it if the selected GPU performs worse or is incompatible. |
+| `allow_fp16` | Defaults to `true`, including when the setting or `[global]` section is omitted. Uses LSFG FP16 when the selected GPU supports it, otherwise FP32. Set `false` to use FP32; existing explicit choices are preserved. Changing it requires a game restart. |
+
+The CLI's `benchmark`, `debug`, `quality-regression`, and `combined-quality-regression` commands also allow LSFG FP16 by default, independently of `conf.toml`. Pass `--no-fp16` to use FP32, or `--allow-fp16` (`-a`) to explicitly allow FP16. If both flags are supplied, the last one wins. For environment-only Renderer configuration (`MAKO_ENV=1`), `MAKO_NO_FP16=1` disables FP16. The backend still checks the selected device's Vulkan `shaderFloat16` support before choosing FP16 shaders.
 
 ## Profile settings
 
@@ -96,11 +98,15 @@ MAKO accepts only configuration format `version = 2`. Unknown keys in a supporte
 
 ## Standalone launcher
 
-Use `mako-launch` to activate MAKO for one native process:
+Saving a profile configures the Renderer; the game must also start with MAKO enabled. For a native Steam or Proton game, put this in **Steam Properties > General > Launch Options**:
 
 ```text
 ~/.local/bin/mako-launch %command%
 ```
+
+Keep `%command%` in Steam. In a terminal, replace it with the actual executable and arguments, for example `~/.local/bin/mako-launch "/path/to/your-game"`. The configuration UI can be closed during play. See [Renderer usage](../README.md#usage) for profile preparation and launcher-specific steps.
+
+Flatpak apps need a matching runtime extension and per-application sandbox setup; follow the [Flatpak guide](FLATPAK-GUIDE.md), then launch the prepared app normally. The host `mako-launch` command and its `launcher.conf` settings do not configure the sandbox.
 
 `MAKO_CONFIG` selects a TOML file and `MAKO_PROFILE` selects an exact profile name:
 

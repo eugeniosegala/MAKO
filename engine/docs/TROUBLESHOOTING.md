@@ -2,14 +2,16 @@
 
 ## MAKO does not load
 
-1. Confirm that the game uses Vulkan. MAKO does not attach to an OpenGL-only process.
-2. Launch the game through MAKO's standalone helper. For Steam, use:
+1. Confirm that the game uses Vulkan, including DXVK or VKD3D-Proton for compatible Windows games. Select the Vulkan backend in emulators. A native OpenGL game needs the optional [Zink launcher setting](CONFIGURATION.md#standalone-launcher).
+2. Installing MAKO or opening its configuration window does not activate it. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**, then restart the game:
 
     ```text
     ~/.local/bin/mako-launch %command%
     ```
 
-3. Check that the Vulkan loader can see the layer:
+    For a direct desktop launch, replace `%command%` with the game command. For a Flatpak application, follow the [Flatpak preparation and verification steps](FLATPAK-GUIDE.md) instead; the host launcher cannot prepare its sandbox.
+
+3. For a native installation, check that the Vulkan loader can see the layer:
 
     ```bash
     ~/.local/bin/mako-launch vulkaninfo | grep -i VK_LAYER_MAKO_render

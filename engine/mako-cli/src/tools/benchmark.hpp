@@ -14,7 +14,7 @@ namespace mako::cli::benchmark {
     /// options for the "benchmark" command
     struct Options {
         std::optional<std::string> dll;
-        bool allow_fp16{false};
+        bool allow_fp16{true};
         int width{1920};
         int height{1080};
 

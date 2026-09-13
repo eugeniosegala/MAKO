@@ -18,8 +18,8 @@ namespace ls {
     struct GlobalConf {
         /// optional dll override
         std::optional<std::string> dll;
-        /// should fp16 be allowed
-        bool allow_fp16{};
+        /// allow FP16 shaders when supported by the selected device
+        bool allow_fp16{true};
     };
 
     /// pacing methods

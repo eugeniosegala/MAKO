@@ -37,6 +37,18 @@ if(BUILD_TESTING)
             "${CMAKE_CURRENT_SOURCE_DIR}/tests/test-i18n-cli.sh"
             "$<TARGET_FILE:mako-cli>")
 
+    # Exercise the production parser and option defaults without a GPU or DLL.
+    add_executable(mako-cli-precision-probe
+        "src/main.cpp"
+        "tests/precision_cli_stubs.cpp")
+    target_link_libraries(mako-cli-precision-probe PRIVATE mako-cli-support)
+    target_include_directories(mako-cli-precision-probe PRIVATE
+        "../mako-backend/include")
+    add_test(NAME cli-precision-contract
+        COMMAND bash
+            "${CMAKE_CURRENT_SOURCE_DIR}/tests/test-precision-cli.sh"
+            "$<TARGET_FILE:mako-cli-precision-probe>")
+
 endif()
 
 install(TARGETS mako-cli
