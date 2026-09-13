@@ -1,4 +1,6 @@
 {
+  "CONTENT_HIDE_INFO": "Ocultar informações",
+  "CONTENT_SHOW_INFO": "Mostrar informações",
   "CONTENT_SCALING": "Redimensionamento",
   "SCALING_ENABLED": "Ativar redimensionamento (Reiniciar)",
   "EXPERIMENTAL_LABEL": "Experimental",
@@ -193,7 +195,7 @@
   "CONFIG_DISABLE_HDR_EXPOSURE": "Desativar HDR",
   "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "O HDR não está disponível nesta versão. Esta definição obrigatória mantém ativo o caminho SDR estável.",
   "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (Reiniciar)",
-  "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Pode reduzir artefactos de movimento coloridos ou pixelizados em alguns jogos através do caminho de apresentação do Gamescope. O redimensionamento ativa-o automaticamente. Em perfis apenas com geração de fotogramas, ative-o somente nos jogos afetados.",
+  "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Pode reduzir artefactos de movimento coloridos ou pixelizados em alguns jogos através do caminho de apresentação do Gamescope. É opcional tanto com o redimensionamento como com a geração de fotogramas. Ative-o apenas quando o jogo precisar dele.",
   "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "Este caminho de compatibilidade é limitado a arranques de host de 64 bits compatíveis. Deixe-o desativado quando o jogo não precisar dele, pois pode afetar o desempenho.",
   "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "Imagens de swapchain do jogo (Reiniciar)",
   "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "Pode corrigir jogos que não iniciam com a geração de fotogramas ao preservar o mínimo de imagens de swapchain pedido pelo jogo. Ative apenas nos jogos afetados.",

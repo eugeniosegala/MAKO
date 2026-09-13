@@ -57,6 +57,7 @@ function WelcomeNotice({ separated }: { separated: boolean }) {
     <PanelSectionRow>
       <div
         role="note"
+        data-mako-info="true"
         style={{
           ...makoPanelStyle,
           width: "100%",
@@ -190,6 +191,7 @@ export function ContentNotices({
       {developmentBuildInfo && (
         <PanelSectionRow>
           <div
+            data-mako-info="true"
             style={{
               padding: "8px 12px",
               width: "100%",
@@ -364,6 +366,7 @@ export function ContentNotices({
       {mainRunningApp && (
         <PanelSectionRow>
           <div
+            data-mako-info="true"
             style={{
               marginTop:
                 hasDevelopmentNotice || showWelcome ? "8px" : undefined,
@@ -390,6 +393,7 @@ export function ContentNotices({
       {engineUpdateRequired && (
         <PanelSectionRow>
           <div
+            data-mako-update-notice="true"
             style={{
               marginTop:
                 hasDevelopmentNotice || showWelcome || hasRunningAppNotice
@@ -402,13 +406,19 @@ export function ContentNotices({
               color: "#ffd08a",
             }}
           >
-            <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+            <div
+              data-mako-info="true"
+              style={{ fontWeight: "bold", marginBottom: "4px" }}
+            >
               {t(
                 "CONTENT_ENGINE_UPDATE_REQUIRED",
                 "MAKO Renderer update required",
               )}
             </div>
-            <div style={{ fontSize: "13px", marginBottom: "10px" }}>
+            <div
+              data-mako-info="true"
+              style={{ fontSize: "13px", marginBottom: "10px" }}
+            >
               {t("CONTENT_ENGINE_INSTALLED", "Installed:")}{" "}
               {installedEngineVersion ||
                 t("CONTENT_ENGINE_NOT_RECORDED", "not recorded")}

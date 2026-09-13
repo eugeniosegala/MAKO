@@ -22,6 +22,8 @@ Published archives target x86_64 Linux hosts and include Vulkan layers for both 
 
 ## Installation
 
+For frame generation or LS1 scaling, first install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam, with beta participation disabled. The open MAKO Scaler works without `Lossless.dll`.
+
 ### Steam Deck or Steam Machine
 
 **MAKO Decky** is the recommended SteamOS installation path. It manages the shared native MAKO Renderer installation, creates the `mako-run` launcher, and prepares supported Flatpak applications. Install the Decky ZIP, open **MAKO Decky**, select **Install MAKO Renderer**, then add this Steam launch option to a native Steam or Proton game:
@@ -33,8 +35,6 @@ Published archives target x86_64 Linux hosts and include Vulkan layers for both 
 See the <a href="../README.md#install-and-use" target="_blank" rel="noopener noreferrer">main installation guide</a> for Decky, Heroic, Lutris, and EmuDeck setup.
 
 ### Direct Linux installation
-
-For frame generation or LS1 scaling, first install <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. The open MAKO Scaler works without `Lossless.dll`.
 
 Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.2.1" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. It verifies the archive, preserves profiles, opens **MAKO Renderer Configuration**, and shows the Steam/Proton launch option. Run the installer again to update; use **Uninstall MAKO Renderer** to remove the shared native installation. The included `README.txt` contains offline instructions.
 
@@ -197,7 +197,9 @@ The pure scheduling, presentation, scaling, and transition policies retain their
 
 ## More documentation
 
+- [Native installation transactions](../INSTALLATION-TRANSACTIONS.md): atomic replacement, rollback, shared native identity, failure boundaries, and contract tests for both installers.
 - <a href="docs/LIFECYCLE.md" target="_blank" rel="noopener noreferrer">Lifecycle</a>: probes, timers, setting lifetimes, swapchain ownership, pacing policies, recovery, retirement, and heuristic risk.
+- <a href="docs/MEMORY-MANAGEMENT.md" target="_blank" rel="noopener noreferrer">Memory management</a>: resource ownership, image pooling, allocation accounting, replacement peaks, cleanup, and validation.
 - <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>: profiles, frame-generation and scaling controls, Adaptive mode, and environment variables.
 - <a href="docs/SCALING.md" target="_blank" rel="noopener noreferrer">Spatial scaling architecture</a>: pipeline order, surface support, formats, resources, private transitions, and validation.
 - <a href="docs/RUNTIME-TRANSITIONS.md" target="_blank" rel="noopener noreferrer">Runtime configuration transitions</a>: live-safe updates, recreation, and restart boundaries.

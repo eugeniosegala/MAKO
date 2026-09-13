@@ -12,6 +12,10 @@ Each `[[profile]]` is selected by `active_in`. Entries may match a Linux executa
 
 Ubisoft Connect's `UbisoftConnect.exe`, `upc.exe`, and `UplayWebCore.exe` stay on MAKO's inactive native-presentation path even when they inherit `MAKO_PROFILE`, `MAKO_PROFILE_FALLBACK`, or `MAKO_ENV`, or appear in an older profile's `active_in`. The guard compares the exact executable basename without case sensitivity, preferring the mapped Windows executable under Wine; a launcher directory or thread name does not exclude the game. It changes no environment variables, so the launched game can still select its profile normally. This excludes MAKO's own rendering work in the launcher, not other Vulkan layers or Proton behavior.
 
+The shared [launcher exclusion registry](../mako-common/launcher_exclusions.json) owns the excluded executables for both MAKO Renderer and MAKO Decky. Each entry records a `launcher` name, a `reason`, and its `executables`. To add a launcher, document the observed need and add only its exact ASCII Windows `.exe` basenames; paths, wildcards, and duplicate names are rejected. Names with spaces require extending Decky's process scanner before they can be registered. Decky derives the truncated Linux process names automatically. Keep removal conditions in [the compatibility ledger](../../CLEANUPS.md), and validate launcher inactivity and child-game activation for each addition.
+
+After editing the registry, run `just generate-launcher-exclusions` from the repository root and include both generated bindings in the change. `just check-launcher-exclusions`, Renderer CTest, and Decky's generated-contract gate check freshness without rewriting files. The Renderer compiles its generated list and Decky imports its packaged Python binding; neither reads the JSON at runtime or depends on the other component's installation. This is a source-maintained compatibility list, not a `conf.toml` setting.
+
 ```toml
 version = 2
 

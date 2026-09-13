@@ -2,6 +2,7 @@
 
 #include "mako-common/configuration/detection.hpp"
 #include "mako-common/configuration/config.hpp"
+#include "launcher_exclusions_generated.hpp"
 
 #include <algorithm>
 #include <array>
@@ -19,16 +20,6 @@
 using namespace ls;
 
 namespace {
-    // Launcher UI processes inherit the game's profile environment. Keep
-    // their own Vulkan presentation native without changing that environment
-    // or denying the game they start. Decky's capture filter mirrors this
-    // bounded list, enforced by test_renderer_config_contract.py.
-    constexpr std::array excludedWindowsLauncherExecutables{
-        std::string_view{"ubisoftconnect.exe"},
-        std::string_view{"upc.exe"},
-        std::string_view{"uplaywebcore.exe"},
-    };
-
     constexpr char asciiLower(const char value) noexcept {
         return value >= 'A' && value <= 'Z'
             ? static_cast<char>(value + ('a' - 'A')) : value;
@@ -40,6 +31,10 @@ namespace {
             [](const char a, const char b) { return asciiLower(a) == asciiLower(b); });
     }
 
+    // Launcher UI processes inherit the game's profile environment. Keep
+    // their own Vulkan presentation native without changing that environment
+    // or denying the game they start. Both components' lists are generated
+    // from mako-common/launcher_exclusions.json.
     bool excludedLauncher(const Identification& id) noexcept {
         // A mapped Windows executable is authoritative. Never inspect its
         // parent directory, command-line arguments, or mutable thread name.
@@ -49,8 +44,8 @@ namespace {
         const auto separator = executable.find_last_of("/\\");
         if (separator != std::string_view::npos)
             executable.remove_prefix(separator + 1);
-        return std::any_of(excludedWindowsLauncherExecutables.begin(),
-            excludedWindowsLauncherExecutables.end(),
+        return std::any_of(detail::excludedWindowsLauncherExecutables.begin(),
+            detail::excludedWindowsLauncherExecutables.end(),
             [&](const auto name) { return asciiEqual(executable, name); });
     }
 

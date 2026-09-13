@@ -1,0 +1,11 @@
+[
+  {
+    "launcher": "Ubisoft Connect",
+    "reason": "The launcher and web UI inherit the game's MAKO profile environment. Keep their own windows on native presentation and exclude them from Decky profile capture while preserving activation for the child game, including when older profiles explicitly name the launcher.",
+    "executables": [
+      "UbisoftConnect.exe",
+      "upc.exe",
+      "UplayWebCore.exe"
+    ]
+  }
+]

@@ -415,31 +415,48 @@ describe("External Tools controls", () => {
     );
   });
 
-  test("Scaling Engine provides and locks Gamescope WSI compatibility", () => {
-    const { container } = render(
-      <ConfigurationSection
-        config={{ ...getDefaults(), scaling_enabled: true }}
-        onConfigChange={vi.fn(async () => undefined)}
-        onConfigUpdate={vi.fn(async () => undefined)}
-      />,
-    );
+  test.each([false, true])(
+    "Scaling keeps WSI independently editable when saved as %s",
+    (wsiEnabled) => {
+      const onConfigChange = vi.fn(async () => undefined);
+      const { container } = render(
+        <ConfigurationSection
+          config={{
+            ...getDefaults(),
+            scaling_enabled: true,
+            gamescope_wsi_compatibility: wsiEnabled,
+          }}
+          onConfigChange={onConfigChange}
+          onConfigUpdate={vi.fn(async () => undefined)}
+        />,
+      );
 
-    fireEvent.click(
-      container.querySelector<HTMLButtonElement>(
-        ".MAKO_WorkaroundsCollapseButton_Container button",
-      )!,
-    );
-    const compatibility = screen.getByText(
-      "Gamescope WSI (Restart)",
-    ) as HTMLButtonElement;
-    expect(compatibility.getAttribute("data-checked")).toBe("true");
-    expect(compatibility.disabled).toBe(true);
-    expect(
-      screen.queryByText(
-        "This compatibility path is limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
-      ),
-    ).toBeNull();
-  });
+      fireEvent.click(
+        container.querySelector<HTMLButtonElement>(
+          ".MAKO_WorkaroundsCollapseButton_Container button",
+        )!,
+      );
+      const compatibility = screen.getByText(
+        "Gamescope WSI (Restart)",
+      ) as HTMLButtonElement;
+      expect(compatibility.getAttribute("data-checked")).toBe(
+        String(wsiEnabled),
+      );
+      expect(compatibility.disabled).toBe(false);
+      expect(
+        screen
+          .getByText(
+            "This compatibility path is limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
+          )
+          .getAttribute("data-tone"),
+      ).toBe("warning");
+      fireEvent.click(compatibility);
+      expect(onConfigChange).toHaveBeenCalledExactlyOnceWith(
+        GAMESCOPE_WSI_COMPATIBILITY,
+        !wsiEnabled,
+      );
+    },
+  );
 
   test("starts collapsed and remembers when it is expanded", () => {
     const { container } = render(

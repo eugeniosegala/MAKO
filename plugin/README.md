@@ -14,6 +14,8 @@ MAKO is an independent community project bringing LSFG frame generation, LS1 sca
 
 ## Download
 
+For frame generation or LS1 scaling, first install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam, with beta participation disabled. The open MAKO Scaler works without `Lossless.dll`.
+
 Open the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a> and download the ZIP under **Assets**. Previous Decky releases are available on the <a href="https://github.com/eugeniosegala/MAKO/releases" target="_blank" rel="noopener noreferrer">MAKO releases page</a>.
 
 For direct Vulkan-layer installation without Decky, open the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.2.1" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a> and download the Linux archive under **Assets**.
@@ -25,7 +27,7 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 - Installs and updates the per-user MAKO Renderer Vulkan layer and common `mako-run` wrapper.
 - Saves per-game and per-process profiles, then selects them automatically by Steam application ID or process name.
 - Groups Fixed and Adaptive Frame Generation, Spatial Scaling, performance, compatibility, external-tool, and manual controls. **Live Status** reports the active mode, scaler, resolutions, limits, fallbacks, and pending changes for the running game.
-- Provides a per-profile Gamescope WSI compatibility option plus host-installed MangoHud or experimental vkBasalt. Scaling enables its managed WSI path automatically inside a supported Gamescope session.
+- Provides a per-profile Gamescope WSI compatibility option plus host-installed MangoHud or experimental vkBasalt. Scaling uses the combined Renderer by default; the independent WSI option selects the managed compatibility path inside a supported Gamescope session.
 - Prepares matching Vulkan runtime extensions and application access for supported Flatpak workflows.
 - Shares one active native Renderer version with the standalone archive installer. Installing either version selects it for both launch workflows; a later MAKO Decky installation adopts a valid standalone Renderer and offers its bundled update when the versions differ.
 - Removes files supplied by either managed native Renderer installer when you select **Uninstall MAKO Renderer**, while preserving MAKO Decky and its profiles. Uninstalling MAKO Decky also removes the managed native Renderer; shared Flatpak runtime extensions remain installed.
@@ -36,7 +38,11 @@ Close games using MAKO before installing or updating the Renderer. Installation 
 
 MAKO Decky lives in the `plugin/` directory of the MAKO monorepo and consumes the sibling `engine/` source tree. Run these commands from `plugin/`:
 
+[Native installation transactions](../INSTALLATION-TRANSACTIONS.md) documents atomic replacement, rollback, shared native identity, failure boundaries, and contract tests for both installers.
+
 `components/FeatureSettings.tsx` and `components/ConfigurationSection.tsx` compose the editor. Independent performance, advanced rendering, compatibility, external-tool, and manual-override sections live under `components/settings/`, alongside the shared collapse control and editor prop types. Their renderers forward edits through the existing callbacks; `hooks/useProfileEditorModel.ts` and `hooks/useProfileConfigWriter.ts` remain the state and persistence owners. Keep translations in the source catalogs and keep save/debounce effects out of section components.
+
+`components/InfoVisibility.tsx` owns the panel-local R1 shortcut and persistent controls-only view. It hides Decky's resolved field-description class and MAKO content marked `data-mako-info="true"`. Mark new explanatory content at its outermost informational container so its spacing and nested help buttons disappear together; keep settings and actions outside that marker.
 
 ```bash
 pnpm install --frozen-lockfile

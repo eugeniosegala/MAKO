@@ -114,6 +114,7 @@ export function MakoExperimentalBadge({ label }: { label: string }) {
   return (
     <span
       data-mako-experimental-badge="true"
+      data-mako-info="true"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -171,6 +172,7 @@ export function MakoInlineTip({
   return (
     <div
       role="note"
+      data-mako-info="true"
       data-tone={tone}
       style={{
         display: "flex",
@@ -213,6 +215,7 @@ export function MakoSettingRelationship({ children }: { children: ReactNode }) {
   return (
     <div
       data-mako-setting-relationship="true"
+      data-mako-info="true"
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -254,6 +257,7 @@ export function MakoReleaseIdentity({
     <PanelSectionRow>
       <div
         aria-label={`Current release: MAKO Decky v${version}, ${codename}`}
+        data-mako-info="true"
         style={{
           width: "100%",
           boxSizing: "border-box",
@@ -312,6 +316,7 @@ export function MakoSectionHeader({
         </div>
         {description && (
           <div
+            data-mako-info="true"
             style={{
               marginTop: "8px",
               color: "#aebfc5",

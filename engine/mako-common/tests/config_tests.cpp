@@ -3,6 +3,7 @@
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/detection.hpp"
 #include "mako-common/configuration/launch.hpp"
+#include "configuration/launcher_exclusions_generated.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -16,6 +17,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <unistd.h>
 #include <sys/resource.h>
@@ -473,20 +475,26 @@ scaling_sharpness = 0.5
     // Neither that environment nor an older captured launcher alias may make
     // MAKO change the launcher's Vulkan device or presentation resources.
     const auto gameIdentification = identification;
-    for (const auto* launcher : {
-            "UbisoftConnect.exe", "upc.exe", "UplayWebCore.exe",
-            "UBISOFTCONNECT.EXE", "UPC.EXE", "uplaywebcore.EXE",
-        }) {
+    std::vector<std::string> launchers;
+    for (const auto name : ls::detail::excludedWindowsLauncherExecutables) {
+        launchers.emplace_back(name);
+        auto upper = std::string(name);
+        std::transform(upper.begin(), upper.end(), upper.begin(), [](const char c) {
+            return c >= 'a' && c <= 'z' ? static_cast<char>(c - ('a' - 'A')) : c;
+        });
+        launchers.push_back(std::move(upper));
+    }
+    for (const auto& launcher : launchers) {
         detectionConfig.profiles()[1].active_in.emplace_back(launcher);
         const ls::Identification launcherIdentification{
             .override = "captured",
             .fallback = "mako",
             .executable = "/proton/files/bin/wine64-preloader",
-            .wine_executable = std::string("C:\\Ubisoft\\") + launcher,
+            .wine_executable = std::string("C:\\Launcher\\") + launcher,
             .process_name = "GameThread",
         };
         expect(!ls::findProfile(detectionConfig, launcherIdentification),
-            "A Ubisoft launcher must stay native despite an inherited override");
+            "An excluded launcher must stay native despite an inherited override");
         auto fallbackLauncher = launcherIdentification;
         fallbackLauncher.override.reset();
         expect(!ls::findProfile(detectionConfig, fallbackLauncher),
@@ -501,7 +509,7 @@ scaling_sharpness = 0.5
             "An explicit launcher alias alone must not activate MAKO");
         auto directLauncher = launcherIdentification;
         directLauncher.wine_executable.reset();
-        directLauncher.executable = std::string("/Ubisoft/") + launcher;
+        directLauncher.executable = std::string("/Launcher/") + launcher;
         expect(!ls::findProfile(detectionConfig, directLauncher),
             "An exact launcher executable must stay native without a Wine path");
         setenv("MAKO_ENV", "1", 1);

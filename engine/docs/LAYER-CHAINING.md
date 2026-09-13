@@ -18,15 +18,15 @@ The generated wrapper exposes only MAKO's managed manifests, removes additive im
 
 ### Gamescope WSI compatibility
 
-MAKO Decky provides **Gamescope WSI (Restart)** under **Compatibility Settings** for supported 64-bit Frame Generation launches. This opt-in setting addresses artifact reports such as [#7](https://github.com/eugeniosegala/MAKO/issues/7) and [#12](https://github.com/eugeniosegala/MAKO/issues/12). Scaling automatically enables and locks its managed WSI path; HDR remains unsupported.
+MAKO Decky provides **Gamescope WSI (Restart)** under **Compatibility Settings** for supported 64-bit launches with Frame Generation, Scaling, or both. This opt-in setting addresses artifact reports such as [#7](https://github.com/eugeniosegala/MAKO/issues/7) and [#12](https://github.com/eugeniosegala/MAKO/issues/12). Scaling leaves this option independent and defaults to the combined Renderer with WSI isolated; HDR remains unsupported.
 
-Inside Gamescope, MAKO preserves the frame-generation → WSI → spatial-scaling order, with selected 64-bit MangoHud or vkBasalt processing last. It loads only validated, managed layer files. Invalid session or layer evidence fails closed to top-only MAKO with scaling suppressed, while other optional layers fail independently.
+Inside Gamescope, selecting both Scaling and WSI preserves the Renderer → WSI → spatial-scaling order, with selected 64-bit MangoHud or vkBasalt processing last. WSI-only profiles omit the lower spatial role. MAKO loads only validated, managed layer files. An ineligible session or unavailable manifest leaves WSI disabled and uses the combined Renderer, subject to its normal scaling extent checks. Other optional layers fail independently.
 
 MAKO Decky stages and repairs the host’s 64-bit Gamescope WSI payload during Renderer installation. It supports direct 64-bit native Vulkan and Proton launches, plus prepared Heroic and EmuDeck Flatpaks. It does not support Desktop Mode, mismatched nested Wayland sessions, unprepared Flatpaks, 32-bit WSI presentation, or HDR.
 
-Test Fixed 2× before Adaptive and confirm generated delivery and active scaling through the final-output counter. Disable Scaling or Gamescope WSI if pacing or output regresses.
+Test Fixed 2× before Adaptive and confirm generated delivery and active scaling through the final-output counter. The WSI toggle can be changed independently when pacing or output regresses. Restart and verify active scaling plus identical source/output sizes before comparing performance.
 
-MAKO Decky validates and stages exact architecture-specific manifests and available libraries. It does not expose the complete host implicit-layer directory. Invalid optional-tool evidence suppresses that tool; invalid WSI or lower-spatial evidence falls back to top-only MAKO with scaling inactive. HDR remains disabled in every current managed chain.
+MAKO Decky validates and stages exact architecture-specific manifests and available libraries. It does not expose the complete host implicit-layer directory. Invalid optional-tool evidence suppresses that tool. Missing staged WSI or spatial manifests keep the launch on the combined Renderer; missing surface or create evidence after a split chain starts keeps scaling native or rejects the invalid create. HDR remains disabled in every current managed chain.
 
 Layer membership cannot change after Vulkan starts. Restart the game after changing WSI, Scaling, MangoHud, or vkBasalt.
 

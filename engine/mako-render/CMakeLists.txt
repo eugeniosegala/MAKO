@@ -41,6 +41,17 @@ if(MAKO_BUILD_VK_LAYER)
         # an older SDK cannot silently remove required presentation handling.
         include(CheckCXXSourceCompiles)
         function(mako_check_native_package_headers)
+            set(revision_file "${CMAKE_CURRENT_SOURCE_DIR}/../vulkan-headers-revision.txt")
+            set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${revision_file}")
+            file(READ "${revision_file}" revision)
+            string(STRIP "${revision}" revision)
+            if(NOT revision MATCHES "^(vulkan-sdk-|v)([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+                message(FATAL_ERROR
+                    "vulkan-headers-revision.txt must contain a Vulkan-Headers "
+                    "SDK branch (vulkan-sdk-X.Y.Z) or release tag (vX.Y.Z).")
+            endif()
+            set(header_version "${CMAKE_MATCH_2}.${CMAKE_MATCH_3}.${CMAKE_MATCH_4}")
+            set(header_version_arguments "${CMAKE_MATCH_2}, ${CMAKE_MATCH_3}, ${CMAKE_MATCH_4}")
             set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
             unset(MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED CACHE)
             check_cxx_source_compiles("
@@ -48,15 +59,20 @@ if(MAKO_BUILD_VK_LAYER)
                 #ifndef VK_KHR_present_id2
                 #error Native packages require VK_KHR_present_id2
                 #endif
+                #ifndef VK_EXT_present_timing
+                #error Native packages require VK_EXT_present_timing
+                #endif
                 static_assert(VK_HEADER_VERSION_COMPLETE >=
-                    VK_MAKE_API_VERSION(0, 1, 4, 328));
+                    VK_MAKE_API_VERSION(0, ${header_version_arguments}));
                 static_assert(sizeof(VkPresentId2KHR) > 0);
+                static_assert(sizeof(VkPresentTimingsInfoEXT) > 0);
                 int main() { return 0; }
             " MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED)
             if(NOT MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED)
                 message(FATAL_ERROR
                     "Native MAKO Renderer packages require Vulkan headers "
-                    "1.4.328 or newer with VK_KHR_present_id2. Use "
+                    "${header_version} or newer with VK_KHR_present_id2 and "
+                    "VK_EXT_present_timing. Use "
                     "MAKO_PORTABLE_PACKAGE=1 with scripts/package-local.sh; "
                     "do not bypass this check. See the CMake compile log.")
             endif()

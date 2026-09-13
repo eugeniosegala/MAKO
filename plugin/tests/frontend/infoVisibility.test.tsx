@@ -1,0 +1,251 @@
+import React, { useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import type { GamepadEvent } from "@decky/ui";
+
+vi.mock("@decky/ui", () => ({
+  GamepadButton: { BUMPER_RIGHT: 6, BUMPER_LEFT: 5 },
+  gamepadDialogClasses: { FieldDescription: "Steam_FieldDescription" },
+  Focusable: ({
+    onButtonDown,
+    "flow-children": _flow,
+    children,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement> & {
+    onButtonDown?: (event: GamepadEvent) => void;
+    "flow-children"?: string;
+  }) => {
+    const ref = useRef<HTMLDivElement>(null);
+    useEffect(() => {
+      const element = ref.current!;
+      const handle = (event: Event) => onButtonDown?.(event as GamepadEvent);
+      element.addEventListener("vgp_onbuttondown", handle);
+      return () => element.removeEventListener("vgp_onbuttondown", handle);
+    }, [onButtonDown]);
+    return (
+      <div ref={ref} {...props}>
+        {children}
+      </div>
+    );
+  },
+  DialogButton: ({
+    onGamepadFocus,
+    onGamepadBlur,
+    ...props
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    onGamepadFocus?: () => void;
+    onGamepadBlur?: () => void;
+  }) => <button {...props} onFocus={onGamepadFocus} onBlur={onGamepadBlur} />,
+  PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
+  ButtonItem: ({
+    children,
+    onClick,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button onClick={onClick}>{children}</button>
+  ),
+  Navigation: { NavigateToExternalWeb: vi.fn() },
+}));
+vi.mock("../../src/api/makoApi", () => ({
+  DEFAULT_STEAM_LAUNCH_OPTION: "mako-run %command%",
+  getLaunchOption: vi.fn(async () => ({ launch_option: "mako-run %command%" })),
+}));
+vi.mock("../../src/components/SmartClipboardButton", () => ({
+  SmartClipboardButton: () => <button>Copy Launch Option</button>,
+}));
+vi.mock("../../src/i18n/i18n", () => ({
+  default: (_key: string, fallback: string) => fallback,
+}));
+
+import { InfoVisibility } from "../../src/components/InfoVisibility";
+import { ContentNotices } from "../../src/components/ContentNotices";
+import { UsageInstructions } from "../../src/components/UsageInstructions";
+import { StatusDisplay } from "../../src/components/StatusDisplay";
+import {
+  MakoInlineTip,
+  MakoSectionHeader,
+  MakoSettingRelationship,
+} from "../../src/components/MakoUi";
+
+beforeEach(() => {
+  window.SP_REACT = React;
+  localStorage.clear();
+});
+afterEach(cleanup);
+
+function pressButton(target: Element, button = 6, repeat = false) {
+  const event = new CustomEvent("vgp_onbuttondown", {
+    bubbles: true,
+    cancelable: true,
+    detail: { button, is_repeat: repeat, source: 0 },
+  });
+  fireEvent(target, event);
+  return event;
+}
+
+function isDisplayed(element: Element): boolean {
+  return (
+    getComputedStyle(element).display !== "none" &&
+    (!element.parentElement || isDisplayed(element.parentElement))
+  );
+}
+
+test("R1 hides information without changing controls, repeats, or other buttons", () => {
+  render(
+    <InfoVisibility>
+      <MakoSectionHeader description="Section tutorial">
+        Settings
+      </MakoSectionHeader>
+      <label>
+        Flow Scale
+        <input defaultValue="90" />
+      </label>
+      <div className="Steam_FieldDescription">Setting description</div>
+      <MakoInlineTip>Helpful tip</MakoInlineTip>
+      <MakoInlineTip tone="warning">Setting warning</MakoInlineTip>
+      <MakoSettingRelationship>Setting relationship</MakoSettingRelationship>
+    </InfoVisibility>,
+  );
+  const input = screen.getByRole("textbox") as HTMLInputElement;
+  fireEvent.change(input, { target: { value: "75" } });
+  input.focus();
+  const descriptions = [
+    "Section tutorial",
+    "Setting description",
+    "Helpful tip",
+    "Setting warning",
+    "Setting relationship",
+  ];
+  expect(
+    descriptions.every((text) => isDisplayed(screen.getByText(text))),
+  ).toBe(true);
+  expect(pressButton(input, 5).defaultPrevented).toBe(false);
+  expect(pressButton(input).defaultPrevented).toBe(true);
+  expect(
+    descriptions.every((text) => !isDisplayed(screen.getByText(text))),
+  ).toBe(true);
+  expect(isDisplayed(screen.getByText("Settings"))).toBe(true);
+  expect(isDisplayed(input)).toBe(true);
+  expect(input.value).toBe("75");
+  expect(document.activeElement).toBe(input);
+  pressButton(input, 6, true);
+  expect(
+    screen
+      .getByRole("button", { name: "Show info" })
+      .getAttribute("aria-pressed"),
+  ).toBe("true");
+  pressButton(input);
+  expect(
+    descriptions.every((text) => isDisplayed(screen.getByText(text))),
+  ).toBe(true);
+  expect(input.value).toBe("75");
+});
+
+test("clicking the ribbon persists the choice across reopening without changing section preferences", () => {
+  localStorage.setItem("mako-welcome-tips-collapsed", "true");
+  const { unmount } = render(
+    <InfoVisibility>
+      <button>Option</button>
+    </InfoVisibility>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Hide info" }));
+  expect(localStorage.getItem("mako-info-hidden")).toBe("true");
+  expect(localStorage.getItem("mako-welcome-tips-collapsed")).toBe("true");
+  unmount();
+  render(
+    <InfoVisibility>
+      <button>Option</button>
+    </InfoVisibility>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: "Show info" }));
+  expect(localStorage.getItem("mako-info-hidden")).toBe("false");
+});
+
+test("hides tutorials, model warnings, welcome and status information; preserves actions and focus", async () => {
+  render(
+    <InfoVisibility>
+      <ContentNotices
+        developmentBuildInfo={null}
+        showWelcome
+        engineUpdateRequired
+        isInstalling={false}
+        isInstallCompletionVisible={false}
+        isUninstalling={false}
+        onInstall={vi.fn(async () => undefined)}
+        modelStatus={{
+          lsfg: { compatible: false, reason: "lsfg-unavailable" },
+        }}
+      />
+      <UsageInstructions />
+      <StatusDisplay
+        dllDetected
+        dllDetectionStatus="DLL found"
+        isInstalled
+        installationStatus="Installed"
+      />
+    </InfoVisibility>,
+  );
+  await waitFor(() =>
+    expect(screen.getByText("mako-run %command%")).toBeTruthy(),
+  );
+  const welcomeButton = screen.getByRole("button", { name: "Hide tips" });
+  welcomeButton.focus();
+  pressButton(welcomeButton);
+  expect(document.activeElement).toBe(
+    screen.getByRole("button", { name: "Show info" }),
+  );
+  for (const text of [
+    "Hello from the MAKO Team!",
+    "Lossless Scaling model warning",
+    "mako-run %command%",
+    "DLL found",
+    "Installed",
+    "MAKO Renderer update required",
+  ]) {
+    expect(isDisplayed(screen.getByText(text))).toBe(false);
+  }
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(
+    screen.getByRole("button", { name: "Copy Launch Option" }),
+  ).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Update MAKO Renderer" }),
+  ).toBeTruthy();
+  fireEvent.click(screen.getByRole("button", { name: "Show info" }));
+  expect(screen.getByRole("button", { name: "Hide tips" })).toBeTruthy();
+  expect(screen.getByRole("alert")).toBeTruthy();
+});
+
+test("does not hide dialog content or handle buttons outside the panel", () => {
+  const parentHandler = vi.fn();
+  document.addEventListener("vgp_onbuttondown", parentHandler);
+  const { unmount } = render(
+    <InfoVisibility>
+      <button>Panel option</button>
+      {createPortal(
+        <div role="dialog">
+          <div data-mako-info="true">Confirmation</div>
+          <button>Confirm</button>
+        </div>,
+        document.body,
+      )}
+    </InfoVisibility>,
+  );
+  pressButton(screen.getByText("Panel option"));
+  expect(parentHandler).not.toHaveBeenCalled();
+  expect(isDisplayed(screen.getByText("Confirmation"))).toBe(true);
+  expect(pressButton(screen.getByText("Confirm")).defaultPrevented).toBe(false);
+  expect(parentHandler).toHaveBeenCalledTimes(1);
+  expect(screen.getByRole("button", { name: "Show info" })).toBeTruthy();
+  unmount();
+  expect(pressButton(document.body).defaultPrevented).toBe(false);
+  document.removeEventListener("vgp_onbuttondown", parentHandler);
+});

@@ -24,7 +24,7 @@ export function ModelWarning({
 
   return (
     <PanelSectionRow>
-      <div role="alert" style={{ marginBottom: "8px" }}>
+      <div role="alert" data-mako-info="true" style={{ marginBottom: "8px" }}>
         <MakoInlineTip tone="warning">
           <div style={{ fontWeight: 700, marginBottom: "6px" }}>
             {t("MODEL_WARNING_TITLE", "Lossless Scaling model warning")}

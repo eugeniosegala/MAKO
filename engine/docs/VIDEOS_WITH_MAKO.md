@@ -45,7 +45,7 @@ Use this workflow to configure MAKO graphically and open videos from the file ma
 
 Only `mpv-bin` is needed for the Flathub package. Its `/app/bin/mpv` command is a shell wrapper that replaces itself with the real `/app/bin/mpv-bin` process before Vulkan starts; `io.mpv.Mpv` is the Flatpak application ID, not the Vulkan executable identity. The UI saves profile changes automatically.
 
-Frame Generation and LS1 scaling require a lawful, user-supplied Lossless Scaling installation and `Lossless.dll`. The open MAKO Scaler does not require the DLL.
+Frame Generation and LS1 scaling require a lawful, user-supplied installation of the **default public version** of Lossless Scaling from Steam, with beta participation disabled, and its `Lossless.dll`. The open MAKO Scaler does not require the DLL.
 
 ### 2. Configure Flatpak mpv for Vulkan
 

@@ -59,6 +59,7 @@ export function StatusDisplay({
   return (
     <PanelSectionRow>
       <div
+        data-mako-info="true"
         style={{
           marginTop: topMargin,
           marginBottom: "0",

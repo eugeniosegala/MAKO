@@ -1,6 +1,6 @@
 # MAKO Renderer lifecycle
 
-This guide explains how MAKO Renderer discovers its environment, creates and replaces resources, applies settings, paces frames, recovers from pressure, and shuts down. It is a conceptual inventory of lifecycle-affecting probes and policies rather than a source-file map. The exact setting contract remains in [Configuration](CONFIGURATION.md), [Runtime configuration transitions](RUNTIME-TRANSITIONS.md), [Spatial scaling architecture](SCALING.md), [Adaptive validation](ADAPTIVE-VALIDATION.md), [HDR pipeline](HDR-PIPELINE.md), and [WSI isolation](WSI-ISOLATION.md).
+This guide explains how MAKO Renderer discovers its environment, creates and replaces resources, applies settings, paces frames, recovers from pressure, and shuts down. It is a conceptual inventory of lifecycle-affecting probes and policies rather than a source-file map. The exact setting contract remains in [Configuration](CONFIGURATION.md), [Runtime configuration transitions](RUNTIME-TRANSITIONS.md), [Spatial scaling architecture](SCALING.md), [Adaptive validation](ADAPTIVE-VALIDATION.md), [HDR pipeline](HDR-PIPELINE.md), and [WSI isolation](WSI-ISOLATION.md). [Memory management](MEMORY-MANAGEMENT.md) covers allocation, pooling, accounting, and cleanup ownership.
 
 ## Safety model
 

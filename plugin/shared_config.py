@@ -139,7 +139,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "scaling_enabled": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-bound scaling engine switch that provisions the Gamescope WSI presentation path",
+        "description": "restart-bound scaling engine switch independent of Gamescope WSI compatibility",
         "location": "toml"
     },
 

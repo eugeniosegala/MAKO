@@ -24,6 +24,7 @@ export function UsageInstructions() {
 
       <PanelSectionRow>
         <div
+          data-mako-info="true"
           style={{
             fontSize: "12px",
             lineHeight: "1.4",
@@ -40,6 +41,7 @@ export function UsageInstructions() {
 
       <PanelSectionRow>
         <div
+          data-mako-info="true"
           style={{
             fontSize: "12px",
             lineHeight: "1.4",
@@ -59,6 +61,7 @@ export function UsageInstructions() {
 
       <PanelSectionRow>
         <div
+          data-mako-info="true"
           style={{
             fontSize: "11px",
             lineHeight: "1.3",
@@ -75,6 +78,7 @@ export function UsageInstructions() {
 
       <PanelSectionRow>
         <div
+          data-mako-info="true"
           style={{
             fontSize: "11px",
             lineHeight: "1.3",

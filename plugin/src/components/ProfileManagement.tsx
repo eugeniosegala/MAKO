@@ -182,6 +182,7 @@ export function ProfileManagement({
 
       <PanelSectionRow>
         <div
+          data-mako-info="true"
           style={{
             fontSize: "11px",
             lineHeight: "1.35",
@@ -256,6 +257,7 @@ export function ProfileManagement({
           {selectedDetails && (
             <PanelSectionRow>
               <div
+                data-mako-info="true"
                 style={{
                   width: "100%",
                   padding: "6px 8px",

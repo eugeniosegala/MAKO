@@ -1,6 +1,6 @@
 # Spatial scaling architecture
 
-MAKO Renderer can reconstruct a lower-resolution Vulkan swapchain to the presentation extent, with or without Frame Generation. Scaling is disabled by default and is independent from Fixed or Adaptive scheduling. [Configuration](CONFIGURATION.md) owns user settings; [runtime transitions](RUNTIME-TRANSITIONS.md) owns live, deferred, and restart boundaries.
+MAKO Renderer can reconstruct a lower-resolution Vulkan swapchain to the presentation extent, with or without Frame Generation. Scaling is disabled by default and is independent from Fixed or Adaptive scheduling. [Configuration](CONFIGURATION.md) owns user settings; [runtime transitions](RUNTIME-TRANSITIONS.md) owns live, deferred, and restart boundaries. [Memory management](MEMORY-MANAGEMENT.md) explains allocation, pooling, accounting, and resource cleanup around the admission policy below.
 
 ## Scaling methods
 
@@ -27,7 +27,7 @@ For one saved selection, `mako-cli inspect-dll --dll <path> --ls1 ls1 --sharpnes
 
 Scaling must be enabled before the process starts because it changes layer membership and swapchain geometry. Once a scaled process is provisioned, method and sharpness changes replace only private scaler resources. A factor or supersampling change may need a game-owned swapchain recreation when it changes the effective source/presentation pair.
 
-Standalone `mako-launch` normally uses one combined Renderer role. MAKO Decky's managed Gamescope path uses three ordered roles:
+Standalone `mako-launch` and MAKO Decky with Gamescope WSI off use one combined Renderer role for scaling and Frame Generation, including inside Gamescope. Scaling does not load Gamescope WSI automatically. When both Scaling and the independent Gamescope WSI compatibility option are enabled in a supported session, MAKO Decky uses three ordered roles:
 
 ```text
 Application
@@ -86,7 +86,7 @@ The lower split role must observe a Wayland surface created through Gamescope WS
 
 For a surface whose `currentExtent` is variable, the application request is the source. MAKO enlarges it by one aspect-preserving effective factor, subject to Vulkan surface limits and memory admission.
 
-Managed Gamescope scaling also requires a positively identified output target from the server-zero feedback resolver and treats it as the normal presentation ceiling. If the source already fills that target, scaling stays native with `inactive_reason=gamescope-presentation-target-no-headroom`. Quality Supersampling may exceed the target, but it cannot bypass Vulkan limits, memory admission, or the requirement to prove the Gamescope target. Direct non-Gamescope operation applies the factor without inventing a compositor target.
+The managed Gamescope split chain also requires a positively identified output target from the server-zero feedback resolver and treats it as the normal presentation ceiling. If the source already fills that target, scaling stays native with `inactive_reason=gamescope-presentation-target-no-headroom`. Quality Supersampling may exceed the target, but it cannot bypass Vulkan limits, memory admission, or the requirement to prove the Gamescope target. The combined path uses available Gamescope target feedback but does not require the split chain's target proof. Direct non-Gamescope operation applies the factor without inventing a compositor target.
 
 The memory policy admits a presentation extent from device-local heap size and, when available, the driver's live budget and usage. It preserves already proven envelopes across safe live transitions and fails closed when the enlarged swapchain and private resources do not fit. Runtime status reports the requested and effective factor plus the active constraint or inactive reason; it does not promise an exact free-memory measurement.
 
@@ -128,7 +128,7 @@ Portable CTest covers configuration, fixed and variable extent policy, Gamescope
 
 Real-Vulkan changes need proportionate MAKO Gym evidence for both FP32 and FP16 where Frame Generation is involved. Select the applicable suites from [Testing MAKO](../../TESTING.md), including quality, spatial performance, synchronization, Gamescope, recovery, native Vulkan, DXVK, VKD3D-Proton, direct desktop, and supported Flatpak/runtime paths. Record unavailable hardware and matrix rows as not tested.
 
-Positive managed-scaling evidence requires the ordered three-role loader chain, Wayland provenance at the lower role, a source/presentation split, `inactive_reason=none`, one active upper reconstruction owner, and correct real/generated delivery. A selected method alone does not prove that scaling ran. Use `VK_LOADER_DEBUG=layer` only for focused loader captures and the `scaling`, `layers`, and `recovery` diagnostics presets from [Collect diagnostics](COLLECT_DIAGNOSTICS.md).
+Positive split-chain scaling evidence requires the ordered three-role loader chain, Wayland provenance at the lower role, a source/presentation split, `inactive_reason=none`, one active upper reconstruction owner, and correct real/generated delivery. A selected method alone does not prove that scaling ran. For the combined path, require isolated Gamescope WSI, no lower spatial role, and an active source/presentation split in the combined Renderer. Compare WSI on/off performance only at the same proven source and presentation sizes, scaler, Frame Generation settings, scene, and refresh rate; native fallback is not a scaling performance improvement. Use `VK_LOADER_DEBUG=layer` only for focused loader captures and the `scaling`, `layers`, and `recovery` diagnostics presets from [Collect diagnostics](COLLECT_DIAGNOSTICS.md).
 
 ## Code and test ownership
 

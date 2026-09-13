@@ -15,7 +15,7 @@ Disabling Gamescope WSI does not disable Gamescope, Steam, or Game Mode. It chan
 
 MAKO expands one application present into generated present(s) followed by the real frame. If Gamescope WSI sits above a single combined MAKO layer, it observes only the application's original call while MAKO injects additional calls below it. Gamescope WSI therefore cannot pace every delivered image.
 
-The managed scaling path uses this explicit order:
+When both Scaling and Gamescope WSI compatibility are enabled, the managed path uses this explicit order:
 
 ```text
 Application / Proton translation
@@ -53,16 +53,18 @@ The private path prevents inherited implicit layers from joining accidentally. K
 
 ## Guarded Gamescope WSI paths
 
-MAKO Decky admits a staged 64-bit Gamescope WSI payload in two cases:
+MAKO Decky admits a staged 64-bit Gamescope WSI payload only when the per-profile **Gamescope WSI (Restart)** compatibility option was enabled before launch:
 
-- Scaling was enabled before launch, which requires the complete three-role split.
-- The per-profile **Gamescope WSI (Restart)** compatibility option was enabled for an FG-only game.
+- With Scaling enabled, the WSI path requires the complete three-role split.
+- With Scaling disabled, the WSI path uses the upper Renderer followed by Gamescope WSI.
 
-The option is independent from the mutually exclusive MangoHud/vkBasalt selection, and both WSI paths remain SDR-only. MAKO Decky validates the host manifest identity, library, architecture, and activation gates, then copies only that payload into its managed compatibility directory. It never exposes the full host implicit-layer directory.
+Scaling alone keeps WSI isolated and uses the existing combined Renderer. The WSI toggle remains independently editable, defaults off, and is not changed by enabling or disabling Scaling. Wrapper regeneration preserves the canonical saved WSI value; old scaling-implied WSI activation is not imported as an explicit opt-in.
 
-Eligibility follows Gamescope WSI's active-session boundary: `GAMESCOPE_WAYLAND_DISPLAY` must be nonempty, and `WAYLAND_DISPLAY` must be empty or equal to it. Desktop Mode, a mismatched nested Wayland session, invalid staged files, or missing lower-role evidence fails closed to top-only MAKO; scaling stays inactive rather than loading a partial chain.
+The option is independent from Scaling and the mutually exclusive MangoHud/vkBasalt selection, and both WSI paths remain SDR-only. MAKO Decky validates the host manifest identity, library, architecture, and activation gates, then copies only that payload into its managed compatibility directory. It never exposes the full host implicit-layer directory.
 
-The managed wrapper sets the semantic prefix through `VK_INSTANCE_LAYERS`; manifest-directory enumeration does not define order. When scaling is active, the order is render role, Gamescope WSI, spatial role, then any selected post-process tool. Caller-requested layers follow that managed prefix. See [Optional graphics integrations](LAYER-CHAINING.md) for supported exceptions.
+Eligibility follows Gamescope WSI's active-session boundary: `GAMESCOPE_WAYLAND_DISPLAY` must be nonempty, and `WAYLAND_DISPLAY` must be empty or equal to it. Desktop Mode, a mismatched nested Wayland session, or unavailable staged manifests leave WSI disabled and use the combined Renderer. That path retains its own extent checks and can remain native if the game cannot supply a distinct source size. Once a split chain is selected, missing lower-role evidence fails closed; it cannot silently become a combined chain after Vulkan starts.
+
+The managed wrapper sets the semantic prefix through `VK_INSTANCE_LAYERS`; manifest-directory enumeration does not define order. When Scaling and WSI are both selected, the order is render role, Gamescope WSI, spatial role, then any selected post-process tool. Caller-requested layers follow that managed prefix. See [Optional graphics integrations](LAYER-CHAINING.md) for supported exceptions.
 
 Prepared 64-bit Heroic and EmuDeck Flatpak launches can receive the same bounded WSI payload and MAKO extension. Unprepared Flatpaks, 32-bit WSI presentation, HDR, broader host layouts, and other sandboxes are separate validation boundaries.
 
@@ -72,7 +74,7 @@ Gamescope WSI may replace the surface handle between upper and lower roles. Fixe
 
 Call order alone is insufficient. The lower spatial role must observe a surface created through `vkCreateWaylandSurfaceKHR`, proving that Gamescope WSI converted the application's X11 window into the compositor-owned surface. An XCB or Xlib surface at that boundary remains native with `inactive_reason=gamescope-wsi-surface-unproven`; the upper role can still retain Frame Generation. Direct combined Renderer operation has no intervening WSI owner and does not require this split-only proof.
 
-For variable surfaces, managed scaling also requires the positively identified Gamescope output target. A missing target or a source with no enlargement headroom remains native. [Spatial scaling architecture](SCALING.md) owns the full fixed/variable extent policy.
+For variable surfaces, scaling through the managed split chain also requires the positively identified Gamescope output target. A missing target or a source with no enlargement headroom remains native. [Spatial scaling architecture](SCALING.md) owns the full fixed/variable extent policy.
 
 ## Presentation and swapchain policy
 
@@ -103,8 +105,8 @@ Do not claim general multi-instance, multi-queue, or multi-swapchain-batch suppo
 | --- | --- |
 | MAKO render role | Admitted and gated by `ENABLE_MAKO=1` |
 | Gamescope compositor and Game Mode | Remain active outside the application layer chain |
-| Gamescope WSI | Excluded normally; admitted only by a guarded scaling or explicit compatibility profile |
-| MAKO spatial role | Admitted only by the complete managed scaling chain |
+| Gamescope WSI | Excluded normally, including for scaling; admitted only by an explicit compatibility profile |
+| MAKO spatial role | Admitted only when Scaling and Gamescope WSI select the complete managed split chain |
 | Known competing Frame Generation layers | Disabled |
 | System implicit overlays, capture, Mesa helpers, and vendor layers | Excluded unless a named guarded exception stages an exact manifest |
 | Explicit application layers | Outside this implicit-discovery policy |
@@ -114,7 +116,9 @@ This boundary intentionally prefers deterministic presentation over arbitrary la
 
 ## Diagnostics and validation
 
-For an ordinary managed launch, loader and Renderer evidence must agree that Gamescope WSI is isolated, HDR exposure is disabled, the render role selected a profile and backend, and ordered SDR presentation owns delivery. For an FG-only compatibility launch, `VK_LAYER_MAKO_render` must be above the architecture-correct Gamescope WSI identity. For scaling, the complete three-role order, lower Wayland provenance, authoritative create relay, active source/presentation split, one upper reconstruction owner, and correct generated/real delivery are all required.
+For an ordinary managed launch, loader and Renderer evidence must agree that Gamescope WSI is isolated, HDR exposure is disabled, the render role selected a profile and backend, and ordered SDR presentation owns delivery. For an FG-only compatibility launch, `VK_LAYER_MAKO_render` must be above the architecture-correct Gamescope WSI identity. For scaling with WSI, the complete three-role order, lower Wayland provenance, authoritative create relay, active source/presentation split, one upper reconstruction owner, and correct generated/real delivery are all required.
+
+Scaling with WSI off must instead prove a combined Renderer context with WSI isolated, no lower spatial role, and an active source/presentation split. WSI on/off comparisons must retain the same source/output sizes, scaler, FG mode, scene, and refresh rate; a safe native fallback cannot count as improved scaling performance.
 
 Use `VK_LOADER_DEBUG=layer` only for a short reproduction because it is verbose. Presentation diagnostics are also opt-in and can affect timing. Collect the `layers`, `startup`, `scaling`, `performance`, and `recovery` presets described in [Collect diagnostics](COLLECT_DIAGNOSTICS.md).
 

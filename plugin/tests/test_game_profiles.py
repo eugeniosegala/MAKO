@@ -29,6 +29,10 @@ from py_modules.mako_plugin.config_schema import (  # noqa: E402
 from py_modules.mako_plugin.configuration import ConfigurationService  # noqa: E402
 from py_modules.mako_plugin.process_detection import (  # noqa: E402
     detect_processes_for_steam_app,
+    is_matchable_process_name,
+)
+from py_modules.mako_plugin.launcher_exclusions_generated import (  # noqa: E402
+    EXCLUDED_WINDOWS_LAUNCHERS,
 )
 
 
@@ -1011,6 +1015,13 @@ class GameProfileTests(unittest.TestCase):
 
 
 class ProcessDetectionTests(unittest.TestCase):
+    def test_all_registered_launchers_are_excluded_from_profile_aliases(self):
+        for name in EXCLUDED_WINDOWS_LAUNCHERS:
+            for candidate in (name, name.upper(), name[:15], name[:15].upper(),
+                              "C:\\Launcher\\" + name, "/Launcher/" + name):
+                with self.subTest(candidate=candidate):
+                    self.assertFalse(is_matchable_process_name(candidate))
+
     def test_ubisoft_launchers_are_not_captured_as_game_aliases(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             proc_root = Path(temp_dir)

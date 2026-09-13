@@ -1,5 +1,7 @@
 {
   "es": {
+    "CONTENT_HIDE_INFO": "Ocultar información",
+    "CONTENT_SHOW_INFO": "Mostrar información",
     "CONTENT_SCALING": "Escalado",
     "SCALING_ENABLED": "Activar escalado (Reiniciar)",
     "EXPERIMENTAL_LABEL": "Experimental",
@@ -194,7 +196,7 @@
     "CONFIG_DISABLE_HDR_EXPOSURE": "Desactivar HDR",
     "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "HDR no está disponible en esta versión. Este ajuste obligatorio mantiene activa la ruta SDR estable.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (Reiniciar)",
-    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Puede reducir artefactos de movimiento coloreados o pixelados en algunos juegos mediante la ruta de presentación de Gamescope. El escalado lo activa automáticamente. En perfiles solo con generación de cuadros, actívelo únicamente para los juegos afectados.",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Puede reducir artefactos de movimiento coloreados o pixelados en algunos juegos mediante la ruta de presentación de Gamescope. Es opcional tanto con el escalado como con la generación de cuadros. Actívelo solo cuando el juego lo necesite.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "Esta ruta de compatibilidad se limita a lanzamientos de host de 64 bits compatibles. Déjela desactivada cuando el juego no la necesite, ya que puede afectar al rendimiento.",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "Imágenes de intercambio del juego (Reiniciar)",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "Puede corregir juegos que no se inician con la generación de cuadros al conservar el mínimo de imágenes de intercambio solicitado por el juego. Actívelo solo para los juegos afectados.",
@@ -305,6 +307,8 @@
     "MODEL_WARNING_CHECK_UPDATES": "Buscar actualizaciones de MAKO Decky"
   },
   "ja": {
+    "CONTENT_HIDE_INFO": "情報を隠す",
+    "CONTENT_SHOW_INFO": "情報を表示",
     "CONTENT_SCALING": "スケーリング",
     "SCALING_ENABLED": "スケーリングを有効化（再起動）",
     "EXPERIMENTAL_LABEL": "実験的",
@@ -499,7 +503,7 @@
     "CONFIG_DISABLE_HDR_EXPOSURE": "HDR を無効化",
     "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "HDR はこのリリースでは利用できません。この必須設定は安定した SDR パスを維持します。",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI（再起動）",
-    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Gamescope の表示経路を使用することで、一部のゲームで色付きまたはピクセル状のモーションアーティファクトを軽減できる場合があります。スケーリングでは自動的に有効になります。フレーム生成のみのプロファイルでは、影響を受けるゲームにだけ有効にしてください。",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Gamescope の表示経路を使用することで、一部のゲームで色付きまたはピクセル状のモーションアーティファクトを軽減できる場合があります。スケーリングとフレーム生成のどちらでも任意に使用できます。ゲームで必要な場合にのみ有効にしてください。",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "この互換性経路は、対応する 64 ビットのホスト起動に限定されています。ゲームで不要な場合は、パフォーマンスに影響する可能性があるためオフにしてください。",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "ゲームのスワップチェーン画像（再起動）",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "ゲームが要求したスワップチェーン画像の最小数を維持することで、フレーム生成を有効にすると起動しないゲームを修正できる場合があります。影響を受けるゲームでのみ有効にしてください。",
@@ -610,6 +614,8 @@
     "MODEL_WARNING_CHECK_UPDATES": "MAKO Deckyの更新を確認"
   },
   "ko": {
+    "CONTENT_HIDE_INFO": "정보 숨기기",
+    "CONTENT_SHOW_INFO": "정보 표시",
     "CONTENT_SCALING": "스케일링",
     "SCALING_ENABLED": "스케일링 활성화 (재시작)",
     "EXPERIMENTAL_LABEL": "실험적",
@@ -804,7 +810,7 @@
     "CONFIG_DISABLE_HDR_EXPOSURE": "HDR 비활성화",
     "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "HDR은 이 릴리스에서 사용할 수 없습니다. 이 필수 설정은 안정적인 SDR 경로를 유지합니다.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (재시작)",
-    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Gamescope 표시 경로를 사용하여 일부 게임의 색상 또는 픽셀 형태 모션 아티팩트를 줄일 수 있습니다. 스케일링에서는 자동으로 활성화됩니다. 프레임 생성 전용 프로필에서는 영향을 받는 게임에만 활성화하세요.",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Gamescope 표시 경로를 사용하여 일부 게임의 색상 또는 픽셀 형태 모션 아티팩트를 줄일 수 있습니다. 스케일링과 프레임 생성 모두에서 선택적으로 사용할 수 있습니다. 게임에 필요한 경우에만 활성화하세요.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "이 호환성 경로는 지원되는 64비트 호스트 실행으로 제한됩니다. 성능에 영향을 줄 수 있으므로 게임에 필요하지 않으면 꺼 두세요.",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "게임 스왑체인 이미지 (재시작)",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "게임이 요청한 최소 스왑체인 이미지 수를 유지하여 프레임 생성 사용 시 시작되지 않는 게임을 해결할 수 있습니다. 영향을 받는 게임에서만 활성화하세요.",
@@ -941,6 +947,8 @@
     }
   },
   "pt-BR": {
+    "CONTENT_HIDE_INFO": "Ocultar informações",
+    "CONTENT_SHOW_INFO": "Mostrar informações",
     "CONTENT_SCALING": "Redimensionamento",
     "SCALING_ENABLED": "Ativar redimensionamento (Reiniciar)",
     "EXPERIMENTAL_LABEL": "Experimental",
@@ -1135,7 +1143,7 @@
     "CONFIG_DISABLE_HDR_EXPOSURE": "Desativar HDR",
     "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "HDR não está disponível nesta versão. Esta configuração obrigatória mantém o caminho SDR estável ativo.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (Reiniciar)",
-    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Pode reduzir artefatos de movimento coloridos ou pixelados em alguns jogos usando o caminho de apresentação do Gamescope. O redimensionamento o ativa automaticamente. Em perfis somente com geração de quadros, ative-o apenas nos jogos afetados.",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Pode reduzir artefatos de movimento coloridos ou pixelados em alguns jogos usando o caminho de apresentação do Gamescope. É opcional tanto com o redimensionamento quanto com a geração de quadros. Ative-o apenas quando o jogo precisar dele.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "Este caminho de compatibilidade é limitado a inicializações de host de 64 bits compatíveis. Deixe-o desativado quando o jogo não precisar dele, pois pode afetar o desempenho.",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "Imagens de swapchain do jogo (Reiniciar)",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "Pode corrigir jogos que não iniciam com a geração de quadros ao preservar o mínimo de imagens de swapchain solicitado pelo jogo. Ative apenas nos jogos afetados.",
@@ -1246,6 +1254,8 @@
     "MODEL_WARNING_CHECK_UPDATES": "Procurar atualizações do MAKO Decky"
   },
   "pt-PT": {
+    "CONTENT_HIDE_INFO": "Ocultar informações",
+    "CONTENT_SHOW_INFO": "Mostrar informações",
     "CONTENT_SCALING": "Redimensionamento",
     "SCALING_ENABLED": "Ativar redimensionamento (Reiniciar)",
     "EXPERIMENTAL_LABEL": "Experimental",
@@ -1440,7 +1450,7 @@
     "CONFIG_DISABLE_HDR_EXPOSURE": "Desativar HDR",
     "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "O HDR não está disponível nesta versão. Esta definição obrigatória mantém ativo o caminho SDR estável.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (Reiniciar)",
-    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Pode reduzir artefactos de movimento coloridos ou pixelizados em alguns jogos através do caminho de apresentação do Gamescope. O redimensionamento ativa-o automaticamente. Em perfis apenas com geração de fotogramas, ative-o somente nos jogos afetados.",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Pode reduzir artefactos de movimento coloridos ou pixelizados em alguns jogos através do caminho de apresentação do Gamescope. É opcional tanto com o redimensionamento como com a geração de fotogramas. Ative-o apenas quando o jogo precisar dele.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "Este caminho de compatibilidade é limitado a arranques de host de 64 bits compatíveis. Deixe-o desativado quando o jogo não precisar dele, pois pode afetar o desempenho.",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "Imagens de swapchain do jogo (Reiniciar)",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "Pode corrigir jogos que não iniciam com a geração de fotogramas ao preservar o mínimo de imagens de swapchain pedido pelo jogo. Ative apenas nos jogos afetados.",
@@ -1564,6 +1574,8 @@
     "ukrainian": "uk"
   },
   "template": {
+    "CONTENT_HIDE_INFO": "Hide info",
+    "CONTENT_SHOW_INFO": "Show info",
     "CONTENT_SCALING": "Spatial Settings",
     "SCALING_ENABLED": "Enable Scaling (Restart)",
     "EXPERIMENTAL_LABEL": "Experimental",
@@ -1758,7 +1770,7 @@
     "CONFIG_DISABLE_HDR_EXPOSURE": "Disable HDR",
     "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "HDR is unavailable in this release. This required setting keeps the stable SDR path active.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (Restart)",
-    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "May reduce coloured or pixelated motion artifacts in some games by using Gamescope's presentation path. Scaling enables it automatically. For FG-only profiles, enable it only for affected games.",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "May reduce coloured or pixelated motion artifacts in some games by using Gamescope's presentation path. Optional with both Scaling and Frame Generation. Enable it only when the game needs it.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "This compatibility path is limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "Game Swapchain Images (Restart)",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "Can fix games that fail to start with Frame Generation by preserving the game's requested swapchain image minimum. Enable it only for affected games.",
@@ -1869,6 +1881,8 @@
     "MODEL_WARNING_CHECK_UPDATES": "Check for MAKO Decky updates"
   },
   "uk": {
+    "CONTENT_HIDE_INFO": "Сховати інформацію",
+    "CONTENT_SHOW_INFO": "Показати інформацію",
     "CONTENT_SCALING": "Масштабування",
     "SCALING_ENABLED": "Увімкнути масштабування (перезапуск)",
     "EXPERIMENTAL_LABEL": "Експериментально",
@@ -2063,7 +2077,7 @@
     "CONFIG_DISABLE_HDR_EXPOSURE": "Вимкнути HDR",
     "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "HDR у цьому випуску недоступний. Це обов’язкове налаштування зберігає стабільний шлях SDR.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI (перезапуск)",
-    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Може зменшити кольорові або піксельні артефакти руху в деяких іграх завдяки шляху презентації Gamescope. Масштабування вмикає його автоматично. У профілях лише з генерацією кадрів вмикайте його тільки для ігор із такими артефактами.",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "Може зменшити кольорові або піксельні артефакти руху в деяких іграх завдяки шляху презентації Gamescope. Необов’язковий як для масштабування, так і для генерації кадрів. Вмикайте лише тоді, коли це потрібно грі.",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "Цей шлях сумісності обмежений підтримуваними 64-бітними запусками на хості. Залишайте його вимкненим, коли він не потрібен грі, оскільки він може вплинути на продуктивність.",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "Зображення swapchain гри (перезапуск)",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "Може виправити ігри, які не запускаються з генерацією кадрів, зберігаючи запитаний грою мінімум зображень swapchain. Вмикайте лише для проблемних ігор.",
@@ -2174,6 +2188,8 @@
     "MODEL_WARNING_CHECK_UPDATES": "Перевірити оновлення MAKO Decky"
   },
   "zh": {
+    "CONTENT_HIDE_INFO": "隐藏信息",
+    "CONTENT_SHOW_INFO": "显示信息",
     "CONTENT_SCALING": "图像缩放",
     "SCALING_ENABLED": "启用缩放（重启）",
     "EXPERIMENTAL_LABEL": "实验性",
@@ -2368,7 +2384,7 @@
     "CONFIG_DISABLE_HDR_EXPOSURE": "禁用 HDR",
     "CONFIG_DISABLE_HDR_EXPOSURE_DESC": "此版本不支持 HDR。此必需设置会保持稳定的 SDR 路径启用。",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY": "Gamescope WSI（重启）",
-    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "通过使用 Gamescope 显示路径，它可能会减少某些游戏中的彩色或像素化运动伪影。启用缩放时会自动启用此功能。对于仅使用帧生成的配置文件，请只为受影响的游戏启用。",
+    "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC": "通过使用 Gamescope 显示路径，它可能会减少某些游戏中的彩色或像素化运动伪影。缩放和帧生成均可选择是否使用此功能。仅在游戏需要时启用。",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING": "此兼容路径仅限受支持的 64 位主机启动方式。游戏不需要时请将其关闭，因为它可能影响性能。",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY": "游戏交换链图像（重启）",
     "CONFIG_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY_DESC": "保留游戏请求的交换链最小图像数，可能修复启用帧生成后无法启动的游戏。仅对受影响的游戏启用。",

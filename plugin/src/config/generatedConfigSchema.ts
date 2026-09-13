@@ -159,7 +159,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "scaling_enabled",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "restart-bound scaling engine switch that provisions the Gamescope WSI presentation path"
+    description: "restart-bound scaling engine switch independent of Gamescope WSI compatibility"
   },
   scaling_method: {
     name: "scaling_method",

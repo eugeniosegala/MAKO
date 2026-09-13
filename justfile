@@ -20,6 +20,14 @@ format-markdown:
 check-markdown-format:
     pnpm --dir plugin run format:markdown:check
 
+# Generate Renderer and Decky launcher lists from the documented shared registry.
+generate-launcher-exclusions:
+    python3 scripts/generate-launcher-exclusions.py
+
+# Check launcher exclusion bindings without changing files.
+check-launcher-exclusions:
+    python3 scripts/generate-launcher-exclusions.py --check
+
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 

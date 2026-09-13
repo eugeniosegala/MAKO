@@ -1,5 +1,6 @@
 """Deterministic tests for the generated Vulkan-layer search environment."""
 
+from itertools import product
 import json
 import os
 from pathlib import Path
@@ -114,7 +115,66 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "")
 
-    def test_scaling_profile_admits_gamescope_presentation_split_at_start(self):
+    def test_scaling_without_wsi_uses_combined_renderer_with_staged_layers(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.service.gamescope_wsi_compatibility_dir = root / "wsi"
+            self.service.spatial_scaling_layer_dir = root / "spatial"
+            for directory, name in (
+                (self.service.gamescope_wsi_compatibility_dir,
+                 configuration_module.GAMESCOPE_WSI_MANIFEST_FILENAME_64),
+                (self.service.spatial_scaling_layer_dir,
+                 configuration_module.SPATIAL_SCALING_JSON_FILENAME),
+            ):
+                directory.mkdir()
+                (directory / name).write_text("{}", encoding="utf-8")
+            flatpak_dir = root / "flatpak"
+            flatpak_dir.mkdir()
+            (flatpak_dir / configuration_module.SPATIAL_SCALING_JSON_FILENAME).write_text(
+                "{}", encoding="utf-8"
+            )
+            for sandboxed, frame_generation, method in product(
+                (False, True), (False, True),
+                ("native", "mako", "ls1", "ls1-performance"),
+            ):
+                with self.subTest(
+                    sandboxed=sandboxed, fg=frame_generation, method=method,
+                ):
+                    config = ConfigurationManager.get_defaults()
+                    config.update(
+                        scaling_enabled=True,
+                        scaling_method=method,
+                        frame_generation_enabled=frame_generation,
+                        gamescope_wsi_compatibility=False,
+                    )
+                    original = config.copy()
+                    with patch.object(
+                        configuration_module, "FLATPAK_IMPLICIT_LAYER_DIR",
+                        str(flatpak_dir if sandboxed else root / "absent"),
+                    ):
+                        values = self._evaluate({
+                            **self.gamescope_environment,
+                            "ENABLE_GAMESCOPE_WSI": "1",
+                            "ENABLE_MAKO_SPATIAL_SCALING": "1",
+                            "MAKO_SPLIT_LAYER_CHAIN": "2",
+                        }, config)
+
+                    self.assertEqual(
+                        values["IMPLICIT"], str(flatpak_dir) if sandboxed
+                        else "/private/mako/implicit_layer.d",
+                    )
+                    self.assertEqual(values["ENABLE"], "1")
+                    self.assertEqual(values["INSTANCE"], "")
+                    self.assertEqual(values["SPLIT"], "")
+                    self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+                    self.assertEqual(values["ENABLE_GAMESCOPE"], "")
+                    self.assertEqual(values["DISABLE_SCALING"], "1")
+                    self.assertEqual(values["ENABLE_SCALING"], "")
+                    self.assertEqual(values["HDR_EXPOSURE_DISABLED"], "1")
+                    self.assertEqual(self.last_stderr, "")
+                    self.assertEqual(config, original)
+
+    def test_scaling_with_explicit_wsi_admits_presentation_split_at_start(self):
         with (
             tempfile.TemporaryDirectory() as compatibility_dir,
             tempfile.TemporaryDirectory() as scaling_dir,
@@ -133,6 +193,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             self.service.spatial_scaling_layer_dir = scaling_path
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             values = self._evaluate(self.gamescope_environment, config)
 
         self.assertEqual(
@@ -161,6 +222,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             )
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             values = self._evaluate(
                 {
                     **self.gamescope_environment,
@@ -186,6 +248,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             self.service.gamescope_wsi_compatibility_dir = compatibility_path
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             values = self._evaluate(self.gamescope_environment, config)
 
         self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
@@ -214,6 +277,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             self.service.spatial_scaling_layer_dir = scaling_path
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             config["disable_mako"] = True
             values = self._evaluate(
                 {"VK_INSTANCE_LAYERS": "VK_LAYER_existing"},
@@ -250,6 +314,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             ).write_text("{}", encoding="utf-8")
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             config["scaling_method"] = "native"
             config["external_vulkan_layer"] = "mangohud"
             values = self._evaluate(self.gamescope_environment, config)
@@ -519,6 +584,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             self.service.spatial_scaling_layer_dir = scaling_path
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             values = self._evaluate(
                 {
                     **self.gamescope_environment,
@@ -555,6 +621,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             self.service.spatial_scaling_layer_dir = scaling_path
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             values = self._evaluate(config=config)
 
         self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
@@ -804,6 +871,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 ).write_text("{}", encoding="utf-8")
                 config = ConfigurationManager.get_defaults()
                 config["scaling_enabled"] = True
+                config["gamescope_wsi_compatibility"] = True
                 with patch.object(
                     configuration_module,
                     "FLATPAK_IMPLICIT_LAYER_DIR",
@@ -845,6 +913,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             with patch.object(
                 configuration_module,
                 "FLATPAK_IMPLICIT_LAYER_DIR",
@@ -1214,6 +1283,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             log_path = Path(diagnostics_dir) / "present-diagnostics.log"
             config = ConfigurationManager.get_defaults()
             config["scaling_enabled"] = True
+            config["gamescope_wsi_compatibility"] = True
             script = "\n".join([
                 *self.service._script_configuration_lines(config),
                 *self.service._generate_layer_environment_lines(),
@@ -1544,7 +1614,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         current_script = self.service._generate_script_content(
             ConfigurationManager.get_defaults()
         )
-        for stale_version in (1, 41, 999):
+        for stale_version in (1, 41, 58, 999):
             with self.subTest(stale_version=stale_version):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     self.service.mako_script_path = Path(temp_dir) / "wrapper"

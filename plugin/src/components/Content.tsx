@@ -26,6 +26,7 @@ import { FgmodClipboardButton } from "./FgmodClipboardButton";
 import { FeatureSettings } from "./FeatureSettings";
 import { RuntimeStatusCard } from "./RuntimeStatusCard";
 import { ContentNotices } from "./ContentNotices";
+import { InfoVisibility } from "./InfoVisibility";
 import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
@@ -113,6 +114,7 @@ export function Content() {
 
   const keepFocusedControlVisible = (event: FocusEvent<HTMLDivElement>) => {
     const target = event.target;
+    if (target.closest('[data-mako-info-toggle="true"]')) return;
 
     // Decky's controller navigation can move focus before its scroll container
     // has caught up, most noticeably when navigating from the bottom back to
@@ -137,7 +139,7 @@ export function Content() {
     hasEngineUpdateNotice;
 
   return (
-    <div onFocusCapture={keepFocusedControlVisible}>
+    <InfoVisibility onFocusCapture={keepFocusedControlVisible}>
       <MakoButtonTheme />
       <PanelSection>
         <MakoReleaseIdentity
@@ -209,7 +211,9 @@ export function Content() {
         {isInstalled && (
           <>
             {mainRunningApp && (
-              <RuntimeStatusCard runtimeState={scalingRuntimeState} />
+              <div data-mako-info="true">
+                <RuntimeStatusCard runtimeState={scalingRuntimeState} />
+              </div>
             )}
             <FeatureSettings
               config={config}
@@ -291,6 +295,6 @@ export function Content() {
           </>
         )}
       </PanelSection>
-    </div>
+    </InfoVisibility>
   );
 }
