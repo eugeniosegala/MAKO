@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from "react";
 import { createPortal } from "react-dom";
 import {
+  act,
   cleanup,
   fireEvent,
   render,
@@ -75,11 +76,34 @@ import {
   MakoSettingRelationship,
 } from "../../src/components/MakoUi";
 
+const animationFrames = new Map<number, FrameRequestCallback>();
+let frameId = 0;
+
 beforeEach(() => {
   window.SP_REACT = React;
   localStorage.clear();
+  animationFrames.clear();
+  vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+    animationFrames.set(++frameId, callback);
+    return frameId;
+  });
+  vi.stubGlobal("cancelAnimationFrame", (id: number) =>
+    animationFrames.delete(id),
+  );
+  HTMLElement.prototype.scrollIntoView = vi.fn();
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
+
+function flushAnimationFrames() {
+  act(() => {
+    const callbacks = [...animationFrames.values()];
+    animationFrames.clear();
+    callbacks.forEach((callback) => callback(0));
+  });
+}
 
 function pressButton(target: Element, button = 6, repeat = false) {
   const event = new CustomEvent("vgp_onbuttondown", {
@@ -170,6 +194,80 @@ test("clicking the ribbon persists the choice across reopening without changing 
   );
   fireEvent.click(screen.getByRole("button", { name: "Show info" }));
   expect(localStorage.getItem("mako-info-hidden")).toBe("false");
+});
+
+test("R1 refocuses the selected control and anchors it after both hide and show reflow", () => {
+  render(
+    <div data-testid="scroller" style={{ overflowY: "auto" }}>
+      <InfoVisibility>
+        <MakoInlineTip>Long tutorial above the control</MakoInlineTip>
+        <input aria-label="Flow Scale" defaultValue="90" />
+      </InfoVisibility>
+    </div>,
+  );
+  const scroller = screen.getByTestId("scroller");
+  Object.defineProperties(scroller, {
+    scrollHeight: { value: 1400 },
+    clientHeight: { value: 400 },
+  });
+  scroller.scrollTop = 600;
+  const control = screen.getByRole("textbox");
+  vi.spyOn(control, "getBoundingClientRect").mockImplementation(() => {
+    const offset = control.closest(".Mako_InfoHidden") ? 250 : 700;
+    return new DOMRect(0, offset - scroller.scrollTop, 100, 32);
+  });
+  control.focus();
+  const focus = vi.spyOn(control, "focus");
+  expect(animationFrames.size).toBe(1);
+  pressButton(control);
+  expect(document.activeElement).toBe(control);
+  expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
+  expect(scroller.scrollTop).toBe(150);
+  expect(control.getBoundingClientRect().top).toBe(100);
+  expect(animationFrames.size).toBe(0);
+  pressButton(control);
+  expect(scroller.scrollTop).toBe(600);
+  expect(control.getBoundingClientRect().top).toBe(100);
+  expect(document.activeElement).toBe(control);
+  flushAnimationFrames();
+  expect(control.scrollIntoView).not.toHaveBeenCalled();
+});
+
+test("normal navigation scrolls only the latest focus and cancels work on unmount", () => {
+  const { unmount } = render(
+    <InfoVisibility>
+      <button>First option</button>
+      <button>Second option</button>
+    </InfoVisibility>,
+  );
+  screen.getByRole("button", { name: "First option" }).focus();
+  const second = screen.getByRole("button", { name: "Second option" });
+  second.focus();
+  flushAnimationFrames();
+  expect(second.scrollIntoView).toHaveBeenCalledExactlyOnceWith({
+    block: "center",
+    inline: "nearest",
+    behavior: "auto",
+  });
+  expect(vi.mocked(second.scrollIntoView).mock.contexts).toEqual([second]);
+  screen.getByRole("button", { name: "First option" }).focus();
+  expect(animationFrames.size).toBe(1);
+  unmount();
+  expect(animationFrames.size).toBe(0);
+});
+
+test("a ribbon toggle keeps focus there without scrolling to the panel bottom", () => {
+  render(
+    <InfoVisibility>
+      <button>Option</button>
+    </InfoVisibility>,
+  );
+  const ribbon = screen.getByRole("button", { name: "Hide info" });
+  ribbon.focus();
+  fireEvent.click(ribbon);
+  flushAnimationFrames();
+  expect(document.activeElement).toBe(ribbon);
+  expect(ribbon.scrollIntoView).not.toHaveBeenCalled();
 });
 
 test("unmounts hidden information and its navigation rows; preserves actions and focus", async () => {

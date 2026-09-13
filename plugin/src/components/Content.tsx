@@ -1,5 +1,4 @@
 import { MakoInfo } from "./MakoInfo";
-import type { FocusEvent } from "react";
 import {
   ButtonItem,
   PanelSection,
@@ -113,23 +112,6 @@ export function Content() {
     showModal(<FlatpaksModal />);
   };
 
-  const keepFocusedControlVisible = (event: FocusEvent<HTMLDivElement>) => {
-    const target = event.target;
-    if (target.closest('[data-mako-info-toggle="true"]')) return;
-
-    // Decky's controller navigation can move focus before its scroll container
-    // has caught up, most noticeably when navigating from the bottom back to
-    // the first controls. Centre the newly focused control without animation
-    // so the top of the plugin is fully reachable and no scroll requests queue.
-    requestAnimationFrame(() => {
-      target.scrollIntoView({
-        block: "center",
-        inline: "nearest",
-        behavior: "auto",
-      });
-    });
-  };
-
   const hasDevelopmentNotice = Boolean(localDevelopmentBuildInfo);
   const hasRunningAppNotice = Boolean(isInstalled && mainRunningApp);
   const hasEngineUpdateNotice = Boolean(isInstalled && engineUpdateRequired);
@@ -140,7 +122,7 @@ export function Content() {
     hasEngineUpdateNotice;
 
   return (
-    <InfoVisibility onFocusCapture={keepFocusedControlVisible}>
+    <InfoVisibility>
       <MakoButtonTheme />
       <PanelSection>
         <MakoReleaseIdentity

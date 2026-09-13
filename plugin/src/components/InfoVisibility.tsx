@@ -5,6 +5,8 @@ import {
   type GamepadEvent,
 } from "@decky/ui";
 import {
+  useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type FocusEventHandler,
@@ -17,15 +19,27 @@ import { InfoHiddenContext } from "./MakoInfo";
 
 // Use Decky's resolved class, never a hard-coded Steam CSS module name.
 const infoSelector = `[data-mako-info="true"], .${gamepadDialogClasses.FieldDescription}`;
+const ribbonSelector = '[data-mako-info-toggle="true"]';
+
+function scrollContainer(element: HTMLElement): HTMLElement | null {
+  const view = element.ownerDocument.defaultView;
+  for (
+    let parent = element.parentElement;
+    parent;
+    parent = parent.parentElement
+  ) {
+    if (
+      parent.scrollHeight > parent.clientHeight &&
+      /auto|scroll|overlay/.test(view?.getComputedStyle(parent).overflowY ?? "")
+    ) {
+      return parent;
+    }
+  }
+  return element.ownerDocument.scrollingElement as HTMLElement | null;
+}
 
 /** Keep help visibility local to the panel, independent of game profiles. */
-export function InfoVisibility({
-  children,
-  onFocusCapture,
-}: {
-  children: ReactNode;
-  onFocusCapture?: FocusEventHandler<HTMLDivElement>;
-}) {
+export function InfoVisibility({ children }: { children: ReactNode }) {
   const [hidden, setHidden] = usePersistentCollapseState(
     "mako-info-hidden",
     false,
@@ -33,16 +47,88 @@ export function InfoVisibility({
   );
   const [focused, setFocused] = useState(false);
   const ribbon = useRef<HTMLDivElement>(null);
+  const scrollFrame = useRef<number>();
+  const focusAnchor = useRef<{
+    target: HTMLElement;
+    top: number;
+    scroller: HTMLElement | null;
+  }>();
   const label = hidden
     ? t("CONTENT_SHOW_INFO", "Show info")
     : t("CONTENT_HIDE_INFO", "Hide info");
 
-  const toggle = () => {
-    // A welcome/model notice may contain the focused button. Move focus to
-    // the ribbon before hiding it, so controller navigation has a live target.
-    const activeElement = ribbon.current?.ownerDocument.activeElement;
-    if (!hidden && activeElement?.closest(infoSelector)) {
-      ribbon.current?.querySelector("button")?.focus({ preventScroll: true });
+  const cancelScroll = () => {
+    if (scrollFrame.current !== undefined) {
+      cancelAnimationFrame(scrollFrame.current);
+      scrollFrame.current = undefined;
+    }
+  };
+
+  useEffect(() => cancelScroll, []);
+
+  useLayoutEffect(() => {
+    const anchor = focusAnchor.current;
+    if (!anchor) return;
+    const target = anchor.target.isConnected
+      ? anchor.target
+      : ribbon.current?.querySelector("button");
+    // Refocusing a surviving control alone emits no new focus event. Restore
+    // its screen position explicitly, after descriptions have changed height.
+    target?.focus({ preventScroll: true });
+    if (target === anchor.target && anchor.scroller) {
+      anchor.scroller.scrollTop +=
+        target.getBoundingClientRect().top - anchor.top;
+    }
+    focusAnchor.current = undefined;
+  }, [hidden]);
+
+  const onFocusCapture: FocusEventHandler<HTMLDivElement> = (event) => {
+    cancelScroll();
+    const target = event.target;
+    if (
+      focusAnchor.current ||
+      !event.currentTarget.contains(target) ||
+      target.closest(ribbonSelector)
+    )
+      return;
+
+    // Keep normal navigation centred, but never let an older request scroll
+    // away from a newer control or from the position restored by an R1 toggle.
+    scrollFrame.current = requestAnimationFrame(() => {
+      scrollFrame.current = undefined;
+      if (target.isConnected && target.ownerDocument.activeElement === target) {
+        target.scrollIntoView({
+          block: "center",
+          inline: "nearest",
+          behavior: "auto",
+        });
+      }
+    });
+  };
+
+  const toggle = (source?: HTMLElement) => {
+    cancelScroll();
+    const panel = ribbon.current?.closest(".Mako_InfoVisibility");
+    const activeElement = ribbon.current?.ownerDocument
+      .activeElement as HTMLElement | null;
+    let target = source ?? activeElement;
+    if (
+      !target ||
+      !panel?.contains(target) ||
+      (!hidden && target.closest(infoSelector))
+    ) {
+      // A disappearing welcome/model control needs a surviving focus target.
+      target = ribbon.current?.querySelector("button") ?? null;
+    }
+    if (target) {
+      focusAnchor.current = {
+        target,
+        top: target.getBoundingClientRect().top,
+        scroller: target.closest(ribbonSelector)
+          ? null
+          : scrollContainer(target),
+      };
+      target.focus({ preventScroll: true });
     }
     setHidden((current) => !current);
   };
@@ -51,7 +137,7 @@ export function InfoVisibility({
     if (event.detail.button !== GamepadButton.BUMPER_RIGHT) return;
     event.preventDefault();
     event.stopPropagation();
-    if (!event.detail.is_repeat) toggle();
+    if (!event.detail.is_repeat) toggle(event.target as HTMLElement);
   };
 
   return (
@@ -92,7 +178,7 @@ export function InfoVisibility({
         <DialogButton
           aria-label={label}
           aria-pressed={hidden}
-          onClick={toggle}
+          onClick={() => toggle()}
           onGamepadFocus={() => setFocused(true)}
           onGamepadBlur={() => setFocused(false)}
           style={{
