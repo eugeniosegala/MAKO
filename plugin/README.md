@@ -46,7 +46,7 @@ MAKO Decky lives in the `plugin/` directory of the MAKO monorepo and consumes th
 
 `hooks/usePersistentCollapseState.ts` persists hidden/collapsed preferences under each component's existing browser key. It accepts only saved booleans, falls back to each view's default for damaged or invalid values, and keeps the controls usable when storage is unavailable.
 
-`components/ModelWarning.tsx` is exempt from the info toggle: its DLL/model failure guidance and update action stay mounted and visible. Its warning uses `MakoInlineTip alwaysVisible` and carries no hidden-info marker, so R1 also preserves focus on its update action. Other tips and optional warnings continue to follow the display preference.
+`components/ModelWarning.tsx` presents one warning with a shared description and a dynamic bullet list: simultaneous LS1/LSFG failures share the list, runtime fallback replaces the generic LS1 bullet, and a missing DLL replaces model-specific bullets with one actionable cause. It is exempt from the info toggle: its DLL/model failure guidance and update action stay mounted and visible. Its warning uses `MakoInlineTip alwaysVisible` and carries no hidden-info marker, so R1 also preserves focus on its update action. Other tips and optional warnings continue to follow the display preference.
 
 ```bash
 pnpm install --frozen-lockfile

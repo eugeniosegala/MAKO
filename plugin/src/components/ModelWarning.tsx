@@ -29,43 +29,60 @@ export function ModelWarning({
           <div style={{ fontWeight: 700, marginBottom: "6px" }}>
             {t("MODEL_WARNING_TITLE", "Lossless Scaling model warning")}
           </div>
-          {missingDll ? (
-            <div>
+          <div>
+            {t(
+              "MODEL_WARNING_DESCRIPTION",
+              "Some Lossless Scaling features may be unavailable:",
+            )}
+          </div>
+          <ul
+            style={{
+              margin: "8px 0 0",
+              paddingLeft: "18px",
+              display: "grid",
+              gap: "6px",
+            }}
+          >
+            {missingDll ? (
+              <li>
+                {t(
+                  "MODEL_WARNING_DLL_MISSING",
+                  "Lossless.dll could not be found. Check its configured path or install Lossless Scaling through Steam.",
+                )}
+              </li>
+            ) : (
+              <>
+                {ls1Failed && (
+                  <li>
+                    {ls1RuntimeFallback
+                      ? t(
+                          "SCALING_LS1_ACTIVE_FALLBACK",
+                          "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
+                        )
+                      : t(
+                          "MODEL_WARNING_LS1",
+                          "LS1 failed its availability check. MAKO Scaler is used automatically if LS1 cannot load.",
+                        )}
+                  </li>
+                )}
+                {lsfgFailed && (
+                  <li>
+                    {t(
+                      "MODEL_WARNING_LSFG",
+                      "An LSFG model check failed. Frame Generation may be unavailable with the selected precision setting.",
+                    )}
+                  </li>
+                )}
+              </>
+            )}
+          </ul>
+          {!missingDll && (
+            <div style={{ marginTop: "8px" }}>
               {t(
-                "MODEL_WARNING_DLL_MISSING",
-                "Lossless.dll could not be found. Check its configured path or install Lossless Scaling through Steam.",
+                "MODEL_WARNING_UPDATE",
+                "Check for MAKO Decky updates, then apply any MAKO Renderer update and restart the game. If the problem persists, verify Lossless Scaling and collect diagnostics.",
               )}
             </div>
-          ) : (
-            <>
-              {ls1Failed && (
-                <div>
-                  {ls1RuntimeFallback
-                    ? t(
-                        "SCALING_LS1_ACTIVE_FALLBACK",
-                        "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
-                      )
-                    : t(
-                        "MODEL_WARNING_LS1",
-                        "LS1 failed its availability check. MAKO Scaler is used automatically if LS1 cannot load.",
-                      )}
-                </div>
-              )}
-              {lsfgFailed && (
-                <div>
-                  {t(
-                    "MODEL_WARNING_LSFG",
-                    "An LSFG model check failed. Frame Generation may be unavailable with the selected precision setting.",
-                  )}
-                </div>
-              )}
-              <div style={{ marginTop: "6px" }}>
-                {t(
-                  "MODEL_WARNING_UPDATE",
-                  "Check for MAKO Decky updates, then apply any MAKO Renderer update and restart the game. If the problem persists, verify Lossless Scaling and collect diagnostics.",
-                )}
-              </div>
-            </>
           )}
         </MakoInlineTip>
         {!missingDll && (

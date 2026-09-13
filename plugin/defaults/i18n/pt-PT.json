@@ -299,6 +299,7 @@
   "LIVE_STATUS_SCALED_RESOLUTION": "Output",
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Aviso sobre os modelos do Lossless Scaling",
+  "MODEL_WARNING_DESCRIPTION": "Algumas funcionalidades do Lossless Scaling podem estar indisponíveis:",
   "MODEL_WARNING_DLL_MISSING": "Não foi encontrado o ficheiro Lossless.dll. Verifique o caminho configurado ou instale o Lossless Scaling através do Steam.",
   "MODEL_WARNING_LS1": "O LS1 falhou na verificação de disponibilidade. O MAKO Scaler é utilizado automaticamente se não for possível carregar o LS1.",
   "MODEL_WARNING_LSFG": "Uma verificação de modelos LSFG falhou. A geração de fotogramas pode estar indisponível com a precisão selecionada.",

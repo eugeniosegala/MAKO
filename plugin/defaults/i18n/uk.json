@@ -299,6 +299,7 @@
   "LIVE_STATUS_SCALED_RESOLUTION": "Output",
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Попередження щодо моделей Lossless Scaling",
+  "MODEL_WARNING_DESCRIPTION": "Деякі функції Lossless Scaling можуть бути недоступні:",
   "MODEL_WARNING_DLL_MISSING": "Lossless.dll не знайдено. Перевірте налаштований шлях або встановіть Lossless Scaling через Steam.",
   "MODEL_WARNING_LS1": "LS1 не пройшла перевірку доступності. Якщо LS1 не вдається завантажити, автоматично використовується MAKO Scaler.",
   "MODEL_WARNING_LSFG": "Перевірка моделі LSFG завершилася невдало. Генерація кадрів може бути недоступною з вибраним налаштуванням точності.",

@@ -550,6 +550,10 @@ test.each<{ name: string; status: ModelWarningProps; message: string }>([
     );
     const warning = screen.getByRole("alert");
     expect(warning.textContent).toContain(message);
+    expect(screen.getByRole("listitem").textContent).toContain(message);
+    expect(warning.textContent).toContain(
+      "Some Lossless Scaling features may be unavailable:",
+    );
     expect(isDisplayed(warning.querySelector('[role="note"]')!)).toBe(true);
     expect(screen.queryByText("Optional advice")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show info" }));
@@ -558,6 +562,86 @@ test.each<{ name: string; status: ModelWarningProps; message: string }>([
     expect(isDisplayed(warning)).toBe(true);
   },
 );
+
+test("one model warning updates its bullets as failures, fallback, and recovery change", () => {
+  const failed = { compatible: false, reason: "lsfg-unavailable" };
+  const panel = (status: ModelWarningProps) => (
+    <InfoVisibility>
+      <ModelWarning {...status} />
+    </InfoVisibility>
+  );
+  const { rerender } = render(
+    panel({
+      ls1: { compatible: false, reason: "ls1-unavailable" },
+      lsfg: failed,
+    }),
+  );
+  const warning = screen.getByRole("alert");
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+  expect(
+    screen.getAllByRole("listitem").map((item) => item.textContent),
+  ).toEqual([
+    "LS1 failed its availability check. MAKO Scaler is used automatically if LS1 cannot load.",
+    "An LSFG model check failed. Frame Generation may be unavailable with the selected precision setting.",
+  ]);
+  const update = screen.getByRole("button", {
+    name: "Check for MAKO Decky updates",
+  });
+  update.focus();
+  pressButton(update);
+  expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  expect(document.activeElement).toBe(update);
+
+  rerender(
+    panel({
+      ls1: { compatible: false, reason: "ls1-unavailable" },
+      ls1RuntimeFallback: true,
+      lsfg: failed,
+    }),
+  );
+  expect(screen.getByRole("alert")).toBe(warning);
+  expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  expect(warning.textContent).toContain(
+    "LS1 is unavailable for this game. MAKO Scaler is active.",
+  );
+  expect(warning.textContent).not.toContain(
+    "LS1 failed its availability check.",
+  );
+  expect(
+    screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
+  ).toBe(update);
+
+  rerender(panel({ ls1: { compatible: true, reason: null }, lsfg: failed }));
+  expect(screen.getByRole("listitem").textContent).toContain(
+    "An LSFG model check failed.",
+  );
+  rerender(
+    panel({
+      ls1: { compatible: true, reason: null },
+      lsfg: { compatible: null, reason: "inspector-unavailable" },
+    }),
+  );
+  expect(screen.queryByRole("alert")).toBeNull();
+});
+
+test("a missing shared DLL produces one actionable bullet instead of duplicate model failures", () => {
+  render(
+    <InfoVisibility>
+      <ModelWarning
+        ls1={{ compatible: false, reason: "dll-unavailable" }}
+        lsfg={{ compatible: false, reason: "dll-unavailable" }}
+        ls1RuntimeFallback
+      />
+    </InfoVisibility>,
+  );
+  expect(screen.getAllByRole("alert")).toHaveLength(1);
+  expect(screen.getByRole("listitem").textContent).toBe(
+    "Lossless.dll could not be found. Check its configured path or install Lossless Scaling through Steam.",
+  );
+  expect(
+    screen.queryByRole("button", { name: "Check for MAKO Decky updates" }),
+  ).toBeNull();
+});
 
 test("the model-warning update action keeps focus across R1 and still opens updates", () => {
   render(

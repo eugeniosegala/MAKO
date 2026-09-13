@@ -299,6 +299,7 @@
   "LIVE_STATUS_SCALED_RESOLUTION": "Output",
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Lossless Scaling 模型警告",
+  "MODEL_WARNING_DESCRIPTION": "Lossless Scaling 的部分功能可能无法使用：",
   "MODEL_WARNING_DLL_MISSING": "未找到 Lossless.dll。请检查配置的路径，或通过 Steam 安装 Lossless Scaling。",
   "MODEL_WARNING_LS1": "LS1 可用性检查失败。如果无法加载 LS1，将自动使用 MAKO Scaler。",
   "MODEL_WARNING_LSFG": "LSFG 模型检查失败。在所选精度设置下，帧生成可能不可用。",
