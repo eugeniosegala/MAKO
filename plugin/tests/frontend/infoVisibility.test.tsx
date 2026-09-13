@@ -44,7 +44,7 @@ vi.mock("@decky/ui", () => ({
     onGamepadBlur?: () => void;
   }) => <button {...props} onFocus={onGamepadFocus} onBlur={onGamepadBlur} />,
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
-    <div>{children}</div>
+    <div data-testid="navigation-row">{children}</div>
   ),
   ButtonItem: ({
     children,
@@ -130,7 +130,10 @@ test("R1 hides information without changing controls, repeats, or other buttons"
   expect(pressButton(input, 5).defaultPrevented).toBe(false);
   expect(pressButton(input).defaultPrevented).toBe(true);
   expect(
-    descriptions.every((text) => !isDisplayed(screen.getByText(text))),
+    descriptions.every((text) => {
+      const element = screen.queryByText(text);
+      return !element || !isDisplayed(element);
+    }),
   ).toBe(true);
   expect(isDisplayed(screen.getByText("Settings"))).toBe(true);
   expect(isDisplayed(input)).toBe(true);
@@ -169,11 +172,20 @@ test("clicking the ribbon persists the choice across reopening without changing 
   expect(localStorage.getItem("mako-info-hidden")).toBe("false");
 });
 
-test("hides tutorials, model warnings, welcome and status information; preserves actions and focus", async () => {
+test("unmounts hidden information and its navigation rows; preserves actions and focus", async () => {
   render(
     <InfoVisibility>
       <ContentNotices
-        developmentBuildInfo={null}
+        developmentBuildInfo={{
+          generatedAt: "2026-09-13T10:00:00Z",
+          plugin: {
+            commit: "abc1234",
+            dirty: false,
+            frontendDeployed: true,
+            backendDeployed: true,
+          },
+          engine: null,
+        }}
         showWelcome
         engineUpdateRequired
         isInstalling={false}
@@ -197,6 +209,13 @@ test("hides tutorials, model warnings, welcome and status information; preserves
     expect(screen.getByText("mako-run %command%")).toBeTruthy(),
   );
   const welcomeButton = screen.getByRole("button", { name: "Hide tips" });
+  const welcomeRow = welcomeButton.closest('[data-testid="navigation-row"]')!;
+  const developmentButton = screen.getByRole("button", { name: "Details" });
+  const warningButton = screen.getByRole("button", {
+    name: "Check for MAKO Decky updates",
+  });
+  fireEvent.click(developmentButton);
+  fireEvent.click(welcomeButton);
   welcomeButton.focus();
   pressButton(welcomeButton);
   expect(document.activeElement).toBe(
@@ -210,8 +229,24 @@ test("hides tutorials, model warnings, welcome and status information; preserves
     "Installed",
     "MAKO Renderer update required",
   ]) {
-    expect(isDisplayed(screen.getByText(text))).toBe(false);
+    expect(screen.queryByText(text)).toBeNull();
   }
+  // CSS-hidden buttons still exist in Steam's navigation graph. Check actual
+  // removal, including the row that can otherwise become an empty focus stop.
+  for (const element of [
+    welcomeButton,
+    welcomeRow,
+    developmentButton,
+    warningButton,
+  ]) {
+    expect(element.isConnected).toBe(false);
+  }
+  expect(screen.getAllByTestId("navigation-row")).toHaveLength(2);
+  expect(
+    screen
+      .getAllByRole("button", { hidden: true })
+      .map((button) => button.textContent),
+  ).toEqual(["Update MAKO Renderer", "Copy Launch Option", "R1Show info"]);
   expect(screen.queryByRole("alert")).toBeNull();
   expect(
     screen.getByRole("button", { name: "Copy Launch Option" }),
@@ -220,8 +255,42 @@ test("hides tutorials, model warnings, welcome and status information; preserves
     screen.getByRole("button", { name: "Update MAKO Renderer" }),
   ).toBeTruthy();
   fireEvent.click(screen.getByRole("button", { name: "Show info" }));
-  expect(screen.getByRole("button", { name: "Hide tips" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Show tips" })).toBeTruthy();
+  expect(screen.getByRole("button", { name: "Hide" })).toBeTruthy();
   expect(screen.getByRole("alert")).toBeTruthy();
+});
+
+test("reopening hidden and receiving a new warning never mounts invisible controls", () => {
+  localStorage.setItem("mako-info-hidden", "true");
+  const panel = (failed: boolean) => (
+    <InfoVisibility>
+      <ContentNotices
+        developmentBuildInfo={null}
+        showWelcome
+        engineUpdateRequired={false}
+        isInstalling={false}
+        isInstallCompletionVisible={false}
+        isUninstalling={false}
+        onInstall={vi.fn(async () => undefined)}
+        modelStatus={{
+          lsfg: {
+            compatible: !failed,
+            reason: failed ? "lsfg-unavailable" : null,
+          },
+        }}
+      />
+      <button>Option</button>
+    </InfoVisibility>
+  );
+  const { rerender } = render(panel(false));
+  rerender(panel(true));
+  expect(screen.queryAllByTestId("navigation-row")).toHaveLength(0);
+  expect(screen.getAllByRole("button", { hidden: true })).toHaveLength(2);
+  pressButton(screen.getByRole("button", { name: "Option" }));
+  expect(screen.getByRole("button", { name: "Hide tips" })).toBeTruthy();
+  expect(
+    screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
+  ).toBeTruthy();
 });
 
 test("does not hide dialog content or handle buttons outside the panel", () => {

@@ -1,3 +1,4 @@
+import { MakoInfo } from "./MakoInfo";
 import { Focusable, PanelSectionRow, Spinner } from "@decky/ui";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { FiAlertTriangle, FiInfo, FiLink } from "react-icons/fi";
@@ -112,7 +113,7 @@ export function MakoRestartLabel({ label }: { label: string }) {
 /** Mark an intentionally early-access control without turning the label into a warning. */
 export function MakoExperimentalBadge({ label }: { label: string }) {
   return (
-    <span
+    <MakoInfo as="span"
       data-mako-experimental-badge="true"
       data-mako-info="true"
       style={{
@@ -132,7 +133,7 @@ export function MakoExperimentalBadge({ label }: { label: string }) {
       }}
     >
       {label}
-    </span>
+    </MakoInfo>
   );
 }
 
@@ -170,7 +171,7 @@ export function MakoInlineTip({
   const accentColor = isWarning ? "#f4a259" : makoAccentColor;
   const Icon = isWarning ? FiAlertTriangle : FiInfo;
   return (
-    <div
+    <MakoInfo
       role="note"
       data-mako-info="true"
       data-tone={tone}
@@ -207,13 +208,13 @@ export function MakoInlineTip({
         }}
       />
       <span style={{ minWidth: 0 }}>{children}</span>
-    </div>
+    </MakoInfo>
   );
 }
 
 export function MakoSettingRelationship({ children }: { children: ReactNode }) {
   return (
-    <div
+    <MakoInfo
       data-mako-setting-relationship="true"
       data-mako-info="true"
       style={{
@@ -238,7 +239,7 @@ export function MakoSettingRelationship({ children }: { children: ReactNode }) {
         }}
       />
       <span style={{ minWidth: 0 }}>{children}</span>
-    </div>
+    </MakoInfo>
   );
 }
 
@@ -254,7 +255,7 @@ export function MakoReleaseIdentity({
     .replace(/^-|-$/g, "");
 
   return (
-    <PanelSectionRow>
+    <MakoInfo as={PanelSectionRow}>
       <div
         aria-label={`Current release: MAKO Decky v${version}, ${codename}`}
         data-mako-info="true"
@@ -282,7 +283,7 @@ export function MakoReleaseIdentity({
         </span>
         <span style={{ color: makoAccentColor }}>{codenameSlug}</span>
       </div>
-    </PanelSectionRow>
+    </MakoInfo>
   );
 }
 
@@ -315,7 +316,7 @@ export function MakoSectionHeader({
           {children}
         </div>
         {description && (
-          <div
+          <MakoInfo
             data-mako-info="true"
             style={{
               marginTop: "8px",
@@ -327,7 +328,7 @@ export function MakoSectionHeader({
             }}
           >
             {description}
-          </div>
+          </MakoInfo>
         )}
       </div>
     </PanelSectionRow>

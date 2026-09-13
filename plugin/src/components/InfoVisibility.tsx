@@ -13,6 +13,7 @@ import {
 import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
 import t from "../i18n/i18n";
 import { MakoFocusable, makoDialogButtonStyle } from "./MakoUi";
+import { InfoHiddenContext } from "./MakoInfo";
 
 // Use Decky's resolved class, never a hard-coded Steam CSS module name.
 const infoSelector = `[data-mako-info="true"], .${gamepadDialogClasses.FieldDescription}`;
@@ -63,7 +64,6 @@ export function InfoVisibility({
       onFocusCapture={onFocusCapture}
     >
       <style>{`
-        .Mako_InfoHidden [data-mako-info="true"],
         .Mako_InfoHidden .${gamepadDialogClasses.FieldDescription} {
           display: none !important;
         }
@@ -73,7 +73,9 @@ export function InfoVisibility({
           padding: 0 !important;
         }
       `}</style>
-      {children}
+      <InfoHiddenContext.Provider value={hidden}>
+        {children}
+      </InfoHiddenContext.Provider>
       <div
         ref={ribbon}
         data-mako-info-toggle="true"

@@ -1,3 +1,4 @@
+import { MakoInfo } from "./MakoInfo";
 import { ButtonItem, Navigation, PanelSectionRow } from "@decky/ui";
 import type { ModelStatusResult } from "../api/makoApi";
 import { MakoInlineTip } from "./MakoUi";
@@ -23,7 +24,7 @@ export function ModelWarning({
     (lsfgFailed && lsfg?.reason === "dll-unavailable");
 
   return (
-    <PanelSectionRow>
+    <MakoInfo as={PanelSectionRow}>
       <div role="alert" data-mako-info="true" style={{ marginBottom: "8px" }}>
         <MakoInlineTip tone="warning">
           <div style={{ fontWeight: 700, marginBottom: "6px" }}>
@@ -81,6 +82,6 @@ export function ModelWarning({
           </ButtonItem>
         )}
       </div>
-    </PanelSectionRow>
+    </MakoInfo>
   );
 }

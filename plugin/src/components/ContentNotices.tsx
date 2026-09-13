@@ -1,3 +1,4 @@
+import { MakoInfo } from "./MakoInfo";
 import { useState, type ReactNode } from "react";
 import {
   ButtonItem,
@@ -54,7 +55,7 @@ function WelcomeNotice({ separated }: { separated: boolean }) {
   const expanded = !tipsCollapsed;
 
   return (
-    <PanelSectionRow>
+    <MakoInfo as={PanelSectionRow}>
       <div
         role="note"
         data-mako-info="true"
@@ -163,7 +164,7 @@ function WelcomeNotice({ separated }: { separated: boolean }) {
           </DialogButton>
         </div>
       </div>
-    </PanelSectionRow>
+    </MakoInfo>
   );
 }
 
@@ -189,7 +190,7 @@ export function ContentNotices({
     <>
       <ModelWarning {...modelStatus} />
       {developmentBuildInfo && (
-        <PanelSectionRow>
+        <MakoInfo as={PanelSectionRow}>
           <div
             data-mako-info="true"
             style={{
@@ -358,13 +359,13 @@ export function ContentNotices({
               </div>
             )}
           </div>
-        </PanelSectionRow>
+        </MakoInfo>
       )}
 
       {showWelcome && <WelcomeNotice separated={hasDevelopmentNotice} />}
 
       {mainRunningApp && (
-        <PanelSectionRow>
+        <MakoInfo as={PanelSectionRow}>
           <div
             data-mako-info="true"
             style={{
@@ -387,7 +388,7 @@ export function ContentNotices({
               "MAKO selects saved profiles automatically. If this game is new, save it below; restart the game after changing restart-only settings.",
             )}
           </div>
-        </PanelSectionRow>
+        </MakoInfo>
       )}
 
       {engineUpdateRequired && (
@@ -406,7 +407,7 @@ export function ContentNotices({
               color: "#ffd08a",
             }}
           >
-            <div
+            <MakoInfo
               data-mako-info="true"
               style={{ fontWeight: "bold", marginBottom: "4px" }}
             >
@@ -414,8 +415,8 @@ export function ContentNotices({
                 "CONTENT_ENGINE_UPDATE_REQUIRED",
                 "MAKO Renderer update required",
               )}
-            </div>
-            <div
+            </MakoInfo>
+            <MakoInfo
               data-mako-info="true"
               style={{ fontSize: "13px", marginBottom: "10px" }}
             >
@@ -435,7 +436,7 @@ export function ContentNotices({
                 "CONTENT_ENGINE_UPDATE_DESC",
                 "Reinstall MAKO Renderer to apply the version bundled with this plugin. Then update the matching runtime extensions for prepared Flatpak apps.",
               )}
-            </div>
+            </MakoInfo>
             <div className="Mako_BrandButton">
               <ButtonItem
                 layout="below"

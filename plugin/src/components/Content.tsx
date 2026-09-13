@@ -1,3 +1,4 @@
+import { MakoInfo } from "./MakoInfo";
 import type { FocusEvent } from "react";
 import {
   ButtonItem,
@@ -211,9 +212,9 @@ export function Content() {
         {isInstalled && (
           <>
             {mainRunningApp && (
-              <div data-mako-info="true">
+              <MakoInfo data-mako-info="true">
                 <RuntimeStatusCard runtimeState={scalingRuntimeState} />
-              </div>
+              </MakoInfo>
             )}
             <FeatureSettings
               config={config}

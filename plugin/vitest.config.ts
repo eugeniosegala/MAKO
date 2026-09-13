@@ -28,6 +28,7 @@ export default defineConfig({
         "src/hooks/useModelStatus.ts",
         "src/components/ModelWarning.tsx",
         "src/components/InfoVisibility.tsx",
+        "src/components/MakoInfo.tsx",
       ],
     },
   },
