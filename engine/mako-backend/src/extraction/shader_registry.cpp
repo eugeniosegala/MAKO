@@ -3,6 +3,7 @@
 #include "shader_registry.hpp"
 #include "../shaders/color_conversion_spirv.hpp"
 #include "model_resource_validation.hpp"
+#include "model_resources.hpp"
 #include "mako-common/helpers/errors.hpp"
 #include "mako-common/vulkan/shader.hpp"
 #include "mako-common/vulkan/vulkan.hpp"
@@ -12,7 +13,6 @@
 #include <cstdint>
 #include <span>
 #include <string>
-#include <unordered_map>
 #include <vector>
 
 using namespace mako;
@@ -21,10 +21,10 @@ using namespace mako::backend;
 namespace {
     /// get the source code for a shader
     const std::vector<uint8_t>& getShaderSource(uint32_t id, bool fp16, bool perf,
-            const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources) {
-        return mako::backend::detail::validatedLsfgResource(
-            resources, id, fp16, perf
-        );
+            const DllResourceArchive& archive,
+            const ModelResourceSelection selection) {
+        return selection.resource(
+            archive, detail::lsfgResourceId(id, fp16, perf));
     }
 
     [[nodiscard]] const mako::backend::detail::LsfgShaderSpec& shaderSpec(
@@ -41,10 +41,11 @@ namespace {
     [[nodiscard]] vk::Shader makeShader(
             const vk::Vulkan& vk, const uint32_t id,
             const bool fp16, const bool perf,
-            const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources) {
+            const DllResourceArchive& archive,
+            const ModelResourceSelection selection) {
         const auto& contract = shaderSpec(id, perf).contract;
         return vk::Shader(
-            vk, getShaderSource(id, fp16, perf, resources),
+            vk, getShaderSource(id, fp16, perf, archive, selection),
             contract.sampledImages, contract.storageImages,
             contract.uniformBuffers, contract.samplers
         );
@@ -94,15 +95,16 @@ namespace {
 }
 
 ShaderRegistry backend::buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
-        const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources) {
+        const DllResourceArchive& archive) {
+    const auto selection = resolveLsfgModelResources(archive, fp16);
     // patch the generate shader
-    std::vector<uint8_t> generate_data = getShaderSource(256, fp16, false, resources);
+    std::vector<uint8_t> generate_data = getShaderSource(256, fp16, false, archive, selection);
     std::vector<uint8_t> generate_data_hdr = generate_data;
     patchGenerateShader(generate_data, false);
     patchGenerateShader(generate_data_hdr, true);
 
     // load all other shaders
-#define SHADER(id) makeShader(vk, id, fp16, PERF, resources)
+#define SHADER(id) makeShader(vk, id, fp16, PERF, archive, selection)
 
     return {
 #define PERF false

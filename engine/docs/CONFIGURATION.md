@@ -35,7 +35,7 @@ scaling_sharpness = 0.8
 
 | Setting | Meaning |
 | --- | --- |
-| `dll` | Optional absolute path to `Lossless.dll`. When omitted, MAKO searches the normal Steam library locations. LSFG and LS1 need this user-supplied file; Native Resolution and MAKO Scaler do not. |
+| `dll` | Optional absolute path to `Lossless.dll`, shared by LSFG and LS1. When omitted, MAKO searches the normal Steam library locations. Model compatibility uses validated resources, not a SHA allowlist; see [shared model resolution](SCALING.md). Native Resolution and MAKO Scaler do not need this file. |
 | `allow_fp16` | Defaults to `true`, including when the setting or `[global]` section is omitted. Uses LSFG FP16 when the selected GPU supports it, otherwise FP32. Set `false` to use FP32; existing explicit choices are preserved. Changing it requires a game restart. |
 
 The CLI's `benchmark`, `debug`, `quality-regression`, and `combined-quality-regression` commands also allow LSFG FP16 by default, independently of `conf.toml`. Pass `--no-fp16` to use FP32, or `--allow-fp16` (`-a`) to explicitly allow FP16. If both flags are supplied, the last one wins. For environment-only Renderer configuration (`MAKO_ENV=1`), `MAKO_NO_FP16=1` disables FP16. The backend still checks the selected device's Vulkan `shaderFloat16` support before choosing FP16 shaders.

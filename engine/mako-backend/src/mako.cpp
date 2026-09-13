@@ -291,7 +291,7 @@ namespace {
         try {
             const bool fp16 = allowLowPrecision && vk.supportsFP16();
             auto registry = backend::buildShaderRegistry(
-                vk, fp16, archive->resources
+                vk, fp16, *archive
             );
             std::clog << "MAKO Renderer: model DLL inspected: component=lsfg"
                       << "; dll_sha256=" << archive->fileSha256

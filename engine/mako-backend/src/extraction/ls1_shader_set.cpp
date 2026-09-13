@@ -5,6 +5,7 @@
 #include "dll_reader.hpp"
 #include "ls1_spirv_patch.hpp"
 #include "model_resource_validation.hpp"
+#include "model_resources.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <algorithm>
@@ -20,8 +21,8 @@
 #include <mutex>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <unordered_map>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -120,8 +121,6 @@ namespace {
 
     constexpr uint32_t bindingFlagImage = 0x2;
     constexpr uint32_t bindingFlagBuffer = 0x1;
-    constexpr uint32_t imageFormatRgba8 = 4;
-    constexpr uint32_t imageFormatR8Snorm = 20;
 
     struct LibraryCloser {
         void operator()(void* library) const noexcept {
@@ -394,16 +393,6 @@ namespace {
         return spirv;
     }
 
-    const std::vector<uint8_t>& resource(
-            const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources,
-            const uint32_t id) {
-        const auto found = resources.find(id);
-        if (found == resources.end())
-            throw ls::error("Lossless.dll does not contain LS1 resource " +
-                std::to_string(id));
-        return found->second;
-    }
-
     std::string shaderCacheKey(
             const mako::backend::DllResourceArchive& archive,
             const mako::backend::Ls1Mode mode,
@@ -418,8 +407,16 @@ namespace {
             const mako::backend::DllResourceArchive& archive,
             const mako::backend::Ls1Mode mode,
             const uint32_t variant) {
-        const auto& resources = archive.resources;
+        const auto selection = backend::resolveLs1ModelResources(archive, mode, variant);
+        const auto spec = backend::detail::ls1ModelSpec(mode, variant);
         const auto translator = loadTranslator(shaderDllPath);
+        const auto load = [&](const backend::detail::Ls1ShaderSpec& shader) {
+            return translate(translator, selection.resource(archive, shader.resourceId),
+                static_cast<uint32_t>(shader.contract.sampledImages),
+                shader.contract.samplers != 0U, shader.contract.uniformBuffers != 0U,
+                shader.storageImageFormat,
+                std::to_string(selection.resourceId(shader.resourceId)));
+        };
 
         mako::backend::Ls1ShaderSet result{
             .mode = mode,
@@ -428,31 +425,10 @@ namespace {
             .dllSha256 = archive.fileSha256,
             .resourceLayoutSha256 = archive.resourceLayoutSha256,
         };
-        if (mode == mako::backend::Ls1Mode::Performance) {
-            const uint32_t stage1Id = 141 + variant;
-            result.stage1 = translate(
-                translator, resource(resources, stage1Id), 1, false, true,
-                imageFormatR8Snorm, std::to_string(stage1Id)
-            );
-        } else {
-            const uint32_t stage1Id = 147 + variant * 3;
-            result.stage1 = translate(
-                translator, resource(resources, stage1Id), 1, false, true,
-                imageFormatRgba8, std::to_string(stage1Id)
-            );
-            result.stage2 = translate(
-                translator, resource(resources, stage1Id + 1), 1, false,
-                false, imageFormatRgba8, std::to_string(stage1Id + 1)
-            );
-            result.stage3 = translate(
-                translator, resource(resources, stage1Id + 2), 1, false, true,
-                imageFormatR8Snorm, std::to_string(stage1Id + 2)
-            );
-        }
-        result.reconstruction = translate(
-            translator, resource(resources, 146), 2, true, true,
-            imageFormatRgba8, "146"
-        );
+        result.stage1 = load(spec.stage1);
+        if (spec.stage2) result.stage2 = load(*spec.stage2);
+        if (spec.stage3) result.stage3 = load(*spec.stage3);
+        result.reconstruction = load(spec.reconstruction);
         return result;
     }
 }

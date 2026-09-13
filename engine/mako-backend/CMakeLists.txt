@@ -5,6 +5,7 @@ set(BACKEND_SOURCES
     "src/extraction/ls1_shader_set.cpp"
     "src/extraction/ls1_spirv_patch.cpp"
     "src/extraction/model_resource_validation.cpp"
+    "src/extraction/model_resources.cpp"
     "src/extraction/shader_registry.cpp"
     "src/helpers/limits.cpp"
     "src/helpers/managed_shader.cpp"
