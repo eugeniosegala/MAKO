@@ -67,6 +67,7 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { InfoVisibility } from "../../src/components/InfoVisibility";
+import { MakoInfo } from "../../src/components/MakoInfo";
 import { ContentNotices } from "../../src/components/ContentNotices";
 import { UsageInstructions } from "../../src/components/UsageInstructions";
 import { StatusDisplay } from "../../src/components/StatusDisplay";
@@ -260,6 +261,119 @@ test("normal navigation scrolls only the latest focus and cancels work on unmoun
   expect(animationFrames.size).toBe(0);
 });
 
+test("a disappearing info control moves to the next visible, enabled control", () => {
+  render(
+    <InfoVisibility>
+      <button>Previous option</button>
+      <MakoInfo data-mako-info="true">
+        <button>Help</button>
+        <button>More help</button>
+      </MakoInfo>
+      <div className="Steam_FieldDescription">
+        <button>Description action</button>
+      </div>
+      <button disabled>Disabled option</button>
+      <fieldset disabled>
+        <input aria-label="Disabled field" />
+      </fieldset>
+      <div aria-disabled="true">
+        <button>Unavailable option</button>
+      </div>
+      <div hidden>
+        <button>Hidden option</button>
+      </div>
+      <div {...{ inert: "" }}>
+        <button>Inert option</button>
+      </div>
+      <div style={{ display: "none" }}>
+        <button>Collapsed option</button>
+      </div>
+      <button style={{ visibility: "hidden" }}>Invisible option</button>
+      <div tabIndex={-1}>Not a navigation stop</div>
+      <div tabIndex={0} role="slider" aria-label="Flow Scale" />
+      <button>Later option</button>
+    </InfoVisibility>,
+  );
+  const help = screen.getByRole("button", { name: "Help" });
+  help.focus();
+  pressButton(help);
+  const next = screen.getByRole("slider", { name: "Flow Scale" });
+  expect(document.activeElement).toBe(next);
+  expect(help.isConnected).toBe(false);
+  flushAnimationFrames();
+  expect(next.scrollIntoView).not.toHaveBeenCalled();
+  pressButton(next);
+  expect(document.activeElement).toBe(next);
+});
+
+test.each([true, false])(
+  "disappearing final help uses a previous control when available (%s), otherwise the ribbon",
+  (hasPrevious) => {
+    render(
+      <InfoVisibility>
+        {hasPrevious && (
+          <>
+            <button>First option</button>
+            <button>Last option</button>
+          </>
+        )}
+        <MakoInfo data-mako-info="true">
+          <button>Help</button>
+        </MakoInfo>
+        <button disabled>Unavailable option</button>
+      </InfoVisibility>,
+    );
+    const help = screen.getByRole("button", { name: "Help" });
+    help.focus();
+    pressButton(help);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", {
+        name: hasPrevious ? "Last option" : "Show info",
+      }),
+    );
+  },
+);
+
+test("the next control takes the disappearing help control's screen position after reflow", () => {
+  render(
+    <div data-testid="scroller" style={{ overflowY: "auto" }}>
+      <InfoVisibility>
+        <MakoInfo data-mako-info="true">
+          <button>Help</button>
+        </MakoInfo>
+        <input aria-label="Next option" />
+      </InfoVisibility>
+    </div>,
+  );
+  const scroller = screen.getByTestId("scroller");
+  Object.defineProperties(scroller, {
+    scrollHeight: { value: 1400 },
+    clientHeight: { value: 400 },
+  });
+  scroller.scrollTop = 600;
+  const help = screen.getByRole("button", { name: "Help" });
+  vi.spyOn(help, "getBoundingClientRect").mockReturnValue(
+    new DOMRect(0, 100, 100, 32),
+  );
+  const next = screen.getByRole("textbox");
+  vi.spyOn(next, "getBoundingClientRect").mockImplementation(
+    () =>
+      new DOMRect(
+        0,
+        (next.closest(".Mako_InfoHidden") ? 350 : 1200) - scroller.scrollTop,
+        100,
+        32,
+      ),
+  );
+  help.focus();
+  pressButton(help);
+  expect(document.activeElement).toBe(next);
+  expect(scroller.scrollTop).toBe(250);
+  expect(next.getBoundingClientRect().top).toBe(100);
+  flushAnimationFrames();
+  expect(next.scrollIntoView).not.toHaveBeenCalled();
+});
+
 test("a ribbon toggle keeps focus there without scrolling to the panel bottom", () => {
   render(
     <InfoVisibility>
@@ -274,93 +388,98 @@ test("a ribbon toggle keeps focus there without scrolling to the panel bottom", 
   expect(ribbon.scrollIntoView).not.toHaveBeenCalled();
 });
 
-test("unmounts hidden information and its navigation rows; preserves actions and focus", async () => {
-  render(
-    <InfoVisibility>
-      <ContentNotices
-        developmentBuildInfo={{
-          generatedAt: "2026-09-13T10:00:00Z",
-          plugin: {
-            commit: "abc1234",
-            dirty: false,
-            frontendDeployed: true,
-            backendDeployed: true,
-          },
-          engine: null,
-        }}
-        showWelcome
-        engineUpdateRequired
-        isInstalling={false}
-        isInstallCompletionVisible={false}
-        isUninstalling={false}
-        onInstall={vi.fn(async () => undefined)}
-        modelStatus={{
-          lsfg: { compatible: false, reason: "lsfg-unavailable" },
-        }}
-      />
-      <UsageInstructions />
-      <StatusDisplay
-        dllDetected
-        dllDetectionStatus="DLL found"
-        isInstalled
-        installationStatus="Installed"
-      />
-    </InfoVisibility>,
-  );
-  await waitFor(() =>
-    expect(screen.getByText("mako-run %command%")).toBeTruthy(),
-  );
-  const welcomeButton = screen.getByRole("button", { name: "Hide tips" });
-  const welcomeRow = welcomeButton.closest('[data-testid="navigation-row"]')!;
-  const developmentButton = screen.getByRole("button", { name: "Details" });
-  const warningButton = screen.getByRole("button", {
-    name: "Check for MAKO Decky updates",
-  });
-  fireEvent.click(developmentButton);
-  fireEvent.click(welcomeButton);
-  welcomeButton.focus();
-  pressButton(welcomeButton);
-  expect(document.activeElement).toBe(
-    screen.getByRole("button", { name: "Show info" }),
-  );
-  for (const text of [
-    "Hello from the MAKO Team!",
-    "mako-run %command%",
-    "DLL found",
-    "Installed",
-    "MAKO Renderer update required",
-  ]) {
-    expect(screen.queryByText(text)).toBeNull();
-  }
-  // CSS-hidden buttons still exist in Steam's navigation graph. Check actual
-  // removal, including the row that can otherwise become an empty focus stop.
-  for (const element of [welcomeButton, welcomeRow, developmentButton]) {
-    expect(element.isConnected).toBe(false);
-  }
-  expect(warningButton.isConnected).toBe(true);
-  expect(screen.getAllByTestId("navigation-row")).toHaveLength(3);
-  expect(
-    screen
-      .getAllByRole("button", { hidden: true })
-      .map((button) => button.textContent),
-  ).toEqual([
-    "Check for MAKO Decky updates",
-    "Update MAKO Renderer",
-    "Copy Launch Option",
-    "R1Show info",
-  ]);
-  expect(isDisplayed(screen.getByRole("alert"))).toBe(true);
-  expect(
-    screen.getByRole("button", { name: "Copy Launch Option" }),
-  ).toBeTruthy();
-  expect(
-    screen.getByRole("button", { name: "Update MAKO Renderer" }),
-  ).toBeTruthy();
-  fireEvent.click(screen.getByRole("button", { name: "Show info" }));
-  expect(screen.getByRole("button", { name: "Show tips" })).toBeTruthy();
-  expect(screen.getByRole("button", { name: "Hide" })).toBeTruthy();
-  expect(screen.getByRole("alert")).toBeTruthy();
-});
+test.each(["welcome", "development"])(
+  "unmounts hidden information and navigation rows; advances focus from %s",
+  async (source) => {
+    render(
+      <InfoVisibility>
+        <ContentNotices
+          developmentBuildInfo={{
+            generatedAt: "2026-09-13T10:00:00Z",
+            plugin: {
+              commit: "abc1234",
+              dirty: false,
+              frontendDeployed: true,
+              backendDeployed: true,
+            },
+            engine: null,
+          }}
+          showWelcome
+          engineUpdateRequired
+          isInstalling={false}
+          isInstallCompletionVisible={false}
+          isUninstalling={false}
+          onInstall={vi.fn(async () => undefined)}
+          modelStatus={{
+            lsfg: { compatible: false, reason: "lsfg-unavailable" },
+          }}
+        />
+        <UsageInstructions />
+        <StatusDisplay
+          dllDetected
+          dllDetectionStatus="DLL found"
+          isInstalled
+          installationStatus="Installed"
+        />
+      </InfoVisibility>,
+    );
+    await waitFor(() =>
+      expect(screen.getByText("mako-run %command%")).toBeTruthy(),
+    );
+    const welcomeButton = screen.getByRole("button", { name: "Hide tips" });
+    const welcomeRow = welcomeButton.closest('[data-testid="navigation-row"]')!;
+    const developmentButton = screen.getByRole("button", { name: "Details" });
+    const warningButton = screen.getByRole("button", {
+      name: "Check for MAKO Decky updates",
+    });
+    fireEvent.click(developmentButton);
+    fireEvent.click(welcomeButton);
+    const focusedInfo =
+      source === "welcome" ? welcomeButton : developmentButton;
+    focusedInfo.focus();
+    pressButton(focusedInfo);
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Update MAKO Renderer" }),
+    );
+    for (const text of [
+      "Hello from the MAKO Team!",
+      "mako-run %command%",
+      "DLL found",
+      "Installed",
+      "MAKO Renderer update required",
+    ]) {
+      expect(screen.queryByText(text)).toBeNull();
+    }
+    // CSS-hidden buttons still exist in Steam's navigation graph. Check actual
+    // removal, including the row that can otherwise become an empty focus stop.
+    for (const element of [welcomeButton, welcomeRow, developmentButton]) {
+      expect(element.isConnected).toBe(false);
+    }
+    expect(warningButton.isConnected).toBe(true);
+    expect(screen.getAllByTestId("navigation-row")).toHaveLength(3);
+    expect(
+      screen
+        .getAllByRole("button", { hidden: true })
+        .map((button) => button.textContent),
+    ).toEqual([
+      "Check for MAKO Decky updates",
+      "Update MAKO Renderer",
+      "Copy Launch Option",
+      "R1Show info",
+    ]);
+    expect(isDisplayed(screen.getByRole("alert"))).toBe(true);
+    expect(
+      screen.getByRole("button", { name: "Copy Launch Option" }),
+    ).toBeTruthy();
+    expect(
+      screen.getByRole("button", { name: "Update MAKO Renderer" }),
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Show info" }));
+    expect(screen.getByRole("button", { name: "Show tips" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Hide" })).toBeTruthy();
+    expect(screen.getByRole("alert")).toBeTruthy();
+  },
+);
 
 test("a new model failure appears while info is hidden, without restoring welcome controls", () => {
   localStorage.setItem("mako-info-hidden", "true");

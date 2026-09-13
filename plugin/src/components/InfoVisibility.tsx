@@ -21,6 +21,56 @@ import { InfoHiddenContext } from "./MakoInfo";
 const infoSelector = `[data-mako-info="true"], .${gamepadDialogClasses.FieldDescription}`;
 const ribbonSelector = '[data-mako-info-toggle="true"]';
 
+function adjacentControl(
+  panel: Element,
+  source: HTMLElement,
+): HTMLElement | null {
+  const view = source.ownerDocument.defaultView;
+  const controls = Array.from(
+    panel.querySelectorAll<HTMLElement>(
+      "button, input, select, textarea, a[href], [tabindex]",
+    ),
+  ).filter((control) => {
+    if (
+      control.tabIndex < 0 ||
+      control.contains(source) ||
+      control.matches(":disabled") ||
+      control.closest(
+        `${infoSelector}, ${ribbonSelector}, [hidden], [inert], [aria-disabled="true"], .disabled`,
+      )
+    )
+      return false;
+
+    for (
+      let element: HTMLElement | null = control;
+      element;
+      element = element.parentElement
+    ) {
+      const style = view?.getComputedStyle(element);
+      if (
+        style?.display === "none" ||
+        style?.visibility === "hidden" ||
+        style?.visibility === "collapse"
+      )
+        return false;
+      if (element === panel) break;
+    }
+    return true;
+  });
+
+  // DOM order follows the panel's column navigation. Prefer continuing down
+  // the settings; at the end, stay near the previous surviving control.
+  return (
+    controls.find(
+      (control) =>
+        source.compareDocumentPosition(control) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ) ??
+    controls[controls.length - 1] ??
+    null
+  );
+}
+
 function scrollContainer(element: HTMLElement): HTMLElement | null {
   const view = element.ownerDocument.defaultView;
   for (
@@ -112,18 +162,22 @@ export function InfoVisibility({ children }: { children: ReactNode }) {
     const activeElement = ribbon.current?.ownerDocument
       .activeElement as HTMLElement | null;
     let target = source ?? activeElement;
+    const sourceTop = target?.getBoundingClientRect().top;
     if (
-      !target ||
-      !panel?.contains(target) ||
-      (!hidden && target.closest(infoSelector))
+      target &&
+      panel?.contains(target) &&
+      !hidden &&
+      target.closest(infoSelector)
     ) {
-      // A disappearing help control needs a surviving focus target.
+      target = adjacentControl(panel, target);
+    }
+    if (!target || !panel?.contains(target)) {
       target = ribbon.current?.querySelector("button") ?? null;
     }
     if (target) {
       focusAnchor.current = {
         target,
-        top: target.getBoundingClientRect().top,
+        top: sourceTop ?? target.getBoundingClientRect().top,
         scroller: target.closest(ribbonSelector)
           ? null
           : scrollContainer(target),
