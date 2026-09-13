@@ -44,6 +44,8 @@ MAKO Decky lives in the `plugin/` directory of the MAKO monorepo and consumes th
 
 `components/InfoVisibility.tsx` owns the panel-local R1 shortcut and persistent controls-only view. It hides Decky's resolved field-description class and MAKO content marked `data-mako-info="true"`. Mark new explanatory content at its outermost informational container so its spacing and nested help buttons disappear together; keep settings and actions outside that marker.
 
+`hooks/usePersistentCollapseState.ts` persists hidden/collapsed preferences under each component's existing browser key. It accepts only saved booleans, falls back to each view's default for damaged or invalid values, and keeps the controls usable when storage is unavailable.
+
 ```bash
 pnpm install --frozen-lockfile
 pnpm run test

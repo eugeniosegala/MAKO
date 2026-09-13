@@ -11,8 +11,8 @@ import {
 } from "../config/configSchema";
 import { effectiveScalingMethod } from "../config/ultraPerformancePreset";
 import {
-  SCALING_MODEL_DEBOUNCE_MS,
-  SCALING_MODEL_POLL_INTERVAL_MS,
+  MODEL_STATUS_DEBOUNCE_MS,
+  MODEL_STATUS_POLL_INTERVAL_MS,
 } from "../config/uiTiming";
 
 interface ModelStatuses {
@@ -78,10 +78,10 @@ export function useModelStatus(
         : null;
       if (active) {
         setResult({ key, ls1: scalingStatus, lsfg: fgStatus });
-        timer = setTimeout(refresh, SCALING_MODEL_POLL_INTERVAL_MS);
+        timer = setTimeout(refresh, MODEL_STATUS_POLL_INTERVAL_MS);
       }
     };
-    timer = setTimeout(refresh, SCALING_MODEL_DEBOUNCE_MS);
+    timer = setTimeout(refresh, MODEL_STATUS_DEBOUNCE_MS);
     return () => {
       active = false;
       clearTimeout(timer);

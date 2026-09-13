@@ -1614,7 +1614,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
         current_script = self.service._generate_script_content(
             ConfigurationManager.get_defaults()
         )
-        for stale_version in (1, 41, 58, 999):
+        current_version = self.service._WRAPPER_FORMAT_VERSION
+        for stale_version in (1, current_version - 1, current_version + 1):
             with self.subTest(stale_version=stale_version):
                 with tempfile.TemporaryDirectory() as temp_dir:
                     self.service.mako_script_path = Path(temp_dir) / "wrapper"

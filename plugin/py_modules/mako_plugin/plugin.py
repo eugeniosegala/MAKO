@@ -7,7 +7,6 @@ Vulkan layer for frame generation and scaling on SteamOS.
 
 import os
 import asyncio
-import subprocess
 import hashlib
 import shlex
 from typing import Dict, Any

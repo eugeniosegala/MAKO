@@ -19,7 +19,6 @@ export default defineConfig({
       include: [
         "src/api/makoApi.ts",
         "src/hooks/useClipboardFeedback.ts",
-        "src/hooks/useDeferredTargetFps.ts",
         "src/hooks/useInstallationActions.ts",
         "src/hooks/useMakoHooks.ts",
         "src/hooks/usePersistentCollapseState.ts",
@@ -28,6 +27,7 @@ export default defineConfig({
         "src/hooks/useProfileSession.ts",
         "src/hooks/useModelStatus.ts",
         "src/components/ModelWarning.tsx",
+        "src/components/InfoVisibility.tsx",
       ],
     },
   },

@@ -40,6 +40,28 @@ describe("persistent collapse state", () => {
     expect(localStorage.getItem("mako-example-collapsed")).toBe("true");
   });
 
+  test.each([null, "false", 0, 1, [], {}].map((saved) => ({ saved })))(
+    "rejects non-boolean stored preferences: %j",
+    ({ saved }) => {
+      for (const defaultCollapsed of [false, true]) {
+        localStorage.setItem("mako-example-collapsed", JSON.stringify(saved));
+        const { result, unmount } = renderHook(() =>
+          usePersistentCollapseState(
+            "mako-example-collapsed",
+            defaultCollapsed,
+            "example",
+          ),
+        );
+
+        expect(result.current[0]).toBe(defaultCollapsed);
+        expect(localStorage.getItem("mako-example-collapsed")).toBe(
+          JSON.stringify(defaultCollapsed),
+        );
+        unmount();
+      }
+    },
+  );
+
   test("keeps controls usable and retains the established warning on write failure", () => {
     const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
     const writeFailure = new Error("storage unavailable");
