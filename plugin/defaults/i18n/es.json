@@ -295,5 +295,11 @@
   "LIVE_STATUS_RENDER_RESOLUTION": "Render",
   "LIVE_STATUS_DISPLAY_RESOLUTION": "Display",
   "LIVE_STATUS_SCALED_RESOLUTION": "Output",
-  "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface."
+  "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
+  "MODEL_WARNING_TITLE": "Advertencia sobre los modelos de Lossless Scaling",
+  "MODEL_WARNING_DLL_MISSING": "No se ha encontrado Lossless.dll. Comprueba la ruta configurada o instala Lossless Scaling desde Steam.",
+  "MODEL_WARNING_LS1": "LS1 no ha superado la comprobación de disponibilidad. MAKO Scaler se usa automáticamente si LS1 no puede cargarse.",
+  "MODEL_WARNING_LSFG": "Ha fallado una comprobación de modelos LSFG. La generación de fotogramas podría no estar disponible con la precisión seleccionada.",
+  "MODEL_WARNING_UPDATE": "Busca actualizaciones de MAKO Decky, aplica las actualizaciones de MAKO Renderer y reinicia el juego. Si el problema persiste, verifica Lossless Scaling y recopila los diagnósticos.",
+  "MODEL_WARNING_CHECK_UPDATES": "Buscar actualizaciones de MAKO Decky"
 }

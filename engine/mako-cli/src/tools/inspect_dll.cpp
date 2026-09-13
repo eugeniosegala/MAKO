@@ -36,6 +36,18 @@ namespace {
 }
 
 int mako::cli::inspect_dll::run(const Options& options) {
+    if (options.lsfg) {
+        // Without querying a GPU, FP16 permission may select either precision.
+        // Check both runtime registries and report a resource preflight only.
+        const auto fp32 = mako::backend::inspectLsfgRegistry(options.dll, false);
+        const auto fp16 = options.allowFp16
+            ? mako::backend::inspectLsfgRegistry(options.dll, true)
+            : mako::backend::ModelCompatibility{.compatible = true, .reason = {}};
+        const bool compatible = fp32.compatible && fp16.compatible;
+        std::cout << "{\"schema_version\":1,\"compatible\":"
+                  << (compatible ? "true" : "false") << "}\n";
+        return compatible ? 0 : 1;
+    }
     if (options.ls1Mode) {
         // Use exactly the runtime loader and selected sharpness variant. An
         // unrelated LSFG family or LS1 variant must not veto this selection.

@@ -35,6 +35,8 @@ namespace mako::cli {
     int quality::runSpatial(const SpatialOptions&) { return 2; }
     int quality::runSpatialProfile(const SpatialProfileOptions&) { return 2; }
     int quality::runSynchronizationCanary(const SynchronizationCanaryOptions&) { return 2; }
-    int inspect_dll::run(const Options&) { return 2; }
+    int inspect_dll::run(const Options& opts) {
+        return opts.lsfg ? reportPrecision(opts.allowFp16) : 2;
+    }
     int validate::run(const Options&, i18n::Language) { return 2; }
 }

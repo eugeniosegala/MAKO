@@ -11,6 +11,7 @@ import { MakoInstallCompletion } from "./MakoInstallCountdown";
 import { MakoCompactSpinner, makoPanelDivider, makoPanelStyle } from "./MakoUi";
 import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
 import t from "../i18n/i18n";
+import { ModelWarning, type ModelWarningProps } from "./ModelWarning";
 
 const SUPPORTED_FLATPAK_RUNTIME_VERSION_LIST = SUPPORTED_FLATPAK_RUNTIMES.map(
   ({ version }) => version,
@@ -27,6 +28,7 @@ interface ContentNoticesProps {
   isInstallCompletionVisible: boolean;
   isUninstalling: boolean;
   onInstall: () => Promise<void>;
+  modelStatus?: ModelWarningProps;
 }
 
 function UnderlinedWelcomeText({ children }: { children: ReactNode }) {
@@ -176,6 +178,7 @@ export function ContentNotices({
   isInstallCompletionVisible,
   isUninstalling,
   onInstall,
+  modelStatus,
 }: ContentNoticesProps) {
   const [showDevelopmentDetails, setShowDevelopmentDetails] = useState(false);
   const hasDevelopmentNotice = Boolean(developmentBuildInfo);
@@ -183,6 +186,7 @@ export function ContentNotices({
 
   return (
     <>
+      <ModelWarning {...modelStatus} />
       {developmentBuildInfo && (
         <PanelSectionRow>
           <div

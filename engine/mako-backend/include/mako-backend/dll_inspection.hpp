@@ -33,4 +33,10 @@ namespace mako::backend {
         const std::filesystem::path& dll
     );
 
+    /// Inspect the complete runtime LSFG registry for one precision, without
+    /// constructing a Vulkan device or requiring any LS1 model/translator.
+    [[nodiscard]] ModelCompatibility inspectLsfgRegistry(
+        const std::filesystem::path& dll, bool fp16
+    );
+
 }

@@ -18,7 +18,8 @@ import { useProfileConfigWriter } from "../hooks/useProfileConfigWriter";
 import { StatusDisplay } from "./StatusDisplay";
 import { InstallationButton } from "./InstallationButton";
 import { ConfigurationSection } from "./ConfigurationSection";
-import { useScalingModelStatus } from "../hooks/useScalingModelStatus";
+import { useModelStatus } from "../hooks/useModelStatus";
+import { effectiveScalingMethod } from "../config/ultraPerformancePreset";
 import { ProfileManagement } from "./ProfileManagement";
 import { UsageInstructions } from "./UsageInstructions";
 import { FgmodClipboardButton } from "./FgmodClipboardButton";
@@ -75,7 +76,7 @@ export function Content() {
     editingProfile,
     Boolean(isInstalled && mainRunningApp),
   );
-  const scalingModelCompatible = useScalingModelStatus(config, isInstalled);
+  const modelStatus = useModelStatus(config, isInstalled);
   const {
     saveConfigChanges: handleConfigChanges,
     saveConfigField: handleConfigChange,
@@ -155,6 +156,21 @@ export function Content() {
           isInstallCompletionVisible={isInstallCompletionVisible}
           isUninstalling={isUninstalling}
           onInstall={onInstall}
+          modelStatus={{
+            ...modelStatus,
+            ls1RuntimeFallback:
+              isInstalled &&
+              !config.disable_mako &&
+              config.scaling_enabled &&
+              ["ls1", "ls1-performance"].includes(
+                effectiveScalingMethod(config),
+              ) &&
+              scalingRuntimeState.requestedMethod ===
+                effectiveScalingMethod(config) &&
+              scalingRuntimeState.scalingActive &&
+              scalingRuntimeState.activeMethod === "mako" &&
+              Boolean(scalingRuntimeState.fallbackReason),
+          }}
         />
         {!isInstalled && (
           <>
@@ -199,7 +215,7 @@ export function Content() {
               config={config}
               disabled={engineUpdateRequired}
               runtimeState={scalingRuntimeState}
-              scalingModelCompatible={scalingModelCompatible}
+              scalingModelCompatible={modelStatus.ls1?.compatible ?? null}
               onConfigChange={handleConfigChange}
               onConfigUpdate={handleConfigChanges}
             />

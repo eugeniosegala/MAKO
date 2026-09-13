@@ -96,6 +96,8 @@ SUBCOMMAND OPTIONS:
         -d, --dll <PATH>                Path to Lossless.dll
             --ls1 <METHOD>             Probe only ls1 or ls1-performance; emits JSON
             --sharpness <FLOAT>        Selected LS1 sharpness from 0 to 1 (default 0.8)
+            --lsfg                     Probe LSFG FP32 and FP16 registries; emits JSON
+            --no-fp16                  With --lsfg, inspect only the FP32 registry
 
     benchmark
         -t, --duration <SECONDS>        Benchmark duration in seconds
@@ -193,10 +195,12 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_inspect_dll(
             int argc, char** argv, const std::string& program) {
         inspect_dll::Options opts{};
-        const std::array<option, 4> GETOPT {{
+        const std::array<option, 6> GETOPT {{
             { "dll", required_argument, nullptr, 'd' },
             { "ls1", required_argument, nullptr, 'l' },
             { "sharpness", required_argument, nullptr, 's' },
+            { "lsfg", no_argument, nullptr, 'f' },
+            { "no-fp16", no_argument, nullptr, 'A' },
             { nullptr, no_argument, nullptr, 0 }
         }};
         int option{0};
@@ -219,13 +223,20 @@ SUBCOMMAND OPTIONS:
                 case 's':
                     opts.sharpness = numericArgument<float>(optarg, "--sharpness");
                     break;
+                case 'f':
+                    opts.lsfg = true;
+                    break;
+                case 'A':
+                    opts.allowFp16 = false;
+                    break;
                 case '?':
                 default:
                     usage(program);
                     std::exit(EXIT_FAILURE);
             }
         }
-        if (optind < argc || opts.dll.empty() ||
+        if (optind < argc || opts.dll.empty() || (opts.lsfg && opts.ls1Mode) ||
+                (!opts.allowFp16 && !opts.lsfg) ||
                 opts.sharpness < 0.0F || opts.sharpness > 1.0F) {
             usage(program);
             std::exit(EXIT_FAILURE);

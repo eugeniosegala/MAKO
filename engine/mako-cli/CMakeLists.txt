@@ -25,6 +25,13 @@ target_compile_options(mako-cli PRIVATE
     -Wno-unsafe-buffer-usage) # CLI parsing
 
 if(BUILD_TESTING)
+    add_executable(mako-cli-dll-inspection-tests
+        "src/tools/inspect_dll.cpp"
+        "tests/inspect_dll_tests.cpp")
+    target_include_directories(mako-cli-dll-inspection-tests PRIVATE
+        "src" "../mako-backend/include")
+    add_test(NAME cli-dll-inspection COMMAND mako-cli-dll-inspection-tests)
+
     add_executable(mako-cli-i18n-tests
         "tests/i18n_tests.cpp")
     target_link_libraries(mako-cli-i18n-tests

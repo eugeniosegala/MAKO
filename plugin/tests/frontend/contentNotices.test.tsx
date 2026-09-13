@@ -3,6 +3,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@decky/ui", () => ({
+  Navigation: { NavigateToExternalWeb: vi.fn() },
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -29,6 +30,9 @@ vi.mock("../../src/components/MakoInstallCountdown", () => ({
   MakoInstallCompletion: () => <span>Install complete</span>,
 }));
 vi.mock("../../src/components/MakoUi", () => ({
+  MakoInlineTip: ({ children }: { children: React.ReactNode }) => (
+    <div>{children}</div>
+  ),
   MakoCompactSpinner: () => <span>Working</span>,
   makoPanelDivider: "1px solid",
   makoPanelStyle: {},
@@ -38,6 +42,7 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { ContentNotices } from "../../src/components/ContentNotices";
+import { Navigation } from "@decky/ui";
 import type { LocalDevelopmentBuildInfo } from "../../src/config/devBuildInfo";
 
 afterEach(cleanup);
@@ -76,6 +81,70 @@ describe("content status notices", () => {
   beforeEach(() => {
     window.SP_REACT = React;
     localStorage.clear();
+  });
+
+  test("shows one top warning for confirmed model failures and opens updates without installing", () => {
+    const { rerender } = render(
+      <ContentNotices
+        {...baseProps}
+        showWelcome={true}
+        modelStatus={{
+          ls1: { compatible: false, reason: "ls1-unavailable" },
+          lsfg: { compatible: false, reason: "lsfg-unavailable" },
+        }}
+      />,
+    );
+    const warning = screen.getByRole("alert");
+    expect(warning.textContent).toContain("LS1 failed its availability check");
+    expect(warning.textContent).toContain("An LSFG model check failed");
+    expect(warning.compareDocumentPosition(screen.getByRole("note")) & 4).toBe(
+      4,
+    );
+    fireEvent.click(screen.getByText("Check for MAKO Decky updates"));
+    expect(Navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
+      "https://github.com/eugeniosegala/MAKO/releases/latest",
+    );
+    expect(baseProps.onInstall).not.toHaveBeenCalled();
+    rerender(
+      <ContentNotices
+        {...baseProps}
+        modelStatus={{
+          ls1: { compatible: true, reason: null },
+          lsfg: { compatible: null, reason: "inspection-unavailable" },
+        }}
+      />,
+    );
+    expect(screen.queryByRole("alert")).toBeNull();
+  });
+
+  test("a missing DLL gets path guidance and active LS1 fallback gets a warning", () => {
+    const { rerender } = render(
+      <ContentNotices
+        {...baseProps}
+        modelStatus={{
+          lsfg: { compatible: false, reason: "dll-unavailable" },
+        }}
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Lossless.dll could not be found",
+    );
+    expect(screen.queryByText("Check for MAKO Decky updates")).toBeNull();
+    rerender(
+      <ContentNotices
+        {...baseProps}
+        modelStatus={{
+          ls1: { compatible: true, reason: null },
+          ls1RuntimeFallback: true,
+        }}
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "MAKO Scaler is active",
+    );
+    expect(screen.getByRole("alert").textContent).not.toContain(
+      "LSFG model check failed",
+    );
   });
 
   test("retains development identity and reveals deployment details on demand", () => {

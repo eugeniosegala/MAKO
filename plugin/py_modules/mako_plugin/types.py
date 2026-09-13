@@ -81,8 +81,8 @@ class DllStatsRequiredResponse(BaseResponse):
     error: Optional[str]
 
 
-class ScalingModelStatusResponse(TypedDict):
-    """Host preflight only; null means the inspector could not establish support."""
+class ModelStatusResponse(TypedDict):
+    """Model preflight only; null means the inspector could not establish support."""
 
     compatible: Optional[bool]
     reason: Optional[str]

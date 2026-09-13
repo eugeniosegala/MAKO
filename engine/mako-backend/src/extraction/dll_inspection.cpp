@@ -21,6 +21,14 @@ namespace {
     }
 }
 
+mako::backend::ModelCompatibility mako::backend::inspectLsfgRegistry(
+        const std::filesystem::path& dll, const bool fp16) {
+    return inspectCapability([&] {
+        const auto archive = loadDllResourceArchive(dll);
+        static_cast<void>(resolveLsfgModelResources(*archive, fp16));
+    });
+}
+
 mako::backend::LosslessDllInspection mako::backend::inspectLosslessDll(
         const std::filesystem::path& dll) {
     const auto archive = loadDllResourceArchive(dll);

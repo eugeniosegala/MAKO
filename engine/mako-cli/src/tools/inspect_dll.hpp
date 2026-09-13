@@ -13,6 +13,8 @@ namespace mako::cli::inspect_dll {
         std::filesystem::path dll;
         std::optional<backend::Ls1Mode> ls1Mode;
         float sharpness{0.8F};
+        bool lsfg{false};
+        bool allowFp16{true};
     };
 
     int run(const Options& options);

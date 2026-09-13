@@ -40,7 +40,7 @@ from .types import (
     ProfileResponse,
     ProfilesResponse,
     RuntimeStatusResponse,
-    ScalingModelStatusResponse,
+    ModelStatusResponse,
 )
 
 
@@ -119,10 +119,18 @@ class Plugin:
 
     async def check_scaling_model(
         self, dll: str, method: str, sharpness: float,
-    ) -> ScalingModelStatusResponse:
+    ) -> ModelStatusResponse:
         """Read-only selected-model preflight outside Decky's event loop."""
         return await asyncio.to_thread(
             self.dll_detection_service.check_scaling_model, dll, method, sharpness,
+        )
+
+    async def check_frame_generation_model(
+        self, dll: str, allow_fp16: bool,
+    ) -> ModelStatusResponse:
+        """Read-only LSFG resource preflight outside Decky's event loop."""
+        return await asyncio.to_thread(
+            self.dll_detection_service.check_frame_generation_model, dll, allow_fp16,
         )
 
     async def get_dll_stats(self) -> DllStatsResponse:

@@ -10,14 +10,26 @@ import subprocess
 import threading
 import time
 from pathlib import Path
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Literal
+from dataclasses import dataclass
 
 from .base_service import BaseService
 from .constants import (
     ENV_MAKO_DLL_PATH, ENV_XDG_DATA_HOME,
     STEAM_COMMON_PATH, LOSSLESS_DLL_NAME, CLI_DIR, CLI_FILENAME,
 )
-from .types import DllDetectionResponse, ScalingModelStatusResponse
+from .types import DllDetectionResponse, ModelStatusResponse
+
+
+FileIdentity = tuple[str, int, int, int, int, int]
+ModelCacheKey = tuple[FileIdentity, FileIdentity, tuple[str, ...]]
+
+
+@dataclass
+class _ModelInspectionCache:
+    key: ModelCacheKey
+    checked_at: float
+    status: ModelStatusResponse
 
 
 class DllDetectionService(BaseService):
@@ -26,26 +38,38 @@ class DllDetectionService(BaseService):
     def __init__(self, logger=None):
         super().__init__(logger)
         self._model_lock = threading.Lock()
-        self._model_cache_key = None
-        self._model_cache_time = 0.0
-        self._model_cache: ScalingModelStatusResponse | None = None
+        self._model_cache: dict[str, _ModelInspectionCache] = {}
 
     def check_scaling_model(
         self, dll: str, method: str, sharpness: float,
-    ) -> ScalingModelStatusResponse:
-        """Inspect the selected graph through the installed Renderer, without saving profiles.
-
-        The one-entry, process-local cache avoids repeated translations. File
-        replacement invalidates it even when size and mtime are preserved; the
-        bounded lifetime also retries after translator/runtime updates.
-        """
-        unknown: ScalingModelStatusResponse = {
-            "compatible": None, "reason": "inspection-unavailable",
-        }
-        if (not isinstance(dll, str) or method not in ("ls1", "ls1-performance")
+    ) -> ModelStatusResponse:
+        """Inspect only the selected LS1 graph through the installed Renderer."""
+        if (method not in ("ls1", "ls1-performance")
                 or isinstance(sharpness, bool)
                 or not isinstance(sharpness, (int, float))
                 or not math.isfinite(sharpness) or not 0 <= sharpness <= 1):
+            return {"compatible": None, "reason": "invalid-selection"}
+        return self._check_model(dll, ("--ls1", method, "--sharpness", str(sharpness)), "ls1")
+
+    def check_frame_generation_model(self, dll: str, allow_fp16: bool) -> ModelStatusResponse:
+        """Inspect LSFG registries allowed by the saved precision permission."""
+        if type(allow_fp16) is not bool:
+            return {"compatible": None, "reason": "invalid-selection"}
+        arguments = ("--lsfg",) if allow_fp16 else ("--lsfg", "--no-fp16")
+        return self._check_model(dll, arguments, "lsfg")
+
+    def _check_model(
+        self, dll: str, arguments: tuple[str, ...], family: Literal["ls1", "lsfg"],
+    ) -> ModelStatusResponse:
+        """One bounded cache slot per family; share discovery and protocol checks.
+
+        File replacement invalidates even same-size/restored-mtime inputs.
+        The five-minute lifetime also retries translator/runtime updates.
+        """
+        unknown: ModelStatusResponse = {
+            "compatible": None, "reason": "inspection-unavailable",
+        }
+        if not isinstance(dll, str):
             return {"compatible": None, "reason": "invalid-selection"}
         if not self._model_lock.acquire(blocking=False):
             return unknown
@@ -65,17 +89,17 @@ class DllDetectionService(BaseService):
             try:
                 if not path.is_file():
                     return {"compatible": False, "reason": "dll-unavailable"}
-                def identity(candidate: Path):
+                def identity(candidate: Path) -> FileIdentity:
                     status = candidate.stat()
                     return (str(candidate.resolve()), status.st_dev, status.st_ino,
                             status.st_size, status.st_mtime_ns, status.st_ctime_ns)
-                key = (identity(path), identity(cli), method, sharpness)
-                if (key == self._model_cache_key and self._model_cache is not None
-                        and time.monotonic() - self._model_cache_time < 300):
-                    return self._model_cache.copy()
+                key = (identity(path), identity(cli), arguments)
+                cached = self._model_cache.get(family)
+                if (cached is not None and key == cached.key
+                        and time.monotonic() - cached.checked_at < 300):
+                    return cached.status.copy()
                 completed = subprocess.run(
-                    [str(cli), "inspect-dll", "--dll", str(path),
-                     "--ls1", method, "--sharpness", str(sharpness)],
+                    [str(cli), "inspect-dll", "--dll", str(path), *arguments],
                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
                     text=True, timeout=15, check=False,
                 )
@@ -88,15 +112,15 @@ class DllDetectionService(BaseService):
                         or type(result.get("compatible")) is not bool
                         or completed.returncode != (0 if result["compatible"] else 1)):
                     return unknown
-                if key != (identity(path), identity(cli), method, sharpness):
+                if key != (identity(path), identity(cli), arguments):
                     return unknown
-                response: ScalingModelStatusResponse = {
+                response: ModelStatusResponse = {
                     "compatible": result["compatible"],
-                    "reason": None if result["compatible"] else "ls1-unavailable",
+                    "reason": None if result["compatible"] else f"{family}-unavailable",
                 }
-                self._model_cache_key = key
-                self._model_cache_time = time.monotonic()
-                self._model_cache = response.copy()
+                self._model_cache[family] = _ModelInspectionCache(
+                    key, time.monotonic(), response.copy(),
+                )
                 return response
             except (OSError, ValueError, subprocess.SubprocessError):
                 return unknown
