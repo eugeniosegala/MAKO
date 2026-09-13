@@ -9,7 +9,7 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
-import type { GamepadEvent } from "@decky/ui";
+import { Navigation, type GamepadEvent } from "@decky/ui";
 
 vi.mock("@decky/ui", () => ({
   GamepadButton: { BUMPER_RIGHT: 6, BUMPER_LEFT: 5 },
@@ -70,6 +70,10 @@ import { InfoVisibility } from "../../src/components/InfoVisibility";
 import { ContentNotices } from "../../src/components/ContentNotices";
 import { UsageInstructions } from "../../src/components/UsageInstructions";
 import { StatusDisplay } from "../../src/components/StatusDisplay";
+import {
+  ModelWarning,
+  type ModelWarningProps,
+} from "../../src/components/ModelWarning";
 import {
   MakoInlineTip,
   MakoSectionHeader,
@@ -321,7 +325,6 @@ test("unmounts hidden information and its navigation rows; preserves actions and
   );
   for (const text of [
     "Hello from the MAKO Team!",
-    "Lossless Scaling model warning",
     "mako-run %command%",
     "DLL found",
     "Installed",
@@ -331,21 +334,22 @@ test("unmounts hidden information and its navigation rows; preserves actions and
   }
   // CSS-hidden buttons still exist in Steam's navigation graph. Check actual
   // removal, including the row that can otherwise become an empty focus stop.
-  for (const element of [
-    welcomeButton,
-    welcomeRow,
-    developmentButton,
-    warningButton,
-  ]) {
+  for (const element of [welcomeButton, welcomeRow, developmentButton]) {
     expect(element.isConnected).toBe(false);
   }
-  expect(screen.getAllByTestId("navigation-row")).toHaveLength(2);
+  expect(warningButton.isConnected).toBe(true);
+  expect(screen.getAllByTestId("navigation-row")).toHaveLength(3);
   expect(
     screen
       .getAllByRole("button", { hidden: true })
       .map((button) => button.textContent),
-  ).toEqual(["Update MAKO Renderer", "Copy Launch Option", "R1Show info"]);
-  expect(screen.queryByRole("alert")).toBeNull();
+  ).toEqual([
+    "Check for MAKO Decky updates",
+    "Update MAKO Renderer",
+    "Copy Launch Option",
+    "R1Show info",
+  ]);
+  expect(isDisplayed(screen.getByRole("alert"))).toBe(true);
   expect(
     screen.getByRole("button", { name: "Copy Launch Option" }),
   ).toBeTruthy();
@@ -358,7 +362,7 @@ test("unmounts hidden information and its navigation rows; preserves actions and
   expect(screen.getByRole("alert")).toBeTruthy();
 });
 
-test("reopening hidden and receiving a new warning never mounts invisible controls", () => {
+test("a new model failure appears while info is hidden, without restoring welcome controls", () => {
   localStorage.setItem("mako-info-hidden", "true");
   const panel = (failed: boolean) => (
     <InfoVisibility>
@@ -381,14 +385,83 @@ test("reopening hidden and receiving a new warning never mounts invisible contro
     </InfoVisibility>
   );
   const { rerender } = render(panel(false));
+  expect(screen.queryByRole("alert")).toBeNull();
   rerender(panel(true));
-  expect(screen.queryAllByTestId("navigation-row")).toHaveLength(0);
-  expect(screen.getAllByRole("button", { hidden: true })).toHaveLength(2);
+  expect(screen.getAllByTestId("navigation-row")).toHaveLength(1);
+  expect(screen.getAllByRole("button", { hidden: true })).toHaveLength(3);
+  expect(isDisplayed(screen.getByRole("alert"))).toBe(true);
+  expect(screen.queryByRole("button", { name: "Hide tips" })).toBeNull();
   pressButton(screen.getByRole("button", { name: "Option" }));
   expect(screen.getByRole("button", { name: "Hide tips" })).toBeTruthy();
   expect(
     screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
   ).toBeTruthy();
+});
+
+test.each<{ name: string; status: ModelWarningProps; message: string }>([
+  {
+    name: "LSFG",
+    status: { lsfg: { compatible: false, reason: "lsfg-unavailable" } },
+    message: "An LSFG model check failed.",
+  },
+  {
+    name: "LS1",
+    status: { ls1: { compatible: false, reason: "ls1-unavailable" } },
+    message: "LS1 failed its availability check.",
+  },
+  {
+    name: "missing DLL",
+    status: { lsfg: { compatible: false, reason: "dll-unavailable" } },
+    message: "Lossless.dll could not be found.",
+  },
+  {
+    name: "runtime fallback",
+    status: { ls1RuntimeFallback: true },
+    message: "LS1 is unavailable for this game.",
+  },
+])(
+  "$name warning stays readable when reopening with info hidden",
+  ({ status, message }) => {
+    localStorage.setItem("mako-info-hidden", "true");
+    render(
+      <InfoVisibility>
+        <ModelWarning {...status} />
+        <MakoInlineTip tone="warning">Optional advice</MakoInlineTip>
+      </InfoVisibility>,
+    );
+    const warning = screen.getByRole("alert");
+    expect(warning.textContent).toContain(message);
+    expect(isDisplayed(warning.querySelector('[role="note"]')!)).toBe(true);
+    expect(screen.queryByText("Optional advice")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Show info" }));
+    fireEvent.click(screen.getByRole("button", { name: "Hide info" }));
+    expect(screen.getByRole("alert")).toBe(warning);
+    expect(isDisplayed(warning)).toBe(true);
+  },
+);
+
+test("the model-warning update action keeps focus across R1 and still opens updates", () => {
+  render(
+    <InfoVisibility>
+      <ModelWarning lsfg={{ compatible: false, reason: "lsfg-unavailable" }} />
+    </InfoVisibility>,
+  );
+  const update = screen.getByRole("button", {
+    name: "Check for MAKO Decky updates",
+  });
+  update.focus();
+  for (let toggle = 0; toggle < 2; toggle++) {
+    pressButton(update);
+    expect(document.activeElement).toBe(update);
+    expect(isDisplayed(update)).toBe(true);
+    expect(screen.getByRole("alert").textContent).toContain(
+      "verify Lossless Scaling and collect diagnostics",
+    );
+  }
+  fireEvent.click(update);
+  expect(Navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
+    "https://github.com/eugeniosegala/MAKO/releases/latest",
+  );
 });
 
 test("does not hide dialog content or handle buttons outside the panel", () => {

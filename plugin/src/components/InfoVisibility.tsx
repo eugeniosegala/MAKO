@@ -117,7 +117,7 @@ export function InfoVisibility({ children }: { children: ReactNode }) {
       !panel?.contains(target) ||
       (!hidden && target.closest(infoSelector))
     ) {
-      // A disappearing welcome/model control needs a surviving focus target.
+      // A disappearing help control needs a surviving focus target.
       target = ribbon.current?.querySelector("button") ?? null;
     }
     if (target) {

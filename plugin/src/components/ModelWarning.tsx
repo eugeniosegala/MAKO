@@ -1,4 +1,3 @@
-import { MakoInfo } from "./MakoInfo";
 import { ButtonItem, Navigation, PanelSectionRow } from "@decky/ui";
 import type { ModelStatusResult } from "../api/makoApi";
 import { MakoInlineTip } from "./MakoUi";
@@ -10,7 +9,7 @@ export interface ModelWarningProps {
   ls1RuntimeFallback?: boolean;
 }
 
-/** Report confirmed model failures without blocking controls or changing profiles. */
+/** Keep confirmed model failures visible even in the controls-only view. */
 export function ModelWarning({
   ls1,
   lsfg,
@@ -24,9 +23,9 @@ export function ModelWarning({
     (lsfgFailed && lsfg?.reason === "dll-unavailable");
 
   return (
-    <MakoInfo as={PanelSectionRow}>
-      <div role="alert" data-mako-info="true" style={{ marginBottom: "8px" }}>
-        <MakoInlineTip tone="warning">
+    <PanelSectionRow>
+      <div role="alert" style={{ marginBottom: "8px" }}>
+        <MakoInlineTip tone="warning" alwaysVisible>
           <div style={{ fontWeight: 700, marginBottom: "6px" }}>
             {t("MODEL_WARNING_TITLE", "Lossless Scaling model warning")}
           </div>
@@ -82,6 +81,6 @@ export function ModelWarning({
           </ButtonItem>
         )}
       </div>
-    </MakoInfo>
+    </PanelSectionRow>
   );
 }

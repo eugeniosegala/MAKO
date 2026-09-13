@@ -163,17 +163,20 @@ export function MakoExperimentalSettingLabel({
 export function MakoInlineTip({
   children,
   tone = "info",
+  alwaysVisible = false,
 }: {
   children: ReactNode;
   tone?: "info" | "warning";
+  alwaysVisible?: boolean;
 }) {
   const isWarning = tone === "warning";
   const accentColor = isWarning ? "#f4a259" : makoAccentColor;
   const Icon = isWarning ? FiAlertTriangle : FiInfo;
+  const Container = alwaysVisible ? "div" : MakoInfo;
   return (
-    <MakoInfo
+    <Container
       role="note"
-      data-mako-info="true"
+      data-mako-info={alwaysVisible ? undefined : "true"}
       data-tone={tone}
       style={{
         display: "flex",
@@ -208,7 +211,7 @@ export function MakoInlineTip({
         }}
       />
       <span style={{ minWidth: 0 }}>{children}</span>
-    </MakoInfo>
+    </Container>
   );
 }
 
