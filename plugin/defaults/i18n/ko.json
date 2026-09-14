@@ -58,7 +58,7 @@
   "CONFIG_ENABLE_MANGOHUD": "MangoHud 활성화 (재시작)",
   "CONFIG_ENABLE_MANGOHUD_DESC": "호스트에 설치된 MangoHud와 기존 MangoHud 설정을 사용합니다. 게임별 환경 변수 재정의는 전문가 가이드를 참조하세요.",
   "CONFIG_ENABLE_VKBASALT": "vkBasalt 활성화 (재시작)",
-  "CONFIG_ENABLE_VKBASALT_DESC": "이 게임에서 vkBasalt를 테스트하는 경우가 아니면 꺼 두세요. 이 프로필에서 호스트에 설치된 vkBasalt 레이어를 사용합니다. 초기 테스트 경로는 SteamOS에서 Steam으로 직접 실행하는 64비트 네이티브 Vulkan 또는 Proton 게임으로 제한됩니다.",
+  "CONFIG_ENABLE_VKBASALT_DESC": "선명도 향상, 안티앨리어싱, 색상 조정 등 설정한 vkBasalt 효과를 적용합니다. vkBasalt를 별도로 설치해야 합니다.",
   "INSTALL_INSTALLING": "MAKO Renderer 설치 중...",
   "INSTALL_UNINSTALLING": "MAKO Renderer 제거 중...",
   "FLATPAK_MODAL_TITLE": "Flatpak 확장",

@@ -495,13 +495,9 @@ describe("External Tools controls", () => {
 
     expect(screen.getByText("Enable MangoHud (Restart)")).toBeTruthy();
     expect(screen.getByText("Enable vkBasalt (Restart)")).toBeTruthy();
-    expect(
-      screen
-        .getByText("Experimental")
-        .getAttribute("data-mako-experimental-badge"),
-    ).toBe("true");
+    expect(screen.queryByText("Experimental")).toBeNull();
     const vkBasaltDescription = screen.getByText(
-      "Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
+      "Applies your configured vkBasalt effects, such as sharpening, anti-aliasing, and color adjustments. Requires vkBasalt to be installed separately.",
     );
     expect(vkBasaltDescription).toBeTruthy();
     expect(vkBasaltDescription.getAttribute("data-tone")).toBeNull();

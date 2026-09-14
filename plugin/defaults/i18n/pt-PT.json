@@ -58,7 +58,7 @@
   "CONFIG_ENABLE_MANGOHUD": "Ativar o MangoHud (Reiniciar)",
   "CONFIG_ENABLE_MANGOHUD_DESC": "Utiliza o MangoHud instalado no sistema e a sua configuração existente. Consulte o guia avançado para substituições de ambiente por jogo.",
   "CONFIG_ENABLE_VKBASALT": "Ativar o vkBasalt (Reiniciar)",
-  "CONFIG_ENABLE_VKBASALT_DESC": "Mantenha-o desativado, exceto se estiver a testar o vkBasalt com este jogo. Utiliza uma camada vkBasalt instalada no sistema para este perfil. Os testes iniciais limitam-se a jogos Vulkan nativos de 64 bits ou Proton iniciados diretamente pelo Steam no SteamOS.",
+  "CONFIG_ENABLE_VKBASALT_DESC": "Aplica os efeitos configurados do vkBasalt, como nitidez, suavização de contornos e ajustes de cor. É necessário instalar o vkBasalt separadamente.",
   "INSTALL_INSTALLING": "A instalar o MAKO Renderer...",
   "INSTALL_UNINSTALLING": "A remover o MAKO Renderer...",
   "FLATPAK_MODAL_TITLE": "Extensões Flatpak",

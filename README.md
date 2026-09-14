@@ -95,7 +95,7 @@ Every game and display behaves differently. Compare one setting at a time; fulls
 
 ### Optional graphics integrations
 
-MAKO Decky provides a per-profile **Gamescope WSI** option and host-installed MangoHud or vkBasalt integrations. Scaling and Gamescope WSI are independent choices. Scaling uses the combined Renderer when WSI is off; enabling WSI selects the managed compatibility path inside a supported Gamescope session. The optional WSI path is limited to supported 64-bit launches, and vkBasalt remains experimental. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
+MAKO Decky provides a per-profile **Gamescope WSI** option and host-installed MangoHud or vkBasalt integrations. Scaling and Gamescope WSI are independent choices. Scaling uses the combined Renderer when WSI is off; enabling WSI selects the managed compatibility path inside a supported Gamescope session. The optional WSI path is limited to supported 64-bit launches. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
 
 ### How to configure MAKO with third-party launchers
 

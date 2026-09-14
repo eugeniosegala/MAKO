@@ -100,7 +100,7 @@ Decky sends typed field patches through one last-value-wins writer with one back
 - **Enable Zink for OpenGL Games (Restart):** Uses Vulkan-backed OpenGL and may help or destabilize individual games.
 - **Force ALSA Audio (Restart):** Selects SDL ALSA and makes Wine/Proton prefer ALSA over PulseAudio. Disable it to restore normal audio defaults.
 
-**Enable MangoHud (Restart)** and experimental **Enable vkBasalt (Restart)** are mutually exclusive per-profile controls under **External Tools**. Either can follow MAKO's Gamescope WSI/scaling chain and uses the tool's existing configuration. Current runtime evidence covers direct 64-bit native Vulkan or Proton launches on SteamOS; Flatpak and 32-bit compatibility remain separate boundaries. See [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md).
+**Enable MangoHud (Restart)** and **Enable vkBasalt (Restart)** are mutually exclusive per-profile controls under **External Tools**. MangoHud displays performance statistics; vkBasalt applies configured effects such as sharpening, anti-aliasing, and color adjustments. Both require a separate host installation and use the tool's existing configuration. Install the library matching the game's Vulkan process architecture. Either tool can follow MAKO's Gamescope WSI/scaling chain on supported 64-bit launches; 32-bit vkBasalt testing uses Gamescope WSI off. These controls do not enable host external layers inside Flatpak games. See [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md) for setup and game-testing evidence, including [vkBasalt's official documentation and MAKO-specific requirements](../../engine/docs/LAYER-CHAINING.md#vkbasalt-with-mako-decky).
 
 ## HDR and isolation
 
