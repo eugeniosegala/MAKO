@@ -17,10 +17,12 @@ export function ModelWarning({
 }: ModelWarningProps) {
   const ls1Failed = ls1RuntimeFallback || ls1?.compatible === false;
   const lsfgFailed = lsfg?.compatible === false;
-  if (!ls1Failed && !lsfgFailed) return null;
   const missingDll =
     (ls1Failed && ls1?.reason === "dll-unavailable") ||
     (lsfgFailed && lsfg?.reason === "dll-unavailable");
+  // Missing installation is not a model compatibility failure. It also takes
+  // precedence over a running game's older LS1 fallback report.
+  if (missingDll || (!ls1Failed && !lsfgFailed)) return null;
 
   return (
     <PanelSectionRow>
@@ -43,60 +45,45 @@ export function ModelWarning({
               gap: "6px",
             }}
           >
-            {missingDll ? (
+            {ls1Failed && (
+              <li>
+                {ls1RuntimeFallback
+                  ? t(
+                      "SCALING_LS1_ACTIVE_FALLBACK",
+                      "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
+                    )
+                  : t(
+                      "MODEL_WARNING_LS1",
+                      "LS1 failed its availability check. MAKO Scaler is used automatically if LS1 cannot load.",
+                    )}
+              </li>
+            )}
+            {lsfgFailed && (
               <li>
                 {t(
-                  "MODEL_WARNING_DLL_MISSING",
-                  "Lossless.dll could not be found. Check its configured path or install Lossless Scaling through Steam.",
+                  "MODEL_WARNING_LSFG",
+                  "An LSFG model check failed. Frame Generation may be unavailable with the selected precision setting.",
                 )}
               </li>
-            ) : (
-              <>
-                {ls1Failed && (
-                  <li>
-                    {ls1RuntimeFallback
-                      ? t(
-                          "SCALING_LS1_ACTIVE_FALLBACK",
-                          "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
-                        )
-                      : t(
-                          "MODEL_WARNING_LS1",
-                          "LS1 failed its availability check. MAKO Scaler is used automatically if LS1 cannot load.",
-                        )}
-                  </li>
-                )}
-                {lsfgFailed && (
-                  <li>
-                    {t(
-                      "MODEL_WARNING_LSFG",
-                      "An LSFG model check failed. Frame Generation may be unavailable with the selected precision setting.",
-                    )}
-                  </li>
-                )}
-              </>
             )}
           </ul>
-          {!missingDll && (
-            <div style={{ marginTop: "8px" }}>
-              {t(
-                "MODEL_WARNING_UPDATE",
-                "Check for MAKO Decky updates, then apply any MAKO Renderer update and restart the game. If the problem persists, verify Lossless Scaling and collect diagnostics.",
-              )}
-            </div>
-          )}
+          <div style={{ marginTop: "8px" }}>
+            {t(
+              "MODEL_WARNING_UPDATE",
+              "Check for MAKO Decky updates, then apply any MAKO Renderer update and restart the game. If the problem persists, verify Lossless Scaling and collect diagnostics.",
+            )}
+          </div>
         </MakoInlineTip>
-        {!missingDll && (
-          <ButtonItem
-            layout="below"
-            onClick={() =>
-              Navigation.NavigateToExternalWeb(
-                "https://github.com/eugeniosegala/MAKO/releases/latest",
-              )
-            }
-          >
-            {t("MODEL_WARNING_CHECK_UPDATES", "Check for MAKO Decky updates")}
-          </ButtonItem>
-        )}
+        <ButtonItem
+          layout="below"
+          onClick={() =>
+            Navigation.NavigateToExternalWeb(
+              "https://github.com/eugeniosegala/MAKO/releases/latest",
+            )
+          }
+        >
+          {t("MODEL_WARNING_CHECK_UPDATES", "Check for MAKO Decky updates")}
+        </ButtonItem>
       </div>
     </PanelSectionRow>
   );

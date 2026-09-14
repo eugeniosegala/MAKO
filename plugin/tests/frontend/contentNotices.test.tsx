@@ -117,7 +117,7 @@ describe("content status notices", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  test("a missing DLL gets path guidance and active LS1 fallback gets a warning", () => {
+  test("a missing DLL shows no model warning, while active LS1 fallback with a DLL still does", () => {
     const { rerender } = render(
       <ContentNotices
         {...baseProps}
@@ -126,9 +126,7 @@ describe("content status notices", () => {
         }}
       />,
     );
-    expect(screen.getByRole("alert").textContent).toContain(
-      "Lossless.dll could not be found",
-    );
+    expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText("Check for MAKO Decky updates")).toBeNull();
     rerender(
       <ContentNotices

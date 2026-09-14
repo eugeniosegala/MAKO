@@ -300,7 +300,6 @@
   "LIVE_STATUS_SCALING_UNAVAILABLE": "Unavailable for this running surface.",
   "MODEL_WARNING_TITLE": "Aviso sobre os modelos do Lossless Scaling",
   "MODEL_WARNING_DESCRIPTION": "Alguns recursos do Lossless Scaling podem estar indisponíveis:",
-  "MODEL_WARNING_DLL_MISSING": "Lossless.dll não foi encontrado. Verifique o caminho configurado ou instale o Lossless Scaling pelo Steam.",
   "MODEL_WARNING_LS1": "O LS1 falhou na verificação de disponibilidade. O MAKO Scaler é usado automaticamente se o LS1 não puder ser carregado.",
   "MODEL_WARNING_LSFG": "Uma verificação de modelos LSFG falhou. A geração de quadros pode estar indisponível com a precisão selecionada.",
   "MODEL_WARNING_UPDATE": "Procure atualizações do MAKO Decky, aplique as atualizações do MAKO Renderer e reinicie o jogo. Se o problema persistir, verifique o Lossless Scaling e colete os diagnósticos.",

@@ -529,11 +529,6 @@ test.each<{ name: string; status: ModelWarningProps; message: string }>([
     message: "LS1 failed its availability check.",
   },
   {
-    name: "missing DLL",
-    status: { lsfg: { compatible: false, reason: "dll-unavailable" } },
-    message: "Lossless.dll could not be found.",
-  },
-  {
     name: "runtime fallback",
     status: { ls1RuntimeFallback: true },
     message: "LS1 is unavailable for this game.",
@@ -624,23 +619,51 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
   expect(screen.queryByRole("alert")).toBeNull();
 });
 
-test("a missing shared DLL produces one actionable bullet instead of duplicate model failures", () => {
-  render(
+test.each<{ name: string; status: ModelWarningProps }>([
+  {
+    name: "LS1 only",
+    status: { ls1: { compatible: false, reason: "dll-unavailable" } },
+  },
+  {
+    name: "LSFG only",
+    status: { lsfg: { compatible: false, reason: "dll-unavailable" } },
+  },
+  {
+    name: "both model families",
+    status: {
+      ls1: { compatible: false, reason: "dll-unavailable" },
+      lsfg: { compatible: false, reason: "dll-unavailable" },
+    },
+  },
+  {
+    name: "an older model failure and runtime fallback",
+    status: {
+      ls1: { compatible: false, reason: "dll-unavailable" },
+      lsfg: { compatible: false, reason: "lsfg-unavailable" },
+      ls1RuntimeFallback: true,
+    },
+  },
+])("a missing DLL suppresses the entire warning for $name", ({ status }) => {
+  const panel = (modelStatus: ModelWarningProps) => (
     <InfoVisibility>
-      <ModelWarning
-        ls1={{ compatible: false, reason: "dll-unavailable" }}
-        lsfg={{ compatible: false, reason: "dll-unavailable" }}
-        ls1RuntimeFallback
-      />
-    </InfoVisibility>,
+      <ModelWarning {...modelStatus} />
+    </InfoVisibility>
   );
-  expect(screen.getAllByRole("alert")).toHaveLength(1);
-  expect(screen.getByRole("listitem").textContent).toBe(
-    "Lossless.dll could not be found. Check its configured path or install Lossless Scaling through Steam.",
-  );
+  const { rerender } = render(panel(status));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByTestId("navigation-row")).toBeNull();
   expect(
     screen.queryByRole("button", { name: "Check for MAKO Decky updates" }),
   ).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "Hide info" }));
+  expect(screen.queryByRole("alert")).toBeNull();
+  // Installing a DLL can expose a real model failure; removing it clears the
+  // warning again without preserving a stale update action or empty row.
+  rerender(panel({ lsfg: { compatible: false, reason: "lsfg-unavailable" } }));
+  expect(screen.getByRole("alert")).toBeTruthy();
+  rerender(panel(status));
+  expect(screen.queryByRole("alert")).toBeNull();
+  expect(screen.queryByTestId("navigation-row")).toBeNull();
 });
 
 test("the model-warning update action keeps focus across R1 and still opens updates", () => {
