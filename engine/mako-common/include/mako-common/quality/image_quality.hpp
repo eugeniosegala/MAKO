@@ -111,6 +111,12 @@ namespace mako::quality {
         QualitySceneKind kind, float interpolation = 0.5F
     );
 
+    /// Render a controlled temporal pair at explicit extents and scene times.
+    /// Scene times are in [0, 1]; interpolation is strictly inside (0, 1).
+    [[nodiscard]] RegressionScene makeImageQualityRegressionScene(
+        QualitySceneKind kind, uint32_t width, uint32_t height,
+        float previousTime, float currentTime, float interpolation);
+
     /// Build a deterministic odd-sized scene aimed at AMD image-boundary and
     /// motion-history regressions.
     [[nodiscard]] RegressionScene makeAmdImageQualityRegressionScene();

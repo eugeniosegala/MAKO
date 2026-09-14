@@ -281,6 +281,36 @@ int main() {
         ));
     }, "exact spatial scenes must reject downscaling extents");
 
+    const auto temporalA = mako::quality::makeImageQualityRegressionScene(
+        mako::quality::QualitySceneKind::Traffic, 321, 181, 0.0F, 0.25F, 0.5F);
+    const auto temporalB = mako::quality::makeImageQualityRegressionScene(
+        mako::quality::QualitySceneKind::Traffic, 321, 181, 0.25F, 0.5F, 0.5F);
+    const auto temporalAgain = mako::quality::makeImageQualityRegressionScene(
+        mako::quality::QualitySceneKind::Traffic, 321, 181, 0.0F, 0.25F, 0.5F);
+    expect(temporalA.current == temporalB.previous,
+        "adjacent temporal pairs must share the exact endpoint pixels");
+    expect(temporalA.reference == temporalAgain.reference &&
+        temporalA.current == temporalAgain.current,
+        "controlled content must be deterministic");
+    expect(temporalA.previous != temporalA.current &&
+        temporalA.reference != temporalA.previous && temporalA.reference != temporalA.current,
+        "temporal references must contain actual intermediate motion");
+    const auto legacy = mako::quality::makeImageQualityRegressionScene(
+        mako::quality::QualitySceneKind::Traffic);
+    const auto temporalLegacy = mako::quality::makeImageQualityRegressionScene(
+        mako::quality::QualitySceneKind::Traffic, 321, 181, 0, 1, 0.5F);
+    expect(legacy.previous == temporalLegacy.previous && legacy.current == temporalLegacy.current &&
+        legacy.reference == temporalLegacy.reference && legacy.focusMask == temporalLegacy.focusMask,
+        "explicit scene times must preserve the existing quality contract");
+    expectInvalidArgument([] {
+        static_cast<void>(mako::quality::makeImageQualityRegressionScene(
+            mako::quality::QualitySceneKind::Traffic, 20000, 20000, 0, 1, 0.5F));
+    }, "bounded scene generation must reject oversized allocations");
+    expectInvalidArgument([] {
+        static_cast<void>(mako::quality::makeImageQualityRegressionScene(
+            mako::quality::QualitySceneKind::Traffic, 321, 181, -0.1F, 1, 0.5F));
+    }, "temporal scenes must reject invalid source times");
+
     std::cout << "Procedural image-quality regression tests passed\n";
     return 0;
 }

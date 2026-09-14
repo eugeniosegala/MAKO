@@ -17,6 +17,9 @@ namespace mako::cli::quality {
         std::optional<std::filesystem::path> output;
         std::string scene{"motion-boundary"};
         float interpolation{0.5F};
+        std::optional<std::string> sequence_plan;
+        std::optional<uint32_t> width;
+        std::optional<uint32_t> height;
         float flow_scale{1.0F};
         bool performance_mode{false};
     };

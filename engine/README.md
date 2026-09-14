@@ -151,6 +151,8 @@ Validate the configuration or run the built-in benchmark with:
 
 The Renderer and CLI's LSFG commands default to FP16 when the selected GPU supports it, with FP32 on unsupported devices. To select FP32 explicitly, set `allow_fp16 = false` under `[global]` and restart the game, or pass `--no-fp16` to a CLI benchmark, debug, or LSFG quality command. The CLI's precision options are independent of the Renderer configuration file; see [global settings](docs/CONFIGURATION.md#global-settings).
 
+The benchmark uses a defined traffic-image pair uploaded before timing; its recipe-2 results require fresh baselines. For changing source images, output counts, timestamps, and frame history, use the [temporal quality sequence](docs/IMAGE-QUALITY-REGRESSION.md#temporal-frame-generation-sequences). That readback-based check verifies correctness and is separate from timed capacity measurements.
+
 ## In-game considerations
 
 <!-- prettier-ignore -->

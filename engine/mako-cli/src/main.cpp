@@ -112,6 +112,8 @@ SUBCOMMAND OPTIONS:
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -s, --scene <NAME>              Procedural scene name
+            --sequence-plan <PLAN>     Long temporal sequence; semicolon-separated frames
+            --width/--height <PIXELS>   Temporal sequence extents (default 321x181)
         -t, --interpolation <FLOAT>     Generated timestamp between 0 and 1
         -f, --flow <FLOAT>              Flow scale from 0.25 to 1.0
         -p, --performance-mode          Use the lighter LSFG model
@@ -384,7 +386,10 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::Options opts{};
-        const std::array<option, 10> GETOPT {{
+        const std::array<option, 13> GETOPT {{
+            { "width",            required_argument, nullptr, 1001 },
+            { "height",           required_argument, nullptr, 1002 },
+            { "sequence-plan",    required_argument, nullptr, 1000 },
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
             { "no-fp16",          no_argument,       nullptr, 'A' },
@@ -401,6 +406,15 @@ SUBCOMMAND OPTIONS:
         while ((c = getopt_long(
                 argc, argv, "d:ag:o:s:t:f:p", GETOPT.data(), nullptr)) != -1) {
             switch (c) {
+                case 1001:
+                    opts.width = numericArgument<uint32_t>(optarg, "--width");
+                    break;
+                case 1002:
+                    opts.height = numericArgument<uint32_t>(optarg, "--height");
+                    break;
+                case 1000:
+                    opts.sequence_plan = optarg;
+                    break;
                 case 'd':
                     opts.dll.emplace(optarg);
                     break;

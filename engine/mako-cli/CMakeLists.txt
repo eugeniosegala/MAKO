@@ -5,6 +5,7 @@ target_include_directories(mako-cli-support
     PUBLIC "src")
 
 set(CLI_SOURCES
+    "src/tools/image_transfer.cpp"
     "src/tools/benchmark.cpp"
     "src/tools/debug.cpp"
     "src/tools/inspect_dll.cpp"
@@ -25,6 +26,10 @@ target_compile_options(mako-cli PRIVATE
     -Wno-unsafe-buffer-usage) # CLI parsing
 
 if(BUILD_TESTING)
+    add_executable(mako-temporal-sequence-tests "tests/temporal_sequence_tests.cpp")
+    target_include_directories(mako-temporal-sequence-tests PRIVATE src)
+    add_test(NAME temporal-sequence-contract COMMAND mako-temporal-sequence-tests)
+
     add_executable(mako-cli-dll-inspection-tests
         "src/tools/inspect_dll.cpp"
         "tests/inspect_dll_tests.cpp")

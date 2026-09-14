@@ -773,32 +773,46 @@ ImageQualityThresholds mako::quality::imageQualityThresholds(
 
 RegressionScene mako::quality::makeImageQualityRegressionScene(
         const QualitySceneKind kind, const float interpolation) {
+    return makeImageQualityRegressionScene(kind, baseWidth, baseHeight,
+        0.0F, 1.0F, interpolation);
+}
+
+RegressionScene mako::quality::makeImageQualityRegressionScene(
+        const QualitySceneKind kind, const uint32_t width, const uint32_t height,
+        const float previousTime, const float currentTime, const float interpolation) {
+    if (width == 0 || height == 0 || width > 16384 || height > 16384 ||
+            static_cast<uint64_t>(width) * height > 16ULL * 1024ULL * 1024ULL)
+        throw std::invalid_argument("temporal scene extent exceeds the bounded pixel budget");
+    if (!std::isfinite(previousTime) || !std::isfinite(currentTime) ||
+            previousTime < 0.0F || previousTime > 1.0F ||
+            currentTime < 0.0F || currentTime > 1.0F)
+        throw std::invalid_argument("temporal scene times must be between zero and one");
     if (!std::isfinite(interpolation) || interpolation <= 0.0F || interpolation >= 1.0F)
         throw std::invalid_argument("image-quality interpolation must be between zero and one");
 
     RegressionScene scene{
-        .width = baseWidth,
-        .height = baseHeight,
-        .previous = renderScene(kind, 0.0F, baseWidth, baseHeight),
-        .current = renderScene(kind, 1.0F, baseWidth, baseHeight),
+        .width = width,
+        .height = height,
+        .previous = renderScene(kind, previousTime, width, height),
+        .current = renderScene(kind, currentTime, width, height),
         .reference = {},
         .focusMask = {},
         .detailMask = std::vector<uint8_t>(
-            static_cast<size_t>(baseWidth) * baseHeight
+            static_cast<size_t>(width) * height
         ),
     };
     scene.reference = renderScene(
         kind,
-        interpolation,
-        baseWidth,
-        baseHeight,
+        previousTime + (currentTime - previousTime) * interpolation,
+        width,
+        height,
         &scene.detailMask
     );
     scene.focusMask = makeFocusMask(
         scene.previous,
         scene.current,
-        baseWidth,
-        baseHeight
+        width,
+        height
     );
     return scene;
 }
