@@ -77,6 +77,7 @@ import {
 } from "../../src/components/ModelWarning";
 import {
   MakoInlineTip,
+  MakoReleaseIdentity,
   MakoSectionHeader,
   MakoSettingRelationship,
 } from "../../src/components/MakoUi";
@@ -130,6 +131,7 @@ function isDisplayed(element: Element): boolean {
 test("R1 hides information without changing controls, repeats, or other buttons", () => {
   render(
     <InfoVisibility>
+      <MakoReleaseIdentity version="3.2.1" codename="The Captain" />
       <MakoSectionHeader description="Section tutorial">
         Settings
       </MakoSectionHeader>
@@ -165,6 +167,8 @@ test("R1 hides information without changing controls, repeats, or other buttons"
     }),
   ).toBe(true);
   expect(isDisplayed(screen.getByText("Settings"))).toBe(true);
+  expect(isDisplayed(screen.getByText("v3.2.1"))).toBe(true);
+  expect(isDisplayed(screen.getByText("the-captain"))).toBe(true);
   expect(isDisplayed(input)).toBe(true);
   expect(input.value).toBe("75");
   expect(document.activeElement).toBe(input);
@@ -194,9 +198,12 @@ test("clicking the ribbon persists the choice across reopening without changing 
   unmount();
   render(
     <InfoVisibility>
+      <MakoReleaseIdentity version="3.2.1" codename="The Captain" />
       <button>Option</button>
     </InfoVisibility>,
   );
+  expect(isDisplayed(screen.getByText("v3.2.1"))).toBe(true);
+  expect(isDisplayed(screen.getByText("the-captain"))).toBe(true);
   fireEvent.click(screen.getByRole("button", { name: "Show info" }));
   expect(localStorage.getItem("mako-info-hidden")).toBe("false");
 });

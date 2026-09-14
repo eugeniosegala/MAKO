@@ -258,10 +258,9 @@ export function MakoReleaseIdentity({
     .replace(/^-|-$/g, "");
 
   return (
-    <MakoInfo as={PanelSectionRow}>
+    <PanelSectionRow>
       <div
         aria-label={`Current release: MAKO Decky v${version}, ${codename}`}
-        data-mako-info="true"
         style={{
           width: "100%",
           boxSizing: "border-box",
@@ -286,7 +285,7 @@ export function MakoReleaseIdentity({
         </span>
         <span style={{ color: makoAccentColor }}>{codenameSlug}</span>
       </div>
-    </MakoInfo>
+    </PanelSectionRow>
   );
 }
 
