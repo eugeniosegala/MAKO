@@ -312,7 +312,9 @@ export function MakoSectionHeader({
         <div
           style={{
             paddingBottom: "8px",
-            borderBottom: "4px solid rgba(77, 170, 190, 0.48)",
+            textAlign: "center",
+            borderBottom: "4px solid transparent",
+            borderImage: `linear-gradient(90deg, ${makoAccentColor}, #ffffff) 1`,
           }}
         >
           {children}
