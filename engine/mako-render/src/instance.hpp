@@ -86,6 +86,12 @@ namespace mako::layer {
                 );
         }
 
+        [[nodiscard]] bool scalingSurfaceConnectionProvisioned() const {
+            return this->scalingEngineConfiguredAtStartup &&
+                this->scalingEngineProvisioned() &&
+                this->presentationEnvironment.gamescopeWsiDisabled;
+        }
+
         /// ensure the layer is up-to-date
         /// @param forceConfigurationPoll bypass the present-path polling
         /// interval at an application-owned swapchain creation boundary
@@ -118,6 +124,7 @@ namespace mako::layer {
             const std::optional<FixedSurfaceScalingContract>&
                 fixedSurfaceContract,
             bool spatialSurfaceScalingSupported,
+            bool gamescopeScalingSurface,
             const std::function<void(
                 const FixedSurfaceScalingContract&)>& publishSpatialCreate,
             const std::function<void(void)>& finish) const;

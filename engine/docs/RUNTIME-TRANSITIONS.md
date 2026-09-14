@@ -73,6 +73,8 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 
 Normal profiles reserve capacity for the larger configured Fixed or Adaptive ceiling. Ultra Performance reserves only its startup-active policy. A later capacity increase can still use private replacement when the lower WSI pool has `application minimum + generated capacity` images; otherwise it remains pending for recreation.
 
+Scaling with Gamescope WSI off provisions the optional surface association at process start. Changing scaler method or suspending private scaling does not replace that connection or switch to full WSI. On the next game launch, the independent Scaling/WSI combination chooses the combined surface adapter, the existing full WSI chain, or ordinary surface handling.
+
 ## Private replacement contract
 
 Private spatial, FG, and colour changes use one last-value-wins coordinator:

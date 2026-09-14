@@ -903,6 +903,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             variableSurfaceRollbackExtents,
         const std::optional<FixedSurfaceScalingContract>& fixedSurfaceContract,
         const bool spatialSurfaceScalingSupported,
+        const bool gamescopeScalingSurface,
         const std::function<void(
             const FixedSurfaceScalingContract&)>& publishSpatialCreate,
         const std::function<void(void)>& finish) const {
@@ -1007,7 +1008,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     const bool spatialExtentOwner =
         spatialScalingCapabilityOwnedByLayer();
     const bool gamescopePresentationTargetRequired =
-        spatialExtentOwner && splitLayerChainEnabled() &&
+        spatialExtentOwner && (splitLayerChainEnabled() || gamescopeScalingSurface) &&
         (this->gamescopeEnvironmentDetected || this->gamescopeDetected);
     if (!spatialResourceOwner && !spatialExtentOwner) {
         // The legacy upper split role relays capabilities but neither expands

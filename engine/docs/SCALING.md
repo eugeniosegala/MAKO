@@ -42,6 +42,8 @@ Application
 
 The lower spatial role owns surface capabilities and physical lower-swapchain extent expansion. It performs no presentation-time GPU work. The upper role owns reconstruction, optional Frame Generation, private resources, and runtime status. The split must be selected explicitly; implicit-manifest directory order is not an ordering contract. [WSI isolation](WSI-ISOLATION.md) owns the launch and proof requirements.
 
+When Scaling is on and WSI is off inside a supported Gamescope session, the combined Renderer uses a minimal X11-to-Wayland surface association. This gives games such as Proton titles that explicitly request their window size a genuine variable-extent surface. The game request remains the source and the ordinary scaler policy chooses the output; no fixed-extent contract is bypassed. The adapter is provisioned at process start, remains through live scaler changes, and is absent when the full WSI chain already supplies the association. It leaves Gamescope's WSI limiter, timing, and HDR interfaces inactive. Missing session, protocol, library, or window proof preserves ordinary native surface handling.
+
 ## Pipeline placement
 
 The upper role selects one immutable pipeline order from the presentation extent. Extents at or below 2,304,000 pixels, equivalent to 1920×1200, reconstruct once before Frame Generation:
@@ -86,7 +88,7 @@ The lower split role must observe a Wayland surface created through Gamescope WS
 
 For a surface whose `currentExtent` is variable, the application request is the source. MAKO enlarges it by one aspect-preserving effective factor, subject to Vulkan surface limits and memory admission.
 
-The managed Gamescope split chain also requires a positively identified output target from the server-zero feedback resolver and treats it as the normal presentation ceiling. If the source already fills that target, scaling stays native with `inactive_reason=gamescope-presentation-target-no-headroom`. Quality Supersampling may exceed the target, but it cannot bypass Vulkan limits, memory admission, or the requirement to prove the Gamescope target. The combined path uses available Gamescope target feedback but does not require the split chain's target proof. Direct non-Gamescope operation applies the factor without inventing a compositor target.
+The managed Gamescope split chain and the combined Renderer's isolated Gamescope surface adapter require a positively identified output target from the server-zero feedback resolver and treat it as the normal presentation ceiling. If the source already fills that target, scaling stays native with `inactive_reason=gamescope-presentation-target-no-headroom`. Quality Supersampling may exceed the target, but it cannot bypass Vulkan limits, memory admission, or the requirement to prove the Gamescope target. Ordinary combined surfaces use available Gamescope target feedback without requiring this adapter-specific proof. Direct non-Gamescope operation applies the factor without inventing a compositor target.
 
 The memory policy admits a presentation extent from device-local heap size and, when available, the driver's live budget and usage. It preserves already proven envelopes across safe live transitions and fails closed when the enlarged swapchain and private resources do not fit. Runtime status reports the requested and effective factor plus the active constraint or inactive reason; it does not promise an exact free-memory measurement.
 

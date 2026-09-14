@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "instance.hpp"
+#include "gamescope_scaling_surface.hpp"
 #include "color_pipeline.hpp"
 #include "layer_role.hpp"
 #include "mako-common/helpers/errors.hpp"
@@ -56,6 +57,7 @@ namespace {
     struct InstanceInfo {
         std::vector<VkInstance> handles; // there may be several instances
         vk::VulkanInstanceFuncs funcs;
+        std::unique_ptr<GamescopeScalingSurface> scalingSurfaces;
 
         std::unordered_map<VkDevice, vk::Vulkan> devices;
         std::unordered_set<VkDevice> nativeDevices;
@@ -476,7 +478,58 @@ namespace {
         };
 
         try {
+            std::unique_ptr<GamescopeScalingSurface> scalingSurfaces;
+            const auto environment = [](const char* name) -> std::string_view {
+                const char* value = std::getenv(name);
+                return value ? value : "";
+            };
+            const bool needsX11Adapter = requestsGamescopeScalingSurface(*info);
+            if (needsX11Adapter && !(instance_info && instance_info->scalingSurfaces) &&
+                    needsGamescopeScalingSurface(
+                    layer_info->root.scalingSurfaceConnectionProvisioned(),
+                    true, spatialScalingLayer, splitLayerChainEnabled(),
+                    environment("GAMESCOPE_WAYLAND_DISPLAY"),
+                    environment("WAYLAND_DISPLAY"))) {
+                const auto enumerate = reinterpret_cast<PFN_vkEnumerateInstanceExtensionProperties>(
+                    layer_info->GetInstanceProcAddr(VK_NULL_HANDLE,
+                        "vkEnumerateInstanceExtensionProperties"));
+                uint32_t count{};
+                std::vector<VkExtensionProperties> extensions;
+                if (enumerate && enumerate(nullptr, &count, nullptr) == VK_SUCCESS) {
+                    extensions.resize(count);
+                    if (enumerate(nullptr, &count, extensions.data()) != VK_SUCCESS)
+                        extensions.clear();
+                }
+                const bool waylandSupported = std::ranges::any_of(extensions,
+                    [](const VkExtensionProperties& extension) {
+                        return std::strcmp(extension.extensionName,
+                            "VK_KHR_wayland_surface") == 0;
+                    });
+                if (waylandSupported) {
+                    auto candidate = std::make_unique<GamescopeScalingSurface>();
+                    if (candidate->connect())
+                        scalingSurfaces = std::move(candidate);
+                }
+                if (!scalingSurfaces)
+                    std::cerr << "MAKO Renderer: spatial scaling surface bridge unavailable; "
+                                 "retaining application surface extent checks\n";
+            }
             VkInstanceCreateInfo newInfo = *info;
+            std::vector<const char*> extensions;
+            // Wine may keep several Vulkan instances alive. Every instance
+            // using the shared surface connection needs the driver extension.
+            if (needsX11Adapter && (scalingSurfaces ||
+                    (instance_info && instance_info->scalingSurfaces))) {
+                if (info->enabledExtensionCount)
+                    extensions.assign(info->ppEnabledExtensionNames,
+                        info->ppEnabledExtensionNames + info->enabledExtensionCount);
+                if (!std::ranges::any_of(extensions, [](const char* name) {
+                        return std::strcmp(name, "VK_KHR_wayland_surface") == 0;
+                    }))
+                    extensions.push_back("VK_KHR_wayland_surface");
+                newInfo.ppEnabledExtensionNames = extensions.data();
+                newInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
+            }
             layer_info->root.modifyInstanceCreateInfo(newInfo,
                 [&, newInfo = &newInfo]() {
                     auto res = vkCreateInstance(newInfo, alloc, instance);
@@ -490,7 +543,10 @@ namespace {
                 instance_info = new InstanceInfo{ // NOLINT (memory management)
                     .funcs = vk::initVulkanInstanceFuncs(*instance,
                         layer_info->GetInstanceProcAddr, true),
+                    .scalingSurfaces = std::move(scalingSurfaces),
                 };
+            else if (scalingSurfaces)
+                instance_info->scalingSurfaces = std::move(scalingSurfaces);
 
             instance_info->handles.push_back(*instance);
             lowerInstanceCreated = false;
@@ -1611,6 +1667,8 @@ namespace {
         );
         if (lower)
             lower(instance, surface, alloc);
+        if (instance_info && instance_info->scalingSurfaces)
+            instance_info->scalingSurfaces->destroy(surface);
     }
 
     using CreateWaylandSurface = VkResult (VKAPI_PTR *)(
@@ -1661,6 +1719,19 @@ namespace {
             const VkXcbSurfaceCreateInfoKHR* createInfo,
             const VkAllocationCallbacks* alloc,
             VkSurfaceKHR* surface) {
+        if (instance_info && instance_info->scalingSurfaces && createInfo) {
+            try {
+                const auto result = instance_info->scalingSurfaces->create(
+                    instance, layer_info->GetInstanceProcAddr, *createInfo, alloc, surface);
+                if (result) {
+                    if (*result == VK_SUCCESS)
+                        recordSurfaceOrigin(*surface, SpatialSurfaceOrigin::Wayland);
+                    return *result;
+                }
+            } catch (const std::bad_alloc&) {
+                return VK_ERROR_OUT_OF_HOST_MEMORY;
+            }
+        }
         return createSurfaceAndRecord<
             CreateXcbSurface
         >(instance, createInfo, alloc, surface, "vkCreateXcbSurfaceKHR",
@@ -1672,6 +1743,19 @@ namespace {
             const VkXlibSurfaceCreateInfoKHR* createInfo,
             const VkAllocationCallbacks* alloc,
             VkSurfaceKHR* surface) {
+        if (instance_info && instance_info->scalingSurfaces && createInfo) {
+            try {
+                const auto result = instance_info->scalingSurfaces->create(
+                    instance, layer_info->GetInstanceProcAddr, *createInfo, alloc, surface);
+                if (result) {
+                    if (*result == VK_SUCCESS)
+                        recordSurfaceOrigin(*surface, SpatialSurfaceOrigin::Wayland);
+                    return *result;
+                }
+            } catch (const std::bad_alloc&) {
+                return VK_ERROR_OUT_OF_HOST_MEMORY;
+            }
+        }
         return createSurfaceAndRecord<
             CreateXlibSurface
         >(instance, createInfo, alloc, surface, "vkCreateXlibSurfaceKHR",
@@ -1837,6 +1921,8 @@ namespace {
                     variableSurfaceRollbackExtents,
                     fixedSurfaceContract,
                     spatialScalingActivationSupported,
+                    instance_info->scalingSurfaces &&
+                        instance_info->scalingSurfaces->owns(info->surface),
                     [&](const FixedSurfaceScalingContract& contract) {
 #if defined(MAKO_LAYER_ROLE_SPATIAL_SCALING)
                         if (spatialScalingCapabilityOwnedByLayer() &&
@@ -2246,6 +2332,18 @@ namespace {
                              "rejected before semaphore consumption; batch "
                              "frame generation and scaling are not supported\n";
                 return unsupported;
+            }
+        }
+
+        if (instance_info->scalingSurfaces) {
+            for (uint32_t i = 0; i < info->swapchainCount; ++i) {
+                const auto metadata = instance_info->swapchainInfos.find(info->pSwapchains[i]);
+                if (metadata != instance_info->swapchainInfos.end() &&
+                        !instance_info->scalingSurfaces->preparePresent(metadata->second.surface)) {
+                    if (info->pResults)
+                        std::fill_n(info->pResults, info->swapchainCount, VK_ERROR_SURFACE_LOST_KHR);
+                    return VK_ERROR_SURFACE_LOST_KHR;
+                }
             }
         }
 

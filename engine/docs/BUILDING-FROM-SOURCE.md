@@ -23,7 +23,7 @@ Install:
 - CMake (version 3.10 or higher)
 - Ninja (recommended; other CMake generators may work)
 - Vulkan headers and loader development files
-- X11 headers (`libx11` and `xorgproto` on Arch/SteamOS)
+- X11 and XCB headers (`libx11`, `libxcb`, and `xorgproto` on Arch/SteamOS)
 - Python 3 when building the registered tests
 - A multilib C++ toolchain when building the 32-bit Vulkan layer
 - Qt 6.2 or newer and Qt6Quick (only needed when building `mako-ui`)
@@ -36,7 +36,7 @@ sudo apt-get install -y \
     git curl python3 \
     llvm clang clang-tools clang-tidy \
     cmake ninja-build pkg-config g++-multilib \
-    libvulkan-dev libx11-dev \
+    libvulkan-dev libx11-dev libxcb1-dev \
     mesa-common-dev \
     qt6-base-dev qt6-base-dev-tools \
     qt6-tools-dev qt6-tools-dev-tools \
@@ -47,7 +47,7 @@ sudo pacman -S --needed \
     git curl python \
     llvm clang ccache lib32-glibc \
     cmake ninja \
-    vulkan-headers vulkan-icd-loader libx11 xorgproto \
+    vulkan-headers vulkan-icd-loader libx11 libxcb xorgproto \
     qt6-base qt6-declarative
 ```
 

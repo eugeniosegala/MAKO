@@ -22,6 +22,18 @@ MAKO Renderer descends directly from PancakeTAS's GPL-3.0-or-later lsfg-vk versi
 
 Copyright in the incorporated portions remains with the respective lsfg-vk copyright holders. The incorporated source files identify themselves as `GPL-3.0-or-later`, and MAKO remains distributed under that license. The MIT License used for lsfg-vk version 1 does not describe MAKO Renderer's version 2 lineage.
 
+## Gamescope surface protocol
+
+MAKO Renderer's optional scaling surface adapter declares the association/destruction requests and version-one events from Valve's [Gamescope swapchain protocol at commit `2d217a16c7e5b56c7417257279bf102320cff024`](https://github.com/ValveSoftware/gamescope/blob/2d217a16c7e5b56c7417257279bf102320cff024/protocol/gamescope-swapchain.xml). This protocol material carries the following MIT notice:
+
+Copyright © 2023 Joshua Ashton for Valve Software
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice (including the next paragraph) shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
 ## MAKO Decky frontend
 
 MAKO Decky's compiled frontend includes the following third-party code and icon data. Declared dependencies are in `plugin/package.json`, and exact resolutions are in `plugin/pnpm-lock.yaml`. MAKO Decky packages include the upstream license files under `third_party_licenses/` and a frontend source map with the bundled dependency source content.

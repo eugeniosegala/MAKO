@@ -52,7 +52,7 @@ pnpm --dir plugin run build
 just test-engine-sanitized
 ```
 
-The focused Renderer policy script compiles Vulkan-facing policy headers, so it needs Vulkan headers even though it does not need a Vulkan device or runtime. The full Renderer suite additionally needs the Vulkan loader and X11 development files:
+The focused Renderer policy script compiles Vulkan-facing policies and the optional Gamescope surface adapter against a local client fixture, so it needs Vulkan, X11, and XCB headers even though it does not need a Vulkan device, compositor, or Wayland development package. The full Renderer suite additionally needs the Vulkan loader:
 
 ```bash
 cmake -S engine -B engine/build/local -DBUILD_TESTING=ON -DMAKO_BUILD_UI=OFF

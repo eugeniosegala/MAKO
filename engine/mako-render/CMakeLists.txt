@@ -1,6 +1,7 @@
 set(LAYER_SOURCES
     "src/entrypoint.cpp"
     "src/gamescope_hdr_feedback.cpp"
+    "src/gamescope_scaling_surface.cpp"
     "src/instance.cpp"
     "src/present_diagnostics.cpp"
     "src/runtime_status.cpp"
@@ -238,6 +239,34 @@ if(BUILD_TESTING)
         COMMAND mako-presentation-policy-tests)
     mako_register_portable_policy_test(
         mako-presentation-policy-tests presentation-policy)
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_library(mako-surface-client-fixture SHARED
+            "tests/gamescope_surface_client_fixture.cpp")
+        set_target_properties(mako-surface-client-fixture PROPERTIES
+            OUTPUT_NAME "wayland-client" SOVERSION 0
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/surface-client-fixture")
+        add_custom_command(TARGET mako-surface-client-fixture POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "$<TARGET_FILE_NAME:mako-surface-client-fixture>"
+                "$<TARGET_FILE_DIR:mako-surface-client-fixture>/libxcb.so.1"
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "$<TARGET_FILE_NAME:mako-surface-client-fixture>"
+                "$<TARGET_FILE_DIR:mako-surface-client-fixture>/libX11-xcb.so.1")
+        add_executable(mako-gamescope-scaling-surface-tests
+            "tests/gamescope_scaling_surface_tests.cpp"
+            "src/gamescope_scaling_surface.cpp")
+        target_include_directories(mako-gamescope-scaling-surface-tests
+            PRIVATE "src" "../mako-common/include")
+        target_link_libraries(mako-gamescope-scaling-surface-tests
+            PRIVATE mako-surface-client-fixture ${CMAKE_DL_LIBS})
+        add_test(NAME gamescope-scaling-surface
+            COMMAND ${CMAKE_COMMAND} -E env
+                "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:mako-surface-client-fixture>"
+                $<TARGET_FILE:mako-gamescope-scaling-surface-tests>)
+        mako_register_portable_policy_test(
+            mako-gamescope-scaling-surface-tests gamescope-scaling-surface)
+    endif()
 
     add_executable(mako-adaptive-tests
         "tests/adaptive_scheduler_tests.cpp")

@@ -66,6 +66,8 @@ Backend context close waits up to 250 ms for that context's work. If completion 
 
 Lower WSI swapchain retirement is separate. Maintenance fences, same-surface replacement progress, compositor grace, custom allocator callbacks, and terminal surface/device destruction determine when those handles can be released. The [lifecycle destruction policy](LIFECYCLE.md#destruction-and-retirement) owns those conditions; backend completion alone does not prove presentation retirement.
 
+The optional `GamescopeScalingSurface` connection is owned by Renderer instance state only when Scaling needs an isolated Gamescope X11-to-Wayland association. Each Vulkan surface owns one Wayland surface and one association object; lower Vulkan destruction and same-surface retirement complete before these are released. An association is bound on first present so preparing a replacement cannot retire the current window image early. The connection and client libraries outlive all of these objects and are released after the final Vulkan instance. This is CPU-side surface bookkeeping outside the private GPU allocation counters, with no timing history or additional worker thread.
+
 The layer calls `backend::makeLeaking()` after provisioning Frame Generation to preserve the private backend Vulkan owner during teardown and avoid loader-destruction hazards in mixed layer stacks. The backend instance destructor moves that Vulkan owner into deliberately retained storage. The operating system reclaims it when the process exits. This exception is distinct from ordinary context retirement and does not make all per-context images permanent. Standalone backend consumers do not enable it merely by constructing an instance.
 
 ## Reading memory evidence
