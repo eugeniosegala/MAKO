@@ -53,7 +53,6 @@ namespace mako::backend {
         /// @return image
         [[nodiscard]] const auto& getImage1() const { return *this->image1; }
     private:
-        std::vector<vk::Image> tempImages1;
         ls::lazy<vk::Image> image0;
         ls::lazy<vk::Image> image1;
 

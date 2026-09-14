@@ -2,6 +2,7 @@
 
 #include "delta1.hpp"
 #include "../helpers/image_prefix.hpp"
+#include "../helpers/delta_scratch.hpp"
 #include "../helpers/utils.hpp"
 #include "mako-common/helpers/pointers.hpp"
 #include "mako-common/vulkan/command_buffer.hpp"
@@ -29,11 +30,10 @@ Delta1::Delta1(const Ctx& ctx, size_t idx,
         temporaryImages0, 2 * m, "Delta1 temporary 0"
     );
 
-    // Reuse the immediately preceding Gamma1 scratch. Gamma1 and Delta1 have
-    // the same extent and execute sequentially in one command buffer.
-    for (size_t i = 0; i < (2 * m); i++) {
-        this->tempImages1.emplace_back(ctx.vk, extent, ctx.imageMemoryPool);
-    }
+    // The first dispatch consumes Gamma0's outputs into Gamma1 scratch. Later
+    // dispatches can overwrite those dead outputs and Gamma1's unused tail.
+    // Keep Gamma1's first m images intact for the second half of this chain.
+    const auto scratch = backend::deltaScratch(sourceImages0, sourceImages1, m);
     this->image0.emplace(ctx.vk,
         VkExtent2D { extent.width, extent.height },
         ctx.imageMemoryPool,
@@ -57,11 +57,13 @@ Delta1::Delta1(const Ctx& ctx, size_t idx,
         .build(ctx.vk, ctx.pool, shaders.at(1)));
     this->sets.emplace_back(ManagedShaderBuilder()
         .sampleds(temporary0)
-        .storages(this->tempImages1)
+        .storages(scratch.primary)
+        .storages(scratch.spare)
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(2)));
     this->sets.emplace_back(ManagedShaderBuilder()
-        .sampleds(this->tempImages1)
+        .sampleds(scratch.primary)
+        .sampleds(scratch.spare)
         .storages(temporary0)
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(3)));
@@ -82,11 +84,11 @@ Delta1::Delta1(const Ctx& ctx, size_t idx,
         .build(ctx.vk, ctx.pool, shaders.at(6)));
     this->sets.emplace_back(ManagedShaderBuilder()
         .sampleds(temporary0.first(m))
-        .storages(this->tempImages1, 0, m)
+        .storages(scratch.primary.first(m))
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(7)));
     this->sets.emplace_back(ManagedShaderBuilder()
-        .sampleds(this->tempImages1, 0, m)
+        .sampleds(scratch.primary.first(m))
         .storages(temporary0.first(m))
         .sampler(ctx.bnbSampler)
         .build(ctx.vk, ctx.pool, shaders.at(8)));
@@ -104,9 +106,7 @@ Delta1::Delta1(const Ctx& ctx, size_t idx,
 }
 
 void Delta1::prepare(std::vector<VkImage>& images) const {
-    for (size_t i = 0; i < this->tempImages1.size(); i++) {
-        images.push_back(this->tempImages1.at(i).handle());
-    }
+    // Reused scratch is initialized once by its Gamma0/Gamma1 owners.
     images.push_back(this->image0->handle());
     images.push_back(this->image1->handle());
 }

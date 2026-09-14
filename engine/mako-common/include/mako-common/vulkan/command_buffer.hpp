@@ -29,8 +29,10 @@ namespace vk {
 
         /// begin recording commands
         /// @param vk the vulkan instance
+        /// @param flags recording usage; use zero for sequential resubmission
         /// @throws ls::vulkan_error on failure
-        void begin(const vk::Vulkan& vk) const;
+        void begin(const vk::Vulkan& vk,
+            VkCommandBufferUsageFlags flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT) const;
 
         /// blit an image
         /// @param vk the vulkan instance

@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
+#include "helpers/temporal_phases.hpp"
 #include "mako-backend/mako.hpp"
 #include "extraction/dll_reader.hpp"
 #include "extraction/shader_registry.hpp"
@@ -107,6 +108,12 @@ namespace mako::backend {
             ls::FileDescriptorScope& sourceFds, ls::FileDescriptorScope& destFds,
             ls::FileDescriptorScope& syncFd, VkExtent2D extent, FrameEncoding encoding, float flow, bool perf);
 
+        // Borrowed scratch and cached descriptors require stable context owners.
+        ContextImpl(const ContextImpl&) = delete;
+        ContextImpl& operator=(const ContextImpl&) = delete;
+        ContextImpl(ContextImpl&&) = delete;
+        ContextImpl& operator=(ContextImpl&&) = delete;
+
         /// schedule frames
         /// (see mako documentation)
         void scheduleFrames();
@@ -133,7 +140,10 @@ namespace mako::backend {
         size_t fidx{0}; // real frame index
         bool workScheduled{false};
 
-        std::vector<vk::CommandBuffer> cmdbufs;
+        // Descriptor bindings repeat every lcm(2 source slots, 3 history slots).
+        // Record lazily, once per phase and output; prepareWork serializes reuse.
+        using RecordedCommands = std::array<std::optional<vk::CommandBuffer>, commandPhaseCount>;
+        std::vector<RecordedCommands> cmdbufs;
         vk::Fence cmdbufFence;
         std::vector<float> constantBufferTimestamps;
 
@@ -450,20 +460,6 @@ namespace {
             throw backend::error("Unable to create prepass semaphore", e);
         }
     }
-    /// create command buffers
-    std::vector<vk::CommandBuffer> createCommandBuffers(const vk::Vulkan& vk, size_t count) {
-        try {
-            std::vector<vk::CommandBuffer> cmdbufs;
-            cmdbufs.reserve(count);
-
-            for (size_t i = 0; i < count; ++i)
-                cmdbufs.emplace_back(vk);
-
-            return cmdbufs;
-        } catch (const std::exception& e) {
-            throw backend::error("Unable to create command buffers", e);
-        }
-    }
     /// create context data
     bool usesHighPrecisionModel(const FrameEncoding encoding) {
         return encoding != FrameEncoding::Sdr8;
@@ -619,7 +615,7 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
         blackImage(createBlackImage(instance.getVulkan())),
         syncSemaphore(importTimelineSemaphore(instance.getVulkan(), syncFd.take())),
         prepassSemaphore(createPrepassSemaphore(instance.getVulkan())),
-        cmdbufs(createCommandBuffers(instance.getVulkan(), destFds.size() + 1)),
+        cmdbufs(destFds.size() + 1),
         cmdbufFence(instance.getVulkan()),
         ctx(createCtx(instance, extent, encoding, flow, perf, destFds.size())),
         sourceColorConversion(createSourceColorConversion(
@@ -640,13 +636,13 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
             Alpha0(ctx, mipmaps.getImages().at(6))
         },
         alpha1{
-            Alpha1(ctx, 3, alpha0.at(0).getImages()),
-            Alpha1(ctx, 2, alpha0.at(1).getImages()),
-            Alpha1(ctx, 2, alpha0.at(2).getImages()),
-            Alpha1(ctx, 2, alpha0.at(3).getImages()),
-            Alpha1(ctx, 2, alpha0.at(4).getImages()),
-            Alpha1(ctx, 2, alpha0.at(5).getImages()),
-            Alpha1(ctx, 2, alpha0.at(6).getImages())
+            Alpha1(ctx, alphaHistoryCounts.at(0), alpha0.at(0).getImages()),
+            Alpha1(ctx, alphaHistoryCounts.at(1), alpha0.at(1).getImages()),
+            Alpha1(ctx, alphaHistoryCounts.at(2), alpha0.at(2).getImages()),
+            Alpha1(ctx, alphaHistoryCounts.at(3), alpha0.at(3).getImages()),
+            Alpha1(ctx, alphaHistoryCounts.at(4), alpha0.at(4).getImages()),
+            Alpha1(ctx, alphaHistoryCounts.at(5), alpha0.at(5).getImages()),
+            Alpha1(ctx, alphaHistoryCounts.at(6), alpha0.at(6).getImages())
         },
         beta0(ctx, alpha1.at(0).getImages()),
         beta1(ctx, beta0.getImages()) {
@@ -673,6 +669,7 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
                 );
                 pass.gamma1.emplace_back(ctx, i,
                     pass.gamma0.at(j).getImages(),
+                    this->alpha0.at(6 - j).getImages(),
                     this->blackImage,
                     this->beta1.getImages().at(5)
                 );
@@ -683,6 +680,7 @@ ContextImpl::ContextImpl(const InstanceImpl& instance,
                 );
                 pass.gamma1.emplace_back(ctx, i,
                     pass.gamma0.at(j).getImages(),
+                    this->alpha0.at(6 - j).getImages(),
                     pass.gamma1.at(j - 1).getImage(),
                     this->beta1.getImages().at(6 - j)
                 );
@@ -866,24 +864,33 @@ void Context::prepareWork() {
                      "aborting frame scheduling\n";
         throw backend::error("Timeout waiting for previous frame to complete");
     }
-    this->cmdbufFence.reset(this->ctx.vk);
 }
 
 void Context::schedulePrepass(const VkFence completionFence) {
-    const auto& cmdbuf = this->cmdbufs.at(0);
-    cmdbuf.begin(ctx.vk);
+    auto& recorded = this->cmdbufs.at(0).at(this->fidx % commandPhaseCount);
+    if (!recorded) {
+        vk::CommandBuffer cmdbuf(ctx.vk);
+        cmdbuf.begin(ctx.vk, 0);
 
-    if (this->sourceColorConversion)
-        this->sourceColorConversion->render(ctx.vk, cmdbuf, this->fidx);
-    this->mipmaps.render(ctx.vk, cmdbuf, this->fidx);
-    for (size_t i = 0; i < 7; ++i) {
-        this->alpha0.at(6 - i).render(ctx.vk, cmdbuf);
-        this->alpha1.at(6 - i).render(ctx.vk, cmdbuf, this->fidx);
+        if (this->sourceColorConversion)
+            this->sourceColorConversion->render(ctx.vk, cmdbuf, this->fidx);
+        this->mipmaps.render(ctx.vk, cmdbuf, this->fidx);
+        for (size_t i = 0; i < 7; ++i) {
+            this->alpha0.at(6 - i).render(ctx.vk, cmdbuf);
+            this->alpha1.at(6 - i).render(ctx.vk, cmdbuf, this->fidx);
+        }
+        this->beta0.render(ctx.vk, cmdbuf, this->fidx);
+        this->beta1.render(ctx.vk, cmdbuf);
+
+        cmdbuf.end(ctx.vk);
+        recorded.emplace(std::move(cmdbuf));
     }
-    this->beta0.render(ctx.vk, cmdbuf, this->fidx);
-    this->beta1.render(ctx.vk, cmdbuf);
-
-    cmdbuf.end(ctx.vk);
+    const auto& cmdbuf = *recorded;
+    // Preserve the completed fence while allocation/recording can still fail.
+    // From the first submit onward, retain the context even if a later submit
+    // fails before the final fence can be signalled.
+    this->cmdbufFence.reset(this->ctx.vk);
+    this->workScheduled = true;
     cmdbuf.submit(this->ctx.vk,
         {}, this->syncSemaphore.handle(), this->idx,
         {}, this->prepassSemaphore.handle(), this->idx,
@@ -920,7 +927,7 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
 
     // Every generated pass has its own uniform buffer and descriptor sets.
     // Previous GPU work is complete at this point, so a changed timestamp can
-    // be safely uploaded before recording the next set of dispatches.
+    // be safely uploaded before submitting the next set of dispatches.
     if (explicitTimestamps) {
         for (size_t i = 0; i < timestamps.size(); ++i) {
             backend::uploadChangedTimestamp(
@@ -938,27 +945,37 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
         }
     }
 
+    // Finish fallible allocation/recording before submitting any work. A cold
+    // cache failure must not leave a prepass without its completion fence.
+    for (size_t i = 0; i < generatedFrameCount; i++) {
+        auto& recorded = this->cmdbufs.at(i + 1).at(this->fidx % commandPhaseCount);
+        if (!recorded) {
+            vk::CommandBuffer cmdbuf(ctx.vk);
+            cmdbuf.begin(ctx.vk, 0);
+
+            const auto& pass = this->passes.at(i);
+            for (size_t j = 0; j < 7; j++) {
+                pass.gamma0.at(j).render(ctx.vk, cmdbuf, this->fidx);
+                pass.gamma1.at(j).render(ctx.vk, cmdbuf);
+
+                if (j < 4) continue;
+                pass.delta0.at(j - 4).render(ctx.vk, cmdbuf, this->fidx);
+                pass.delta1.at(j - 4).render(ctx.vk, cmdbuf);
+            }
+            pass.generate->render(ctx.vk, cmdbuf, this->fidx);
+            if (this->destColorConversion)
+                this->destColorConversion->render(ctx.vk, cmdbuf, i);
+
+            cmdbuf.end(ctx.vk);
+            recorded.emplace(std::move(cmdbuf));
+        }
+    }
+
     this->schedulePrepass(VK_NULL_HANDLE);
 
     // schedule main passes
     for (size_t i = 0; i < generatedFrameCount; i++) {
-        const auto& cmdbuf = this->cmdbufs.at(i + 1);
-        cmdbuf.begin(ctx.vk);
-
-        const auto& pass = this->passes.at(i);
-        for (size_t j = 0; j < 7; j++) {
-            pass.gamma0.at(j).render(ctx.vk, cmdbuf, this->fidx);
-            pass.gamma1.at(j).render(ctx.vk, cmdbuf);
-
-            if (j < 4) continue;
-            pass.delta0.at(j - 4).render(ctx.vk, cmdbuf, this->fidx);
-            pass.delta1.at(j - 4).render(ctx.vk, cmdbuf);
-        }
-        pass.generate->render(ctx.vk, cmdbuf, this->fidx);
-        if (this->destColorConversion)
-            this->destColorConversion->render(ctx.vk, cmdbuf, i);
-
-        cmdbuf.end(ctx.vk);
+        const auto& cmdbuf = *this->cmdbufs.at(i + 1).at(this->fidx % commandPhaseCount);
         cmdbuf.submit(this->ctx.vk,
             {}, this->prepassSemaphore.handle(), this->idx - 1,
             {}, this->syncSemaphore.handle(), this->idx + i,
@@ -968,14 +985,12 @@ void Context::scheduleFrames(std::span<const float> timestamps) {
 
     this->idx += generatedFrameCount;
     this->fidx++;
-    this->workScheduled = true;
 }
 
 void Context::scheduleFrameHistory() {
     this->prepareWork();
     this->schedulePrepass(this->cmdbufFence.handle());
     this->fidx++;
-    this->workScheduled = true;
 }
 
 bool Context::waitForIdle(const uint64_t timeoutNs) const {
