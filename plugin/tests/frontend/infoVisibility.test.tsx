@@ -71,6 +71,8 @@ import { MakoInfo } from "../../src/components/MakoInfo";
 import { ContentNotices } from "../../src/components/ContentNotices";
 import { UsageInstructions } from "../../src/components/UsageInstructions";
 import { StatusDisplay } from "../../src/components/StatusDisplay";
+import { RuntimeStatusCard } from "../../src/components/RuntimeStatusCard";
+import { EMPTY_RUNTIME_SCALING_UI_STATE } from "../../src/utils/runtimeScalingUtils";
 import {
   ModelWarning,
   type ModelWarningProps,
@@ -132,6 +134,15 @@ test("R1 hides information without changing controls, repeats, or other buttons"
   render(
     <InfoVisibility>
       <MakoReleaseIdentity version="3.2.1" codename="The Captain" />
+      <RuntimeStatusCard
+        runtimeState={{
+          ...EMPTY_RUNTIME_SCALING_UI_STATE,
+          hasContext: true,
+          frameGenerationActive: true,
+          frameGenerationMode: "fixed",
+          frameGenerationMultiplier: 2,
+        }}
+      />
       <MakoSectionHeader description="Section tutorial">
         Settings
       </MakoSectionHeader>
@@ -169,6 +180,9 @@ test("R1 hides information without changing controls, repeats, or other buttons"
   expect(isDisplayed(screen.getByText("Settings"))).toBe(true);
   expect(isDisplayed(screen.getByText("v3.2.1"))).toBe(true);
   expect(isDisplayed(screen.getByText("the-captain"))).toBe(true);
+  expect(isDisplayed(screen.getByText("Live Status"))).toBe(true);
+  expect(isDisplayed(screen.getByText("MAKO is active"))).toBe(true);
+  expect(isDisplayed(screen.getByText("2×"))).toBe(true);
   expect(isDisplayed(input)).toBe(true);
   expect(input.value).toBe("75");
   expect(document.activeElement).toBe(input);
@@ -179,6 +193,8 @@ test("R1 hides information without changing controls, repeats, or other buttons"
       .getAttribute("aria-pressed"),
   ).toBe("true");
   pressButton(input);
+  expect(isDisplayed(screen.getByText("MAKO is active"))).toBe(true);
+  expect(isDisplayed(screen.getByText("2×"))).toBe(true);
   expect(
     descriptions.every((text) => isDisplayed(screen.getByText(text))),
   ).toBe(true);
@@ -199,11 +215,16 @@ test("clicking the ribbon persists the choice across reopening without changing 
   render(
     <InfoVisibility>
       <MakoReleaseIdentity version="3.2.1" codename="The Captain" />
+      <RuntimeStatusCard runtimeState={EMPTY_RUNTIME_SCALING_UI_STATE} />
       <button>Option</button>
     </InfoVisibility>,
   );
   expect(isDisplayed(screen.getByText("v3.2.1"))).toBe(true);
   expect(isDisplayed(screen.getByText("the-captain"))).toBe(true);
+  expect(isDisplayed(screen.getByText("Waiting for MAKO"))).toBe(true);
+  expect(isDisplayed(screen.getByText(/Live status is unavailable/))).toBe(
+    true,
+  );
   fireEvent.click(screen.getByRole("button", { name: "Show info" }));
   expect(localStorage.getItem("mako-info-hidden")).toBe("false");
 });

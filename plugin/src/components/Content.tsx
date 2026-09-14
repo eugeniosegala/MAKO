@@ -1,4 +1,3 @@
-import { MakoInfo } from "./MakoInfo";
 import {
   ButtonItem,
   PanelSection,
@@ -194,9 +193,7 @@ export function Content() {
         {isInstalled && (
           <>
             {mainRunningApp && (
-              <MakoInfo data-mako-info="true">
-                <RuntimeStatusCard runtimeState={scalingRuntimeState} />
-              </MakoInfo>
+              <RuntimeStatusCard runtimeState={scalingRuntimeState} />
             )}
             <FeatureSettings
               config={config}
