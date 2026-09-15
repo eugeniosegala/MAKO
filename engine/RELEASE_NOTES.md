@@ -1,27 +1,15 @@
 ## What's new in MAKO Renderer v3.3.0
 
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/neptune-fury.png" alt="Neptune Fury: a Renaissance-style pixel-art sea god commanding a storm beside a colossal mako, with sailing ships and a distant coastal city" width="100%">
+
 ### Release codename: neptune-fury
 
-> **Draft — unreleased.** Release validation, final copy, and banner artwork are pending.
+> **Draft — unreleased.** Release validation and final copy are pending.
 
-<!-- Before publication: add the shared assets/neptune-fury.png banner to both component notes, record its provenance in ASSET_PROVENANCE.md, and remove the draft notice. -->
+<!-- Before publication: complete release validation and remove the draft notice. -->
 
-### Scaling with Gamescope WSI off
-
-- **Preserve the game's render resolution:** On supported Gamescope X11 windows, MAKO keeps the game's original resolution as the scaling source and uses the confirmed output target when the full Gamescope WSI layer is disabled. This supports both 64-bit and 32-bit game processes.
-- **Keep compatibility optional:** Scaling can run alone or with Frame Generation through the combined Renderer. The full Gamescope WSI path remains an optional compatibility choice for supported 64-bit launches.
-
-### More resilient Lossless Scaling model loading
-
-- **Recognize supported model layouts after resource IDs move:** LS1 and LSFG loading can locate a complete, compatible model table when its internal resource IDs have shifted together. Incomplete, ambiguous, or incompatible layouts remain rejected; this does not guarantee support for every future Lossless Scaling update.
-- **Consistent inspection and loading:** Model inspection and rendering use the same resource checks, so availability reports reflect the models the Renderer can actually load. Restart the game after updating Lossless Scaling.
-
-### Consistent precision defaults
-
-- **FP16 when supported:** Missing `allow_fp16` settings now use the same enabled default as a newly generated configuration. Existing explicit choices are preserved, and GPUs without FP16 support use FP32.
-- **Explicit CLI precision:** Benchmark, debug, and LSFG quality commands allow FP16 by default. Use `--no-fp16` to select FP32 or `--allow-fp16` to allow FP16 explicitly.
-
-### Setup and diagnostics
-
-- **Clearer standalone and Flatpak instructions:** Updated guides explain the required Steam launch option, profile matching, and separate Flatpak preparation.
-- **Better scaling diagnostics:** Reports include the Gamescope scaling-surface association, helping distinguish active scaling from a native-resolution fallback when WSI is off.
+- **Upscaling without the full Gamescope WSI layer:** Scale independently or alongside Frame Generation on supported 64-bit and 32-bit Gamescope X11 launches. The full WSI layer remains an optional compatibility choice for supported 64-bit launches.
+- **Lower CPU and memory use:** Reusing recorded GPU commands and temporary resources reduces CPU overhead, RAM and VRAM use during Frame Generation.
+- **More reliable resolution changes:** Reclaim retired rendering resources before checking memory for a replacement, reducing unnecessary scaling rejections when changing resolution.
+- **More resilient model loading:** LS1 and LSFG recognize supported model layouts after resource IDs move, with shared checks for inspection and rendering. Restart the game after updating Lossless Scaling.
+- **Consistent FP16 defaults:** New configurations, missing precision settings and CLI tools allow FP16 where supported. Explicit choices are preserved, with FP32 fallback on unsupported GPUs.

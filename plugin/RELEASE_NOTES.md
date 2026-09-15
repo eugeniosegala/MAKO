@@ -1,24 +1,15 @@
 ## What's new in MAKO Decky v3.3.0
 
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/neptune-fury.png" alt="Neptune Fury: a Renaissance-style pixel-art sea god commanding a storm beside a colossal mako, with sailing ships and a distant coastal city" width="100%">
+
 ### Release codename: neptune-fury
 
-> **Draft — unreleased.** Release validation, final copy, and banner artwork are pending.
+> **Draft — unreleased.** Release validation and final copy are pending.
 
-<!-- Before publication: add the shared assets/neptune-fury.png banner to both component notes, record its provenance in ASSET_PROVENANCE.md, and remove the draft notice. -->
+<!-- Before publication: complete release validation and remove the draft notice. -->
 
-### A clearer panel
-
-- **Hide info with R1:** Switch to a compact view that keeps settings and actions available while hiding explanations and optional information. MAKO Decky remembers your preference and preserves controller focus and scroll position as the panel changes.
-- **Keep essential information visible:** Live Status, Lossless Scaling model warnings, and the release version and codename stay visible in the compact view.
-- **Clearer section headings:** Centered titles and blue-to-white gradient underlines make the settings groups easier to distinguish. Advanced Details also gives values and code blocks more room.
-
-### Clearer model warnings
-
-- **LS1 and LSFG checks together:** A single warning near the top of the panel lists confirmed problems with the models needed by your enabled features, including an active LS1 fallback. It includes troubleshooting guidance and a link to check for MAKO Decky updates.
-- **Separate installation guidance:** When Lossless Scaling is missing, the installation status explains what is needed without adding a model-failure warning.
-
-### Scaling and external tools
-
-- **Choose Gamescope WSI independently:** Enabling Scaling no longer forces the Gamescope WSI compatibility option on. The bundled Renderer supports scaling with WSI off on supported 64-bit and 32-bit Gamescope launches. The full WSI option remains a separate choice for supported 64-bit launches.
-- **Clearer vkBasalt controls:** The toggle describes sharpening, anti-aliasing, and color adjustments without the experimental badge or a 64-bit-only description. vkBasalt requires a separate installation matching the game's process architecture; use WSI off for 32-bit games. MAKO's guide covers the integration requirements and links to vkBasalt's official documentation for effects and configuration.
-- **Easier setup guidance:** Updated installation, update, launcher, and panel-display instructions explain how to activate MAKO and find the right settings.
+- **Independent upscaling:** Scaling no longer enables Gamescope WSI automatically. Supported 64-bit and 32-bit Gamescope games can upscale with WSI off.
+- **Lower CPU and memory use:** The updated MAKO Renderer reduces CPU overhead and RAM/VRAM use, with improved memory handling during resolution changes.
+- **A cleaner panel:** Press R1 for a compact view that retains Live Status and warnings. Centered headings, blue-to-white dividers and preserved controller focus make navigation clearer.
+- **Clearer model warnings:** See LS1 and LSFG compatibility problems together, with troubleshooting guidance and separate instructions when Lossless Scaling is missing.
+- **Clearer vkBasalt integration:** Updated controls and documentation cover 64-bit and 32-bit use, with a separate matching installation and links to official effect configuration guidance.
