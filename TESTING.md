@@ -66,7 +66,7 @@ Use `-DMAKO_BUILD_UI=ON` when Qt 6 Base and Declarative development packages are
 
 MAKO Gym is an optional sibling checkout for local development and a required release-gate dependency. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.
 
-Gym contract version 17 requires explicit CLI precision selection: quality, synchronization, and performance runners pass `--no-fp16` for FP32 cases and `--allow-fp16` for FP16 cases. This preserves both matrix lanes now that CLI LSFG commands allow FP16 by default. Use a matching Gym checkout; older runners must not silently reinterpret an FP32 workload through the new default.
+Gym contract version 18 requires defined-content benchmark inputs and performance baseline schema 4, while retaining explicit CLI precision selection: quality, synchronization, and performance runners pass `--no-fp16` for FP32 cases and `--allow-fp16` for FP16 cases. This preserves both matrix lanes now that CLI LSFG commands allow FP16 by default. Use a matching Gym checkout; older runners must not silently reinterpret an FP32 workload through the new default or compare incompatible benchmark recipes.
 
 Before any hardware run, validate Gym's portable contracts with `(cd ../MAKO-Gym && ./scripts/check.sh)` or `just check` from its checkout.
 
