@@ -142,7 +142,7 @@ describe("Frame Generation controls", () => {
       .closest<HTMLElement>('[data-field-kind="standard"]');
     expect(fixedMultiplierField).toBeTruthy();
     expect(fixedMultiplierField?.getAttribute("data-bottom-separator")).toBe(
-      "none",
+      "default",
     );
     const fixedMultiplierControls = screen
       .getByText("−")

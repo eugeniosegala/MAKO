@@ -223,7 +223,6 @@ export function FpsMultiplierControl({
                     "ADAPTIVE_SMOOTH_CADENCE_DESC",
                     "Uses a validated constant interpolation cadence. With Steady Base Cap, it can align proven 3x–5x demand to an exact target rung. It can make motion smoother, but may lower real-frame cadence and increase input lag. Enabled by default; disable it if a game feels more responsive without it.",
                   )}
-                  bottomSeparator="none"
                   checked={
                     config.adaptive_stable_cadence ??
                     DEFAULT_CONFIGURATION.adaptive_stable_cadence
@@ -239,7 +238,6 @@ export function FpsMultiplierControl({
           <PanelSectionRow>
             <Field
               label={t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
-              bottomSeparator="none"
               description={
                 <>
                   <span style={{ display: "block", paddingTop: "8px" }}>
