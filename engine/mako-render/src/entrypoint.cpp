@@ -1902,6 +1902,45 @@ namespace {
             }();
             if (previousSwapchainExtents)
                 previousVariableExtents = previousSwapchainExtents;
+            // The application already destroyed this null-old predecessor.
+            // Complete its existing fence/grace-protected retirement before
+            // querying live memory for the replacement. Otherwise admission
+            // charges the old WSI/private buffers against their replacement
+            // and can permanently discard a valid scaling envelope.
+            // Keep the copied surface proof above; non-null oldSwapchain
+            // contexts remain application-owned and are not retired here.
+            bool retiredNullOldReplacement{false};
+            const auto retainedOldSwapchain =
+                retainedSwapchainBeforeNullOldReplacement(
+                    device,
+                    info->surface,
+                    info->oldSwapchain
+                );
+            if (retainedOldSwapchain) {
+                if (!finalizeRetiredSwapchain(
+                        *retainedOldSwapchain,
+                        UINT64_MAX,
+                        "replacement-create")) {
+                    throw ls::vulkan_error(
+                        VK_ERROR_INITIALIZATION_FAILED,
+                        "retained swapchain retirement failed "
+                        "before null-old replacement"
+                    );
+                }
+                retiredNullOldReplacement = true;
+                if (present_diagnostics::enabled()) {
+                    std::cerr << "MAKO Renderer: present diagnostics: "
+                                 "operation=swapchain-retirement-before-replacement"
+                              << " role=" << layerRoleName
+                              << " swapchain="
+                              << *retainedOldSwapchain
+                              << " surface=" << info->surface
+                              << " reason=null-upper-old-swapchain"
+                              << " lower_old_swapchain=0"
+                              << " action=destroy-before-create"
+                              << '\n';
+                }
+            }
             LowerFixedSurfaceContractLookupState lowerCreateRelayState(
                 FixedSurfaceCapabilityRelayOperation::BeginCreate,
                 FixedSurfaceCapabilityRelayOperation::ConsumeCreate
@@ -1912,7 +1951,6 @@ namespace {
                     lowerCreateRelayState, it->second.physdev()
                 );
             }
-            bool retiredNullOldReplacement{false};
             bool spatialScalingActivationSupported =
                 spatialSurfaceScalingSupported(info->surface);
             auto modification =
@@ -1936,37 +1974,6 @@ namespace {
 #endif
                     },
                     [&, newInfo = &newInfo]() {
-                        const auto retainedOldSwapchain =
-                            retainedSwapchainBeforeNullOldReplacement(
-                                device,
-                                newInfo->surface,
-                                newInfo->oldSwapchain
-                            );
-                        if (retainedOldSwapchain) {
-                            if (!finalizeRetiredSwapchain(
-                                    *retainedOldSwapchain,
-                                    UINT64_MAX,
-                                    "replacement-create")) {
-                                throw ls::vulkan_error(
-                                    VK_ERROR_INITIALIZATION_FAILED,
-                                    "retained swapchain retirement failed "
-                                    "before null-old replacement"
-                                );
-                            }
-                            retiredNullOldReplacement = true;
-                            if (present_diagnostics::enabled()) {
-                                std::cerr << "MAKO Renderer: present diagnostics: "
-                                             "operation=swapchain-retirement-before-replacement"
-                                          << " role=" << layerRoleName
-                                          << " swapchain="
-                                          << *retainedOldSwapchain
-                                          << " surface=" << newInfo->surface
-                                          << " reason=null-upper-old-swapchain"
-                                          << " lower_old_swapchain=0"
-                                          << " action=destroy-before-create"
-                                          << '\n';
-                            }
-                        }
                         const uint32_t provisionedMinImages =
                             newInfo->minImageCount;
                         auto res = it->second.df().CreateSwapchainKHR(
