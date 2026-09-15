@@ -1434,24 +1434,36 @@ namespace {
         }
     }
 
-    void maybeVirtualizeSurfaceCapabilities(
+    VkResult maybeVirtualizeSurfaceCapabilities(
             const VkPhysicalDevice physicalDevice,
             const VkSurfaceKHR surface,
             VkSurfaceCapabilitiesKHR& capabilities,
             const std::optional<FixedSurfaceCapabilityRelayRecord>&
                 lowerRelay) {
         if (!layer_info || !instance_info) {
-            return;
+            return VK_SUCCESS;
+        }
+        if (instance_info->scalingSurfaces) {
+            const auto result = instance_info->scalingSurfaces->applicationCapabilities(
+                surface, capabilities
+            );
+            if (result) {
+                // The application sees its X11 window size, while create-time
+                // policy queries the driver's real variable Wayland extent.
+                // This is not a fixed-surface source/presentation contract.
+                clearFixedSurfaceScalingContract(physicalDevice, surface);
+                return *result;
+            }
         }
         if (!spatialScalingCapabilityOwnedByLayer() &&
                 !spatialScalingCapabilityRelayByLayer()) {
             clearFixedSurfaceScalingContract(physicalDevice, surface);
-            return;
+            return VK_SUCCESS;
         }
         if (!spatialSurfaceScalingSupported(surface)) {
             clearFixedSurfaceScalingContract(physicalDevice, surface);
             logUnprovenSplitSurfaceOnce(surface);
-            return;
+            return VK_SUCCESS;
         }
         try {
             auto candidate = capabilities;
@@ -1463,13 +1475,13 @@ namespace {
                         candidate, *lowerContract
                     ))) {
                 clearFixedSurfaceScalingContract(physicalDevice, surface);
-                return;
+                return VK_SUCCESS;
             }
             const auto selection =
                 layer_info->root.modifySurfaceCapabilities(candidate);
             if (!selection) {
                 clearFixedSurfaceScalingContract(physicalDevice, surface);
-                return;
+                return VK_SUCCESS;
             }
             if (lowerContract &&
                     (!sameExtent(
@@ -1482,7 +1494,7 @@ namespace {
                 clearFixedSurfaceScalingContract(physicalDevice, surface);
                 std::cerr << "MAKO Renderer: spatial scaling capability relay "
                              "failed closed: reason=lower-contract-mismatch\n";
-                return;
+                return VK_SUCCESS;
             }
             const auto eligibility = supportsSpatialScalingSurface(
                 physicalDevice, surface, capabilities
@@ -1503,7 +1515,7 @@ namespace {
                           << eligibility.compatibleFormatCount
                           << '\n';
                 }
-                return;
+                return VK_SUCCESS;
             }
             uint64_t queryGeneration{};
             FixedSurfaceScalingContract publishedContract;
@@ -1567,6 +1579,7 @@ namespace {
             std::cerr << "MAKO Renderer: spatial scaling capability policy "
                          "failed closed: " << error.what() << '\n';
         }
+        return VK_SUCCESS;
     }
 
     VkResult myvkGetPhysicalDeviceSurfaceCapabilitiesKHR(
@@ -1586,7 +1599,7 @@ namespace {
             );
         const auto lowerRelay = lowerRelayState.consume();
         if (result == VK_SUCCESS && capabilities) {
-            maybeVirtualizeSurfaceCapabilities(
+            return maybeVirtualizeSurfaceCapabilities(
                 physicalDevice, surface, *capabilities, lowerRelay
             );
         } else {
@@ -1621,7 +1634,7 @@ namespace {
         const auto result = lower(physicalDevice, surfaceInfo, capabilities);
         const auto lowerRelay = lowerRelayState.consume();
         if (result == VK_SUCCESS) {
-            maybeVirtualizeSurfaceCapabilities(
+            return maybeVirtualizeSurfaceCapabilities(
                 physicalDevice, surfaceInfo->surface,
                 capabilities->surfaceCapabilities, lowerRelay
             );

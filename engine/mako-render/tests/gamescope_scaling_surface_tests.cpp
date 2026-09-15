@@ -17,6 +17,8 @@ extern "C" {
     int mako_test_surface_objects();
     int mako_test_surface_associations();
     int mako_test_surface_reads();
+    int mako_test_surface_geometry_queries();
+    void mako_test_surface_resize(uint16_t, uint16_t);
     uint32_t mako_test_surface_window();
     uint32_t mako_test_surface_server();
     void mako_test_surface_retire();
@@ -52,6 +54,48 @@ namespace {
         if (std::strcmp(name, "vkDestroySurfaceKHR") == 0)
             return reinterpret_cast<PFN_vkVoidFunction>(destroySurface);
         return nullptr;
+    }
+
+    VkSurfaceCapabilitiesKHR driverCapabilities() {
+        return {
+            .minImageCount = 3,
+            .maxImageCount = 8,
+            .currentExtent = {UINT32_MAX, UINT32_MAX},
+            .minImageExtent = {1, 1},
+            .maxImageExtent = {16384, 16384},
+            .maxImageArrayLayers = 1,
+            .supportedTransforms = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+            .currentTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR,
+            .supportedCompositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,
+            .supportedUsageFlags = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
+        };
+    }
+
+    void checkApplicationExtent(GamescopeScalingSurface& bridge,
+            VkSurfaceKHR surface, VkExtent2D extent, const float factor = 2.0F) {
+        mako_test_surface_resize(static_cast<uint16_t>(extent.width),
+            static_cast<uint16_t>(extent.height));
+        const auto lower = driverCapabilities();
+        auto application = lower;
+        expect(bridge.applicationCapabilities(surface, application) == VK_SUCCESS,
+            "X11 capability query must succeed before the first swapchain");
+        expect(sameExtent(application.currentExtent, extent) &&
+            sameExtent(application.minImageExtent, extent) &&
+            sameExtent(application.maxImageExtent, extent),
+            "X11 current/minimum/maximum extents must match the live window");
+        application.currentExtent = lower.currentExtent;
+        application.minImageExtent = lower.minImageExtent;
+        application.maxImageExtent = lower.maxImageExtent;
+        expect(std::memcmp(&application, &lower, sizeof(lower)) == 0,
+            "extent compatibility must preserve all other driver capabilities");
+        const auto decision = scalingDecisionForCreate(
+            SpatialScalingPolicy{.enabled = true, .factor = factor}, true, 1,
+            lower, extent, std::nullopt, std::nullopt, std::nullopt,
+            VkExtent2D{3840, 2160}, true);
+        expect(decision.extents && sameExtent(decision.extents->source, extent) &&
+            decision.extents->presentation.width > extent.width,
+            "the concrete application size must still permit internal variable-surface scaling");
     }
 }
 
@@ -123,13 +167,42 @@ int main() {
         VkAllocationCallbacks allocator{};
         expect(bridge.create(VK_NULL_HANDLE, next, info, &allocator, &surface) == VK_SUCCESS, "create private surface");
         expect(lastAllocator == &allocator && bridge.owns(surface), "surface allocator/ownership");
+        checkApplicationExtent(bridge, surface, {640, 480});
+        checkApplicationExtent(bridge, surface, {1920, 1080});
+        checkApplicationExtent(bridge, surface, {1280, 720});
+        // Black Mesa's reported 32-bit path: 1440p source, 1.5x to 4K.
+        checkApplicationExtent(bridge, surface, {2560, 1440}, 1.5F);
+        auto caps = driverCapabilities();
+        const auto unchanged = caps;
+        const int geometryQueries = mako_test_surface_geometry_queries();
+        expect(!bridge.applicationCapabilities(VK_NULL_HANDLE, caps) &&
+            std::memcmp(&caps, &unchanged, sizeof(caps)) == 0 &&
+            mako_test_surface_geometry_queries() == geometryQueries,
+            "unowned and native surfaces must pass through without an X11 query");
+        mako_test_surface_mode(4);
+        expect(bridge.applicationCapabilities(surface, caps) == VK_ERROR_SURFACE_LOST_KHR &&
+            std::memcmp(&caps, &unchanged, sizeof(caps)) == 0,
+            "a lost window must propagate an error instead of exposing a variable extent");
+        mako_test_surface_mode(0);
+        for (const auto extent : {VkExtent2D{0, 480}, VkExtent2D{640, 0},
+                VkExtent2D{17000, 1080}, VkExtent2D{1920, 17000}}) {
+            mako_test_surface_resize(static_cast<uint16_t>(extent.width),
+                static_cast<uint16_t>(extent.height));
+            expect(bridge.applicationCapabilities(surface, caps) == VK_ERROR_SURFACE_LOST_KHR &&
+                std::memcmp(&caps, &unchanged, sizeof(caps)) == 0,
+                "an unrepresentable extent must not fabricate supported capabilities");
+        }
+        checkApplicationExtent(bridge, surface, {1920, 1080});
         const int associations = mako_test_surface_associations();
         expect(associations == 0, "surface creation must not steal existing window content");
         const int reads = mako_test_surface_reads();
+        const int presentGeometryQueries = mako_test_surface_geometry_queries();
         for (int frame = 0; frame < 100; ++frame)
             expect(bridge.preparePresent(surface), "healthy presentation association");
         expect(mako_test_surface_associations() == associations + 1, "association must be sent only once");
         expect(mako_test_surface_reads() == reads, "present path must not poll or read the socket");
+        expect(mako_test_surface_geometry_queries() == presentGeometryQueries,
+            "present path must not query X11 geometry");
         expect(mako_test_surface_window() == 71 && mako_test_surface_server() == 9, "actual X11 window/server binding");
 
         VkSurfaceKHR replacement{};
@@ -138,6 +211,9 @@ int main() {
             .dpy = reinterpret_cast<Display*>(1), .window = 71,
         };
         expect(bridge.create(VK_NULL_HANDLE, next, xlib, nullptr, &replacement) == VK_SUCCESS, "Xlib replacement surface");
+        checkApplicationExtent(bridge, replacement, {640, 480});
+        checkApplicationExtent(bridge, replacement, {1920, 1080});
+        checkApplicationExtent(bridge, replacement, {2560, 1440}, 1.5F);
         expect(mako_test_surface_associations() == associations + 1, "replacement preparation stole live surface");
         expect(bridge.preparePresent(replacement), "replacement first present");
         mako_test_surface_retire();
@@ -145,6 +221,8 @@ int main() {
         expect(bridge.preparePresent(replacement), "retiring old surface affected replacement");
         bridge.destroy(surface);
         expect(!bridge.owns(surface) && bridge.owns(replacement), "surface destruction removed wrong owner");
+        expect(!bridge.applicationCapabilities(surface, caps),
+            "destroyed surface must not retain an application extent override");
         mako_test_surface_mode(5);
         expect(!bridge.preparePresent(replacement), "lost connection must stop presentation");
         mako_test_surface_mode(0);

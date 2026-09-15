@@ -35,6 +35,9 @@ namespace {
     int associations{};
     int queues{};
     int reads{};
+    int geometryQueries{};
+    uint16_t windowWidth{1920};
+    uint16_t windowHeight{1080};
     int sockets[2]{-1, -1};
     uint32_t associatedServer{};
     uint32_t associatedWindow{};
@@ -69,6 +72,11 @@ extern "C" {
     int mako_test_surface_objects() { return static_cast<int>(objects.size()) + queues; }
     int mako_test_surface_associations() { return associations; }
     int mako_test_surface_reads() { return reads; }
+    int mako_test_surface_geometry_queries() { return geometryQueries; }
+    void mako_test_surface_resize(uint16_t width, uint16_t height) {
+        windowWidth = width;
+        windowHeight = height;
+    }
     uint32_t mako_test_surface_window() { return associatedWindow; }
     uint32_t mako_test_surface_server() { return associatedServer; }
     void mako_test_surface_retire() {
@@ -165,12 +173,17 @@ extern "C" {
         wl_proxy_marshal_array_flags(proxy, opcode, nullptr, 1, 0, args);
     }
 
-    xcb_get_geometry_cookie_t xcb_get_geometry(xcb_connection_t*, xcb_drawable_t) { return {1}; }
+    xcb_get_geometry_cookie_t xcb_get_geometry(xcb_connection_t*, xcb_drawable_t) {
+        ++geometryQueries;
+        return {1};
+    }
     xcb_get_geometry_reply_t* xcb_get_geometry_reply(xcb_connection_t*, xcb_get_geometry_cookie_t, xcb_generic_error_t**) {
         if (mode == 4)
             return nullptr;
         auto* reply = static_cast<xcb_get_geometry_reply_t*>(std::calloc(1, sizeof(xcb_get_geometry_reply_t)));
         reply->root = 42;
+        reply->width = windowWidth;
+        reply->height = windowHeight;
         return reply;
     }
     xcb_intern_atom_cookie_t xcb_intern_atom(xcb_connection_t*, uint8_t, uint16_t size, const char* name) {

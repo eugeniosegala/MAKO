@@ -96,7 +96,7 @@ Use `previous` for the immediately previous run, `previous-two` for the two prev
 
 Use `all` for the first report. Focused presets such as `startup`, `errors`, `scaling`, `adaptive`, `recovery`, `performance`, `layers`, and `hdr` are intended for requested follow-ups. Run `/home/deck/.local/bin/mako-diagnostics --list` to see the complete preset list.
 
-For Scaling with Gamescope WSI disabled, the `scaling` preset retains `spatial scaling surface bridge` records. `transport=wayland; gamescope_wsi=isolated` identifies the minimal Gamescope surface association; check the active source/presentation split as well, since the association alone does not prove that scaling ran.
+For Scaling with Gamescope WSI disabled, the `scaling` preset retains `spatial scaling surface bridge` records. `transport=wayland; gamescope_wsi=isolated` identifies the minimal Gamescope surface association; check the active source/presentation split as well, since the association alone does not prove that scaling ran. `application_surface=x11; extent_contract=window` records that application capability queries preserve the X11 window-size contract while the private transport remains Wayland; this protects startup without a game-specific exception.
 
 ## 4. Restore normal launch settings
 

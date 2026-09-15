@@ -68,6 +68,13 @@ namespace mako::layer {
         [[nodiscard]] bool preparePresent(VkSurfaceKHR surface);
         [[nodiscard]] bool owns(VkSurfaceKHR surface) const;
 
+        /// Preserve the application's X11 extent contract at both public
+        /// capability-query entrypoints. Internal driver queries still see
+        /// the variable Wayland extent needed for separate scaling output.
+        /// nullopt means this adapter does not own the surface.
+        [[nodiscard]] std::optional<VkResult> applicationCapabilities(
+            VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR& capabilities) const;
+
     private:
         struct Impl;
         std::unique_ptr<Impl> impl;

@@ -135,6 +135,7 @@ struct GamescopeScalingSurface::Impl {
         wl_proxy* content{};
         uint32_t server{};
         uint32_t window{};
+        xcb_connection_t* connection{};
         bool bound{};
         bool retired{};
         ~Surface() {
@@ -368,6 +369,7 @@ struct GamescopeScalingSurface::Impl {
         state->owner = this;
         state->server = *server;
         state->window = window;
+        state->connection = connection;
         wl_argument newId{.o = nullptr};
         state->surface = marshal(compositor, 0, surfaceInterface, 1, 0, &newId);
         if (!state->surface)
@@ -417,7 +419,8 @@ struct GamescopeScalingSurface::Impl {
         std::cerr << "MAKO Renderer: spatial scaling surface bridge: "
                   << "surface=" << *output << "; xwayland_server=" << *server
                   << "; window=" << window
-                  << "; transport=wayland; gamescope_wsi=isolated\n";
+                  << "; transport=wayland; gamescope_wsi=isolated"
+                     "; application_surface=x11; extent_contract=window\n";
         return VK_SUCCESS;
     }
 };
@@ -480,6 +483,33 @@ void GamescopeScalingSurface::destroy(const VkSurfaceKHR surface) {
 bool GamescopeScalingSurface::owns(const VkSurfaceKHR surface) const {
     const std::lock_guard lock(impl->mutex);
     return impl->surfaces.contains(surface);
+}
+
+std::optional<VkResult> GamescopeScalingSurface::applicationCapabilities(
+        const VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR& capabilities) const {
+    const std::lock_guard lock(impl->mutex);
+    const auto found = impl->surfaces.find(surface);
+    if (found == impl->surfaces.end())
+        return std::nullopt;
+    const auto& state = *found->second;
+    Reply<xcb_get_geometry_reply_t> geometry(impl->geometryReply(state.connection,
+        impl->getGeometry(state.connection, state.window), nullptr), &std::free);
+    if (!geometry)
+        return VK_ERROR_SURFACE_LOST_KHR;
+    const VkExtent2D extent{geometry->width, geometry->height};
+    if (extent.width < capabilities.minImageExtent.width ||
+            extent.height < capabilities.minImageExtent.height ||
+            extent.width > capabilities.maxImageExtent.width ||
+            extent.height > capabilities.maxImageExtent.height)
+        return VK_ERROR_SURFACE_LOST_KHR;
+    // Both Xlib and XCB expose a concrete window extent. Leaking Wayland's
+    // UINT32_MAX sentinel can break startup before an application has even
+    // created a swapchain. Query the live geometry rather than the creation
+    // size so recreation follows resizes, without doing X11 work at present.
+    capabilities.currentExtent = extent;
+    capabilities.minImageExtent = extent;
+    capabilities.maxImageExtent = extent;
+    return VK_SUCCESS;
 }
 
 bool GamescopeScalingSurface::preparePresent(const VkSurfaceKHR surface) {
