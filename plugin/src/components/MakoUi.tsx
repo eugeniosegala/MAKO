@@ -313,7 +313,7 @@ export function MakoSectionHeader({
           style={{
             paddingBottom: "8px",
             textAlign: "center",
-            borderBottom: "4px solid #A58ACB",
+            borderBottom: "4px solid #7650B8",
           }}
         >
           {children}
