@@ -4,7 +4,7 @@
 
 ### Release codename: neptune-fury
 
-> _“The realms of ocean and the fields of air<br>Are mine, not his.”_
+> _“The realms of ocean and the fields of air are mine, not his.”_
 >
 > **Virgil, [_The Aeneid_, Book I](https://www.gutenberg.org/files/228/228-h/228-h.htm), translated by John Dryden**
 
