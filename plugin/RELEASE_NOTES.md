@@ -4,12 +4,16 @@
 
 ### Release codename: neptune-fury
 
-> **Draft — unreleased.** Release validation and final copy are pending.
+> _“The realms of ocean and the fields of air<br>Are mine, not his.”_
+>
+> **Virgil, [_The Aeneid_, Book I](https://www.gutenberg.org/files/228/228-h/228-h.htm), translated by John Dryden**
 
-<!-- Before publication: complete release validation and remove the draft notice. -->
+---
+
+<!-- Unreleased: complete release validation before publication. -->
 
 - **Independent upscaling:** Scaling no longer enables Gamescope WSI automatically. Supported 64-bit and 32-bit Gamescope games can upscale with WSI off.
 - **Lower CPU and memory use:** The updated MAKO Renderer reduces CPU overhead and RAM/VRAM use, with improved memory handling during resolution changes.
-- **A cleaner panel:** Press R1 for a compact view that retains Live Status and warnings. Centered headings, blue-to-white dividers and preserved controller focus make navigation clearer.
+- **A cleaner panel:** Press R1 for a compact view that retains Live Status and warnings. Centered headings, solid dark violet dividers and preserved controller focus make navigation clearer.
 - **Clearer model warnings:** See LS1 and LSFG compatibility problems together, with troubleshooting guidance and separate instructions when Lossless Scaling is missing.
 - **Clearer vkBasalt integration:** Updated controls and documentation cover 64-bit and 32-bit use, with a separate matching installation and links to official effect configuration guidance.
