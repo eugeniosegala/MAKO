@@ -24,7 +24,7 @@ pnpm run package:local-engine
 
 For testing intended to qualify a public release, use `MAKO_PORTABLE_PACKAGE=1 pnpm run package:local-engine` so the native Renderer uses the publication builder. Retain build identity and artifact hashes, and invalidate the matching cached native archive if its builder or SDK changes; see [tester/release build alignment](../../HOW_TO_RELEASE.md#keep-tester-and-release-builds-aligned).
 
-The native Vulkan-Headers revision is owned by [`engine/vulkan-headers-revision.txt`](../../engine/vulkan-headers-revision.txt). MAKO Decky calls the Renderer packager, so standalone archives and Decky's native payload use the same pin and minimum header check. Flatpak payloads retain their runtime SDK headers; published Renderer archive pins in `package.json` remain release-owned artifact identities.
+The shared native and Flatpak Vulkan-Headers revision is owned by [`engine/vulkan-headers-revision.txt`](../../engine/vulkan-headers-revision.txt). MAKO Decky calls the Renderer packager, so standalone archives and Decky's native payload use the same pin and minimum header check. Flatpak payloads use that same generated header dependency while retaining their runtime SDK compilers and libraries; published Renderer archive pins in `package.json` remain release-owned artifact identities.
 
 `package:local` is an exact alias for `package:local-engine`. Use `pnpm run package:local-engine-fast` only for a native 64-bit focused package; it omits 32-bit and Flatpak payloads and cannot become a release candidate.
 

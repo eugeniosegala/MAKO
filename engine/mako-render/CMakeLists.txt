@@ -58,10 +58,10 @@ if(MAKO_BUILD_VK_LAYER)
             check_cxx_source_compiles("
                 #include \"${CMAKE_CURRENT_SOURCE_DIR}/src/pnext_chain.hpp\"
                 #ifndef VK_KHR_present_id2
-                #error Native packages require VK_KHR_present_id2
+                #error MAKO Renderer packages require VK_KHR_present_id2
                 #endif
                 #ifndef VK_EXT_present_timing
-                #error Native packages require VK_EXT_present_timing
+                #error MAKO Renderer packages require VK_EXT_present_timing
                 #endif
                 static_assert(VK_HEADER_VERSION_COMPLETE >=
                     VK_MAKE_API_VERSION(0, ${header_version_arguments}));
@@ -71,10 +71,11 @@ if(MAKO_BUILD_VK_LAYER)
             " MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED)
             if(NOT MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED)
                 message(FATAL_ERROR
-                    "Native MAKO Renderer packages require Vulkan headers "
+                    "MAKO Renderer packages require Vulkan headers "
                     "${header_version} or newer with VK_KHR_present_id2 and "
-                    "VK_EXT_present_timing. Use "
-                    "MAKO_PORTABLE_PACKAGE=1 with scripts/package-local.sh; "
+                    "VK_EXT_present_timing. Use the pinned headers through "
+                    "scripts/package-local.sh (MAKO_PORTABLE_PACKAGE=1) or "
+                    "scripts/package-flatpaks.sh; "
                     "do not bypass this check. See the CMake compile log.")
             endif()
         endfunction()

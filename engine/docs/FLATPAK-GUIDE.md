@@ -160,3 +160,5 @@ cd engine
 The script builds and verifies both Renderer roles for 64-bit and 32-bit processes on every supported runtime. The resulting archive is written under `engine/out/`.
 
 `dist/flatpak/mako-render/runtime-versions.txt` owns the ordered Renderer build matrix. Each listed version must have a matching standalone manifest in that directory; MAKO Decky's shared runtime contract is regression-tested against the same ordered versions.
+
+All runtime builds use the Vulkan-Headers ref in [`vulkan-headers-revision.txt`](../vulkan-headers-revision.txt). The SDK still supplies its own compiler and runtime libraries. `scripts/generate-flatpak-vulkan-headers.py` generates the shared `dist/flatpak/mako-render/vulkan-headers.json` module; run it after updating the pin. `scripts/package-flatpaks.sh` and Renderer CTest run its read-only `--check` gate, which rejects a stale module instead of silently using different headers. Each standalone manifest includes the shared dependency and enables `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON` for both 64-bit and 32-bit builds. The headers are build-only and removed from the finished extension.

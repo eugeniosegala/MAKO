@@ -28,6 +28,14 @@ generate-launcher-exclusions:
 check-launcher-exclusions:
     python3 scripts/generate-launcher-exclusions.py --check
 
+# Generate Flatpak's build-only Vulkan-Headers module from the shared pin.
+generate-flatpak-headers:
+    python3 engine/scripts/generate-flatpak-vulkan-headers.py
+
+# Reject a stale Flatpak header dependency without rewriting it.
+check-flatpak-headers:
+    python3 engine/scripts/generate-flatpak-vulkan-headers.py --check
+
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 

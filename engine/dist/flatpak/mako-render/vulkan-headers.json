@@ -1,0 +1,20 @@
+{
+  "name": "mako-vulkan-headers",
+  "buildsystem": "simple",
+  "build-commands": [
+    "install -d \"${FLATPAK_DEST}/include\"",
+    "cp -a include/vulkan include/vk_video \"${FLATPAK_DEST}/include/\"",
+    "printf \"MAKO Renderer: Vulkan-Headers revision=v1.4.362 commit=%s\\n\" \"$(git rev-parse HEAD)\""
+  ],
+  "cleanup": [
+    "/include/vulkan",
+    "/include/vk_video"
+  ],
+  "sources": [
+    {
+      "type": "git",
+      "url": "https://github.com/KhronosGroup/Vulkan-Headers.git",
+      "tag": "v1.4.362"
+    }
+  ]
+}
