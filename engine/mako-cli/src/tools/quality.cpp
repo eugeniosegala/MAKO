@@ -22,7 +22,6 @@
 #include <array>
 #include <cmath>
 #include <chrono>
-#include <ranges>
 #include <thread>
 #include <cstddef>
 #include <cstdint>
@@ -552,8 +551,9 @@ namespace {
         const auto plan = parseSequence(*opts.sequence_plan);
         if (plan.size() < 12)
             throw ls::error("temporal quality requires at least 12 planned source frames");
-        const auto capacity = std::ranges::max(plan | std::views::transform(
-            [](const auto& frame) { return frame.size(); }));
+        size_t capacity = 0;
+        for (const auto& frame : plan)
+            capacity = std::max(capacity, frame.size());
         if (capacity == 0)
             throw ls::error("temporal quality needs at least one generated output");
         const auto kind = sceneKind(opts.scene);
