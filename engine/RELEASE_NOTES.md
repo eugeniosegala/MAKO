@@ -6,7 +6,7 @@
 
 > _“The waves unruffle and the sea subsides.”_
 >
-> **Virgil, [_The Aeneid_, Book I](https://www.gutenberg.org/files/228/228-h/228-h.htm), translated by John Dryden**
+> **Virgil, _The Aeneid_, Book I, translated by John Dryden**
 
 ---
 
