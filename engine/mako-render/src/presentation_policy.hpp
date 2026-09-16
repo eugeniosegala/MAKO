@@ -105,13 +105,11 @@ namespace mako::layer {
         return configuredTimeout.value_or(std::numeric_limits<uint64_t>::max());
     }
 
-    /// A lower WSI pool with no image beyond the application's minimum and
-    /// the current generated batch cannot absorb an ordered acquire wait
-    /// without feeding scanout backpressure into the application's present.
-    /// Admit that batch opportunistically before backend submission instead:
-    /// a missing image then drops only synthetic work and the real frame can
-    /// still reach Gamescope immediately. Extra driver-provided images retain
-    /// the normal blocking ordered path.
+    /// The real frame already belongs to the application's minimum. Ordered
+    /// delivery acquires and presents generated images one at a time, so a
+    /// complete generated batch does not require another unused relief image.
+    /// Only an undersized pool needs opportunistic admission before backend
+    /// work. A pool that just fits uses the bounded acquire budget below.
     [[nodiscard]] inline bool orderedGeneratedBatchNeedsNonblockingAdmission(
             const uint32_t requestedMinImages,
             const size_t returnedImages,
@@ -120,8 +118,28 @@ namespace mako::layer {
             return false;
         if (returnedImages < requestedMinImages)
             return true;
-        return returnedImages - requestedMinImages <=
+        return returnedImages - requestedMinImages <
             requestedGeneratedFrames;
+    }
+
+    /// Without a relief image, FIFO may need to release an earlier present
+    /// before the next output can be acquired. Allow that progress, but never
+    /// introduce an unbounded wait on this path, even for standalone launches.
+    /// Preserve smaller user ceilings and share the budget across the batch;
+    /// the existing per-image deadline and recovery still apply.
+    [[nodiscard]] inline std::optional<uint64_t>
+    orderedGeneratedBatchAcquireBudget(
+            const uint32_t requestedMinImages,
+            const size_t returnedImages,
+            const size_t requestedGeneratedFrames,
+            const std::optional<uint64_t> configuredBudget) noexcept {
+        if (requestedGeneratedFrames == 0 ||
+                returnedImages < requestedMinImages ||
+                returnedImages - requestedMinImages != requestedGeneratedFrames)
+            return configuredBudget;
+        constexpr uint64_t maximumBatchBudget = 50'000'000;
+        return std::min(configuredBudget.value_or(maximumBatchBudget),
+            maximumBatchBudget);
     }
 
     /// Return a tighter Adaptive ceiling only when native-first ordered

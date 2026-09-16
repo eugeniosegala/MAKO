@@ -65,7 +65,7 @@ mako-diagnostics --lines 2000 all
 
 For the complete end-to-end workflow, including Steam, direct commands, Heroic or Flatpak setups, creating `MAKO-diagnostics.txt` on the Desktop, restoring normal settings, and using the shared submission form, see [Collect Standalone MAKO Renderer Diagnostics](COLLECT_DIAGNOSTICS.md).
 
-`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` sets one shared deadline for all ordered generated-image acquisitions in an application present, so higher multipliers cannot multiply the wait. Exhaustion or elapsed-time overrun enters native recovery. MAKO Decky uses 50 ms; standalone launches retain the unbounded compatibility default when unset. For a focused stall reproduction, try `25` and include the log.
+`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` sets one shared deadline for all ordered generated-image acquisitions in an application present, so higher multipliers cannot multiply the wait. Exhaustion or elapsed-time overrun enters native recovery. MAKO Decky uses 50 ms. A pool that fits the generated batch but has no additional relief image always uses at most 50 ms, including standalone launches; a shorter configured deadline remains authoritative. Other standalone ordered paths retain the unbounded compatibility default when unset. For a focused stall reproduction, try `25` and include the log.
 
 ## Report an issue
 

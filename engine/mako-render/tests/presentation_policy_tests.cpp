@@ -258,11 +258,36 @@ int main() {
         "legacy unconfigured acquire behaviour changed");
     expect(!orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 0) &&
             !orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 1) &&
-            orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 2) &&
-            orderedGeneratedBatchNeedsNonblockingAdmission(4, 5, 1) &&
+            !orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 2) &&
+            !orderedGeneratedBatchNeedsNonblockingAdmission(4, 5, 1) &&
+            orderedGeneratedBatchNeedsNonblockingAdmission(3, 4, 2) &&
             !orderedGeneratedBatchNeedsNonblockingAdmission(4, 6, 1) &&
             orderedGeneratedBatchNeedsNonblockingAdmission(4, 3, 1),
-        "ordered admission did not distinguish a real spare from generated headroom");
+        "ordered admission did not distinguish a fitting batch from insufficient headroom");
+    for (uint32_t applicationImages = 2; applicationImages <= 4; ++applicationImages) {
+        for (size_t generated = 1; generated <= 4; ++generated) {
+            const size_t images = applicationImages + generated;
+            expect(!orderedGeneratedBatchNeedsNonblockingAdmission(
+                    applicationImages, images, generated),
+                "a fitting generated batch was dropped solely for lacking a relief image");
+            expect(orderedGeneratedBatchNeedsNonblockingAdmission(
+                    applicationImages, images - 1, generated),
+                "an undersized pool lost its nonblocking admission protection");
+            expect(orderedGeneratedBatchAcquireBudget(
+                    applicationImages, images, generated, std::nullopt) == 50'000'000 &&
+                    orderedGeneratedBatchAcquireBudget(
+                        applicationImages, images, generated, 100'000'000) == 50'000'000 &&
+                    orderedGeneratedBatchAcquireBudget(
+                        applicationImages, images, generated, 5'000'000) == 5'000'000,
+                "tight-pool delivery lost its shared finite ceiling or shorter user limit");
+            expect(!orderedGeneratedBatchAcquireBudget(
+                    applicationImages, images + 1, generated, std::nullopt),
+                "relief-bearing ordered delivery changed its existing acquire contract");
+        }
+    }
+    expect(!orderedGeneratedBatchAcquireBudget(3, 3, 0, std::nullopt) &&
+            !orderedGeneratedBatchAcquireBudget(3, 2, 1, std::nullopt),
+        "empty or malformed pools gained a synthetic acquire budget");
     expect(adaptiveOrderedWsiLimitAfterPartialAdmission(
                 true, true, true, 2, 1, std::nullopt) == 1 &&
             adaptiveOrderedWsiLimitAfterPartialAdmission(
