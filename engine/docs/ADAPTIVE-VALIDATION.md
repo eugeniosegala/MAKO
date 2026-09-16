@@ -58,6 +58,8 @@ Ordered SDR also has an automatic collapse guard. After a healthy Fixed baseline
 
 Adaptive varies generated work toward `target_fps` without exceeding `adaptive_max_multiplier`. Fractional mode owns the long-term output budget and keeps timestamps evenly spaced within each real-frame interval. Near target, it may prefer native presentation when measured interval quality and output coverage are already sufficient.
 
+When demand temporarily exceeds the validated multiplier ceiling, the target clock retains less than one output of bounded credit instead of wrapping it away. This lets a source returning from an external throttle recover an achievable integer cadence without dropping generated work on ordinary timing jitter, while still preventing impossible whole-output debt from accumulating or producing later catch-up bursts.
+
 Smooth Cadence may retain a delivery-validated integer multiplier. On ordered Gamescope SDR with matching refresh, it can also hand pacing to FIFO for a proven 2x cadence or select an exact target/multiplier base cap for validated 3x–5x demand. Load shedding and efficiency probes roll back when a cheaper level preserves output better. Exact thresholds and traces are owned by `adaptive_scheduler.*` and its tests.
 
 `adaptive_auto_base_fps_cap` normally starts at half the target. If ordered SDR proves that this cap is sustaining a severe combined-workload collapse, Adaptive releases only the automatic cap for that swapchain; manual and Fixed caps remain authoritative.

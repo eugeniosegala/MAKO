@@ -24,6 +24,7 @@
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -1161,7 +1162,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         const auto& resourceAdmission = admissionPlacement ==
                 SpatialFramePipelinePlacement::PreFrameGeneration
             ? preFrameGenerationAdmission : postFrameGenerationAdmission;
-        std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
+        std::ostringstream policyLog;
+        policyLog << "MAKO Renderer: spatial scaling swapchain policy: "
                   << "role=" << layerRoleName
                   << "; requested=" << modification.applicationExtent.width
                   << 'x' << modification.applicationExtent.height
@@ -1266,8 +1268,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                         scalingExtents->source,
                         scalingExtents->presentation
                       ) ? 1 : 0)
-                  << "; active=" << modification.spatialScalingActive
-                  << '\n';
+                  << "; active=" << modification.spatialScalingActive;
+        std::cerr << policyLog.str() << '\n';
         if (scalingDecision.retainedPreviousFixedSource && scalingExtents) {
             std::cerr << "MAKO Renderer: fixed-surface scaling factor "
                          "constrained: requested_factor="

@@ -1634,6 +1634,105 @@ namespace {
             "noisy achievable 2x cadence lost the target average");
     }
 
+    void testTargetClockRecoversNoisyThreeXCeilingAfterThrottle() {
+        Harness harness(120, 3, false,
+            AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(40.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: throttle recovery had no 3x capacity");
+
+        harness.runAtFps(30.0, 15s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "external throttle discarded the validated 3x ceiling");
+
+        size_t phaseFrames = 0;
+        while (harness.scheduler.snapshot().
+                    targetOutputBudgetCreditOutputs < 0.98 &&
+                phaseFrames < 400) {
+            harness.frameAtFps(39.9);
+            phaseFrames++;
+        }
+        require(phaseFrames < 400,
+            "precondition failed: noisy ceiling did not reach its rollover phase");
+
+        const auto slowPlan = harness.frame(26ms);
+        requireValidTimestamps(slowPlan, 2);
+        require(slowPlan.size() == 2 &&
+                harness.scheduler.snapshot().
+                    targetOutputBudgetCreditOutputs >= 0.95,
+            "ceiling saturation discarded recoverable output credit");
+        const auto fastPlan = harness.frame(22ms);
+        requireValidTimestamps(fastPlan, 2);
+        require(fastPlan.size() == 2,
+            "ceiling-credit rollover dropped a generated output");
+
+        std::array<std::chrono::nanoseconds, 200> intervals{};
+        uint32_t jitterState = 10;
+        for (auto& interval : intervals) {
+            jitterState ^= jitterState << 13;
+            jitterState ^= jitterState >> 17;
+            jitterState ^= jitterState << 5;
+            const int64_t jitter = static_cast<int64_t>(
+                jitterState % 1'000'001U
+            ) - 500'000;
+            interval = std::chrono::nanoseconds{25'000'000 + jitter};
+        }
+        constexpr size_t windowFrames = 40;
+        constexpr size_t windows = intervals.size() / windowFrames;
+        for (size_t window = 0; window < windows; ++window) {
+            std::chrono::nanoseconds elapsed{};
+            for (size_t frame = 0; frame < windowFrames; ++frame)
+                elapsed += intervals[window * windowFrames + frame];
+            const auto correction =
+                (elapsed - 1s) / static_cast<int64_t>(windowFrames);
+            for (size_t frame = 0; frame < windowFrames; ++frame)
+                intervals[window * windowFrames + frame] -= correction;
+        }
+
+        for (size_t frame = 0; frame < 80; ++frame) {
+            const auto plan = harness.frame(intervals[frame]);
+            requireValidTimestamps(plan, 2);
+        }
+
+        size_t targetWindows = 0;
+        size_t longestTargetStreak = 0;
+        for (size_t window = 0; window < windows; ++window) {
+            size_t scheduledOutputs = 0;
+            std::chrono::nanoseconds elapsed{};
+            for (size_t frame = 0; frame < windowFrames; ++frame) {
+                const auto interval =
+                    intervals[window * windowFrames + frame];
+                const auto plan = harness.frame(interval);
+                requireValidTimestamps(plan, 2);
+                require(plan.size() == 2,
+                    "near-integer 3x recovery dropped a generated output");
+                const auto snapshot = harness.scheduler.snapshot();
+                require(snapshot.targetOutputClockActive &&
+                        snapshot.targetOutputBudgetCreditOutputs >= 0.0 &&
+                        snapshot.targetOutputBudgetCreditOutputs < 1.0 &&
+                        std::abs(snapshot.targetOutputPhaseErrorOutputs) <=
+                            0.5 + 1e-9,
+                    "near-integer 3x recovery escaped bounded clock state");
+                scheduledOutputs += plan.size() + 1;
+                elapsed += interval;
+            }
+            const double outputFps =
+                static_cast<double>(scheduledOutputs) /
+                std::chrono::duration<double>(elapsed).count();
+            if (outputFps >= 117.6 && outputFps <= 122.4) {
+                targetWindows++;
+                longestTargetStreak = std::max(
+                    longestTargetStreak, targetWindows
+                );
+            } else {
+                targetWindows = 0;
+            }
+        }
+        require(longestTargetStreak >= 3,
+            "noisy 3x ceiling did not sustain three 120 FPS windows");
+    }
+
     void testDeferredOutputRepaymentPreservesPacingBenefit() {
         constexpr std::array traces{
             std::array<std::chrono::nanoseconds, 3>{
@@ -3611,6 +3710,7 @@ int main() {
         {"near-target native preference preserves Fixed recovery", testNearTargetNativePreferenceDoesNotChangeFixedRecoveryPolicy},
         {"target clock handles multi-level fractional cadence", testTargetClockHandlesMultiLevelFractionalCadence},
         {"target clock preserves noisy integer ceiling", testTargetClockPreservesNoisyIntegerCeiling},
+        {"target clock recovers noisy 3x ceiling after throttle", testTargetClockRecoversNoisyThreeXCeilingAfterThrottle},
         {"deferred output repayment preserves pacing benefit", testDeferredOutputRepaymentPreservesPacingBenefit},
         {"target clock reset clears deferred output", testTargetClockResetClearsDeferredOutput},
         {"raw placement cannot mint generated work", testRawPlacementCannotMintGeneratedWork},
