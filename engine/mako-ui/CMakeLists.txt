@@ -3,11 +3,13 @@ find_package(Qt6 6.2 REQUIRED COMPONENTS Quick)
 set(UI_SOURCES
     "src/backend.cpp"
     "src/main.cpp"
+    "src/process_detection.cpp"
     "src/utils.cpp")
 
 set(UI_RESOURCES
     "rsc/dialogs/CenteredDialog.qml"
     "rsc/dialogs/LargeDialog.qml"
+    "rsc/dialogs/RunningGamesDialog.qml"
     "rsc/panes/Group.qml"
     "rsc/panes/GroupEntry.qml"
     "rsc/panes/Pane.qml"
@@ -48,9 +50,20 @@ target_link_libraries(mako-ui
     PRIVATE Qt6::Quick)
 
 if(BUILD_TESTING)
+    add_executable(mako-ui-process-detection-tests
+        "tests/process_detection_tests.cpp"
+        "src/backend.cpp"
+        "src/backend.hpp"
+        "src/process_detection.cpp")
+    set_target_properties(mako-ui-process-detection-tests PROPERTIES AUTOMOC ON)
+    target_include_directories(mako-ui-process-detection-tests PRIVATE "src")
+    target_link_libraries(mako-ui-process-detection-tests PRIVATE mako-common Qt6::Core)
+    add_test(NAME ui-process-detection COMMAND mako-ui-process-detection-tests)
+
     add_executable(mako-ui-backend-contract-tests
         "tests/backend_contract_tests.cpp"
         "src/backend.cpp"
+        "src/process_detection.cpp"
         "src/backend.hpp")
     set_target_properties(mako-ui-backend-contract-tests PROPERTIES AUTOMOC ON)
     target_include_directories(mako-ui-backend-contract-tests PRIVATE "src")

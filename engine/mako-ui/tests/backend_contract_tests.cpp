@@ -46,6 +46,9 @@ void require_property(const char* name, const char* type_name,
 }
 
 void test_scaling_properties() {
+    require_property("running_games", "QVariantList", false, false);
+    require_property("scanning_games", "bool", false, false);
+    require_property("capture_failed", "bool", false, false);
     static_assert(!ls::GameConfDefaults::scalingEnabled);
     static_assert(ls::GameConfDefaults::scalingMethod ==
         ls::ScalingMethod::Ls1);

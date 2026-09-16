@@ -16,6 +16,41 @@ ApplicationWindow {
     minimumHeight: 400
     visible: true
 
+    RunningGamesDialog {
+        id: running_games_dialog
+        strings: t
+        onCaptured: launch_setup_dialog.open()
+    }
+
+    CenteredDialog {
+        id: launch_setup_dialog
+        objectName: "launch_setup_dialog"
+        name: t.gameProfileReady
+        width: parent.width * 0.8
+
+        Label {
+            Layout.fillWidth: true
+            text: t.gameLaunchSetup
+            wrapMode: Text.WordWrap
+        }
+        TextField {
+            Layout.fillWidth: true
+            text: "~/.local/bin/mako-launch %command%"
+            readOnly: true
+            selectByMouse: true
+        }
+        Label {
+            Layout.fillWidth: true
+            text: t.gameLaunchFlatpak
+            wrapMode: Text.WordWrap
+        }
+        Button {
+            Layout.fillWidth: true
+            text: t.openLaunchGuide
+            onClicked: Qt.openUrlExternally("https://github.com/eugeniosegala/MAKO/blob/main/engine/README.md#2-launch-the-game-with-mako")
+        }
+    }
+
     CenteredDialog {
         id: create_dialog
         name: t.createNewProfile
@@ -113,6 +148,11 @@ ApplicationWindow {
                 onSelect: index => backend.profile_index = index
             }
 
+            Button {
+                Layout.fillWidth: true
+                text: t.detectRunningGame
+                onClicked: running_games_dialog.open()
+            }
             Button {
                 Layout.fillWidth: true
                 text: t.createNewProfile

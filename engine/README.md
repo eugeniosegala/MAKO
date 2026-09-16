@@ -74,13 +74,15 @@ Open **MAKO Renderer Configuration** from the application launcher (the MAKO-log
 ~/.local/bin/mako-ui
 ```
 
-1. Select **Create New Profile** and give it a name, for example `My game`.
-2. Under **Profile Matching > Matched Processes > Edit...**, enter the actual game executable or process name, for example `Game.exe` for a Proton game or `dolphin-emu` for Dolphin, then press **+**. Use the process that renders the game, rather than its launcher, Steam display title, ROM filename, or Flatpak application ID.
+1. Start your game and reach gameplay, then select **Detect Running Game…** in MAKO Renderer Configuration. Select its executable and choose **Use Game Profile** to create a profile or open its existing match. This works with native Linux and Wine/Proton games, including non-Steam games. Use **Refresh** or **Show all applications** if it is missing.
+2. To keep a profile you already configured, select that profile first and choose **Add to Selected Profile** in the picker. An existing match opens its profile instead of creating a duplicate. You can also use **Create New Profile** and enter an executable manually under **Profile Matching > Matched Processes > Edit...**, for example `Game.exe` or `dolphin-emu`, then press **+**. Match the rendering executable, rather than a launcher, Steam display title, ROM filename, or Flatpak application ID.
 3. For Frame Generation or LS1, set **Lossless.dll Path (Restart)** if automatic discovery does not find your Steam installation. For open MAKO Scaler use without the DLL, turn **Frame Generation** off and select **MAKO Scaler**.
 4. Select Fixed or Adaptive Frame Generation and/or **Enable Scaling (Restart)**. For scaling, choose the method and factor and lower the game's resolution as described in [desktop scaling and resolution](docs/CONFIGURATION.md#desktop-scaling-and-resolution).
 5. Changes save automatically. Close the window to flush pending edits, then follow the launch instructions below.
 
 Selecting a profile in the UI chooses which settings you edit; **Matched Processes** chooses which program uses them. With no match, MAKO remains dormant. You can also select a profile explicitly with `MAKO_PROFILE`, as shown below. See [Configuration](docs/CONFIGURATION.md) for all settings and matching rules.
+
+Detection saves the executable match; it does not inject MAKO into an already running game. After capture, the UI shows the launch setup. Follow the native launch instructions or Flatpak preparation below, then restart the game.
 
 ### 2. Launch the game with MAKO
 

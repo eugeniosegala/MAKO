@@ -30,25 +30,26 @@ namespace {
         return std::equal(left.begin(), left.end(), right.begin(), right.end(),
             [](const char a, const char b) { return asciiLower(a) == asciiLower(b); });
     }
+}
 
-    // Launcher UI processes inherit the game's profile environment. Keep
-    // their own Vulkan presentation native without changing that environment
-    // or denying the game they start. Both components' lists are generated
-    // from mako-common/launcher_exclusions.json.
-    bool excludedLauncher(const Identification& id) noexcept {
-        // A mapped Windows executable is authoritative. Never inspect its
-        // parent directory, command-line arguments, or mutable thread name.
-        std::string_view executable = id.wine_executable &&
-                !id.wine_executable->empty()
-            ? *id.wine_executable : id.executable;
-        const auto separator = executable.find_last_of("/\\");
-        if (separator != std::string_view::npos)
-            executable.remove_prefix(separator + 1);
-        return std::any_of(detail::excludedWindowsLauncherExecutables.begin(),
-            detail::excludedWindowsLauncherExecutables.end(),
-            [&](const auto name) { return asciiEqual(executable, name); });
-    }
+bool ls::isExcludedLauncher(const Identification& id) noexcept {
+    // Launcher UI processes inherit the game's profile environment. Keep their
+    // own presentation native and omit them from capture without denying their
+    // child game. The registry also generates Decky's independent binding.
+    // A mapped Windows executable is authoritative. Never inspect its parent
+    // directory, command-line arguments, or mutable thread name.
+    std::string_view executable = id.wine_executable &&
+            !id.wine_executable->empty()
+        ? *id.wine_executable : id.executable;
+    const auto separator = executable.find_last_of("/\\");
+    if (separator != std::string_view::npos)
+        executable.remove_prefix(separator + 1);
+    return std::any_of(detail::excludedWindowsLauncherExecutables.begin(),
+        detail::excludedWindowsLauncherExecutables.end(),
+        [&](const auto name) { return asciiEqual(executable, name); });
+}
 
+namespace {
     // try to match a profile by name
     std::optional<GameConf> matchByName(const std::vector<GameConf>& profiles, const std::string& id) {
         for (const auto& profile : profiles)
@@ -75,7 +76,7 @@ namespace {
 }
 
 Identification ls::identify() {
-    Identification id{};
+    Identification id = identifyProcess("/proc/self");
 
     // fetch MAKO_PROFILE
     const char* override = std::getenv("MAKO_PROFILE");
@@ -89,9 +90,15 @@ Identification ls::identify() {
     if (fallback && *fallback != '\0')
         id.fallback = std::string(fallback);
 
+    return id;
+}
+
+Identification ls::identifyProcess(const std::filesystem::path& processDirectory) {
+    Identification id{};
+
     // fetch process exe path
     std::array<char, 4096> buf{};
-    const ssize_t len = readlink("/proc/self/exe", buf.data(), buf.size() - 1);
+    const ssize_t len = readlink((processDirectory / "exe").c_str(), buf.data(), buf.size() - 1);
     if (len > 0) {
         buf.at(static_cast<size_t>(len)) = '\0';
         id.executable = std::string(buf.data());
@@ -101,7 +108,7 @@ Identification ls::identify() {
     if (id.executable.find("wine") != std::string::npos
         || id.executable.find("proton") != std::string::npos) {
 
-        std::ifstream maps("/proc/self/maps");
+        std::ifstream maps(processDirectory / "maps");
         std::string line;
         while (maps.is_open() && std::getline(maps, line)) {
             if (line.size() < 4 || !asciiEqual(
@@ -125,13 +132,13 @@ Identification ls::identify() {
     }
 
     // fetch process name
-    std::ifstream comm("/proc/self/comm");
+    std::ifstream comm(processDirectory / "comm");
     if (comm.is_open()) {
         comm.read(buf.data(), buf.size() - 1);
         buf.at(static_cast<size_t>(comm.gcount())) = '\0';
 
         id.process_name = std::string(buf.data());
-        if (id.process_name.back() == '\n')
+        if (!id.process_name.empty() && id.process_name.back() == '\n')
             id.process_name.pop_back();
     }
 
@@ -139,14 +146,15 @@ Identification ls::identify() {
 }
 
 std::optional<std::pair<IdentType, GameConf>> ls::findProfile(
-        const ConfigFile& config, const Identification& id) {
-    if (excludedLauncher(id))
+        const ConfigFile& config, const Identification& id,
+        const bool allowEnvironmentProfile) {
+    if (isExcludedLauncher(id))
         return std::nullopt;
 
     const auto& profiles = config.profiles();
 
     // check for the environment option first
-    if (std::getenv("MAKO_ENV") != nullptr)
+    if (allowEnvironmentProfile && std::getenv("MAKO_ENV") != nullptr)
         return std::make_pair(IdentType::OVERRIDE, profiles.front());
 
     // then override first

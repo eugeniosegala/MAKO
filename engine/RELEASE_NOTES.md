@@ -12,6 +12,7 @@
 
 <!-- Unreleased: complete release validation before publication. -->
 
+- **Automatic game recognition in the desktop GUI:** Detect a running native Linux or Wine/Proton game, including non-Steam games, and capture its executable into a new or existing profile. The UI also explains the launch setup needed to activate MAKO.
 - **Upscaling without the full Gamescope WSI layer:** Scale independently or alongside Frame Generation on supported 64-bit and 32-bit Gamescope X11 launches. The full WSI layer remains an optional compatibility choice for supported 64-bit launches.
 - **Lower CPU and memory use:** Reusing recorded GPU commands and temporary resources reduces CPU overhead, RAM and VRAM use during Frame Generation.
 - **More reliable resolution changes:** Reclaim retired rendering resources before checking memory for a replacement, reducing unnecessary scaling rejections when changing resolution.

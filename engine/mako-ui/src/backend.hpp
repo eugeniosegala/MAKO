@@ -7,12 +7,16 @@
 #include <QString>
 #include <QVariantList>
 #include <QTimer>
+#include <QThread>
+
+#include "process_detection.hpp"
 
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/launch.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <memory>
 #include <utility>
 
 #define getters public
@@ -26,6 +30,9 @@ namespace mako::ui {
 
         Q_PROPERTY(QStringListModel* profiles READ calculateProfileListModel NOTIFY refreshUI)
         Q_PROPERTY(int profile_index READ getProfileIndex WRITE profileSelected NOTIFY refreshUI)
+        Q_PROPERTY(QVariantList running_games READ getRunningGames NOTIFY runningGamesChanged)
+        Q_PROPERTY(bool scanning_games READ isScanningGames NOTIFY runningGamesChanged)
+        Q_PROPERTY(bool capture_failed READ captureFailed NOTIFY runningGamesChanged)
 
         Q_PROPERTY(QString dll READ getDll WRITE dllUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool allow_fp16 READ getAllowFP16 WRITE allowFP16Updated NOTIFY refreshUI)
@@ -81,8 +88,14 @@ namespace mako::ui {
         Q_PROPERTY(float maximum_flow_scale READ getMaximumFlowScale CONSTANT)
 
     public:
-        explicit Backend();
+        explicit Backend(std::filesystem::path procRoot = "/proc");
         ~Backend() override;
+
+        [[nodiscard]] QVariantList getRunningGames() const;
+        [[nodiscard]] bool isScanningGames() const { return m_scanning_games; }
+        [[nodiscard]] bool captureFailed() const { return m_capture_failed; }
+        Q_INVOKABLE void refreshRunningGames(bool includeAllApplications = false);
+        Q_INVOKABLE bool captureRunningGame(int index, bool createProfile);
 
         [[nodiscard]] static bool isFractionalAdaptivePresetEnabled(
                 const ls::GameConf& conf) noexcept {
@@ -625,8 +638,15 @@ namespace mako::ui {
 
     signals:
         void refreshUI();
+        void runningGamesChanged();
 
     private:
+        std::filesystem::path m_proc_root;
+        std::vector<RunningGame> m_running_games;
+        std::unique_ptr<QThread> m_detection_thread;
+        bool m_scanning_games{false};
+        bool m_capture_failed{false};
+
         ls::GlobalConf m_global;
         std::vector<ls::GameConf> m_profiles;
         ls::LaunchConf m_launch;
