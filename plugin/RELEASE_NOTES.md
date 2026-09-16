@@ -16,4 +16,5 @@
 - **Lower CPU and memory use:** The updated MAKO Renderer reduces CPU overhead and RAM/VRAM use, with improved memory handling during resolution changes.
 - **A cleaner panel:** Press R1 for a compact view that retains Live Status and warnings. Centered headings, solid dark violet dividers and preserved controller focus make navigation clearer.
 - **Clearer model warnings:** See LS1 and LSFG compatibility problems together, with troubleshooting guidance and separate instructions when Lossless Scaling is missing.
+- **Improved Japanese translations:** Translated scaling and Live Status messages, with consistent control names and updated Adaptive guidance across MAKO Decky and MAKO Renderer. Thanks to [Tak-attack](https://github.com/Tak-attack) for [PR #64](https://github.com/eugeniosegala/MAKO/pull/64).
 - **Clearer vkBasalt integration:** Updated controls and documentation cover 64-bit and 32-bit use, with a separate matching installation and links to official effect configuration guidance.
