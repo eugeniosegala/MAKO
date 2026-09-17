@@ -84,7 +84,7 @@ namespace ls {
         static constexpr bool adaptiveAutoBaseFpsCap = false;
         static constexpr uint32_t targetFps = 120;
         static constexpr size_t adaptiveMaxMultiplier = 3;
-        static constexpr bool adaptiveStableCadence = false;
+        static constexpr bool adaptiveStableCadence = true;
         static constexpr bool dynamicCadenceRecovery = false;
         static constexpr float dynamicCadenceProbeIntervalSeconds = 2.0F;
         static constexpr bool ultraPerformance = false;
@@ -161,7 +161,7 @@ namespace ls {
         uint32_t target_fps{GameConfDefaults::targetFps};
         /// maximum total multiplier Adaptive may use
         size_t adaptive_max_multiplier{GameConfDefaults::adaptiveMaxMultiplier};
-        /// prefer a validated constant interpolation cadence when safe
+        /// prefer a validated even display-divisor cadence when safe
         bool adaptive_stable_cadence{GameConfDefaults::adaptiveStableCadence};
         /// periodically expose native cadence to detect upward rate changes
         bool dynamic_cadence_recovery{GameConfDefaults::dynamicCadenceRecovery};

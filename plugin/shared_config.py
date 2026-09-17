@@ -230,7 +230,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "adaptive_stable_cadence": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
-        "description": "prefer smoother constant interpolation; may lower real-frame cadence and increase input lag",
+        "description": "prefer an even display-divisor cadence; may lower real-frame cadence and increase input lag",
         "location": "toml"
     },
 

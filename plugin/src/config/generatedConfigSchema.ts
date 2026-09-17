@@ -237,7 +237,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "adaptive_stable_cadence",
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
-    description: "prefer smoother constant interpolation; may lower real-frame cadence and increase input lag"
+    description: "prefer an even display-divisor cadence; may lower real-frame cadence and increase input lag"
   },
   dynamic_cadence_recovery: {
     name: "dynamic_cadence_recovery",

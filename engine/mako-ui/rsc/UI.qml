@@ -388,7 +388,6 @@ ApplicationWindow {
                         title: t.smoothCadence
                         description: t.smoothCadenceDesc
                         visible: backend.frame_generation_enabled
-                        enabled: backend.adaptive
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight

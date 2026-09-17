@@ -1092,6 +1092,114 @@ namespace mako::layer {
         std::optional<TimePoint> nextFrameAt;
     };
 
+    /// Fixed normally preserves every application present and budgets only the
+    /// generated images against the confirmed display refresh. That is useful
+    /// when the source rate is variable, but a source consistently above an
+    /// exact display/multiplier rung otherwise has to alternate real-only and
+    /// generated presents. Smooth Cadence may instead pace the application to
+    /// that rung before lower presentation. Qualification and release holds
+    /// keep a changing game rate from repeatedly resetting the pacer.
+    class FixedSmoothCadenceBaseCap {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+
+        struct Decision {
+            std::optional<double> framesPerSecond;
+            bool changed{false};
+        };
+
+        [[nodiscard]] Decision update(const TimePoint now,
+                const bool eligible, const uint32_t refreshHz,
+                const size_t multiplier) {
+            const auto previousCap = this->activeFramesPerSecond;
+            if (!eligible || refreshHz == 0 || multiplier < 2) {
+                this->reset();
+                return this->decision(previousCap);
+            }
+
+            const double desiredCap = static_cast<double>(refreshHz) /
+                static_cast<double>(multiplier);
+            if (!std::isfinite(desiredCap) || desiredCap <= 0.0) {
+                this->reset();
+                return this->decision(previousCap);
+            }
+
+            std::optional<double> observedFramesPerSecond;
+            if (this->lastArrival) {
+                const auto interval = now - *this->lastArrival;
+                const double intervalSeconds =
+                    std::chrono::duration<double>(interval).count();
+                if (intervalSeconds > 0.0 && intervalSeconds < 1.0)
+                    observedFramesPerSecond = 1.0 / intervalSeconds;
+            }
+            this->lastArrival = now;
+            if (!observedFramesPerSecond)
+                return this->decision(previousCap);
+
+            if (this->activeFramesPerSecond &&
+                    *this->activeFramesPerSecond == desiredCap) {
+                if (*observedFramesPerSecond >= desiredCap * 0.90) {
+                    this->releaseSince.reset();
+                    return this->decision(previousCap);
+                }
+                if (!this->releaseSince)
+                    this->releaseSince = now;
+                if (now - *this->releaseSince < releaseQualificationDuration())
+                    return this->decision(previousCap);
+                this->reset();
+                return this->decision(previousCap);
+            }
+
+            if (*observedFramesPerSecond < desiredCap * 0.95) {
+                this->candidateSince.reset();
+                return this->decision(previousCap);
+            }
+            if (!this->candidateSince) {
+                this->candidateSince = now;
+                return this->decision(previousCap);
+            }
+            if (now - *this->candidateSince < qualificationDuration())
+                return this->decision(previousCap);
+
+            this->activeFramesPerSecond = desiredCap;
+            this->candidateSince.reset();
+            this->releaseSince.reset();
+            return this->decision(previousCap);
+        }
+
+        void reset() {
+            this->lastArrival.reset();
+            this->activeFramesPerSecond.reset();
+            this->candidateSince.reset();
+            this->releaseSince.reset();
+        }
+
+        [[nodiscard]] static constexpr std::chrono::seconds
+        qualificationDuration() {
+            return std::chrono::seconds{1};
+        }
+
+        [[nodiscard]] static constexpr std::chrono::milliseconds
+        releaseQualificationDuration() {
+            return std::chrono::milliseconds{250};
+        }
+
+    private:
+        [[nodiscard]] Decision decision(
+                const std::optional<double> previousCap) const {
+            return {
+                .framesPerSecond = this->activeFramesPerSecond,
+                .changed = previousCap != this->activeFramesPerSecond,
+            };
+        }
+
+        std::optional<TimePoint> lastArrival;
+        std::optional<double> activeFramesPerSecond;
+        std::optional<TimePoint> candidateSince;
+        std::optional<TimePoint> releaseSince;
+    };
+
     /// When Steady Adaptive has already proven that it needs at least 3x, a
     /// target/2 cap can leave the source cadence between integer generation
     /// ratios (for example 45 -> 120 FPS). Qualify the exact target/N rung for

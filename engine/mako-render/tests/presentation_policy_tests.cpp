@@ -910,6 +910,59 @@ int main() {
             fractionalDeadline < pacingStart + 13ms,
         "82.5 FPS pacing did not retain its fractional interval");
 
+    // Fixed Smooth Cadence is opt-in and only takes over after a whole second
+    // of source cadence that can sustain the selected display/multiplier rung.
+    // Verify all supported display and multiplier combinations because these
+    // are the paths that otherwise alternate real-only and generated presents.
+    for (const uint32_t refresh : {60U, 90U, 120U, 144U}) {
+        for (size_t multiplier = 2; multiplier <= 5; ++multiplier) {
+            FixedSmoothCadenceBaseCap fixedCap;
+            auto now = pacingStart;
+            const double cap = static_cast<double>(refresh) / multiplier;
+            const auto sourceInterval = std::chrono::duration_cast<
+                FixedSmoothCadenceBaseCap::Clock::duration>(
+                    std::chrono::duration<double>{1.0 / (cap * 1.03)}
+                );
+            auto decision = fixedCap.update(now, true, refresh, multiplier);
+            expect(!decision.framesPerSecond && !decision.changed,
+                "Fixed Smooth Cadence activated before observing source cadence");
+
+            while (now < pacingStart + 1s + sourceInterval) {
+                now += sourceInterval;
+                decision = fixedCap.update(now, true, refresh, multiplier);
+            }
+            expect(decision.framesPerSecond && decision.changed &&
+                    std::abs(*decision.framesPerSecond - cap) < 0.001,
+                "Fixed Smooth Cadence did not align its proven display rung");
+
+            const auto stableUntil = now + 95s;
+            size_t frame = 0;
+            while (now < stableUntil) {
+                const double observedFps = cap * (frame++ % 2 ? 0.92 : 1.04);
+                now += std::chrono::duration_cast<
+                    FixedSmoothCadenceBaseCap::Clock::duration>(
+                        std::chrono::duration<double>{1.0 / observedFps}
+                    );
+                decision = fixedCap.update(now, true, refresh, multiplier);
+                expect(decision.framesPerSecond && !decision.changed,
+                    "Fixed Smooth Cadence jitter reset the real-frame pacer");
+            }
+
+            now += 250ms;
+            decision = fixedCap.update(now, true, refresh, multiplier);
+            expect(decision.framesPerSecond && !decision.changed,
+                "one slow Fixed frame released Smooth Cadence");
+            now += 250ms;
+            decision = fixedCap.update(now, true, refresh, multiplier);
+            expect(!decision.framesPerSecond && decision.changed,
+                "sustained Fixed slowdown did not release Smooth Cadence");
+
+            decision = fixedCap.update(now, false, refresh, multiplier);
+            expect(!decision.framesPerSecond && !decision.changed,
+                "ineligible Fixed Smooth Cadence retained stale pacing state");
+        }
+    }
+
     SmoothCadenceBaseCap cadenceBaseCap;
     SmoothCadenceBaseCap::SchedulerState cadenceSnapshot{
         .validatedGenerationLimit = 2,

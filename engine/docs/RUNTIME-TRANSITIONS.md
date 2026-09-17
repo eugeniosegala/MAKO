@@ -54,7 +54,7 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Frame Generation On | Live if startup provisioning succeeded; otherwise restart | Reuses retained interop and private resources, then warms temporal history where required. |
 | Refresh threshold and Gamescope refresh | Live | Re-evaluates effective enablement and refresh-targeted scheduling. |
 | Fixed/Adaptive mode or multiplier | Live within current capacity; otherwise private FG replacement or recreation | Dormant mode values are saved without resetting the active mode. |
-| Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler state whose assumptions changed. |
+| Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. |
 | Dynamic Cadence probe interval | Live | Reschedules an inactive probe without discarding validated cadence or an active confirmation. |
 | Base FPS Cap and Adaptive auto-cap | Live while generation is active; dormant while Off | Resets the real-frame pacer and affected scheduler policy. |
 | Scaling enable | Restart | Existing and naturally recreated contexts retain process-start scaling and layer membership. |
@@ -103,7 +103,7 @@ The immutable pre/post-FG spatial placement is selected from source and presenta
 Reset only state whose assumptions changed:
 
 - enable/disable clears affected pacing, admission, acquire recovery, and history state;
-- mode, target, ceiling, Smooth Cadence, or recovery-policy changes rebuild scheduler policy;
+- mode, target, ceiling, Smooth Cadence, or recovery-policy changes rebuild scheduler policy and affected real-frame pacing;
 - effective cap changes reset the real-frame pacer and scheduler observations;
 - probe-interval-only changes update only the timer;
 - private-resource, mode, multiplier, refresh, or transport-recovery changes clear Fixed collapse evidence when its baseline is no longer valid; and

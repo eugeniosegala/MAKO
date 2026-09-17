@@ -392,6 +392,7 @@ namespace mako::layer {
         std::optional<uint32_t> gamescopeRefreshHz;
         FixedRefreshBudget fixedRefreshBudget;
         RealFramePacer realFramePacer;
+        FixedSmoothCadenceBaseCap fixedSmoothCadenceBaseCap;
         SmoothCadenceBaseCap smoothCadenceBaseCap;
         SmoothCadencePacerHandoff smoothCadencePacerHandoff;
         // A null-old replacement loses the driver's explicit WSI lineage.

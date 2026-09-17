@@ -1,6 +1,6 @@
 # Configuration guide
 
-The default profile uses Fixed 2x Frame Generation with 80% Flow Scale, the full FG model, Ultra Performance off, and FP16 allowed. If Adaptive is enabled, it starts with a 90 FPS target, a 3x ceiling, Steady Base Cap, and Smooth Cadence. Scaling is off, with LS1 Quality, a 1.5x factor, 80% sharpness, and Quality Supersampling off saved for when it is enabled.
+The default profile uses Fixed 2x Frame Generation with 80% Flow Scale, the full FG model, Ultra Performance off, FP16 allowed, and Smooth Cadence. If Adaptive is enabled, it starts with a 90 FPS target, a 3x ceiling, and Steady Base Cap. Scaling is off, with LS1 Quality, a 1.5x factor, 80% sharpness, and Quality Supersampling off saved for when it is enabled.
 
 Test one change at a time and compare the game's V-Sync both on and off. Results vary with the game, display, VRR, and compositor.
 
@@ -33,17 +33,17 @@ Method and sharpness changes rebuild only MAKO's private scaler. Factor or super
 ## Frame Generation
 
 - **Frame Generation:** Enables or disables generated frames without discarding the selected Fixed or Adaptive settings. It normally applies live.
-- **Fixed FPS Multiplier:** Selects 2x–5x generation. Start at 2x; higher values require more GPU and memory headroom. With Dynamic Cadence Recovery, it becomes a ceiling against confirmed Gamescope refresh.
+- **Fixed FPS Multiplier:** Selects 2x–5x generation. Start at 2x; higher values require more GPU and memory headroom. With Smooth Cadence and ordered Gamescope presentation, MAKO can pace a proven stable source to the display divided by this multiplier for even output; disable Smooth Cadence to retain every real frame. With Dynamic Cadence Recovery, the multiplier becomes a ceiling against confirmed Gamescope refresh.
 - **Adaptive Frame Generation:** Varies generation toward the Target FPS without slowing a game already above target or exceeding the selected ceiling.
 - **Fractional Adaptive:** Mixes generation ratios to retain more real frames, which may reduce latency and ghosting but can feel less smooth. It cannot be combined with Steady Base Cap; changing it also disables Dynamic Cadence Recovery.
 - **Target FPS:** Selects 30–240 displayed FPS for Adaptive mode.
 - **Steady Base Cap:** The default Adaptive mode. It starts with an even 2x cadence at half the target and may align a validated higher integer rung when Smooth Cadence is enabled. It is usually smoother but retains fewer real frames.
 - **Maximum Adaptive Multiplier:** Selects a 2x–5x ceiling. Lower ceilings usually preserve quality; higher ceilings need more headroom.
-- **Smooth Cadence:** Prefers a validated constant interpolation cadence. Disable it if the game feels more responsive without it.
+- **Smooth Cadence:** Prefers a validated constant interpolation cadence. In Fractional Adaptive it stabilizes a validated generated-frame plan without imposing a real-frame cap. In Fixed mode, it can pace a stable source to the selected display/multiplier rung; with Steady Base Cap, it can align a validated higher Adaptive rung. It never overrides an explicit Base FPS Cap, Dynamic Cadence Recovery, transport recovery, or insufficient generated-output capacity. Disable it if the game feels more responsive without it.
 - **Base FPS Cap:** Caps real application frames from Off to 120 FPS in MAKO Decky. It is unavailable while Frame Generation is off or Steady Base Cap owns the cap; changing it disables Dynamic Cadence Recovery.
 - **Auto-disable Frame Generation by Refresh Rate:** Pauses generation at or below a 30–240 Hz Gamescope threshold and resumes it above the threshold. It does nothing without refresh feedback and never overrides the main Frame Generation switch.
 
-Without confirmed Gamescope refresh, Fixed Dynamic Cadence Recovery and refresh-matched Smooth Cadence refinements are unavailable. Fixed keeps its selected multiplier, while Adaptive continues toward its configured target.
+Without confirmed ordered Gamescope refresh, Fixed Dynamic Cadence Recovery and refresh-matched Smooth Cadence refinements are unavailable. Fixed keeps its selected multiplier, while Adaptive continues toward its configured target.
 
 Most generation controls apply live. Flow Scale and Lighter FG Model use a 500 ms last-value-wins private-context replacement. A multiplier change that needs more generated-frame capacity uses the same replacement when the current WSI pool has enough headroom; otherwise it waits for recreation. MAKO keeps the previous context active until a replacement is ready, so the brief overlap can cause a one-time hitch or use extra memory.
 

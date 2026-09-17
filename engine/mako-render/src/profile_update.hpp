@@ -433,6 +433,26 @@ namespace mako::layer {
             );
     }
 
+    /// Fixed can use the same user-selected Smooth Cadence preference only
+    /// when ordered Gamescope presentation provides the refresh rate that
+    /// bounds its output budget. The caller additionally verifies that the
+    /// current private output pool can deliver the selected full multiplier.
+    [[nodiscard]] inline bool fixedSmoothCadenceBaseCapEligible(
+            const ls::GameConf& profile,
+            const bool privateOrderedTransport,
+            const bool orderedAcquireRecoveryActive,
+            const std::optional<uint32_t> gamescopeRefreshHz) {
+        return !profile.adaptive &&
+            profile.adaptive_stable_cadence &&
+            profile.base_fps_cap == 0 &&
+            !profile.dynamic_cadence_recovery &&
+            profile.multiplier >= 2 &&
+            effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
+            privateOrderedTransport &&
+            !orderedAcquireRecoveryActive &&
+            gamescopeRefreshHz.has_value() && *gamescopeRefreshHz > 0;
+    }
+
     struct GenerationSchedulerPolicy {
         uint32_t targetFps{0};
         size_t maximumMultiplier{0};
@@ -662,12 +682,12 @@ namespace mako::layer {
         const bool generationPolicyChanged =
             current.dynamic_cadence_recovery !=
                 applied.dynamic_cadence_recovery ||
+            current.adaptive_stable_cadence !=
+                applied.adaptive_stable_cadence ||
             (current.adaptive && applied.adaptive && (
                 current.target_fps != applied.target_fps ||
                 current.adaptive_max_multiplier !=
-                    applied.adaptive_max_multiplier ||
-                current.adaptive_stable_cadence !=
-                    applied.adaptive_stable_cadence
+                    applied.adaptive_max_multiplier
             ));
         const bool spatialScalingChanged =
             current.scaling_enabled != next.scaling_enabled ||

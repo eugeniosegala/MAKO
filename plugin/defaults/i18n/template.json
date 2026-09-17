@@ -181,7 +181,7 @@
   "ADAPTIVE_MAX_MULTIPLIER": "Maximum Adaptive Multiplier",
   "ADAPTIVE_MAX_MULTIPLIER_DESC": "Interpolation ceiling. 3x is balanced; 2x usually looks best, 4x gives more headroom, and 5x is for high-refresh displays with substantial GPU and memory headroom. Test per game.",
   "ADAPTIVE_SMOOTH_CADENCE": "Smooth Cadence",
-  "ADAPTIVE_SMOOTH_CADENCE_DESC": "Uses a validated constant interpolation cadence. With Steady Base Cap, it can align proven 3x–5x demand to an exact target rung. It can make motion smoother, but may lower real-frame cadence and increase input lag. Enabled by default; disable it if a game feels more responsive without it.",
+  "ADAPTIVE_SMOOTH_CADENCE_DESC": "Prefers an even display-divisor cadence when ordered Gamescope presentation proves it is safe. In Fractional Adaptive it stabilizes a validated generated-frame plan without imposing a real-frame cap. In Fixed mode it can pace the game to the selected multiplier; with Steady Base Cap it can align proven 3x–5x demand to an exact target rung. It may lower real-frame cadence and increase input lag. Enabled by default; disable it if a game feels more responsive without it.",
   "DYNAMIC_CADENCE_RECOVERY": "Dynamic Cadence Recovery",
   "DYNAMIC_CADENCE_RECOVERY_DESC": "Helps games and emulators that switch native rates, such as 30 FPS gameplay and 60 FPS menus. It periodically checks for a rate change and recovers the correct cadence, but each check can briefly affect pacing. Enable it only for affected games.",
   "DYNAMIC_CADENCE_RECOVERY_RELATION": "Turning this on disables Steady Base Cap and Base FPS Cap. Changing either cap later turns Recovery off.",
