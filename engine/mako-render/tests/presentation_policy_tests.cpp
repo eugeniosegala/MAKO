@@ -910,157 +910,6 @@ int main() {
             fractionalDeadline < pacingStart + 13ms,
         "82.5 FPS pacing did not retain its fractional interval");
 
-    // Fixed Smooth Cadence is opt-in and only takes over after a whole second
-    // of source cadence that can sustain the selected display/multiplier rung.
-    // Verify all supported display and multiplier combinations because these
-    // are the paths that otherwise alternate real-only and generated presents.
-    for (const uint32_t refresh : {60U, 90U, 120U, 144U}) {
-        for (size_t multiplier = 2; multiplier <= 5; ++multiplier) {
-            FixedSmoothCadenceBaseCap fixedCap;
-            auto now = pacingStart;
-            const double cap = static_cast<double>(refresh) / multiplier;
-            const auto sourceInterval = std::chrono::duration_cast<
-                FixedSmoothCadenceBaseCap::Clock::duration>(
-                    std::chrono::duration<double>{1.0 / (cap * 1.03)}
-                );
-            auto decision = fixedCap.update(now, true, refresh, multiplier);
-            expect(!decision.framesPerSecond && !decision.changed,
-                "Fixed Smooth Cadence activated before observing source cadence");
-
-            while (now < pacingStart + 1s + sourceInterval) {
-                now += sourceInterval;
-                decision = fixedCap.update(now, true, refresh, multiplier);
-            }
-            expect(decision.framesPerSecond && decision.changed &&
-                    std::abs(*decision.framesPerSecond - cap) < 0.001,
-                "Fixed Smooth Cadence did not align its proven display rung");
-
-            const auto stableUntil = now + 95s;
-            size_t frame = 0;
-            while (now < stableUntil) {
-                const double observedFps = cap * (frame++ % 2 ? 0.92 : 1.04);
-                now += std::chrono::duration_cast<
-                    FixedSmoothCadenceBaseCap::Clock::duration>(
-                        std::chrono::duration<double>{1.0 / observedFps}
-                    );
-                decision = fixedCap.update(now, true, refresh, multiplier);
-                expect(decision.framesPerSecond && !decision.changed,
-                    "Fixed Smooth Cadence jitter reset the real-frame pacer");
-            }
-
-            now += 250ms;
-            decision = fixedCap.update(now, true, refresh, multiplier);
-            expect(decision.framesPerSecond && !decision.changed,
-                "one slow Fixed frame released Smooth Cadence");
-            now += 250ms;
-            decision = fixedCap.update(now, true, refresh, multiplier);
-            expect(!decision.framesPerSecond && decision.changed,
-                "sustained Fixed slowdown did not release Smooth Cadence");
-
-            decision = fixedCap.update(now, false, refresh, multiplier);
-            expect(!decision.framesPerSecond && !decision.changed,
-                "ineligible Fixed Smooth Cadence retained stale pacing state");
-        }
-    }
-
-    // A live Fixed 3x -> 2x switch must release the old 40 FPS cap before
-    // trying to qualify the new 60 FPS rung. Otherwise the old cap prevents
-    // the source from ever reaching the new qualification threshold.
-    FixedSmoothCadenceBaseCap switchedFixedCap;
-    auto fixedNow = pacingStart;
-    static_cast<void>(switchedFixedCap.update(fixedNow, true, 120, 3));
-    FixedSmoothCadenceBaseCap::Decision switchedDecision;
-    for (size_t frame = 0; frame < 45; ++frame) {
-        fixedNow += 25ms;
-        switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 3);
-    }
-    expect(switchedDecision.framesPerSecond == 40.0,
-        "Fixed 3x cap did not qualify before a live multiplier switch");
-    fixedNow += 25ms;
-    switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 2);
-    expect(!switchedDecision.framesPerSecond && switchedDecision.changed,
-        "Fixed 3x-to-2x retained the old 40 FPS cap");
-    const auto switchedAt = fixedNow;
-    for (size_t frame = 0; frame < 50; ++frame) {
-        fixedNow += 16'666'667ns;
-        switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 2);
-        expect(!switchedDecision.framesPerSecond,
-            "Fixed 2x inherited the old multiplier's qualification time");
-    }
-    while (fixedNow < switchedAt + 1200ms) {
-        fixedNow += 16'666'667ns;
-        switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 2);
-    }
-    expect(switchedDecision.framesPerSecond == 60.0,
-        "Fixed 2x did not qualify its own 60 FPS rung after the switch");
-    fixedNow += 16'666'667ns;
-    switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 3);
-    expect(!switchedDecision.framesPerSecond && switchedDecision.changed,
-        "Fixed 2x-to-3x retained the old 60 FPS cap");
-
-    FixedSmoothCadenceBaseCap partiallyQualifiedCap;
-    fixedNow = pacingStart;
-    static_cast<void>(partiallyQualifiedCap.update(fixedNow, true, 120, 3));
-    for (size_t frame = 0; frame < 20; ++frame) {
-        fixedNow += 25ms;
-        switchedDecision = partiallyQualifiedCap.update(
-            fixedNow, true, 120, 3
-        );
-    }
-    expect(!switchedDecision.framesPerSecond,
-        "Fixed 3x qualified before a full second of source cadence");
-    fixedNow += 16'666'667ns;
-    switchedDecision = partiallyQualifiedCap.update(fixedNow, true, 120, 2);
-    expect(!switchedDecision.framesPerSecond && !switchedDecision.changed,
-        "switching an unqualified Fixed rung activated a cap");
-    for (size_t frame = 0; frame < 55; ++frame) {
-        fixedNow += 16'666'667ns;
-        switchedDecision = partiallyQualifiedCap.update(
-            fixedNow, true, 120, 2
-        );
-        expect(!switchedDecision.framesPerSecond,
-            "Fixed 2x reused partial qualification from Fixed 3x");
-    }
-
-    // The display budget is already warm when Smooth Cadence enters or exits.
-    // Keeping that budget avoids a forced real-only frame at either boundary.
-    FixedRefreshBudget retainedFixedBudget;
-    FixedSmoothCadenceBaseCap budgetTransitionCap;
-    fixedNow = pacingStart;
-    static_cast<void>(budgetTransitionCap.update(fixedNow, true, 120, 2));
-    expect(retainedFixedBudget.plan(fixedNow, 120, 1) == 0,
-        "a new Fixed display budget did not warm on its first frame");
-    bool observedCapActivation = false;
-    for (size_t frame = 0; frame < 75; ++frame) {
-        fixedNow += 16'666'667ns;
-        const auto decision = budgetTransitionCap.update(
-            fixedNow, true, 120, 2
-        );
-        const auto generated = retainedFixedBudget.plan(fixedNow, 120, 1);
-        expect(generated == 1,
-            "a warm Fixed display budget lost a generated midpoint");
-        observedCapActivation |= decision.changed &&
-            decision.framesPerSecond == 60.0;
-    }
-    expect(observedCapActivation,
-        "Fixed Smooth Cadence never entered during the display-budget test");
-    bool observedCapRelease = false;
-    for (size_t frame = 0; frame < 16; ++frame) {
-        fixedNow += 20ms;
-        const auto decision = budgetTransitionCap.update(
-            fixedNow, true, 120, 2
-        );
-        expect(retainedFixedBudget.plan(fixedNow, 120, 1) == 1,
-            "a slower Fixed source lost a warm generated midpoint");
-        if (decision.changed) {
-            expect(!decision.framesPerSecond,
-                "a sustained Fixed slowdown did not release Smooth Cadence");
-            observedCapRelease = true;
-        }
-    }
-    expect(observedCapRelease,
-        "the Fixed display-budget test did not exercise cap release");
-
     SmoothCadenceBaseCap cadenceBaseCap;
     SmoothCadenceBaseCap::SchedulerState cadenceSnapshot{
         .validatedGenerationLimit = 2,
@@ -1558,6 +1407,29 @@ int main() {
     }
     expect(generated >= 115 && generated <= 125,
         "100 FPS Fixed 2x should synthesize only the displayable remainder");
+
+    // With Smooth Cadence and ordered FIFO, Fixed requests its full multiplier
+    // and lets the present queue provide back-pressure instead of sleeping in
+    // the game present call. First-frame and long-stall guards still apply.
+    for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+        for (size_t multiplier = 2; multiplier <= 5; ++multiplier) {
+            budget.reset();
+            const size_t maximumGenerated = multiplier - 1;
+            expect(budget.plan(start, refreshHz, maximumGenerated, true) == 0,
+                "FIFO-paced Fixed generated on its first timing sample");
+            for (size_t frame = 1; frame <= 30; ++frame) {
+                expect(budget.plan(
+                    start + frame * 10ms, refreshHz,
+                    maximumGenerated, true
+                ) == maximumGenerated,
+                    "FIFO-paced Fixed suppressed part of its multiplier");
+            }
+            expect(budget.plan(
+                start + 1s, refreshHz, maximumGenerated, true
+            ) == 0,
+                "FIFO-paced Fixed ignored a long timing discontinuity");
+        }
+    }
 
     budget.reset();
     generated = 0;

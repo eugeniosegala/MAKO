@@ -224,22 +224,30 @@ int main() {
     fixedPacing.adaptive_stable_cadence = true;
     fixedPacing.base_fps_cap = 0;
     fixedPacing.dynamic_cadence_recovery = false;
-    expect(fixedSmoothCadenceBaseCapEligible(
+    expect(fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),
-        "ordered Fixed Smooth Cadence did not qualify against display refresh");
-    expect(!fixedSmoothCadenceBaseCapEligible(
+        "ordered Fixed Smooth Cadence did not select FIFO pacing");
+    fixedPacing.adaptive_stable_cadence = false;
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, 120),
+        "Fixed without Smooth Cadence selected FIFO full-cadence pacing");
+    fixedPacing.adaptive_stable_cadence = true;
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, std::nullopt),
+        "Fixed selected full-cadence pacing without refresh feedback");
+    expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, false, false, 120),
         "non-ordered transport enabled Fixed Smooth Cadence");
-    expect(!fixedSmoothCadenceBaseCapEligible(
+    expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, true, 120),
         "ordered-acquire recovery did not suspend Fixed Smooth Cadence");
     fixedPacing.base_fps_cap = 40;
-    expect(!fixedSmoothCadenceBaseCapEligible(
+    expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),
         "Fixed Smooth Cadence overrode an explicit real-frame cap");
     fixedPacing.base_fps_cap = 0;
     fixedPacing.dynamic_cadence_recovery = true;
-    expect(!fixedSmoothCadenceBaseCapEligible(
+    expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),
         "Fixed Smooth Cadence interfered with Dynamic Cadence Recovery");
 

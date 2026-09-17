@@ -1092,119 +1092,6 @@ namespace mako::layer {
         std::optional<TimePoint> nextFrameAt;
     };
 
-    /// Fixed normally preserves every application present and budgets only the
-    /// generated images against the confirmed display refresh. That is useful
-    /// when the source rate is variable, but a source consistently above an
-    /// exact display/multiplier rung otherwise has to alternate real-only and
-    /// generated presents. Smooth Cadence may instead pace the application to
-    /// that rung before lower presentation. Qualification and release holds
-    /// keep a changing game rate from repeatedly resetting the pacer.
-    class FixedSmoothCadenceBaseCap {
-    public:
-        using Clock = std::chrono::steady_clock;
-        using TimePoint = Clock::time_point;
-
-        struct Decision {
-            std::optional<double> framesPerSecond;
-            bool changed{false};
-        };
-
-        [[nodiscard]] Decision update(const TimePoint now,
-                const bool eligible, const uint32_t refreshHz,
-                const size_t multiplier) {
-            const auto previousCap = this->activeFramesPerSecond;
-            if (!eligible || refreshHz == 0 || multiplier < 2) {
-                this->reset();
-                return this->decision(previousCap);
-            }
-
-            const double desiredCap = static_cast<double>(refreshHz) /
-                static_cast<double>(multiplier);
-            if (!std::isfinite(desiredCap) || desiredCap <= 0.0) {
-                this->reset();
-                return this->decision(previousCap);
-            }
-            if (this->selectedRung && *this->selectedRung != desiredCap)
-                this->reset();
-            this->selectedRung = desiredCap;
-
-            std::optional<double> observedFramesPerSecond;
-            if (this->lastArrival) {
-                const auto interval = now - *this->lastArrival;
-                const double intervalSeconds =
-                    std::chrono::duration<double>(interval).count();
-                if (intervalSeconds > 0.0 && intervalSeconds < 1.0)
-                    observedFramesPerSecond = 1.0 / intervalSeconds;
-            }
-            this->lastArrival = now;
-            if (!observedFramesPerSecond)
-                return this->decision(previousCap);
-
-            if (this->activeFramesPerSecond &&
-                    *this->activeFramesPerSecond == desiredCap) {
-                if (*observedFramesPerSecond >= desiredCap * 0.90) {
-                    this->releaseSince.reset();
-                    return this->decision(previousCap);
-                }
-                if (!this->releaseSince)
-                    this->releaseSince = now;
-                if (now - *this->releaseSince < releaseQualificationDuration())
-                    return this->decision(previousCap);
-                this->reset();
-                return this->decision(previousCap);
-            }
-
-            if (*observedFramesPerSecond < desiredCap * 0.95) {
-                this->candidateSince.reset();
-                return this->decision(previousCap);
-            }
-            if (!this->candidateSince) {
-                this->candidateSince = now;
-                return this->decision(previousCap);
-            }
-            if (now - *this->candidateSince < qualificationDuration())
-                return this->decision(previousCap);
-
-            this->activeFramesPerSecond = desiredCap;
-            this->candidateSince.reset();
-            this->releaseSince.reset();
-            return this->decision(previousCap);
-        }
-
-        void reset() {
-            this->lastArrival.reset();
-            this->selectedRung.reset();
-            this->activeFramesPerSecond.reset();
-            this->candidateSince.reset();
-            this->releaseSince.reset();
-        }
-
-        [[nodiscard]] static constexpr std::chrono::seconds
-        qualificationDuration() {
-            return std::chrono::seconds{1};
-        }
-
-        [[nodiscard]] static constexpr std::chrono::milliseconds
-        releaseQualificationDuration() {
-            return std::chrono::milliseconds{250};
-        }
-
-    private:
-        [[nodiscard]] Decision decision(
-                const std::optional<double> previousCap) const {
-            return {
-                .framesPerSecond = this->activeFramesPerSecond,
-                .changed = previousCap != this->activeFramesPerSecond,
-            };
-        }
-
-        std::optional<TimePoint> lastArrival;
-        std::optional<double> selectedRung;
-        std::optional<double> activeFramesPerSecond;
-        std::optional<TimePoint> candidateSince;
-        std::optional<TimePoint> releaseSince;
-    };
-
     /// When Steady Adaptive has already proven that it needs at least 3x, a
     /// target/2 cap can leave the source cadence between integer generation
     /// ratios (for example 45 -> 120 FPS). Qualify the exact target/N rung for
@@ -1911,16 +1798,17 @@ namespace mako::layer {
         size_t consecutiveFailures{0};
     };
 
-    /// Deterministically suppress synthetic frames which cannot be scanned out
-    /// at the confirmed Gamescope refresh rate. Fixed mode remains at its full
-    /// multiplier whenever that output fits the display budget.
+    /// Normally suppress synthetic frames that exceed confirmed refresh.
+    /// Fixed Smooth Cadence can instead request the full multiplier and let
+    /// ordered FIFO back-pressure presents without a timed CPU sleep.
     class FixedRefreshBudget {
     public:
         using TimePoint = std::chrono::steady_clock::time_point;
 
         [[nodiscard]] size_t plan(const TimePoint now,
                 const std::optional<uint32_t> refreshHz,
-                const size_t maximumGeneratedFrames) {
+                const size_t maximumGeneratedFrames,
+                const bool fifoPacedFullCadence = false) {
             if (!refreshHz || *refreshHz == 0 || maximumGeneratedFrames == 0) {
                 this->lastRealFrame = now;
                 return maximumGeneratedFrames;
@@ -1962,7 +1850,9 @@ namespace mako::layer {
                 this->outputCredit = 0.0;
             if (generated == maximumGeneratedFrames && this->outputCredit >= 1.0)
                 this->outputCredit = std::fmod(this->outputCredit, 1.0);
-            return generated;
+            // Keep the display budget warm for a later policy change, but
+            // allow ordered FIFO to back-pressure a full Fixed multiplier.
+            return fifoPacedFullCadence ? maximumGeneratedFrames : generated;
         }
 
         void reset() {

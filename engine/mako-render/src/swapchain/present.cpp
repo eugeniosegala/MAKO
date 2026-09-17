@@ -797,11 +797,21 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             presentNow, orderedAcquireRecoveryProbe
         )
         : AdaptiveFramePlan{};
+    const bool fixedFifoPacedFullCadence = !schedulerEnabled &&
+        fixedSmoothCadenceFifoEligible(
+            this->profile,
+            this->privateOrderedTransport,
+            orderedAcquireRecoveryProbe ||
+                this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz
+        ) && this->configuredFixedGeneratedFrames + 1 ==
+            this->profile.multiplier;
     const size_t fixedGeneratedFrameCount = schedulerEnabled
         ? 0
         : this->fixedRefreshBudget.plan(
             presentNow, this->gamescopeRefreshHz,
-            this->configuredFixedGeneratedFrames
+            this->configuredFixedGeneratedFrames,
+            fixedFifoPacedFullCadence
         );
     const bool fixedCadenceRecoveryEligible =
         fixedCadenceCollapseRecoveryEligible(
@@ -2048,7 +2058,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
 
     const auto limiterArrival = DiagnosticsClock::now();
     AdaptiveSchedulerSnapshot schedulerSnapshot;
-    FixedSmoothCadenceBaseCap::Decision fixedCadenceBaseCap;
     bool handoffEligible = false;
     bool cadenceBaseCapEligible = false;
     bool automaticBaseCapSuppressed = false;
@@ -2070,38 +2079,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->gamescopeRefreshHz,
             schedulerSnapshot
         );
-    } else {
-        const bool fixedCadenceBaseCapEligible =
-            fixedSmoothCadenceBaseCapEligible(
-                this->profile,
-                this->privateOrderedTransport,
-                this->recoveryState.orderedAcquireRecovery.active(),
-                this->gamescopeRefreshHz
-            ) && this->configuredFixedGeneratedFrames + 1 ==
-                this->profile.multiplier;
-        fixedCadenceBaseCap = this->fixedSmoothCadenceBaseCap.update(
-            limiterArrival,
-            fixedCadenceBaseCapEligible,
-            this->gamescopeRefreshHz.value_or(0),
-            this->profile.multiplier
-        );
-        if (fixedCadenceBaseCap.changed) {
-            this->realFramePacer.reset();
-            if (presentDiagnosticsEnabled()) {
-                std::cerr << "MAKO Renderer: present diagnostics: "
-                             "operation=fixed-smooth-cadence-base-cap"
-                          << " context=" << this->diagnosticsState.contextId
-                          << " action=" << (
-                              fixedCadenceBaseCap.framesPerSecond
-                                  ? "activated" : "released"
-                          )
-                          << " refresh_hz=" << this->gamescopeRefreshHz.value_or(0)
-                          << " multiplier=" << this->profile.multiplier
-                          << " base_fps_cap=" << (
-                              fixedCadenceBaseCap.framesPerSecond.value_or(0.0)
-                          ) << '\n';
-            }
-        }
     }
     const auto cadenceBaseCap = this->smoothCadenceBaseCap.update(
         limiterArrival,
@@ -2155,9 +2132,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     const double baseFpsCap = handoff.active
         ? 0.0
         : cadenceBaseCap.framesPerSecond.value_or(
-            fixedCadenceBaseCap.framesPerSecond.value_or(
-                effectiveBaseFpsCap(this->profile, schedulerSnapshot)
-            )
+            effectiveBaseFpsCap(this->profile, schedulerSnapshot)
         );
     const auto limiterDeadline = this->realFramePacer.schedule(
         limiterArrival, baseFpsCap

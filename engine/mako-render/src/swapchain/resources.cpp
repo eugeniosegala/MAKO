@@ -246,7 +246,6 @@ void Swapchain::commitFrameGenerationResources(
     this->recoveryState.lowerPresentStallRecovery.reset();
     this->fixedRefreshBudget.reset();
     this->realFramePacer.reset();
-    this->fixedSmoothCadenceBaseCap.reset();
     this->smoothCadenceBaseCap.reset();
     this->smoothCadencePacerHandoff.reset();
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(

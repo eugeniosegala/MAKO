@@ -354,7 +354,6 @@ ProfileUpdateDecision Swapchain::updateProfile(
     if (decision.baseFpsCapChanged || decision.generationPolicyChanged ||
             decision.generationModeChanged || enabling || disabling) {
         this->realFramePacer.reset();
-        this->fixedSmoothCadenceBaseCap.reset();
         this->smoothCadenceBaseCap.reset();
         this->smoothCadencePacerHandoff.reset();
     }
@@ -499,7 +498,6 @@ void Swapchain::updateGamescopeRefreshRate(
     );
     this->gamescopeRefreshHz = refreshHz;
     this->realFramePacer.reset();
-    this->fixedSmoothCadenceBaseCap.reset();
     this->smoothCadenceBaseCap.reset();
     this->smoothCadencePacerHandoff.reset();
     const bool generationIsEnabled = effectiveFrameGenerationEnabled(
@@ -559,7 +557,6 @@ void Swapchain::disableFrameGeneration() {
 
     this->profile.frame_generation_enabled = false;
     this->realFramePacer.reset();
-    this->fixedSmoothCadenceBaseCap.reset();
     this->smoothCadenceBaseCap.reset();
     this->smoothCadencePacerHandoff.reset();
     this->recoveryState.historyWarmupRemaining = 0;

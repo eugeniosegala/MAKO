@@ -433,11 +433,11 @@ namespace mako::layer {
             );
     }
 
-    /// Fixed can use the same user-selected Smooth Cadence preference only
-    /// when ordered Gamescope presentation provides the refresh rate that
-    /// bounds its output budget. The caller additionally verifies that the
-    /// current private output pool can deliver the selected full multiplier.
-    [[nodiscard]] inline bool fixedSmoothCadenceBaseCapEligible(
+    /// Fixed Smooth Cadence can let ordered FIFO pace a full multiplier instead
+    /// of sleeping in the application's present call. Explicit caps and
+    /// recovery retain their existing output budget; the caller also verifies
+    /// that the private output pool can deliver the selected multiplier.
+    [[nodiscard]] inline bool fixedSmoothCadenceFifoEligible(
             const ls::GameConf& profile,
             const bool privateOrderedTransport,
             const bool orderedAcquireRecoveryActive,
