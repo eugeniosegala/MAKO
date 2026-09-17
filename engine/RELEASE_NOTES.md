@@ -16,6 +16,7 @@
 - **Clearer Japanese controls:** The desktop GUI uses consistent Japanese terminology with MAKO Decky and updated Adaptive guidance, extending [Tak-attack’s contribution](https://github.com/eugeniosegala/MAKO/pull/64).
 - **Upscaling without the full Gamescope WSI layer:** Scale independently or alongside Frame Generation on supported 64-bit and 32-bit Gamescope X11 launches. The full WSI layer remains an optional compatibility choice for supported 64-bit launches.
 - **Lower CPU and memory use:** Reusing recorded GPU commands and temporary resources reduces CPU overhead, RAM and VRAM use during Frame Generation.
+- **Smoother Frame Generation cadence:** Smooth Cadence is on by default and uses validated ordered Gamescope presentation to stabilize delivery. Fractional Adaptive retains real frames, while Fixed and Steady Base Cap can favor an even cadence at the cost of real-frame rate and responsiveness; turn it off per game if preferred.
 - **More reliable resolution changes:** Reclaim retired rendering resources before checking memory for a replacement, reducing unnecessary scaling rejections when changing resolution.
 - **More resilient model loading:** LS1 and LSFG recognize supported model layouts after resource IDs move, with shared checks for inspection and rendering. Restart the game after updating Lossless Scaling.
 - **Consistent FP16 defaults:** New configurations, missing precision settings and CLI tools allow FP16 where supported. Explicit choices are preserved, with FP32 fallback on unsupported GPUs.

@@ -224,7 +224,7 @@ export function FpsMultiplierControl({
               label={t("ADAPTIVE_SMOOTH_CADENCE", "Smooth Cadence")}
               description={t(
                 "ADAPTIVE_SMOOTH_CADENCE_DESC",
-                "Prefers an even display-divisor cadence when ordered Gamescope presentation proves it is safe. In Fractional Adaptive it stabilizes a validated generated-frame plan without imposing a real-frame cap. In Fixed mode it can pace the game to the selected multiplier; with Steady Base Cap it can align proven 3x–5x demand to an exact target rung. It may lower real-frame cadence and increase input lag. Enabled by default; disable it if a game feels more responsive without it.",
+                "Maintains even pacing when ordered Gamescope presentation is validated. Fractional Adaptive stabilizes generated frames without capping real frames. Fixed uses its selected multiplier; Steady Base Cap can align validated 3x–5x rungs. It may reduce real-frame rate and responsiveness. On by default; turn it off if a game feels better.",
               )}
               checked={
                 config.adaptive_stable_cadence ??
