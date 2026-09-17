@@ -44,7 +44,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "刷新率阈值",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "选择帧生成应保持暂停的最高刷新率。",
   "CONFIG_ULTRA_PERFORMANCE": "极致性能（重启）",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "降低 MAKO 在低功耗设备上的 GPU 负载。它使用 75% 光流缩放、轻量帧生成模型、受支持时的 FP16，并在启用缩放时使用 LS1 Performance。以画质换取所有已启用 MAKO 功能的性能。",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "降低 MAKO 在低功耗设备上的 GPU 负载。它使用 70% 光流缩放、轻量帧生成模型、受支持时的 FP16，并在启用缩放时使用 LS1 Performance。以画质换取所有已启用 MAKO 功能的性能。",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "开启或关闭 Ultra Performance 需要重启游戏。其他兼容的配置文件控件在启动后仍可使用。",
   "CONFIG_PERFORMANCE_MODE": "轻量帧生成模型",
   "CONFIG_PERFORMANCE_MODE_DESC": "使用更轻量的帧生成模型来减少 GPU 工作，但会增加重影。极致性能会强制启用此选项。",

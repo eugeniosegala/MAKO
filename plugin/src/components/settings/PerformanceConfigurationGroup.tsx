@@ -47,7 +47,7 @@ export function PerformanceConfigurationGroup({
               <div>
                 {t(
                   "CONFIG_ULTRA_PERFORMANCE_DESC",
-                  "Reduces MAKO's GPU workload on low-power devices. Uses 75% Flow Scale, the Lighter FG Model, FP16 when supported, and LS1 Performance when Scaling is enabled. Trades image quality for performance across the active MAKO features.",
+                  "Reduces MAKO's GPU workload on low-power devices. Uses 70% Flow Scale, the Lighter FG Model, FP16 when supported, and LS1 Performance when Scaling is enabled. Trades image quality for performance across the active MAKO features.",
                 )}
               </div>
               <MakoInlineTip tone="info">

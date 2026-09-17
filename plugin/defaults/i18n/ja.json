@@ -44,7 +44,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "リフレッシュレートしきい値",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "フレーム生成を一時停止する最大リフレッシュレートを選択します。",
   "CONFIG_ULTRA_PERFORMANCE": "ウルトラパフォーマンス（再起動）",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "低消費電力デバイスで MAKO の GPU 負荷を軽減します。フロースケール 75%、軽量 FG モデル、対応環境では FP16、スケーリング有効時は LS1 Performance を使用します。有効な MAKO 機能全体で、画質と引き換えにパフォーマンスを高めます。",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "低消費電力デバイスで MAKO の GPU 負荷を軽減します。フロースケール 70%、軽量 FG モデル、対応環境では FP16、スケーリング有効時は LS1 Performance を使用します。有効な MAKO 機能全体で、画質と引き換えにパフォーマンスを高めます。",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Ultra Performance のオン／オフ切り替えにはゲームの再起動が必要です。その他の互換性のあるプロファイル設定は起動後も利用できます。",
   "CONFIG_PERFORMANCE_MODE": "軽量 FG モデル",
   "CONFIG_PERFORMANCE_MODE_DESC": "軽量なフレーム生成モデルで GPU 負荷を下げますが、ゴーストが増えます。ウルトラパフォーマンスでは常に有効です。",

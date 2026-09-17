@@ -115,7 +115,7 @@ A broad “configuration changed” reset would discard validated cadence after 
 
 Frame Generation Off submits no LSFG model work, generated-image acquisition, or generated presents. The saved cap is dormant. A matched process still provisions interop, backend, private images, and synchronization when startup succeeds so Off can turn On live. Failed provisioning leaves real-frame or independent scaling active and reports restart pending.
 
-Ultra Performance remains a process-start policy: effective FP16, Flow Scale 0.75, lighter model, active-policy-sized capacity, and LS1 Performance when scaling is enabled. It never enables scaling. Compatible live controls still work, but changing Ultra itself waits for restart and cannot partially mutate the active backend.
+Ultra Performance remains a process-start policy: effective FP16, Flow Scale 0.7, lighter model, active-policy-sized capacity, and LS1 Performance when scaling is enabled. It never enables scaling. Compatible live controls still work, but changing Ultra itself waits for restart and cannot partially mutate the active backend.
 
 ## Runtime status and diagnostics
 

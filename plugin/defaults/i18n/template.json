@@ -44,7 +44,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "Refresh Rate Threshold",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "Choose the highest refresh rate where frame generation should remain paused.",
   "CONFIG_ULTRA_PERFORMANCE": "Ultra Performance (Restart)",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduces MAKO's GPU workload on low-power devices. Uses 75% Flow Scale, the Lighter FG Model, FP16 when supported, and LS1 Performance when Scaling is enabled. Trades image quality for performance across the active MAKO features.",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduces MAKO's GPU workload on low-power devices. Uses 70% Flow Scale, the Lighter FG Model, FP16 when supported, and LS1 Performance when Scaling is enabled. Trades image quality for performance across the active MAKO features.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Turning Ultra Performance on or off requires a game restart. Other compatible profile controls remain available after startup.",
   "CONFIG_PERFORMANCE_MODE": "Lighter FG Model",
   "CONFIG_PERFORMANCE_MODE_DESC": "Reduces GPU work by using a lighter frame-generation model at the cost of more ghosting. Ultra Performance locks this on.",

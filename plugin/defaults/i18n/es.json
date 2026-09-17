@@ -44,7 +44,7 @@
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD": "Umbral de frecuencia de actualización",
   "CONFIG_FRAME_GENERATION_REFRESH_THRESHOLD_DESC": "Elija la frecuencia más alta a la que la generación de cuadros debe permanecer pausada.",
   "CONFIG_ULTRA_PERFORMANCE": "Rendimiento ultra (Reiniciar)",
-  "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduce la carga de la GPU de MAKO en dispositivos de bajo consumo. Usa una escala de flujo del 75 %, el modelo de FG ligero, FP16 cuando es compatible y LS1 Performance cuando el escalado está habilitado. Sacrifica calidad de imagen para mejorar el rendimiento de las funciones activas de MAKO.",
+  "CONFIG_ULTRA_PERFORMANCE_DESC": "Reduce la carga de la GPU de MAKO en dispositivos de bajo consumo. Usa una escala de flujo del 70 %, el modelo de FG ligero, FP16 cuando es compatible y LS1 Performance cuando el escalado está habilitado. Sacrifica calidad de imagen para mejorar el rendimiento de las funciones activas de MAKO.",
   "CONFIG_ULTRA_PERFORMANCE_WARNING": "Activar o desactivar Ultra Performance requiere reiniciar el juego. Los demás controles de perfil compatibles siguen disponibles después del inicio.",
   "CONFIG_PERFORMANCE_MODE": "Modelo de FG ligero",
   "CONFIG_PERFORMANCE_MODE_DESC": "Reduce la carga de la GPU con un modelo de generación de cuadros más ligero a costa de más imágenes fantasma. Rendimiento ultra la mantiene activada.",

@@ -509,7 +509,7 @@ int main() {
     expect(ls::effectiveFlowScale(next) ==
             ls::GameConfDefaults::ultraPerformanceFlowScale &&
             ls::effectivePerformanceMode(next),
-        "Ultra Performance must force 75% flow and the lighter model");
+        "Ultra Performance must force 70% flow and the lighter model");
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action ==
             ProfileUpdateAction::DeferUntilProcessRestart &&

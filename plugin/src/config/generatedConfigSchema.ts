@@ -70,7 +70,7 @@ export const SCALING_METHOD_VALUES = [
 export type ScalingMethod = (typeof SCALING_METHOD_VALUES)[number];
 export const SCALING_SHARPNESS_MIN = 0.0 as const;
 export const SCALING_SHARPNESS_MAX = 1.0 as const;
-export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.75 as const;
+export const ULTRA_PERFORMANCE_FLOW_SCALE = 0.7 as const;
 export const FIXED_MULTIPLIER_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MIN = 2 as const;
 export const FIXED_MULTIPLIER_UI_MAX = 5 as const;
@@ -255,12 +255,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "ultra_performance",
     fieldType: ConfigFieldType.BOOLEAN,
     default: false,
-    description: "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain available after startup"
+    description: "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 70% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain available after startup"
   },
   flow_scale: {
     name: "flow_scale",
     fieldType: ConfigFieldType.FLOAT,
-    default: 0.9,
+    default: 0.8,
     description: "adjust Frame Generation motion-estimation resolution; lower values reduce GPU work and higher values favour quality"
   },
   performance_mode: {
@@ -402,7 +402,7 @@ export function getDefaults(): ConfigurationData {
     dynamic_cadence_recovery: false,
     dynamic_cadence_probe_interval_seconds: 2.0,
     ultra_performance: false,
-    flow_scale: 0.9,
+    flow_scale: 0.8,
     performance_mode: false,
     pacing: "none",
     active_in: "",

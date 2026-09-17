@@ -71,9 +71,9 @@ The CLI's `benchmark`, `debug`, `quality-regression`, and `combined-quality-regr
 | `scaling_supersampling` | Boolean | `false` | Lets a variable managed Gamescope surface exceed its proven display target. Vulkan and memory limits still apply; fixed and direct non-Gamescope geometry is unchanged. |
 | `scaling_sharpness` | 0.0–1.0 | `0.8` | MAKO Scaler sharpening strength or nearest selection among LS1's five model variants. |
 | `swapchain_image_count_compatibility` | Boolean | `false` | Preserves the application's requested minimum WSI image count instead of reserving generated-output headroom. Use only for games that fail to create the normal swapchain; generated frames may be skipped under pressure. Requires restart. |
-| `flow_scale` | 0.25–1.0 | `0.9` | LSFG motion-vector resolution. Lower values reduce cost and may reduce quality. |
+| `flow_scale` | 0.25–1.0 | `0.8` | LSFG motion-vector resolution. Lower values reduce cost and may reduce quality. |
 | `performance_mode` | Boolean | `false` | Selects the lighter LSFG model. The UIs label this **Lighter FG Model**. |
-| `ultra_performance` | Boolean | `false` | Restart-bound preset that selects Flow Scale 0.75, the lighter LSFG model, FP16 permission, active-policy-sized resources, and LS1 Performance when scaling is enabled. It does not enable scaling. |
+| `ultra_performance` | Boolean | `false` | Restart-bound preset that selects Flow Scale 0.7, the lighter LSFG model, FP16 permission, active-policy-sized resources, and LS1 Performance when scaling is enabled. It does not enable scaling. |
 | `pacing` | `none` | `none` | Presentation-policy compatibility field; `none` is the only supported value. |
 | `gpu` | GPU name, vendor/device ID, or PCI bus ID | Unset | Selects the application's GPU. MAKO does not support cross-GPU Frame Generation. |
 

@@ -217,7 +217,7 @@ describe("External Tools controls", () => {
       />,
     );
 
-    expect(screen.queryByText("Flow Scale (75%)")).toBeNull();
+    expect(screen.queryByText("Flow Scale (70%)")).toBeNull();
     expect(screen.queryByText("Allow FP16 (Restart)")).toBeNull();
   });
 

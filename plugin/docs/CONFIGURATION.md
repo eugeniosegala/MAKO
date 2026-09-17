@@ -1,6 +1,6 @@
 # Configuration guide
 
-The default profile uses Fixed 2x Frame Generation with 90% Flow Scale, the full FG model, Ultra Performance off, and FP16 allowed. If Adaptive is enabled, it starts with a 90 FPS target, a 3x ceiling, Steady Base Cap, and Smooth Cadence. Scaling is off, with LS1 Quality, a 1.5x factor, 80% sharpness, and Quality Supersampling off saved for when it is enabled.
+The default profile uses Fixed 2x Frame Generation with 80% Flow Scale, the full FG model, Ultra Performance off, and FP16 allowed. If Adaptive is enabled, it starts with a 90 FPS target, a 3x ceiling, Steady Base Cap, and Smooth Cadence. Scaling is off, with LS1 Quality, a 1.5x factor, 80% sharpness, and Quality Supersampling off saved for when it is enabled.
 
 Test one change at a time and compare the game's V-Sync both on and off. Results vary with the game, display, VRR, and compositor.
 
@@ -83,8 +83,8 @@ Decky sends typed field patches through one last-value-wins writer with one back
 
 ## Performance and quality
 
-- **Ultra Performance (Restart):** Uses 75% Flow Scale, Lighter FG Model, FP16 where supported, active-policy resource allocation, and LS1 Performance when Scaling is enabled. It does not enable Scaling. Turning it off restores 90% Flow Scale, the full FG model, and FP16 allowed.
-- **Flow Scale:** Controls Frame Generation motion-estimation resolution from 25–100%. Lower values reduce GPU work; higher values favour quality. Ultra Performance locks it to 75%.
+- **Ultra Performance (Restart):** Uses 70% Flow Scale, Lighter FG Model, FP16 where supported, active-policy resource allocation, and LS1 Performance when Scaling is enabled. It does not enable Scaling. Turning it off restores 80% Flow Scale, the full FG model, and FP16 allowed.
+- **Flow Scale:** Controls Frame Generation motion-estimation resolution from 25–100%. Lower values reduce GPU work; higher values favour quality. Ultra Performance locks it to 70%.
 - **Lighter FG Model:** Reduces GPU work at the cost of more visible artifacts. Ultra Performance locks it on.
 - **Allow FP16 (Restart):** Global permission shared by every profile. It normally improves AMD performance; older NVIDIA GPUs may perform better with it disabled.
 - **Lossless.dll Path (Restart):** Optional override for LS1 and LSFG discovery. Leave it empty for automatic Steam-library discovery.
