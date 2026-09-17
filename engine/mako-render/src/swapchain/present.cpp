@@ -2087,7 +2087,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         );
         if (fixedCadenceBaseCap.changed) {
             this->realFramePacer.reset();
-            this->fixedRefreshBudget.reset();
             if (presentDiagnosticsEnabled()) {
                 std::cerr << "MAKO Renderer: present diagnostics: "
                              "operation=fixed-smooth-cadence-base-cap"

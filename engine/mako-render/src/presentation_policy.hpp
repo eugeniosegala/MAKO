@@ -1124,6 +1124,9 @@ namespace mako::layer {
                 this->reset();
                 return this->decision(previousCap);
             }
+            if (this->selectedRung && *this->selectedRung != desiredCap)
+                this->reset();
+            this->selectedRung = desiredCap;
 
             std::optional<double> observedFramesPerSecond;
             if (this->lastArrival) {
@@ -1170,6 +1173,7 @@ namespace mako::layer {
 
         void reset() {
             this->lastArrival.reset();
+            this->selectedRung.reset();
             this->activeFramesPerSecond.reset();
             this->candidateSince.reset();
             this->releaseSince.reset();
@@ -1195,6 +1199,7 @@ namespace mako::layer {
         }
 
         std::optional<TimePoint> lastArrival;
+        std::optional<double> selectedRung;
         std::optional<double> activeFramesPerSecond;
         std::optional<TimePoint> candidateSince;
         std::optional<TimePoint> releaseSince;

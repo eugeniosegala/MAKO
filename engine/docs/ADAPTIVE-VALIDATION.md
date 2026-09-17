@@ -54,6 +54,8 @@ Fixed uses the configured 2x–5x multiplier. When Gamescope reports a nonzero r
 
 Ordered SDR also has an automatic collapse guard. After a healthy Fixed baseline is established, a sustained cadence loss can trigger a short native-only probe. A clearly faster native cadence rebases timing; a true game or GPU slowdown rejects the probe. After rejection, bounded retry backoff alone does not rearm the guard: cadence must move outside the rejected baseline's 0.8–1.25 band, or healthy output must requalify the baseline before a later collapse. This avoids periodic native-only interruptions under unchanged load while preserving recovery after new evidence. This guard is independent of optional Dynamic Cadence Recovery.
 
+A live Fixed multiplier change immediately discards the old Smooth Cadence cap and starts fresh qualification for the new display/multiplier rung. Entering or leaving that cap retains Fixed's warm display budget, so the cap transition itself does not force a real-only frame. Mode changes and other changes that invalidate the display budget still reset it at their owning transition.
+
 ### Adaptive mode
 
 Adaptive varies generated work toward `target_fps` without exceeding `adaptive_max_multiplier`. Fractional mode owns the long-term output budget and keeps timestamps evenly spaced within each real-frame interval. Near target, it may prefer native presentation when measured interval quality and output coverage are already sufficient.

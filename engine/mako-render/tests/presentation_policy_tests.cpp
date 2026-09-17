@@ -963,6 +963,104 @@ int main() {
         }
     }
 
+    // A live Fixed 3x -> 2x switch must release the old 40 FPS cap before
+    // trying to qualify the new 60 FPS rung. Otherwise the old cap prevents
+    // the source from ever reaching the new qualification threshold.
+    FixedSmoothCadenceBaseCap switchedFixedCap;
+    auto fixedNow = pacingStart;
+    static_cast<void>(switchedFixedCap.update(fixedNow, true, 120, 3));
+    FixedSmoothCadenceBaseCap::Decision switchedDecision;
+    for (size_t frame = 0; frame < 45; ++frame) {
+        fixedNow += 25ms;
+        switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 3);
+    }
+    expect(switchedDecision.framesPerSecond == 40.0,
+        "Fixed 3x cap did not qualify before a live multiplier switch");
+    fixedNow += 25ms;
+    switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 2);
+    expect(!switchedDecision.framesPerSecond && switchedDecision.changed,
+        "Fixed 3x-to-2x retained the old 40 FPS cap");
+    const auto switchedAt = fixedNow;
+    for (size_t frame = 0; frame < 50; ++frame) {
+        fixedNow += 16'666'667ns;
+        switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 2);
+        expect(!switchedDecision.framesPerSecond,
+            "Fixed 2x inherited the old multiplier's qualification time");
+    }
+    while (fixedNow < switchedAt + 1200ms) {
+        fixedNow += 16'666'667ns;
+        switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 2);
+    }
+    expect(switchedDecision.framesPerSecond == 60.0,
+        "Fixed 2x did not qualify its own 60 FPS rung after the switch");
+    fixedNow += 16'666'667ns;
+    switchedDecision = switchedFixedCap.update(fixedNow, true, 120, 3);
+    expect(!switchedDecision.framesPerSecond && switchedDecision.changed,
+        "Fixed 2x-to-3x retained the old 60 FPS cap");
+
+    FixedSmoothCadenceBaseCap partiallyQualifiedCap;
+    fixedNow = pacingStart;
+    static_cast<void>(partiallyQualifiedCap.update(fixedNow, true, 120, 3));
+    for (size_t frame = 0; frame < 20; ++frame) {
+        fixedNow += 25ms;
+        switchedDecision = partiallyQualifiedCap.update(
+            fixedNow, true, 120, 3
+        );
+    }
+    expect(!switchedDecision.framesPerSecond,
+        "Fixed 3x qualified before a full second of source cadence");
+    fixedNow += 16'666'667ns;
+    switchedDecision = partiallyQualifiedCap.update(fixedNow, true, 120, 2);
+    expect(!switchedDecision.framesPerSecond && !switchedDecision.changed,
+        "switching an unqualified Fixed rung activated a cap");
+    for (size_t frame = 0; frame < 55; ++frame) {
+        fixedNow += 16'666'667ns;
+        switchedDecision = partiallyQualifiedCap.update(
+            fixedNow, true, 120, 2
+        );
+        expect(!switchedDecision.framesPerSecond,
+            "Fixed 2x reused partial qualification from Fixed 3x");
+    }
+
+    // The display budget is already warm when Smooth Cadence enters or exits.
+    // Keeping that budget avoids a forced real-only frame at either boundary.
+    FixedRefreshBudget retainedFixedBudget;
+    FixedSmoothCadenceBaseCap budgetTransitionCap;
+    fixedNow = pacingStart;
+    static_cast<void>(budgetTransitionCap.update(fixedNow, true, 120, 2));
+    expect(retainedFixedBudget.plan(fixedNow, 120, 1) == 0,
+        "a new Fixed display budget did not warm on its first frame");
+    bool observedCapActivation = false;
+    for (size_t frame = 0; frame < 75; ++frame) {
+        fixedNow += 16'666'667ns;
+        const auto decision = budgetTransitionCap.update(
+            fixedNow, true, 120, 2
+        );
+        const auto generated = retainedFixedBudget.plan(fixedNow, 120, 1);
+        expect(generated == 1,
+            "a warm Fixed display budget lost a generated midpoint");
+        observedCapActivation |= decision.changed &&
+            decision.framesPerSecond == 60.0;
+    }
+    expect(observedCapActivation,
+        "Fixed Smooth Cadence never entered during the display-budget test");
+    bool observedCapRelease = false;
+    for (size_t frame = 0; frame < 16; ++frame) {
+        fixedNow += 20ms;
+        const auto decision = budgetTransitionCap.update(
+            fixedNow, true, 120, 2
+        );
+        expect(retainedFixedBudget.plan(fixedNow, 120, 1) == 1,
+            "a slower Fixed source lost a warm generated midpoint");
+        if (decision.changed) {
+            expect(!decision.framesPerSecond,
+                "a sustained Fixed slowdown did not release Smooth Cadence");
+            observedCapRelease = true;
+        }
+    }
+    expect(observedCapRelease,
+        "the Fixed display-budget test did not exercise cap release");
+
     SmoothCadenceBaseCap cadenceBaseCap;
     SmoothCadenceBaseCap::SchedulerState cadenceSnapshot{
         .validatedGenerationLimit = 2,
