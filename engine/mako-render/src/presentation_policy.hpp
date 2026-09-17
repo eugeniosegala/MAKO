@@ -903,10 +903,11 @@ namespace mako::layer {
 
     /// Keep the application-present budget cumulative for 3x/4x/5x, while
     /// preventing one unavailable lower image from consuming the full legacy
-    /// 50 ms ceiling by itself. On a known-refresh ordered path, one image gets
-    /// one-and-a-half display periods with an 8 ms floor; an image that misses
-    /// that useful delivery window must enter recovery instead of blocking a
-    /// 120 Hz application present for the separate 25 ms pressure threshold.
+    /// 50 ms ceiling by itself. On a known-refresh ordered path, allow two and
+    /// a half display periods with an 8 ms floor. Any extension beyond the
+    /// original one-and-a-half-period window must leave half a display period
+    /// below the pressure threshold: a short deadline miss must still reach
+    /// the zero-wait guard instead of immediately starting native drain.
     /// Unknown-refresh and unconfigured paths retain their historical 25 ms
     /// and unbounded contracts respectively.
     [[nodiscard]] inline uint64_t orderedGeneratedImageAcquireTimeout(
@@ -917,14 +918,24 @@ namespace mako::layer {
         constexpr uint64_t nanosecondsPerSecond = 1'000'000'000;
         constexpr uint64_t minimumPerImageTimeout = 8'000'000;
         constexpr uint64_t unknownRefreshTimeout = 25'000'000;
-        const uint64_t perImageCeiling = refreshHz && *refreshHz > 0
-            ? std::max(
-                minimumPerImageTimeout,
-                (nanosecondsPerSecond * 3 +
-                    static_cast<uint64_t>(*refreshHz) * 2 - 1) /
-                    (static_cast<uint64_t>(*refreshHz) * 2)
-            )
-            : unknownRefreshTimeout;
+        const auto pressureCeiling = static_cast<uint64_t>(
+            std::chrono::duration_cast<std::chrono::nanoseconds>(
+                OrderedAcquireRecovery::slowAcquireDuration(refreshHz)
+            ).count()
+        );
+        uint64_t perImageCeiling = unknownRefreshTimeout;
+        if (refreshHz && *refreshHz > 0) {
+            const uint64_t divisor = static_cast<uint64_t>(*refreshHz) * 2;
+            const auto displayPeriods = [divisor](const uint64_t halves) {
+                return (nanosecondsPerSecond * halves + divisor - 1) / divisor;
+            };
+            const uint64_t guardMargin = displayPeriods(1);
+            const uint64_t extensionCeiling = pressureCeiling > guardMargin
+                ? pressureCeiling - guardMargin : 0;
+            perImageCeiling = std::max({minimumPerImageTimeout,
+                displayPeriods(3),
+                std::min(displayPeriods(5), extensionCeiling)});
+        }
         return std::min(
             *remainingBudget,
             perImageCeiling
@@ -1084,9 +1095,11 @@ namespace mako::layer {
     /// When Steady Adaptive has already proven that it needs at least 3x, a
     /// target/2 cap can leave the source cadence between integer generation
     /// ratios (for example 45 -> 120 FPS). Qualify the exact target/N rung for
-    /// one second before lowering the cap. Validated scheduler limits remain
-    /// the authority, so this policy cannot activate a multiplier that has not
-    /// passed delivery and throughput checks.
+    /// one second before lowering the cap. A qualified rung tolerates small
+    /// cadence dips and requires sustained loss before releasing the cap;
+    /// scheduler and transport guards still restore normal pacing immediately.
+    /// Validated scheduler limits remain the authority, so this policy cannot
+    /// activate a multiplier that has not passed delivery and throughput checks.
     class SmoothCadenceBaseCap {
     public:
         using Clock = std::chrono::steady_clock;
@@ -1115,9 +1128,7 @@ namespace mako::layer {
             if (!eligible || targetFps == 0 ||
                     scheduler.discontinuityRecoveryActive ||
                     scheduler.rearmRequired || scheduler.rampEvaluationActive) {
-                this->resetCandidate();
-                this->activeMultiplier.reset();
-                this->probeMultiplier.reset();
+                this->reset();
                 return this->decision(previousMultiplier);
             }
 
@@ -1128,6 +1139,7 @@ namespace mako::layer {
             // restore it immediately.
             if (scheduler.efficiencyProbeGenerationLimit) {
                 this->resetCandidate();
+                this->releaseSince.reset();
                 this->probeMultiplier =
                     *scheduler.efficiencyProbeGenerationLimit + 1;
                 this->activeTargetFps = static_cast<double>(targetFps);
@@ -1144,6 +1156,7 @@ namespace mako::layer {
                 // qualification or pacing transition. Exact 2x falls through
                 // to the normal target/2 automatic cap.
                 this->resetCandidate();
+                this->releaseSince.reset();
                 if (desiredMultiplier >= 3) {
                     this->activeMultiplier = desiredMultiplier;
                     this->activeTargetFps =
@@ -1156,8 +1169,7 @@ namespace mako::layer {
                 };
             }
             if (desiredMultiplier < 3 || scheduler.smoothedBaseFps <= 0.0) {
-                this->resetCandidate();
-                this->activeMultiplier.reset();
+                this->reset();
                 return this->decision(previousMultiplier);
             }
 
@@ -1167,16 +1179,30 @@ namespace mako::layer {
                 static_cast<double>(desiredMultiplier - 1);
             const bool cadenceNeedsRung =
                 scheduler.smoothedBaseFps < previousRung * 0.98;
+            if (this->activeMultiplier == desiredMultiplier) {
+                this->activeTargetFps = static_cast<double>(targetFps);
+                // Entry needs 95% of the target/N cadence. Retention uses
+                // 90% plus a short hold, so jitter at the entry boundary does
+                // not alternate caps and reset the real-frame pacer.
+                const bool retainRung = cadenceNeedsRung &&
+                    scheduler.smoothedBaseFps >= desiredCap * 0.90;
+                if (retainRung) {
+                    this->releaseSince.reset();
+                } else {
+                    if (!this->releaseSince)
+                        this->releaseSince = now;
+                    if (now - *this->releaseSince >=
+                            releaseQualificationDuration())
+                        this->reset();
+                }
+                return this->decision(previousMultiplier);
+            }
+            this->releaseSince.reset();
             const bool rungSustainable =
                 scheduler.smoothedBaseFps >= desiredCap * 0.95;
             if (!cadenceNeedsRung || !rungSustainable) {
                 this->resetCandidate();
                 this->activeMultiplier.reset();
-                return this->decision(previousMultiplier);
-            }
-
-            if (this->activeMultiplier == desiredMultiplier) {
-                this->activeTargetFps = static_cast<double>(targetFps);
                 return this->decision(previousMultiplier);
             }
 
@@ -1199,12 +1225,18 @@ namespace mako::layer {
         void reset() {
             this->activeMultiplier.reset();
             this->probeMultiplier.reset();
+            this->releaseSince.reset();
             this->resetCandidate();
         }
 
         [[nodiscard]] static constexpr std::chrono::seconds
         qualificationDuration() {
             return std::chrono::seconds{1};
+        }
+
+        [[nodiscard]] static constexpr std::chrono::milliseconds
+        releaseQualificationDuration() {
+            return std::chrono::milliseconds{250};
         }
 
     private:
@@ -1238,6 +1270,7 @@ namespace mako::layer {
         std::optional<size_t> probeMultiplier;
         std::optional<size_t> candidateMultiplier;
         std::optional<TimePoint> candidateSince;
+        std::optional<TimePoint> releaseSince;
         double activeTargetFps{0.0};
     };
 
@@ -1449,7 +1482,8 @@ namespace mako::layer {
     /// every following frame without producing an acquire or QueuePresent
     /// timeout. Qualify a healthy target first, then use a short, history-only
     /// native probe only after a sustained severe collapse. A true workload
-    /// slowdown rejects on the first probe sample and enters bounded backoff;
+    /// slowdown rejects on the first probe sample and requires materially new
+    /// cadence evidence before another probe, in addition to bounded backoff;
     /// a faster exposed cadence must survive both three native samples and a
     /// generated-delivery verification window before the failure count clears.
     class FixedCadenceCollapseRecovery {
@@ -1572,6 +1606,7 @@ namespace mako::layer {
                     }
                     this->retryAt.reset();
                     this->consecutiveFailures = 0;
+                    this->rejectedProbeBaseFps = 0.0;
                 }
                 return {};
             }
@@ -1587,6 +1622,18 @@ namespace mako::layer {
             }
             if (this->retryAt && now < *this->retryAt)
                 return {};
+            if (this->rejectedProbeBaseFps > 0.0 &&
+                    this->smoothedBaseFps > this->rejectedProbeBaseFps /
+                        minimumProbeRiseRatio() &&
+                    this->smoothedBaseFps < this->rejectedProbeBaseFps *
+                        minimumProbeRiseRatio()) {
+                // The native sample already disproved a hidden faster rate.
+                // A retry timer alone is not fresh collapse evidence. Keep
+                // generation steady until cadence moves outside that band
+                // for the normal qualification window or becomes healthy.
+                this->collapseSince.reset();
+                return {};
+            }
             if (!this->collapseSince) {
                 this->collapseSince = now;
                 return {};
@@ -1614,6 +1661,7 @@ namespace mako::layer {
             this->smoothedBaseFps = 0.0;
             this->healthyBaseFps = 0.0;
             this->probeBaselineBaseFps = 0.0;
+            this->rejectedProbeBaseFps = 0.0;
             this->minimumProbeBaseFps = 0.0;
             this->healthySince.reset();
             this->collapseSince.reset();
@@ -1652,6 +1700,7 @@ namespace mako::layer {
                 this->probeBaselineBaseFps * minimumProbeRiseRatio();
             if (!fasterCadence) {
                 const double baselineBaseFps = this->probeBaselineBaseFps;
+                this->rejectedProbeBaseFps = baselineBaseFps;
                 this->probeActive = false;
                 this->minimumProbeBaseFps = 0.0;
                 this->probeConfirmedSamples = 0;
@@ -1682,6 +1731,7 @@ namespace mako::layer {
             }
 
             const double recoveredBaseFps = this->minimumProbeBaseFps;
+            this->rejectedProbeBaseFps = 0.0;
             this->probeActive = false;
             this->probeConfirmedSamples = 0;
             this->minimumProbeBaseFps = 0.0;
@@ -1737,6 +1787,7 @@ namespace mako::layer {
         double smoothedBaseFps{0.0};
         double healthyBaseFps{0.0};
         double probeBaselineBaseFps{0.0};
+        double rejectedProbeBaseFps{0.0};
         double minimumProbeBaseFps{0.0};
         std::optional<TimePoint> healthySince;
         std::optional<TimePoint> collapseSince;

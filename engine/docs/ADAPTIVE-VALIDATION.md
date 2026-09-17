@@ -52,7 +52,7 @@ Full admission preserves requested timestamps. A partial batch is evenly re-spac
 
 Fixed uses the configured 2x–5x multiplier. When Gamescope reports a nonzero refresh, a fractional display budget suppresses outputs that the display cannot consume; without refresh feedback, exact Fixed behavior is retained.
 
-Ordered SDR also has an automatic collapse guard. After a healthy Fixed baseline is established, a sustained cadence loss can trigger a short native-only probe. A clearly faster native cadence rebases timing; a true game or GPU slowdown rejects the probe and uses bounded retry backoff. This guard is independent of optional Dynamic Cadence Recovery.
+Ordered SDR also has an automatic collapse guard. After a healthy Fixed baseline is established, a sustained cadence loss can trigger a short native-only probe. A clearly faster native cadence rebases timing; a true game or GPU slowdown rejects the probe. After rejection, bounded retry backoff alone does not rearm the guard: cadence must move outside the rejected baseline's 0.8–1.25 band, or healthy output must requalify the baseline before a later collapse. This avoids periodic native-only interruptions under unchanged load while preserving recovery after new evidence. This guard is independent of optional Dynamic Cadence Recovery.
 
 ### Adaptive mode
 
@@ -61,6 +61,8 @@ Adaptive varies generated work toward `target_fps` without exceeding `adaptive_m
 When demand temporarily exceeds the validated multiplier ceiling, the target clock retains less than one output of bounded credit instead of wrapping it away. This lets a source returning from an external throttle recover an achievable integer cadence without dropping generated work on ordinary timing jitter, while still preventing impossible whole-output debt from accumulating or producing later catch-up bursts.
 
 Smooth Cadence may retain a delivery-validated integer multiplier. On ordered Gamescope SDR with matching refresh, it can also hand pacing to FIFO for a proven 2x cadence or select an exact target/multiplier base cap for validated 3x–5x demand. Load shedding and efficiency probes roll back when a cheaper level preserves output better. Exact thresholds and traces are owned by `adaptive_scheduler.*` and its tests.
+
+The 3x–5x base-cap policy requires one second at or above 95% of the selected target/multiplier cadence before entry. An active cap tolerates dips down to 90%; a lower cadence or a return to the previous multiplier's range must persist for 250 ms before releasing it. This prevents entry-threshold jitter from repeatedly resetting the real-frame pacer. Transport guards, scheduler recovery, ramp evaluation, loss of eligibility and a return to 2x still restore normal pacing immediately; lower-load efficiency probes retain their separate cap transitions.
 
 `adaptive_auto_base_fps_cap` normally starts at half the target. If ordered SDR proves that this cap is sustaining a severe combined-workload collapse, Adaptive releases only the automatic cap for that swapchain; manual and Fixed caps remain authoritative.
 
@@ -74,7 +76,7 @@ Adaptive keeps its configured target and ceiling. Fixed uses confirmed Gamescope
 
 ## Transport recovery
 
-Ordered generated-image acquisition uses one application-present deadline, not one full deadline per generated image. Slow pressure first arms a zero-wait guard. Sustained pressure switches to native presentation, warms temporal history, and makes one bounded single-image probe after backoff. If native cadence already meets the requested target, the probe is deferred until cadence falls.
+Ordered generated-image acquisition uses one application-present deadline, not one full deadline per generated image. Each normal image acquire can extend its original one-and-a-half-display-period window toward two and a half periods, provided the extension leaves half a display period below the slow-acquire pressure threshold. The 8 ms floor and remaining cumulative budget still take precedence. This allows 20.8 ms at 120 Hz and 19.4 ms at 90 Hz while preserving the original 25 ms at 60 Hz. The margin keeps a short deadline miss eligible for the zero-wait guard instead of turning an isolated late image into native drain. Sustained pressure switches to native presentation, warms temporal history, and makes one bounded single-image probe after backoff. If native cadence already meets the requested target, the probe is deferred until cadence falls.
 
 An isolated short acquire timeout below the slow-pressure threshold uses the same zero-wait guard without discarding validated cadence. Only a healthy unrestricted generated batch clears repeated-pressure evidence; a successful guard or temporal warm-up cannot clear it. Repeated failures back off through 250 ms, 500 ms, one, two, five, 15, and 30 seconds. Native cadence qualifies during backoff, so confirmed renewed demand after a target-satisfying menu can re-arm one probe early; a failed demand probe retains the failure count.
 
