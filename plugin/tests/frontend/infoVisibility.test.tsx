@@ -151,6 +151,7 @@ test("R1 hides information without changing controls, repeats, or other buttons"
         <input defaultValue="90" />
       </label>
       <div className="Steam_FieldDescription">Setting description</div>
+      <div className="Mako_OptionDescription">MAKO description</div>
       <MakoInlineTip>Helpful tip</MakoInlineTip>
       <MakoInlineTip tone="warning">Setting warning</MakoInlineTip>
       <MakoSettingRelationship>Setting relationship</MakoSettingRelationship>
@@ -162,6 +163,7 @@ test("R1 hides information without changing controls, repeats, or other buttons"
   const descriptions = [
     "Section tutorial",
     "Setting description",
+    "MAKO description",
     "Helpful tip",
     "Setting warning",
     "Setting relationship",
@@ -205,6 +207,7 @@ test("renders option descriptions two pixels smaller in both Steam UI modes", ()
   const { container } = render(
     <InfoVisibility>
       <div className="Steam_FieldDescription">Setting description</div>
+      <div className="Mako_OptionDescription">MAKO description</div>
     </InfoVisibility>,
   );
 
@@ -212,10 +215,10 @@ test("renders option descriptions two pixels smaller in both Steam UI modes", ()
     .map((style) => style.textContent)
     .join("\n");
   expect(styles).toContain(
-    ".Mako_InfoVisibility .Steam_FieldDescription {\n          font-size: 10px !important;\n          line-height: 14px !important;",
+    ".Mako_InfoVisibility .Steam_FieldDescription,\n        .Mako_InfoVisibility .Mako_OptionDescription {\n          font-size: 10px !important;\n          line-height: 14px !important;",
   );
   expect(styles).toContain(
-    ".DesktopUI .Mako_InfoVisibility .Steam_FieldDescription {\n          font-size: 11px !important;\n          line-height: 16px !important;",
+    ".DesktopUI .Mako_InfoVisibility .Steam_FieldDescription,\n        .DesktopUI .Mako_InfoVisibility .Mako_OptionDescription {\n          font-size: 11px !important;\n          line-height: 16px !important;",
   );
 });
 

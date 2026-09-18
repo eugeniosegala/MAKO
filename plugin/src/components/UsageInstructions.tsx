@@ -25,6 +25,7 @@ export function UsageInstructions() {
 
       <MakoInfo as={PanelSectionRow}>
         <div
+          className="Mako_OptionDescription"
           data-mako-info="true"
           style={{
             fontSize: "12px",
@@ -42,6 +43,7 @@ export function UsageInstructions() {
 
       <MakoInfo as={PanelSectionRow}>
         <div
+          className="Mako_OptionDescription"
           data-mako-info="true"
           style={{
             fontSize: "12px",
@@ -62,6 +64,7 @@ export function UsageInstructions() {
 
       <MakoInfo as={PanelSectionRow}>
         <div
+          className="Mako_OptionDescription"
           data-mako-info="true"
           style={{
             fontSize: "11px",
@@ -79,6 +82,7 @@ export function UsageInstructions() {
 
       <MakoInfo as={PanelSectionRow}>
         <div
+          className="Mako_OptionDescription"
           data-mako-info="true"
           style={{
             fontSize: "11px",

@@ -18,7 +18,7 @@ import { MakoFocusable, makoDialogButtonStyle } from "./MakoUi";
 import { InfoHiddenContext } from "./MakoInfo";
 
 // Use Decky's resolved class, never a hard-coded Steam CSS module name.
-const infoSelector = `[data-mako-info="true"], .${gamepadDialogClasses.FieldDescription}`;
+const infoSelector = `[data-mako-info="true"], .${gamepadDialogClasses.FieldDescription}, .Mako_OptionDescription`;
 const ribbonSelector = '[data-mako-info-toggle="true"]';
 
 function adjacentControl(
@@ -204,16 +204,20 @@ export function InfoVisibility({ children }: { children: ReactNode }) {
       onFocusCapture={onFocusCapture}
     >
       <style>{`
-        .Mako_InfoVisibility .${gamepadDialogClasses.FieldDescription} {
+        .Mako_InfoVisibility .${gamepadDialogClasses.FieldDescription},
+        .Mako_InfoVisibility .Mako_OptionDescription {
           font-size: 10px !important;
           line-height: 14px !important;
         }
         .Mako_InfoVisibility.DesktopUI .${gamepadDialogClasses.FieldDescription},
-        .DesktopUI .Mako_InfoVisibility .${gamepadDialogClasses.FieldDescription} {
+        .Mako_InfoVisibility.DesktopUI .Mako_OptionDescription,
+        .DesktopUI .Mako_InfoVisibility .${gamepadDialogClasses.FieldDescription},
+        .DesktopUI .Mako_InfoVisibility .Mako_OptionDescription {
           font-size: 11px !important;
           line-height: 16px !important;
         }
-        .Mako_InfoHidden .${gamepadDialogClasses.FieldDescription} {
+        .Mako_InfoHidden .${gamepadDialogClasses.FieldDescription},
+        .Mako_InfoHidden .Mako_OptionDescription {
           display: none !important;
         }
         .Mako_InfoHidden [data-mako-update-notice="true"] {
