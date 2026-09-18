@@ -220,23 +220,6 @@ export function FpsMultiplierControl({
           )}
 
           <PanelSectionRow>
-            <ToggleField
-              label={t("ADAPTIVE_SMOOTH_CADENCE", "Smooth Cadence")}
-              description={t(
-                "ADAPTIVE_SMOOTH_CADENCE_DESC",
-                "Maintains even pacing when ordered Gamescope presentation is validated. Fractional Adaptive stabilizes generated frames without capping real frames. Fixed uses its selected multiplier; Steady Base Cap can align validated 3x–5x rungs. It may reduce real-frame rate and responsiveness. On by default; turn it off if a game feels better.",
-              )}
-              checked={
-                config.adaptive_stable_cadence ??
-                DEFAULT_CONFIGURATION.adaptive_stable_cadence
-              }
-              onChange={(value) =>
-                onConfigChange(ADAPTIVE_STABLE_CADENCE, value)
-              }
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
             <Field
               label={t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
               description={
@@ -340,6 +323,23 @@ export function FpsMultiplierControl({
                 </DialogButton>
               </MakoFocusable>
             </Field>
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("ADAPTIVE_SMOOTH_CADENCE", "Smooth Cadence")}
+              description={t(
+                "ADAPTIVE_SMOOTH_CADENCE_DESC",
+                "Uses validated ordered Gamescope presentation for steadier pacing. Fractional Adaptive keeps real frames; Fixed and Steady Base Cap can favor even output. It may reduce real FPS and responsiveness. On by default; turn it off per game if preferred.",
+              )}
+              checked={
+                config.adaptive_stable_cadence ??
+                DEFAULT_CONFIGURATION.adaptive_stable_cadence
+              }
+              onChange={(value) =>
+                onConfigChange(ADAPTIVE_STABLE_CADENCE, value)
+              }
+            />
           </PanelSectionRow>
 
           <PanelSectionRow>

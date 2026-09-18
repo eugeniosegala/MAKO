@@ -51,6 +51,7 @@ RowLayout {
             Layout.fillWidth: true
             text: root.description
             wrapMode: Text.Wrap
+            font.pixelSize: 10
             color: Qt.rgba(
                 palette.text.r,
                 palette.text.g,

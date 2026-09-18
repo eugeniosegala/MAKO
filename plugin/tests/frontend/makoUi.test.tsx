@@ -38,14 +38,14 @@ describe("MAKO release identity", () => {
 });
 
 describe("MAKO section headers", () => {
-  test("centers the title above the solid dark violet four-pixel divider", () => {
+  test("centers the title above the solid deep-blue four-pixel divider", () => {
     window.SP_REACT = React;
 
     render(<MakoSectionHeader>Spatial Scaling</MakoSectionHeader>);
 
     const heading = screen.getByText("Spatial Scaling");
     expect(heading.style.textAlign).toBe("center");
-    expect(heading.style.borderBottom).toBe("4px solid rgb(118, 80, 184)");
+    expect(heading.style.borderBottom).toBe("4px solid rgb(49, 90, 134)");
     expect(heading.style.borderImage).toBe("");
     expect(heading.parentElement?.style.marginTop).toBe("26px");
   });

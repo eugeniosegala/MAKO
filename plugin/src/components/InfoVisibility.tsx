@@ -204,6 +204,15 @@ export function InfoVisibility({ children }: { children: ReactNode }) {
       onFocusCapture={onFocusCapture}
     >
       <style>{`
+        .Mako_InfoVisibility .${gamepadDialogClasses.FieldDescription} {
+          font-size: 10px !important;
+          line-height: 14px !important;
+        }
+        .Mako_InfoVisibility.DesktopUI .${gamepadDialogClasses.FieldDescription},
+        .DesktopUI .Mako_InfoVisibility .${gamepadDialogClasses.FieldDescription} {
+          font-size: 11px !important;
+          line-height: 16px !important;
+        }
         .Mako_InfoHidden .${gamepadDialogClasses.FieldDescription} {
           display: none !important;
         }

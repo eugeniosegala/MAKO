@@ -201,6 +201,24 @@ test("R1 hides information without changing controls, repeats, or other buttons"
   expect(input.value).toBe("75");
 });
 
+test("renders option descriptions two pixels smaller in both Steam UI modes", () => {
+  const { container } = render(
+    <InfoVisibility>
+      <div className="Steam_FieldDescription">Setting description</div>
+    </InfoVisibility>,
+  );
+
+  const styles = [...container.querySelectorAll("style")]
+    .map((style) => style.textContent)
+    .join("\n");
+  expect(styles).toContain(
+    ".Mako_InfoVisibility .Steam_FieldDescription {\n          font-size: 10px !important;\n          line-height: 14px !important;",
+  );
+  expect(styles).toContain(
+    ".DesktopUI .Mako_InfoVisibility .Steam_FieldDescription {\n          font-size: 11px !important;\n          line-height: 16px !important;",
+  );
+});
+
 test("clicking the ribbon persists the choice across reopening without changing section preferences", () => {
   localStorage.setItem("mako-welcome-tips-collapsed", "true");
   const { unmount } = render(

@@ -3,7 +3,7 @@ MAKO Renderer standalone archive
 
 MAKO Renderer provides Frame Generation and spatial scaling for Vulkan games on SteamOS and Linux. The archive includes matching 64-bit and 32-bit Vulkan layers, the configuration UI, the command-line tools, and the managed installer.
 
-Frame Generation and LS1 scaling require a user-owned installation of the default public version of Lossless Scaling from Steam, with beta participation disabled. The open MAKO Scaler does not require Lossless.dll.
+Frame Generation and LS1 scaling require a user-owned installation of the default public version of Lossless Scaling from Steam. MAKO can use beta branches, but they are not validated; the default public branch is recommended. The open MAKO Scaler does not require Lossless.dll.
 
 Install or update
 -----------------

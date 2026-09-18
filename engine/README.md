@@ -22,7 +22,7 @@ Published archives target x86_64 Linux hosts and include Vulkan layers for both 
 
 ## Installation
 
-For frame generation or LS1 scaling, first install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam, with beta participation disabled. The open MAKO Scaler works without `Lossless.dll`.
+For frame generation or LS1 scaling, first install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. MAKO can use beta branches, but they are not validated; the default public branch is recommended. The open MAKO Scaler works without `Lossless.dll`.
 
 ### Steam Deck or Steam Machine
 

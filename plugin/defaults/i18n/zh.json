@@ -181,7 +181,7 @@
   "ADAPTIVE_MAX_MULTIPLIER": "最大自适应倍率",
   "ADAPTIVE_MAX_MULTIPLIER_DESC": "插帧上限。3x 较为均衡；2x 通常画面最佳，4x 为达到目标提供更多余量，而 5x 适用于具有充足 GPU 和内存余量的高刷新率显示器。请针对每个游戏进行测试。",
   "ADAPTIVE_SMOOTH_CADENCE": "平滑节奏",
-  "ADAPTIVE_SMOOTH_CADENCE_DESC": "当有序的 Gamescope 呈现经过验证时，保持均匀节奏。分数自适应会稳定生成帧而不限制真实帧。固定模式使用所选倍率；稳定基础帧率上限可对齐已验证的 3x–5x 档位。它可能减少真实帧并降低响应性。默认启用；如果关闭后游戏感觉更好，请关闭它。",
+  "ADAPTIVE_SMOOTH_CADENCE_DESC": "使用经验证的有序 Gamescope 呈现来获得更稳定的帧节奏。分数自适应保留真实帧；固定模式和稳定基础帧率上限可优先保持均匀输出。它可能降低真实 FPS 和响应性。默认启用；可按游戏关闭。",
   "DYNAMIC_CADENCE_RECOVERY": "动态节奏恢复",
   "DYNAMIC_CADENCE_RECOVERY_DESC": "帮助原生帧率会切换的游戏和模拟器，例如游戏中 30 FPS、菜单中 60 FPS。它会定期检查变化并恢复正确的帧节奏，但每次检查都可能短暂影响帧节奏。只应在受影响的游戏中启用。",
   "DYNAMIC_CADENCE_RECOVERY_RELATION": "启用此选项会关闭稳定基础 FPS 上限和基础 FPS 上限。之后更改任一上限都会关闭恢复功能。",

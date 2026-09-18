@@ -385,19 +385,6 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: t.smoothCadence
-                        description: t.smoothCadenceDesc
-                        visible: backend.frame_generation_enabled
-
-                        CheckBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            checked: backend.adaptive_stable_cadence
-                            onToggled: backend.adaptive_stable_cadence = checked
-                        }
-                    }
-
-                    GroupEntry {
                         title: t.multiplier
                         description: t.multiplierDesc
                         visible: backend.frame_generation_enabled
@@ -411,6 +398,19 @@ ApplicationWindow {
 
                             value: backend.multiplier
                             onValueModified: backend.multiplier = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.smoothCadence
+                        description: t.smoothCadenceDesc
+                        visible: backend.frame_generation_enabled
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.adaptive_stable_cadence
+                            onToggled: backend.adaptive_stable_cadence = checked
                         }
                     }
 
