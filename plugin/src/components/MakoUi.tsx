@@ -176,6 +176,7 @@ export function MakoInlineTip({
   return (
     <Container
       role="note"
+      className={alwaysVisible ? undefined : "Mako_OptionMessage"}
       data-mako-info={alwaysVisible ? undefined : "true"}
       data-tone={tone}
       style={{
@@ -218,6 +219,7 @@ export function MakoInlineTip({
 export function MakoSettingRelationship({ children }: { children: ReactNode }) {
   return (
     <MakoInfo
+      className="Mako_OptionMessage"
       data-mako-setting-relationship="true"
       data-mako-info="true"
       style={{

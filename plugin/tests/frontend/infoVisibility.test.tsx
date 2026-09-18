@@ -171,6 +171,14 @@ test("R1 hides information without changing controls, repeats, or other buttons"
   expect(
     descriptions.every((text) => isDisplayed(screen.getByText(text))),
   ).toBe(true);
+  expect(
+    screen.getByText("Helpful tip").closest(".Mako_OptionMessage"),
+  ).toBeTruthy();
+  expect(
+    screen
+      .getByText("Setting relationship")
+      .closest(".Mako_OptionMessage"),
+  ).toBeTruthy();
   expect(pressButton(input, 5).defaultPrevented).toBe(false);
   expect(pressButton(input).defaultPrevented).toBe(true);
   expect(
@@ -208,6 +216,8 @@ test("renders option descriptions two pixels smaller in both Steam UI modes", ()
     <InfoVisibility>
       <div className="Steam_FieldDescription">Setting description</div>
       <div className="Mako_OptionDescription">MAKO description</div>
+      <MakoInlineTip>Option message</MakoInlineTip>
+      <MakoInlineTip alwaysVisible>Top warning</MakoInlineTip>
     </InfoVisibility>,
   );
 
@@ -215,11 +225,13 @@ test("renders option descriptions two pixels smaller in both Steam UI modes", ()
     .map((style) => style.textContent)
     .join("\n");
   expect(styles).toContain(
-    ".Mako_InfoVisibility .Steam_FieldDescription,\n        .Mako_InfoVisibility .Mako_OptionDescription {\n          font-size: 10px !important;\n          line-height: 14px !important;",
+    ".Mako_InfoVisibility .Steam_FieldDescription,\n        .Mako_InfoVisibility .Mako_OptionDescription,\n        .Mako_InfoVisibility .Mako_OptionMessage {\n          font-size: 10px !important;\n          line-height: 14px !important;",
   );
   expect(styles).toContain(
-    ".DesktopUI .Mako_InfoVisibility .Steam_FieldDescription,\n        .DesktopUI .Mako_InfoVisibility .Mako_OptionDescription {\n          font-size: 11px !important;\n          line-height: 16px !important;",
+    ".DesktopUI .Mako_InfoVisibility .Steam_FieldDescription,\n        .DesktopUI .Mako_InfoVisibility .Mako_OptionDescription,\n        .DesktopUI .Mako_InfoVisibility .Mako_OptionMessage {\n          font-size: 11px !important;\n          line-height: 16px !important;",
   );
+  expect(screen.getByText("Option message").closest(".Mako_OptionMessage")).toBeTruthy();
+  expect(screen.getByText("Top warning").closest(".Mako_OptionMessage")).toBeNull();
 });
 
 test("clicking the ribbon persists the choice across reopening without changing section preferences", () => {

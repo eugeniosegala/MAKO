@@ -205,14 +205,17 @@ export function InfoVisibility({ children }: { children: ReactNode }) {
     >
       <style>{`
         .Mako_InfoVisibility .${gamepadDialogClasses.FieldDescription},
-        .Mako_InfoVisibility .Mako_OptionDescription {
+        .Mako_InfoVisibility .Mako_OptionDescription,
+        .Mako_InfoVisibility .Mako_OptionMessage {
           font-size: 10px !important;
           line-height: 14px !important;
         }
         .Mako_InfoVisibility.DesktopUI .${gamepadDialogClasses.FieldDescription},
         .Mako_InfoVisibility.DesktopUI .Mako_OptionDescription,
+        .Mako_InfoVisibility.DesktopUI .Mako_OptionMessage,
         .DesktopUI .Mako_InfoVisibility .${gamepadDialogClasses.FieldDescription},
-        .DesktopUI .Mako_InfoVisibility .Mako_OptionDescription {
+        .DesktopUI .Mako_InfoVisibility .Mako_OptionDescription,
+        .DesktopUI .Mako_InfoVisibility .Mako_OptionMessage {
           font-size: 11px !important;
           line-height: 16px !important;
         }
