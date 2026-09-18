@@ -50,7 +50,7 @@ When updating, follow the [update guide](../README.md#updating-mako-decky) to re
 
 ## Panel display
 
-Press **R1** or select **Hide info** to hide explanations and optional information while keeping settings and actions available. **Live Status** remains visible while a game runs, along with any Lossless Scaling model warning and its update action. The version number and release codename also stay visible. Press **R1** again or select **Show info** to restore the information. MAKO Decky remembers your display preference without changing game profiles or which settings sections you have collapsed.
+Press **R1** or select **Hide info** to hide explanations and optional information while keeping settings and actions available. The Lossless Scaling and MAKO Renderer installation status card stays visible, as does **Live Status** while a game runs, along with any Lossless Scaling model warning and its update action. The version number and release codename also stay visible. Press **R1** again or select **Show info** to restore the information. MAKO Decky remembers your display preference without changing game profiles or which settings sections you have collapsed.
 
 See the [configuration guide](docs/CONFIGURATION.md) for settings and profiles, [troubleshooting](docs/TROUBLESHOOTING.md) for common problems, and [Collect MAKO Decky Diagnostics](docs/COLLECT_DIAGNOSTICS.md) to create a report when you need help.
 

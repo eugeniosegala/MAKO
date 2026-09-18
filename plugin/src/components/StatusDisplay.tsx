@@ -1,4 +1,3 @@
-import { MakoInfo } from "./MakoInfo";
 import { PanelSectionRow } from "@decky/ui";
 import { FiAlertCircle, FiCheckCircle } from "react-icons/fi";
 
@@ -58,9 +57,8 @@ export function StatusDisplay({
   topMargin = "0"
 }: StatusDisplayProps) {
   return (
-    <MakoInfo as={PanelSectionRow}>
+    <PanelSectionRow>
       <div
-        data-mako-info="true"
         style={{
           marginTop: topMargin,
           marginBottom: "0",
@@ -76,6 +74,6 @@ export function StatusDisplay({
         <StatusRow ready={dllDetected} text={dllDetectionStatus} />
         <StatusRow ready={isInstalled} text={installationStatus} separated />
       </div>
-    </MakoInfo>
+    </PanelSectionRow>
   );
 }

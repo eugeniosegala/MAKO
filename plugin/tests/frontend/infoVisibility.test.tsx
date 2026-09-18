@@ -450,7 +450,7 @@ test("a ribbon toggle keeps focus there without scrolling to the panel bottom", 
 });
 
 test.each(["welcome", "development"])(
-  "unmounts hidden information and navigation rows; advances focus from %s",
+  "unmounts hidden information while keeping installation status; advances focus from %s",
   async (source) => {
     render(
       <InfoVisibility>
@@ -478,9 +478,9 @@ test.each(["welcome", "development"])(
         <UsageInstructions />
         <StatusDisplay
           dllDetected
-          dllDetectionStatus="DLL found"
+          dllDetectionStatus="Lossless Scaling installed"
           isInstalled
-          installationStatus="Installed"
+          installationStatus="MAKO Renderer installed"
         />
       </InfoVisibility>,
     );
@@ -505,11 +505,15 @@ test.each(["welcome", "development"])(
     for (const text of [
       "Hello from the MAKO Team!",
       "mako-run %command%",
-      "DLL found",
-      "Installed",
       "MAKO Renderer update required",
     ]) {
       expect(screen.queryByText(text)).toBeNull();
+    }
+    for (const text of [
+      "Lossless Scaling installed",
+      "MAKO Renderer installed",
+    ]) {
+      expect(isDisplayed(screen.getByText(text))).toBe(true);
     }
     // CSS-hidden buttons still exist in Steam's navigation graph. Check actual
     // removal, including the row that can otherwise become an empty focus stop.
@@ -517,7 +521,7 @@ test.each(["welcome", "development"])(
       expect(element.isConnected).toBe(false);
     }
     expect(warningButton.isConnected).toBe(true);
-    expect(screen.getAllByTestId("navigation-row")).toHaveLength(3);
+    expect(screen.getAllByTestId("navigation-row")).toHaveLength(4);
     expect(
       screen
         .getAllByRole("button", { hidden: true })
