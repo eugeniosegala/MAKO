@@ -3,6 +3,7 @@
 #include "swapchain/retirement.hpp"
 
 #include <array>
+#include <bit>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -117,7 +118,7 @@ int main() {
         "present-fence pNext lookup failed");
     expect(!upstreamPresentFenceProtectsSwapchain(&presentFence),
         "a null upstream present fence was accepted as lifetime proof");
-    fence = reinterpret_cast<VkFence>(static_cast<uintptr_t>(1));
+    fence = std::bit_cast<VkFence>(uint64_t{1});
     expect(upstreamPresentFenceProtectsSwapchain(&presentFence),
         "a valid upstream present fence was not accepted as lifetime proof");
     expect(!upstreamPresentFenceProtectsSwapchain(&presentFence, 1),
@@ -144,8 +145,8 @@ int main() {
     expect(swapchainRetirementGracePeriod == std::chrono::milliseconds(50),
         "the compositor retirement grace contract changed unexpectedly");
 
-    const auto surfaceA = reinterpret_cast<VkSurfaceKHR>(1);
-    const auto surfaceB = reinterpret_cast<VkSurfaceKHR>(2);
+    const auto surfaceA = std::bit_cast<VkSurfaceKHR>(uint64_t{1});
+    const auto surfaceB = std::bit_cast<VkSurfaceKHR>(uint64_t{2});
     expect(retiredSwapchainBelongsToSurface(surfaceA, surfaceA),
         "the creating surface did not own terminal retirement");
     expect(!retiredSwapchainBelongsToSurface(surfaceA, surfaceB) &&
@@ -154,7 +155,7 @@ int main() {
 
     const auto deviceA = reinterpret_cast<VkDevice>(1);
     const auto deviceB = reinterpret_cast<VkDevice>(2);
-    const auto swapchainA = reinterpret_cast<VkSwapchainKHR>(1);
+    const auto swapchainA = std::bit_cast<VkSwapchainKHR>(uint64_t{1});
     expect(shouldRetireRetainedSwapchainBeforeNullOldReplacement(
             VK_NULL_HANDLE, deviceA, surfaceA, deviceA, surfaceA),
         "a retained lower swapchain was not selected for pre-create retirement");

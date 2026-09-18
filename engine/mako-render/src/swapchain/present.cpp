@@ -797,11 +797,21 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             presentNow, orderedAcquireRecoveryProbe
         )
         : AdaptiveFramePlan{};
+    const bool fixedFifoPacedFullCadence = !schedulerEnabled &&
+        fixedSmoothCadenceFifoEligible(
+            this->profile,
+            this->privateOrderedTransport,
+            orderedAcquireRecoveryProbe ||
+                this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz
+        ) && this->configuredFixedGeneratedFrames + 1 ==
+            this->profile.multiplier;
     const size_t fixedGeneratedFrameCount = schedulerEnabled
         ? 0
         : this->fixedRefreshBudget.plan(
             presentNow, this->gamescopeRefreshHz,
-            this->configuredFixedGeneratedFrames
+            this->configuredFixedGeneratedFrames,
+            fixedFifoPacedFullCadence
         );
     const bool fixedCadenceRecoveryEligible =
         fixedCadenceCollapseRecoveryEligible(
@@ -2408,16 +2418,21 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     );
     plan.boundedOrderedAcquireProbe = boundedOrderedAcquireProbe;
 
-    // The Gamescope HDR bridge is native-first. Ordered SDR remains
-    // synchronous only while its lower WSI pool has a spare beyond the
-    // application's ownership and this generated batch. With no spare,
-    // pre-acquire opportunistically before backend work so lower scanout
-    // backpressure can drop synthetic frames but never stall the real frame.
+    // The Gamescope HDR bridge remains native-first. Ordered SDR can deliver
+    // a batch that fits beyond application ownership sequentially, with a
+    // finite acquire budget when there is no relief image. Undersized pools
+    // still admit opportunistically before scheduling backend work.
     if (!this->generationPipelineReady(
             vk, gamescopeHdrTransport, plan, presentNow)) {
         return this->presentNativeFrame(invocation);
     }
 
+    if (this->privateOrderedTransport) {
+        plan.configuredAcquireTimeout = orderedGeneratedBatchAcquireBudget(
+            this->info.requestedMinImageCount, this->info.images.size(),
+            plan.requestedGeneratedFrames.size(), plan.configuredAcquireTimeout
+        );
+    }
     const bool headroomTightOrderedBatch =
         this->privateOrderedTransport && !orderedAcquireRecoveryProbe &&
         orderedGeneratedBatchNeedsNonblockingAdmission(

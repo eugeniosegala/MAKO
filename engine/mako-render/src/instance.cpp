@@ -24,6 +24,7 @@
 #include <functional>
 #include <iostream>
 #include <optional>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -903,6 +904,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
             variableSurfaceRollbackExtents,
         const std::optional<FixedSurfaceScalingContract>& fixedSurfaceContract,
         const bool spatialSurfaceScalingSupported,
+        const bool gamescopeScalingSurface,
         const std::function<void(
             const FixedSurfaceScalingContract&)>& publishSpatialCreate,
         const std::function<void(void)>& finish) const {
@@ -1007,7 +1009,7 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
     const bool spatialExtentOwner =
         spatialScalingCapabilityOwnedByLayer();
     const bool gamescopePresentationTargetRequired =
-        spatialExtentOwner && splitLayerChainEnabled() &&
+        spatialExtentOwner && (splitLayerChainEnabled() || gamescopeScalingSurface) &&
         (this->gamescopeEnvironmentDetected || this->gamescopeDetected);
     if (!spatialResourceOwner && !spatialExtentOwner) {
         // The legacy upper split role relays capabilities but neither expands
@@ -1160,7 +1162,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         const auto& resourceAdmission = admissionPlacement ==
                 SpatialFramePipelinePlacement::PreFrameGeneration
             ? preFrameGenerationAdmission : postFrameGenerationAdmission;
-        std::cerr << "MAKO Renderer: spatial scaling swapchain policy: "
+        std::ostringstream policyLog;
+        policyLog << "MAKO Renderer: spatial scaling swapchain policy: "
                   << "role=" << layerRoleName
                   << "; requested=" << modification.applicationExtent.width
                   << 'x' << modification.applicationExtent.height
@@ -1265,8 +1268,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                         scalingExtents->source,
                         scalingExtents->presentation
                       ) ? 1 : 0)
-                  << "; active=" << modification.spatialScalingActive
-                  << '\n';
+                  << "; active=" << modification.spatialScalingActive;
+        std::cerr << policyLog.str() << '\n';
         if (scalingDecision.retainedPreviousFixedSource && scalingExtents) {
             std::cerr << "MAKO Renderer: fixed-surface scaling factor "
                          "constrained: requested_factor="

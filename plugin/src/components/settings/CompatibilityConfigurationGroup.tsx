@@ -140,23 +140,18 @@ export function CompatibilityConfigurationGroup({
                   <div>
                     {t(
                       "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_DESC",
-                      "May reduce coloured or pixelated motion artifacts in some games by using Gamescope's presentation path. Scaling enables it automatically. For FG-only profiles, enable it only for affected games.",
+                      "May reduce coloured or pixelated motion artifacts in some games by using Gamescope's presentation path. Optional with both Scaling and Frame Generation. Enable it only when the game needs it.",
                     )}
                   </div>
-                  {!config.scaling_enabled && (
-                    <MakoInlineTip tone="warning">
-                      {t(
-                        "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
-                        "This compatibility path is limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
-                      )}
-                    </MakoInlineTip>
-                  )}
+                  <MakoInlineTip tone="warning">
+                    {t(
+                      "CONFIG_GAMESCOPE_WSI_COMPATIBILITY_WARNING",
+                      "This compatibility path is limited to supported 64-bit host launches. Leave it off when the game does not need it, as it may impact performance.",
+                    )}
+                  </MakoInlineTip>
                 </>
               }
-              checked={
-                config.scaling_enabled || config.gamescope_wsi_compatibility
-              }
-              disabled={config.scaling_enabled}
+              checked={config.gamescope_wsi_compatibility}
               onChange={(value) =>
                 onConfigChange(GAMESCOPE_WSI_COMPATIBILITY, value)
               }

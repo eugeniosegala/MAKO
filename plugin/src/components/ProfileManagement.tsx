@@ -1,3 +1,4 @@
+import { MakoInfo } from "./MakoInfo";
 import { useState, type CSSProperties } from "react";
 import {
   type AppOverview,
@@ -180,8 +181,9 @@ export function ProfileManagement({
         {t("PROFILE_SECTION_TITLE", "Game / Process Profiles")}
       </MakoSectionHeader>
 
-      <PanelSectionRow>
+      <MakoInfo as={PanelSectionRow}>
         <div
+          data-mako-info="true"
           style={{
             fontSize: "11px",
             lineHeight: "1.35",
@@ -194,7 +196,7 @@ export function ProfileManagement({
             "Start a game and save its process once. MAKO selects saved profiles automatically; outside a game, the dropdown only chooses which profile to edit.",
           )}
         </div>
-      </PanelSectionRow>
+      </MakoInfo>
 
       {mainRunningApp && !runningProfile && (
         <PanelSectionRow>
@@ -254,8 +256,9 @@ export function ProfileManagement({
           </PanelSectionRow>
 
           {selectedDetails && (
-            <PanelSectionRow>
+            <MakoInfo as={PanelSectionRow}>
               <div
+                data-mako-info="true"
                 style={{
                   width: "100%",
                   padding: "6px 8px",
@@ -306,7 +309,7 @@ export function ProfileManagement({
                   </div>
                 )}
               </div>
-            </PanelSectionRow>
+            </MakoInfo>
           )}
 
           <PanelSectionRow>

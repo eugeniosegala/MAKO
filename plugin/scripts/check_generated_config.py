@@ -2,6 +2,7 @@
 """Fail when tracked Decky bindings differ from their shared source."""
 
 from pathlib import Path
+import subprocess
 import sys
 
 
@@ -13,6 +14,11 @@ from generate_ts_schema import generate_typescript_schema  # noqa: E402
 
 
 def main() -> None:
+    subprocess.run(
+        [sys.executable, str(PLUGIN_ROOT.parent / "scripts/generate-launcher-exclusions.py"),
+         "--check"],
+        check=True,
+    )
     expected_files = {
         PLUGIN_ROOT / "src/config/generatedConfigSchema.ts": (
             generate_typescript_schema()

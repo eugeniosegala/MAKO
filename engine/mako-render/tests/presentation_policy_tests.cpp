@@ -258,11 +258,36 @@ int main() {
         "legacy unconfigured acquire behaviour changed");
     expect(!orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 0) &&
             !orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 1) &&
-            orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 2) &&
-            orderedGeneratedBatchNeedsNonblockingAdmission(4, 5, 1) &&
+            !orderedGeneratedBatchNeedsNonblockingAdmission(3, 5, 2) &&
+            !orderedGeneratedBatchNeedsNonblockingAdmission(4, 5, 1) &&
+            orderedGeneratedBatchNeedsNonblockingAdmission(3, 4, 2) &&
             !orderedGeneratedBatchNeedsNonblockingAdmission(4, 6, 1) &&
             orderedGeneratedBatchNeedsNonblockingAdmission(4, 3, 1),
-        "ordered admission did not distinguish a real spare from generated headroom");
+        "ordered admission did not distinguish a fitting batch from insufficient headroom");
+    for (uint32_t applicationImages = 2; applicationImages <= 4; ++applicationImages) {
+        for (size_t generated = 1; generated <= 4; ++generated) {
+            const size_t images = applicationImages + generated;
+            expect(!orderedGeneratedBatchNeedsNonblockingAdmission(
+                    applicationImages, images, generated),
+                "a fitting generated batch was dropped solely for lacking a relief image");
+            expect(orderedGeneratedBatchNeedsNonblockingAdmission(
+                    applicationImages, images - 1, generated),
+                "an undersized pool lost its nonblocking admission protection");
+            expect(orderedGeneratedBatchAcquireBudget(
+                    applicationImages, images, generated, std::nullopt) == 50'000'000 &&
+                    orderedGeneratedBatchAcquireBudget(
+                        applicationImages, images, generated, 100'000'000) == 50'000'000 &&
+                    orderedGeneratedBatchAcquireBudget(
+                        applicationImages, images, generated, 5'000'000) == 5'000'000,
+                "tight-pool delivery lost its shared finite ceiling or shorter user limit");
+            expect(!orderedGeneratedBatchAcquireBudget(
+                    applicationImages, images + 1, generated, std::nullopt),
+                "relief-bearing ordered delivery changed its existing acquire contract");
+        }
+    }
+    expect(!orderedGeneratedBatchAcquireBudget(3, 3, 0, std::nullopt) &&
+            !orderedGeneratedBatchAcquireBudget(3, 2, 1, std::nullopt),
+        "empty or malformed pools gained a synthetic acquire budget");
     expect(adaptiveOrderedWsiLimitAfterPartialAdmission(
                 true, true, true, 2, 1, std::nullopt) == 1 &&
             adaptiveOrderedWsiLimitAfterPartialAdmission(
@@ -319,10 +344,10 @@ int main() {
             std::nullopt, 10'000'000, 3) == 10'000'000,
         "recovery probe exceeded the configured acquire ceiling");
     expect(orderedGeneratedImageAcquireTimeout(120, acquireBudget) ==
-            12'500'000,
-        "one 120 Hz image exceeded its useful delivery window");
+            20'833'333,
+        "one 120 Hz image lost its bounded FIFO release grace");
     expect(orderedGeneratedImageAcquireTimeout(120, 17'194'900) ==
-            12'500'000,
+            17'194'900,
         "the per-image ceiling ignored the remaining cumulative budget");
     expect(orderedGeneratedImageAcquireTimeout(120, 7'500'000) ==
             7'500'000,
@@ -331,8 +356,15 @@ int main() {
             37'500'000,
         "the per-image ceiling lost its low-refresh scaling");
     expect(orderedGeneratedImageAcquireTimeout(240, acquireBudget) ==
-            8'000'000,
+            10'416'667,
         "the per-image ceiling lost its high-refresh safety floor");
+    expect(orderedGeneratedImageAcquireTimeout(60, acquireBudget) ==
+            25'000'000 &&
+            orderedGeneratedImageAcquireTimeout(90, acquireBudget) ==
+                19'444'444 &&
+            orderedGeneratedImageAcquireTimeout(360, acquireBudget) ==
+                8'000'000,
+        "acquire grace exceeded the pressure ceiling or lost the 8 ms floor");
     expect(orderedGeneratedImageAcquireTimeout(
             std::nullopt, acquireBudget) == 25'000'000,
         "an unknown-refresh path lost its historical finite ceiling");
@@ -379,6 +411,20 @@ int main() {
 
     OrderedAcquireRecovery acquireRecovery;
     const auto acquireStart = OrderedAcquireRecovery::TimePoint{};
+    // RE4 timeouts returned beyond both the 12.5 and 16.7 ms test deadlines.
+    // If an image becomes available in this added grace, success must avoid
+    // recovery. A timeout's return time does not prove image availability.
+    for (const auto wait : {13'741us, 14'756us, 17'146us, 19'259us}) {
+        expect(wait < std::chrono::nanoseconds{
+                orderedGeneratedImageAcquireTimeout(120, acquireBudget)},
+            "isolated RE4 acquire delay still exceeds the normal image budget");
+        const auto recoveredAcquire = acquireRecovery.observe(
+            acquireStart, wait, 25ms, false
+        );
+        expect(!recoveredAcquire.guardArmed &&
+                !recoveredAcquire.quarantined && !acquireRecovery.active(),
+            "successful short acquire unnecessarily disturbed generation");
+    }
     auto observation = acquireRecovery.observe(
         acquireStart, 30ms, 25ms, false
     );
@@ -404,10 +450,10 @@ int main() {
             !acquireDecision.limitGeneratedFrames,
         "successful slow-acquire protection retained recovery constraints");
 
-    // A refresh-relative delivery deadline is shorter than the pressure
-    // threshold on 90/120 Hz displays. An isolated miss must not turn one
-    // dropped synthetic output into a multi-frame native drain.
-    for (const uint32_t refresh : {90U, 120U, 240U}) {
+    // Extended deadlines must preserve the short-miss guard, including at
+    // 90 Hz where using the full 25 ms threshold caused immediate native drain.
+    // The historical 60 Hz window still reaches the pressure threshold.
+    for (const uint32_t refresh : {60U, 72U, 90U, 120U, 144U, 240U}) {
         acquireRecovery.reset();
         const auto threshold =
             OrderedAcquireRecovery::slowAcquireDuration(refresh);
@@ -417,7 +463,14 @@ int main() {
         observation = acquireRecovery.observe(
             acquireStart, wait, threshold, true
         );
-        acquireDecision = acquireRecovery.beforePresent(acquireStart + 20ms);
+        acquireDecision = acquireRecovery.beforePresent(acquireStart + wait + 1ms);
+        if (refresh == 60U) {
+            expect(observation.quarantined && observation.timedOut &&
+                    acquireDecision.bypassGeneration &&
+                    observation.retryDelay == 250ms,
+                "pressure-limited acquire grace delayed native-drain protection");
+            continue;
+        }
         expect(observation.guardArmed && observation.timedOut &&
                 !observation.quarantined &&
                 acquireDecision.preacquireGeneratedFrame &&
@@ -426,7 +479,7 @@ int main() {
             "short image deadline miss did not use zero-wait protection");
         const auto missedGuard =
             acquireRecovery.reportNonblockingProbeUnavailable(
-                acquireStart + 21ms
+                acquireStart + wait + 2ms
             );
         expect(missedGuard.guardBypassed && !missedGuard.quarantined,
             "short deadline guard miss skipped native relief");
@@ -918,6 +971,118 @@ int main() {
     expect(!cadenceCap.framesPerSecond && cadenceCap.changed,
         "losing the ordered target-matched guard did not restore the base cap");
 
+    // RE4 hovered around the 95% entry threshold (38 FPS for 40 -> 120).
+    // Once qualified, keep the pacer stable across that boundary on every
+    // supported integer rung, including handheld refresh rates.
+    for (const uint32_t target : {60U, 90U, 120U, 144U}) {
+        for (size_t multiplier = 3; multiplier <= 5; ++multiplier) {
+            SmoothCadenceBaseCap stableCap;
+            auto now = pacingStart;
+            const double cap = static_cast<double>(target) / multiplier;
+            SmoothCadenceBaseCap::SchedulerState snapshot{
+                .validatedGenerationLimit = multiplier - 1,
+                .smoothedBaseFps = cap * 0.97,
+            };
+            static_cast<void>(stableCap.update(now, true, target, snapshot));
+            now += 1s;
+            auto decision = stableCap.update(now, true, target, snapshot);
+            expect(decision.changed && decision.framesPerSecond &&
+                    std::abs(*decision.framesPerSecond - cap) < 0.001,
+                "integer cadence matrix failed to qualify its initial cap");
+
+            const auto jitterUntil = now + 95s;
+            size_t frame = 0;
+            while (now < jitterUntil) {
+                snapshot.smoothedBaseFps = cap * (frame++ % 2 ? 0.94 : 0.97);
+                now += std::chrono::duration_cast<
+                    SmoothCadenceBaseCap::Clock::duration>(
+                        std::chrono::duration<double>{
+                            1.0 / snapshot.smoothedBaseFps});
+                decision = stableCap.update(now, true, target, snapshot);
+                expect(decision.framesPerSecond && !decision.changed,
+                    "entry-boundary jitter repeatedly reset Smooth Cadence pacing");
+            }
+
+            snapshot.smoothedBaseFps = cap * 0.85;
+            static_cast<void>(stableCap.update(now, true, target, snapshot));
+            now += 100ms;
+            snapshot.smoothedBaseFps = cap * 0.94;
+            decision = stableCap.update(now, true, target, snapshot);
+            expect(decision.framesPerSecond && !decision.changed,
+                "a short cadence dip unnecessarily released the qualified cap");
+
+            now += 1s;
+            snapshot.smoothedBaseFps = cap * 0.85;
+            decision = stableCap.update(now, true, target, snapshot);
+            expect(decision.framesPerSecond && !decision.changed,
+                "a recovered dip left stale cap-release evidence");
+            decision = stableCap.update(now + 249ms, true, target, snapshot);
+            expect(decision.framesPerSecond && !decision.changed,
+                "cap release ignored its sustained-loss hold");
+            decision = stableCap.update(now + 250ms, true, target, snapshot);
+            expect(!decision.framesPerSecond && decision.changed,
+                "sustained cadence loss could not release the integer cap");
+
+            now += 251ms;
+            snapshot.smoothedBaseFps = cap * 0.97;
+            decision = stableCap.update(now, true, target, snapshot);
+            expect(!decision.framesPerSecond && !decision.changed,
+                "released cap reactivated without new stable evidence");
+            now += 1s;
+            decision = stableCap.update(now, true, target, snapshot);
+            expect(decision.framesPerSecond && decision.changed,
+                "healthy cadence could not requalify after a genuine slowdown");
+
+            snapshot.smoothedBaseFps = static_cast<double>(target) /
+                (multiplier - 1);
+            static_cast<void>(stableCap.update(now, true, target, snapshot));
+            decision = stableCap.update(now + 250ms, true, target, snapshot);
+            expect(!decision.framesPerSecond && decision.changed,
+                "a sustained return to a lower multiplier retained the old cap");
+        }
+    }
+
+    // Safety and scheduler transitions bypass the cadence-only hold, even
+    // when a release timer is already pending.
+    for (size_t guard = 0; guard < 5; ++guard) {
+        SmoothCadenceBaseCap guardedCap;
+        SmoothCadenceBaseCap::SchedulerState snapshot{
+            .validatedGenerationLimit = 2,
+            .smoothedBaseFps = 40.0,
+        };
+        static_cast<void>(guardedCap.update(pacingStart, true, 120, snapshot));
+        static_cast<void>(guardedCap.update(pacingStart + 1s, true, 120, snapshot));
+        snapshot.smoothedBaseFps = 34.0;
+        static_cast<void>(guardedCap.update(pacingStart + 2s, true, 120, snapshot));
+        snapshot.rampEvaluationActive = guard == 1;
+        snapshot.rearmRequired = guard == 2;
+        snapshot.discontinuityRecoveryActive = guard == 3;
+        snapshot.validatedGenerationLimit = guard == 4 ? 1 : 2;
+        const auto decision = guardedCap.update(
+            pacingStart + 2010ms, guard != 0, 120, snapshot);
+        expect(!decision.framesPerSecond && decision.changed,
+            "cadence retention delayed a transport or scheduler safety exit");
+    }
+
+    SmoothCadenceBaseCap probedCap;
+    SmoothCadenceBaseCap::SchedulerState probeSnapshot{
+        .validatedGenerationLimit = 2,
+        .smoothedBaseFps = 40.0,
+    };
+    static_cast<void>(probedCap.update(pacingStart, true, 120, probeSnapshot));
+    static_cast<void>(probedCap.update(pacingStart + 1s, true, 120, probeSnapshot));
+    probeSnapshot.smoothedBaseFps = 34.0;
+    static_cast<void>(probedCap.update(pacingStart + 2s, true, 120, probeSnapshot));
+    probeSnapshot.efficiencyProbeGenerationLimit = 1;
+    auto probeCap = probedCap.update(pacingStart + 2010ms, true, 120, probeSnapshot);
+    expect(probeCap.framesPerSecond == 60.0 && probeCap.changed,
+        "cadence retention prevented a lower-load probe from changing its cap");
+    probeSnapshot.efficiencyProbeGenerationLimit.reset();
+    probeSnapshot.smoothedBaseFps = 37.7;
+    probeCap = probedCap.update(pacingStart + 3s, true, 120, probeSnapshot);
+    expect(probeCap.framesPerSecond == 40.0 && probeCap.changed,
+        "a rejected lower-load probe failed to restore its retained integer cap");
+
     SmoothCadencePacerHandoff pacerHandoff;
     auto handoff = pacerHandoff.update(pacingStart, true);
     expect(handoff.active && handoff.changed,
@@ -1151,6 +1316,57 @@ int main() {
     expect(!retriedInsideBackoff,
         "true Fixed slowdown retried its native probe inside backoff");
 
+    // A rejected native probe disproves the old fast-menu baseline for this
+    // workload. Jitter around that rate must not cause another hitch every
+    // 30 seconds, across all Fixed multipliers and representative refreshes.
+    for (const uint32_t refresh : {60U, 90U, 120U, 144U}) {
+        for (size_t outputs = 2; outputs <= 5; ++outputs) {
+            FixedCadenceCollapseRecovery steadyRecovery;
+            auto now = FixedCadenceCollapseRecovery::TimePoint{};
+            const double healthy = static_cast<double>(refresh) / outputs;
+            const double slow = healthy * 0.70;
+            for (size_t frame = 0; frame < refresh * 2; ++frame)
+                static_cast<void>(cadenceStep(
+                    steadyRecovery, now, healthy, refresh, outputs - 1));
+            size_t started = 0;
+            size_t rejected = 0;
+            size_t slowFrame = 0;
+            const auto steadyUntil = now + 95s;
+            while (now < steadyUntil) {
+                const double jitter = slowFrame++ % 2 ? 0.98 : 1.02;
+                const auto decision = cadenceStep(
+                    steadyRecovery, now, slow * jitter, refresh, outputs - 1);
+                started += decision.probeStarted;
+                rejected += decision.probeRejected;
+            }
+            expect(started == 1 && rejected == 1,
+                "unchanged slow Fixed workload kept repeating native probes");
+
+            bool renewedCollapseProbed = false;
+            const auto slowerUntil = now + 3s;
+            while (now < slowerUntil) {
+                const auto decision = cadenceStep(
+                    steadyRecovery, now, slow * 0.70, refresh, outputs - 1);
+                renewedCollapseProbed |= decision.probeStarted;
+            }
+            expect(renewedCollapseProbed,
+                "a materially new Fixed cadence collapse could not rearm recovery");
+
+            for (size_t frame = 0; frame < refresh * 2; ++frame)
+                static_cast<void>(cadenceStep(
+                    steadyRecovery, now, healthy, refresh, outputs - 1));
+            bool requalifiedCollapseProbed = false;
+            const auto collapsedUntil = now + 3s;
+            while (now < collapsedUntil) {
+                const auto decision = cadenceStep(
+                    steadyRecovery, now, slow, refresh, outputs - 1);
+                requalifiedCollapseProbed |= decision.probeStarted;
+            }
+            expect(requalifiedCollapseProbed,
+                "healthy Fixed recovery did not requalify later collapse detection");
+        }
+    }
+
     fixedCadenceRecovery.reset();
     fixedCadenceNow = FixedCadenceCollapseRecovery::TimePoint{};
     for (size_t frame = 0; frame < 180; ++frame) {
@@ -1191,6 +1407,29 @@ int main() {
     }
     expect(generated >= 115 && generated <= 125,
         "100 FPS Fixed 2x should synthesize only the displayable remainder");
+
+    // With Smooth Cadence and ordered FIFO, Fixed requests its full multiplier
+    // and lets the present queue provide back-pressure instead of sleeping in
+    // the game present call. First-frame and long-stall guards still apply.
+    for (const uint32_t refreshHz : {60U, 90U, 120U, 144U}) {
+        for (size_t multiplier = 2; multiplier <= 5; ++multiplier) {
+            budget.reset();
+            const size_t maximumGenerated = multiplier - 1;
+            expect(budget.plan(start, refreshHz, maximumGenerated, true) == 0,
+                "FIFO-paced Fixed generated on its first timing sample");
+            for (size_t frame = 1; frame <= 30; ++frame) {
+                expect(budget.plan(
+                    start + frame * 10ms, refreshHz,
+                    maximumGenerated, true
+                ) == maximumGenerated,
+                    "FIFO-paced Fixed suppressed part of its multiplier");
+            }
+            expect(budget.plan(
+                start + 1s, refreshHz, maximumGenerated, true
+            ) == 0,
+                "FIFO-paced Fixed ignored a long timing discontinuity");
+        }
+    }
 
     budget.reset();
     generated = 0;

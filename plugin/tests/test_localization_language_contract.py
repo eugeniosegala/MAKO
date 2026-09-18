@@ -1,4 +1,4 @@
-"""Cross-component contract for MAKO's supported UI languages."""
+"""Cross-component contracts for MAKO's UI languages and shared terminology."""
 
 import json
 from pathlib import Path
@@ -85,6 +85,26 @@ class LocalizationLanguageContractTests(unittest.TestCase):
         self.assertLessEqual(set(steam_aliases.values()), set(decky_metadata))
         self.assertEqual(steam_aliases["brazilian"], "pt-BR")
         self.assertEqual(steam_aliases["portuguese"], "pt-PT")
+
+    def test_japanese_shared_control_names_agree_across_independent_catalogs(self):
+        decky = json.loads(
+            (DECKY_I18N_ROOT / "ja.json").read_text(encoding="utf-8")
+        )
+        renderer = json.loads(
+            RENDERER_TRANSLATIONS.read_text(encoding="utf-8")
+        )["catalogs"]["ja"]
+        shared_controls = {
+            "ADAPTIVE_TITLE": "adaptiveFrameGen",
+            "FRACTIONAL_ADAPTIVE_PRESET": "fractionalAdaptive",
+            "ADAPTIVE_MAX_MULTIPLIER": "maxAdaptiveMultiplier",
+            "CONFIG_BASE_FPS_CAP": "baseFpsCap",
+            "SCALING_FACTOR": "scalingFactor",
+            "SCALING_SUPERSAMPLING": "scalingSupersampling",
+        }
+
+        for decky_key, renderer_key in shared_controls.items():
+            with self.subTest(control=decky_key):
+                self.assertEqual(decky[decky_key], renderer[renderer_key])
 
 
 if __name__ == "__main__":

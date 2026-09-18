@@ -1,3 +1,4 @@
+import { MakoInfo } from "./MakoInfo";
 import { useEffect, useState } from "react";
 import { PanelSectionRow } from "@decky/ui";
 import { DEFAULT_STEAM_LAUNCH_OPTION, getLaunchOption } from "../api/makoApi";
@@ -22,8 +23,10 @@ export function UsageInstructions() {
         {t("USAGE_TITLE", "Usage Instructions")}
       </MakoSectionHeader>
 
-      <PanelSectionRow>
+      <MakoInfo as={PanelSectionRow}>
         <div
+          className="Mako_OptionDescription"
+          data-mako-info="true"
           style={{
             fontSize: "12px",
             lineHeight: "1.4",
@@ -36,10 +39,12 @@ export function UsageInstructions() {
             "Copy the launch option into your Steam game's launch options to enable MAKO Renderer for frame generation, scaling, or both.",
           )}
         </div>
-      </PanelSectionRow>
+      </MakoInfo>
 
-      <PanelSectionRow>
+      <MakoInfo as={PanelSectionRow}>
         <div
+          className="Mako_OptionDescription"
+          data-mako-info="true"
           style={{
             fontSize: "12px",
             lineHeight: "1.4",
@@ -55,10 +60,12 @@ export function UsageInstructions() {
         >
           <strong>{launchOption}</strong>
         </div>
-      </PanelSectionRow>
+      </MakoInfo>
 
-      <PanelSectionRow>
+      <MakoInfo as={PanelSectionRow}>
         <div
+          className="Mako_OptionDescription"
+          data-mako-info="true"
           style={{
             fontSize: "11px",
             lineHeight: "1.3",
@@ -71,10 +78,12 @@ export function UsageInstructions() {
             "This command applies MAKO only to the game you launch with it.",
           )}
         </div>
-      </PanelSectionRow>
+      </MakoInfo>
 
-      <PanelSectionRow>
+      <MakoInfo as={PanelSectionRow}>
         <div
+          className="Mako_OptionDescription"
+          data-mako-info="true"
           style={{
             fontSize: "11px",
             lineHeight: "1.3",
@@ -87,7 +96,7 @@ export function UsageInstructions() {
             "Do not combine MAKO with another frame-generation or scaling tool for the same game.",
           )}
         </div>
-      </PanelSectionRow>
+      </MakoInfo>
 
       <SmartClipboardButton />
     </>

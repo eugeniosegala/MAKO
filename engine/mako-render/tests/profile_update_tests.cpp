@@ -155,6 +155,13 @@ int main() {
             adaptiveSchedulerPolicy->nearTargetNativePreference,
         "Adaptive must retain its configured target when refresh is available");
 
+    auto fractionalSmooth = current;
+    fractionalSmooth.adaptive_auto_base_fps_cap = false;
+    fractionalSmooth.adaptive_stable_cadence = true;
+    const auto fractionalSmoothPolicy = generationSchedulerPolicy(fractionalSmooth, 60);
+    expect(fractionalSmoothPolicy && fractionalSmoothPolicy->stableCadence,
+        "Fractional Adaptive must pass Smooth Cadence into its scheduler");
+
     auto steadyPacing = current;
     steadyPacing.target_fps = 120;
     steadyPacing.adaptive_auto_base_fps_cap = true;
@@ -210,6 +217,39 @@ int main() {
     expect(!smoothCadenceBaseCapEligible(
             steadyPacing, true, false, 120),
         "Fractional policy enabled the Steady integer-cap ladder");
+
+    auto fixedPacing = current;
+    fixedPacing.adaptive = false;
+    fixedPacing.multiplier = 3;
+    fixedPacing.adaptive_stable_cadence = true;
+    fixedPacing.base_fps_cap = 0;
+    fixedPacing.dynamic_cadence_recovery = false;
+    expect(fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, 120),
+        "ordered Fixed Smooth Cadence did not select FIFO pacing");
+    fixedPacing.adaptive_stable_cadence = false;
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, 120),
+        "Fixed without Smooth Cadence selected FIFO full-cadence pacing");
+    fixedPacing.adaptive_stable_cadence = true;
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, std::nullopt),
+        "Fixed selected full-cadence pacing without refresh feedback");
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, false, false, 120),
+        "non-ordered transport enabled Fixed Smooth Cadence");
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, true, 120),
+        "ordered-acquire recovery did not suspend Fixed Smooth Cadence");
+    fixedPacing.base_fps_cap = 40;
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, 120),
+        "Fixed Smooth Cadence overrode an explicit real-frame cap");
+    fixedPacing.base_fps_cap = 0;
+    fixedPacing.dynamic_cadence_recovery = true;
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, 120),
+        "Fixed Smooth Cadence interfered with Dynamic Cadence Recovery");
 
     auto next = current;
     next.target_fps = 120;
@@ -509,7 +549,7 @@ int main() {
     expect(ls::effectiveFlowScale(next) ==
             ls::GameConfDefaults::ultraPerformanceFlowScale &&
             ls::effectivePerformanceMode(next),
-        "Ultra Performance must force 75% flow and the lighter model");
+        "Ultra Performance must force 70% flow and the lighter model");
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action ==
             ProfileUpdateAction::DeferUntilProcessRestart &&

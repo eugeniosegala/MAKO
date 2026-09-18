@@ -3,6 +3,7 @@
 #include "extraction/content_hash.hpp"
 #include "extraction/dll_reader.hpp"
 #include "extraction/model_resource_validation.hpp"
+#include "extraction/model_resources.hpp"
 #include "mako-common/helpers/errors.hpp"
 
 #include <algorithm>
@@ -13,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <span>
 #include <stdexcept>
 #include <string>
@@ -168,13 +170,16 @@ namespace {
 
     [[nodiscard]] std::vector<uint8_t> syntheticSpirv(
             const mako::backend::detail::ShaderResourceContract& contract,
-            const bool includeExtraSampler = false) {
+            const bool includeExtraSampler = false,
+            const bool fp16 = false) {
         std::vector<uint32_t> words{
             0x07230203U, 0x00010000U, 0U, 256U, 0U,
         };
         appendInstruction(words, 17U, {1U});
         appendInstruction(words, 15U, {5U, 1U, 0x6e69616dU, 0U});
         appendInstruction(words, 22U, {2U, 32U});
+        if (fp16)
+            appendInstruction(words, 22U, {7U, 16U});
         appendInstruction(words, 26U, {3U});
         appendInstruction(words, 25U, {4U, 2U, 2U, 0U, 0U, 0U, 1U, 0U});
         appendInstruction(words, 25U, {5U, 2U, 2U, 0U, 0U, 0U, 2U, 4U});
@@ -221,6 +226,224 @@ namespace {
         );
         writeInteger<uint32_t>(data, 40U, 0U);
         return data; // Eight trailing vendor bytes are deliberately accepted.
+    }
+
+    // A metadata-only SM5.0 fixture, with no proprietary shader instructions.
+    [[nodiscard]] std::vector<uint8_t> reflectedDxbc(
+            const mako::backend::detail::ShaderResourceContract contract) {
+        const size_t count = contract.sampledImages + contract.storageImages +
+            contract.uniformBuffers + contract.samplers;
+        const size_t reflectionSize = 28U + count * 32U;
+        const size_t shader = 48U + reflectionSize;
+        std::vector<uint8_t> data(shader + 8U, 0U);
+        writeInteger<uint32_t>(data, 0U, 0x43425844U);
+        writeInteger<uint32_t>(data, 24U, static_cast<uint32_t>(data.size()));
+        writeInteger<uint32_t>(data, 28U, 2U);
+        writeInteger<uint32_t>(data, 32U, 40U);
+        writeInteger<uint32_t>(data, 36U, static_cast<uint32_t>(shader));
+        writeInteger<uint32_t>(data, 40U, 0x46454452U);
+        writeInteger<uint32_t>(data, 44U, static_cast<uint32_t>(reflectionSize));
+        writeInteger<uint32_t>(data, 56U, static_cast<uint32_t>(count));
+        writeInteger<uint32_t>(data, 60U, 28U);
+        writeInteger<uint32_t>(data, 64U, 0x43530500U);
+        writeInteger<uint32_t>(data, shader, 0x58454853U);
+        size_t next = 76U;
+        const auto add = [&](const uint32_t type, const uint32_t dimension,
+                const size_t slots) {
+            for (size_t slot = 0; slot < slots; ++slot, next += 32U) {
+                writeInteger<uint32_t>(data, next + 4U, type);
+                writeInteger<uint32_t>(data, next + 12U, dimension);
+                writeInteger<uint32_t>(data, next + 20U, static_cast<uint32_t>(slot));
+                writeInteger<uint32_t>(data, next + 24U, 1U);
+            }
+        };
+        add(0U, 0U, contract.uniformBuffers);
+        add(2U, 4U, contract.sampledImages);
+        add(3U, 0U, contract.samplers);
+        add(4U, 4U, contract.storageImages);
+        return data;
+    }
+
+    using Resources = std::unordered_map<uint32_t, std::vector<uint8_t>>;
+
+    void addLsfgTable(Resources& resources, const int64_t offset) {
+        for (const bool fp16 : {false, true})
+            for (const bool performance : {false, true})
+                for (const auto& spec : mako::backend::detail::lsfgShaderSpecs(performance)) {
+                    const auto canonical = mako::backend::detail::lsfgResourceId(
+                        spec.logicalId, fp16, performance);
+                    resources.emplace(mako::backend::ModelResourceSelection{offset}.resourceId(canonical),
+                        syntheticSpirv(spec.contract, false, fp16));
+                }
+    }
+
+    void addLs1Table(Resources& resources, const int64_t offset) {
+        // Independently spell out the supported table to detect mistakes in
+        // the production graph, mode, and variant declarations.
+        for (uint32_t id = 141U; id <= 161U; ++id) {
+            const mako::backend::detail::ShaderResourceContract contract = id == 146U
+                ? mako::backend::detail::ShaderResourceContract{2, 1, 1, 1}
+                : mako::backend::detail::ShaderResourceContract{
+                    1, 1, id >= 148U && (id - 148U) % 3U == 0 ? 0U : 1U, 0};
+            resources.emplace(mako::backend::ModelResourceSelection{offset}.resourceId(id),
+                reflectedDxbc(contract));
+        }
+    }
+
+    void testRelocatedTables() {
+        using namespace mako::backend;
+        for (const int64_t offset : {-140, 1, 700, 9000}) {
+            Resources resources;
+            addLs1Table(resources, offset);
+            addLsfgTable(resources, offset);
+            resources.emplace(90000U, std::vector<uint8_t>{1, 2, 3});
+            const DllResourceArchive archive{.resources = std::move(resources)};
+            for (const bool fp16 : {false, true}) {
+                require(resolveLsfgModelResources(archive, fp16).idOffset == offset,
+                    "runtime registry disagrees with relocated model inspection");
+                for (const bool performance : {false, true})
+                    for (int repeat = 0; repeat < 2; ++repeat) {
+                        const auto selection = resolveLsfgModelResources(archive, fp16, performance);
+                        require(selection.idOffset == offset, "wrong LSFG table selected");
+                        const auto spec = detail::lsfgShaderSpecs(performance).front();
+                        const auto id = detail::lsfgResourceId(spec.logicalId, fp16, performance);
+                        require(&selection.resource(archive, id) ==
+                                &archive.resources.at(selection.resourceId(id)),
+                            "resolved LSFG bytes do not belong to the selected archive");
+                    }
+            }
+            for (const auto mode : {Ls1Mode::Quality, Ls1Mode::Performance}) {
+                require(resolveLs1ModelResources(archive, mode).idOffset == offset,
+                    "wrong complete LS1 table selected");
+                for (uint32_t variant = 0; variant < 5; ++variant)
+                    require(resolveLs1ModelResources(archive, mode, variant).idOffset == offset,
+                        "selected LS1 loader disagrees with inspection");
+            }
+        }
+    }
+
+    void testUnsafeDiscoveryAndCanonicalPreference() {
+        using namespace mako::backend;
+        Resources resources;
+        addLs1Table(resources, 1000);
+        addLsfgTable(resources, 1000);
+        addLs1Table(resources, 2000);
+        addLsfgTable(resources, 2000);
+        const DllResourceArchive ambiguous{.resources = resources};
+        for (int repeat = 0; repeat < 2; ++repeat) {
+            requireFailure([&] { static_cast<void>(resolveLs1ModelResources(
+                ambiguous, Ls1Mode::Quality)); }, "ambiguous LS1 tables accepted");
+            requireFailure([&] { static_cast<void>(resolveLsfgModelResources(
+                ambiguous, false, false)); }, "ambiguous LSFG tables accepted");
+        }
+        addLs1Table(resources, 0);
+        addLsfgTable(resources, 0);
+        const DllResourceArchive canonical{.resources = resources};
+        require(resolveLs1ModelResources(canonical, Ls1Mode::Quality).idOffset == 0 &&
+                resolveLsfgModelResources(canonical, false, false).idOffset == 0,
+            "canonical models did not take precedence over ambiguous relocated tables");
+
+        Resources mixed;
+        addLsfgTable(mixed, 0);
+        addLsfgTable(mixed, 1000);
+        mixed.erase(detail::lsfgResourceId(257U, true, true));
+        const DllResourceArchive mixedArchive{.resources = std::move(mixed)};
+        require(resolveLsfgModelResources(mixedArchive, true, false).idOffset == 0 &&
+                resolveLsfgModelResources(mixedArchive, true, true).idOffset == 1000 &&
+                resolveLsfgModelResources(mixedArchive, true).idOffset == 1000,
+            "runtime LSFG registry mixed shared stages from different tables");
+
+        resources.clear();
+        addLs1Table(resources, 1000);
+        addLsfgTable(resources, 1000);
+        for (const uint32_t missing : {1141U, 1161U, 1304U, 1400U}) {
+            auto incomplete = resources;
+            incomplete.erase(missing);
+            const DllResourceArchive archive{.resources = std::move(incomplete)};
+            if (missing < 1200U) {
+                requireFailure([&] { static_cast<void>(resolveLs1ModelResources(
+                    archive, Ls1Mode::Quality, 0)); }, "partial relocated LS1 table accepted");
+                require(resolveLsfgModelResources(archive, false, false).idOffset == 1000,
+                    "bad LS1 table vetoed LSFG");
+            } else {
+                requireFailure([&] { static_cast<void>(resolveLsfgModelResources(
+                    archive, true, true)); }, "partial relocated LSFG table accepted");
+                require(resolveLs1ModelResources(archive, Ls1Mode::Quality).idOffset == 1000,
+                    "bad LSFG table vetoed LS1");
+            }
+        }
+        auto noReflection = resources;
+        noReflection.at(1141U) = syntheticDxbc();
+        requireFailure([&] { static_cast<void>(resolveLs1ModelResources(
+            {.resources = noReflection}, Ls1Mode::Quality)); },
+            "relocated LS1 accepted a graph without reflection proof");
+        auto shuffled = resources;
+        std::swap(shuffled.at(1147U), shuffled.at(1148U));
+        requireFailure([&] { static_cast<void>(resolveLs1ModelResources(
+            {.resources = shuffled}, Ls1Mode::Quality)); }, "shuffled LS1 stages accepted");
+        auto swappedPrecision = resources;
+        for (const bool performance : {false, true})
+            for (const auto& spec : detail::lsfgShaderSpecs(performance))
+                std::swap(swappedPrecision.at(1000U + detail::lsfgResourceId(spec.logicalId, true, performance)),
+                    swappedPrecision.at(1000U + detail::lsfgResourceId(spec.logicalId, false, performance)));
+        requireFailure([&] { static_cast<void>(resolveLsfgModelResources(
+            {.resources = swappedPrecision}, false, false)); }, "swapped LSFG precision lanes accepted");
+        auto extraBindings = resources;
+        extraBindings.at(1304U) = syntheticSpirv(detail::lsfgShaderSpecs(false).front().contract, true, true);
+        requireFailure([&] { static_cast<void>(resolveLsfgModelResources(
+            {.resources = extraBindings}, true, false)); }, "unproven relocated interface accepted");
+
+        auto oversized = resources;
+        for (uint32_t id = 10000U; id < 14100U; ++id)
+            oversized.emplace(id, std::vector<uint8_t>{});
+        requireFailure([&] { static_cast<void>(resolveLsfgModelResources(
+            {.resources = oversized}, true, false)); }, "unbounded discovery accepted");
+        addLsfgTable(oversized, 0);
+        require(resolveLsfgModelResources({.resources = oversized}, true, false).idOffset == 0,
+            "discovery limit incorrectly rejected a canonical table");
+
+        Resources selected;
+        selected.emplace(141U, syntheticDxbc());
+        selected.emplace(146U, syntheticDxbc());
+        const DllResourceArchive oneVariant{.resources = selected};
+        require(resolveLs1ModelResources(oneVariant, Ls1Mode::Performance, 0).idOffset == 0,
+            "unrelated missing LS1 variants vetoed canonical selected loader");
+        requireFailure([&] { static_cast<void>(resolveLs1ModelResources(
+            oneVariant, Ls1Mode::Performance)); }, "incomplete canonical family inspection accepted");
+        requireFailure([&] { static_cast<void>(resolveLs1ModelResources(
+            oneVariant, Ls1Mode::Performance, 5)); }, "invalid variant accepted");
+    }
+
+    void testReflectionAndIdBounds() {
+        using namespace mako::backend;
+        const detail::ShaderResourceContract contract{2, 1, 1, 1};
+        const auto original = reflectedDxbc(contract);
+        detail::validateDxbcResourceBindings(original, contract, "reflection fixture");
+        detail::validateDxbcResourceBindings(syntheticDxbc(), contract, "optional reflection", false);
+        auto futureReflection = original;
+        writeInteger<uint32_t>(futureReflection, 64U, 0x43530501U);
+        detail::validateDxbcResourceBindings(futureReflection, contract, "future reflection", false);
+        detail::validateDxbcResourceBindings(reflectedDxbc({2, 1, 1, 2}), contract,
+            "additional canonical binding", false);
+        // RDEF: unsupported model, count overflow, offset under/overflow,
+        // unsupported resource type, wrong dimension, array, duplicate slot.
+        for (const auto [offset, value] : std::array<std::pair<size_t, uint32_t>, 9>{
+                {{64U, 0x43530501U}, {56U, 0xffffffffU}, {60U, 0U},
+                 {60U, 0xffffffffU}, {80U, 99U}, {120U, 5U},
+                 {100U, 2U}, {160U, 0U}, {56U, 1U}}}) {
+            auto malformed = original;
+            writeInteger<uint32_t>(malformed, offset, value);
+            requireFailure([&] { detail::validateDxbcResourceBindings(
+                malformed, contract, "bad reflection"); }, "invalid reflection accepted");
+        }
+        for (const int64_t offset : {std::numeric_limits<int64_t>::min(),
+                std::numeric_limits<int64_t>::max(), int64_t{-2},
+                static_cast<int64_t>(std::numeric_limits<uint32_t>::max())})
+            requireFailure([&] { static_cast<void>(ModelResourceSelection{offset}.resourceId(1U)); },
+                "out-of-range resource ID accepted");
+        require(ModelResourceSelection{-1}.resourceId(1U) == 0U &&
+                ModelResourceSelection{1}.resourceId(0xfffffffeU) == 0xffffffffU,
+            "valid resource ID boundary rejected");
     }
 
     void testSha256() {
@@ -300,6 +523,35 @@ namespace {
                 outsidePath)); },
             "out-of-range PE resource was accepted"
         );
+
+        // Two metadata-only resources are enough for one canonical LS1
+        // Performance variant. Replacement must invalidate its resolved model
+        // even when size and mtime are restored by an updater.
+        auto model = syntheticPe(syntheticDxbc());
+        writeInteger<uint16_t>(model, 0x24eU, 2U);
+        writeInteger<uint32_t>(model, 0x258U, 146U);
+        writeInteger<uint32_t>(model, 0x25cU, 0x800000b0U);
+        writeInteger<uint16_t>(model, 0x2beU, 1U);
+        writeInteger<uint32_t>(model, 0x2c4U, 0xd0U);
+        writeInteger<uint32_t>(model, 0x2d0U, 0x1100U);
+        writeInteger<uint32_t>(model, 0x2d4U, static_cast<uint32_t>(syntheticDxbc().size()));
+        const auto modelPath = temporary.path / "model.dll";
+        writeFile(modelPath, model);
+        const auto modelArchive = mako::backend::loadDllResourceArchive(modelPath);
+        require(mako::backend::resolveLs1ModelResources(*modelArchive,
+                mako::backend::Ls1Mode::Performance, 0).idOffset == 0,
+            "synthetic selected model did not resolve");
+        const auto modelTime = std::filesystem::last_write_time(modelPath);
+        model[0x300U] = 0U;
+        writeFile(modelPath, model);
+        std::filesystem::last_write_time(modelPath, modelTime);
+        const auto replacement = mako::backend::loadDllResourceArchive(modelPath);
+        requireFailure([&] { static_cast<void>(mako::backend::resolveLs1ModelResources(
+            *replacement, mako::backend::Ls1Mode::Performance, 0)); },
+            "DLL replacement reused a stale successful model resolution");
+        require(mako::backend::resolveLs1ModelResources(*modelArchive,
+                mako::backend::Ls1Mode::Performance, 0).idOffset == 0,
+            "DLL replacement invalidated an existing immutable archive");
     }
 
     void testShaderContainersAndRequiredBindings() {
@@ -367,16 +619,16 @@ namespace {
                     );
                 }
                 resources.emplace(9999U, std::vector<uint8_t>{1U, 2U, 3U});
-                mako::backend::detail::validateLsfgModelResources(
-                    resources, fp16, performance
-                );
+                static_cast<void>(mako::backend::resolveLsfgModelResources(
+                    {.resources = resources}, fp16, performance
+                ));
                 resources.erase(mako::backend::detail::lsfgResourceId(
                     mako::backend::detail::lsfgShaderSpecs(performance).front().logicalId,
                     fp16, performance
                 ));
                 requireFailure(
-                    [&] { mako::backend::detail::validateLsfgModelResources(
-                        resources, fp16, performance); },
+                    [&] { static_cast<void>(mako::backend::resolveLsfgModelResources(
+                        {.resources = resources}, fp16, performance)); },
                     "missing LSFG resource was accepted"
                 );
             }
@@ -394,25 +646,26 @@ namespace {
                 const bool required = removed == 146U ||
                     (mode == mako::backend::Ls1Mode::Quality ? removed >= 147U : removed <= 145U);
                 const auto validate = [&] {
-                    mako::backend::detail::validateLs1ModelResources(changed, mode);
+                    static_cast<void>(mako::backend::resolveLs1ModelResources(
+                        {.resources = changed}, mode));
                 };
                 if (required) requireFailure(validate, "missing selected LS1 graph resource accepted");
                 else validate();
             }
         }
-        mako::backend::detail::validateLs1ModelResources(
-            ls1Resources, mako::backend::Ls1Mode::Quality
-        );
-        mako::backend::detail::validateLs1ModelResources(
-            ls1Resources, mako::backend::Ls1Mode::Performance
-        );
+        static_cast<void>(mako::backend::resolveLs1ModelResources(
+            {.resources = ls1Resources}, mako::backend::Ls1Mode::Quality
+        ));
+        static_cast<void>(mako::backend::resolveLs1ModelResources(
+            {.resources = ls1Resources}, mako::backend::Ls1Mode::Performance
+        ));
         ls1Resources.erase(141U);
-        mako::backend::detail::validateLs1ModelResources(
-            ls1Resources, mako::backend::Ls1Mode::Quality
-        );
+        static_cast<void>(mako::backend::resolveLs1ModelResources(
+            {.resources = ls1Resources}, mako::backend::Ls1Mode::Quality
+        ));
         requireFailure(
-            [&] { mako::backend::detail::validateLs1ModelResources(
-                ls1Resources, mako::backend::Ls1Mode::Performance); },
+            [&] { static_cast<void>(mako::backend::resolveLs1ModelResources(
+                {.resources = ls1Resources}, mako::backend::Ls1Mode::Performance)); },
             "LS1 Performance did not fail independently of Quality"
         );
     }
@@ -425,6 +678,9 @@ int main() {
         testPeExtractionAndIdentity(temporary);
         testShaderContainersAndRequiredBindings();
         testCapabilityIsolationAndHarmlessAdditions();
+        testRelocatedTables();
+        testUnsafeDiscoveryAndCanonicalPreference();
+        testReflectionAndIdBounds();
     } catch (const std::exception& error) {
         std::cerr << "DLL inspection test failed: " << error.what() << '\n';
         return 1;

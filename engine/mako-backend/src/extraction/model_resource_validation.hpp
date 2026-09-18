@@ -6,10 +6,9 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <optional>
 #include <span>
 #include <string>
-#include <unordered_map>
-#include <vector>
 
 namespace mako::backend::detail {
 
@@ -28,16 +27,45 @@ namespace mako::backend::detail {
         ShaderResourceContract contract;
     };
 
+    struct Ls1ShaderSpec {
+        uint32_t resourceId;
+        ShaderResourceContract contract;
+        uint32_t storageImageFormat;
+    };
+
+    struct Ls1ModelSpec {
+        Ls1ShaderSpec reconstruction;
+        Ls1ShaderSpec stage1;
+        std::optional<Ls1ShaderSpec> stage2;
+        std::optional<Ls1ShaderSpec> stage3;
+    };
+
+    [[nodiscard]] Ls1ModelSpec ls1ModelSpec(Ls1Mode mode, uint32_t variant);
+
+    struct SpirvShaderInfo {
+        bool declaresFloat16{false};
+        bool exactBindings{false};
+    };
+
     /// Validate only invariants required to consume a DXBC compute container.
     /// Unknown chunks and trailing vendor metadata are accepted.
     void validateDxbcComputeShader(
         std::span<const uint8_t> data, const std::string& sourceName
     );
 
+    /// Check known SM5.0 reflection when available. Discovery requires it and
+    /// an exact interface; canonical loading permits missing/unknown metadata
+    /// and additional bindings, but never a contradictory required binding.
+    void validateDxbcResourceBindings(
+        std::span<const uint8_t> data,
+        const ShaderResourceContract& required,
+        const std::string& sourceName, bool discovery = true
+    );
+
     /// Validate SPIR-V structure, a compute `main`, and the descriptor bindings
     /// MAKO will actually bind. Additional declarations are accepted and remain
     /// subject to Vulkan pipeline validation, avoiding brittle allowlisting.
-    void validateSpirvComputeShader(
+    SpirvShaderInfo validateSpirvComputeShader(
         std::span<const uint8_t> data,
         const ShaderResourceContract& required,
         const std::string& sourceName
@@ -49,21 +77,6 @@ namespace mako::backend::detail {
 
     [[nodiscard]] std::span<const LsfgShaderSpec> lsfgShaderSpecs(
         bool performance
-    );
-
-    [[nodiscard]] const std::vector<uint8_t>& validatedLsfgResource(
-        const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources,
-        uint32_t logicalId, bool fp16, bool performance
-    );
-
-    void validateLsfgModelResources(
-        const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources,
-        bool fp16, bool performance
-    );
-
-    void validateLs1ModelResources(
-        const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources,
-        Ls1Mode mode
     );
 
 }

@@ -3,6 +3,7 @@
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/detection.hpp"
 #include "mako-common/configuration/launch.hpp"
+#include "configuration/launcher_exclusions_generated.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -16,6 +17,7 @@
 #include <string_view>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <unistd.h>
 #include <sys/resource.h>
@@ -142,8 +144,10 @@ int main() {
         "GameConf must use the Renderer profile defaults");
     expect(defaults.scaling_method == ls::ScalingMethod::Ls1,
         "LS1 Quality must be the default spatial scaling method");
-    expect(ls::GameConfDefaults::flowScale == 0.9F,
-        "standalone Renderer and MAKO Decky must share the 90% Flow Scale default");
+    expect(ls::GameConfDefaults::flowScale == 0.8F,
+        "standalone Renderer and MAKO Decky must share the 80% Flow Scale default");
+    expect(ls::GameConfDefaults::adaptiveStableCadence,
+        "Smooth Cadence must default to on for new standalone Renderer profiles");
     expect(ls::scalingMethodFromName("native") ==
                 ls::ScalingMethod::Native &&
             std::string_view(ls::scalingMethodName(
@@ -181,6 +185,10 @@ int main() {
     ls::ConfigFile::createDefaultConfigFile(defaultPath);
     const ls::ConfigFile generatedDefaults(defaultPath);
     const ls::ConfigFile inMemoryDefaults;
+    expect(ls::GlobalConf{}.allow_fp16 &&
+            generatedDefaults.global().allow_fp16 &&
+            inMemoryDefaults.global().allow_fp16,
+        "Renderer defaults must allow FP16 on supported hardware");
     expect(generatedDefaults.global().dll == inMemoryDefaults.global().dll &&
             generatedDefaults.global().allow_fp16 ==
                 inMemoryDefaults.global().allow_fp16 &&
@@ -189,6 +197,20 @@ int main() {
                 sameGameConf
             ),
         "The documented default TOML and in-memory examples must stay equivalent");
+
+    const auto precisionPath = directory / "precision.toml";
+    for (const std::string_view global : {"", "[global]\n", "[global]\nallow_fp16 = true\n"}) {
+        writeText(precisionPath, "version = 2\n" + std::string(global) + "[[profile]]\n");
+        expect(ls::ConfigFile(precisionPath).global().allow_fp16,
+            "Omitting the global section or FP16 setting must still allow FP16");
+    }
+    writeText(precisionPath, "version = 2\n[global]\nallow_fp16 = false\n[[profile]]\n");
+    const ls::ConfigFile fp32Config(precisionPath);
+    expect(!fp32Config.global().allow_fp16,
+        "An explicit FP32 setting must override the FP16 default");
+    fp32Config.write(precisionPath);
+    expect(!ls::ConfigFile(precisionPath).global().allow_fp16,
+        "Saving an existing FP32 configuration must preserve its precision");
 
     const auto path = directory / "conf.toml";
     writeText(path, validConfiguration);
@@ -455,20 +477,26 @@ scaling_sharpness = 0.5
     // Neither that environment nor an older captured launcher alias may make
     // MAKO change the launcher's Vulkan device or presentation resources.
     const auto gameIdentification = identification;
-    for (const auto* launcher : {
-            "UbisoftConnect.exe", "upc.exe", "UplayWebCore.exe",
-            "UBISOFTCONNECT.EXE", "UPC.EXE", "uplaywebcore.EXE",
-        }) {
+    std::vector<std::string> launchers;
+    for (const auto name : ls::detail::excludedWindowsLauncherExecutables) {
+        launchers.emplace_back(name);
+        auto upper = std::string(name);
+        std::transform(upper.begin(), upper.end(), upper.begin(), [](const char c) {
+            return c >= 'a' && c <= 'z' ? static_cast<char>(c - ('a' - 'A')) : c;
+        });
+        launchers.push_back(std::move(upper));
+    }
+    for (const auto& launcher : launchers) {
         detectionConfig.profiles()[1].active_in.emplace_back(launcher);
         const ls::Identification launcherIdentification{
             .override = "captured",
             .fallback = "mako",
             .executable = "/proton/files/bin/wine64-preloader",
-            .wine_executable = std::string("C:\\Ubisoft\\") + launcher,
+            .wine_executable = std::string("C:\\Launcher\\") + launcher,
             .process_name = "GameThread",
         };
         expect(!ls::findProfile(detectionConfig, launcherIdentification),
-            "A Ubisoft launcher must stay native despite an inherited override");
+            "An excluded launcher must stay native despite an inherited override");
         auto fallbackLauncher = launcherIdentification;
         fallbackLauncher.override.reset();
         expect(!ls::findProfile(detectionConfig, fallbackLauncher),
@@ -483,7 +511,7 @@ scaling_sharpness = 0.5
             "An explicit launcher alias alone must not activate MAKO");
         auto directLauncher = launcherIdentification;
         directLauncher.wine_executable.reset();
-        directLauncher.executable = std::string("/Ubisoft/") + launcher;
+        directLauncher.executable = std::string("/Launcher/") + launcher;
         expect(!ls::findProfile(detectionConfig, directLauncher),
             "An exact launcher executable must stay native without a Wine path");
         setenv("MAKO_ENV", "1", 1);
@@ -512,6 +540,16 @@ scaling_sharpness = 0.5
 
     setenv("MAKO_ENV", "1", 1);
     setenv("MAKO_ADAPTIVE", "0", 1);
+    unsetenv("MAKO_NO_FP16");
+    expect(ls::WatchedConfig{}.get().global().allow_fp16,
+        "Environment-only configuration must allow FP16 by default");
+    setenv("MAKO_NO_FP16", "1", 1);
+    expect(!ls::WatchedConfig{}.get().global().allow_fp16,
+        "MAKO_NO_FP16=1 must preserve the explicit FP32 override");
+    setenv("MAKO_NO_FP16", "0", 1);
+    expect(ls::WatchedConfig{}.get().global().allow_fp16,
+        "MAKO_NO_FP16=0 must allow FP16");
+    unsetenv("MAKO_NO_FP16");
     setenv("MAKO_BASE_FPS_CAP", "30", 1);
     setenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);

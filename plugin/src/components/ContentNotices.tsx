@@ -1,3 +1,4 @@
+import { MakoInfo } from "./MakoInfo";
 import { useState, type ReactNode } from "react";
 import {
   ButtonItem,
@@ -11,6 +12,7 @@ import { MakoInstallCompletion } from "./MakoInstallCountdown";
 import { MakoCompactSpinner, makoPanelDivider, makoPanelStyle } from "./MakoUi";
 import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
 import t from "../i18n/i18n";
+import { ModelWarning, type ModelWarningProps } from "./ModelWarning";
 
 const SUPPORTED_FLATPAK_RUNTIME_VERSION_LIST = SUPPORTED_FLATPAK_RUNTIMES.map(
   ({ version }) => version,
@@ -27,6 +29,7 @@ interface ContentNoticesProps {
   isInstallCompletionVisible: boolean;
   isUninstalling: boolean;
   onInstall: () => Promise<void>;
+  modelStatus?: ModelWarningProps;
 }
 
 function UnderlinedWelcomeText({ children }: { children: ReactNode }) {
@@ -52,9 +55,10 @@ function WelcomeNotice({ separated }: { separated: boolean }) {
   const expanded = !tipsCollapsed;
 
   return (
-    <PanelSectionRow>
+    <MakoInfo as={PanelSectionRow}>
       <div
         role="note"
+        data-mako-info="true"
         style={{
           ...makoPanelStyle,
           width: "100%",
@@ -160,7 +164,7 @@ function WelcomeNotice({ separated }: { separated: boolean }) {
           </DialogButton>
         </div>
       </div>
-    </PanelSectionRow>
+    </MakoInfo>
   );
 }
 
@@ -176,6 +180,7 @@ export function ContentNotices({
   isInstallCompletionVisible,
   isUninstalling,
   onInstall,
+  modelStatus,
 }: ContentNoticesProps) {
   const [showDevelopmentDetails, setShowDevelopmentDetails] = useState(false);
   const hasDevelopmentNotice = Boolean(developmentBuildInfo);
@@ -183,9 +188,11 @@ export function ContentNotices({
 
   return (
     <>
+      <ModelWarning {...modelStatus} />
       {developmentBuildInfo && (
-        <PanelSectionRow>
+        <MakoInfo as={PanelSectionRow}>
           <div
+            data-mako-info="true"
             style={{
               padding: "8px 12px",
               width: "100%",
@@ -352,14 +359,15 @@ export function ContentNotices({
               </div>
             )}
           </div>
-        </PanelSectionRow>
+        </MakoInfo>
       )}
 
       {showWelcome && <WelcomeNotice separated={hasDevelopmentNotice} />}
 
       {mainRunningApp && (
-        <PanelSectionRow>
+        <MakoInfo as={PanelSectionRow}>
           <div
+            data-mako-info="true"
             style={{
               marginTop:
                 hasDevelopmentNotice || showWelcome ? "8px" : undefined,
@@ -380,12 +388,13 @@ export function ContentNotices({
               "MAKO selects saved profiles automatically. If this game is new, save it below; restart the game after changing restart-only settings.",
             )}
           </div>
-        </PanelSectionRow>
+        </MakoInfo>
       )}
 
       {engineUpdateRequired && (
         <PanelSectionRow>
           <div
+            data-mako-update-notice="true"
             style={{
               marginTop:
                 hasDevelopmentNotice || showWelcome || hasRunningAppNotice
@@ -398,13 +407,19 @@ export function ContentNotices({
               color: "#ffd08a",
             }}
           >
-            <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+            <MakoInfo
+              data-mako-info="true"
+              style={{ fontWeight: "bold", marginBottom: "4px" }}
+            >
               {t(
                 "CONTENT_ENGINE_UPDATE_REQUIRED",
                 "MAKO Renderer update required",
               )}
-            </div>
-            <div style={{ fontSize: "13px", marginBottom: "10px" }}>
+            </MakoInfo>
+            <MakoInfo
+              data-mako-info="true"
+              style={{ fontSize: "13px", marginBottom: "10px" }}
+            >
               {t("CONTENT_ENGINE_INSTALLED", "Installed:")}{" "}
               {installedEngineVersion ||
                 t("CONTENT_ENGINE_NOT_RECORDED", "not recorded")}
@@ -421,7 +436,7 @@ export function ContentNotices({
                 "CONTENT_ENGINE_UPDATE_DESC",
                 "Reinstall MAKO Renderer to apply the version bundled with this plugin. Then update the matching runtime extensions for prepared Flatpak apps.",
               )}
-            </div>
+            </MakoInfo>
             <div className="Mako_BrandButton">
               <ButtonItem
                 layout="below"

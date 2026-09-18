@@ -79,6 +79,8 @@ The helper prefers MAKO Decky's private log when present; otherwise it selects t
 
 Run `mako-diagnostics --list` to see focused presets. `startup`, `layers`, `config`, `scaling`, `adaptive`, `recovery`, `performance`, `lifecycle`, `hdr`, and `errors` may be combined. These records describe Renderer state and queueing, not reconstructed image quality or compositor scanout.
 
+For Scaling with Gamescope WSI disabled, the `scaling` preset includes `spatial scaling surface bridge` records. `transport=wayland; gamescope_wsi=isolated` proves the minimal Gamescope surface association; an accompanying active source/presentation split is still required to prove that scaling ran. `application_surface=x11; extent_contract=window` records that application capability queries preserve the X11 window-size contract while the private transport remains Wayland; this protects startup without a game-specific exception.
+
 `--session previous`, `oldest`, `previous-two`, or `all` applies only when the selected base log has MAKO Decky's rotated session files. A standalone Steam console log has no such history.
 
 ## 4. Restore normal settings

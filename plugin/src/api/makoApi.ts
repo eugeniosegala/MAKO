@@ -47,7 +47,7 @@ export interface DllDetectionResult {
   error: Nullable<string>;
 }
 
-export interface ScalingModelStatusResult {
+export interface ModelStatusResult {
   compatible: boolean | null;
   reason: string | null;
 }
@@ -298,8 +298,12 @@ export const checkLosslessScalingDll = callable<[], DllDetectionResult>(
 );
 export const checkScalingModel = callable<
   [string, string, number],
-  ScalingModelStatusResult
+  ModelStatusResult
 >("check_scaling_model");
+export const checkFrameGenerationModel = callable<
+  [string, boolean],
+  ModelStatusResult
+>("check_frame_generation_model");
 export const getDllStats = callable<[], DllStatsResult>("get_dll_stats");
 export const getMakoConfig = callable<[], ConfigResult>("get_mako_config");
 export const getProfileConfig = callable<[string], ConfigResult>(

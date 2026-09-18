@@ -27,7 +27,7 @@ void ConfigFile::createDefaultConfigFile(const std::filesystem::path& path) {
 
 [global]
 # dll = '/media/games/Lossless Scaling/Lossless.dll' # if you don't have LS in the default location
-allow_fp16 = true # this will improve give a MASSIVE performance boost on AMD, but be super slow on older (!) NVIDIA GPUs
+allow_fp16 = true # use FP16 when supported; set false to select FP32
 
 [[profile]]
 name = "4x FG / 85% [Performance]"
@@ -50,7 +50,7 @@ adaptive = false
 adaptive_auto_base_fps_cap = false
 target_fps = 120
 adaptive_max_multiplier = 3
-adaptive_stable_cadence = false
+adaptive_stable_cadence = true
 dynamic_cadence_recovery = false
 dynamic_cadence_probe_interval_seconds = 2
 ultra_performance = false

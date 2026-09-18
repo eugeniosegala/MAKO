@@ -1,6 +1,7 @@
 """Keep Decky's profile allowlist aligned with Renderer TOML fields."""
 
 from pathlib import Path
+import json
 import re
 import unittest
 
@@ -30,7 +31,7 @@ from shared_config import (
     ULTRA_PERFORMANCE_FLOW_SCALE,
 )
 from py_modules.mako_plugin.config_schema import CONFIG_FORMAT_VERSION
-from py_modules.mako_plugin.process_detection import _EXCLUDED_WINDOWS_LAUNCHERS
+from py_modules.mako_plugin.launcher_exclusions_generated import EXCLUDED_WINDOWS_LAUNCHERS
 from py_modules.mako_plugin.constants import (
     CONFIG_DIR,
     CONFIG_FILENAME,
@@ -63,15 +64,18 @@ RENDERER_CONFIG_SOURCE = (
 class RendererConfigContractTests(unittest.TestCase):
     def test_launcher_exclusions_match_renderer_activation_guard(self):
         source = (REPOSITORY_ROOT /
-                  "engine/mako-common/src/configuration/detection.cpp").read_text()
+                  "engine/mako-common/src/configuration/launcher_exclusions_generated.hpp").read_text()
         declaration = re.search(
             r"excludedWindowsLauncherExecutables\s*\{(.*?)\n    \};",
             source, re.DOTALL,
         )
         self.assertIsNotNone(declaration)
         names = re.findall(r'std::string_view\{"([^"\n]+)"\}', declaration[1])
-        self.assertTrue(names)
-        self.assertEqual(set(names), _EXCLUDED_WINDOWS_LAUNCHERS)
+        entries = json.loads((REPOSITORY_ROOT /
+                              "engine/mako-common/launcher_exclusions.json").read_text())
+        expected = {name.lower() for entry in entries for name in entry["executables"]}
+        self.assertEqual(set(names), expected)
+        self.assertEqual(EXCLUDED_WINDOWS_LAUNCHERS, expected)
 
     def test_decky_toml_fields_match_renderer_parser_and_writer(self):
         source = RENDERER_CONFIG_SOURCE.read_text(encoding="utf-8")

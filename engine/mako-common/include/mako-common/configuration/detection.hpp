@@ -5,6 +5,7 @@
 #include "config.hpp"
 
 #include <cstdint>
+#include <filesystem>
 #include <optional>
 #include <string>
 #include <utility>
@@ -37,10 +38,20 @@ namespace ls {
     /// identify the current process
     Identification identify();
 
+    /// Read the same executable identities from a procfs process directory.
+    /// Does not read the target's environment or apply this process's overrides.
+    Identification identifyProcess(const std::filesystem::path& processDirectory);
+
+    /// Whether the authoritative executable belongs to an excluded launcher.
+    bool isExcludedLauncher(const Identification& id) noexcept;
+
     /// find a profile for the current process
     /// @param config configuration to search in
     /// @param id identification data
+    /// @param allowEnvironmentProfile honor MAKO_ENV for the current process;
+    /// disable when previewing another process's ordinary profile match
     /// @return ident pair if found
     std::optional<std::pair<IdentType, GameConf>> findProfile(
-        const ConfigFile& config, const Identification& id);
+        const ConfigFile& config, const Identification& id,
+        bool allowEnvironmentProfile = true);
 }

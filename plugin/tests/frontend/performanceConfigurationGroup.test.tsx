@@ -104,7 +104,7 @@ describe("Performance Settings", () => {
     ).toBeTruthy();
     expect(screen.queryByText("Lighter FG Model")).toBeNull();
     expect(
-      (screen.getByText("Flow Scale (75%)") as HTMLButtonElement).disabled,
+      (screen.getByText("Flow Scale (70%)") as HTMLButtonElement).disabled,
     ).toBe(true);
     const allowFp16 = screen.getByText("Allow FP16 (Restart)");
     expect((allowFp16 as HTMLButtonElement).disabled).toBe(true);
@@ -132,7 +132,7 @@ describe("Performance Settings", () => {
     expect(onConfigChange).not.toHaveBeenCalled();
     expect(onConfigUpdate).toHaveBeenCalledWith({
       ultra_performance: false,
-      flow_scale: 0.9,
+      flow_scale: 0.8,
       performance_mode: false,
       allow_fp16: true,
     });

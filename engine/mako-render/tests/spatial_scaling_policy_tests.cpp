@@ -3,6 +3,7 @@
 #include "spatial_scaling_policy.hpp"
 #include "swapchain/create_policy.hpp"
 
+#include <bit>
 #include <cstdlib>
 #include <iostream>
 #include <limits>
@@ -505,8 +506,8 @@ int main() {
     FixedSurfaceCapabilityRelaySlot capabilityRelay;
     const auto lowerPhysicalDevice = reinterpret_cast<VkPhysicalDevice>(0x1);
     const auto otherPhysicalDevice = reinterpret_cast<VkPhysicalDevice>(0x2);
-    const auto lowerSurface = reinterpret_cast<VkSurfaceKHR>(0x10);
-    const auto aliasedUpperSurface = reinterpret_cast<VkSurfaceKHR>(0x20);
+    const auto lowerSurface = std::bit_cast<VkSurfaceKHR>(uint64_t{0x10});
+    const auto aliasedUpperSurface = std::bit_cast<VkSurfaceKHR>(uint64_t{0x20});
     static_cast<void>(aliasedUpperSurface);
     capabilityRelay.begin();
     capabilityRelay.publish(

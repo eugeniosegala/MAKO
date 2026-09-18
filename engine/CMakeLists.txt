@@ -75,7 +75,7 @@ option(MAKO_BUILD_CLI          "Build the command line interface"  ON)
 option(MAKO_INSTALL_DEVELOP    "Install development libraries and headers"      OFF)
 option(MAKO_INSTALL_XDG_FILES  "Install the application icon and desktop files" OFF)
 option(MAKO_ENABLE_SANITIZERS  "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
-option(MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS "Require the native package Vulkan header baseline" OFF)
+option(MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS "Require the shared package Vulkan header baseline" OFF)
 set(MAKO_LAYER_LIBRARY_PATH libmako-render.so CACHE STRING "Change where Vulkan searches for the layer library")
 set(MAKO_SCALING_LAYER_LIBRARY_PATH libmako-render-scaling.so CACHE STRING "Change where Vulkan searches for the isolated spatial-scaling layer library")
 set(MAKO_LAYER_MANIFEST_SUFFIX "" CACHE STRING "Suffix for the installed Vulkan layer manifest filename")
@@ -120,6 +120,16 @@ if(BUILD_TESTING AND UNIX)
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-install-flatpaks")
     set_tests_properties(standalone-flatpak-installer PROPERTIES
         LABELS "portable-policy")
+
+    add_test(NAME flatpak-vulkan-headers-freshness
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate-flatpak-vulkan-headers.py"
+            --check)
+    add_test(NAME flatpak-vulkan-headers-contract
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-flatpak-vulkan-headers.py")
+    set_tests_properties(flatpak-vulkan-headers-freshness
+        flatpak-vulkan-headers-contract PROPERTIES LABELS "portable-policy")
 
     add_test(NAME embedded-color-conversion-spirv-freshness
         COMMAND "${MAKO_PYTHON3_EXECUTABLE}"

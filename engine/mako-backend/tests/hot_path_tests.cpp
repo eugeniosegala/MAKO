@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "helpers/image_prefix.hpp"
+#include "helpers/delta_scratch.hpp"
+#include "helpers/temporal_phases.hpp"
 #include "helpers/timestamp_upload_cache.hpp"
 
 #include <cmath>
@@ -71,6 +73,46 @@ namespace {
             "successful retry did not commit the timestamp");
     }
 
+    void testCommandPhasesPreserveEveryBinding() {
+        for (size_t frame = 0; frame < 120; ++frame) {
+            const auto phase = frame % mako::backend::commandPhaseCount;
+            require(phase % 2 == frame % 2, "cached commands select the wrong source image");
+            for (const size_t count : mako::backend::alphaHistoryCounts)
+                require(phase % count == frame % count,
+                    "cached commands select the wrong temporal history");
+        }
+        require(mako::backend::commandPhaseCount == 6,
+            "model history changed; update the six-phase hardware qualification");
+    }
+
+    void testDeltaScratchPreservesLiveInputs() {
+        const std::vector<int> gamma0{10, 11, 12};
+        const std::vector<int> gamma1{20, 21, 22, 23};
+        for (const size_t multiplier : {size_t{1}, size_t{2}}) {
+            const auto scratch = mako::backend::deltaScratch(gamma0, gamma1, multiplier);
+            require(scratch.primary.size() + scratch.spare.size() == 2 * multiplier,
+                "Delta1 scratch does not cover every storage binding");
+            require(scratch.primary.size() >= multiplier,
+                "Delta1 second-half scratch is incomplete");
+            require(scratch.primary.data() == gamma0.data(),
+                "Delta1 did not reuse Gamma0 images");
+            for (const auto& image : scratch.spare)
+                require(&image >= gamma1.data() + multiplier,
+                    "Delta1 scratch overwrites a still-live Gamma1 input");
+        }
+        const auto rejects = [](const std::vector<int>& a,
+                const std::vector<int>& b, const size_t m) {
+            try { static_cast<void>(mako::backend::deltaScratch(a, b, m)); }
+            catch (const std::invalid_argument&) { return true; }
+            return false;
+        };
+        require(rejects({10, 11}, gamma1, 2), "short Gamma0 scratch was accepted");
+        require(rejects(gamma0, {20, 21}, 2), "missing Gamma1 spare was accepted");
+        require(rejects(gamma0, gamma1, 0) && rejects(gamma0, gamma1, 3),
+            "unsupported scratch multiplier was accepted");
+        require(rejects(gamma0, gamma0, 1), "aliased scratch inputs were accepted");
+    }
+
     void testRequiredImagePrefixIsExactAndFailsClosed() {
         const std::vector<int> images{10, 20, 30, 40};
         const auto prefix = mako::backend::requiredPrefix(images, 2, "test");
@@ -92,6 +134,8 @@ int main() {
         testStableAndChangingCounts();
         testFailedWriteDoesNotCommit();
         testRequiredImagePrefixIsExactAndFailsClosed();
+        testDeltaScratchPreservesLiveInputs();
+        testCommandPhasesPreserveEveryBinding();
     } catch (const std::exception& error) {
         std::cerr << "Backend hot-path test failed: " << error.what() << '\n';
         return 1;

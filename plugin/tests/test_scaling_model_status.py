@@ -120,7 +120,7 @@ class ScalingModelStatusTests(unittest.TestCase):
         self.runner.return_value = self.output(True)
         self.assertTrue(self.check()["compatible"])
         self.runner.return_value = self.output(False)
-        self.service._model_cache_time -= 301
+        self.service._model_cache["ls1"].checked_at -= 301
         self.assertFalse(self.check()["compatible"])
 
     def test_dll_changes_during_inspection_do_not_publish_stale_result(self):
@@ -146,6 +146,37 @@ class ScalingModelStatusTests(unittest.TestCase):
         self.dll.mkdir()
         with patch.dict(os.environ, {"MAKO_DLL_PATH": str(self.dll)}):
             self.assertIsNone(self.service._check_env_dll_path())
+
+    def test_lsfg_checks_saved_precision_and_does_not_evict_ls1_cache(self):
+        self.assertTrue(self.check()["compatible"])
+        self.runner.return_value = self.output(False)
+        check_fg = self.service.check_frame_generation_model
+        self.assertEqual(check_fg(str(self.dll), True),
+                         {"compatible": False, "reason": "lsfg-unavailable"})
+        self.assertEqual(self.runner.call_args.args[0][-1:], ["--lsfg"])
+        self.assertTrue(self.check()["compatible"])
+        self.assertFalse(check_fg(str(self.dll), True)["compatible"])
+        self.assertEqual(self.runner.call_count, 2)
+        check_fg(str(self.dll), False)
+        self.assertEqual(self.runner.call_args.args[0][-2:], ["--lsfg", "--no-fp16"])
+        self.assertEqual(len(self.service._model_cache), 2)
+        self.runner.return_value = self.output(True)
+        self.dll.write_text("changed model input")
+        self.assertTrue(check_fg(str(self.dll), False)["compatible"])
+        self.assertTrue(self.check()["compatible"])
+        self.assertEqual(self.runner.call_count, 5)
+
+    def test_lsfg_missing_dll_is_distinct_from_unknown_inspector(self):
+        check_fg = self.service.check_frame_generation_model
+        self.runner.return_value = SimpleNamespace(returncode=1, stdout="old CLI")
+        self.assertIsNone(check_fg(str(self.dll), True)["compatible"])
+        self.runner.side_effect = subprocess.TimeoutExpired("inspect-dll", 15)
+        self.assertIsNone(check_fg(str(self.dll), True)["compatible"])
+        self.dll.unlink()
+        self.assertEqual(check_fg(str(self.dll), True),
+                         {"compatible": False, "reason": "dll-unavailable"})
+        for value in ("false", 1, None):
+            self.assertIsNone(check_fg(str(self.dll), value)["compatible"])
 
 
 if __name__ == "__main__":

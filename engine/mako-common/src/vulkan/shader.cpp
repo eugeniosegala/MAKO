@@ -190,7 +190,9 @@ Shader::Shader(const vk::Vulkan& vk, const std::vector<uint8_t>& code,
         *this->shaderModule,
         *this->pipelineLayout
     )) {
-
+    // Pipelines own the compiled executable; the input module is needed only
+    // until pipeline creation returns, including for later context reuse.
+    this->shaderModule = {};
 }
 
 Shader::Shader(const vk::Vulkan& vk, const std::span<const uint32_t> code,
@@ -208,5 +210,5 @@ Shader::Shader(const vk::Vulkan& vk, const std::span<const uint32_t> code,
         *this->shaderModule,
         *this->pipelineLayout
     )) {
-
+    this->shaderModule = {};
 }

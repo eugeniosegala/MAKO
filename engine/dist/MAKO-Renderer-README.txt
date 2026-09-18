@@ -3,7 +3,7 @@ MAKO Renderer standalone archive
 
 MAKO Renderer provides Frame Generation and spatial scaling for Vulkan games on SteamOS and Linux. The archive includes matching 64-bit and 32-bit Vulkan layers, the configuration UI, the command-line tools, and the managed installer.
 
-Frame Generation and LS1 scaling require a user-owned installation of Lossless Scaling from Steam. The open MAKO Scaler does not require Lossless.dll.
+Frame Generation and LS1 scaling require a user-owned installation of the default public version of Lossless Scaling from Steam. MAKO can use beta branches, but they are not validated; the default public branch is recommended. The open MAKO Scaler does not require Lossless.dll.
 
 Install or update
 -----------------
@@ -14,13 +14,27 @@ Install or update
 4. Confirm the installation location. The installer verifies every managed payload file, safely updates an existing installation, and preserves your profiles.
 5. MAKO Renderer Configuration opens when installation finishes. You can reopen it from the application menu or by running ~/.local/bin/mako-ui.
 
-For a native Steam or Proton game, add this under Steam Properties > Launch Options:
+Prepare and launch a game
+-------------------------
+
+Installing MAKO Renderer or opening its configuration window does not activate it for every game. A standalone native or Proton game needs both a matching profile and the launch command.
+
+1. In MAKO Renderer Configuration, choose "Create New Profile" and name it.
+2. Under Profile Matching > Matched Processes > Edit..., enter the game's executable or process name (for example Game.exe), then press +. Use the game's process, not its launcher or Steam display title.
+3. Select Frame Generation and/or scaling. Set Lossless.dll Path if automatic discovery fails. To use the open MAKO Scaler without the DLL, turn Frame Generation off and select MAKO Scaler. Scaling enablement and other restart-labelled settings must be selected before launch.
+4. Changes save automatically. You can close the configuration window; it does not need to stay open during play.
+
+For a native Steam or Proton game, add this under Steam Properties > General > Launch Options:
 
     ~/.local/bin/mako-launch %command%
 
-If you selected a custom installation prefix, use the mako-launch path shown by the installer's completion message instead.
+Keep %command% exactly as written. Set this once per game, then use Steam's Play button normally. If you selected a custom installation prefix, use the mako-launch path shown by the installer's completion message instead.
 
-Create or select a matching profile in MAKO Renderer Configuration before starting the game. Scaling enablement and other restart-labelled settings must be selected before launch. Flatpak games require the matching MAKO runtime extension and sandbox preparation described in the online Flatpak guide.
+For a direct desktop command, replace %command% with the actual game executable and arguments:
+
+    ~/.local/bin/mako-launch "/path/to/your-game"
+
+Flatpak games, launchers, and emulators require the matching MAKO runtime extension and preparation for each application. The standalone configuration window edits profiles; it does not prepare Flatpaks. "Install MAKO Flatpak Extensions" installs extensions only. Follow the Flatpak setup link below for runtime selection, configuration/DLL access, and sandbox environment, then restart and launch the app normally. The host mako-launch command does not replace that preparation. MAKO Decky's Flatpak Setup provides managed preparation when using Decky.
 
 Update
 ------

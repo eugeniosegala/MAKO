@@ -18,21 +18,21 @@ The generated wrapper exposes only MAKO's managed manifests, removes additive im
 
 ### Gamescope WSI compatibility
 
-MAKO Decky provides **Gamescope WSI (Restart)** under **Compatibility Settings** for supported 64-bit Frame Generation launches. This opt-in setting addresses artifact reports such as [#7](https://github.com/eugeniosegala/MAKO/issues/7) and [#12](https://github.com/eugeniosegala/MAKO/issues/12). Scaling automatically enables and locks its managed WSI path; HDR remains unsupported.
+MAKO Decky provides **Gamescope WSI (Restart)** under **Compatibility Settings** for supported 64-bit launches with Frame Generation, Scaling, or both. This opt-in setting addresses artifact reports such as [#7](https://github.com/eugeniosegala/MAKO/issues/7) and [#12](https://github.com/eugeniosegala/MAKO/issues/12). Scaling leaves this option independent and defaults to the combined Renderer with WSI isolated; HDR remains unsupported.
 
-Inside Gamescope, MAKO preserves the frame-generation → WSI → spatial-scaling order, with selected 64-bit MangoHud or vkBasalt processing last. It loads only validated, managed layer files. Invalid session or layer evidence fails closed to top-only MAKO with scaling suppressed, while other optional layers fail independently.
+Inside Gamescope, selecting both Scaling and WSI preserves the Renderer → WSI → spatial-scaling order, with selected 64-bit MangoHud or vkBasalt processing last. WSI-only profiles omit the lower spatial role. MAKO loads only validated, managed layer files. An ineligible session or unavailable manifest leaves WSI disabled and uses the combined Renderer, subject to its normal scaling extent checks. Other optional layers fail independently.
 
 MAKO Decky stages and repairs the host’s 64-bit Gamescope WSI payload during Renderer installation. It supports direct 64-bit native Vulkan and Proton launches, plus prepared Heroic and EmuDeck Flatpaks. It does not support Desktop Mode, mismatched nested Wayland sessions, unprepared Flatpaks, 32-bit WSI presentation, or HDR.
 
-Test Fixed 2× before Adaptive and confirm generated delivery and active scaling through the final-output counter. Disable Scaling or Gamescope WSI if pacing or output regresses.
+Test Fixed 2× before Adaptive and confirm generated delivery and active scaling through the final-output counter. The WSI toggle can be changed independently when pacing or output regresses. Restart and verify active scaling plus identical source/output sizes before comparing performance.
 
-MAKO Decky validates and stages exact architecture-specific manifests and available libraries. It does not expose the complete host implicit-layer directory. Invalid optional-tool evidence suppresses that tool; invalid WSI or lower-spatial evidence falls back to top-only MAKO with scaling inactive. HDR remains disabled in every current managed chain.
+MAKO Decky validates and stages exact architecture-specific manifests and available libraries. It does not expose the complete host implicit-layer directory. Invalid optional-tool evidence suppresses that tool. Missing staged WSI or spatial manifests keep the launch on the combined Renderer; missing surface or create evidence after a split chain starts keeps scaling native or rejects the invalid create. HDR remains disabled in every current managed chain.
 
 Layer membership cannot change after Vulkan starts. Restart the game after changing WSI, Scaling, MangoHud, or vkBasalt.
 
 ### Enable MangoHud or vkBasalt
 
-1. Install the tool on the SteamOS host.
+1. Install the tool on the SteamOS host. For vkBasalt, follow the [upstream documentation and MAKO requirements below](#vkbasalt-with-mako-decky).
 2. Keep `/home/deck/.local/bin/mako-run %command%` as the Steam launch option.
 3. Select the default profile or save a profile for the running game.
 4. Enable exactly one tool under **External Tools**.
@@ -46,7 +46,29 @@ MangoHud continues to read `~/.config/MangoHud/MangoHud.conf`. To override a few
 /home/deck/.local/bin/mako-run env MANGOHUD_CONFIG=fps,frametime,cpu_stats,gpu_stats,position=top-right %command%
 ```
 
-Do not add activation or layer-path variables when the managed control is enabled. vkBasalt similarly continues to read its normal configuration below `~/.config/vkBasalt/`; MAKO Decky controls admission, not effects.
+Do not add activation or layer-path variables when the managed control is enabled.
+
+#### vkBasalt with MAKO Decky
+
+Use vkBasalt's official documentation for its installation, effects, and general troubleshooting:
+
+- [Installation and 64-bit/32-bit source builds](https://github.com/DadSchoorse/vkBasalt#building-from-source).
+- [Configuration, per-game effects, ReShade shaders, and the Home toggle](https://github.com/DadSchoorse/vkBasalt#configure).
+- [Annotated example configuration](https://github.com/DadSchoorse/vkBasalt/blob/master/config/vkBasalt.conf), including effect names and sharpening ranges.
+- [Debug logging](https://github.com/DadSchoorse/vkBasalt#debug-output) and [frequently asked questions](https://github.com/DadSchoorse/vkBasalt#faq).
+
+MAKO Decky controls which installed layer loads for a profile. vkBasalt reads its own configuration, normally `~/.config/vkBasalt/vkBasalt.conf`; MAKO does not install vkBasalt or edit its effects. For MAKO launches, keep the `mako-run` launch option above and use **Enable vkBasalt (Restart)** under **External Tools**. MAKO supplies activation, so do not add the upstream standalone `ENABLE_VKBASALT=1 %command%` launch option.
+
+MAKO's installation requirements are:
+
+- Install the library matching the game's Vulkan process architecture. MAKO currently discovers host manifests only in `/usr/share/vulkan/implicit_layer.d`: `vkBasalt.json` or `vkBasalt.x86_64.json` for 64-bit, and `vkBasalt.x86.json` for 32-bit. User-directory-only and Flatpak installations do not satisfy this discovery path.
+- A 32-bit source build using upstream's `-Dwith_json=false` does not install a manifest. Supply the separate `vkBasalt.x86.json` as well: copy the installed 64-bit vkBasalt manifest to that filename, set its `layer.library_arch` to `"32"`, and point `layer.library_path` to the installed 32-bit library, normally `/usr/lib32/libvkbasalt.so` on SteamOS. Keep the original 64-bit manifest.
+- Preserve the standard manifest activation gates: `ENABLE_VKBASALT=1` and `DISABLE_VKBASALT=1`. MAKO rejects manifests that change those gates.
+- Reload MAKO Decky after installing vkBasalt so it stages the matching manifests, then restart the game. Keep Gamescope WSI off for 32-bit launches. The external-tool controls do not enable host vkBasalt inside Flatpak games.
+
+If vkBasalt works on its own but is absent with MAKO, check these installation requirements and the game's selected profile, then collect a [MAKO Decky diagnostics report](../../plugin/docs/COLLECT_DIAGNOSTICS.md). Use the upstream links for effect selection, sharpening strength, hotkeys, and vkBasalt's own logs.
+
+User-reported SteamOS gameplay checks confirmed working vkBasalt effects in Resident Evil 4 and Black Mesa's 32-bit Windows build through Proton. A separate native 32-bit Vulkan loader check confirmed that MAKO's managed manifest loads the 32-bit vkBasalt library and its configuration. These checks cover those specific paths, not every game, runtime, or presentation scenario.
 
 ## Manual MangoHud diagnostic path
 
@@ -71,7 +93,7 @@ Do not generalize the manual MangoHud command to a support claim. Every Vulkan l
 | Integration | MAKO status |
 | --- | --- |
 | MangoHud | Managed per-profile path; bounded manual diagnostic path above |
-| vkBasalt | Managed experimental per-profile path |
+| vkBasalt | Managed per-profile path; requires the matching host library and manifest |
 | OBS Vulkan Capture | Unsupported candidate until the exact host/plugin/sandbox path and generated-frame capture are validated |
 | RenderDoc | Developer diagnostic only; use its own registration and activation flow and measure the resulting chain |
 | Other Frame Generation layers | Never combine with MAKO |
@@ -84,7 +106,7 @@ Adding a supported integration requires one exact manifest path and intended ord
 
 XR Gaming has two distinct rendering paths. Its [Gamescope integration](https://github.com/wheaney/XRLinuxDriver/blob/3e0132f67bba17709e16286a1f8dce88bcf65adc/src/plugins/gamescope_reshade_wayland.c) loads a ReShade effect in the compositor through Wayland. This runs outside the game's Vulkan layer chain, so MAKO's private manifest isolation does not disable it. MAKO Decky's **Gamescope WSI (Restart)** setting controls a different, application-side layer; enabling it is not an established XR fix.
 
-XR Gaming's [**Disable gamescope integration** control](https://github.com/wheaney/decky-XRGaming/blob/main/src/index.tsx) instead selects its Vulkan-only path, which uses Breezy's vkBasalt fork. That layer is excluded by MAKO's default isolation. Selecting MAKO's experimental vkBasalt control is not proof of compatibility with Breezy's fork, its transforms, or head-tracking timing. Neither XR path currently has validated MAKO compatibility on glasses.
+XR Gaming's [**Disable gamescope integration** control](https://github.com/wheaney/decky-XRGaming/blob/main/src/index.tsx) instead selects its Vulkan-only path, which uses Breezy's vkBasalt fork. That layer is excluded by MAKO's default isolation. Selecting MAKO's vkBasalt control is not proof of compatibility with Breezy's fork, its transforms, or head-tracking timing. Neither XR path currently has validated MAKO compatibility on glasses.
 
 [Issue #24](https://github.com/eugeniosegala/MAKO/issues/24) reports severe lag only when Frame Generation and Anchor/Follow run together. The supplied MAKO 2.1.0 logs show successful Renderer startup and Gamescope compiling a `Transform` effect, but contain neither presentation-timing diagnostics nor Vulkan loader order. They do not establish whether the slowdown comes from game cadence, generated-image waits, shared GPU load, or compositor/head-tracking timing. Missing-texture warnings alone do not establish a shader failure, and the recorded Gamescope abort follows session shutdown.
 

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 
 /**
- * Keeps one collapsible Decky section in local storage.
+ * Keeps a Decky section's collapsed/hidden preference in local storage.
  *
  * Reading intentionally fails silently so damaged or unavailable browser
  * storage falls back to the product default. Writes retain the existing
@@ -15,7 +15,8 @@ export function usePersistentCollapseState(
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
       const saved = localStorage.getItem(storageKey);
-      return saved !== null ? (JSON.parse(saved) as boolean) : defaultCollapsed;
+      const parsed: unknown = saved !== null ? JSON.parse(saved) : null;
+      return typeof parsed === "boolean" ? parsed : defaultCollapsed;
     } catch {
       return defaultCollapsed;
     }

@@ -143,6 +143,14 @@ namespace {
     // the chance that an ordered FIFO begins Fractional pacing one frame
     // short. It changes only the bounded prefix phase, not the long-term rate.
     constexpr double adaptiveTargetClockInitialBudgetPhaseOutputs = 0.5;
+    // Keep almost one bounded output of credit when the configured multiplier
+    // cannot currently satisfy target demand. Wrapping the excess to its
+    // fractional remainder discards slow-side credit, so ordinary source
+    // jitter can then spend a fast frame below an otherwise achievable integer
+    // ceiling after an external throttle. Leave enough distance from one for
+    // the target-clock floor tolerance below.
+    constexpr double adaptiveTargetClockMaximumCeilingCreditOutputs =
+        1.0 - 2e-9;
     // Do not move earned work between almost-equivalent source intervals.
     // Five percent of one target period filters ordinary high-base cadence
     // noise while preserving the materially better long-interval placement
@@ -1409,8 +1417,9 @@ MAKO_ADAPTIVE_STAGE_INLINE size_t AdaptiveScheduler::selectGeneratedFrameCount(
             targetClock.budgetCreditOutputs = 0.0;
         if (baselineOutputs == maximumOutputs &&
                 targetClock.budgetCreditOutputs >= 1.0) {
-            targetClock.budgetCreditOutputs = std::fmod(
-                targetClock.budgetCreditOutputs, 1.0
+            targetClock.budgetCreditOutputs = std::min(
+                targetClock.budgetCreditOutputs,
+                adaptiveTargetClockMaximumCeilingCreditOutputs
             );
         }
         size_t scheduledOutputs = baselineOutputs;

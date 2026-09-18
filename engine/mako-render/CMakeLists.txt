@@ -1,6 +1,7 @@
 set(LAYER_SOURCES
     "src/entrypoint.cpp"
     "src/gamescope_hdr_feedback.cpp"
+    "src/gamescope_scaling_surface.cpp"
     "src/instance.cpp"
     "src/present_diagnostics.cpp"
     "src/runtime_status.cpp"
@@ -41,23 +42,40 @@ if(MAKO_BUILD_VK_LAYER)
         # an older SDK cannot silently remove required presentation handling.
         include(CheckCXXSourceCompiles)
         function(mako_check_native_package_headers)
+            set(revision_file "${CMAKE_CURRENT_SOURCE_DIR}/../vulkan-headers-revision.txt")
+            set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${revision_file}")
+            file(READ "${revision_file}" revision)
+            string(STRIP "${revision}" revision)
+            if(NOT revision MATCHES "^(vulkan-sdk-|v)([0-9]+)\\.([0-9]+)\\.([0-9]+)$")
+                message(FATAL_ERROR
+                    "vulkan-headers-revision.txt must contain a Vulkan-Headers "
+                    "SDK branch (vulkan-sdk-X.Y.Z) or release tag (vX.Y.Z).")
+            endif()
+            set(header_version "${CMAKE_MATCH_2}.${CMAKE_MATCH_3}.${CMAKE_MATCH_4}")
+            set(header_version_arguments "${CMAKE_MATCH_2}, ${CMAKE_MATCH_3}, ${CMAKE_MATCH_4}")
             set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
             unset(MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED CACHE)
             check_cxx_source_compiles("
                 #include \"${CMAKE_CURRENT_SOURCE_DIR}/src/pnext_chain.hpp\"
                 #ifndef VK_KHR_present_id2
-                #error Native packages require VK_KHR_present_id2
+                #error MAKO Renderer packages require VK_KHR_present_id2
+                #endif
+                #ifndef VK_EXT_present_timing
+                #error MAKO Renderer packages require VK_EXT_present_timing
                 #endif
                 static_assert(VK_HEADER_VERSION_COMPLETE >=
-                    VK_MAKE_API_VERSION(0, 1, 4, 328));
+                    VK_MAKE_API_VERSION(0, ${header_version_arguments}));
                 static_assert(sizeof(VkPresentId2KHR) > 0);
+                static_assert(sizeof(VkPresentTimingsInfoEXT) > 0);
                 int main() { return 0; }
             " MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED)
             if(NOT MAKO_NATIVE_PACKAGE_HEADERS_SUPPORTED)
                 message(FATAL_ERROR
-                    "Native MAKO Renderer packages require Vulkan headers "
-                    "1.4.328 or newer with VK_KHR_present_id2. Use "
-                    "MAKO_PORTABLE_PACKAGE=1 with scripts/package-local.sh; "
+                    "MAKO Renderer packages require Vulkan headers "
+                    "${header_version} or newer with VK_KHR_present_id2 and "
+                    "VK_EXT_present_timing. Use the pinned headers through "
+                    "scripts/package-local.sh (MAKO_PORTABLE_PACKAGE=1) or "
+                    "scripts/package-flatpaks.sh; "
                     "do not bypass this check. See the CMake compile log.")
             endif()
         endfunction()
@@ -222,6 +240,34 @@ if(BUILD_TESTING)
         COMMAND mako-presentation-policy-tests)
     mako_register_portable_policy_test(
         mako-presentation-policy-tests presentation-policy)
+
+    if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+        add_library(mako-surface-client-fixture SHARED
+            "tests/gamescope_surface_client_fixture.cpp")
+        set_target_properties(mako-surface-client-fixture PROPERTIES
+            OUTPUT_NAME "wayland-client" SOVERSION 0
+            LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/surface-client-fixture")
+        add_custom_command(TARGET mako-surface-client-fixture POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "$<TARGET_FILE_NAME:mako-surface-client-fixture>"
+                "$<TARGET_FILE_DIR:mako-surface-client-fixture>/libxcb.so.1"
+            COMMAND ${CMAKE_COMMAND} -E create_symlink
+                "$<TARGET_FILE_NAME:mako-surface-client-fixture>"
+                "$<TARGET_FILE_DIR:mako-surface-client-fixture>/libX11-xcb.so.1")
+        add_executable(mako-gamescope-scaling-surface-tests
+            "tests/gamescope_scaling_surface_tests.cpp"
+            "src/gamescope_scaling_surface.cpp")
+        target_include_directories(mako-gamescope-scaling-surface-tests
+            PRIVATE "src" "../mako-common/include")
+        target_link_libraries(mako-gamescope-scaling-surface-tests
+            PRIVATE mako-surface-client-fixture ${CMAKE_DL_LIBS})
+        add_test(NAME gamescope-scaling-surface
+            COMMAND ${CMAKE_COMMAND} -E env
+                "LD_LIBRARY_PATH=$<TARGET_FILE_DIR:mako-surface-client-fixture>"
+                $<TARGET_FILE:mako-gamescope-scaling-surface-tests>)
+        mako_register_portable_policy_test(
+            mako-gamescope-scaling-surface-tests gamescope-scaling-surface)
+    endif()
 
     add_executable(mako-adaptive-tests
         "tests/adaptive_scheduler_tests.cpp")

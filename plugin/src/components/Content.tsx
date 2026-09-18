@@ -1,4 +1,3 @@
-import type { FocusEvent } from "react";
 import {
   ButtonItem,
   PanelSection,
@@ -18,13 +17,15 @@ import { useProfileConfigWriter } from "../hooks/useProfileConfigWriter";
 import { StatusDisplay } from "./StatusDisplay";
 import { InstallationButton } from "./InstallationButton";
 import { ConfigurationSection } from "./ConfigurationSection";
-import { useScalingModelStatus } from "../hooks/useScalingModelStatus";
+import { useModelStatus } from "../hooks/useModelStatus";
+import { effectiveScalingMethod } from "../config/ultraPerformancePreset";
 import { ProfileManagement } from "./ProfileManagement";
 import { UsageInstructions } from "./UsageInstructions";
 import { FgmodClipboardButton } from "./FgmodClipboardButton";
 import { FeatureSettings } from "./FeatureSettings";
 import { RuntimeStatusCard } from "./RuntimeStatusCard";
 import { ContentNotices } from "./ContentNotices";
+import { InfoVisibility } from "./InfoVisibility";
 import { AdvancedDetailsModal } from "./AdvancedDetailsModal";
 import { FlatpaksModal } from "./FlatpaksModal";
 import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
@@ -75,7 +76,7 @@ export function Content() {
     editingProfile,
     Boolean(isInstalled && mainRunningApp),
   );
-  const scalingModelCompatible = useScalingModelStatus(config, isInstalled);
+  const modelStatus = useModelStatus(config, isInstalled);
   const {
     saveConfigChanges: handleConfigChanges,
     saveConfigField: handleConfigChange,
@@ -110,22 +111,6 @@ export function Content() {
     showModal(<FlatpaksModal />);
   };
 
-  const keepFocusedControlVisible = (event: FocusEvent<HTMLDivElement>) => {
-    const target = event.target;
-
-    // Decky's controller navigation can move focus before its scroll container
-    // has caught up, most noticeably when navigating from the bottom back to
-    // the first controls. Centre the newly focused control without animation
-    // so the top of the plugin is fully reachable and no scroll requests queue.
-    requestAnimationFrame(() => {
-      target.scrollIntoView({
-        block: "center",
-        inline: "nearest",
-        behavior: "auto",
-      });
-    });
-  };
-
   const hasDevelopmentNotice = Boolean(localDevelopmentBuildInfo);
   const hasRunningAppNotice = Boolean(isInstalled && mainRunningApp);
   const hasEngineUpdateNotice = Boolean(isInstalled && engineUpdateRequired);
@@ -136,7 +121,7 @@ export function Content() {
     hasEngineUpdateNotice;
 
   return (
-    <div onFocusCapture={keepFocusedControlVisible}>
+    <InfoVisibility>
       <MakoButtonTheme />
       <PanelSection>
         <MakoReleaseIdentity
@@ -155,6 +140,21 @@ export function Content() {
           isInstallCompletionVisible={isInstallCompletionVisible}
           isUninstalling={isUninstalling}
           onInstall={onInstall}
+          modelStatus={{
+            ...modelStatus,
+            ls1RuntimeFallback:
+              isInstalled &&
+              !config.disable_mako &&
+              config.scaling_enabled &&
+              ["ls1", "ls1-performance"].includes(
+                effectiveScalingMethod(config),
+              ) &&
+              scalingRuntimeState.requestedMethod ===
+                effectiveScalingMethod(config) &&
+              scalingRuntimeState.scalingActive &&
+              scalingRuntimeState.activeMethod === "mako" &&
+              Boolean(scalingRuntimeState.fallbackReason),
+          }}
         />
         {!isInstalled && (
           <>
@@ -199,7 +199,7 @@ export function Content() {
               config={config}
               disabled={engineUpdateRequired}
               runtimeState={scalingRuntimeState}
-              scalingModelCompatible={scalingModelCompatible}
+              scalingModelCompatible={modelStatus.ls1?.compatible ?? null}
               onConfigChange={handleConfigChange}
               onConfigUpdate={handleConfigChanges}
             />
@@ -275,6 +275,6 @@ export function Content() {
           </>
         )}
       </PanelSection>
-    </div>
+    </InfoVisibility>
   );
 }

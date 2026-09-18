@@ -1,3 +1,4 @@
+import { MakoInfo } from "./MakoInfo";
 import { Focusable, PanelSectionRow, Spinner } from "@decky/ui";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { FiAlertTriangle, FiInfo, FiLink } from "react-icons/fi";
@@ -112,8 +113,9 @@ export function MakoRestartLabel({ label }: { label: string }) {
 /** Mark an intentionally early-access control without turning the label into a warning. */
 export function MakoExperimentalBadge({ label }: { label: string }) {
   return (
-    <span
+    <MakoInfo as="span"
       data-mako-experimental-badge="true"
+      data-mako-info="true"
       style={{
         display: "inline-flex",
         alignItems: "center",
@@ -131,7 +133,7 @@ export function MakoExperimentalBadge({ label }: { label: string }) {
       }}
     >
       {label}
-    </span>
+    </MakoInfo>
   );
 }
 
@@ -161,16 +163,21 @@ export function MakoExperimentalSettingLabel({
 export function MakoInlineTip({
   children,
   tone = "info",
+  alwaysVisible = false,
 }: {
   children: ReactNode;
   tone?: "info" | "warning";
+  alwaysVisible?: boolean;
 }) {
   const isWarning = tone === "warning";
   const accentColor = isWarning ? "#f4a259" : makoAccentColor;
   const Icon = isWarning ? FiAlertTriangle : FiInfo;
+  const Container = alwaysVisible ? "div" : MakoInfo;
   return (
-    <div
+    <Container
       role="note"
+      className={alwaysVisible ? undefined : "Mako_OptionMessage"}
+      data-mako-info={alwaysVisible ? undefined : "true"}
       data-tone={tone}
       style={{
         display: "flex",
@@ -205,14 +212,16 @@ export function MakoInlineTip({
         }}
       />
       <span style={{ minWidth: 0 }}>{children}</span>
-    </div>
+    </Container>
   );
 }
 
 export function MakoSettingRelationship({ children }: { children: ReactNode }) {
   return (
-    <div
+    <MakoInfo
+      className="Mako_OptionMessage"
       data-mako-setting-relationship="true"
+      data-mako-info="true"
       style={{
         display: "flex",
         alignItems: "flex-start",
@@ -235,7 +244,7 @@ export function MakoSettingRelationship({ children }: { children: ReactNode }) {
         }}
       />
       <span style={{ minWidth: 0 }}>{children}</span>
-    </div>
+    </MakoInfo>
   );
 }
 
@@ -305,13 +314,15 @@ export function MakoSectionHeader({
         <div
           style={{
             paddingBottom: "8px",
-            borderBottom: "4px solid rgba(77, 170, 190, 0.48)",
+            textAlign: "center",
+            borderBottom: "4px solid #315A86",
           }}
         >
           {children}
         </div>
         {description && (
-          <div
+          <MakoInfo
+            data-mako-info="true"
             style={{
               marginTop: "8px",
               color: "#aebfc5",
@@ -322,7 +333,7 @@ export function MakoSectionHeader({
             }}
           >
             {description}
-          </div>
+          </MakoInfo>
         )}
       </div>
     </PanelSectionRow>

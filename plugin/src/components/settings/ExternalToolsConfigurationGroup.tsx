@@ -6,11 +6,7 @@ import {
   EXTERNAL_VULKAN_LAYER,
 } from "../../config/configSchema";
 import t from "../../i18n/i18n";
-import {
-  MakoExperimentalSettingLabel,
-  MakoRestartLabel,
-  MakoSectionHeader,
-} from "../MakoUi";
+import { MakoRestartLabel, MakoSectionHeader } from "../MakoUi";
 import type { ConfigurationGroupProps } from "./types";
 import { CollapseControl } from "./CollapseControl";
 
@@ -65,17 +61,16 @@ export function ExternalToolsConfigurationGroup({
           <PanelSectionRow>
             <ToggleField
               label={
-                <MakoExperimentalSettingLabel
+                <MakoRestartLabel
                   label={t(
                     "CONFIG_ENABLE_VKBASALT",
                     "Enable vkBasalt (Restart)",
                   )}
-                  badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
                 />
               }
               description={t(
                 "CONFIG_ENABLE_VKBASALT_DESC",
-                "Keep it off unless you are testing vkBasalt with this game. Uses a host-installed vkBasalt layer for this profile. The initial test lane is limited to 64-bit native Vulkan or Proton games launched directly by Steam on SteamOS.",
+                "Applies your configured vkBasalt effects, such as sharpening, anti-aliasing, and color adjustments. Requires vkBasalt to be installed separately.",
               )}
               bottomSeparator="none"
               checked={

@@ -23,7 +23,7 @@ Install:
 - CMake (version 3.10 or higher)
 - Ninja (recommended; other CMake generators may work)
 - Vulkan headers and loader development files
-- X11 headers (`libx11` and `xorgproto` on Arch/SteamOS)
+- X11 and XCB headers (`libx11`, `libxcb`, and `xorgproto` on Arch/SteamOS)
 - Python 3 when building the registered tests
 - A multilib C++ toolchain when building the 32-bit Vulkan layer
 - Qt 6.2 or newer and Qt6Quick (only needed when building `mako-ui`)
@@ -36,7 +36,7 @@ sudo apt-get install -y \
     git curl python3 \
     llvm clang clang-tools clang-tidy \
     cmake ninja-build pkg-config g++-multilib \
-    libvulkan-dev libx11-dev \
+    libvulkan-dev libx11-dev libxcb1-dev \
     mesa-common-dev \
     qt6-base-dev qt6-base-dev-tools \
     qt6-tools-dev qt6-tools-dev-tools \
@@ -47,7 +47,7 @@ sudo pacman -S --needed \
     git curl python \
     llvm clang ccache lib32-glibc \
     cmake ninja \
-    vulkan-headers vulkan-icd-loader libx11 xorgproto \
+    vulkan-headers vulkan-icd-loader libx11 libxcb xorgproto \
     qt6-base qt6-declarative
 ```
 
@@ -65,9 +65,11 @@ The release packager builds the 64-bit CLI, UI, launcher, and both Renderer role
 
 Use the incremental script for iteration, the local package for testers, and the hardware workflow for a release candidate. Publication is a separate workflow that applies version and pin commits and rebuilds the public artifacts, as described in [How to release MAKO](../../HOW_TO_RELEASE.md).
 
-For an explicitly requested maintainer exception, `MAKO_RELEASE_SKIP_TESTS=1` omits test compilation, CTest, and launcher tests while retaining build, ABI, archive, and checksum verification. See the [hotfix exception](../../HOW_TO_RELEASE.md#maintainer-directed-hotfix-without-automated-validation). Publication always uses the portable native builder: Ubuntu 22.04, Clang 14, Qt 6.2, and Vulkan headers 1.4.328. Use `MAKO_PORTABLE_PACKAGE=1` for complete tester packages too; follow the [build-alignment and evidence requirements](../../HOW_TO_RELEASE.md#keep-tester-and-release-builds-aligned) when comparing them with a release.
+For an explicitly requested maintainer exception, `MAKO_RELEASE_SKIP_TESTS=1` omits test compilation, CTest, and launcher tests while retaining build, ABI, archive, and checksum verification. See the [hotfix exception](../../HOW_TO_RELEASE.md#maintainer-directed-hotfix-without-automated-validation). Publication always uses the portable native builder: Ubuntu 22.04, Clang 14, Qt 6.2, and the Vulkan headers pinned in [`vulkan-headers-revision.txt`](../vulkan-headers-revision.txt). Use `MAKO_PORTABLE_PACKAGE=1` for complete tester packages too; follow the [build-alignment and evidence requirements](../../HOW_TO_RELEASE.md#keep-tester-and-release-builds-aligned) when comparing them with a release.
 
-Every native archive build enables `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON` for both architectures. CMake compiles the actual presentation-filter header and rejects headers older than 1.4.328 or missing `VK_KHR_present_id2`, including when automated tests are disabled. This prevents SDK selection from silently removing the native package's presentation compatibility. It is a build-time requirement, not a higher Vulkan driver/API requirement. Direct development CMake builds and Flatpak SDK builds retain their existing header compatibility; the latter need separate runtime-specific evidence.
+Every native and Flatpak archive build enables `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON` for both architectures; the option retains its historical name for compatibility. CMake compiles the actual presentation-filter header and rejects headers older than the pinned revision or missing `VK_KHR_present_id2` or `VK_EXT_present_timing`, including when automated tests are disabled. The timing-node ABI checks therefore compile against the official `VkPresentTimingsInfoEXT` declaration. This prevents SDK selection from silently removing the packaged Renderer's presentation compatibility. It is a build-time requirement, not a higher Vulkan driver/API requirement. Direct development CMake builds retain their existing header compatibility. Flatpak builds use the shared pinned headers with each runtime's existing compiler and libraries and still need runtime-specific evidence.
+
+[`engine/vulkan-headers-revision.txt`](../vulkan-headers-revision.txt) is the single owner of the native and Flatpak Vulkan-Headers build pin and minimum header version. It contains one upstream SDK branch (`vulkan-sdk-X.Y.Z`) or release tag (`vX.Y.Z`). The portable packager and main Renderer CI builds fetch that ref, and CMake derives its minimum version from the same file. `scripts/generate-flatpak-vulkan-headers.py` derives the shared Flatpak module from it; regenerate after pin changes, then run its read-only `--check` gate. All three Flatpak manifests include that generated module before their two Renderer builds. The headers are removed during Flatpak cleanup and are not a runtime dependency. An SDK branch can advance, so retain the resolved header commit with the build evidence. MAKO Decky delegates native source builds to this Renderer packager and has no separate header pin. The sanitizer CI job retains its host headers for distribution SDK coverage. To update the baseline, change this file and qualify the resulting packages under the tester/release build-alignment requirements above. The Vulkan layer manifests' `api_version` describes the layer's supported API and is maintained separately; it must not automatically follow header updates.
 
 Distributable archives and Flatpak extensions include the project license, third-party notices, and asset-provenance record. Packaging fails if those files or another required payload entry is missing. The standalone installer also rewrites its desktop entries to the selected installation prefix.
 
@@ -158,7 +160,7 @@ Useful CMake options:
 - `MAKO_BUILD_CLI`: Set to `On` to build the command-line interface (default is `On`).
 - `MAKO_INSTALL_DEVELOP`: Set to `On` to install development files like headers and libraries (default is `Off`).
 - `MAKO_INSTALL_XDG_FILES`: Set to `On` to install XDG desktop files and icons (default is `Off`).
-- `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS`: Require the native archive's Vulkan header baseline (default is `Off` for direct CMake builds; the host packager always sets it to `On`).
+- `MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS`: Require the shared native/Flatpak Vulkan header baseline (default is `Off` for direct CMake builds; all package builds set it to `On`).
 - `MAKO_LAYER_LIBRARY_PATH`: Override the frame-generation role library path stored in its manifest.
 - `MAKO_SCALING_LAYER_LIBRARY_PATH`: Override the spatial role library path stored in its manifest.
 - `MAKO_LAYER_MANIFEST_SUFFIX`: Add a suffix to the installed manifest filename when packaging multiple architectures.

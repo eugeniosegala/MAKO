@@ -55,10 +55,10 @@ namespace {
 CommandBuffer::CommandBuffer(const vk::Vulkan& vk)
         : commandBuffer(createCommandBuffer(vk)) {}
 
-void CommandBuffer::begin(const vk::Vulkan& vk) const {
+void CommandBuffer::begin(const vk::Vulkan& vk, const VkCommandBufferUsageFlags flags) const {
     const VkCommandBufferBeginInfo beginInfo = {
         .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+        .flags = flags
     };
     auto res = vk.df().BeginCommandBuffer(*this->commandBuffer, &beginInfo);
     if (res != VK_SUCCESS)

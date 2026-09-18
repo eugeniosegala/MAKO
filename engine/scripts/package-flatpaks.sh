@@ -62,17 +62,19 @@ if [[ "$(uname -s)" != "Linux" ]]; then
                 apt-get -o Acquire::https::Verify-Peer=false install -y -qq ca-certificates
             fi
             apt-get update -qq
-            apt-get install -y -qq ca-certificates flatpak flatpak-builder xz-utils
+            apt-get install -y -qq ca-certificates flatpak flatpak-builder python3 xz-utils
             scripts/package-flatpaks.sh "/workspace/engine/'"$output_relative"'"
         '
 fi
 
-for command in flatpak flatpak-builder nm strings tar; do
+for command in flatpak flatpak-builder nm python3 strings tar; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         exit 1
     fi
 done
+
+python3 "$repo_root/scripts/generate-flatpak-vulkan-headers.py" --check
 
 verify_elf_class() {
     local path="$1"

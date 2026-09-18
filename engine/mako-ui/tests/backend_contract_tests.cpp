@@ -46,6 +46,9 @@ void require_property(const char* name, const char* type_name,
 }
 
 void test_scaling_properties() {
+    require_property("running_games", "QVariantList", false, false);
+    require_property("scanning_games", "bool", false, false);
+    require_property("capture_failed", "bool", false, false);
     static_assert(!ls::GameConfDefaults::scalingEnabled);
     static_assert(ls::GameConfDefaults::scalingMethod ==
         ls::ScalingMethod::Ls1);
@@ -176,6 +179,19 @@ void test_feature_group_order_and_ownership() {
             frame_generation_group.contains(
                 QStringLiteral("checked: backend.performance_mode")),
         "Lighter FG Model does not belong to Frame Generation");
+    const qsizetype fixed_multiplier_entry = frame_generation_group.indexOf(
+        QStringLiteral("title: t.multiplier")
+    );
+    const qsizetype smooth_cadence_entry = frame_generation_group.indexOf(
+        QStringLiteral("title: t.smoothCadence")
+    );
+    const qsizetype lighter_model_entry = frame_generation_group.indexOf(
+        QStringLiteral("title: t.performanceMode")
+    );
+    require(fixed_multiplier_entry >= 0 &&
+            fixed_multiplier_entry < smooth_cadence_entry &&
+            smooth_cadence_entry < lighter_model_entry,
+        "Frame Generation must order Fixed Multiplier, Smooth Cadence, then Lighter FG Model");
 
     qsizetype performance_group_end = qml.indexOf(
         QStringLiteral("\n                Group {"),

@@ -30,12 +30,14 @@ Use [MAKO Decky packaging](plugin/docs/PACKAGING.md) for development and tester 
 The `Tests` workflow runs on every pull request and push to `main`:
 
 - MAKO Decky backend/frontend tests, type checking, coverage, generated-contract freshness, localization, production bundling, and package-license contracts;
-- MAKO Renderer CTest with GCC and Clang, including Qt, localization, synthetic model inspection, launch policy, and generated-SPIR-V freshness;
+- MAKO Renderer CTest with GCC and Clang using the [native package Vulkan-Headers revision](engine/vulkan-headers-revision.txt) and its required-header check, including Qt, localization, synthetic model inspection, launch policy, generated-SPIR-V freshness, and shared Flatpak-header module freshness/mutation checks;
 - portable Renderer policy tests under ASan and UBSan;
 - protected-input, trace-producer, and Gym-selection contracts on their supported hosts; and
 - Markdown formatting.
 
 The owning component tests remain authoritative for their detailed invariants.
+
+Launcher exclusion freshness runs in Renderer CTest and Decky's generated-contract gate; `just check-launcher-exclusions` runs it directly. The shared registry is `engine/mako-common/launcher_exclusions.json`; regenerate both component bindings with `just generate-launcher-exclusions`. Portable tests validate registry entries, reject stale or missing bindings without rewriting them, and cover exclusion and child activation for the registered executables. New exclusions also need focused real-launcher evidence; moving the unchanged list does not establish new compatibility evidence.
 
 Decky's backend suite includes `plugin/tests/test_flatpak_override_integration.py`, which uses the real Linux `flatpak override` command in a temporary `FLATPAK_USER_DIR`. It checks preparation, repeated app-list refreshes, removal, and preservation of unrelated settings for Heroic, Lutris, and Dolphin. Application/runtime inventory is simulated; no installed apps, runtime downloads, licensed inputs, or GPU are required. The test skips when Linux or Flatpak is unavailable locally; the Decky CI job installs Flatpak before running it. Actual sandbox launches and rendering remain MAKO Gym evidence.
 
@@ -50,7 +52,7 @@ pnpm --dir plugin run build
 just test-engine-sanitized
 ```
 
-The focused Renderer policy script compiles Vulkan-facing policy headers, so it needs Vulkan headers even though it does not need a Vulkan device or runtime. The full Renderer suite additionally needs the Vulkan loader and X11 development files:
+The focused Renderer policy script compiles Vulkan-facing policies and the optional Gamescope surface adapter against a local client fixture, so it needs Vulkan, X11, and XCB headers even though it does not need a Vulkan device, compositor, or Wayland development package. The full Renderer suite additionally needs the Vulkan loader:
 
 ```bash
 cmake -S engine -B engine/build/local -DBUILD_TESTING=ON -DMAKO_BUILD_UI=OFF
@@ -63,6 +65,8 @@ Use `-DMAKO_BUILD_UI=ON` when Qt 6 Base and Declarative development packages are
 ## Selecting MAKO Gym coverage
 
 MAKO Gym is an optional sibling checkout for local development and a required release-gate dependency. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.
+
+Gym contract version 18 requires defined-content benchmark inputs and performance baseline schema 4, while retaining explicit CLI precision selection: quality, synchronization, and performance runners pass `--no-fp16` for FP32 cases and `--allow-fp16` for FP16 cases. This preserves both matrix lanes now that CLI LSFG commands allow FP16 by default. Use a matching Gym checkout; older runners must not silently reinterpret an FP32 workload through the new default or compare incompatible benchmark recipes.
 
 Before any hardware run, validate Gym's portable contracts with `(cd ../MAKO-Gym && ./scripts/check.sh)` or `just check` from its checkout.
 

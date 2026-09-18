@@ -196,7 +196,7 @@ export function RuntimeStatusCard({
         <MakoSectionTail>
           <div
             aria-label={t("LIVE_STATUS_TITLE", "Live Status")}
-            style={{ ...makoPanelStyle, width: "100%" }}
+            style={{ ...makoPanelStyle, width: "100%", marginTop: "8px" }}
           >
             <div
               style={{

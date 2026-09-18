@@ -19,7 +19,7 @@ See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics inte
     ```
 
 2. Open MAKO Decky and select **Install MAKO Renderer**. Installing the ZIP alone does not install its bundled Renderer.
-3. If using Frame Generation or LS1, check the selected profile's `Lossless.dll` path. Clear an unnecessary **GPU** override and verify **Matched Processes**. Start with Fixed 2x.
+3. If using Frame Generation or LS1, confirm that the **default public version** of Lossless Scaling is installed through Steam and check the selected profile's `Lossless.dll` path. MAKO can use beta branches, but they are not validated; the default public branch is recommended. Clear an unnecessary **GPU** override and verify **Matched Processes**. Start with Fixed 2x.
 4. Compare the game's V-Sync on and off; its limiter, VRR, and compositor can change pacing.
 5. Select **Disable MAKO Renderer on Next Launch**, restart the game, and compare once. Turn the option off after the test.
 

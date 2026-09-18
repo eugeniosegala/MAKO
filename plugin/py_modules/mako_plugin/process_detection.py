@@ -6,14 +6,7 @@ import re
 from typing import Dict, Iterable, Optional
 
 from .constants import SCRIPT_NAME, STEAM_APP_ID_ENV_KEYS
-
-# Mirrored by the Renderer's executable activation guard. The cross-component
-# contract test keeps launcher capture and runtime exclusion aligned.
-_EXCLUDED_WINDOWS_LAUNCHERS = {
-    "ubisoftconnect.exe",
-    "upc.exe",
-    "uplaywebcore.exe",
-}
+from .launcher_exclusions_generated import EXCLUDED_WINDOWS_LAUNCHERS
 
 _HELPER_PROCESS_NAMES = {
     "bash",
@@ -50,8 +43,8 @@ _HELPER_PROCESS_NAMES = {
     "wine64-preloader",
     "wineserver",
     "xalia.exe",
-} | _EXCLUDED_WINDOWS_LAUNCHERS | {
-    name[:15] for name in _EXCLUDED_WINDOWS_LAUNCHERS
+} | EXCLUDED_WINDOWS_LAUNCHERS | {
+    name[:15] for name in EXCLUDED_WINDOWS_LAUNCHERS
 }
 
 _WINDOWS_EXECUTABLE = re.compile(r"([^/\\\s\x00]+\.exe)(?:\x00|\s|$)", re.IGNORECASE)

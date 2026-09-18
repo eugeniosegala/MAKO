@@ -11,6 +11,8 @@
 
 namespace mako::backend {
 
+    struct ModelResolutionCache;
+
     /// Parsed, process-local view of one user-owned DLL. Fingerprints identify
     /// content for caching and diagnostics; they are never compatibility
     /// allowlists and no resource payload is persisted.
@@ -19,6 +21,9 @@ namespace mako::backend {
         std::string fileSha256;
         std::string resourceLayoutSha256;
         uint64_t fileSize{0};
+        // Resolution metadata only, lazily populated by model_resources.cpp.
+        // The archive is immutable once published; its cache retains no archive.
+        mutable std::shared_ptr<ModelResolutionCache> modelResolutionCache;
     };
 
     /// Parse and fingerprint a DLL, reusing a process-local result only while

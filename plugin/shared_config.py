@@ -63,7 +63,7 @@ DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES = (
 )
 FLOW_SCALE_MIN = 0.25
 FLOW_SCALE_MAX = 1.0
-ULTRA_PERFORMANCE_FLOW_SCALE = 0.75
+ULTRA_PERFORMANCE_FLOW_SCALE = 0.7
 SCALING_FACTOR_MIN = 1.0
 SCALING_FACTOR_MAX = 2.0
 SCALING_SHARPNESS_MIN = 0.0
@@ -139,7 +139,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "scaling_enabled": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-bound scaling engine switch that provisions the Gamescope WSI presentation path",
+        "description": "restart-bound scaling engine switch independent of Gamescope WSI compatibility",
         "location": "toml"
     },
 
@@ -230,7 +230,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "adaptive_stable_cadence": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
-        "description": "prefer smoother constant interpolation; may lower real-frame cadence and increase input lag",
+        "description": "prefer an even display-divisor cadence; may lower real-frame cadence and increase input lag",
         "location": "toml"
     },
 
@@ -251,13 +251,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "ultra_performance": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": False,
-        "description": "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 75% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain available after startup",
+        "description": "restart-bound preset that may improve frame-generation performance by up to 30% in favourable GPU-limited scenarios with 70% flow scale, the lighter FG model, FP16 when supported, and active-policy resource allocation; compatible controls remain available after startup",
         "location": "toml"
     },
 
     "flow_scale": {
         "fieldType": ConfigFieldType.FLOAT,
-        "default": 0.9,
+        "default": 0.8,
         "description": "adjust Frame Generation motion-estimation resolution; lower values reduce GPU work and higher values favour quality",
         "location": "toml"
     },

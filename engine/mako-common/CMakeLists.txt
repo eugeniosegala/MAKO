@@ -28,6 +28,15 @@ target_include_directories(mako-common SYSTEM
     PRIVATE thirdparty/include)
 
 if(BUILD_TESTING)
+    if(UNIX)
+        add_test(NAME launcher-exclusions-freshness
+            COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+                "${CMAKE_CURRENT_SOURCE_DIR}/../../scripts/generate-launcher-exclusions.py"
+                --check)
+        set_tests_properties(launcher-exclusions-freshness PROPERTIES
+            LABELS "portable-policy")
+    endif()
+
     add_executable(mako-external-fd-tests "tests/external_fd_tests.cpp")
     target_link_libraries(mako-external-fd-tests PRIVATE mako-common)
     add_test(NAME external-fd-ownership COMMAND mako-external-fd-tests)
@@ -40,6 +49,7 @@ if(BUILD_TESTING)
         "tests/config_tests.cpp")
     target_link_libraries(mako-config-tests
         PRIVATE mako-common)
+    target_include_directories(mako-config-tests PRIVATE src)
     add_test(NAME watched-configuration
         COMMAND mako-config-tests)
 

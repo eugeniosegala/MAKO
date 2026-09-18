@@ -2,14 +2,16 @@
 
 ## MAKO does not load
 
-1. Confirm that the game uses Vulkan. MAKO does not attach to an OpenGL-only process.
-2. Launch the game through MAKO's standalone helper. For Steam, use:
+1. Confirm that the game uses Vulkan, including DXVK or VKD3D-Proton for compatible Windows games. Select the Vulkan backend in emulators. A native OpenGL game needs the optional [Zink launcher setting](CONFIGURATION.md#standalone-launcher).
+2. Installing MAKO or opening its configuration window does not activate it. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**, then restart the game:
 
     ```text
     ~/.local/bin/mako-launch %command%
     ```
 
-3. Check that the Vulkan loader can see the layer:
+    For a direct desktop launch, replace `%command%` with the game command. For a Flatpak application, follow the [Flatpak preparation and verification steps](FLATPAK-GUIDE.md) instead; the host launcher cannot prepare its sandbox.
+
+3. For a native installation, check that the Vulkan loader can see the layer:
 
     ```bash
     ~/.local/bin/mako-launch vulkaninfo | grep -i VK_LAYER_MAKO_render
@@ -31,7 +33,7 @@ Use `VK_LOADER_DEBUG=layer` with the normal launch command when you need to see 
 
 - Check the active profile. `active_in` must match the actual Linux binary, Windows executable, process name, or path suffix. Set `MAKO_PROFILE` to a known profile name to test profile matching explicitly.
 - On multi-GPU systems, the profile's `gpu` must identify the same GPU used by the game.
-- For Frame Generation, confirm that Lossless Scaling is installed through Steam and that MAKO can find `Lossless.dll`. Set `dll` in the configuration if the library is in a non-standard Steam location.
+- For Frame Generation or LS1, confirm that the **default public version** of Lossless Scaling is installed through Steam and that MAKO can find `Lossless.dll`. MAKO can use beta branches, but they are not validated; the default public branch is recommended. Set `dll` in the configuration if the library is in a non-standard Steam location.
 - For scaling, enable it before launching the game. Native Resolution and MAKO Scaler need no licensed model; LS1 also needs `Lossless.dll` and an architecture-matched `libvkd3d-shader.so.1`. Check Live Status or `mako-diagnostics scaling` for the effective factor and any inactive reason.
 - Test the game's V-Sync both on and off. Also check its own FPS limiter, VRR, and compositor settings before changing MAKO options.
 
@@ -63,7 +65,7 @@ mako-diagnostics --lines 2000 all
 
 For the complete end-to-end workflow, including Steam, direct commands, Heroic or Flatpak setups, creating `MAKO-diagnostics.txt` on the Desktop, restoring normal settings, and using the shared submission form, see [Collect Standalone MAKO Renderer Diagnostics](COLLECT_DIAGNOSTICS.md).
 
-`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` sets one shared deadline for all ordered generated-image acquisitions in an application present, so higher multipliers cannot multiply the wait. Exhaustion or elapsed-time overrun enters native recovery. MAKO Decky uses 50 ms; standalone launches retain the unbounded compatibility default when unset. For a focused stall reproduction, try `25` and include the log.
+`MAKO_PRESENT_ACQUIRE_TIMEOUT_MS` sets one shared deadline for all ordered generated-image acquisitions in an application present, so higher multipliers cannot multiply the wait. Exhaustion or elapsed-time overrun enters native recovery. MAKO Decky uses 50 ms. A pool that fits the generated batch but has no additional relief image always uses at most 50 ms, including standalone launches; a shorter configured deadline remains authoritative. Other standalone ordered paths retain the unbounded compatibility default when unset. For a focused stall reproduction, try `25` and include the log.
 
 ## Report an issue
 

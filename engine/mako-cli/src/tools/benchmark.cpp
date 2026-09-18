@@ -1,6 +1,8 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "benchmark.hpp"
+#include "image_transfer.hpp"
+#include "mako-common/quality/image_quality.hpp"
 #include "i18n.hpp"
 #include "mako-backend/mako.hpp"
 #include "mako-common/helpers/errors.hpp"
@@ -136,6 +138,19 @@ int benchmark::run(const Options& opts, const i18n::Language language) {
             mako::backend::FrameEncoding::Sdr8,
             1.0F / opts.flow, opts.performance_mode
         );
+
+        // Defined inputs belong outside the timed capacity loop. This remains a
+        // repeated endpoint-pair workload, not a moving game or pixel-quality test.
+        {
+            const auto scene = mako::quality::makeImageQualityRegressionScene(
+                mako::quality::QualitySceneKind::Traffic, extent.width, extent.height,
+                0.0F, 1.0F, 0.5F);
+            images::uploadImage(vk, frame_0, scene.previous);
+            images::uploadImage(vk, frame_1, scene.current);
+        }
+        std::cerr << "MAKO_BENCHMARK recipe=2 content=traffic-pair-v1 "
+                     "source_times=0,1 upload=outside-timer precision="
+                  << (opts.allow_fp16 ? "fp16-allowed" : "fp32") << '\n';
 
         // run the benchmark
         size_t iterations{0};

@@ -83,7 +83,8 @@ SUBCOMMAND OPTIONS:
 
     benchmark & debug
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Allow FP16 acceleration
+        -a, --allow-fp16                Allow FP16 when supported (default)
+            --no-fp16                  Use FP32 LSFG shaders
         -w, --width <INT>               Width of the input frames
         -h, --height <INT>              Height of the input frames
         -f, --flow <FLOAT>              Flow scale
@@ -95,6 +96,8 @@ SUBCOMMAND OPTIONS:
         -d, --dll <PATH>                Path to Lossless.dll
             --ls1 <METHOD>             Probe only ls1 or ls1-performance; emits JSON
             --sharpness <FLOAT>        Selected LS1 sharpness from 0 to 1 (default 0.8)
+            --lsfg                     Probe LSFG FP32 and FP16 registries; emits JSON
+            --no-fp16                  With --lsfg, inspect only the FP32 registry
 
     benchmark
         -t, --duration <SECONDS>        Benchmark duration in seconds
@@ -104,10 +107,13 @@ SUBCOMMAND OPTIONS:
 
     quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Include FP16 acceleration in the test
+        -a, --allow-fp16                Allow FP16 when supported (default)
+            --no-fp16                  Use FP32 LSFG shaders
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -s, --scene <NAME>              Procedural scene name
+            --sequence-plan <PLAN>     Long temporal sequence; semicolon-separated frames
+            --width/--height <PIXELS>   Temporal sequence extents (default 321x181)
         -t, --interpolation <FLOAT>     Generated timestamp between 0 and 1
         -f, --flow <FLOAT>              Flow scale from 0.25 to 1.0
         -p, --performance-mode          Use the lighter LSFG model
@@ -141,7 +147,8 @@ SUBCOMMAND OPTIONS:
 
     combined-quality-regression
         -d, --dll <PATH>                Path to Lossless.dll
-        -a, --allow-fp16                Include FP16 LSFG acceleration
+        -a, --allow-fp16                Allow FP16 when supported (default)
+            --no-fp16                  Use FP32 LSFG shaders
         -g, --gpu <STRING>              GPU to use
         -o, --output <DIRECTORY>        Write generated/reference PPM artifacts
         -c, --scene <NAME>              Procedural scene name
@@ -190,10 +197,12 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_inspect_dll(
             int argc, char** argv, const std::string& program) {
         inspect_dll::Options opts{};
-        const std::array<option, 4> GETOPT {{
+        const std::array<option, 6> GETOPT {{
             { "dll", required_argument, nullptr, 'd' },
             { "ls1", required_argument, nullptr, 'l' },
             { "sharpness", required_argument, nullptr, 's' },
+            { "lsfg", no_argument, nullptr, 'f' },
+            { "no-fp16", no_argument, nullptr, 'A' },
             { nullptr, no_argument, nullptr, 0 }
         }};
         int option{0};
@@ -216,13 +225,20 @@ SUBCOMMAND OPTIONS:
                 case 's':
                     opts.sharpness = numericArgument<float>(optarg, "--sharpness");
                     break;
+                case 'f':
+                    opts.lsfg = true;
+                    break;
+                case 'A':
+                    opts.allowFp16 = false;
+                    break;
                 case '?':
                 default:
                     usage(program);
                     std::exit(EXIT_FAILURE);
             }
         }
-        if (optind < argc || opts.dll.empty() ||
+        if (optind < argc || opts.dll.empty() || (opts.lsfg && opts.ls1Mode) ||
+                (!opts.allowFp16 && !opts.lsfg) ||
                 opts.sharpness < 0.0F || opts.sharpness > 1.0F) {
             usage(program);
             std::exit(EXIT_FAILURE);
@@ -235,9 +251,10 @@ SUBCOMMAND OPTIONS:
             const i18n::Language language, const std::string& program) {
         benchmark::Options opts{};
 
-        const std::array<option, 10> GETOPT {{
+        const std::array<option, 11> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "no-fp16",          no_argument,       nullptr, 'A' },
             { "width",            required_argument, nullptr, 'w' },
             { "height",           required_argument, nullptr, 'h' },
             { "flow",             required_argument, nullptr, 'f' },
@@ -256,6 +273,9 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'a':
                     opts.allow_fp16 = true;
+                    break;
+                case 'A':
+                    opts.allow_fp16 = false;
                     break;
                 case 'w':
                     opts.width = numericArgument<int>(optarg, "--width");
@@ -300,9 +320,10 @@ SUBCOMMAND OPTIONS:
             const i18n::Language language, const std::string& program) {
         debug::Options opts{};
 
-        const std::array<option, 9> GETOPT {{
+        const std::array<option, 10> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "no-fp16",          no_argument,       nullptr, 'A' },
             { "width",            required_argument, nullptr, 'w' },
             { "height",           required_argument, nullptr, 'h' },
             { "flow",             required_argument, nullptr, 'f' },
@@ -320,6 +341,9 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'a':
                     opts.allow_fp16 = true;
+                    break;
+                case 'A':
+                    opts.allow_fp16 = false;
                     break;
                 case 'w':
                     opts.width = numericArgument<int>(optarg, "--width");
@@ -362,9 +386,13 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::Options opts{};
-        const std::array<option, 9> GETOPT {{
+        const std::array<option, 13> GETOPT {{
+            { "width",            required_argument, nullptr, 1001 },
+            { "height",           required_argument, nullptr, 1002 },
+            { "sequence-plan",    required_argument, nullptr, 1000 },
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "no-fp16",          no_argument,       nullptr, 'A' },
             { "gpu",              required_argument, nullptr, 'g' },
             { "output",           required_argument, nullptr, 'o' },
             { "scene",            required_argument, nullptr, 's' },
@@ -378,11 +406,23 @@ SUBCOMMAND OPTIONS:
         while ((c = getopt_long(
                 argc, argv, "d:ag:o:s:t:f:p", GETOPT.data(), nullptr)) != -1) {
             switch (c) {
+                case 1001:
+                    opts.width = numericArgument<uint32_t>(optarg, "--width");
+                    break;
+                case 1002:
+                    opts.height = numericArgument<uint32_t>(optarg, "--height");
+                    break;
+                case 1000:
+                    opts.sequence_plan = optarg;
+                    break;
                 case 'd':
                     opts.dll.emplace(optarg);
                     break;
                 case 'a':
                     opts.allow_fp16 = true;
+                    break;
+                case 'A':
+                    opts.allow_fp16 = false;
                     break;
                 case 'g':
                     opts.gpu.emplace(optarg);
@@ -594,9 +634,10 @@ SUBCOMMAND OPTIONS:
     [[noreturn]] void on_combined_quality_regression(int argc, char** argv,
             const std::string& program) {
         quality::CombinedOptions opts{};
-        const std::array<option, 14> GETOPT {{
+        const std::array<option, 15> GETOPT {{
             { "dll",              required_argument, nullptr, 'd' },
             { "allow-fp16",       no_argument,       nullptr, 'a' },
+            { "no-fp16",          no_argument,       nullptr, 'A' },
             { "gpu",              required_argument, nullptr, 'g' },
             { "output",           required_argument, nullptr, 'o' },
             { "scene",            required_argument, nullptr, 'c' },
@@ -620,6 +661,9 @@ SUBCOMMAND OPTIONS:
                     break;
                 case 'a':
                     opts.allow_fp16 = true;
+                    break;
+                case 'A':
+                    opts.allow_fp16 = false;
                     break;
                 case 'g':
                     opts.gpu.emplace(optarg);

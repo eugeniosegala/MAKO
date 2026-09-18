@@ -142,18 +142,23 @@ describe("Frame Generation controls", () => {
       .closest<HTMLElement>('[data-field-kind="standard"]');
     expect(fixedMultiplierField).toBeTruthy();
     expect(fixedMultiplierField?.getAttribute("data-bottom-separator")).toBe(
-      "none",
+      "default",
     );
     const fixedMultiplierControls = screen
       .getByText("−")
       .closest<HTMLElement>('[data-focusable="true"]');
     expect(fixedMultiplierControls?.style.marginTop).toBe("6px");
     const lighterModel = screen.getByText("Lighter FG Model");
+    const smoothCadence = screen.getByText("Smooth Cadence");
     expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
     expect(
       screen
         .getByText("Fixed FPS Multiplier")
-        .compareDocumentPosition(lighterModel) &
+        .compareDocumentPosition(smoothCadence) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(
+      smoothCadence.compareDocumentPosition(lighterModel) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     fireEvent.click(lighterModel);

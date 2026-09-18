@@ -18,7 +18,7 @@
 using namespace mako;
 using namespace mako::ui;
 
-Backend::Backend() {
+Backend::Backend(std::filesystem::path procRoot) : m_proc_root(std::move(procRoot)) {
     // load configuration
     ls::ConfigFile config{};
 
@@ -86,7 +86,77 @@ Backend::Backend() {
 }
 
 Backend::~Backend() {
+    if (m_detection_thread)
+        m_detection_thread->wait();
     this->savePendingChanges();
+}
+
+QVariantList Backend::getRunningGames() const {
+    QVariantList games;
+    for (const auto& game : m_running_games) {
+        games.append(QVariantMap{
+            {"name", game.name}, {"pid", game.pid}, {"executable", game.executable}
+        });
+    }
+    return games;
+}
+
+void Backend::refreshRunningGames(const bool includeAllApplications) {
+    if (m_scanning_games)
+        return;
+    if (m_detection_thread)
+        m_detection_thread->wait();
+    m_running_games.clear();
+    m_capture_failed = false;
+    m_scanning_games = true;
+    emit runningGamesChanged();
+    m_detection_thread.reset(QThread::create([this, includeAllApplications] {
+        auto games = detectRunningGames(m_proc_root, includeAllApplications);
+        QMetaObject::invokeMethod(this, [this, games = std::move(games)] {
+            m_running_games = games;
+            m_scanning_games = false;
+            emit runningGamesChanged();
+        }, Qt::QueuedConnection);
+    }));
+    m_detection_thread->start();
+}
+
+bool Backend::captureRunningGame(const int index, const bool create) {
+    if (m_scanning_games || index < 0 || std::cmp_greater_equal(index, m_running_games.size()))
+        return false;
+    const auto& game = m_running_games.at(static_cast<size_t>(index));
+    const auto identity = runningGameIdentity(game, m_proc_root);
+    if (!identity) {
+        m_capture_failed = true;
+        emit runningGamesChanged();
+        return false;
+    }
+    // Reuse the Renderer's matching precedence, including manually configured
+    // path suffixes/process names, without applying the UI's launch environment.
+    ls::ConfigFile config;
+    config.profiles() = m_profiles;
+    const auto match = ls::findProfile(config, *identity, false);
+    if (match) {
+        for (size_t profile = 0; profile < m_profiles.size(); ++profile) {
+            const auto& existing = m_profiles.at(profile);
+            if (existing.name == match->second.name && existing.active_in == match->second.active_in) {
+                profileSelected(static_cast<int>(profile));
+                return true;
+            }
+        }
+    }
+    if (create) {
+        QString name = game.name;
+        int suffix = 2;
+        const auto names = m_profile_list_model->stringList();
+        while (names.contains(name))
+            name = game.name + QStringLiteral(" (%1)").arg(suffix++);
+        createProfile(name);
+    }
+    if (!isValidProfileIndex())
+        return false;
+    addActiveIn(game.name);
+    return true;
 }
 
 void Backend::savePendingChanges() {

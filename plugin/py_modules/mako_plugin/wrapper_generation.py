@@ -61,7 +61,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 58
+WRAPPER_FORMAT_VERSION = 59
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -182,17 +182,16 @@ def script_configuration_lines(
 ) -> list[str]:
     """Generate wrapper settings without repeating forced compatibility exports."""
     lines = get_script_generation_logic()(config)
-    # A Vulkan layer chain cannot gain Gamescope WSI after instance creation.
-    # The Scaling Engine provisions that presentation path even while its live
-    # method is Native; the explicit compatibility switch provisions the same
-    # path for FG-only profiles. Keep the combined decision shell-local.
+    # WSI is an independent, restart-only compatibility choice. Without it,
+    # the combined Renderer owns scaling and Frame Generation. Only an
+    # explicitly selected WSI path needs the lower spatial role for scaling.
     lines.append(
         "mako_gamescope_wsi_required="
-        f"{1 if (config.get('scaling_enabled', False) or config.get('gamescope_wsi_compatibility', False)) else 0}"
+        f"{1 if config.get('gamescope_wsi_compatibility', False) else 0}"
     )
     lines.append(
         "mako_spatial_scaling_required="
-        f"{1 if config.get('scaling_enabled', False) else 0}"
+        f"{1 if (config.get('scaling_enabled', False) and config.get('gamescope_wsi_compatibility', False)) else 0}"
     )
     for line in hdr_lines(config):
         if line not in lines:

@@ -1,6 +1,6 @@
 # MAKO Renderer lifecycle
 
-This guide explains how MAKO Renderer discovers its environment, creates and replaces resources, applies settings, paces frames, recovers from pressure, and shuts down. It is a conceptual inventory of lifecycle-affecting probes and policies rather than a source-file map. The exact setting contract remains in [Configuration](CONFIGURATION.md), [Runtime configuration transitions](RUNTIME-TRANSITIONS.md), [Spatial scaling architecture](SCALING.md), [Adaptive validation](ADAPTIVE-VALIDATION.md), [HDR pipeline](HDR-PIPELINE.md), and [WSI isolation](WSI-ISOLATION.md).
+This guide explains how MAKO Renderer discovers its environment, creates and replaces resources, applies settings, paces frames, recovers from pressure, and shuts down. It is a conceptual inventory of lifecycle-affecting probes and policies rather than a source-file map. The exact setting contract remains in [Configuration](CONFIGURATION.md), [Runtime configuration transitions](RUNTIME-TRANSITIONS.md), [Spatial scaling architecture](SCALING.md), [Adaptive validation](ADAPTIVE-VALIDATION.md), [HDR pipeline](HDR-PIPELINE.md), and [WSI isolation](WSI-ISOLATION.md). [Memory management](MEMORY-MANAGEMENT.md) covers allocation, pooling, accounting, and cleanup ownership.
 
 ## Safety model
 
@@ -100,7 +100,7 @@ This table centralizes lifecycle timers. Frame-count gates are included because 
 | Replacement warm-up | 250 ms real-only, then three real history frames | Prevent interpolation across old/new swapchain history |
 | Adaptive stabilization | 3 seconds at initial startup; 1 second after ordinary recreation, cadence reset, or recovery | Establish a trustworthy base cadence before increasing load |
 | Fixed collapse detection | 1 second healthy baseline; 250 ms collapse evidence; three native-only samples at least 25% faster; 1 second verification | Require repeatable evidence before dropping or restoring generated load |
-| Fixed collapse retry | 2, 5, 15, then 30 seconds | Back off repeated rejected recovery probes |
+| Fixed collapse retry | 2, 5, 15, then 30 seconds; rejected probes also require a material cadence change or healthy baseline requalification | Back off recovery attempts without periodically probing an unchanged workload |
 | Adaptive ramp | 1 second target deficit; 250 ms step delay; 1 second evaluation | Add one generated level at a time and measure its value |
 | Adaptive ramp retry | 5, 15, 30, then 60 seconds after repeated rejection; two seconds of stability for rearm | Avoid oscillating into a known-unhelpful load level |
 | Adaptive interrupted or failed probe | 2-second cooldown after interruption; 15-second cooldown after failure; 2 seconds of stable evidence before rearm | Keep a cadence disruption from immediately restarting the same load experiment |
@@ -206,7 +206,7 @@ The real-frame cap uses an absolute per-present deadline. A late frame rebases t
 
 Smooth Cadence is an opt-in Adaptive policy that looks for a constant integer multiplier which can satisfy demand without excessive overshoot. It requires stable evidence before entry, evaluates load for one second, and exits after sustained loss of eligibility. Its special ordered 2x handoff is allowed only when the target matches confirmed refresh within the tighter of one hertz or two percent.
 
-When a 3x–5x multiplier is already delivery-validated and the source cadence lies between integer target rungs, the automatic base cap may select exact target divided by multiplier after one second of evidence. It cannot activate an unvalidated multiplier. A user-selected manual cap remains authoritative, while the automatic half-target cap may be released if ordered presentation proves that it is sustaining a severe combined-workload collapse.
+When a 3x–5x multiplier is already delivery-validated and the source cadence lies between integer target rungs, the automatic base cap may select exact target divided by multiplier after one second of evidence at 95% or more of that cadence. Retention allows dips to 90% and requires 250 ms of cadence loss before release, avoiding repeated pacer resets near the entry threshold. Transport and scheduler safety exits remain immediate. It cannot activate an unvalidated multiplier. A user-selected manual cap remains authoritative, while the automatic half-target cap may be released if ordered presentation proves that it is sustaining a severe combined-workload collapse.
 
 Dynamic Cadence Recovery is an opt-in native-only probe with a configurable 0.1–3 second interval, defaulting to two seconds. It is restricted to ordered SDR with usable target/refresh capacity. A probe starts with one native frame and requires three samples at least 25% faster before changing policy. Enabling it disables manual and automatic base caps so the probe measures an uncapped source.
 

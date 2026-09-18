@@ -64,7 +64,10 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 
 | Boundary | Authoritative guide |
 | --- | --- |
+| Native installation, atomic file replacement, and rollback | `INSTALLATION-TRANSACTIONS.md` |
 | Renderer configuration | `engine/docs/CONFIGURATION.md` |
+| Launcher executable exclusions shared by Renderer and Decky | `engine/docs/CONFIGURATION.md`, `engine/mako-common/launcher_exclusions.json` |
+| Renderer allocation, ownership, and memory accounting | `engine/docs/MEMORY-MANAGEMENT.md` |
 | Live and deferred setting lifetimes | `engine/docs/RUNTIME-TRANSITIONS.md` |
 | Spatial scaling | `engine/docs/SCALING.md` |
 | Adaptive scheduling and frame plans | `engine/docs/ADAPTIVE-VALIDATION.md` |
@@ -100,6 +103,7 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 | --- | --- | --- |
 | Understand validation coverage | `TESTING.md` | `justfile`, `.github/workflows/tests.yml` |
 | Format Markdown or enable the commit hook | `AGENTS.md` | `just format-markdown`, `just check-markdown-format`, `just install-hooks` |
+| Change native installation or rollback | `INSTALLATION-TRANSACTIONS.md` | `plugin/py_modules/mako_plugin/installation.py`, `plugin/py_modules/mako_plugin/managed_files.py`, `engine/scripts/mako-installer` |
 | Build Renderer from source | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/CMakeLists.txt`, `engine/scripts/build-steamos-dev.sh` |
 | Run portable Renderer tests | `TESTING.md` | `engine/scripts/test-adaptive-scheduler.sh` |
 | Change native spatial scaling | `engine/docs/SCALING.md`, `engine/docs/WSI-ISOLATION.md`, `engine/docs/HDR-PIPELINE.md` | `engine/mako-render/src/spatial_scaler.*`, `engine/mako-render/src/spatial_scaling_policy.hpp`, `engine/scripts/generate-spatial-scaling-spirv.py` |
@@ -122,6 +126,7 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 | Build or package MAKO Decky | `plugin/docs/PACKAGING.md` | `plugin/package.json`, `plugin/scripts/package-local.sh` |
 | Build or publish the product website | `website/README.md` | `website/package.json`, `.github/workflows/pages.yml` |
 | Change Decky's shared configuration or runtime contract | `plugin/README.md`, `plugin/docs/CONFIGURATION.md` | `plugin/shared_config.py`, `plugin/scripts/generate_ts_schema.py`, `plugin/scripts/check_generated_config.py` |
+| Add or document a launcher executable exclusion | `engine/docs/CONFIGURATION.md`, `CLEANUPS.md` | `engine/mako-common/launcher_exclusions.json`, `scripts/generate-launcher-exclusions.py`, `just generate-launcher-exclusions`, `just check-launcher-exclusions` |
 | Change Decky's public RPC mappings | `plugin/README.md`, `TESTING.md` | `plugin/py_modules/mako_plugin/types.py`, owning service types, `plugin/src/api/makoApi.ts`, `plugin/tests/test_rpc_contract.py` |
 | Change Decky or Qt translations | This file and the owning component README | `plugin/defaults/i18n/`, `plugin/scripts/i18n-contract.mjs`, `plugin/scripts/manage-i18n.mjs`, `engine/mako-ui/rsc/i18n/translations.json`, localization tests |
 | Review Armada/native AArch64 behavior | `plugin/docs/ARMADA.md` | `plugin/py_modules/mako_plugin/host_environment.py`, host/wrapper/Flatpak boundary tests |
@@ -160,8 +165,10 @@ Keep diagnostic operation names and fields machine-filterable. If a current log 
 
 - Treat `engine/{build,out}/`, `plugin/{dist,out,coverage,node_modules}/`, `website/{dist,dist-pages,.vinext,.next,node_modules}/`, package-manager stores, `__pycache__/`, and sibling `MAKO-Gym/out/` as generated local data. Do not hand-edit or commit them.
 - Renderer SPIR-V headers and hash manifests are generated from adjacent GLSL by `engine/scripts/generate-color-conversion-spirv.py` and `engine/scripts/generate-spatial-scaling-spirv.py`. Portable CTest runs their read-only `--check` modes; regeneration requires `glslangValidator`. Never edit embedded arrays or hashes independently.
+- `engine/mako-common/launcher_exclusions.json` owns the documented launcher executable exclusions for Renderer activation and Decky profile capture. `scripts/generate-launcher-exclusions.py` generates the component-local C++ and Python lists; use `just generate-launcher-exclusions` after source edits and `just check-launcher-exclusions` for read-only validation. Never edit the generated lists independently or add a runtime dependency between the components.
 - `plugin/shared_config.py` owns the Decky schema and stable identifiers. `plugin/scripts/generate_ts_schema.py` owns its generated Python and TypeScript bindings; use `npm run check:generated-config` from `plugin/` and never edit the outputs independently.
 - `plugin/defaults/i18n/` owns Decky's translation sources; `plugin/scripts/manage-i18n.mjs` validates them and generates `plugin/src/i18n/languages.json`. `plugin/src/config/devBuildInfo.generated.ts` is local build metadata. Do not edit either generated output directly.
+- `engine/vulkan-headers-revision.txt` also owns the generated `engine/dist/flatpak/mako-render/vulkan-headers.json` build-only dependency. Use `just generate-flatpak-headers` after changing the pin and `just check-flatpak-headers` for read-only validation; never edit that module independently.
 - `engine/dist/flatpak/mako-render/runtime-versions.txt` owns MAKO Renderer's ordered Flatpak build matrix. Decky's independently deployed runtime list remains in `plugin/shared_config.py`; `plugin/tests/test_flatpak_runtime_detection.py` requires the two owners to remain aligned, and `plugin/scripts/read_flatpak_runtime_contract.py` exposes the Decky contract to shell tooling without duplicating it.
 - Treat the Decky schema as the profile allowlist. Unknown keys are inert and removed by the next canonical write; wrapper keys become environment exports only when the schema and generator support them. Preserve changed semantics with an explicit, tested migration.
 - Published Renderer URLs, checksums, and pins in `plugin/package.json` are maintained by the release/pinning scripts. Local-engine packaging writes local identity into the ZIP without changing the tracked release pin.
@@ -178,7 +185,7 @@ Qt is used only by the optional `mako-ui`; the Vulkan layer, backend, and CLI do
 
 Published host archives must remain runnable with Ubuntu 24.04's Qt 6.4. The ABI checks in `engine/scripts/package-local.sh` reject Qt 6.5-or-newer symbols and the Qt 6.8 `libQt6QmlMeta` dependency. On hosts with newer Qt, use `MAKO_PORTABLE_PACKAGE=1`; the portable Ubuntu 22.04 builder links against Qt 6.2 and produces an archive that also runs with newer compatible Qt 6 releases. Do not raise the CMake minimum or relax the package ABI guard without updating the build documentation and testing the oldest supported runtime.
 
-Native publication always selects that portable builder, matching the SteamOS release gate. Host packaging requires Vulkan headers 1.4.328 or newer with `VK_KHR_present_id2` for both architectures, independently of test selection; direct development and Flatpak builds retain their separate SDK contracts. Follow [tester/release build alignment](HOW_TO_RELEASE.md#keep-tester-and-release-builds-aligned): retain artifact hashes and resolved toolchain identities, invalidate stale native package caches when the builder changes, and verify the public asset rather than assuming identical source means identical compiled support.
+Native publication always selects that portable builder, matching the SteamOS release gate. [`engine/vulkan-headers-revision.txt`](engine/vulkan-headers-revision.txt) owns the shared native/Flatpak Vulkan-Headers ref and minimum version; the Renderer packager, main Renderer CI builds, CMake, and generated Flatpak module consume it, and MAKO Decky delegates builds to those packagers. Native and Flatpak packaging also require `VK_KHR_present_id2` and `VK_EXT_present_timing` for both architectures, independently of test selection. Flatpak builds retain each runtime SDK compiler and libraries; direct development builds retain their separate header compatibility. Layer manifest API versions remain separate from the build-header pin. Follow [tester/release build alignment](HOW_TO_RELEASE.md#keep-tester-and-release-builds-aligned): retain artifact hashes and resolved toolchain identities, invalidate stale native package caches when the builder changes, and verify the public asset rather than assuming identical source means identical compiled support.
 
 ## Packaging, deployment, and release boundaries
 

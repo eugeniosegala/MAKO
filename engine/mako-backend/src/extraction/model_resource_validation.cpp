@@ -246,7 +246,71 @@ void mako::backend::detail::validateDxbcComputeShader(
         throw ls::error(sourceName + " has no DXBC shader bytecode chunk");
 }
 
-void mako::backend::detail::validateSpirvComputeShader(
+void mako::backend::detail::validateDxbcResourceBindings(
+        const std::span<const uint8_t> data,
+        const ShaderResourceContract& required,
+        const std::string& sourceName, const bool discovery) {
+    validateDxbcComputeShader(data, sourceName);
+    std::optional<std::span<const uint8_t>> reflection;
+    const uint32_t count = readLittleEndian(data, 28U, sourceName);
+    for (uint32_t i = 0; i < count; ++i) {
+        const size_t offset = readLittleEndian(data, 32U + i * 4U, sourceName);
+        if (readLittleEndian(data, offset, sourceName) != 0x46454452U) // RDEF
+            continue;
+        if (reflection)
+            throw ls::error(sourceName + " has ambiguous DXBC reflection");
+        reflection = data.subspan(offset + 8U,
+            readLittleEndian(data, offset + 4U, sourceName));
+    }
+    if (!reflection && !discovery)
+        return;
+    if (!reflection || reflection->size() < 28U)
+        throw ls::error(sourceName + " lacks resource reflection for discovery");
+    const auto rdef = *reflection;
+    // Shader model 5.0 compute uses eight DWORDs per binding. Other reflection
+    // versions need their own reader; never interpret them with this stride.
+    if (readLittleEndian(rdef, 16U, sourceName) != 0x43530500U) {
+        if (!discovery) return;
+        throw ls::error(sourceName + " has unsupported discovery reflection");
+    }
+    const size_t bindingCount = readLittleEndian(rdef, 8U, sourceName);
+    const size_t bindingOffset = readLittleEndian(rdef, 12U, sourceName);
+    if (bindingOffset < 28U || bindingOffset > rdef.size() ||
+            bindingCount > (rdef.size() - bindingOffset) / 32U)
+        throw ls::error(sourceName + " has truncated DXBC reflection bindings");
+
+    std::set<std::pair<uint32_t, uint32_t>> expected;
+    const auto add = [&expected](const uint32_t type, const size_t slots) {
+        for (size_t i = 0; i < slots; ++i)
+            expected.emplace(type, static_cast<uint32_t>(i));
+    };
+    add(0U, required.uniformBuffers);
+    add(2U, required.sampledImages);
+    add(3U, required.samplers);
+    add(4U, required.storageImages);
+    std::set<std::pair<uint32_t, uint32_t>> actual;
+    for (size_t i = 0; i < bindingCount; ++i) {
+        const size_t offset = bindingOffset + i * 32U;
+        const uint32_t type = readLittleEndian(rdef, offset + 4U, sourceName);
+        const uint32_t dimension = readLittleEndian(rdef, offset + 12U, sourceName);
+        const uint32_t slot = readLittleEndian(rdef, offset + 20U, sourceName);
+        const uint32_t slots = readLittleEndian(rdef, offset + 24U, sourceName);
+        if (!discovery && !expected.contains({type, slot}))
+            continue;
+        // D3D_SIT_CBUFFER/TEXTURE/SAMPLER/UAV_RWTYPED; image bindings must be
+        // single, non-array Texture2D resources as consumed by the LS1 graph.
+        if (slots != 1U ||
+                ((type == 2U || type == 4U) ? dimension != 4U
+                    : (type != 0U && type != 3U) || dimension != 0U) ||
+                !actual.emplace(type, slot).second)
+            throw ls::error(sourceName + " has incompatible discovery bindings");
+    }
+    if (actual != expected)
+        throw ls::error(sourceName + " has incompatible discovery bindings");
+}
+
+mako::backend::detail::SpirvShaderInfo
+mako::backend::detail::validateSpirvComputeShader(
         const std::span<const uint8_t> data,
         const ShaderResourceContract& required,
         const std::string& sourceName) {
@@ -262,6 +326,7 @@ void mako::backend::detail::validateSpirvComputeShader(
     std::unordered_map<uint32_t, Type> types;
     std::unordered_map<uint32_t, Variable> variables;
     std::unordered_map<uint32_t, Decorations> decorations;
+    SpirvShaderInfo info;
     bool hasShaderCapability = false;
     bool hasComputeMain = false;
     const size_t totalWords = data.size() / sizeof(uint32_t);
@@ -293,6 +358,9 @@ void mako::backend::detail::validateSpirvComputeShader(
                 .kind = Type::Kind::SampledImage,
                 .pointee = readWord(data, offset + 2U),
             });
+        } else if (opcode == 22U && count == 3U) { // OpTypeFloat
+            info.declaresFloat16 = info.declaresFloat16 ||
+                readWord(data, offset + 2U) == 16U;
         } else if (opcode == opTypePointer && count >= 4U) {
             types.insert_or_assign(readWord(data, offset + 1U), Type{
                 .kind = Type::Kind::Pointer,
@@ -330,13 +398,32 @@ void mako::backend::detail::validateSpirvComputeShader(
         if (!actual.emplace(key, descriptorKind(variable, types)).second)
             throw ls::error(sourceName + " declares a duplicate descriptor binding");
     }
-    for (const auto& [binding, kind] : requiredBindings(required)) {
+    const auto expected = requiredBindings(required);
+    for (const auto& [binding, kind] : expected) {
         const auto found = actual.find(binding);
         if (found == actual.end())
             throw ls::error(sourceName + " is missing a required descriptor binding");
         if (found->second != kind)
             throw ls::error(sourceName + " has an incompatible descriptor binding");
     }
+    info.exactBindings = actual == expected;
+    return info;
+}
+
+mako::backend::detail::Ls1ModelSpec mako::backend::detail::ls1ModelSpec(
+        const Ls1Mode mode, const uint32_t variant) {
+    if (variant >= 5U)
+        throw ls::error("invalid LS1 model variant");
+    constexpr uint32_t rgba8 = 4U;
+    constexpr uint32_t r8Snorm = 20U;
+    const Ls1ShaderSpec reconstruction{146U, {2, 1, 1, 1}, rgba8};
+    if (mode == Ls1Mode::Performance)
+        return {reconstruction, {141U + variant, {1, 1, 1, 0}, r8Snorm},
+            std::nullopt, std::nullopt};
+    const uint32_t first = 147U + variant * 3U;
+    return {reconstruction, {first, {1, 1, 1, 0}, rgba8},
+        Ls1ShaderSpec{first + 1U, {1, 1, 0, 0}, rgba8},
+        Ls1ShaderSpec{first + 2U, {1, 1, 1, 0}, r8Snorm}};
 }
 
 uint32_t mako::backend::detail::lsfgResourceId(
@@ -355,58 +442,4 @@ mako::backend::detail::lsfgShaderSpecs(const bool performance) {
     return performance
         ? std::span<const LsfgShaderSpec>{performanceSpecs}
         : std::span<const LsfgShaderSpec>{qualitySpecs};
-}
-
-const std::vector<uint8_t>& mako::backend::detail::validatedLsfgResource(
-        const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources,
-        const uint32_t logicalId, const bool fp16, const bool performance) {
-    const auto specs = lsfgShaderSpecs(performance);
-    const auto spec = std::ranges::find(
-        specs, logicalId, &LsfgShaderSpec::logicalId
-    );
-    if (spec == specs.end())
-        throw ls::error("unknown LSFG shader contract: " + std::to_string(logicalId));
-    const uint32_t resourceId = lsfgResourceId(
-        logicalId, fp16, performance
-    );
-    const auto found = resources.find(resourceId);
-    if (found == resources.end())
-        throw ls::error("Lossless.dll does not contain LSFG resource " +
-            std::to_string(resourceId));
-    validateSpirvComputeShader(
-        found->second, spec->contract, std::to_string(resourceId)
-    );
-    return found->second;
-}
-
-void mako::backend::detail::validateLsfgModelResources(
-        const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources,
-        const bool fp16, const bool performance) {
-    for (const LsfgShaderSpec& spec : lsfgShaderSpecs(performance))
-        static_cast<void>(validatedLsfgResource(
-            resources, spec.logicalId, fp16, performance
-        ));
-}
-
-void mako::backend::detail::validateLs1ModelResources(
-        const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources,
-        const Ls1Mode mode) {
-    const auto validate = [&resources](const uint32_t id) {
-        const auto found = resources.find(id);
-        if (found == resources.end())
-            throw ls::error("Lossless.dll does not contain LS1 resource " +
-                std::to_string(id));
-        validateDxbcComputeShader(found->second, std::to_string(id));
-    };
-    validate(146U);
-    for (uint32_t variant = 0; variant < 5U; ++variant) {
-        if (mode == Ls1Mode::Performance) {
-            validate(141U + variant);
-        } else {
-            const uint32_t first = 147U + variant * 3U;
-            validate(first);
-            validate(first + 1U);
-            validate(first + 2U);
-        }
-    }
 }

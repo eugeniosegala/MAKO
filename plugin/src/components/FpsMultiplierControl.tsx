@@ -216,30 +216,12 @@ export function FpsMultiplierControl({
                   }
                 />
               </PanelSectionRow>
-              <PanelSectionRow>
-                <ToggleField
-                  label={t("ADAPTIVE_SMOOTH_CADENCE", "Smooth Cadence")}
-                  description={t(
-                    "ADAPTIVE_SMOOTH_CADENCE_DESC",
-                    "Uses a validated constant interpolation cadence. With Steady Base Cap, it can align proven 3x–5x demand to an exact target rung. It can make motion smoother, but may lower real-frame cadence and increase input lag. Enabled by default; disable it if a game feels more responsive without it.",
-                  )}
-                  bottomSeparator="none"
-                  checked={
-                    config.adaptive_stable_cadence ??
-                    DEFAULT_CONFIGURATION.adaptive_stable_cadence
-                  }
-                  onChange={(value) =>
-                    onConfigChange(ADAPTIVE_STABLE_CADENCE, value)
-                  }
-                />
-              </PanelSectionRow>
             </>
           )}
 
           <PanelSectionRow>
             <Field
               label={t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
-              bottomSeparator="none"
               description={
                 <>
                   <span style={{ display: "block", paddingTop: "8px" }}>
@@ -341,6 +323,23 @@ export function FpsMultiplierControl({
                 </DialogButton>
               </MakoFocusable>
             </Field>
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <ToggleField
+              label={t("ADAPTIVE_SMOOTH_CADENCE", "Smooth Cadence")}
+              description={t(
+                "ADAPTIVE_SMOOTH_CADENCE_DESC",
+                "Uses validated ordered Gamescope presentation for steadier pacing. Fractional Adaptive keeps real frames; Fixed and Steady Base Cap can favor even output. It may reduce real FPS and responsiveness. On by default; turn it off per game if preferred.",
+              )}
+              checked={
+                config.adaptive_stable_cadence ??
+                DEFAULT_CONFIGURATION.adaptive_stable_cadence
+              }
+              onChange={(value) =>
+                onConfigChange(ADAPTIVE_STABLE_CADENCE, value)
+              }
+            />
           </PanelSectionRow>
 
           <PanelSectionRow>

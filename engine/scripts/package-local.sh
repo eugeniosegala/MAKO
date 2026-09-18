@@ -60,6 +60,12 @@ if [[ -z "$version" ]]; then
     exit 1
 fi
 
+vulkan_headers_revision="$(< "$repo_root/vulkan-headers-revision.txt")"
+if [[ ! "$vulkan_headers_revision" =~ ^(vulkan-sdk-|v)[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "vulkan-headers-revision.txt must contain a Vulkan-Headers SDK branch (vulkan-sdk-X.Y.Z) or release tag (vX.Y.Z)." >&2
+    exit 1
+fi
+
 portable_container="${MAKO_PORTABLE_PACKAGE:-0}"
 containerized_build="${MAKO_PACKAGE_CONTAINERIZED:-0}"
 if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_container" == "1" ) ]]; then
@@ -91,6 +97,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
     exec "$container_runtime" run --rm --platform linux/amd64 \
         -e MAKO_PACKAGE_64_ONLY="$docker_64_only" \
         -e MAKO_PACKAGE_CONTAINERIZED=1 \
+        -e MAKO_VULKAN_HEADERS_REVISION="$vulkan_headers_revision" \
         -e MAKO_RELEASE_SKIP_TESTS="${MAKO_RELEASE_SKIP_TESTS:-0}" \
         -v "$monorepo_root:/workspace" \
         -w /workspace/engine \
@@ -113,7 +120,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
                 qt6-base-dev qt6-base-dev-tools \
                 qt6-tools-dev qt6-tools-dev-tools \
                 qt6-declarative-dev qt6-declarative-dev-tools
-            git clone --depth=1 -b vulkan-sdk-1.4.328 \
+            git clone --depth=1 -b "$MAKO_VULKAN_HEADERS_REVISION" \
                 https://github.com/KhronosGroup/Vulkan-Headers /tmp/vkh
             rm -rf /usr/include/vulkan /usr/include/vk_video
             cp -a /tmp/vkh/include/vulkan /tmp/vkh/include/vk_video /usr/include/

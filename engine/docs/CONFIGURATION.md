@@ -10,7 +10,15 @@ The UI supports English, Brazilian Portuguese, European Portuguese, Spanish, Kor
 
 Each `[[profile]]` is selected by `active_in`. Entries may match a Linux executable, Windows executable, process name, or executable-path suffix. `MAKO_PROFILE` selects a profile by its exact `name` and takes precedence over automatic matching.
 
+The standalone UI's **Detect Running Game…** captures the actual executable from a running native or Wine/Proton game, including non-Steam games. Start the game, reach gameplay, and select it in the picker. **Use Game Profile** creates a uniquely named profile or opens an existing executable match; **Add to Selected Profile** preserves the selected profile's settings and manual matches, opening an existing match instead when present. The UI uses the Renderer's own executable identification and launcher exclusions, preserves executable case and spaces, and checks the process again before saving. Capture stores an ordinary `active_in` entry, so no configuration migration or Decky installation is required.
+
+Detection takes a snapshot of the current user's readable processes only when the picker opens or you request a refresh. It runs off the UI thread with no idle polling, reads neither command lines nor environments, and filters common Steam/Wine helpers. The default list includes mapped Windows executables and native processes with Vulkan/OpenGL libraries; **Show all applications** also includes other native executables when graphics detection is unavailable. Restricted procfs access or an unreadable Wine mapping can prevent discovery; manual **Matched Processes** remains available. A detected application is not proof of Vulkan compatibility or MAKO activation. Save the profile, complete the [standalone launch setup](#standalone-launcher) or Flatpak preparation, and restart the game.
+
 Ubisoft Connect's `UbisoftConnect.exe`, `upc.exe`, and `UplayWebCore.exe` stay on MAKO's inactive native-presentation path even when they inherit `MAKO_PROFILE`, `MAKO_PROFILE_FALLBACK`, or `MAKO_ENV`, or appear in an older profile's `active_in`. The guard compares the exact executable basename without case sensitivity, preferring the mapped Windows executable under Wine; a launcher directory or thread name does not exclude the game. It changes no environment variables, so the launched game can still select its profile normally. This excludes MAKO's own rendering work in the launcher, not other Vulkan layers or Proton behavior.
+
+The shared [launcher exclusion registry](../mako-common/launcher_exclusions.json) owns the excluded executables for both MAKO Renderer and MAKO Decky. Each entry records a `launcher` name, a `reason`, and its `executables`. To add a launcher, document the observed need and add only its exact ASCII Windows `.exe` basenames; paths, wildcards, and duplicate names are rejected. Names with spaces require extending Decky's process scanner before they can be registered. Decky derives the truncated Linux process names automatically. Keep removal conditions in [the compatibility ledger](../../CLEANUPS.md), and validate launcher inactivity and child-game activation for each addition.
+
+After editing the registry, run `just generate-launcher-exclusions` from the repository root and include both generated bindings in the change. `just check-launcher-exclusions`, Renderer CTest, and Decky's generated-contract gate check freshness without rewriting files. The Renderer compiles its generated list and Decky imports its packaged Python binding; neither reads the JSON at runtime or depends on the other component's installation. This is a source-maintained compatibility list, not a `conf.toml` setting.
 
 ```toml
 version = 2
@@ -35,8 +43,10 @@ scaling_sharpness = 0.8
 
 | Setting | Meaning |
 | --- | --- |
-| `dll` | Optional absolute path to `Lossless.dll`. When omitted, MAKO searches the normal Steam library locations. LSFG and LS1 need this user-supplied file; Native Resolution and MAKO Scaler do not. |
-| `allow_fp16` | Permits LSFG FP16 on supported hardware. The generated configuration defaults to `true`; disable it if the selected GPU performs worse or is incompatible. |
+| `dll` | Optional absolute path to `Lossless.dll`, shared by LSFG and LS1. When omitted, MAKO searches the normal Steam library locations. Model compatibility uses validated resources, not a SHA allowlist; see [shared model resolution](SCALING.md). Native Resolution and MAKO Scaler do not need this file. |
+| `allow_fp16` | Defaults to `true`, including when the setting or `[global]` section is omitted. Uses LSFG FP16 when the selected GPU supports it, otherwise FP32. Set `false` to use FP32; existing explicit choices are preserved. Changing it requires a game restart. |
+
+The CLI's `benchmark`, `debug`, `quality-regression`, and `combined-quality-regression` commands also allow LSFG FP16 by default, independently of `conf.toml`. Pass `--no-fp16` to use FP32, or `--allow-fp16` (`-a`) to explicitly allow FP16. If both flags are supplied, the last one wins. For environment-only Renderer configuration (`MAKO_ENV=1`), `MAKO_NO_FP16=1` disables FP16. The backend still checks the selected device's Vulkan `shaderFloat16` support before choosing FP16 shaders.
 
 ## Profile settings
 
@@ -52,7 +62,7 @@ scaling_sharpness = 0.8
 | `adaptive_auto_base_fps_cap` | Boolean | `false` | Starts Adaptive with a half-target real-frame cap and may select a proven integer cadence with Smooth Cadence. Recovery can release only this automatic cap when it becomes the bottleneck. |
 | `target_fps` | 10–1000 FPS | `120` | Adaptive output target. It is not a limiter for a game already above target and cannot override the multiplier ceiling. |
 | `adaptive_max_multiplier` | 2–5 | `3` | Maximum total multiplier Adaptive may select. Start at 2 for the lowest generated-frame share. |
-| `adaptive_stable_cadence` | Boolean | `false` | Allows Adaptive to retain a delivery-validated constant cadence. This may trade real-frame cadence and latency for smoother output. |
+| `adaptive_stable_cadence` | Boolean | `true` | Allows a delivery-validated constant cadence in Adaptive. In eligible Fixed mode, ordered Gamescope FIFO paces the full multiplier without an automatic real-frame CPU cap. This may trade real-frame cadence and latency for smoother output. |
 | `dynamic_cadence_recovery` | Boolean | `false` | Periodically exposes native cadence on ordered SDR to detect a faster game mode hidden by FIFO backpressure. It is per-profile and automatically disables both manual and automatic base caps. |
 | `dynamic_cadence_probe_interval_seconds` | 0.1–3.0 | `2.0` | Delay between optional cadence probes. Short values react faster but make rejected probes more frequent. |
 | `scaling_enabled` | Boolean | `false` | Provisions scaling at process start. Changing it requires a game restart. |
@@ -61,9 +71,9 @@ scaling_sharpness = 0.8
 | `scaling_supersampling` | Boolean | `false` | Lets a variable managed Gamescope surface exceed its proven display target. Vulkan and memory limits still apply; fixed and direct non-Gamescope geometry is unchanged. |
 | `scaling_sharpness` | 0.0–1.0 | `0.8` | MAKO Scaler sharpening strength or nearest selection among LS1's five model variants. |
 | `swapchain_image_count_compatibility` | Boolean | `false` | Preserves the application's requested minimum WSI image count instead of reserving generated-output headroom. Use only for games that fail to create the normal swapchain; generated frames may be skipped under pressure. Requires restart. |
-| `flow_scale` | 0.25–1.0 | `0.9` | LSFG motion-vector resolution. Lower values reduce cost and may reduce quality. |
+| `flow_scale` | 0.25–1.0 | `0.8` | LSFG motion-vector resolution. Lower values reduce cost and may reduce quality. |
 | `performance_mode` | Boolean | `false` | Selects the lighter LSFG model. The UIs label this **Lighter FG Model**. |
-| `ultra_performance` | Boolean | `false` | Restart-bound preset that selects Flow Scale 0.75, the lighter LSFG model, FP16 permission, active-policy-sized resources, and LS1 Performance when scaling is enabled. It does not enable scaling. |
+| `ultra_performance` | Boolean | `false` | Restart-bound preset that selects Flow Scale 0.7, the lighter LSFG model, FP16 permission, active-policy-sized resources, and LS1 Performance when scaling is enabled. It does not enable scaling. |
 | `pacing` | `none` | `none` | Presentation-policy compatibility field; `none` is the only supported value. |
 | `gpu` | GPU name, vendor/device ID, or PCI bus ID | Unset | Selects the application's GPU. MAKO does not support cross-GPU Frame Generation. |
 
@@ -96,11 +106,15 @@ MAKO accepts only configuration format `version = 2`. Unknown keys in a supporte
 
 ## Standalone launcher
 
-Use `mako-launch` to activate MAKO for one native process:
+Saving a profile configures the Renderer; the game must also start with MAKO enabled. For a native Steam or Proton game, put this in **Steam Properties > General > Launch Options**:
 
 ```text
 ~/.local/bin/mako-launch %command%
 ```
+
+Keep `%command%` in Steam. In a terminal, replace it with the actual executable and arguments, for example `~/.local/bin/mako-launch "/path/to/your-game"`. The configuration UI can be closed during play. See [Renderer usage](../README.md#usage) for profile preparation and launcher-specific steps.
+
+Flatpak apps need a matching runtime extension and per-application sandbox setup; follow the [Flatpak guide](FLATPAK-GUIDE.md), then launch the prepared app normally. The host `mako-launch` command and its `launcher.conf` settings do not configure the sandbox.
 
 `MAKO_CONFIG` selects a TOML file and `MAKO_PROFILE` selects an exact profile name:
 

@@ -1,6 +1,6 @@
 # Runtime configuration transitions
 
-This guide defines how a saved profile becomes running Renderer state. [Configuration](CONFIGURATION.md) defines fields, [Adaptive validation](ADAPTIVE-VALIDATION.md) owns scheduling, [Spatial scaling architecture](SCALING.md) owns extent policy, [HDR pipeline architecture](HDR-PIPELINE.md) owns colour transitions, and [WSI isolation](WSI-ISOLATION.md) owns process-start discovery.
+This guide defines how a saved profile becomes running Renderer state. [Configuration](CONFIGURATION.md) defines fields, [Adaptive validation](ADAPTIVE-VALIDATION.md) owns scheduling, [Spatial scaling architecture](SCALING.md) owns extent policy, [HDR pipeline architecture](HDR-PIPELINE.md) owns colour transitions, and [WSI isolation](WSI-ISOLATION.md) owns process-start discovery. [Memory management](MEMORY-MANAGEMENT.md) explains allocation ownership, replacement peaks, and accounting.
 
 ## Lifetime boundaries
 
@@ -54,7 +54,7 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Frame Generation On | Live if startup provisioning succeeded; otherwise restart | Reuses retained interop and private resources, then warms temporal history where required. |
 | Refresh threshold and Gamescope refresh | Live | Re-evaluates effective enablement and refresh-targeted scheduling. |
 | Fixed/Adaptive mode or multiplier | Live within current capacity; otherwise private FG replacement or recreation | Dormant mode values are saved without resetting the active mode. |
-| Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler state whose assumptions changed. |
+| Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. |
 | Dynamic Cadence probe interval | Live | Reschedules an inactive probe without discarding validated cadence or an active confirmation. |
 | Base FPS Cap and Adaptive auto-cap | Live while generation is active; dormant while Off | Resets the real-frame pacer and affected scheduler policy. |
 | Scaling enable | Restart | Existing and naturally recreated contexts retain process-start scaling and layer membership. |
@@ -73,6 +73,8 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 
 Normal profiles reserve capacity for the larger configured Fixed or Adaptive ceiling. Ultra Performance reserves only its startup-active policy. A later capacity increase can still use private replacement when the lower WSI pool has `application minimum + generated capacity` images; otherwise it remains pending for recreation.
 
+Scaling with Gamescope WSI off provisions the optional surface association at process start. Changing scaler method or suspending private scaling does not replace that connection or switch to full WSI. On the next game launch, the independent Scaling/WSI combination chooses the combined surface adapter, the existing full WSI chain, or ordinary surface handling.
+
 ## Private replacement contract
 
 Private spatial, FG, and colour changes use one last-value-wins coordinator:
@@ -90,7 +92,7 @@ Private transitions never destroy the application swapchain or replace its WSI-f
 
 On the managed Gamescope split, only a Scale Factor or Quality Supersampling extent change may request application-visible recreation, and only from the upper spatial-resource owner. A compatible non-Gamescope maintenance1 context may also request recreation for another private-resource change that cannot be rebuilt in place, such as generated-capacity growth beyond current WSI headroom. Either path may return `VK_ERROR_OUT_OF_DATE_KHR` once, only after the lower present succeeded with retirement proof. MAKO never destroys the game-owned swapchain itself.
 
-Natural and requested recreation remove the old context from live updates immediately. Lower WSI destruction waits for same-surface replacement progress, a 50 ms compositor grace, and retirement fences. If Gamescope WSI supplies a null lower `oldSwapchain`, MAKO completes the exact retained same-device, same-surface retirement before forwarding replacement creation. Surface destruction is the terminal same-surface boundary.
+Natural and requested recreation remove the old context from live updates immediately. Lower WSI destruction waits for same-surface replacement progress, a 50 ms compositor grace, and retirement fences. When an application or upper layer passes a null `oldSwapchain` after destroying its predecessor, MAKO completes the exact retained same-device, same-surface retirement before querying the replacement memory budget or selecting scaling extents, then forwards replacement creation. The memory query must follow completed cleanup rather than charge old WSI/private buffers against their replacement; the compositor grace and retirement fences remain mandatory. Non-null `oldSwapchain` contexts retain their application-owned lifetime. Surface destruction is the terminal same-surface boundary.
 
 A scaled null-old replacement presents its first acquired application image directly before private spatial work. A known replacement with Frame Generation active then presents real frames for 250 ms and warms three new history frames inside scheduler stabilization. A replacement created while Frame Generation is Off does not arm that FG-only interval.
 
@@ -101,7 +103,7 @@ The immutable pre/post-FG spatial placement is selected from source and presenta
 Reset only state whose assumptions changed:
 
 - enable/disable clears affected pacing, admission, acquire recovery, and history state;
-- mode, target, ceiling, Smooth Cadence, or recovery-policy changes rebuild scheduler policy;
+- mode, target, ceiling, Smooth Cadence, or recovery-policy changes rebuild scheduler policy and affected real-frame pacing;
 - effective cap changes reset the real-frame pacer and scheduler observations;
 - probe-interval-only changes update only the timer;
 - private-resource, mode, multiplier, refresh, or transport-recovery changes clear Fixed collapse evidence when its baseline is no longer valid; and
@@ -113,7 +115,7 @@ A broad “configuration changed” reset would discard validated cadence after 
 
 Frame Generation Off submits no LSFG model work, generated-image acquisition, or generated presents. The saved cap is dormant. A matched process still provisions interop, backend, private images, and synchronization when startup succeeds so Off can turn On live. Failed provisioning leaves real-frame or independent scaling active and reports restart pending.
 
-Ultra Performance remains a process-start policy: effective FP16, Flow Scale 0.75, lighter model, active-policy-sized capacity, and LS1 Performance when scaling is enabled. It never enables scaling. Compatible live controls still work, but changing Ultra itself waits for restart and cannot partially mutate the active backend.
+Ultra Performance remains a process-start policy: effective FP16, Flow Scale 0.7, lighter model, active-policy-sized capacity, and LS1 Performance when scaling is enabled. It never enables scaling. Compatible live controls still work, but changing Ultra itself waits for restart and cannot partially mutate the active backend.
 
 ## Runtime status and diagnostics
 

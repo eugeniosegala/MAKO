@@ -13,11 +13,13 @@ sdk-extensions:
   - org.freedesktop.Sdk.Extension.toolchain-i386
 
 build-options:
+  cxxflags: -I/usr/lib/extensions/vulkan/makorender/include
   prefix: /usr/lib/extensions/vulkan/makorender
   append-path: /usr/lib/sdk/llvm21/bin
   prepend-ld-library-path: /usr/lib/sdk/llvm21/lib
 
 modules:
+  - vulkan-headers.json
   - name: mako
     buildsystem: cmake-ninja
     subdir: engine
@@ -27,6 +29,7 @@ modules:
       - -DCMAKE_CXX_COMPILER=clang++
       - -DCMAKE_INSTALL_LIBDIR=lib64
       - -DBUILD_TESTING=OFF
+      - -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON
       - -DMAKO_BUILD_VK_LAYER=ON
       - -DMAKO_BUILD_UI=OFF
       - -DMAKO_BUILD_CLI=OFF
@@ -51,6 +54,7 @@ modules:
       - -DCMAKE_CXX_COMPILER=i686-unknown-linux-gnu-g++
       - -DCMAKE_INSTALL_LIBDIR=lib/i386-linux-gnu
       - -DBUILD_TESTING=OFF
+      - -DMAKO_REQUIRE_NATIVE_PACKAGE_HEADERS=ON
       - -DMAKO_BUILD_VK_LAYER=ON
       - -DMAKO_BUILD_UI=OFF
       - -DMAKO_BUILD_CLI=OFF

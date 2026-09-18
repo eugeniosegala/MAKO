@@ -7,10 +7,10 @@
 #include <array>
 #include <cstdint>
 #include <optional>
-#include <unordered_map>
-#include <vector>
 
 namespace mako::backend {
+
+    struct DllResourceArchive;
 
     /// shader collection struct
     struct Shaders {
@@ -36,11 +36,11 @@ namespace mako::backend {
     /// build a shader registry from resources
     /// @param vk Vulkan instance
     /// @param fp16 whether to load fp16 variants
-    /// @param resources map of resource IDs to their binary data
+    /// @param archive immutable model DLL archive
     /// @return constructed shader registry
     /// @throws ls::error if shaders are missing
     /// @throws vk::vulkan_error on Vulkan errors
     ShaderRegistry buildShaderRegistry(const vk::Vulkan& vk, bool fp16,
-        const std::unordered_map<uint32_t, std::vector<uint8_t>>& resources);
+        const DllResourceArchive& archive);
 
 }
