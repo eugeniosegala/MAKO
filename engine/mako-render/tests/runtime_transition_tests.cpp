@@ -25,6 +25,83 @@ namespace {
 int main() {
     const auto start = StableBooleanFeedback::TimePoint{};
 
+    expect(gamescopeApplicationId("1462040") == 1462040 &&
+            !gamescopeApplicationId("") && !gamescopeApplicationId("0") &&
+            !gamescopeApplicationId("769") && !gamescopeApplicationId("12x") &&
+            !gamescopeApplicationId("4294967296"),
+        "Steam application identity must be complete and representable");
+    expect(classifyGamescopeFocus(42, 42, 42) == true &&
+            classifyGamescopeFocus(42, 769, 42) == false &&
+            classifyGamescopeFocus(42, 769, 769) == false &&
+            !classifyGamescopeFocus(42, 77, 42) &&
+            !classifyGamescopeFocus(42, 42, 77) &&
+            !classifyGamescopeFocus(42, std::nullopt, 42) &&
+            !classifyGamescopeFocus(42, 0, 42) &&
+            !classifyGamescopeFocus(std::nullopt, 769, 42),
+        "focus must distinguish the game's input, Steam UI, and unknown peers");
+    GamescopeFocusTracker focusTracker;
+    expect(!focusTracker.observe(start, true).gameFocused,
+        "one unconfirmed focus sample was trusted");
+    auto focus = focusTracker.observe(start + 250ms, true);
+    expect(focus.gameFocused == true && focus.returnSequence == 0,
+        "initial foreground observation manufactured a menu return");
+    static_cast<void>(focusTracker.observe(start + 500ms, false));
+    focus = focusTracker.observe(start + 600ms, true);
+    expect(focus.gameFocused == true && focus.returnSequence == 0,
+        "brief focus flicker interrupted gameplay");
+    static_cast<void>(focusTracker.observe(start + 750ms, false));
+    focus = focusTracker.observe(start + 1s, false);
+    expect(focus.menuOpen(start + 1s) && !focus.recoveryWindow(start + 1s),
+        "confirmed Steam focus was not isolated from gameplay recovery");
+    static_cast<void>(focusTracker.observe(start + 1250ms, true));
+    focus = focusTracker.observe(start + 1500ms, true);
+    expect(focus.gameFocused == true && focus.returnSequence == 1 &&
+            focus.openedAt == start + 750ms && focus.recoveryWindow(start + 1500ms) &&
+            !focus.recoveryWindow(start + 3s),
+        "confirmed return was lost or stale focus remained authoritative");
+    static_cast<void>(focusTracker.observe(start + 1750ms, false));
+    static_cast<void>(focusTracker.observe(start + 2s, false));
+    focus = focusTracker.observe(start + 2250ms, std::nullopt);
+    expect(!focus.gameFocused && !focus.returnedAt,
+        "unknown input focus retained a menu recovery episode");
+    static_cast<void>(focusTracker.observe(start + 2500ms, true));
+    focus = focusTracker.observe(start + 2750ms, true);
+    expect(focus.returnSequence == 1 && !focus.returnedAt,
+        "unknown-to-game focus fabricated a close event");
+    static_cast<void>(focusTracker.observe(start + 3s, false));
+    static_cast<void>(focusTracker.observe(start + 3250ms, false));
+    static_cast<void>(focusTracker.observe(start + 6s, true));
+    focus = focusTracker.observe(start + 6250ms, true);
+    expect(focus.returnSequence == 1 && !focus.returnedAt,
+        "a stalled monitor bridged stale open/close evidence");
+
+    auto focusTime = start + 6250ms;
+    for (uint64_t sequence = 2; sequence <= 21; ++sequence) {
+        focusTime += 250ms;
+        static_cast<void>(focusTracker.observe(focusTime, false));
+        focusTime += 250ms;
+        expect(focusTracker.observe(focusTime, false).menuOpen(focusTime),
+            "repeated menu opening failed to suspend gameplay");
+        focusTime += 250ms;
+        static_cast<void>(focusTracker.observe(focusTime, true));
+        focusTime += 250ms;
+        focus = focusTracker.observe(focusTime, true);
+        expect(focus.returnSequence == sequence && focus.recoveryWindow(focusTime),
+            "repeated menu returns were delayed or lost");
+    }
+    for (size_t sample = 0; sample < 480; ++sample) {
+        focusTime += 250ms;
+        focus = focusTracker.observe(focusTime, false);
+    }
+    expect(focus.menuOpen(focusTime) && !focus.recoveryWindow(focusTime),
+        "two minutes in a menu activated gameplay recovery");
+    focusTime += 250ms;
+    static_cast<void>(focusTracker.observe(focusTime, true));
+    focusTime += 250ms;
+    focus = focusTracker.observe(focusTime, true);
+    expect(focus.returnSequence == 22 && focus.recoveryWindow(focusTime),
+        "a long menu visit lost its immediately available return event");
+
     PrivateResourceTransition<int> resources;
     resources.request(2, 10, 500ms, start);
     expect(resources.pendingRequest() &&

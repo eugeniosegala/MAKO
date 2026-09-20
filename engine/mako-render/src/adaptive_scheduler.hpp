@@ -209,6 +209,7 @@ namespace mako::layer {
             TimePoint now, std::chrono::milliseconds interval);
         void beginStabilization(TimePoint now, std::string_view reason);
         void beginTransportRecovery(TimePoint now);
+        void resumeAfterExternalInterruption(TimePoint now, bool confirmedReturn);
         void restoreGenerationLimit(TimePoint now, size_t generationLimit,
             std::string_view reason,
             std::optional<size_t> monitoredFallbackLimit = std::nullopt,
@@ -233,7 +234,9 @@ namespace mako::layer {
         void beginHistoryWarmup(size_t frames, bool recovery);
         void ensureHistoryWarmup(size_t frames, bool recovery);
         void cancelHistoryWarmup();
-        void consumeHistoryWarmupFrame(TimePoint now);
+        // Use the same application-present start boundary as planFrame(),
+        // never a clock sampled after history scheduling or GPU waits.
+        void consumeHistoryWarmupFrame(TimePoint frameStarted);
         void reportGeneratedFrameDelivery(GeneratedFrameDelivery delivery);
 
         [[nodiscard]] bool discontinuityRecoveryActive() const {
@@ -277,6 +280,9 @@ namespace mako::layer {
         static Clock::duration stableRearmDuration();
 
     private:
+        void beginStabilization(TimePoint now, std::string_view reason,
+            Clock::duration stabilizationDuration);
+
         struct CadenceObservation {
             bool planningReady{false};
             AdaptiveFramePlan terminalPlan;

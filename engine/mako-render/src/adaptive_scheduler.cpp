@@ -63,6 +63,8 @@ namespace {
     constexpr double adaptiveNativeCadenceMinimumRiseRatio = 1.25;
     constexpr size_t adaptiveNativeCadenceConfirmationFrames = 3;
     constexpr auto adaptiveStabilizationDuration = std::chrono::seconds(1);
+    constexpr auto adaptiveMenuReturnStabilizationDuration =
+        std::chrono::milliseconds(250);
     constexpr auto adaptiveRecoveryStabilizationDuration = std::chrono::seconds(3);
     constexpr auto adaptiveRampEvaluationDuration = std::chrono::seconds(1);
     constexpr auto adaptiveTargetDeficitDuration = std::chrono::seconds(1);
@@ -307,7 +309,7 @@ void AdaptiveScheduler::cancelHistoryWarmup() {
     this->state.historyWarmup.recovery = false;
 }
 
-void AdaptiveScheduler::consumeHistoryWarmupFrame(const TimePoint now) {
+void AdaptiveScheduler::consumeHistoryWarmupFrame(const TimePoint frameStarted) {
     if (this->state.historyWarmup.remaining == 0)
         return;
 
@@ -322,7 +324,7 @@ void AdaptiveScheduler::consumeHistoryWarmupFrame(const TimePoint now) {
     this->state.historyWarmup.remaining--;
     if (this->state.historyWarmup.remaining == 0)
         this->state.historyWarmup.recovery = false;
-    this->resetTiming(now);
+    this->resetTiming(frameStarted);
     if (retainedEfficiencyRetryAt)
         this->state.efficiencyProbe.retryAt = retainedEfficiencyRetryAt;
 }
@@ -2403,6 +2405,14 @@ void AdaptiveScheduler::scheduleRearm(
 void AdaptiveScheduler::beginStabilization(
         const std::chrono::steady_clock::time_point now,
         const std::string_view reason) {
+    this->beginStabilization(now, reason, reason == "startup"
+        ? adaptiveRecoveryStabilizationDuration
+        : adaptiveStabilizationDuration);
+}
+
+void AdaptiveScheduler::beginStabilization(
+        const TimePoint now, const std::string_view reason,
+        const Clock::duration stabilizationDuration) {
     const bool cadenceChange =
         reason == "cadence-stall" || reason == "cadence-drop";
     const bool hardDiscontinuity = reason == "cadence-stall";
@@ -2464,9 +2474,6 @@ void AdaptiveScheduler::beginStabilization(
     // oldSwapchain replacement is already inside a running game: its new
     // backend still receives the normal temporal-history warm-up, while one
     // second of fresh source cadence is enough before the measured ramp.
-    const auto stabilizationDuration = reason == "startup"
-        ? adaptiveRecoveryStabilizationDuration
-        : adaptiveStabilizationDuration;
     this->state.stabilization.until = now + stabilizationDuration;
     this->state.ramp.nextAt = this->state.stabilization.until;
     if (this->state.rearm.notBefore &&
@@ -2512,6 +2519,31 @@ void AdaptiveScheduler::beginStabilization(
     this->resetTiming(now);
     if (!alreadyStabilizing)
         this->diagnostics->stabilization(reason, stabilizationDuration);
+}
+
+void AdaptiveScheduler::resumeAfterExternalInterruption(
+        const TimePoint now, const bool confirmedReturn) {
+    // The caller did not feed menu-throttled frames into the scheduler. Keep
+    // the last proven level, abandon interrupted experiments and remeasure
+    // source cadence without retaining their elapsed timers or stale history.
+    const auto retainedLimit = this->validatedGenerationLimit();
+    // A confirmed return can reuse proven capacity after a short settling
+    // interval. Unknown focus and newly reset policies have no such proof.
+    // Temporal warm-up and the caller's transport/fence guards still apply.
+    const bool fastResume = confirmedReturn && retainedLimit > 0 &&
+        this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr;
+    const auto remainingStabilization =
+        this->state.stabilization.until.value_or(now) - now;
+    // A menu event cannot advance an existing transport/lifecycle deadline.
+    // Repeated healthy returns still have only the short settling minimum.
+    this->beginStabilization(now, "gamescope-focus-return", fastResume
+        ? std::max<Clock::duration>(adaptiveMenuReturnStabilizationDuration,
+            remainingStabilization)
+        : adaptiveStabilizationDuration);
+    this->restoreGenerationLimit(now, retainedLimit, "gamescope-focus-return");
+    // A second menu may interrupt the first warm-up after only one frame.
+    // Every return needs fresh history, not the remainder of the old gap.
+    this->beginHistoryWarmup(historyWarmupFrameCount(), true);
 }
 
 void AdaptiveScheduler::beginTransportRecovery(const TimePoint now) {

@@ -428,7 +428,7 @@ describe("Scaling controls", () => {
     expect(factor.getAttribute("data-notch-count")).toBe("3");
     expect(
       screen.getByText(
-        "This resolution already fills the display. Lower the in-game resolution or enable Quality Supersampling.",
+        "This input already fills the display target. Try Windowed mode, lower the in-game resolution, or enable Quality Supersampling.",
       ),
     ).toBeTruthy();
   });

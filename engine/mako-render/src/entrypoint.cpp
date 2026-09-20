@@ -89,6 +89,12 @@ namespace {
             variableSurfaceRollbackExtents;
         std::unordered_map<VkSurfaceKHR, SpatialSurfaceOrigin> surfaceOrigins;
         std::unordered_set<VkSurfaceKHR> unprovenSplitSurfacesLogged;
+        // Replacement swapchains retain a bounded recovery-recreation budget.
+        // A later independent collapse may repair the same long-lived game
+        // surface, while fixed spacing and episode limits prevent loops.
+        std::unordered_map<
+            VkSurfaceKHR, PersistentAdaptiveRecoverySurfaceBudget
+        > persistentRecoveryRecreationStates;
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
         std::unordered_set<VkSwapchainKHR> nativeSwapchains;
@@ -1673,6 +1679,8 @@ namespace {
                 instance_info->variableSurfaceRollbackExtents.erase(surface);
                 instance_info->surfaceOrigins.erase(surface);
                 instance_info->unprovenSplitSurfacesLogged.erase(surface);
+                instance_info->persistentRecoveryRecreationStates
+                    .erase(surface);
             }
         }
         const auto lower = reinterpret_cast<PFN_vkDestroySurfaceKHR>(
@@ -2468,7 +2476,114 @@ namespace {
                     context.requestLiveProfileResourceRecreationAfterPresent(
                         result
                     );
-                if (liveProfileRecreationRequested) {
+                const VkSurfaceKHR presentingSurface = metadata ==
+                        instance_info->swapchainInfos.end()
+                    ? VK_NULL_HANDLE
+                    : metadata->second.surface;
+                const auto recoveryRequestedAt =
+                    std::chrono::steady_clock::now();
+                const auto recoverySample = context.persistentAdaptiveRecoverySample();
+                auto persistentRecoveryState = presentingSurface ==
+                        VK_NULL_HANDLE
+                    ? instance_info->persistentRecoveryRecreationStates.end()
+                    : instance_info->persistentRecoveryRecreationStates.find(
+                        presentingSurface
+                    );
+                if (presentingSurface != VK_NULL_HANDLE && recoverySample &&
+                        persistentRecoveryState ==
+                            instance_info->persistentRecoveryRecreationStates.end()) {
+                    persistentRecoveryState = instance_info
+                        ->persistentRecoveryRecreationStates.try_emplace(
+                            presentingSurface).first;
+                }
+                PersistentAdaptiveRecoverySurfaceBudget::DeficitObservation
+                    sustainedDeficit;
+                if (persistentRecoveryState !=
+                        instance_info
+                            ->persistentRecoveryRecreationStates.end()) {
+                    sustainedDeficit = persistentRecoveryState->second
+                        .observeSustainedDeficit(recoveryRequestedAt, recoverySample);
+                    if (present_diagnostics::enabled() &&
+                            (sustainedDeficit.newlyQualified || sustainedDeficit.cancelled)) {
+                        std::cerr << "MAKO Renderer: present diagnostics: "
+                                     "operation=adaptive-recovery-recreation-watchdog"
+                                  << " context=" << context.diagnosticsId()
+                                  << " phase=" << (sustainedDeficit.qualified
+                                      ? "qualified" : "cancelled")
+                                  << " reason=sustained-post-menu-deficit"
+                                  << " output_fps=" << (recoverySample
+                                      ? recoverySample->outputFps.value_or(0.0) : 0.0)
+                                  << " lower_present_share=" << (recoverySample
+                                      ? recoverySample->lowerPresentShare : 0.0)
+                                  << " deficit_ms="
+                                  << std::chrono::duration<double, std::milli>(
+                                      sustainedDeficit.duration).count()
+                                  << " surface_available="
+                                  << persistentRecoveryState->second.available(
+                                      recoveryRequestedAt)
+                                  << '\n';
+                    }
+                }
+                const bool persistentRecoverySurfaceAvailable =
+                    presentingSurface != VK_NULL_HANDLE &&
+                    (persistentRecoveryState ==
+                            instance_info
+                                ->persistentRecoveryRecreationStates.end() ||
+                     persistentRecoveryState->second.available(
+                         recoveryRequestedAt
+                     ));
+                const bool lowerPresentRecoverySurfaceAvailable =
+                    presentingSurface != VK_NULL_HANDLE &&
+                    (persistentRecoveryState ==
+                            instance_info
+                                ->persistentRecoveryRecreationStates.end() ||
+                     persistentRecoveryState->second
+                        .severeLowerPresentAvailable(recoveryRequestedAt));
+                const bool lowerPresentRecoveryRecreationRequested =
+                    context.requestLowerPresentStallRecreationAfterPresent(
+                        result,
+                        !liveProfileRecreationRequested &&
+                            lowerPresentRecoverySurfaceAvailable
+                    );
+                const bool persistentRecoveryRecreationRequested =
+                    context.requestPersistentRecoveryRecreationAfterPresent(
+                        result,
+                        !liveProfileRecreationRequested &&
+                            !lowerPresentRecoveryRecreationRequested &&
+                            persistentRecoverySurfaceAvailable,
+                        sustainedDeficit.qualified
+                    );
+                if (lowerPresentRecoveryRecreationRequested ||
+                        persistentRecoveryRecreationRequested) {
+                    auto& recoveryState = instance_info
+                        ->persistentRecoveryRecreationStates[
+                            presentingSurface
+                        ];
+                    recoveryState.recordRequest(recoveryRequestedAt,
+                        persistentRecoveryRecreationRequested && sustainedDeficit.qualified);
+                    if (present_diagnostics::enabled()) {
+                        std::cerr << "MAKO Renderer: present diagnostics: "
+                                  << "operation="
+                                  << (lowerPresentRecoveryRecreationRequested
+                                        ? "lower-present-stall-recreation-budget"
+                                        : "adaptive-recovery-recreation-budget")
+                                  << " surface=" << presentingSurface
+                                  << " completed_requests="
+                                  << recoveryState.completedRequests()
+                                  << " next_cooldown_ms="
+                                  << std::chrono::duration_cast<
+                                         std::chrono::milliseconds
+                                     >(
+                                         lowerPresentRecoveryRecreationRequested
+                                             ? std::chrono::seconds{30}
+                                             : recoveryState.nextCooldown()
+                                     ).count()
+                                  << '\n';
+                    }
+                }
+                if (liveProfileRecreationRequested ||
+                        lowerPresentRecoveryRecreationRequested ||
+                        persistentRecoveryRecreationRequested) {
                     // This role owns the guarded request only after
                     // Swapchain::present() returned from a successful lower
                     // present. The application's acquired real image has
@@ -2494,6 +2609,10 @@ namespace {
                               << " source="
                               << (liveProfileRecreationRequested
                                     ? "guarded-live-profile-request"
+                                    : lowerPresentRecoveryRecreationRequested
+                                        ? "persistent-lower-present-stall"
+                                    : persistentRecoveryRecreationRequested
+                                        ? "persistent-adaptive-recovery"
                                     : "upstream-or-driver")
                               << '\n';
                 }

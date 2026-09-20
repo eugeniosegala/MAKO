@@ -1105,12 +1105,23 @@ int main() {
     handoff = pacerHandoff.update(pacingStart + 3s, true);
     expect(handoff.active && handoff.changed,
         "explicit pacing-handoff reset retained stale cooldown state");
+    pacerHandoff.pauseForExternalInterruption();
+    handoff = pacerHandoff.update(pacingStart + 4s, false);
+    expect(!handoff.active && !handoff.changed,
+        "menu suspension retained an active FIFO handoff");
+    handoff = pacerHandoff.update(pacingStart + 5s, true);
+    expect(handoff.active && handoff.changed,
+        "menu suspension invented a gameplay pacing cooldown");
+    static_cast<void>(pacerHandoff.update(pacingStart + 6s, false));
+    pacerHandoff.pauseForExternalInterruption();
+    handoff = pacerHandoff.update(pacingStart + 7s, true);
+    expect(!handoff.active,
+        "menu suspension erased a genuine earlier pacing-failure cooldown");
 
-    expect(LowerPresentStallRecovery::stallThreshold(120) == 50ms &&
-            LowerPresentStallRecovery::stallThreshold(60) >= 66ms &&
-            LowerPresentStallRecovery::stallThreshold(60) < 67ms &&
-            LowerPresentStallRecovery::stallThreshold(40) == 100ms,
-        "lower-present stall thresholds lost their display-relative floor");
+    expect(LowerPresentStallRecovery::stallThreshold(120) == 250ms &&
+            LowerPresentStallRecovery::stallThreshold(60) == 250ms &&
+            LowerPresentStallRecovery::stallThreshold(40) == 250ms,
+        "lower-present stall threshold lost its severe-hitch floor");
     LowerPresentStallRecovery presentStallRecovery;
     const auto presentStallStart =
         LowerPresentStallRecovery::TimePoint{};
@@ -1120,11 +1131,25 @@ int main() {
     expect(!presentStall.quarantined &&
             !presentStallRecovery.active(),
         "a sub-threshold lower present entered recovery");
+    for (const auto batch : {std::array{7ms, 47ms}, std::array{47ms, 7ms}}) {
+        presentStall = presentStallRecovery.observe(
+            presentStallStart, *std::max_element(batch.begin(), batch.end()), 120
+        );
+        expect(!presentStall.quarantined && !presentStallRecovery.active(),
+            "separate sub-threshold FIFO waits were summed into a stall");
+    }
+    for (const auto duration : {50ms, 69ms, 114ms, 249ms}) {
+        presentStall = presentStallRecovery.observe(
+            presentStallStart + 1ms, duration, 120
+        );
+        expect(!presentStall.quarantined && !presentStallRecovery.active(),
+            "a returned gameplay hitch entered lower-present quarantine");
+    }
     presentStall = presentStallRecovery.observe(
         presentStallStart + 1ms, 621ms, 120
     );
     expect(presentStall.quarantined &&
-            presentStall.threshold == 50ms &&
+            presentStall.threshold == 250ms &&
             presentStallRecovery.active(),
         "a severe lower present did not enter native stabilization");
     auto presentStallDecision = presentStallRecovery.beforePresent(
@@ -1142,7 +1167,7 @@ int main() {
             !presentStallRecovery.active(),
         "lower-present recovery did not end at its absolute deadline");
     presentStall = presentStallRecovery.observe(
-        presentStallStart + 2100ms, 72ms, 120
+        presentStallStart + 2200ms, 521ms, 120
     );
     expect(presentStall.quarantined &&
             presentStall.consecutiveStalls == 2 &&
@@ -1160,6 +1185,297 @@ int main() {
             !presentStallRecovery.active(),
         "extended lower-present recovery did not end at its absolute deadline");
     presentStallRecovery.reset();
+
+    LowerPresentStallRecovery nativeStallRecovery;
+    auto nativeStall = nativeStallRecovery.observe(
+        presentStallStart, 300ms, 120
+    );
+    expect(nativeStall.quarantined,
+        "severe generated batch did not start native-only recovery");
+    const auto healthyNative =
+        nativeStallRecovery.observeNativeRecoveryPresent(
+            presentStallStart + 100ms, 40ms, 120);
+    expect(!healthyNative.newlyArmedRecreation &&
+            !nativeStallRecovery.recreationRequested(),
+        "healthy native recovery present armed a recreation");
+    const auto isolatedNative = nativeStallRecovery.observeNativeRecoveryPresent(
+        presentStallStart + 400ms, 280ms, 120);
+    expect(!isolatedNative.newlyArmedRecreation &&
+            !nativeStallRecovery.recreationRequested(),
+        "one native overlay hitch requested a recreation");
+    const auto failedNative = nativeStallRecovery.observeNativeRecoveryPresent(
+        presentStallStart + 800ms, 280ms, 120);
+    expect(failedNative.newlyArmedRecreation &&
+            failedNative.severeNativeStalls == 2 &&
+            nativeStallRecovery.recreationRequested(),
+        "severe native recovery present did not arm recreation");
+    presentStallDecision = nativeStallRecovery.beforePresent(
+        presentStallStart + 3s
+    );
+    expect(presentStallDecision.bypassGeneration &&
+            !presentStallDecision.recovered,
+        "failed native FIFO resumed generation before recreation");
+    expect(nativeStallRecovery.signalRecreation() &&
+            !nativeStallRecovery.signalRecreation(),
+        "native lower-present recreation signal was not one-shot");
+    static_cast<void>(nativeStallRecovery.observeNativeRecoveryPresent(
+        presentStallStart + 3100ms, 300ms, 120));
+    expect(!nativeStallRecovery.recreationRequested(),
+        "an ignored OUT_OF_DATE was signaled again on the same context");
+    presentStallDecision = nativeStallRecovery.beforePresent(
+        presentStallStart + 3s
+    );
+    expect(presentStallDecision.recovered &&
+            presentStallDecision.beginHistoryWarmup,
+        "signaled native FIFO recovery did not release its local guard");
+    nativeStallRecovery.reset();
+    static_cast<void>(nativeStallRecovery.observe(
+        presentStallStart + 4s, 300ms, 120));
+    for (size_t i = 1; i <= 4; ++i) {
+        static_cast<void>(nativeStallRecovery.observeNativeRecoveryPresent(
+            presentStallStart + 4s + i * 300ms, 280ms, 120));
+    }
+    expect(!nativeStallRecovery.recreationRequested(),
+        "a private reset cleared the context's one-shot recreation guard");
+
+    LowerPresentStallRecovery unavailableRecreation;
+    static_cast<void>(unavailableRecreation.observe(
+        presentStallStart, 300ms, 120));
+    for (size_t i = 1; i < 30; ++i) {
+        static_cast<void>(unavailableRecreation.observeNativeRecoveryPresent(
+            presentStallStart + i * 1s, 300ms, 120));
+        expect(unavailableRecreation.beforePresent(
+                presentStallStart + i * 1s).bypassGeneration,
+            "pending native recreation did not retain its bounded guard");
+    }
+    const auto boundedRetry = unavailableRecreation.beforePresent(
+        presentStallStart + 30s);
+    expect(boundedRetry.beginHistoryWarmup && boundedRetry.recreationWaitExpired &&
+            !unavailableRecreation.active() &&
+            !unavailableRecreation.recreationRequested(),
+        "missing retirement proof or surface budget latched native-only forever");
+
+    LowerPresentStallRecovery recoveredBeforeBudget;
+    static_cast<void>(recoveredBeforeBudget.observe(
+        presentStallStart, 300ms, 120));
+    for (size_t i = 1; i <= 2; ++i) {
+        static_cast<void>(recoveredBeforeBudget.observeNativeRecoveryPresent(
+            presentStallStart + i * 300ms, 280ms, 120));
+    }
+    static_cast<void>(recoveredBeforeBudget.observeNativeRecoveryPresent(
+        presentStallStart + 700ms, 40ms, 120));
+    const auto cancelled = recoveredBeforeBudget.observeNativeRecoveryPresent(
+        presentStallStart + 1700ms, 40ms, 120);
+    expect(cancelled.cancelledRecreation &&
+            !recoveredBeforeBudget.recreationRequested() &&
+            recoveredBeforeBudget.beforePresent(
+                presentStallStart + 2s).beginHistoryWarmup,
+        "healthy native output retained a stale rebuild or extended its guard");
+    static_cast<void>(recoveredBeforeBudget.observe(
+        presentStallStart + 3s, 300ms, 120));
+    recoveredBeforeBudget.reset();
+    expect(!recoveredBeforeBudget.active() &&
+            !recoveredBeforeBudget.recreationRequested(),
+        "FG Off retained native-only recovery state");
+
+    for (size_t remaining = 0; remaining <= 3; ++remaining) {
+        expect(historyWarmupFramesAfterRequest(remaining, 3, true) == 3,
+            "a new Fixed menu return retained incomplete pre-menu history");
+        expect(historyWarmupFramesAfterRequest(remaining, 3, false) ==
+                (remaining == 0 ? 3 : remaining),
+            "ordinary Fixed readiness checks restarted an active warm-up");
+    }
+    auto menuWarmupRemaining = historyWarmupFramesAfterRequest(0, 3, true);
+    --menuWarmupRemaining;
+    menuWarmupRemaining = historyWarmupFramesAfterRequest(menuWarmupRemaining, 3, true);
+    for (size_t frame = 0; frame < 3; ++frame) {
+        expect(menuWarmupRemaining == 3 - frame,
+            "second Fixed interruption did not require three new real frames");
+        --menuWarmupRemaining;
+    }
+    expect(menuWarmupRemaining == 0,
+        "Fixed history warm-up did not complete after three fresh frames");
+
+    RecoveryPresentHealth outputHealth;
+    auto outputNow = RecoveryPresentHealth::Clock::time_point{};
+    outputHealth.beginPresent(outputNow);
+    for (size_t frame = 0; frame < 100; ++frame) {
+        // Alternating two/three outputs at 50 real FPS: 125 FPS delivered.
+        for (size_t output = 0; output < 2 + frame % 2; ++output)
+            outputHealth.observePresent(4ms, true);
+        outputNow += 20ms;
+        outputHealth.beginPresent(outputNow);
+    }
+    expect(outputHealth.outputFps() && *outputHealth.outputFps() >= 120.0,
+        "fractional delivered output did not qualify recovery health");
+    for (size_t frame = 0; frame < 30; ++frame) {
+        outputHealth.observePresent(20ms, true);
+        outputNow += 20ms;
+        outputHealth.beginPresent(outputNow);
+    }
+    expect(outputHealth.outputFps() &&
+            std::abs(*outputHealth.outputFps() - 50.0) < 0.001,
+        "native-only output was multiplied by a selected 3x ceiling");
+    outputHealth.observePresent(280ms, true);
+    outputHealth.observePresent(40ms, true);
+    expect(outputHealth.maximumPresentDuration() == 280ms,
+        "stall health did not retain the longest individual lower present");
+    outputNow += 2s;
+    outputHealth.beginPresent(outputNow);
+    expect(!outputHealth.outputFps() &&
+            outputHealth.maximumPresentDuration() == 0ms,
+        "a long menu pause retained stale output health or stall timing");
+    for (size_t frame = 0; frame < 30; ++frame) {
+        outputHealth.observePresent(4ms, true);
+        outputHealth.observePresent(4ms, true);
+        outputNow += 16ms;
+        outputHealth.beginPresent(outputNow);
+    }
+    expect(outputHealth.outputFps() &&
+            std::abs(*outputHealth.outputFps() - 125.0) < 0.001 &&
+            std::abs(outputHealth.lowerPresentShare() - 0.5) < 0.001,
+        "output and lower-present pressure were not paired with their completed intervals");
+    outputHealth.observePresent(4ms, false);
+    expect(!outputHealth.outputFps(),
+        "failed lower present retained a healthy output classification");
+
+    PersistentAdaptiveRecoveryRecreation request;
+    expect(!request.signal() && request.signal(true) && !request.signal(true),
+        "recreation requires qualification and stays one-shot for the context");
+    expect(persistentAdaptiveRecoveryRecreationCooldown(0) == 0s &&
+            persistentAdaptiveRecoveryRecreationCooldown(1) == 30s &&
+            persistentAdaptiveRecoveryRecreationCooldown(20) == 30s,
+        "surface spacing must not turn a menu visit into a five-minute cooldown");
+
+    using SurfaceBudget = PersistentAdaptiveRecoverySurfaceBudget;
+    using RecoverySample = SurfaceBudget::RecoverySample;
+    SurfaceBudget spacing;
+    auto spacingNow = SurfaceBudget::TimePoint{};
+    expect(spacing.available(spacingNow) && spacing.severeLowerPresentAvailable(spacingNow),
+        "a fresh surface incurred a recovery cooldown");
+    for (size_t requestCount = 1; requestCount <= 20; ++requestCount) {
+        spacing.recordRequest(spacingNow);
+        expect(spacing.completedRequests() == requestCount && spacing.nextCooldown() == 30s,
+            "surface request accounting reset or escalated the fixed cooldown");
+        expect(!spacing.available(spacingNow + 29999ms) &&
+                !spacing.severeLowerPresentAvailable(spacingNow + 29999ms) &&
+                spacing.available(spacingNow + 30s) &&
+                spacing.severeLowerPresentAvailable(spacingNow + 30s),
+            "watchdog and native requests did not share exact 30-second spacing");
+        spacingNow += 30s;
+    }
+    const RecoverySample healthySample{
+        .contextId = 1, .configurationRevision = 2,
+        .targetFps = 120, .refreshHz = 120,
+        .extents = {2560, 1440, 3840, 2160},
+        .focus = {.gameFocused = true},
+        .outputFps = 120.0, .lowerPresentShare = 0.7,
+    };
+    auto watchdogNow = SurfaceBudget::TimePoint{};
+    auto sample = healthySample;
+    const auto observe = [&](auto& budget, const auto elapsed) {
+        watchdogNow += elapsed;
+        sample.focus.sampledAt = watchdogNow;
+        return budget.observeSustainedDeficit(watchdogNow, sample);
+    };
+    const auto baseline = [&](auto& budget) {
+        for (int i = 0; i < 6; ++i)
+            expect(!observe(budget, 250ms).qualified, "healthy gameplay rebuilt");
+    };
+    const auto menu = [&](auto& budget, const auto duration) {
+        sample.focus.gameFocused = false;
+        sample.focus.openedAt = watchdogNow;
+        sample.outputFps = 30.0;
+        expect(!observe(budget, duration).qualified, "menu-open throttle rebuilt");
+        sample.focus.gameFocused = true;
+        sample.focus.returnedAt = watchdogNow;
+        ++sample.focus.returnSequence;
+        sample.outputFps = 70.0;
+        return observe(budget, 25ms);
+    };
+
+    SurfaceBudget stalled;
+    baseline(stalled);
+    expect(!menu(stalled, 60s).qualified,
+        "menu close rebuilt immediately without observing gameplay");
+    expect(!observe(stalled, 3999ms).qualified,
+        "post-menu watchdog skipped the four-second evidence window");
+    expect(observe(stalled, 1ms).qualified && stalled.available(watchdogNow),
+        "confirmed return after a long menu lost the pre-menu baseline");
+    stalled.recordRequest(watchdogNow, true);
+    const auto firstRequest = watchdogNow;
+    ++sample.contextId;
+    sample.outputFps.reset();
+    expect(!observe(stalled, 1s).qualified, "replacement warm-up armed a rebuild");
+    sample.outputFps = 70.0;
+    static_cast<void>(observe(stalled, 25ms));
+    expect(observe(stalled, 4s).qualified && !stalled.available(watchdogNow),
+        "first failed rebuild forgot the episode or skipped surface spacing");
+    watchdogNow = firstRequest + 30s;
+    expect(observe(stalled, 0ms).qualified && stalled.available(watchdogNow),
+        "failed first rebuild never became eligible for its bounded retry");
+    stalled.recordRequest(watchdogNow, true);
+    ++sample.contextId;
+    for (int i = 0; i < 200; ++i)
+        expect(!observe(stalled, 250ms).qualified, "two failed rebuilds entered a loop");
+    sample.outputFps = 120.0;
+    baseline(stalled);
+    static_cast<void>(menu(stalled, 1s));
+    expect(observe(stalled, 4s).qualified,
+        "healthy gameplay could not recover a later independent menu visit");
+    sample.outputFps = 100.0;
+    expect(observe(stalled, 25ms).cancelled, "recovered output did not cancel deficit");
+    static_cast<void>(observe(stalled, 1s));
+    sample.outputFps = 70.0;
+    static_cast<void>(observe(stalled, 25ms));
+    expect(!observe(stalled, 4s).qualified,
+        "resolved menu recovery leaked into a later heavy scene");
+
+    for (const bool hadBaseline : {false, true}) {
+        SurfaceBudget normal;
+        watchdogNow = {}; sample = healthySample;
+        if (hadBaseline) baseline(normal);
+        if (!hadBaseline) static_cast<void>(menu(normal, 1s));
+        sample.outputFps = 30.0;
+        for (int i = 0; i < 240; ++i)
+            expect(!observe(normal, 250ms).qualified,
+                "ordinary low FPS or an unattainable target triggered recreation");
+    }
+    for (int invalidation = 0; invalidation < 11; ++invalidation) {
+        SurfaceBudget invalidated;
+        watchdogNow = {}; sample = healthySample; baseline(invalidated);
+        static_cast<void>(menu(invalidated, 1s));
+        if (invalidation == 0) ++sample.configurationRevision;
+        if (invalidation == 1) ++sample.contextId;
+        if (invalidation == 2) sample.extents[0] = 1920;
+        if (invalidation == 3) sample.refreshHz = 90;
+        if (invalidation == 4)
+            static_cast<void>(invalidated.observeSustainedDeficit(watchdogNow, std::nullopt));
+        if (invalidation == 5) sample.lowerPresentShare = 0.1;
+        if (invalidation == 6) sample.outputFps.reset();
+        if (invalidation == 7) sample.targetFps = 144;
+        if (invalidation == 8) sample.focus.gameFocused.reset();
+        if (invalidation == 9) watchdogNow += 76s;
+        if (invalidation == 10) {
+            watchdogNow += 2s;
+            expect(!invalidated.observeSustainedDeficit(watchdogNow, sample).qualified,
+                "stale focus authorized a rebuild");
+        }
+        static_cast<void>(observe(invalidated, 25ms));
+        expect(!observe(invalidated, 5s).qualified,
+            "invalid/stale evidence authorized a post-menu rebuild");
+    }
+    SurfaceBudget missedPresent;
+    watchdogNow = {}; sample = healthySample; baseline(missedPresent);
+    // Gamescope's reader observes the menu even if the game submits no frames.
+    sample.focus.openedAt = watchdogNow;
+    watchdogNow += 60s;
+    sample.focus.returnedAt = watchdogNow;
+    sample.focus.returnSequence = 1;
+    sample.outputFps = 70.0;
+    static_cast<void>(observe(missedPresent, 25ms));
+    expect(observe(missedPresent, 4s).qualified,
+        "no game presents during the menu hid its confirmed focus return");
 
     const auto cadenceInterval = [](const double framesPerSecond) {
         return std::chrono::duration_cast<

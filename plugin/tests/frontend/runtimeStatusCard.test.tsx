@@ -91,11 +91,6 @@ describe("authoritative live status", () => {
     expect(screen.queryByText(/→/)).toBeNull();
     expect(screen.getByText("1.50×")).toBeTruthy();
     expect(screen.getByText("Factor")).toBeTruthy();
-    const notices = container.querySelectorAll(
-      '[data-mako-live-status-notices="true"]',
-    );
-    expect(notices).toHaveLength(1);
-    expect((notices[0] as HTMLElement).style.marginTop).toBe("8px");
     const footer = container.querySelector(
       '[data-mako-live-status-footer="true"]',
     );
@@ -124,6 +119,43 @@ describe("authoritative live status", () => {
         "You selected LS1 Quality; MAKO is using MAKO Scaler instead.",
       ),
     ).toBeTruthy();
+    expect(
+      screen.getByText("A saved change is still applying or needs a restart."),
+    ).toBeTruthy();
+    const noticeList = container.querySelector(
+      '[data-mako-live-status-notice-list="true"]',
+    ) as HTMLElement | null;
+    expect(noticeList).toBeTruthy();
+    expect(noticeList?.style.listStyleType).toBe("disc");
+    expect(screen.getAllByRole("listitem")).toHaveLength(4);
+  });
+
+  test("places a Frame Generation restart notice in the shared footer", () => {
+    window.SP_REACT = React;
+    const { container } = render(
+      <RuntimeStatusCard
+        runtimeState={{
+          ...EMPTY_RUNTIME_SCALING_UI_STATE,
+          hasContext: true,
+          frameGenerationEnabled: true,
+          frameGenerationPending: true,
+        }}
+      />,
+    );
+
+    const pendingNotice = screen.getByText(
+      "A saved change is still applying or needs a restart.",
+    );
+    const footer = pendingNotice.closest(
+      '[data-mako-live-status-footer="true"]',
+    );
+    expect(footer).toBeTruthy();
+    expect(
+      container
+        .querySelector('[data-mako-live-status-grid="compact-two-column"]')
+        ?.contains(footer),
+    ).toBe(false);
+    expect(screen.queryByRole("list")).toBeNull();
   });
 
   test("keeps the compact output resolution unchanged without supersampling", () => {
@@ -191,7 +223,7 @@ describe("authoritative live status", () => {
     ],
     [
       "gamescope-presentation-target-no-headroom",
-      "This input already fills the display target. Lower the in-game resolution or enable Quality Supersampling.",
+      "This input already fills the display target. Try Windowed mode, lower the in-game resolution, or enable Quality Supersampling.",
     ],
   ])("explains the %s scaling limit", (inactiveReason, message) => {
     window.SP_REACT = React;
@@ -225,7 +257,9 @@ describe("authoritative live status", () => {
 
     expect(screen.getByText("Waiting for MAKO")).toBeTruthy();
     expect(
-      screen.getByText(/Live status is unavailable, but MAKO may still be active/),
+      screen.getByText(
+        /Live status is unavailable, but MAKO may still be active/,
+      ),
     ).toBeTruthy();
     expect(
       screen.getByText(/Check Frame Generation or Scaling manually/),

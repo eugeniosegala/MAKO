@@ -69,9 +69,9 @@ The project consists of two closely integrated components:
 
 <!-- prettier-ignore -->
 > [!TIP]
-> **Try the game's V-Sync setting both on and off.** It can make frame delivery feel steadier, but it may also add input lag or clash with the game's FPS cap, VRR, or compositor. Compare both options and keep the one that feels smoother and more responsive.
+> **Try the game's V-Sync setting both on and off.** Neither setting is universally best: the result depends on the game, its FPS cap, VRR, and the compositor. Keep whichever option feels smoother and more responsive for that game.
 
-Every game and display behaves differently. Compare one setting at a time; fullscreen is usually the best starting point. See the <a href="plugin/docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">configuration guide</a> for which controls apply live and which require a restart.
+Every game and display behaves differently, so compare one setting at a time. For scaling, use a display mode where **Live Status** shows **Input** smaller than **Display**; some games require Windowed mode because fullscreen or borderless keeps a display-sized input. See the <a href="plugin/docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">configuration guide</a> for which controls apply live and which require a restart.
 
 ## Install and use
 

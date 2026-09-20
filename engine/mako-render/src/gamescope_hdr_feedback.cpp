@@ -61,6 +61,14 @@ struct GamescopeHdrFeedbackReader::Impl {
     std::jthread monitor;
     std::mutex monitorWaitMutex;
     std::condition_variable monitorWake;
+    GamescopeFocusTracker focusTracker;
+    std::optional<uint32_t> focusGamescopePid;
+    const std::optional<uint32_t> applicationId = [] {
+        const char* value = std::getenv("SteamAppId");
+        if (!value || !*value)
+            value = std::getenv("STEAM_COMPAT_APP_ID");
+        return value ? gamescopeApplicationId(value) : std::nullopt;
+    }();
 
 #if defined(__linux__)
     void* library{nullptr};
@@ -107,7 +115,7 @@ struct GamescopeHdrFeedbackReader::Impl {
         );
         std::optional<uint32_t> value;
         if (result == Success && actualType == XA_CARDINAL &&
-                actualFormat == 32 && itemCount == 1 && data) {
+                actualFormat == 32 && itemCount == 1 && bytesAfter == 0 && data) {
             value = static_cast<uint32_t>(
                 *reinterpret_cast<const unsigned long*>(data)
             );
@@ -446,6 +454,20 @@ struct GamescopeHdrFeedbackReader::Impl {
         sample.appHdrMetadataPresent = this->hasCardinalData(
             this->display, this->root, gamescopeHdrMetadataProperty
         );
+        if (sample.gamescopeDetected && sample.xwaylandServerId == 0 &&
+                this->applicationId) {
+            const auto graphics = this->readCardinal(
+                this->display, this->root, "GAMESCOPE_FOCUSED_APP_GFX");
+            const auto input = this->readCardinal(
+                this->display, this->root, "GAMESCOPE_FOCUSED_APP");
+            // The properties are published separately. Reject a graphics
+            // focus change during the read; debounce the coherent pair too.
+            const auto graphicsAfter = this->readCardinal(
+                this->display, this->root, "GAMESCOPE_FOCUSED_APP_GFX");
+            if (graphics == graphicsAfter)
+                sample.focus.gameFocused = classifyGamescopeFocus(
+                    this->applicationId, input, graphics);
+        }
         if (this->presentationEnvironment.hdrExposureDisabled) {
             const auto decision = decideGamescopeHdrActivation({
                 .outputHdrEnabled = sample.outputHdrEnabled,
@@ -527,7 +549,14 @@ struct GamescopeHdrFeedbackReader::Impl {
 #endif
 
     void refresh() {
-        const auto sample = this->sampleOnce();
+        auto sample = this->sampleOnce();
+        const auto now = std::chrono::steady_clock::now();
+        if (this->focusGamescopePid != sample.gamescopePid) {
+            static_cast<void>(this->focusTracker.observe(now, std::nullopt));
+            this->focusGamescopePid = sample.gamescopePid;
+        }
+        sample.focus = this->focusTracker.observe(
+            now, sample.focus.gameFocused);
         std::scoped_lock lock(this->sampleMutex);
         this->latestSample = sample;
     }

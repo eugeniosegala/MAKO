@@ -159,9 +159,9 @@ The benchmark uses a defined traffic-image pair uploaded before timing; its reci
 
 <!-- prettier-ignore -->
 > [!TIP]
-> Try the game's V-Sync setting both on and off. It can make frame delivery steadier, but may also add input lag or clash with the game's FPS cap, VRR, or compositor. Keep the setting that feels best for that game.
+> Try the game's V-Sync setting both on and off. Neither setting is universally best: the result depends on the game, its FPS cap, VRR, and the compositor. Keep whichever option feels smoother and more responsive for that game.
 
-Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling one setting at a time; fullscreen is a useful starting point. Enable or disable Scaling between game sessions. See <a href="docs/SCALING.md" target="_blank" rel="noopener noreferrer">spatial scaling</a>, <a href="docs/WSI-ISOLATION.md" target="_blank" rel="noopener noreferrer">WSI isolation</a>, and <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">troubleshooting</a> for compatibility limits and diagnostics.
+Compare Fixed Frame Generation, Adaptive Frame Generation, and scaling one setting at a time. For scaling, use a display mode where the application input is smaller than the presentation output; some games require Windowed mode because fullscreen or borderless keeps a display-sized input. Enable or disable Scaling between game sessions. See <a href="docs/SCALING.md" target="_blank" rel="noopener noreferrer">spatial scaling</a>, <a href="docs/WSI-ISOLATION.md" target="_blank" rel="noopener noreferrer">WSI isolation</a>, and <a href="docs/TROUBLESHOOTING.md" target="_blank" rel="noopener noreferrer">troubleshooting</a> for compatibility limits and diagnostics.
 
 ## Build from source
 

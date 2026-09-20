@@ -91,7 +91,7 @@ For variable surfaces, scaling through either the managed split chain or the iso
 
 Current launchers select `OrderedSdr`. It owns FIFO ordering for generated and real frames and removes Gamescope's incompatible present-mode override from the lower create chain. Unknown create-chain prefixes fail before driver creation rather than mutating caller-owned data.
 
-Frame Generation normally reserves lower WSI images for the largest configured generated batch. FG-only ordered presentation also requests its established relief headroom; combined scaling uses a smaller bounded topology for compatibility. Surface limits remain authoritative, and an initialization or memory failure retries once with the application's original minimum.
+Frame Generation normally reserves lower WSI images for the largest configured generated batch. FG-only ordered presentation also requests its established relief headroom; combined scaling that is active or configured above 1.0 uses a smaller bounded topology for compatibility. An enabled 1.0 scaler remains inactive and retains the FG-only relief topology. Surface limits remain authoritative, and an initialization or memory failure retries once with the application's original minimum.
 
 When the returned pool fits the requested generated batch beyond the application's minimum, MAKO acquires and presents outputs sequentially. An additional relief image is not required. Without that relief image, acquisition has a shared ceiling of 50 ms per application present, reduced by any shorter configured ceiling; the existing per-image deadline and recovery remain active. This delivery policy is shared by all Frame Generation modes and is independent of model execution. An undersized pool still admits generated images opportunistically before backend work; Adaptive can retain a smaller proven capacity and Fixed may skip unavailable output under pressure. The experimental Gamescope HDR bridge remains nonblocking.
 
@@ -121,6 +121,14 @@ Do not claim general multi-instance, multi-queue, or multi-swapchain-batch suppo
 This boundary intentionally prefers deterministic presentation over arbitrary layer compatibility.
 
 ## Diagnostics and validation
+
+### Steam focus feedback
+
+The existing background Gamescope reader samples `GAMESCOPE_FOCUSED_APP` (input recipient) and `GAMESCOPE_FOCUSED_APP_GFX` (displayed application) from the verified same-compositor server-zero root. A strict nonzero 32-bit `SteamAppId`, or `STEAM_COMPAT_APP_ID` when it is absent, identifies this game; Steam UI uses Gamescope's app ID 769. Matching game input/display means gameplay focus, and Steam input over this game or Steam's own display means Steam UI focus. Another app, missing/empty/malformed properties, an unknown launch identity, changed compositor identity, or stale feedback is unknown, never guessed from FPS. Graphics identity is re-read to reject a transition during the sample; focus changes require 250 ms agreement. The monitor records returns even when the game submits no frames. Consumers expire cached focus after one second and perform no X11 queries on the presentation thread.
+
+This observes Steam UI ownership, not a particular menu's identity or the game's own pause screen. Very short visits can be missed by the existing 250 ms sampling cadence. Notifications that leave input on the game do not interrupt generation. Desktop, unsupported launchers, sandbox access restrictions, and unrecognized Steam focus layouts retain ordinary scheduling without menu-authorized rebuilds. Steam, Quick Access, Decky panels, keyboard, full overlay, brief taps, focus switches, and stale/missing feedback still require real-session validation; portable tests do not prove every client version's behavior. No Gamescope WSI layer or per-frame Decky RPC is required.
+
+### Presentation evidence
 
 For an ordinary managed launch, loader and Renderer evidence must agree that Gamescope WSI is isolated, HDR exposure is disabled, the render role selected a profile and backend, and ordered SDR presentation owns delivery. For an FG-only compatibility launch, `VK_LAYER_MAKO_render` must be above the architecture-correct Gamescope WSI identity. For scaling with WSI, the complete three-role order, lower Wayland provenance, authoritative create relay, active source/presentation split, one upper reconstruction owner, and correct generated/real delivery are all required.
 

@@ -561,6 +561,11 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
             now - *this->lastHdrFeedbackPoll >= hdrFeedbackPollInterval) {
         const auto hdrFeedbackSample =
             this->hdrFeedbackReader.diagnosticSample();
+        this->gamescopeFocus = hdrFeedbackSample.focus;
+        for (auto& [swapchain, context] : this->swapchains) {
+            static_cast<void>(swapchain);
+            context.updateGamescopeFocus(this->gamescopeFocus);
+        }
         this->lastHdrFeedbackSample = hdrFeedbackSample.active;
         this->lastHdrActivationSource = hdrFeedbackSample.activationSource;
         this->gamescopeDetected = hdrFeedbackSample.gamescopeDetected;
@@ -1552,6 +1557,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
     const auto contextImported = memoryDelta(
         memoryAfter.imported, memoryBefore.imported);
     const auto insertedContext = this->swapchains.find(swapchain);
+    if (insertedContext != this->swapchains.end())
+        insertedContext->second.updateGamescopeFocus(this->gamescopeFocus);
     const uint64_t diagnosticsContextId =
         insertedContext != this->swapchains.end()
         ? insertedContext->second.diagnosticsId()

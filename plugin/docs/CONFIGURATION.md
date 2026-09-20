@@ -2,7 +2,7 @@
 
 The default profile uses Fixed 2x Frame Generation with 80% Flow Scale, the full FG model, Ultra Performance off, FP16 allowed, and Smooth Cadence. If Adaptive is enabled, it starts with a 90 FPS target, a 3x ceiling, and Steady Base Cap. Scaling is off, with LS1 Quality, a 1.5x factor, 80% sharpness, and Quality Supersampling off saved for when it is enabled.
 
-Test one change at a time and compare the game's V-Sync both on and off. Results vary with the game, display, VRR, and compositor.
+Test one change at a time and compare the game's V-Sync both on and off. Neither setting is universally best; keep whichever option feels smoother and more responsive for that game and display setup.
 
 Controls are grouped under **Frame Generation**, **Spatial Settings**, **Performance Settings**, **Advanced Rendering Settings**, compatibility, external tools, and manual overrides. While a game runs, **Live Status** reports the applied Frame Generation and Upscaling state, active model, resolutions, limits, fallbacks, and pending changes.
 
@@ -24,7 +24,7 @@ Select **Enable Scaling (Restart)** before the game starts. Frame Generation and
 | **LS1 Performance** | Lower-cost LS1 model | Same as LS1 Quality |
 
 - **Scaling Method:** Can be changed while the game runs. If LS1 cannot load its DLL, translator, resources, format, or processing path, that swapchain falls back to MAKO Scaler and records the reason in diagnostics.
-- **Scale Factor:** Sets the output-to-input ratio from 1.0x to 2.0x; 1.5x is the default. Set Steam's Game Resolution to the display maximum, then choose a lower in-game resolution. While a supported game runs, MAKO limits the slider to the useful display ceiling without overwriting a higher saved value. The Renderer enforces its memory limit separately and reports any reduction in Live Status.
+- **Scale Factor:** Sets the output-to-input ratio from 1.0x to 2.0x; 1.5x is the default. Set Steam's Game Resolution to the display maximum, then choose a lower in-game resolution. Use a display mode where Live Status shows **Input** smaller than **Display**; some games require Windowed mode because fullscreen or borderless keeps a display-sized input. While a supported game runs, MAKO limits the slider to the useful display ceiling without overwriting a higher saved value. The Renderer enforces its memory limit separately and reports any reduction in Live Status.
 - **Quality Supersampling:** On a supported variable Gamescope surface, allows rendering beyond the proven display target before downsampling. It can improve quality but increases GPU and memory use. It does not change fixed-surface or direct non-Gamescope geometry.
 - **Scaling Sharpness:** Runs from 0–100%, with an 80% default. MAKO Scaler applies bounded local sharpening; LS1 selects the nearest of five learned variants. It is hidden for Native Resolution.
 
@@ -65,7 +65,7 @@ Most generation controls apply live. Flow Scale and Lighter FG Model use a 500 m
 | Disable MAKO Renderer on Next Launch | Game restart; remains selected until turned off |
 | Gamescope WSI, MangoHud, vkBasalt, Steam Deck Mode, Zink, Force ALSA, and other launcher controls | Game restart |
 
-A restart-bound change does not block unrelated live-safe changes. **Live Status** distinguishes saved values from applied values and reports pending restarts, scaler rebuilds, and recreations without transition pop-ups.
+A restart-bound change does not block unrelated live-safe changes. **Live Status** distinguishes saved values from applied values and reports pending restarts, scaler rebuilds, and recreations without transition pop-ups. The displayed Target is the configured Adaptive target, not a measurement of delivered FPS.
 
 ## Game and process profiles
 

@@ -81,7 +81,7 @@ MAKO Decky creates profiles with product-level defaults that may differ from the
 
 ## Desktop scaling and resolution
 
-MAKO reads the game's requested image size directly from Vulkan when it creates a swapchain. This is the image presented by the game, which may already include the game's own upscaling; it is not necessarily the game's internal 3D rendering resolution. There is no desktop resolution scan in the per-frame scaling path and no need to enter that source size separately in `mako-ui` or the configuration file.
+MAKO reads the game's requested image size directly from Vulkan when it creates a swapchain. This is the image presented by the game, which may already include the game's own upscaling; it is not necessarily the game's internal 3D rendering resolution. Some games keep this image at the display size in fullscreen or borderless mode and require Windowed mode to expose a smaller scaling source. There is no desktop resolution scan in the per-frame scaling path and no need to enter that source size separately in `mako-ui` or the configuration file.
 
 Scale Factor has two effects depending on the surface. With a fixed presentation size, a 1920×1080 surface at 1.5× advertises a 1280×720 source for the game to render. On a variable desktop surface, MAKO retains the game's requested source size: set the game to 1280×720 and use 1.5× to request a 1920×1080 output. Raising the factor alone on that surface enlarges MAKO's output rather than lowering the game's resolution, and can increase GPU and memory use. Surface and memory limits may reduce the effective factor.
 

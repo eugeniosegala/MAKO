@@ -61,15 +61,19 @@ namespace mako::layer {
                 // Preserve the application's requested WSI ownership and add
                 // one image per generated output. Ordered FG-only restores
                 // the release-3.0 relief image which keeps multi-output FIFO
-                // batches off the headroom-tight admission path. Combined
-                // scaling deliberately omits that sixth image: some engines
-                // reject or churn the enlarged lower replacement pool, while
-                // the replacement-prime and native-first paths protect its
-                // real frame without double-counting it.
+                // batches off the headroom-tight admission path. Potentially
+                // active combined scaling deliberately omits that sixth image:
+                // some engines reject or churn the enlarged lower replacement
+                // pool, while the replacement-prime and native-first paths
+                // protect its real frame without double-counting it. An enabled
+                // 1.0 scaler remains inactive and must preserve FG-only relief.
                 if (!swapchainImageCountCompatibility) {
+                    const bool combinedScalingTopology =
+                        spatialScalingActive ||
+                        ls::spatialScalingMayActivate(profile);
                     const uint64_t orderedFrameGenerationReliefImages =
                         orderedFrameGenerationTransport &&
-                            !ls::spatialScalingRequested(profile)
+                            !combinedScalingTopology
                         ? 1 : 0;
                     createInfo.minImageCount = static_cast<uint32_t>(std::min(
                         static_cast<uint64_t>(

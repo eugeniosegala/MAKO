@@ -249,7 +249,7 @@ export function ScalingControl({
                       {factorHasNoHeadroom
                         ? t(
                             "SCALING_FACTOR_NO_HEADROOM",
-                            "This resolution already fills the display. Lower the in-game resolution or enable Quality Supersampling.",
+                            "This input already fills the display target. Try Windowed mode, lower the in-game resolution, or enable Quality Supersampling.",
                           )
                         : t(
                             "SCALING_FACTOR_DEVICE_LIMIT",

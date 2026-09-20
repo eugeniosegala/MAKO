@@ -1691,6 +1691,25 @@ int main() {
             combinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
         "A configured combined profile must reserve two generated outputs without a duplicate real-frame slot before the lower scaling relay arrives");
 
+    auto inactiveCombinedProfile = combinedProfile;
+    inactiveCombinedProfile.scaling_method = ls::ScalingMethod::Native;
+    inactiveCombinedProfile.scaling_factor = 1.0F;
+    VkSwapchainCreateInfoKHR inactiveCombinedCreate{
+        .sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,
+        .minImageCount = 3,
+        .imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
+        .presentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+    };
+    const bool inactiveCombinedPrivateTransport =
+        applySwapchainCreateProvisioning(
+            inactiveCombinedProfile, 0, inactiveCombinedCreate,
+            true, false, true
+        );
+    expect(inactiveCombinedPrivateTransport &&
+            inactiveCombinedCreate.minImageCount == 6 &&
+            inactiveCombinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
+        "An enabled 1.0 scaler must preserve the ordered FG-only relief image");
+
     auto frameGenerationOnlyProfile = combinedProfile;
     frameGenerationOnlyProfile.scaling_enabled = false;
     VkSwapchainCreateInfoKHR frameGenerationOnlyCreate{

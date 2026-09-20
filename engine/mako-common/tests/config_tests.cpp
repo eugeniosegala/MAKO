@@ -162,6 +162,12 @@ int main() {
     nativeEngine.scaling_method = ls::ScalingMethod::Native;
     expect(ls::spatialScalingRequested(nativeEngine),
         "Native must retain the model-free reconstruction lane for live switching");
+    nativeEngine.scaling_factor = 1.0F;
+    expect(!ls::spatialScalingMayActivate(nativeEngine),
+        "An enabled 1.0 scaler must remain spatially inactive");
+    nativeEngine.scaling_factor = 1.5F;
+    expect(ls::spatialScalingMayActivate(nativeEngine),
+        "An enabled scaler above 1.0 must retain activation provisioning");
     nativeEngine.scaling_method = ls::ScalingMethod::Mako;
     expect(ls::spatialScalingRequested(nativeEngine),
         "A selected scaler must activate when the engine is enabled");

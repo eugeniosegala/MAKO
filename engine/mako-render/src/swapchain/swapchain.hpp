@@ -171,6 +171,25 @@ namespace mako::layer {
         [[nodiscard]] bool requestLiveProfileResourceRecreationAfterPresent(
             VkResult lowerPresentResult);
 
+        /// Request one app-owned recreation for a qualified post-menu deficit.
+        /// The entrypoint supplies the surface budget; the lower present carries
+        /// same maintenance1 retirement proof as live resource transitions.
+        [[nodiscard]] bool requestPersistentRecoveryRecreationAfterPresent(
+            VkResult lowerPresentResult, bool surfaceRequestAvailable,
+            bool sustainedDeficit = false);
+
+        /// Request one app-owned recreation when a severe lower present
+        /// recurs while synthetic work is already quarantined. This applies
+        /// to Fixed and Adaptive because the blocking persists without FG.
+        [[nodiscard]] bool requestLowerPresentStallRecreationAfterPresent(
+            VkResult lowerPresentResult, bool surfaceRequestAvailable);
+
+        /// Observed output for the process-surface recreation budget.
+        /// Ineligible modes return no sample and break qualification.
+        [[nodiscard]] std::optional<
+            PersistentAdaptiveRecoverySurfaceBudget::RecoverySample>
+        persistentAdaptiveRecoverySample() const;
+
         /// Wait for every layer-owned maintenance1 present fence associated
         /// with this swapchain. A zero timeout is a nonblocking retirement
         /// poll; finite waits are used only at application destruction.
@@ -187,10 +206,20 @@ namespace mako::layer {
 
         /// Update the compositor scanout budget without rebuilding resources.
         void updateGamescopeRefreshRate(std::optional<uint32_t> refreshHz);
+        void updateGamescopeFocus(const GamescopeFocusFeedback& focus) {
+            this->gamescopeFocus = focus;
+        }
 
         /// Stop generation in place when the active profile disappears.
         void disableFrameGeneration();
     private:
+        [[nodiscard]] bool persistentAdaptiveRecoveryEligible() const;
+        void applyGamescopeFocus(std::chrono::steady_clock::time_point now);
+        GamescopeFocusFeedback gamescopeFocus;
+        bool steamMenuSuspended{false};
+        uint64_t lastFocusReturnSequence{0};
+        std::optional<bool> lastReportedGameFocus;
+        bool focusReported{false};
         // Shared construction/replacement support; no independent resource owner.
         [[nodiscard]] static bool directSpatialFrameGenerationOutputSupported(
             const vk::Vulkan& vk, VkFormat format,
@@ -210,6 +239,7 @@ namespace mako::layer {
             const void* nextChain;
             uint32_t imageIndex;
             std::span<const VkSemaphore> waitSemaphores;
+            std::chrono::steady_clock::time_point cadenceStarted;
             std::chrono::steady_clock::time_point started;
         };
 
@@ -242,6 +272,7 @@ namespace mako::layer {
         };
 
         struct FrameState {
+            RecoveryPresentHealth recoveryPresentHealth;
             size_t sequenceIndex{1};
             // The backend timeline is reset only when MAKO commits a new
             // private context. Diagnostics and binary-semaphore ring indices
@@ -260,6 +291,8 @@ namespace mako::layer {
             GeneratedImageAdmission generatedImageAdmission;
             OrderedAcquireRecovery orderedAcquireRecovery;
             LowerPresentStallRecovery lowerPresentStallRecovery;
+            PersistentAdaptiveRecoveryRecreation
+                persistentAdaptiveRecoveryRecreation;
             PipelineBusyRecovery pipelineBusyRecovery;
             FixedCadenceCollapseRecovery fixedCadenceCollapseRecovery;
             ReplacementBackendStabilization replacementBackendStabilization;
@@ -436,7 +469,6 @@ namespace mako::layer {
         void recordPresentCadence(
             std::chrono::steady_clock::time_point presentNow);
         void observeLowerPresentHealth(
-            std::chrono::steady_clock::duration presentDuration,
             std::string_view source,
             size_t requestedGenerated = 0,
             size_t presentedGenerated = 0);
@@ -455,7 +487,7 @@ namespace mako::layer {
             const vk::Vulkan& vk, VkQueue queue,
             const VkPresentInfoKHR& presentInfo);
         [[nodiscard]] bool recoverBackendIfReady(const vk::Vulkan& vk);
-        void ensureHistoryWarmup();
+        void ensureHistoryWarmup(bool restart = false);
         [[nodiscard]] PresentationFramePlan prepareFramePlan(
             std::chrono::steady_clock::time_point presentNow,
             bool orderedAcquireRecoveryProbe);

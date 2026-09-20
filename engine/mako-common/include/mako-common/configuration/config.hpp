@@ -187,6 +187,15 @@ namespace ls {
         return profile.scaling_enabled;
     }
 
+    /// Whether this profile can change the source or presentation extent.
+    /// A 1.0 factor retains the live reconstruction lane but remains spatially
+    /// inactive, so it must not alter unrelated swapchain provisioning.
+    [[nodiscard]] constexpr bool spatialScalingMayActivate(
+            const GameConf& profile) noexcept {
+        return spatialScalingRequested(profile) &&
+            profile.scaling_factor > GameConfLimits::minimumScalingFactor;
+    }
+
     /// Spatial model selected after applying cross-feature presets. Ultra
     /// Performance keeps a disabled scaling engine dormant, but uses the
     /// lower-cost licensed model whenever that engine is provisioned.

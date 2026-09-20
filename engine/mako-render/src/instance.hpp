@@ -177,6 +177,7 @@ namespace mako::layer {
         PresentationEnvironmentPolicy presentationEnvironment;
         bool gamescopeEnvironmentDetected{false};
         GamescopeHdrFeedbackReader hdrFeedbackReader;
+        GamescopeFocusFeedback gamescopeFocus;
         StableBooleanFeedback hdrFeedback;
         std::optional<bool> gamescopeHdrActive;
         bool gamescopeDetected{false};

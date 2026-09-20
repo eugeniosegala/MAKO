@@ -253,9 +253,12 @@ for preset in "${presets[@]}"; do
       add_pattern "$renderer_prefix present diagnostics: operation=(runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-state-applied|generated-delivery-miss|gamescope-refresh-rate-applied)"
       ;;
     recovery)
+      # Include focus/watchdog records, including older recovery operation names.
+      add_pattern "$renderer_prefix present diagnostics: operation=(gamescope-focus|lower-present-stall-|adaptive-recovery-recreation-)"
       add_pattern "$renderer_prefix present diagnostics: operation=(adaptive-wsi-headroom-limit|skip-generated-frames|resume-generated-frames|generated-image-recovered|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|fixed-cadence-collapse-(probe-start|probe-rejected|probe-recovered|recovery-unstable|recovery-verified)|ordered-acquire-policy|ordered-acquire-classification-split|ordered-acquire-budget-exhausted|ordered-acquire-guard|ordered-acquire-guard-bypass|ordered-acquire-native-saturation|ordered-acquire-quarantine|ordered-acquire-retry|ordered-acquire-recovered|ordered-acquire-stabilized|pipeline-busy-bypass|pipeline-busy-recovered|render-fence-budget-missed|history-warmup|swapchain-recreation-suppressed|runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied)"
       ;;
     performance)
+      add_pattern "$renderer_prefix present diagnostics: operation=(gamescope-focus|lower-present-stall-|adaptive-recovery-recreation-)"
       add_pattern "$renderer_prefix (backend-memory|renderer-memory) operation="
       add_pattern "$renderer_prefix present diagnostics: operation=(adaptive-wsi-headroom-limit|fixed-plan|fixed-cadence-collapse-(probe-start|probe-rejected|probe-recovered|recovery-unstable|recovery-verified)|runtime-transition-pending|runtime-transition-prepared|runtime-transition-failed|runtime-transition-applied|runtime-transition-recreation-requested|runtime-state-applied|generated-delivery-miss|generated-admission-pressure|generated-admission-recovered|ordered-acquire-policy|ordered-acquire-classification-split|ordered-acquire-budget-exhausted|ordered-acquire-guard|ordered-acquire-guard-bypass|ordered-acquire-native-saturation|ordered-acquire-quarantine|ordered-acquire-retry|ordered-acquire-recovered|ordered-acquire-stabilized|pipeline-busy-recovered|pipeline-busy-bypass|gamescope-refresh-rate-applied|present-|schedule-|submit-|acquire-|wait-|copy-|render-)"
       ;;

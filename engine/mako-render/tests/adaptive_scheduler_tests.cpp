@@ -2362,6 +2362,45 @@ namespace {
         }
     }
 
+    void testHistoryWarmupUsesPresentStartDespitePrivateWork() {
+        for (const bool smooth : {false, true}) {
+            Harness harness(120, 3, smooth, AdaptiveRecoveryPolicy::OrderedSdr);
+            harness.start();
+            harness.runAtFps(60.0, 12s);
+            require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+                "precondition failed: recovery needs a validated 2x baseline");
+            const auto refreshes = harness.diagnostics.count("cadence-refresh");
+            harness.scheduler.ensureHistoryWarmup(3, true);
+            const auto period = std::chrono::nanoseconds{16'666'667};
+            auto nextPresent = harness.now;
+            size_t generated = 0;
+            for (size_t frame = 0; frame < 300; ++frame) {
+                nextPresent += period;
+                const auto presentStarted = nextPresent;
+                harness.now = presentStarted;
+                AdaptiveFramePlan plan;
+                if (!harness.scheduler.historyWarmupActive())
+                    plan = harness.scheduler.planFrame(presentStarted, false);
+                harness.scheduler.reportGeneratedFrameDelivery({
+                    .requested = plan.size(),
+                    .acceptedForPresentation = plan.size(),
+                });
+                // Completion would seed ~214 FPS from a steady 60-FPS source
+                // and restart history every five frames. Keep the entry clock.
+                harness.now += 12ms;
+                if (harness.scheduler.historyWarmupActive())
+                    harness.scheduler.consumeHistoryWarmupFrame(presentStarted);
+                generated += plan.size();
+            }
+            require(harness.diagnostics.count("cadence-refresh") == refreshes,
+                "private history work caused a false cadence-drop loop");
+            require(generated >= 295 && generated <= 300,
+                "steady source did not promptly resume full 2x delivery");
+            require(std::abs(harness.scheduler.snapshot().smoothedBaseFps - 60.0) < 0.01,
+                "post-warmup cadence included a partial application frame");
+        }
+    }
+
     void testSdrCadenceDropRefreshesHistoryWithoutFullStabilization() {
         Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
         harness.start();
@@ -2566,6 +2605,184 @@ namespace {
         require(backoff && backoff->testedLimit == 2 &&
                 backoff->previousLimit == 1,
             "higher-level rejection did not schedule first bounded retry delay");
+    }
+
+    void testOrderedSdrPreservesUsefulHigherLevelBelowTarget() {
+        Harness harness(
+            120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr
+        );
+        harness.start();
+
+        while (!harness.scheduler.snapshot().rampEvaluationActive)
+            harness.frameAtFps(60.0);
+        while (harness.scheduler.snapshot().rampEvaluationActive)
+            harness.frameAtFps(40.0);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: useful ordered-SDR 2x level was not accepted");
+
+        while (!harness.scheduler.snapshot().rampEvaluationActive)
+            harness.frameAtFps(31.2726);
+        require(harness.scheduler.snapshot().generationLimit == 2 &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: ordered-SDR 3x probe did not begin");
+
+        while (harness.scheduler.snapshot().rampEvaluationActive)
+            harness.frameAtFps(22.5732);
+
+        const auto snapshot = harness.scheduler.snapshot();
+        const auto* result = harness.diagnostics.last("ramp-result");
+        require(result && result->accepted &&
+                result->previousLimit == 1 && result->testedLimit == 2,
+            "menu recovery policy rejected useful ordinary-gameplay 3x");
+        require(snapshot.validatedGenerationLimit == 2,
+            "below-target gameplay lost its accepted 3x level");
+    }
+
+    void testConfirmedFocusReturnRetainsProvenLevel() {
+        for (const bool smooth : {false, true}) {
+            Harness harness(120, 3, smooth, AdaptiveRecoveryPolicy::OrderedSdr);
+            harness.start();
+            harness.runAtFps(40.0, 15s);
+            require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+                "precondition failed: gameplay had no proven 3x level");
+            const auto stalls = harness.diagnostics.count("cadence-refresh");
+            // No planFrame calls during confirmed menu focus, even if it
+            // lasts minutes. Recovery observes fresh frames only on return.
+            harness.now += 120s;
+            harness.scheduler.resumeAfterExternalInterruption(harness.now, true);
+            require(harness.scheduler.snapshot().validatedGenerationLimit == 2 &&
+                    harness.scheduler.historyWarmupActive(),
+                "focus return lost proven capacity or retained stale history");
+            const auto plan = harness.runAtFps(40.0, 4s);
+            require(harness.scheduler.snapshot().validatedGenerationLimit == 2 &&
+                    plan.size() == 2 &&
+                    harness.diagnostics.count("cadence-refresh") == stalls,
+                "menu time polluted cadence or prevented ordinary 3x recovery");
+        }
+    }
+
+    AdaptiveFramePlan frameAfterFocusReturn(Harness& harness,
+            const std::chrono::milliseconds interval) {
+        harness.now += interval;
+        // Match prepareFramePlan/presentHistoryOnly: warm-up never plans
+        // synthetic work and consumes history at the present start boundary.
+        if (harness.scheduler.historyWarmupActive()) {
+            harness.scheduler.consumeHistoryWarmupFrame(harness.now);
+            return {};
+        }
+        return harness.scheduler.planFrame(harness.now, false);
+    }
+
+    void testConfirmedFocusReturnBoundedFastResume() {
+        for (const bool smooth : {false, true}) {
+            Harness harness(120, 3, smooth, AdaptiveRecoveryPolicy::OrderedSdr);
+            harness.start();
+            harness.runAtFps(40.0, 15s);
+            require(harness.scheduler.validatedGenerationLimit() == 2,
+                "precondition failed: fast menu return needs proven 3x");
+            const auto ramps = harness.diagnostics.count("ramp");
+            for (const auto menuDuration : {500ms, 750ms, 30'000ms, 120'000ms,
+                    500ms, 500ms, 500ms}) {
+                harness.now += menuDuration;
+                harness.scheduler.resumeAfterExternalInterruption(harness.now, true);
+                const auto returnedAt = harness.now;
+                require(harness.scheduler.historyWarmupRemaining() == 3,
+                    "fast return skipped three fresh history frames");
+                const auto* settling = harness.diagnostics.last("stabilization");
+                require(settling && settling->duration == 250ms,
+                    "confirmed return retained the full one-second delay");
+                AdaptiveFramePlan plan;
+                for (size_t frame = 0; frame < 12; ++frame) {
+                    plan = frameAfterFocusReturn(harness, 25ms);
+                    if (harness.now - returnedAt < 250ms)
+                        require(plan.empty(), "menu resume bypassed its settling interval");
+                    if (!plan.empty())
+                        break;
+                }
+                require(plan.size() == 2 && harness.now - returnedAt <= 300ms,
+                    "proven 3x did not return within 300 ms of confirmed focus");
+                harness.runAtFps(40.0, 1s);
+                require(harness.scheduler.validatedGenerationLimit() == 2 &&
+                        harness.diagnostics.count("ramp") == ramps,
+                    "repeated menu returns restarted ordinary 3x qualification");
+            }
+        }
+    }
+
+    void testFocusReturnRetainsConservativeFallbacks() {
+        for (const auto policy : {AdaptiveRecoveryPolicy::OrderedSdr,
+                AdaptiveRecoveryPolicy::ConservativeHdr}) {
+            Harness harness(120, 3, false, policy);
+            harness.start();
+            harness.runAtFps(40.0, 15s);
+            harness.now += 2s;
+            // Ordered SDR with uncertain focus and unsupported HDR with a
+            // claimed return must both retain the ordinary stabilization.
+            harness.scheduler.resumeAfterExternalInterruption(harness.now,
+                policy == AdaptiveRecoveryPolicy::ConservativeHdr);
+            const auto* settling = harness.diagnostics.last("stabilization");
+            require(settling && settling->duration == 1s,
+                "unconfirmed/unsupported return enabled fast settling");
+            for (size_t frame = 0; frame < 39; ++frame)
+                require(frameAfterFocusReturn(harness, 25ms).empty(),
+                    "conservative return generated before one second");
+        }
+
+        // Live target/ceiling/cap changes and FG re-enable reconstruct the
+        // scheduler. A confirmed menu return cannot validate its new policy.
+        Harness changed(90, 2, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        changed.scheduler.beginStabilization(changed.now, "configuration-update");
+        changed.now += 2s;
+        changed.scheduler.resumeAfterExternalInterruption(changed.now, true);
+        require(changed.scheduler.validatedGenerationLimit() == 0,
+            "menu return invented a proven multiplier for a live policy reset");
+        const auto* settling = changed.diagnostics.last("stabilization");
+        require(settling && settling->duration == 1s,
+            "unproven live policy used the short menu delay");
+        for (size_t frame = 0; frame < 39; ++frame)
+            require(frameAfterFocusReturn(changed, 25ms).empty(),
+                "live policy reset bypassed ordinary qualification");
+    }
+
+    void testFastFocusReturnCannotBypassHistoryOrTransportSettling() {
+        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(40.0, 15s);
+        harness.now += 2s;
+        harness.scheduler.resumeAfterExternalInterruption(harness.now, true);
+        for (size_t frame = 0; frame < 3; ++frame)
+            require(frameAfterFocusReturn(harness, 100ms).empty(),
+                "elapsed menu settling bypassed fresh history at low source FPS");
+        require(!harness.scheduler.historyWarmupActive(),
+            "three slow real frames failed to complete history warm-up");
+        harness.scheduler.beginTransportRecovery(harness.now);
+        const auto* settling = harness.diagnostics.last("stabilization");
+        require(settling && settling->duration == 1s,
+            "fast menu return shortened real transport recovery");
+        for (size_t frame = 0; frame < 39; ++frame)
+            require(frameAfterFocusReturn(harness, 25ms).empty(),
+                "fast menu return bypassed transport recovery settling");
+
+        harness.runAtFps(40.0, 15s);
+        harness.scheduler.beginTransportRecovery(harness.now);
+        const auto transportStarted = harness.now;
+        harness.now += 100ms;
+        harness.scheduler.resumeAfterExternalInterruption(harness.now, true);
+        while (harness.now - transportStarted < 950ms)
+            require(frameAfterFocusReturn(harness, 25ms).empty(),
+                "menu return shortened an already active transport deadline");
+
+        harness.runAtFps(40.0, 15s);
+        harness.scheduler.resumeAfterExternalInterruption(harness.now, true);
+        static_cast<void>(frameAfterFocusReturn(harness, 25ms));
+        require(harness.scheduler.historyWarmupRemaining() == 2,
+            "precondition failed: interrupted warm-up did not retain two frames");
+        // The game presents once, then stops immediately for another menu.
+        // Reusing the unfinished warm-up could interpolate across that gap.
+        harness.now += 2s;
+        harness.scheduler.resumeAfterExternalInterruption(harness.now, true);
+        require(harness.scheduler.historyWarmupRemaining() == 3,
+            "a second menu return reused history from before its interruption");
     }
 
     void testSmoothCadenceSettlesNearIntegerDemand() {
@@ -3440,6 +3657,63 @@ namespace {
             "sustained fallback-cadence recovery did not retry 3x early");
     }
 
+    void testSdrThroughputRegressionFallsBackAndBacksOff() {
+        // Actual throughput regression remains a normal-gameplay load guard.
+        // It does not infer a menu or authorize a swapchain recreation.
+        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
+        harness.start();
+        harness.runAtFps(50.0, 10s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
+            "precondition failed: severe-deficit SDR 3x was not validated");
+
+        for (size_t frame = 0;
+                frame < 160 && harness.diagnostics.count("load-shed") < 1;
+                ++frame) {
+            harness.frameAtFps(29.0);
+        }
+        require(harness.diagnostics.count("load-shed") == 1 &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "precondition failed: initial SDR collapse did not establish 2x fallback");
+
+        for (size_t frame = 0;
+                frame < 600 &&
+                    !harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(25.0);
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "SDR fallback never retried its higher level");
+
+        for (size_t frame = 0;
+                frame < 160 &&
+                    harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(16.0);
+        }
+        const auto* result = harness.diagnostics.last("ramp-result");
+        require(result && !result->accepted &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "a throughput-regressing probe was not rejected");
+
+        const size_t rampsBeforeBackoff = harness.diagnostics.count("ramp");
+        harness.runAtFps(25.0, 4s);
+        require(harness.diagnostics.count("ramp") == rampsBeforeBackoff &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "rejected saturated 3x probe did not enter retry backoff");
+
+        const size_t earlyRetries = harness.diagnostics.count(
+            "ramp-early-retry"
+        );
+        for (size_t frame = 0;
+                frame < 150 &&
+                    harness.diagnostics.count("ramp-early-retry") == earlyRetries;
+                ++frame) {
+            harness.frameAtFps(30.0);
+        }
+        require(harness.diagnostics.count("ramp-early-retry") > earlyRetries,
+            "sustained fallback-cadence recovery did not retry 3x early");
+    }
+
     void testSdrTwoXCollapseRetainsMinimumGeneratedPolicy() {
         Harness harness(180, 2, false, AdaptiveRecoveryPolicy::OrderedSdr);
         harness.start();
@@ -3734,12 +4008,18 @@ int main() {
         {"unconfirmed cadence drop retains slow samples", testUnconfirmedCadenceDropRetainsSlowSamples},
         {"bursty cadence retains both interval populations", testBurstySourceCadenceDoesNotLockOntoFastSamples},
         {"SDR cadence drop uses short refresh", testSdrCadenceDropRefreshesHistoryWithoutFullStabilization},
+        {"history warm-up retains the present-start clock", testHistoryWarmupUsesPresentStartDespitePrivateWork},
         {"SDR hard stall avoids refresh loop", testSdrSustainedHardStallDoesNotRestartHistoryRefresh},
         {"fast-present burst preserves cadence", testImpossibleFastBurstDoesNotCorruptCadence},
         {"harmful first probe enters rearm", testRejectedFirstProbeEntersBoundedRearm},
         {"interrupted probe rearms promptly", testInterruptedProbeRearmsWithoutFailurePenalty},
         {"bridge probe handles misleading first step", testBridgeProbeCanRecoverMisleadingFirstStep},
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
+        {"ordered SDR preserves useful below-target 3x", testOrderedSdrPreservesUsefulHigherLevelBelowTarget},
+        {"confirmed focus return has bounded fast resume", testConfirmedFocusReturnBoundedFastResume},
+        {"focus return retains conservative fallbacks", testFocusReturnRetainsConservativeFallbacks},
+        {"fast focus return retains history and transport settling", testFastFocusReturnCannotBypassHistoryOrTransportSettling},
+        {"confirmed focus return retains proven generation", testConfirmedFocusReturnRetainsProvenLevel},
         {"Smooth Cadence settles near integer demand", testSmoothCadenceSettlesNearIntegerDemand},
         {"Smooth Cadence converges Fractional 2x on matching refresh", testSmoothCadenceConvergesFractionalTwoXOnMatchingRefresh},
         {"Smooth Cadence rejects unproven 2x convergence", testSmoothCadenceRejectsTwoXThatDoesNotConverge},
@@ -3766,6 +4046,7 @@ int main() {
         {"SDR load shed retains higher output", testSdrStrictLoadRetainsHigherOutputLevel},
         {"SDR moderate deficit ignores stale fallback", testSdrModerateDeficitDoesNotTrustHistoricalFallback},
         {"SDR severe marginal gain backs off", testSdrSevereMarginalGainFallsBackAndBacksOff},
+        {"SDR throughput regression backs off", testSdrThroughputRegressionFallsBackAndBacksOff},
         {"SDR 2x load shed stays generated", testSdrTwoXCollapseRetainsMinimumGeneratedPolicy},
         {"Smooth Cadence collapse measures real-only", testSmoothCadenceCollapseUsesRealOnlyMeasurement},
         {"Ordered SDR Smooth collapse releases automatic cap", testOrderedSdrSmoothCollapseReleasesAutomaticCap},

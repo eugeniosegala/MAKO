@@ -255,6 +255,14 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "pipeline-busy-recovered",
             "render-fence-budget-missed",
             "history-warmup",
+            "lower-present-stall-quarantine",
+            "lower-present-stall-recovered",
+            "lower-present-stall-recreation-armed",
+            "lower-present-stall-recreation-cancelled",
+            "lower-present-stall-recreation-requested",
+            "gamescope-focus",
+            "adaptive-recovery-recreation-requested",
+            "adaptive-recovery-recreation-watchdog",
             "runtime-transition-pending",
             "runtime-transition-prepared",
             "runtime-transition-failed",
@@ -263,6 +271,41 @@ class DiagnosticsHelperTests(unittest.TestCase):
         for operation in current_operations:
             with self.subTest(operation=operation):
                 self.assertIn(f"operation={operation}", renderer_source)
+
+    def test_recovery_presets_keep_rebuild_decisions(self):
+        operations = (
+            "lower-present-stall-quarantine",
+            "lower-present-stall-recovered",
+            "lower-present-stall-recreation-armed",
+            "lower-present-stall-recreation-cancelled",
+            "lower-present-stall-recreation-requested",
+            "lower-present-stall-recreation-budget",
+            "adaptive-recovery-recreation-armed",
+            "gamescope-focus",
+            "adaptive-recovery-recreation-requested",
+            "adaptive-recovery-recreation-budget",
+            # Older builds emitted this obsolete cooldown-reset record.
+            "adaptive-recovery-recreation-budget-reset",
+            "adaptive-recovery-recreation-watchdog",
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "recovery.log"
+            path.write_text("\n".join(
+                f"MAKO Renderer: present diagnostics: operation={op} context=7 "
+                "reason=sustained-post-menu-deficit output_fps=70 "
+                "lower_present_share=0.8 deficit_ms=4000 surface_available=0 "
+                "delivery=one-shot-per-context-after-retirement-fence-attachment"
+                for op in operations
+            ), encoding="utf-8")
+            for preset in ("recovery", "performance"):
+                result = self._run("--log", str(path), preset)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("reason=sustained-post-menu-deficit", result.stdout)
+                self.assertIn("surface_available=0", result.stdout)
+                self.assertIn("delivery=one-shot-per-context-after-retirement-fence-attachment", result.stdout)
+                for operation in operations:
+                    with self.subTest(preset=preset, operation=operation):
+                        self.assertIn(f"operation={operation}", result.stdout)
 
     def test_every_preset_keeps_the_authoritative_build_marker(self):
         with tempfile.TemporaryDirectory() as temporary_directory:

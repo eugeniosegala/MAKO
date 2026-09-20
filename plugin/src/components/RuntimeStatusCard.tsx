@@ -48,7 +48,7 @@ function scalingInactiveNotice(reason: string | null): string | null {
     case "variable-surface-no-headroom":
       return t(
         "LIVE_STATUS_SCALING_NO_HEADROOM",
-        "This input already fills the display target. Lower the in-game resolution or enable Quality Supersampling.",
+        "This input already fills the display target. Try Windowed mode, lower the in-game resolution, or enable Quality Supersampling.",
       );
     default:
       return null;
@@ -138,23 +138,17 @@ function StatusRow({
   );
 }
 
-function StatusNotices({ children }: { children: React.ReactNode }) {
-  return (
-    <div
-      data-mako-live-status-notices="true"
-      style={{
-        display: "grid",
-        gap: "4px",
-        marginTop: "8px",
-        color: "#f7d9b4",
-      }}
-    >
-      {children}
-    </div>
-  );
-}
+type StatusNotice = {
+  key: string;
+  content: React.ReactNode;
+  color?: string;
+};
 
-function StatusFooterNotices({ children }: { children: React.ReactNode }) {
+function StatusFooterNotices({ notices }: { notices: StatusNotice[] }) {
+  const noticeContent = (notice: StatusNotice) => (
+    <span style={{ color: notice.color }}>{notice.content}</span>
+  );
+
   return (
     <div
       data-mako-live-status-footer="true"
@@ -168,7 +162,18 @@ function StatusFooterNotices({ children }: { children: React.ReactNode }) {
         lineHeight: 1.35,
       }}
     >
-      {children}
+      {notices.length > 1 ? (
+        <ul
+          data-mako-live-status-notice-list="true"
+          style={{ margin: 0, paddingLeft: "16px", listStyleType: "disc" }}
+        >
+          {notices.map((notice) => (
+            <li key={notice.key}>{noticeContent(notice)}</li>
+          ))}
+        </ul>
+      ) : (
+        noticeContent(notices[0])
+      )}
     </div>
   );
 }
@@ -186,6 +191,55 @@ export function RuntimeStatusCard({
     runtimeState.scalingActive &&
     runtimeState.constraintReason === "variable-surface-memory-budget" &&
     runtimeState.requestedFactor > runtimeState.effectiveFactor + 0.005;
+  const pendingNotice =
+    runtimeState.frameGenerationPending || runtimeState.scalingPending;
+  const notices: StatusNotice[] = [];
+
+  if (runtimeState.supersamplingActive) {
+    notices.push({
+      key: "supersampling",
+      color: makoAccentColor,
+      content: t("LIVE_STATUS_SUPERSAMPLING", "Quality Supersampling active."),
+    });
+  }
+  if (memoryConstraintNotice) {
+    notices.push({
+      key: "memory-constraint",
+      content: t(
+        "LIVE_STATUS_SCALING_MEMORY_CONSTRAINED",
+        "Requested {requested}×; limited to {effective}× by this GPU's memory safety limit.",
+        {
+          requested: runtimeState.requestedFactor.toFixed(2),
+          effective: runtimeState.effectiveFactor.toFixed(2),
+        },
+      ),
+    });
+  }
+  if (inactiveNotice) {
+    notices.push({ key: "scaling-inactive", content: inactiveNotice });
+  }
+  if (runtimeState.fallbackReason) {
+    notices.push({
+      key: "scaling-fallback",
+      content: t(
+        "LIVE_STATUS_SCALING_FALLBACK",
+        "You selected {requested}; MAKO is using {active} instead.",
+        {
+          requested: methodLabel(runtimeState.requestedMethod),
+          active: methodLabel(runtimeState.activeMethod),
+        },
+      ),
+    });
+  }
+  if (pendingNotice) {
+    notices.push({
+      key: "pending",
+      content: t(
+        "LIVE_STATUS_PENDING",
+        "A saved change is still applying or needs a restart.",
+      ),
+    });
+  }
 
   return (
     <>
@@ -301,14 +355,6 @@ export function RuntimeStatusCard({
                     ) : (
                       t("LIVE_STATUS_OFF", "Off")
                     )}
-                    {runtimeState.frameGenerationPending && (
-                      <StatusNotices>
-                        {t(
-                          "LIVE_STATUS_PENDING",
-                          "A saved change is still applying or needs a restart.",
-                        )}
-                      </StatusNotices>
-                    )}
                   </StatusRow>
                   <StatusRow
                     label={t("FEATURE_UPSCALING_TAB", "Upscaling")}
@@ -382,56 +428,8 @@ export function RuntimeStatusCard({
                     )}
                   </StatusRow>
                 </div>
-                {(runtimeState.supersamplingActive ||
-                  runtimeState.fallbackReason ||
-                  runtimeState.scalingPending ||
-                  inactiveNotice ||
-                  memoryConstraintNotice) && (
-                  <StatusFooterNotices>
-                    {runtimeState.supersamplingActive && (
-                      <div style={{ color: makoAccentColor }}>
-                        {t(
-                          "LIVE_STATUS_SUPERSAMPLING",
-                          "Quality Supersampling active.",
-                        )}
-                      </div>
-                    )}
-                    {memoryConstraintNotice && (
-                      <div>
-                        {t(
-                          "LIVE_STATUS_SCALING_MEMORY_CONSTRAINED",
-                          "Requested {requested}×; limited to {effective}× by this GPU's memory safety limit.",
-                          {
-                            requested: runtimeState.requestedFactor.toFixed(2),
-                            effective: runtimeState.effectiveFactor.toFixed(2),
-                          },
-                        )}
-                      </div>
-                    )}
-                    {inactiveNotice && <div>{inactiveNotice}</div>}
-                    {runtimeState.fallbackReason && (
-                      <div>
-                        {t(
-                          "LIVE_STATUS_SCALING_FALLBACK",
-                          "You selected {requested}; MAKO is using {active} instead.",
-                          {
-                            requested: methodLabel(
-                              runtimeState.requestedMethod,
-                            ),
-                            active: methodLabel(runtimeState.activeMethod),
-                          },
-                        )}
-                      </div>
-                    )}
-                    {runtimeState.scalingPending && (
-                      <div>
-                        {t(
-                          "LIVE_STATUS_PENDING",
-                          "A saved change is still applying or needs a restart.",
-                        )}
-                      </div>
-                    )}
-                  </StatusFooterNotices>
+                {notices.length > 0 && (
+                  <StatusFooterNotices notices={notices} />
                 )}
               </>
             )}

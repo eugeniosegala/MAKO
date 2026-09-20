@@ -14,6 +14,35 @@
 
 namespace mako::layer {
 
+    /// Ordinary readiness checks preserve progress. A new interruption must
+    /// discard partial pre-interruption history and start a complete warm-up.
+    [[nodiscard]] constexpr size_t historyWarmupFramesAfterRequest(
+            const size_t remaining, const size_t required,
+            const bool restart) noexcept {
+        return restart || remaining == 0 ? required : remaining;
+    }
+
+    struct GamescopeFocusFeedback {
+        using Clock = std::chrono::steady_clock;
+        std::optional<bool> gameFocused;
+        std::optional<Clock::time_point> sampledAt;
+        std::optional<Clock::time_point> openedAt;
+        std::optional<Clock::time_point> returnedAt;
+        uint64_t returnSequence{0};
+
+        [[nodiscard]] bool fresh(const Clock::time_point now) const {
+            return sampledAt && now >= *sampledAt &&
+                now - *sampledAt <= std::chrono::seconds{1};
+        }
+        [[nodiscard]] bool menuOpen(const Clock::time_point now) const {
+            return fresh(now) && gameFocused == false;
+        }
+        [[nodiscard]] bool recoveryWindow(const Clock::time_point now) const {
+            return fresh(now) && gameFocused == true && returnedAt &&
+                now >= *returnedAt && now - *returnedAt <= std::chrono::seconds{75};
+        }
+    };
+
     /// MAKO's current presentation transport owns one swapchain per lower
     /// submit/present sequence. A Vulkan present batch supplies its binary
     /// waits and per-swapchain pNext arrays once for the whole batch, so it
@@ -1304,6 +1333,12 @@ namespace mako::layer {
             return {.active = this->handoffActive};
         }
 
+        void pauseForExternalInterruption() {
+            // Losing focus is not a failed FIFO pacing experiment. Preserve
+            // any genuine earlier failure's backoff without creating one.
+            this->handoffActive = false;
+        }
+
         void reset() {
             this->handoffActive = false;
             this->retryAt.reset();
@@ -1334,6 +1369,7 @@ namespace mako::layer {
             bool bypassGeneration{false};
             bool beginHistoryWarmup{false};
             bool recovered{false};
+            bool recreationWaitExpired{false};
             size_t bypassedFrames{0};
             Duration recoveryDuration{};
         };
@@ -1346,10 +1382,18 @@ namespace mako::layer {
             size_t consecutiveStalls{0};
         };
 
+        struct NativeRecoveryObservation {
+            bool newlyArmedRecreation{false};
+            bool cancelledRecreation{false};
+            Duration presentDuration{};
+            Duration threshold{};
+            size_t severeNativeStalls{0};
+        };
+
         [[nodiscard]] static Duration stallThreshold(
                 const std::optional<uint32_t> refreshHz) {
             constexpr auto minimumThreshold =
-                std::chrono::milliseconds{50};
+                std::chrono::milliseconds{250};
             if (!refreshHz || *refreshHz == 0)
                 return minimumThreshold;
             const auto displayRelativeThreshold =
@@ -1404,6 +1448,9 @@ namespace mako::layer {
             this->startedAt = now;
             this->stabilizingUntil = now + stabilization;
             this->bypassedFrames = 0;
+            this->nativeHealthySince.reset();
+            this->severeNativeStalls = 0;
+            this->recreationArmed = false;
             return {
                 .quarantined = true,
                 .presentDuration = maximumPresentDuration,
@@ -1413,10 +1460,55 @@ namespace mako::layer {
             };
         }
 
+        /// Repeated severe native presents justify a guarded recreation, but
+        /// can also be external throttling. Cancel stale evidence after one
+        /// healthy second and never turn an unavailable rebuild into an
+        /// indefinite native-only latch.
+        [[nodiscard]] NativeRecoveryObservation observeNativeRecoveryPresent(
+                const TimePoint now, const Duration presentDuration,
+                const std::optional<uint32_t> refreshHz) {
+            const auto threshold = stallThreshold(refreshHz);
+            if (!this->active())
+                return {};
+            if (presentDuration < threshold) {
+                if (!this->nativeHealthySince)
+                    this->nativeHealthySince = now;
+                const bool healthy = now - *this->nativeHealthySince >=
+                    std::chrono::seconds{1};
+                const bool cancelled = healthy && this->recreationArmed;
+                if (healthy) {
+                    this->recreationArmed = false;
+                    this->severeNativeStalls = 0;
+                }
+                return {
+                    .cancelledRecreation = cancelled,
+                    .presentDuration = presentDuration,
+                    .threshold = threshold,
+                    .severeNativeStalls = this->severeNativeStalls,
+                };
+            }
+
+            this->nativeHealthySince.reset();
+            this->severeNativeStalls++;
+            const bool newlyArmed = !this->recreationArmed &&
+                !this->recreationSignaled && this->severeNativeStalls >= 2;
+            this->recreationArmed |= newlyArmed;
+            return {
+                .newlyArmedRecreation = newlyArmed,
+                .presentDuration = presentDuration,
+                .threshold = threshold,
+                .severeNativeStalls = this->severeNativeStalls,
+            };
+        }
+
         [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
             if (!this->stabilizingUntil)
                 return {};
-            if (now < *this->stabilizingUntil) {
+            const auto deadline = this->recreationArmed && this->startedAt
+                ? std::max(*this->stabilizingUntil,
+                    *this->startedAt + std::chrono::seconds{30})
+                : *this->stabilizingUntil;
+            if (now < deadline) {
                 this->bypassedFrames++;
                 return {
                     .bypassGeneration = true,
@@ -1429,6 +1521,7 @@ namespace mako::layer {
             const PresentDecision decision{
                 .beginHistoryWarmup = true,
                 .recovered = true,
+                .recreationWaitExpired = this->recreationArmed,
                 .bypassedFrames = this->bypassedFrames,
                 .recoveryDuration = this->startedAt
                     ? now - *this->startedAt : Duration{},
@@ -1436,11 +1529,29 @@ namespace mako::layer {
             this->startedAt.reset();
             this->stabilizingUntil.reset();
             this->bypassedFrames = 0;
+            this->recreationArmed = false;
+            this->nativeHealthySince.reset();
             return decision;
         }
 
         [[nodiscard]] bool active() const {
             return this->stabilizingUntil.has_value();
+        }
+
+        [[nodiscard]] bool recreationRequested() const {
+            return this->recreationArmed;
+        }
+
+        [[nodiscard]] bool signalRecreation() {
+            if (!this->recreationArmed || this->recreationSignaled)
+                return false;
+            this->recreationArmed = false;
+            this->recreationSignaled = true;
+            return true;
+        }
+
+        [[nodiscard]] size_t severeRecoveryStalls() const {
+            return this->severeNativeStalls;
         }
 
         void reset() {
@@ -1449,6 +1560,11 @@ namespace mako::layer {
             this->bypassedFrames = 0;
             this->lastStallAt.reset();
             this->consecutiveStalls = 0;
+            this->severeNativeStalls = 0;
+            this->recreationArmed = false;
+            this->nativeHealthySince.reset();
+            // One request per game-owned context, including live Off/On or
+            // private resource changes if the application ignored OUT_OF_DATE.
         }
 
     private:
@@ -1462,6 +1578,311 @@ namespace mako::layer {
         size_t bypassedFrames{0};
         std::optional<TimePoint> lastStallAt;
         size_t consecutiveStalls{0};
+        size_t severeNativeStalls{0};
+        bool recreationArmed{false};
+        bool recreationSignaled{false};
+        std::optional<TimePoint> nativeHealthySince;
+    };
+
+    /// One guarded request per context, including after live/private resets.
+    /// FPS/cadence changes alone never arm a game-owned recreation.
+    class PersistentAdaptiveRecoveryRecreation {
+    public:
+        [[nodiscard]] bool signal(const bool qualified = false) {
+            if (!qualified || this->signaled)
+                return false;
+            this->signaled = true;
+            return true;
+        }
+    private:
+        bool signaled{false};
+    };
+
+    /// All recovery requests share minimum surface spacing. The menu watchdog
+    /// also has a two-attempt, 75-second episode limit, rather than a minutes-
+    /// long cooldown that can outlive the interruption being repaired.
+    [[nodiscard]] constexpr std::chrono::seconds
+    persistentAdaptiveRecoveryRecreationCooldown(
+            const size_t completedRequests) noexcept {
+        return completedRequests == 0 ? std::chrono::seconds::zero()
+            : std::chrono::seconds{30};
+    }
+
+    /// Process-surface budget shared by replacement swapchains. Only confirmed
+    /// Steam focus-return episodes authorize the performance watchdog.
+    class PersistentAdaptiveRecoverySurfaceBudget {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using TimePoint = Clock::time_point;
+        using Duration = Clock::duration;
+
+        struct RecoverySample {
+            uint64_t contextId{0};
+            uint64_t configurationRevision{0};
+            uint32_t targetFps{0};
+            uint32_t refreshHz{0};
+            std::array<uint32_t, 4> extents{};
+            GamescopeFocusFeedback focus;
+            std::optional<double> outputFps;
+            double lowerPresentShare{0.0};
+        };
+
+        struct DeficitObservation {
+            bool qualified{false};
+            bool newlyQualified{false};
+            bool cancelled{false};
+            Duration duration{};
+        };
+
+        /// Require a recent healthy baseline, an explicit Steam UI focus
+        /// round trip, and sustained output/present pressure after return.
+        /// Keep the episode across our own replacement for one bounded retry.
+        [[nodiscard]] DeficitObservation observeSustainedDeficit(
+                const TimePoint now,
+                const std::optional<RecoverySample>& sample) {
+            const bool wasQualified = this->deficitQualified;
+            if (!sample || sample->targetFps == 0 ||
+                    !sample->focus.fresh(now) || !sample->focus.gameFocused) {
+                this->resetDeficitWatch();
+                return {.cancelled = wasQualified};
+            }
+            const bool contextChanged = this->lastRecoverySample &&
+                sample->contextId != this->lastRecoverySample->contextId;
+            const bool policyChanged = this->lastRecoverySample &&
+                (sample->configurationRevision !=
+                    this->lastRecoverySample->configurationRevision ||
+                 sample->targetFps != this->lastRecoverySample->targetFps ||
+                 sample->refreshHz != this->lastRecoverySample->refreshHz ||
+                 sample->extents != this->lastRecoverySample->extents);
+            if (policyChanged || (contextChanged && !this->expectedReplacement))
+                this->resetDeficitWatch();
+            const bool interrupted = this->lastRecoverySample &&
+                sample->focus.returnSequence >
+                    this->lastRecoverySample->focus.returnSequence &&
+                sample->focus.recoveryWindow(now);
+            if (contextChanged) {
+                this->expectedReplacement = false;
+                this->deficitSince.reset();
+                this->baselineHealthySince.reset();
+                this->deficitRecoveredSince.reset();
+            }
+            this->lastRecoverySample = sample;
+            if (sample->focus.menuOpen(now)) {
+                // Preserve only the pre-menu baseline, never learn Steam's
+                // throttled output or accrue a rebuild while the menu is open.
+                this->baselineHealthySince.reset();
+                this->deficitRecoveredSince.reset();
+                this->deficitSince.reset();
+                this->deficitQualified = false;
+                this->postInterruption = false;
+                return {.cancelled = wasQualified};
+            }
+            const bool valid = sample->outputFps &&
+                std::isfinite(*sample->outputFps) && *sample->outputFps > 0.0;
+            const bool healthy = valid &&
+                *sample->outputFps >= sample->targetFps * 0.95;
+            if (interrupted && this->baselineQualified &&
+                    this->lastHealthyAt &&
+                    sample->focus.openedAt &&
+                    *sample->focus.openedAt - *this->lastHealthyAt <= std::chrono::seconds{15}) {
+                this->postInterruption = true;
+                this->episodeRequests = 0;
+                this->deficitRecoveredSince.reset();
+            }
+            if (!sample->focus.recoveryWindow(now))
+                this->postInterruption = false;
+            // Once delivered output leaves the severe-deficit band, a later
+            // workload slowdown needs a new interruption; do not retain a
+            // menu visit as permission for an unrelated future rebuild.
+            if (valid && !interrupted &&
+                    *sample->outputFps >= sample->targetFps * 0.75) {
+                if (!this->deficitRecoveredSince)
+                    this->deficitRecoveredSince = now;
+                if (now - *this->deficitRecoveredSince >= std::chrono::seconds{1})
+                    this->postInterruption = false;
+            } else {
+                this->deficitRecoveredSince.reset();
+            }
+            if (healthy) {
+                this->lastHealthyAt = now;
+                if (!this->baselineHealthySince)
+                    this->baselineHealthySince = now;
+                if (now - *this->baselineHealthySince >= std::chrono::seconds{1}) {
+                    this->baselineQualified = true;
+                    this->postInterruption = false;
+                }
+            } else {
+                this->baselineHealthySince.reset();
+                if (!this->postInterruption && this->lastHealthyAt &&
+                        now - *this->lastHealthyAt > std::chrono::seconds{15}) {
+                    this->baselineQualified = false;
+                }
+            }
+            const bool deficit = valid && this->baselineQualified &&
+                this->postInterruption && this->episodeRequests < 2 &&
+                *sample->outputFps < sample->targetFps * 0.75 &&
+                std::isfinite(sample->lowerPresentShare) &&
+                sample->lowerPresentShare >= 0.5;
+            if (deficit) {
+                if (!this->deficitSince)
+                    this->deficitSince = now;
+            } else {
+                this->deficitSince.reset();
+            }
+            const auto duration = this->deficitSince
+                ? now - *this->deficitSince : Duration{};
+            this->deficitQualified = deficit && duration >= std::chrono::seconds{4};
+            return {
+                .qualified = this->deficitQualified,
+                .newlyQualified = this->deficitQualified && !wasQualified,
+                .cancelled = wasQualified && !this->deficitQualified,
+                .duration = duration,
+            };
+        }
+
+        [[nodiscard]] bool available(const TimePoint now) const {
+            return !this->lastRequestedAt ||
+                now - *this->lastRequestedAt >=
+                    persistentAdaptiveRecoveryRecreationCooldown(
+                        this->completedRequestCount
+                    );
+        }
+
+        /// Returned severe native stalls share the same minimum spacing.
+        [[nodiscard]] bool severeLowerPresentAvailable(
+                const TimePoint now) const {
+            return this->available(now);
+        }
+
+        void recordRequest(const TimePoint now,
+                const bool sustainedDeficit = false) {
+            this->completedRequestCount++;
+            this->lastRequestedAt = now;
+            this->expectedReplacement = true;
+            if (sustainedDeficit)
+                ++this->episodeRequests;
+            this->deficitQualified = false;
+            this->deficitSince.reset();
+            this->baselineHealthySince.reset();
+            this->deficitRecoveredSince.reset();
+        }
+
+        [[nodiscard]] size_t completedRequests() const {
+            return this->completedRequestCount;
+        }
+
+        [[nodiscard]] std::chrono::seconds nextCooldown() const {
+            return persistentAdaptiveRecoveryRecreationCooldown(
+                this->completedRequestCount
+            );
+        }
+
+    private:
+        void resetDeficitWatch() {
+            this->lastRecoverySample.reset();
+            this->baselineHealthySince.reset();
+            this->deficitRecoveredSince.reset();
+            this->lastHealthyAt.reset();
+            this->deficitSince.reset();
+            this->baselineQualified = false;
+            this->postInterruption = false;
+            this->episodeRequests = 0;
+            this->deficitQualified = false;
+            this->expectedReplacement = false;
+        }
+
+        size_t completedRequestCount{0};
+        std::optional<TimePoint> lastRequestedAt;
+        std::optional<RecoverySample> lastRecoverySample;
+        std::optional<TimePoint> baselineHealthySince;
+        std::optional<TimePoint> deficitRecoveredSince;
+        std::optional<TimePoint> lastHealthyAt;
+        std::optional<TimePoint> deficitSince;
+        bool baselineQualified{false};
+        bool postInterruption{false};
+        size_t episodeRequests{0};
+        bool deficitQualified{false};
+        bool expectedReplacement{false};
+    };
+
+    /// Count successful lower presents, not the selected multiplier. Close
+    /// each batch at the next application-present start so its output is
+    /// paired with the interval that actually contained its work. A short
+    /// window also handles fractional plans alternating real-only/FG frames.
+    class RecoveryPresentHealth {
+    public:
+        using Clock = std::chrono::steady_clock;
+        using Duration = Clock::duration;
+
+        void beginPresent(const Clock::time_point now) {
+            if (this->lastStarted) {
+                const auto interval = now - *this->lastStarted;
+                if (interval <= Duration::zero() ||
+                        interval >= std::chrono::seconds{1} ||
+                        this->batchFailed) {
+                    this->windowDuration = {};
+                    this->windowFrames = 0;
+                    this->windowLowerPresentDuration = {};
+                    this->observedDuration.reset();
+                } else {
+                    this->windowDuration += interval;
+                    this->windowFrames += this->batchFrames;
+                    this->windowLowerPresentDuration += this->batchLowerPresentDuration;
+                    if (this->windowDuration >= std::chrono::milliseconds{250}) {
+                        this->observedDuration = this->windowDuration;
+                        this->observedFrames = this->windowFrames;
+                        this->observedLowerPresentDuration = this->windowLowerPresentDuration;
+                        this->windowDuration = {};
+                        this->windowFrames = 0;
+                        this->windowLowerPresentDuration = {};
+                    }
+                }
+            }
+            this->lastStarted = now;
+            this->batchFrames = 0;
+            this->batchFailed = false;
+            this->maximumDuration = {};
+            this->batchLowerPresentDuration = {};
+        }
+
+        void observePresent(const Duration duration, const bool succeeded) {
+            this->maximumDuration = std::max(this->maximumDuration, duration);
+            this->batchLowerPresentDuration += duration;
+            this->batchFrames += succeeded ? 1 : 0;
+            this->batchFailed |= !succeeded;
+        }
+
+        [[nodiscard]] Duration maximumPresentDuration() const {
+            return this->maximumDuration;
+        }
+
+        [[nodiscard]] std::optional<double> outputFps() const {
+            if (this->batchFailed || !this->observedDuration ||
+                    *this->observedDuration <= Duration::zero())
+                return std::nullopt;
+            return this->observedFrames /
+                std::chrono::duration<double>(*this->observedDuration).count();
+        }
+
+        [[nodiscard]] double lowerPresentShare() const {
+            if (!this->observedDuration || *this->observedDuration <= Duration::zero())
+                return 0.0;
+            return std::chrono::duration<double>(this->observedLowerPresentDuration).count() /
+                std::chrono::duration<double>(*this->observedDuration).count();
+        }
+
+    private:
+        std::optional<Clock::time_point> lastStarted;
+        Duration windowDuration{};
+        size_t windowFrames{0};
+        std::optional<Duration> observedDuration;
+        size_t observedFrames{0};
+        size_t batchFrames{0};
+        bool batchFailed{false};
+        Duration maximumDuration{};
+        Duration batchLowerPresentDuration{};
+        Duration windowLowerPresentDuration{};
+        Duration observedLowerPresentDuration{};
     };
 
     [[nodiscard]] constexpr bool fixedCadenceCollapseRecoveryEligible(

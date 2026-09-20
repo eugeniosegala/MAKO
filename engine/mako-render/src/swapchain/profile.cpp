@@ -28,6 +28,7 @@ bool Swapchain::resetGenerationScheduler(
         const DiagnosticsClock::time_point now,
         const std::string_view reason) {
     this->recoveryState.fixedCadenceCollapseRecovery.reset();
+    this->frameState.recoveryPresentHealth = {};
     const auto policy = generationSchedulerPolicy(
         this->profile, this->gamescopeRefreshHz
     );
@@ -70,6 +71,52 @@ bool Swapchain::resetGenerationScheduler(
     this->adaptiveScheduler->beginStabilization(now, reason);
     this->recoveryState.historyWarmupRemaining = 0;
     return true;
+}
+
+void Swapchain::applyGamescopeFocus(const DiagnosticsClock::time_point now) {
+    const auto focused = this->gamescopeFocus.fresh(now)
+        ? this->gamescopeFocus.gameFocused : std::nullopt;
+    const bool eligible = this->privateOrderedTransport &&
+        effectiveFrameGenerationEnabled(this->profile, this->gamescopeRefreshHz) &&
+        this->colorPipeline.generationSupported;
+    const bool suspended = eligible && focused == false;
+    const bool returned = this->gamescopeFocus.recoveryWindow(now) &&
+        this->gamescopeFocus.returnSequence != this->lastFocusReturnSequence;
+    if (returned)
+        this->lastFocusReturnSequence = this->gamescopeFocus.returnSequence;
+    if ((this->steamMenuSuspended && !suspended) || (eligible && returned)) {
+        if (this->adaptiveScheduler)
+            this->adaptiveScheduler->resumeAfterExternalInterruption(now, returned);
+        this->ensureHistoryWarmup(true);
+        this->fixedRefreshBudget.reset();
+        this->realFramePacer.reset();
+        this->smoothCadenceBaseCap.reset();
+        this->smoothCadencePacerHandoff.pauseForExternalInterruption();
+        this->frameState.lastPresentStarted.reset();
+        this->frameState.recentRealInterval.reset();
+        this->frameState.recoveryPresentHealth = {};
+        this->recoveryState.fixedCadenceCollapseRecovery.reset();
+    }
+    if (suspended && !this->steamMenuSuspended) {
+        this->smoothCadencePacerHandoff.pauseForExternalInterruption();
+        this->frameState.recoveryPresentHealth = {};
+        this->recoveryState.fixedCadenceCollapseRecovery.reset();
+        // Returned blocking calls while Steam owns input are not evidence
+        // that gameplay's lower-present path failed. GPU/fence guards remain.
+        this->recoveryState.lowerPresentStallRecovery.reset();
+    }
+    this->steamMenuSuspended = suspended;
+    if (present_diagnostics::enabled() &&
+            (!this->focusReported || focused != this->lastReportedGameFocus || returned)) {
+        std::cerr << "MAKO Renderer: present diagnostics: operation=gamescope-focus"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " state=" << (!focused ? "unknown" : *focused ? "game" : "steam-ui")
+                  << " return_sequence=" << this->gamescopeFocus.returnSequence
+                  << " resumed=" << returned
+                  << " generation_suspended=" << suspended << '\n';
+        this->focusReported = true;
+        this->lastReportedGameFocus = focused;
+    }
 }
 
 ProfileUpdateDecision Swapchain::updateProfile(
@@ -487,6 +534,110 @@ bool Swapchain::requestLiveProfileResourceRecreationAfterPresent(
                   << " delivery=one-shot-after-retirement-fence-attachment\n";
     }
     return true;
+}
+
+bool Swapchain::requestPersistentRecoveryRecreationAfterPresent(
+        const VkResult lowerPresentResult,
+        const bool surfaceRequestAvailable,
+        const bool sustainedDeficit) {
+    if (!surfaceRequestAvailable || !sustainedDeficit ||
+            !this->gamescopeFocus.recoveryWindow(DiagnosticsClock::now()) ||
+            !this->persistentAdaptiveRecoveryEligible() ||
+            (lowerPresentResult != VK_SUCCESS &&
+             lowerPresentResult != VK_SUBOPTIMAL_KHR) ||
+            !this->lastLowerPresentRetirementProtected ||
+            !this->recoveryState.persistentAdaptiveRecoveryRecreation.signal(
+                sustainedDeficit)) {
+        return false;
+    }
+
+    std::cerr << "MAKO Renderer: persistent Adaptive recovery failure "
+                 "requested one game-owned swapchain recreation after a "
+                 "maintenance1-fenced lower present\n";
+    if (present_diagnostics::enabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=adaptive-recovery-recreation-requested"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " reason=sustained-post-menu-deficit"
+                  << " lower_present_result=" << lowerPresentResult
+                  << " signal=VK_ERROR_OUT_OF_DATE_KHR"
+                  << " delivery=one-shot-per-context-after-retirement-fence-attachment\n";
+    }
+    return true;
+}
+
+bool Swapchain::requestLowerPresentStallRecreationAfterPresent(
+        const VkResult lowerPresentResult,
+        const bool surfaceRequestAvailable) {
+    if (this->steamMenuSuspended || !this->privateOrderedTransport ||
+            !effectiveFrameGenerationEnabled(
+                this->profile, this->gamescopeRefreshHz
+            ) || !this->colorPipeline.generationSupported ||
+            !surfaceRequestAvailable ||
+            !this->recoveryState.lowerPresentStallRecovery
+                .recreationRequested() ||
+            (lowerPresentResult != VK_SUCCESS &&
+             lowerPresentResult != VK_SUBOPTIMAL_KHR) ||
+            !this->lastLowerPresentRetirementProtected ||
+            !this->recoveryState.lowerPresentStallRecovery
+                .signalRecreation()) {
+        return false;
+    }
+
+    std::cerr << "MAKO Renderer: persistent native lower-present failure "
+                 "requested one game-owned swapchain recreation after a "
+                 "maintenance1-fenced lower present\n";
+    if (present_diagnostics::enabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=lower-present-stall-recreation-requested"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " severe_native_stalls="
+                  << this->recoveryState.lowerPresentStallRecovery
+                        .severeRecoveryStalls()
+                  << " lower_present_result=" << lowerPresentResult
+                  << " signal=VK_ERROR_OUT_OF_DATE_KHR"
+                  << " delivery=one-shot-per-context-after-retirement-fence-attachment\n";
+    }
+    return true;
+}
+
+bool Swapchain::persistentAdaptiveRecoveryEligible() const {
+    return this->adaptiveScheduler && this->privateOrderedTransport &&
+        effectiveFrameGenerationEnabled(this->profile, this->gamescopeRefreshHz) &&
+        this->colorPipeline.generationSupported;
+}
+
+std::optional<PersistentAdaptiveRecoverySurfaceBudget::RecoverySample>
+Swapchain::persistentAdaptiveRecoverySample() const {
+    if (!this->profile.adaptive ||
+            !this->persistentAdaptiveRecoveryEligible())
+        return std::nullopt;
+    const auto snapshot = this->adaptiveScheduler->snapshot();
+    const bool ordinaryDelivery =
+        !this->steamMenuSuspended &&
+        (snapshot.phase == AdaptiveSchedulerPhase::Active ||
+         snapshot.phase == AdaptiveSchedulerPhase::StableCadence ||
+         snapshot.phase == AdaptiveSchedulerPhase::NearTargetNative) &&
+        !snapshot.efficiencyProbeGenerationLimit &&
+        !snapshot.stableCadenceEvaluationActive &&
+        !this->recoveryState.lowerPresentStallRecovery.active() &&
+        !this->recoveryState.orderedAcquireRecovery.active() &&
+        !this->recoveryState.backendPending &&
+        !this->frameGenerationTransition.draining() &&
+        !this->spatialTransition.draining();
+    return PersistentAdaptiveRecoverySurfaceBudget::RecoverySample{
+        .contextId = this->diagnosticsState.contextId,
+        .configurationRevision = this->runtimeStatusState.stateRevision,
+        .targetFps = this->profile.target_fps,
+        .refreshHz = this->gamescopeRefreshHz.value_or(0),
+        .extents = {this->info.applicationExtent.width,
+            this->info.applicationExtent.height,
+            this->info.extent.width, this->info.extent.height},
+        .focus = this->gamescopeFocus,
+        .outputFps = ordinaryDelivery
+            ? this->frameState.recoveryPresentHealth.outputFps() : std::nullopt,
+        .lowerPresentShare = this->frameState.recoveryPresentHealth.lowerPresentShare(),
+    };
 }
 
 void Swapchain::updateGamescopeRefreshRate(

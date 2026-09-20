@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <charconv>
 #include <memory>
 #include <cstdint>
 #include <optional>
@@ -14,6 +15,72 @@
 #include <vector>
 
 namespace mako::layer {
+
+    [[nodiscard]] inline std::optional<uint32_t> gamescopeApplicationId(
+            const std::string_view value) {
+        if (value.empty())
+            return std::nullopt;
+        uint32_t id{};
+        const auto result = std::from_chars(value.data(), value.data() + value.size(), id);
+        if (result.ec != std::errc{} || result.ptr != value.data() + value.size() ||
+                id == 0 || id == 769)
+            return std::nullopt;
+        return id;
+    }
+
+    /// Gamescope identifies Steam's UI as app 769. Missing/empty properties,
+    /// another game, and unidentifiable launchers are NOT menu evidence.
+    [[nodiscard]] inline std::optional<bool> classifyGamescopeFocus(
+            const std::optional<uint32_t> applicationId,
+            const std::optional<uint32_t> inputApp,
+            const std::optional<uint32_t> graphicsApp) {
+        if (!applicationId || !inputApp || !graphicsApp)
+            return std::nullopt;
+        if (*inputApp == *applicationId && *graphicsApp == *applicationId)
+            return true;
+        if (*inputApp == 769 && (*graphicsApp == *applicationId || *graphicsApp == 769))
+            return false;
+        return std::nullopt;
+    }
+
+    /// Debounce on the existing background reader, even when the game stops
+    /// presenting. Unknown/stale evidence breaks the open/close chain.
+    class GamescopeFocusTracker {
+    public:
+        [[nodiscard]] GamescopeFocusFeedback observe(
+                const GamescopeFocusFeedback::Clock::time_point now,
+                const std::optional<bool> focused) {
+            if (!this->feedback.fresh(now) || !focused) {
+                const auto sequence = this->feedback.returnSequence;
+                this->feedback = {};
+                this->feedback.returnSequence = sequence;
+                this->candidate.reset();
+            }
+            this->feedback.sampledAt = now;
+            if (!focused)
+                return this->feedback;
+            if (this->candidate != focused) {
+                this->candidate = focused;
+                this->candidateSince = now;
+            }
+            if (now - this->candidateSince >= std::chrono::milliseconds{250} &&
+                    this->feedback.gameFocused != focused) {
+                if (!*focused) {
+                    this->feedback.openedAt = this->candidateSince;
+                    this->feedback.returnedAt.reset();
+                } else if (this->feedback.gameFocused == false) {
+                    this->feedback.returnedAt = now;
+                    ++this->feedback.returnSequence;
+                }
+                this->feedback.gameFocused = focused;
+            }
+            return this->feedback;
+        }
+    private:
+        GamescopeFocusFeedback feedback;
+        std::optional<bool> candidate;
+        GamescopeFocusFeedback::Clock::time_point candidateSince{};
+    };
 
     /// Conservative process-start hint used only for safety gates that must
     /// fail closed before X11 feedback can confirm compositor identity.
@@ -34,6 +101,7 @@ namespace mako::layer {
         std::string display;
         std::string resolverStatus;
         std::string resolverCandidates;
+        GamescopeFocusFeedback focus;
     };
 
     struct GamescopePresentationTarget {

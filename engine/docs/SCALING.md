@@ -74,7 +74,7 @@ Each active scaled swapchain has two extents:
 - **Source:** the image size presented to the application and sampled by the scaler.
 - **Presentation:** the physical lower WSI size and final output resolution.
 
-Dimensions greater than one are rounded down to even values. Scaling remains inactive when the factor is 1.0, the extents cannot differ safely, or a required capability cannot be proven.
+Dimensions greater than one are rounded down to even values. Scaling remains inactive when the factor is 1.0, the extents cannot differ safely, or a required capability cannot be proven. An enabled 1.0 profile retains the live reconstruction lane but uses Frame Generation-only WSI relief topology until a factor above 1.0 can activate scaling.
 
 ### Fixed-extent surfaces
 
