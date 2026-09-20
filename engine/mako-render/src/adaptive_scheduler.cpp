@@ -2234,12 +2234,20 @@ void AdaptiveScheduler::restoreGenerationLimit(
         const size_t generationLimit,
         const std::string_view reason,
         const std::optional<size_t> monitoredFallbackLimit,
-        const double monitoredBaselineBaseFps) {
+        const double monitoredBaselineBaseFps,
+        const bool preserveRampBackoff) {
     const size_t configuredLimit = std::min(
         this->config.generatedFrameCapacity,
         this->config.maximumMultiplier - 1
     );
     const size_t restoredLimit = std::min(generationLimit, configuredLimit);
+    const size_t retainedFailedLimit = this->state.ramp.lastFailedLimit;
+    const size_t retainedFailureCount = this->state.ramp.consecutiveFailures;
+    const double retainedFailedBaselineBaseFps =
+        this->state.ramp.failedBaselineBaseFps;
+    const auto retainedRetryAt = this->state.ramp.nextAt;
+    const bool retainBackoff = preserveRampBackoff &&
+        retainedFailureCount > 0 && retainedFailedLimit > restoredLimit;
 
     this->state.outputPlanner.generationLimit = restoredLimit;
     this->state.ramp.previousLimit = restoredLimit;
@@ -2257,9 +2265,15 @@ void AdaptiveScheduler::restoreGenerationLimit(
     this->state.rearm.baselineBaseFps = 0.0;
     this->state.rearm.fallbackLimit = 0;
     this->state.rearm.consecutiveProbeFailures = 0;
-    this->state.ramp.lastFailedLimit = 0;
-    this->state.ramp.consecutiveFailures = 0;
-    this->state.ramp.failedBaselineBaseFps = 0.0;
+    this->state.ramp.lastFailedLimit = retainBackoff
+        ? retainedFailedLimit
+        : 0;
+    this->state.ramp.consecutiveFailures = retainBackoff
+        ? retainedFailureCount
+        : 0;
+    this->state.ramp.failedBaselineBaseFps = retainBackoff
+        ? retainedFailedBaselineBaseFps
+        : 0.0;
     const size_t fallbackLimit = std::min(
         monitoredFallbackLimit.value_or(restoredLimit), configuredLimit
     );
@@ -2282,8 +2296,16 @@ void AdaptiveScheduler::restoreGenerationLimit(
     const auto higherProbeDelay = restoredLimit > 0 && restoredLimit < configuredLimit
         ? adaptiveRecoveryHigherProbeDelay
         : AdaptiveScheduler::Clock::duration::zero();
-    this->state.ramp.nextAt = stabilizationEnd + higherProbeDelay;
-    this->diagnostics->recoveryResume(restoredLimit, higherProbeDelay, reason);
+    this->state.ramp.nextAt = retainBackoff && retainedRetryAt
+        ? retainedRetryAt
+        : stabilizationEnd + higherProbeDelay;
+    const auto scheduledHigherProbeDelay =
+        *this->state.ramp.nextAt > stabilizationEnd
+        ? *this->state.ramp.nextAt - stabilizationEnd
+        : AdaptiveScheduler::Clock::duration::zero();
+    this->diagnostics->recoveryResume(
+        restoredLimit, scheduledHigherProbeDelay, reason
+    );
 }
 
 void AdaptiveScheduler::beginCadenceRefresh(
@@ -2315,7 +2337,8 @@ void AdaptiveScheduler::beginCadenceRefresh(
         loadBaseline.baseFps > 0.0
             ? std::optional<size_t>{loadBaseline.fallbackGenerationLimit}
             : std::nullopt,
-        loadBaseline.baseFps
+        loadBaseline.baseFps,
+        true
     );
     this->beginHistoryWarmup(adaptiveSdrCadenceRefreshFrames, false);
     this->resetTiming(now);
@@ -2555,14 +2578,57 @@ void AdaptiveScheduler::beginTransportRecovery(const TimePoint now) {
     // an unrelated long-lived efficiency-probe backoff intact.
     const auto retainedEfficiencyRetryAt =
         this->state.efficiencyProbe.retryAt;
-    const AdaptiveGenerationLoadBaseline loadBaseline =
+    const bool failedRampProbe = this->state.ramp.evaluationAt.has_value();
+    const size_t failedGenerationLimit =
+        this->state.outputPlanner.generationLimit;
+    const size_t previousProbeFailures =
+        this->state.ramp.lastFailedLimit == failedGenerationLimit
+        ? this->state.ramp.consecutiveFailures
+        : 0;
+    AdaptiveGenerationLoadBaseline loadBaseline =
         this->generationLoadBaseline();
+    if (failedRampProbe) {
+        loadBaseline = {
+            .fallbackGenerationLimit = this->state.ramp.bridgeActive
+                ? this->state.ramp.bridgeBaselineLimit
+                : this->state.ramp.previousLimit,
+            .baseFps = this->state.ramp.bridgeActive
+                ? this->state.ramp.bridgeBaselineBaseFps
+                : this->state.ramp.baselineBaseFps,
+        };
+        this->diagnostics->probeAborted(
+            "generated-image-recovery", failedGenerationLimit
+        );
+        // This is direct evidence that the tested load is unsafe, not an
+        // unrelated cadence interruption. End the probe before generic
+        // stabilization so it cannot be rearmed as a benign interruption.
+        this->state.ramp.evaluationAt.reset();
+        this->state.ramp.delivery.reset();
+    }
     this->beginStabilization(now, "generated-image-recovery");
     if (loadBaseline.baseFps > 0.0) {
         this->restoreGenerationLimit(
             now,
             loadBaseline.fallbackGenerationLimit,
             "generated-image-pressure-fallback"
+        );
+    }
+    if (failedRampProbe && loadBaseline.baseFps > 0.0) {
+        const size_t failureCount = previousProbeFailures + 1;
+        const auto retryDelay = adaptiveRampRetryDelayForFailures(
+            failureCount
+        );
+        this->state.ramp.lastFailedLimit = failedGenerationLimit;
+        this->state.ramp.consecutiveFailures = failureCount;
+        this->state.ramp.failedBaselineBaseFps = loadBaseline.baseFps;
+        const auto stabilizationEnd =
+            this->state.stabilization.until.value_or(now);
+        this->state.ramp.nextAt = stabilizationEnd + retryDelay;
+        this->diagnostics->rampBackoff(
+            failedGenerationLimit,
+            failureCount,
+            loadBaseline.baseFps,
+            retryDelay
         );
     }
     if (retainedEfficiencyRetryAt)

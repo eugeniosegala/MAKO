@@ -213,7 +213,8 @@ namespace mako::layer {
         void restoreGenerationLimit(TimePoint now, size_t generationLimit,
             std::string_view reason,
             std::optional<size_t> monitoredFallbackLimit = std::nullopt,
-            double monitoredBaselineBaseFps = 0.0);
+            double monitoredBaselineBaseFps = 0.0,
+            bool preserveRampBackoff = false);
         void beginDiscontinuityRecovery(TimePoint now, size_t generationLimit,
             size_t fallbackGenerationLimit, double baselineBaseFps,
             std::optional<TimePoint> deadline,

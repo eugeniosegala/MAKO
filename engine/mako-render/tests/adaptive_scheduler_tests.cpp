@@ -3918,6 +3918,125 @@ namespace {
             "image recovery retried the failed higher load before its backoff");
     }
 
+    void testTransportFailureDuringAnyMultiplierProbeRetainsProvenLoad() {
+        struct ProbeCase {
+            uint32_t targetFps;
+            size_t maximumMultiplier;
+            double baseFps;
+            size_t testedGenerationLimit;
+            size_t provenGenerationLimit;
+        };
+        constexpr std::array cases{
+            ProbeCase{120, 3, 50.0, 2, 1},
+            ProbeCase{180, 4, 50.0, 3, 2},
+            ProbeCase{240, 5, 50.0, 4, 3},
+        };
+
+        for (const auto& test : cases) {
+            Harness harness(
+                test.targetFps,
+                test.maximumMultiplier,
+                false,
+                AdaptiveRecoveryPolicy::OrderedSdr,
+                false,
+                ls::dynamicCadenceProbeIntervalDuration(
+                    ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+                ),
+                std::nullopt,
+                false
+            );
+            harness.start();
+
+            bool probeStarted = false;
+            for (size_t frame = 0; frame < 3000; ++frame) {
+                harness.frameAtFps(test.baseFps);
+                const auto snapshot = harness.scheduler.snapshot();
+                if (snapshot.rampEvaluationActive &&
+                        snapshot.generationLimit ==
+                            test.testedGenerationLimit &&
+                        snapshot.validatedGenerationLimit ==
+                            test.provenGenerationLimit) {
+                    probeStarted = true;
+                    break;
+                }
+            }
+            require(probeStarted,
+                "precondition failed: generic higher-multiplier probe did not begin");
+
+            harness.scheduler.beginTransportRecovery(harness.now);
+            const auto recovery = harness.scheduler.snapshot();
+            require(recovery.phase == AdaptiveSchedulerPhase::Stabilizing &&
+                    recovery.generationLimit ==
+                        test.provenGenerationLimit &&
+                    recovery.validatedGenerationLimit ==
+                        test.provenGenerationLimit,
+                "transport failure discarded the last proven multiplier");
+            const auto* resume = harness.diagnostics.last(
+                "adaptive-recovery-resume-scheduled"
+            );
+            require(resume &&
+                    resume->reason == "generated-image-pressure-fallback" &&
+                    resume->testedLimit == test.provenGenerationLimit,
+                "transport recovery did not resume its generic proven fallback");
+            const auto* backoff = harness.diagnostics.last("ramp-backoff");
+            require(backoff &&
+                    backoff->testedLimit == test.testedGenerationLimit &&
+                    backoff->previousLimit == 1,
+                "transport-failed probe did not start bounded retry backoff");
+        }
+    }
+
+    void testTransportProbeBackoffSurvivesCadenceRefresh() {
+        Harness harness(
+            120,
+            3,
+            false,
+            AdaptiveRecoveryPolicy::OrderedSdr,
+            false,
+            ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+            ),
+            std::nullopt,
+            false
+        );
+        harness.start();
+
+        const auto reachThreeXProbe = [&] {
+            for (size_t frame = 0; frame < 1200; ++frame) {
+                harness.frameAtFps(50.0);
+                const auto snapshot = harness.scheduler.snapshot();
+                if (snapshot.rampEvaluationActive &&
+                        snapshot.generationLimit == 2 &&
+                        snapshot.validatedGenerationLimit == 1) {
+                    return true;
+                }
+            }
+            return false;
+        };
+
+        require(reachThreeXProbe(),
+            "precondition failed: first 3x probe did not begin");
+        harness.scheduler.beginTransportRecovery(harness.now);
+        const auto* firstBackoff = harness.diagnostics.last("ramp-backoff");
+        require(firstBackoff && firstBackoff->previousLimit == 1,
+            "first transport failure did not record its retry history");
+
+        harness.frame(200ms);
+        require(harness.diagnostics.contains("cadence-refresh") &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "cadence refresh discarded the proven 2x fallback");
+
+        require(reachThreeXProbe(),
+            "3x probe did not retry after its bounded cooldown");
+        harness.scheduler.beginTransportRecovery(harness.now);
+        const auto recovery = harness.scheduler.snapshot();
+        const auto* secondBackoff = harness.diagnostics.last("ramp-backoff");
+        require(recovery.validatedGenerationLimit == 1 &&
+                secondBackoff && secondBackoff->testedLimit == 2 &&
+                secondBackoff->previousLimit == 2,
+            "cadence refresh reset transport-failure backoff escalation");
+    }
+
     void testDeterministicReplay() {
         Harness first(120, 4, true);
         Harness second(120, 4, true);
@@ -4053,6 +4172,8 @@ int main() {
         {"Ordered SDR minimum-generated collapse releases automatic cap", testOrderedSdrMinimumGeneratedCollapseReleasesAutomaticCap},
         {"restored load keeps collapse guard", testRestoredDiscontinuityLoadRetainsCollapseGuard},
         {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
+        {"transport-failed multiplier probes keep proven load", testTransportFailureDuringAnyMultiplierProbeRetainsProvenLoad},
+        {"transport probe backoff survives cadence refresh", testTransportProbeBackoffSurvivesCadenceRefresh},
         {"cadence replay is deterministic", testDeterministicReplay},
     };
 
