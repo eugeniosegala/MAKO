@@ -108,15 +108,23 @@ struct GamescopeScalingSurface::Impl {
     const wl_interface* callbackInterface{};
 
     // Minimal wire subset of Gamescope's MIT-licensed swapchain protocol at
-    // 2d217a16c7e5b56c7417257279bf102320cff024. Only association and destruction
-    // requests are used. All v1 events are declared so unsolicited feedback is
-    // consumed without retaining timing history. See THIRD_PARTY_NOTICES.md.
+    // 2d217a16c7e5b56c7417257279bf102320cff024. Association plus create-time
+    // swapchain feedback are used. Ordered combined delivery also moves its
+    // FIFO constraint from the lower Wayland WSI to this compositor protocol;
+    // timing, limiter and HDR control remain inactive. All v1 events are
+    // declared so unsolicited feedback is consumed without retaining history.
+    // See THIRD_PARTY_NOTICES.md.
     std::array<const wl_interface*, 2> createTypes{};
     std::array<wl_message, 2> factoryRequests{{
         {"destroy", "", nullptr}, {"create_swapchain", "on", createTypes.data()},
     }};
-    std::array<wl_message, 2> contentRequests{{
-        {"destroy", "", nullptr}, {"override_window_content", "uu", nullptr},
+    std::array<wl_message, 6> contentRequests{{
+        {"destroy", "", nullptr},
+        {"override_window_content", "uu", nullptr},
+        {"swapchain_feedback", "uuuuuus", nullptr},
+        {"set_present_mode", "u", nullptr},
+        {"set_hdr_metadata", "uuuuuuuuuuuu", nullptr},
+        {"set_present_time", "uuu", nullptr},
     }};
     std::array<wl_message, 3> contentEvents{{
         {"past_present_timing", "uuuuuuuuu", nullptr},
@@ -126,18 +134,26 @@ struct GamescopeScalingSurface::Impl {
         "gamescope_swapchain_factory_v2", 1, 2, factoryRequests.data(), 0, nullptr,
     };
     wl_interface contentInterface{
-        "gamescope_swapchain", 1, 2, contentRequests.data(), 3, contentEvents.data(),
+        "gamescope_swapchain", 1, 6, contentRequests.data(), 3, contentEvents.data(),
     };
 
+    struct Content {
+        Impl* owner{};
+        wl_proxy* proxy{};
+        bool retired{};
+        std::optional<VkPresentModeKHR> compositorPresentMode;
+        ~Content() {
+            if (owner)
+                owner->release(proxy);
+        }
+    };
     struct Surface {
         Impl* owner{};
         wl_proxy* surface{};
-        wl_proxy* content{};
         uint32_t server{};
         uint32_t window{};
         xcb_connection_t* connection{};
-        bool bound{};
-        bool retired{};
+        std::unordered_map<VkSwapchainKHR, std::unique_ptr<Content>> contents;
         ~Surface() {
             if (owner)
                 owner->release(*this);
@@ -167,7 +183,11 @@ struct GamescopeScalingSurface::Impl {
     }
 
     void release(Surface& surface) {
-        release(surface.content);
+        for (auto& [swapchain, content] : surface.contents) {
+            static_cast<void>(swapchain);
+            release(content->proxy);
+        }
+        surface.contents.clear();
         release(surface.surface);
     }
 
@@ -340,7 +360,7 @@ struct GamescopeScalingSurface::Impl {
             uint32_t, uint32_t, uint32_t, uint32_t, uint32_t, uint32_t) {}
     static void ignoreRefresh(void*, wl_proxy*, uint32_t, uint32_t) {}
     static void retired(void* data, wl_proxy*) {
-        static_cast<Surface*>(data)->retired = true;
+        static_cast<Content*>(data)->retired = true;
     }
     static void ignoreOutput(void*, wl_proxy*, void*) {}
 
@@ -379,19 +399,10 @@ struct GamescopeScalingSurface::Impl {
             reinterpret_cast<void (*)(void)>(ignoreOutput),
             reinterpret_cast<void (*)(void)>(ignoreOutput),
         };
-        wl_argument args[2]{{.o = state->surface}, {.o = nullptr}};
-        state->content = marshal(factory, 1, &contentInterface, 1, 0, args);
-        static void (*contentListener[])(void){
-            reinterpret_cast<void (*)(void)>(ignoreTiming),
-            reinterpret_cast<void (*)(void)>(ignoreRefresh),
-            reinterpret_cast<void (*)(void)>(retired),
-        };
-        if (!state->content || addListener(state->surface, surfaceListener, nullptr) != 0 ||
-                addListener(state->content, contentListener, state.get()) != 0) {
+        if (addListener(state->surface, surfaceListener, nullptr) != 0) {
             release(*state);
             return VK_ERROR_OUT_OF_HOST_MEMORY;
         }
-        setQueue(state->content, queue);
         const VkWaylandSurfaceCreateInfoKHR info{
             .sType = VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR,
             .display = display,
@@ -485,6 +496,72 @@ bool GamescopeScalingSurface::owns(const VkSurfaceKHR surface) const {
     return impl->surfaces.contains(surface);
 }
 
+bool GamescopeScalingSurface::createSwapchain(
+        const VkSurfaceKHR surface, const VkSwapchainKHR swapchain,
+        const VkSwapchainCreateInfoKHR& info, const uint32_t imageCount,
+        const std::string_view engineName,
+        const std::optional<VkPresentModeKHR> compositorPresentMode) {
+    const std::lock_guard lock(impl->mutex);
+    const auto found = impl->surfaces.find(surface);
+    if (found == impl->surfaces.end())
+        return true;
+    auto& state = *found->second;
+    if (state.contents.contains(swapchain))
+        return true;
+
+    auto content = std::make_unique<Impl::Content>();
+    content->owner = impl.get();
+    content->compositorPresentMode = compositorPresentMode;
+    wl_argument createArgs[2]{{.o = state.surface}, {.o = nullptr}};
+    content->proxy = impl->marshal(
+        impl->factory, 1, &impl->contentInterface, 1, 0, createArgs
+    );
+    static void (*contentListener[])(void){
+        reinterpret_cast<void (*)(void)>(Impl::ignoreTiming),
+        reinterpret_cast<void (*)(void)>(Impl::ignoreRefresh),
+        reinterpret_cast<void (*)(void)>(Impl::retired),
+    };
+    if (!content->proxy || impl->addListener(
+            content->proxy, contentListener, content.get()) != 0) {
+        impl->release(content->proxy);
+        return false;
+    }
+    impl->setQueue(content->proxy, impl->queue);
+    const std::string engine(engineName);
+    wl_argument feedback[7]{
+        {.u = imageCount},
+        {.u = static_cast<uint32_t>(info.imageFormat)},
+        {.u = static_cast<uint32_t>(info.imageColorSpace)},
+        {.u = static_cast<uint32_t>(info.compositeAlpha)},
+        {.u = static_cast<uint32_t>(info.preTransform)},
+        {.u = static_cast<uint32_t>(info.clipped)},
+        {.s = engine.c_str()},
+    };
+    impl->marshal(content->proxy, 2, nullptr, 1, 0, feedback);
+    state.contents.emplace(swapchain, std::move(content));
+    if (impl->displayFlush(impl->display) < 0 && errno != EAGAIN) {
+        const auto inserted = state.contents.find(swapchain);
+        impl->release(inserted->second->proxy);
+        state.contents.erase(inserted);
+        return false;
+    }
+    return true;
+}
+
+void GamescopeScalingSurface::destroySwapchain(
+        const VkSurfaceKHR surface, const VkSwapchainKHR swapchain) {
+    const std::lock_guard lock(impl->mutex);
+    const auto found = impl->surfaces.find(surface);
+    if (found == impl->surfaces.end())
+        return;
+    const auto content = found->second->contents.find(swapchain);
+    if (content == found->second->contents.end())
+        return;
+    impl->release(content->second->proxy);
+    found->second->contents.erase(content);
+    impl->displayFlush(impl->display);
+}
+
 std::optional<VkResult> GamescopeScalingSurface::applicationCapabilities(
         const VkSurfaceKHR surface, VkSurfaceCapabilitiesKHR& capabilities) const {
     const std::lock_guard lock(impl->mutex);
@@ -512,7 +589,8 @@ std::optional<VkResult> GamescopeScalingSurface::applicationCapabilities(
     return VK_SUCCESS;
 }
 
-bool GamescopeScalingSurface::preparePresent(const VkSurfaceKHR surface) {
+bool GamescopeScalingSurface::preparePresent(
+        const VkSurfaceKHR surface, const VkSwapchainKHR swapchain) {
     const std::lock_guard lock(impl->mutex);
     const auto found = impl->surfaces.find(surface);
     if (found == impl->surfaces.end())
@@ -524,14 +602,20 @@ bool GamescopeScalingSurface::preparePresent(const VkSurfaceKHR surface) {
             impl->displayGetError(impl->display) != 0)
         return false;
     auto& state = *found->second;
-    if (state.retired)
+    const auto content = state.contents.find(swapchain);
+    if (content == state.contents.end() || content->second->retired)
         return false;
-    if (!state.bound) {
-        wl_argument args[2]{{.u = state.server}, {.u = state.window}};
-        impl->marshal(state.content, 1, nullptr, 1, 0, args);
-        state.bound = true;
-        if (impl->displayFlush(impl->display) < 0 && errno != EAGAIN)
-            return false;
+    wl_argument args[2]{{.u = state.server}, {.u = state.window}};
+    impl->marshal(content->second->proxy, 1, nullptr, 1, 0, args);
+    if (content->second->compositorPresentMode) {
+        wl_argument mode{
+            .u = static_cast<uint32_t>(
+                *content->second->compositorPresentMode
+            ),
+        };
+        impl->marshal(content->second->proxy, 3, nullptr, 1, 0, &mode);
     }
+    if (impl->displayFlush(impl->display) < 0 && errno != EAGAIN)
+        return false;
     return true;
 }

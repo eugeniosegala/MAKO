@@ -7,6 +7,7 @@
 #include "pnext_chain.hpp"
 #include "present_diagnostics.hpp"
 #include "spatial_scaling_policy.hpp"
+#include "swapchain/create_policy.hpp"
 #include "swapchain/swapchain.hpp"
 
 #include "mako-common/configuration/detection.hpp"
@@ -1379,6 +1380,16 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
         );
     }
     createInfo.pNext = presentModes.head();
+
+    const auto gamescopePresentContract =
+        gamescopeScalingPresentContract(
+            createInfo.presentMode,
+            gamescopeScalingSurface,
+            modification.privateOrderedTransport
+        );
+    createInfo.presentMode = gamescopePresentContract.lowerPresentMode;
+    modification.gamescopeProtocolPresentMode =
+        gamescopePresentContract.compositorPresentMode;
 
     finish();
     if (modification.spatialScalingActive && !spatialExtentOwner) {

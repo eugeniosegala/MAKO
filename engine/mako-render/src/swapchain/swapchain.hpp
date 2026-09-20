@@ -176,7 +176,8 @@ namespace mako::layer {
         /// same maintenance1 retirement proof as live resource transitions.
         [[nodiscard]] bool requestPersistentRecoveryRecreationAfterPresent(
             VkResult lowerPresentResult, bool surfaceRequestAvailable,
-            bool sustainedDeficit = false);
+            bool sustainedDeficit = false,
+            bool stagedScaledRecreation = false);
 
         /// Rebuild only the generation scheduler and temporal history after a
         /// qualified post-menu regression in a combined scaling context. This

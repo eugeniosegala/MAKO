@@ -1690,6 +1690,28 @@ int main() {
             combinedCreate.minImageCount == 5 &&
             combinedCreate.presentMode == VK_PRESENT_MODE_FIFO_KHR,
         "A configured combined profile must reserve two generated outputs without a duplicate real-frame slot before the lower scaling relay arrives");
+    const auto isolatedOrderedPresent = gamescopeScalingPresentContract(
+        combinedCreate.presentMode, true, combinedPrivateTransport
+    );
+    expect(isolatedOrderedPresent.lowerPresentMode ==
+            VK_PRESENT_MODE_MAILBOX_KHR &&
+            isolatedOrderedPresent.compositorPresentMode ==
+                VK_PRESENT_MODE_FIFO_KHR,
+        "The isolated Gamescope scaling bridge must move ordered FIFO from the lower Wayland WSI to the compositor protocol");
+    const auto ordinaryOrderedPresent = gamescopeScalingPresentContract(
+        combinedCreate.presentMode, false, combinedPrivateTransport
+    );
+    expect(ordinaryOrderedPresent.lowerPresentMode ==
+            VK_PRESENT_MODE_FIFO_KHR &&
+            !ordinaryOrderedPresent.compositorPresentMode,
+        "An ordinary ordered surface must retain MAKO's lower FIFO owner");
+    const auto scalingOnlyPresent = gamescopeScalingPresentContract(
+        scalingOnlyCreate.presentMode, true, scalingOnlyPrivateTransport
+    );
+    expect(scalingOnlyPresent.lowerPresentMode ==
+            VK_PRESENT_MODE_MAILBOX_KHR &&
+            !scalingOnlyPresent.compositorPresentMode,
+        "Scaling-only presentation must retain its existing lower present-mode owner");
 
     auto inactiveCombinedProfile = combinedProfile;
     inactiveCombinedProfile.scaling_method = ls::ScalingMethod::Native;

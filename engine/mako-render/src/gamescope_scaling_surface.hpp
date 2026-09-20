@@ -4,6 +4,7 @@
 
 #include <memory>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vulkan/vulkan_core.h>
 
@@ -63,9 +64,20 @@ namespace mako::layer {
         /// Called after Vulkan has destroyed the surface and retired all its
         /// swapchains. Wayland objects must outlive those driver resources.
         void destroy(VkSurfaceKHR surface);
-        /// Bind on first presentation, so merely preparing a replacement
-        /// surface cannot steal an existing window's still-live image.
-        [[nodiscard]] bool preparePresent(VkSurfaceKHR surface);
+        /// Mirror Gamescope WSI's per-Vulkan-swapchain protocol lifetime. The
+        /// compositor needs the real image count before low-latency delivery,
+        /// and a replacement must not inherit its predecessor's pacing state.
+        [[nodiscard]] bool createSwapchain(VkSurfaceKHR surface,
+            VkSwapchainKHR swapchain, const VkSwapchainCreateInfoKHR& info,
+            uint32_t imageCount, std::string_view engineName,
+            std::optional<VkPresentModeKHR> compositorPresentMode);
+        void destroySwapchain(VkSurfaceKHR surface, VkSwapchainKHR swapchain);
+
+        /// Bind the matching protocol object at presentation. Gamescope WSI
+        /// reasserts this association every frame because Xwayland and Steam
+        /// UI transitions can publish their own window-content mapping.
+        [[nodiscard]] bool preparePresent(
+            VkSurfaceKHR surface, VkSwapchainKHR swapchain);
         [[nodiscard]] bool owns(VkSurfaceKHR surface) const;
 
         /// Preserve the application's X11 extent contract at both public

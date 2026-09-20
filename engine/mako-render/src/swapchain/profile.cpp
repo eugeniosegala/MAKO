@@ -539,12 +539,15 @@ bool Swapchain::requestLiveProfileResourceRecreationAfterPresent(
 bool Swapchain::requestPersistentRecoveryRecreationAfterPresent(
         const VkResult lowerPresentResult,
         const bool surfaceRequestAvailable,
-        const bool sustainedDeficit) {
+        const bool sustainedDeficit,
+        const bool stagedScaledRecreation) {
     if (!surfaceRequestAvailable || !sustainedDeficit ||
             !this->gamescopeFocus.recoveryWindow(DiagnosticsClock::now()) ||
             !this->persistentAdaptiveRecoveryMonitoringEligible() ||
             !automaticRecoveryRecreationAllowed(
-                this->spatialScaler.has_value()
+                this->spatialScaler.has_value(),
+                stagedScaledRecreation,
+                this->info.spatialScalingMemoryConstrained
             ) ||
             (lowerPresentResult != VK_SUCCESS &&
              lowerPresentResult != VK_SUBOPTIMAL_KHR) ||
@@ -561,7 +564,9 @@ bool Swapchain::requestPersistentRecoveryRecreationAfterPresent(
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=adaptive-recovery-recreation-requested"
                   << " context=" << this->diagnosticsState.contextId
-                  << " reason=sustained-post-menu-deficit"
+                  << " reason=" << (stagedScaledRecreation
+                        ? "failed-scaled-in-place-post-menu-deficit"
+                        : "sustained-post-menu-deficit")
                   << " lower_present_result=" << lowerPresentResult
                   << " signal=VK_ERROR_OUT_OF_DATE_KHR"
                   << " delivery=one-shot-per-context-after-retirement-fence-attachment\n";

@@ -14,14 +14,16 @@
 
 namespace mako::layer {
 
-    /// A recovery heuristic must not force a combined spatial-scaling WSI
-    /// replacement. That path can be reached precisely while the application
-    /// is under acute device-memory pressure, and reconstructing the complete
-    /// scaled context can turn a recoverable deficit into device loss. Natural
-    /// and profile-required recreations retain their existing ownership rules.
+    /// A combined spatial-scaling WSI replacement is a last-stage recovery.
+    /// It requires a failed in-place attempt and is still forbidden when the
+    /// create-time scaling admission was memory constrained. Natural and
+    /// profile-required recreations retain their existing ownership rules.
     [[nodiscard]] constexpr bool automaticRecoveryRecreationAllowed(
-            const bool spatialScalingActive) noexcept {
-        return !spatialScalingActive;
+            const bool spatialScalingActive,
+            const bool failedInPlaceRecovery = false,
+            const bool spatialScalingMemoryConstrained = false) noexcept {
+        return !spatialScalingActive ||
+            (failedInPlaceRecovery && !spatialScalingMemoryConstrained);
     }
 
     /// Ordinary readiness checks preserve progress. A new interruption must
@@ -1641,6 +1643,7 @@ namespace mako::layer {
             bool qualified{false};
             bool newlyQualified{false};
             bool cancelled{false};
+            bool retainedBaselineUsed{false};
             Duration duration{};
             std::optional<double> baselineOutputFps;
             std::optional<double> baselineLowerPresentShare;
@@ -1680,16 +1683,20 @@ namespace mako::layer {
                 this->deficitSince.reset();
                 this->deficitRecoveredSince.reset();
                 this->clearPerformanceHistory();
+                this->retainedPerformanceBaseline.reset();
+                this->stagedScaledRecreationAt.reset();
             }
             if (sample->focus.menuOpen(now)) {
                 if (sample->focus.openedAt &&
                         (!this->pendingOpenedAt ||
                          *this->pendingOpenedAt != *sample->focus.openedAt)) {
                     this->pendingOpenedAt = sample->focus.openedAt;
-                    this->pendingInterruptionBaseline =
-                        this->capturePerformanceBaseline(
-                            *sample->focus.openedAt
-                        );
+                    const auto selection = this->selectInterruptionBaseline(
+                        *sample->focus.openedAt
+                    );
+                    this->pendingInterruptionBaseline = selection.baseline;
+                    this->pendingRetainedBaselineUsed =
+                        selection.retainedBaselineUsed;
                 }
                 // Never learn Steam's throttled output or accrue a recovery
                 // action while the menu is open.
@@ -1705,15 +1712,25 @@ namespace mako::layer {
                 const bool pendingMatches = sample->focus.openedAt &&
                     this->pendingOpenedAt &&
                     *sample->focus.openedAt == *this->pendingOpenedAt;
-                this->interruptionBaseline = pendingMatches
-                    ? this->pendingInterruptionBaseline
-                    : sample->focus.openedAt
-                        ? this->capturePerformanceBaseline(
-                            *sample->focus.openedAt
-                        )
-                        : std::nullopt;
+                if (pendingMatches) {
+                    this->interruptionBaseline =
+                        this->pendingInterruptionBaseline;
+                    this->interruptionRetainedBaselineUsed =
+                        this->pendingRetainedBaselineUsed;
+                } else if (sample->focus.openedAt) {
+                    const auto selection = this->selectInterruptionBaseline(
+                        *sample->focus.openedAt
+                    );
+                    this->interruptionBaseline = selection.baseline;
+                    this->interruptionRetainedBaselineUsed =
+                        selection.retainedBaselineUsed;
+                } else {
+                    this->interruptionBaseline.reset();
+                    this->interruptionRetainedBaselineUsed = false;
+                }
                 this->pendingInterruptionBaseline.reset();
                 this->pendingOpenedAt.reset();
+                this->pendingRetainedBaselineUsed = false;
                 this->postInterruption =
                     this->interruptionBaseline.has_value();
                 this->episodeRequests = 0;
@@ -1740,6 +1757,8 @@ namespace mako::layer {
             if (!sample->focus.recoveryWindow(now)) {
                 this->postInterruption = false;
                 this->interruptionBaseline.reset();
+                this->interruptionRetainedBaselineUsed = false;
+                this->stagedScaledRecreationAt.reset();
             }
             // Once delivered output recovers to the pre-menu comparison band,
             // a later workload slowdown needs a new interruption; do not retain
@@ -1752,12 +1771,18 @@ namespace mako::layer {
                 if (now - *this->deficitRecoveredSince >= std::chrono::seconds{1}) {
                     this->postInterruption = false;
                     this->interruptionBaseline.reset();
+                    this->interruptionRetainedBaselineUsed = false;
+                    this->stagedScaledRecreationAt.reset();
                 }
             } else {
                 this->deficitRecoveredSince.reset();
             }
             const bool deficit = valid && this->interruptionBaseline &&
-                this->postInterruption && this->episodeRequests < 2 &&
+                this->postInterruption &&
+                this->episodeRequests <
+                    (this->interruptionRetainedBaselineUsed &&
+                            !this->stagedScaledRecreationAt
+                        ? 1 : 2) &&
                 *sample->outputFps < recoveryThresholdFps &&
                 std::isfinite(sample->lowerPresentShare) &&
                 sample->lowerPresentShare >= 0.5;
@@ -1769,13 +1794,19 @@ namespace mako::layer {
             }
             const auto duration = this->deficitSince
                 ? now - *this->deficitSince : Duration{};
-            this->deficitQualified = deficit && duration >= std::chrono::seconds{4};
+            const auto requiredDeficitDuration = this->stagedScaledRecreationAt
+                ? stagedScaledRecreationDelay
+                : std::chrono::seconds{4};
+            this->deficitQualified = deficit &&
+                duration >= requiredDeficitDuration;
             if (valid && !sample->focus.menuOpen(now))
                 this->recordPerformanceSample(now, *sample);
             return {
                 .qualified = this->deficitQualified,
                 .newlyQualified = this->deficitQualified && !wasQualified,
                 .cancelled = wasQualified && !this->deficitQualified,
+                .retainedBaselineUsed =
+                    this->interruptionRetainedBaselineUsed,
                 .duration = duration,
                 .baselineOutputFps = baselineOutputFps,
                 .baselineLowerPresentShare = baselineLowerPresentShare,
@@ -1799,16 +1830,39 @@ namespace mako::layer {
             return this->available(now);
         }
 
+        [[nodiscard]] bool stagedScaledRecreationPending() const {
+            return this->stagedScaledRecreationAt.has_value();
+        }
+
+        [[nodiscard]] bool stagedScaledRecreationAvailable(
+                const TimePoint now) const {
+            return this->stagedScaledRecreationAt &&
+                now >= *this->stagedScaledRecreationAt;
+        }
+
         void recordRequest(const TimePoint now,
                 const bool sustainedDeficit = false,
-                const bool expectedReplacement = true) {
+                const bool expectedReplacement = true,
+                const bool inPlaceScaledRecovery = false,
+                const bool stagedScaledRecreation = false) {
             this->completedRequestCount++;
             this->lastRequestedAt = now;
             this->expectedReplacement = expectedReplacement;
             if (sustainedDeficit)
                 ++this->episodeRequests;
+            if (stagedScaledRecreation)
+                this->episodeRequests = 2;
+            if (inPlaceScaledRecovery) {
+                this->stagedScaledRecreationAt =
+                    now + stagedScaledRecreationDelay;
+            } else if (expectedReplacement) {
+                this->stagedScaledRecreationAt.reset();
+            }
             this->deficitQualified = false;
-            this->deficitSince.reset();
+            if (inPlaceScaledRecovery)
+                this->deficitSince = now;
+            else
+                this->deficitSince.reset();
             this->deficitRecoveredSince.reset();
         }
 
@@ -1817,6 +1871,8 @@ namespace mako::layer {
         }
 
         [[nodiscard]] std::chrono::seconds nextCooldown() const {
+            if (this->stagedScaledRecreationAt)
+                return stagedScaledRecreationDelay;
             return persistentAdaptiveRecoveryActionCooldown(
                 this->completedRequestCount
             );
@@ -1837,7 +1893,16 @@ namespace mako::layer {
             size_t sampleCount{0};
         };
 
+        struct BaselineSelection {
+            std::optional<PerformanceBaseline> baseline;
+            bool retainedBaselineUsed{false};
+        };
+
         static constexpr size_t performanceHistoryCapacity = 8;
+        static constexpr auto retainedBaselineLifetime =
+            std::chrono::minutes{3};
+        static constexpr auto stagedScaledRecreationDelay =
+            std::chrono::seconds{3};
 
         void recordPerformanceSample(const TimePoint now,
                 const RecoverySample& sample) {
@@ -1915,6 +1980,44 @@ namespace mako::layer {
             };
         }
 
+        /// A return can look healthy for one second and collapse later while
+        /// the same WSI context remains wedged. Preserve the last pre-menu
+        /// baseline across that apparent recovery. A later confirmed menu may
+        /// reuse it only when the immediate pre-menu history is severely
+        /// slower and QueuePresent owns most of the interval. This excludes a
+        /// game/GPU workload slowdown in the usual case and authorizes only
+        /// one action for the retained-reference episode.
+        [[nodiscard]] BaselineSelection selectInterruptionBaseline(
+                const TimePoint openedAt) {
+            const auto current = this->capturePerformanceBaseline(openedAt);
+            if (!current)
+                return {};
+
+            if (this->retainedPerformanceBaseline &&
+                    (openedAt <
+                        this->retainedPerformanceBaseline->lastSampledAt ||
+                     openedAt -
+                        this->retainedPerformanceBaseline->lastSampledAt >
+                            retainedBaselineLifetime)) {
+                this->retainedPerformanceBaseline.reset();
+            }
+
+            const bool transportBoundRegression =
+                this->retainedPerformanceBaseline &&
+                current->outputFps <
+                    this->retainedPerformanceBaseline->outputFps * 0.6 &&
+                current->lowerPresentShare >= 0.75;
+            if (transportBoundRegression) {
+                return {
+                    .baseline = this->retainedPerformanceBaseline,
+                    .retainedBaselineUsed = true,
+                };
+            }
+
+            this->retainedPerformanceBaseline = current;
+            return {.baseline = current};
+        }
+
         void clearPerformanceHistory() {
             this->performanceHistoryCount = 0;
             this->performanceHistoryNext = 0;
@@ -1926,13 +2029,17 @@ namespace mako::layer {
             this->clearPerformanceHistory();
             this->pendingInterruptionBaseline.reset();
             this->pendingOpenedAt.reset();
+            this->pendingRetainedBaselineUsed = false;
             this->interruptionBaseline.reset();
+            this->interruptionRetainedBaselineUsed = false;
+            this->retainedPerformanceBaseline.reset();
             this->deficitRecoveredSince.reset();
             this->deficitSince.reset();
             this->postInterruption = false;
             this->episodeRequests = 0;
             this->deficitQualified = false;
             this->expectedReplacement = false;
+            this->stagedScaledRecreationAt.reset();
         }
 
         size_t completedRequestCount{0};
@@ -1945,13 +2052,17 @@ namespace mako::layer {
         std::optional<TimePoint> lastPerformanceSampleAt;
         std::optional<PerformanceBaseline> pendingInterruptionBaseline;
         std::optional<TimePoint> pendingOpenedAt;
+        bool pendingRetainedBaselineUsed{false};
         std::optional<PerformanceBaseline> interruptionBaseline;
+        bool interruptionRetainedBaselineUsed{false};
+        std::optional<PerformanceBaseline> retainedPerformanceBaseline;
         std::optional<TimePoint> deficitRecoveredSince;
         std::optional<TimePoint> deficitSince;
         bool postInterruption{false};
         size_t episodeRequests{0};
         bool deficitQualified{false};
         bool expectedReplacement{false};
+        std::optional<TimePoint> stagedScaledRecreationAt;
     };
 
     /// Count successful lower presents, not the selected multiplier. Close

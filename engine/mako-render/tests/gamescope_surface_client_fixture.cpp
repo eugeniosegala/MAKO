@@ -6,6 +6,7 @@
 #include <array>
 #include <cstdlib>
 #include <cstring>
+#include <string>
 #include <string_view>
 #include <vector>
 #include <sys/socket.h>
@@ -33,6 +34,11 @@ namespace {
     std::vector<wl_proxy*> objects;
     int mode{};
     int associations{};
+    int feedbacks{};
+    int presentModes{};
+    uint32_t presentMode{};
+    uint32_t feedbackImageCount{};
+    std::string feedbackEngine;
     int queues{};
     int reads{};
     int geometryQueries{};
@@ -71,6 +77,11 @@ extern "C" {
     void mako_test_surface_mode(int value) { mode = value; }
     int mako_test_surface_objects() { return static_cast<int>(objects.size()) + queues; }
     int mako_test_surface_associations() { return associations; }
+    int mako_test_surface_feedbacks() { return feedbacks; }
+    int mako_test_surface_present_modes() { return presentModes; }
+    uint32_t mako_test_surface_present_mode() { return presentMode; }
+    uint32_t mako_test_surface_feedback_image_count() { return feedbackImageCount; }
+    const char* mako_test_surface_feedback_engine() { return feedbackEngine.c_str(); }
     int mako_test_surface_reads() { return reads; }
     int mako_test_surface_geometry_queries() { return geometryQueries; }
     void mako_test_surface_resize(uint16_t width, uint16_t height) {
@@ -124,11 +135,20 @@ extern "C" {
             return nullptr;
         }
         if (proxy->kind == "gamescope_swapchain") {
-            if (opcode != 1)
-                std::abort(); // No limiter, timing, present-mode or HDR requests.
-            ++associations;
-            associatedServer = args[0].u;
-            associatedWindow = args[1].u;
+            if (opcode == 1) {
+                ++associations;
+                associatedServer = args[0].u;
+                associatedWindow = args[1].u;
+            } else if (opcode == 2) {
+                ++feedbacks;
+                feedbackImageCount = args[0].u;
+                feedbackEngine = args[6].s;
+            } else if (opcode == 3) {
+                ++presentModes;
+                presentMode = args[0].u;
+            } else {
+                std::abort(); // No limiter, timing or HDR requests.
+            }
             return nullptr;
         }
         if (!interface)

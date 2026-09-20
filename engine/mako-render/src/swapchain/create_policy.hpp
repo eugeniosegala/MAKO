@@ -8,10 +8,33 @@
 #include <algorithm>
 #include <cstdint>
 #include <limits>
+#include <optional>
 
 #include <vulkan/vulkan_core.h>
 
 namespace mako::layer {
+
+    struct GamescopeScalingPresentContract {
+        VkPresentModeKHR lowerPresentMode{VK_PRESENT_MODE_FIFO_KHR};
+        std::optional<VkPresentModeKHR> compositorPresentMode;
+    };
+
+    /// Gamescope's protocol owns the FIFO constraint for the isolated scaling
+    /// bridge. Keep the lower Wayland WSI non-blocking so a Steam UI transition
+    /// cannot leave MAKO waiting on a stale client-side FIFO callback. Other
+    /// surfaces and scaling-only presentation retain their original owner.
+    [[nodiscard]] constexpr GamescopeScalingPresentContract
+    gamescopeScalingPresentContract(const VkPresentModeKHR intendedPresentMode,
+            const bool gamescopeScalingSurface,
+            const bool privateOrderedTransport) noexcept {
+        if (gamescopeScalingSurface && privateOrderedTransport) {
+            return {
+                .lowerPresentMode = VK_PRESENT_MODE_MAILBOX_KHR,
+                .compositorPresentMode = intendedPresentMode,
+            };
+        }
+        return {.lowerPresentMode = intendedPresentMode};
+    }
 
     [[nodiscard]] inline bool shouldRetrySwapchainWithApplicationMinimum(
             const VkResult result, const uint32_t requestedMinImages,

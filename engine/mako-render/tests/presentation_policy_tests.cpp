@@ -1297,8 +1297,10 @@ int main() {
         "Fixed history warm-up did not complete after three fresh frames");
 
     expect(automaticRecoveryRecreationAllowed(false) &&
-            !automaticRecoveryRecreationAllowed(true),
-        "automatic recovery recreation crossed the combined spatial-scaling safety boundary");
+            !automaticRecoveryRecreationAllowed(true) &&
+            automaticRecoveryRecreationAllowed(true, true) &&
+            !automaticRecoveryRecreationAllowed(true, true, true),
+        "staged recovery recreation crossed the combined spatial-scaling safety boundary");
 
     RecoveryPresentHealth outputHealth;
     auto outputNow = RecoveryPresentHealth::Clock::time_point{};
@@ -1462,11 +1464,125 @@ int main() {
             relativeDeficit.recoveryThresholdFps &&
             std::abs(*relativeDeficit.recoveryThresholdFps - 60.0) < 0.001,
         "relative post-menu regression did not use the captured below-target baseline");
-    belowTargetCollapsed.recordRequest(watchdogNow, true, false);
+    belowTargetCollapsed.recordRequest(watchdogNow, true, false, true);
+    expect(belowTargetCollapsed.stagedScaledRecreationPending(),
+        "scaled in-place recovery did not stage its bounded recreation");
     ++sample.contextId;
     static_cast<void>(observe(belowTargetCollapsed, 25ms));
-    expect(!observe(belowTargetCollapsed, 4s).qualified,
+    expect(!belowTargetCollapsed.stagedScaledRecreationPending() &&
+            !observe(belowTargetCollapsed, 4s).qualified,
         "an in-place recovery action incorrectly authorized a later context replacement");
+
+    SurfaceBudget delayedTransportCollapse;
+    watchdogNow = {}; sample = healthySample;
+    baseline(delayedTransportCollapse);
+    static_cast<void>(menu(delayedTransportCollapse, 1s));
+    sample.outputFps = 100.0;
+    static_cast<void>(observe(delayedTransportCollapse, 25ms));
+    static_cast<void>(observe(delayedTransportCollapse, 1s));
+    sample.outputFps = 40.0;
+    sample.lowerPresentShare = 0.9;
+    for (int i = 0; i < 10; ++i)
+        static_cast<void>(observe(delayedTransportCollapse, 250ms));
+    static_cast<void>(menu(delayedTransportCollapse, 1s));
+    sample.outputFps = 40.0;
+    sample.lowerPresentShare = 0.9;
+    static_cast<void>(observe(delayedTransportCollapse, 25ms));
+    const auto retainedDeficit = observe(delayedTransportCollapse, 4s);
+    expect(retainedDeficit.qualified && retainedDeficit.retainedBaselineUsed &&
+            retainedDeficit.baselineOutputFps &&
+            std::abs(*retainedDeficit.baselineOutputFps - 120.0) < 0.001 &&
+            retainedDeficit.recoveryThresholdFps &&
+            std::abs(*retainedDeficit.recoveryThresholdFps - 90.0) < 0.001,
+        "delayed transport collapse replaced the recent healthy menu baseline");
+    delayedTransportCollapse.recordRequest(watchdogNow, true, false, true);
+    expect(delayedTransportCollapse.stagedScaledRecreationPending() &&
+            delayedTransportCollapse.nextCooldown() == 3s &&
+            !delayedTransportCollapse.stagedScaledRecreationAvailable(
+                watchdogNow + 2999ms) &&
+            delayedTransportCollapse.stagedScaledRecreationAvailable(
+                watchdogNow + 3s),
+        "failed scaled in-place recovery did not stage one three-second retry");
+    expect(!observe(delayedTransportCollapse, 2999ms).qualified &&
+            !delayedTransportCollapse.stagedScaledRecreationAvailable(
+                watchdogNow),
+        "scaled recreation became available before three seconds of persistent deficit");
+    expect(observe(delayedTransportCollapse, 1ms).qualified &&
+            delayedTransportCollapse.stagedScaledRecreationAvailable(
+                watchdogNow),
+        "staged scaled recreation did not qualify after three seconds of persistent deficit");
+    delayedTransportCollapse.recordRequest(
+        watchdogNow, true, true, false, true
+    );
+    expect(!delayedTransportCollapse.stagedScaledRecreationPending() &&
+            !observe(delayedTransportCollapse, 31s).qualified,
+        "retained-baseline rescue authorized more than one staged sequence");
+
+    SurfaceBudget replacedContext;
+    watchdogNow = {}; sample = healthySample;
+    baseline(replacedContext);
+    static_cast<void>(menu(replacedContext, 1s));
+    sample.outputFps = 100.0;
+    static_cast<void>(observe(replacedContext, 25ms));
+    static_cast<void>(observe(replacedContext, 1s));
+    ++sample.contextId;
+    sample.outputFps = 40.0;
+    sample.lowerPresentShare = 0.9;
+    for (int i = 0; i < 6; ++i)
+        static_cast<void>(observe(replacedContext, 250ms));
+    static_cast<void>(menu(replacedContext, 1s));
+    sample.outputFps = 40.0;
+    static_cast<void>(observe(replacedContext, 25ms));
+    const auto replacementDeficit = observe(replacedContext, 4s);
+    expect(!replacementDeficit.qualified &&
+            !replacementDeficit.retainedBaselineUsed &&
+            replacementDeficit.baselineOutputFps &&
+            std::abs(*replacementDeficit.baselineOutputFps - 40.0) < 0.001,
+        "a replacement context inherited the old healthy baseline");
+
+    SurfaceBudget gameplaySlowdown;
+    watchdogNow = {}; sample = healthySample;
+    baseline(gameplaySlowdown);
+    static_cast<void>(menu(gameplaySlowdown, 1s));
+    sample.outputFps = 100.0;
+    static_cast<void>(observe(gameplaySlowdown, 25ms));
+    static_cast<void>(observe(gameplaySlowdown, 1s));
+    sample.outputFps = 40.0;
+    sample.lowerPresentShare = 0.5;
+    for (int i = 0; i < 10; ++i)
+        static_cast<void>(observe(gameplaySlowdown, 250ms));
+    static_cast<void>(menu(gameplaySlowdown, 1s));
+    sample.outputFps = 40.0;
+    sample.lowerPresentShare = 0.9;
+    static_cast<void>(observe(gameplaySlowdown, 25ms));
+    const auto workloadDeficit = observe(gameplaySlowdown, 4s);
+    expect(!workloadDeficit.qualified &&
+            !workloadDeficit.retainedBaselineUsed &&
+            workloadDeficit.baselineOutputFps &&
+            std::abs(*workloadDeficit.baselineOutputFps - 40.0) < 0.001,
+        "gameplay-owned slowdown reused a healthy transport baseline");
+
+    SurfaceBudget expiredRetainedBaseline;
+    watchdogNow = {}; sample = healthySample;
+    baseline(expiredRetainedBaseline);
+    static_cast<void>(menu(expiredRetainedBaseline, 1s));
+    sample.outputFps = 100.0;
+    static_cast<void>(observe(expiredRetainedBaseline, 25ms));
+    static_cast<void>(observe(expiredRetainedBaseline, 1s));
+    sample.outputFps = 40.0;
+    sample.lowerPresentShare = 0.9;
+    static_cast<void>(observe(expiredRetainedBaseline, 181s));
+    for (int i = 0; i < 6; ++i)
+        static_cast<void>(observe(expiredRetainedBaseline, 250ms));
+    static_cast<void>(menu(expiredRetainedBaseline, 1s));
+    sample.outputFps = 40.0;
+    static_cast<void>(observe(expiredRetainedBaseline, 25ms));
+    const auto expiredDeficit = observe(expiredRetainedBaseline, 4s);
+    expect(!expiredDeficit.qualified &&
+            !expiredDeficit.retainedBaselineUsed &&
+            expiredDeficit.baselineOutputFps &&
+            std::abs(*expiredDeficit.baselineOutputFps - 40.0) < 0.001,
+        "expired healthy baseline authorized delayed recovery");
 
     for (const bool hadBaseline : {false, true}) {
         SurfaceBudget normal;

@@ -57,6 +57,7 @@ namespace {
     struct InstanceInfo {
         std::vector<VkInstance> handles; // there may be several instances
         vk::VulkanInstanceFuncs funcs;
+        std::string engineName;
         std::unique_ptr<GamescopeScalingSurface> scalingSurfaces;
 
         std::unordered_map<VkDevice, vk::Vulkan> devices;
@@ -549,10 +550,21 @@ namespace {
                 instance_info = new InstanceInfo{ // NOLINT (memory management)
                     .funcs = vk::initVulkanInstanceFuncs(*instance,
                         layer_info->GetInstanceProcAddr, true),
+                    .engineName = info->pApplicationInfo &&
+                            info->pApplicationInfo->pEngineName
+                        ? info->pApplicationInfo->pEngineName : "",
                     .scalingSurfaces = std::move(scalingSurfaces),
                 };
-            else if (scalingSurfaces)
-                instance_info->scalingSurfaces = std::move(scalingSurfaces);
+            else {
+                if (instance_info->engineName.empty() &&
+                        info->pApplicationInfo &&
+                        info->pApplicationInfo->pEngineName) {
+                    instance_info->engineName =
+                        info->pApplicationInfo->pEngineName;
+                }
+                if (scalingSurfaces)
+                    instance_info->scalingSurfaces = std::move(scalingSurfaces);
+            }
 
             instance_info->handles.push_back(*instance);
             lowerInstanceCreated = false;
@@ -1801,6 +1813,11 @@ namespace {
             instance_info->swapchains.erase(createdSwapchain);
             instance_info->swapchainInfos.erase(createdSwapchain);
             instance_info->nativeSwapchains.erase(createdSwapchain);
+            if (instance_info->scalingSurfaces) {
+                instance_info->scalingSurfaces->destroySwapchain(
+                    info->surface, createdSwapchain
+                );
+            }
             try {
                 layer_info->root.removeSwapchainContext(createdSwapchain);
             } catch (const std::exception& e) {
@@ -2224,6 +2241,41 @@ namespace {
             if (res != VK_SUCCESS)
                 throw ls::vulkan_error(res, "vkGetSwapchainImagesKHR() failed");
 
+            if (instance_info->scalingSurfaces &&
+                    !instance_info->scalingSurfaces->createSwapchain(
+                        info->surface, *swapchain, newInfo, imageCount,
+                        instance_info->engineName,
+                        modification.gamescopeProtocolPresentMode)) {
+                throw ls::vulkan_error(
+                    VK_ERROR_SURFACE_LOST_KHR,
+                    "Gamescope scaling surface swapchain feedback failed"
+                );
+            }
+            if (present_diagnostics::enabled() &&
+                    instance_info->scalingSurfaces &&
+                    instance_info->scalingSurfaces->owns(info->surface)) {
+                std::cerr << "MAKO Renderer: present diagnostics: "
+                             "operation=gamescope-scaling-swapchain-feedback"
+                          << " surface=" << info->surface
+                          << " swapchain=" << *swapchain
+                          << " image_count=" << imageCount
+                          << " format=" << static_cast<uint32_t>(
+                                newInfo.imageFormat)
+                          << " color_space=" << static_cast<uint32_t>(
+                                newInfo.imageColorSpace)
+                          << " requested_old_swapchain="
+                          << info->oldSwapchain
+                          << " lower_present_mode="
+                          << static_cast<uint32_t>(newInfo.presentMode)
+                          << " compositor_present_mode="
+                          << (modification.gamescopeProtocolPresentMode
+                                ? static_cast<int64_t>(
+                                    *modification.gamescopeProtocolPresentMode)
+                                : -1)
+                          << " action=fresh-protocol-lifetime"
+                          << '\n';
+            }
+
             auto& swapchainInfo = instance_info->swapchainInfos.emplace(*swapchain, SwapchainInfo {
                 .images = std::move(swapchainImages),
                 .surface = info->surface,
@@ -2239,7 +2291,8 @@ namespace {
                 .extent = newInfo.imageExtent,
                 .gamescopePresentationTarget =
                     modification.gamescopePresentationTarget,
-                .presentMode = newInfo.presentMode,
+                .presentMode = modification.gamescopeProtocolPresentMode
+                    .value_or(newInfo.presentMode),
                 .privateOrderedTransport =
                     modification.privateOrderedTransport,
                 .spatialScalingActive =
@@ -2367,7 +2420,8 @@ namespace {
             for (uint32_t i = 0; i < info->swapchainCount; ++i) {
                 const auto metadata = instance_info->swapchainInfos.find(info->pSwapchains[i]);
                 if (metadata != instance_info->swapchainInfos.end() &&
-                        !instance_info->scalingSurfaces->preparePresent(metadata->second.surface)) {
+                        !instance_info->scalingSurfaces->preparePresent(
+                            metadata->second.surface, info->pSwapchains[i])) {
                     if (info->pResults)
                         std::fill_n(info->pResults, info->swapchainCount, VK_ERROR_SURFACE_LOST_KHR);
                     return VK_ERROR_SURFACE_LOST_KHR;
@@ -2511,6 +2565,8 @@ namespace {
                                   << " phase=" << (sustainedDeficit.qualified
                                       ? "qualified" : "cancelled")
                                   << " reason=sustained-post-menu-deficit"
+                                  << " retained_baseline="
+                                  << sustainedDeficit.retainedBaselineUsed
                                   << " baseline_output_fps="
                                   << sustainedDeficit.baselineOutputFps.value_or(0.0)
                                   << " baseline_lower_present_share="
@@ -2527,6 +2583,13 @@ namespace {
                                   << " surface_available="
                                   << persistentRecoveryState->second.available(
                                       recoveryRequestedAt)
+                                  << " staged_scaled_recreation_pending="
+                                  << persistentRecoveryState->second
+                                        .stagedScaledRecreationPending()
+                                  << " staged_scaled_recreation_available="
+                                  << persistentRecoveryState->second
+                                        .stagedScaledRecreationAvailable(
+                                            recoveryRequestedAt)
                                   << '\n';
                     }
                 }
@@ -2538,6 +2601,16 @@ namespace {
                      persistentRecoveryState->second.available(
                          recoveryRequestedAt
                      ));
+                const bool stagedScaledRecoveryRecreationPending =
+                    persistentRecoveryState !=
+                        instance_info->persistentRecoveryStates.end() &&
+                    persistentRecoveryState->second
+                        .stagedScaledRecreationPending();
+                const bool stagedScaledRecoveryRecreationAvailable =
+                    persistentRecoveryState !=
+                        instance_info->persistentRecoveryStates.end() &&
+                    persistentRecoveryState->second
+                        .stagedScaledRecreationAvailable(recoveryRequestedAt);
                 const bool lowerPresentRecoverySurfaceAvailable =
                     presentingSurface != VK_NULL_HANDLE &&
                     (persistentRecoveryState ==
@@ -2556,8 +2629,10 @@ namespace {
                         result,
                         !liveProfileRecreationRequested &&
                             !lowerPresentRecoveryRecreationRequested &&
-                            persistentRecoverySurfaceAvailable,
-                        sustainedDeficit.qualified
+                            (persistentRecoverySurfaceAvailable ||
+                             stagedScaledRecoveryRecreationAvailable),
+                        sustainedDeficit.qualified,
+                        stagedScaledRecoveryRecreationAvailable
                     );
                 const bool persistentRecoveryInPlaceRequested =
                     context.requestPersistentRecoveryInPlaceAfterPresent(
@@ -2565,7 +2640,8 @@ namespace {
                         !liveProfileRecreationRequested &&
                             !lowerPresentRecoveryRecreationRequested &&
                             !persistentRecoveryRecreationRequested &&
-                            persistentRecoverySurfaceAvailable,
+                            persistentRecoverySurfaceAvailable &&
+                            !stagedScaledRecoveryRecreationPending,
                         sustainedDeficit.qualified
                     );
                 if (lowerPresentRecoveryRecreationRequested ||
@@ -2579,7 +2655,10 @@ namespace {
                         (persistentRecoveryRecreationRequested ||
                          persistentRecoveryInPlaceRequested) &&
                             sustainedDeficit.qualified,
-                        !persistentRecoveryInPlaceRequested);
+                        !persistentRecoveryInPlaceRequested,
+                        persistentRecoveryInPlaceRequested,
+                        persistentRecoveryRecreationRequested &&
+                            stagedScaledRecoveryRecreationAvailable);
                     if (present_diagnostics::enabled()) {
                         std::cerr << "MAKO Renderer: present diagnostics: "
                                   << "operation="
@@ -2720,6 +2799,11 @@ namespace {
             : swapchainMetadata->second.surface;
         const bool native =
             instance_info->nativeSwapchains.contains(swapchain);
+        if (instance_info->scalingSurfaces) {
+            instance_info->scalingSurfaces->destroySwapchain(
+                surface, swapchain
+            );
+        }
         if (present_diagnostics::enabled()) {
             std::cerr << "MAKO Renderer: present diagnostics: "
                          "operation=swapchain-destroy-observed"

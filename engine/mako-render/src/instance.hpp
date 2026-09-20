@@ -41,6 +41,7 @@ namespace mako::layer {
 
     struct SwapchainCreateModification {
         bool privateOrderedTransport{false};
+        std::optional<VkPresentModeKHR> gamescopeProtocolPresentMode;
         bool swapchainImageCountCompatibility{false};
         bool spatialScalingActive{false};
         bool variableSurface{false};
