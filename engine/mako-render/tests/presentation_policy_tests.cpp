@@ -1296,6 +1296,10 @@ int main() {
     expect(menuWarmupRemaining == 0,
         "Fixed history warm-up did not complete after three fresh frames");
 
+    expect(automaticRecoveryRecreationAllowed(false) &&
+            !automaticRecoveryRecreationAllowed(true),
+        "automatic recovery recreation crossed the combined spatial-scaling safety boundary");
+
     RecoveryPresentHealth outputHealth;
     auto outputNow = RecoveryPresentHealth::Clock::time_point{};
     outputHealth.beginPresent(outputNow);

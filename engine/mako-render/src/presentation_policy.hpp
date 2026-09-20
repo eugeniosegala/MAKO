@@ -14,6 +14,16 @@
 
 namespace mako::layer {
 
+    /// A recovery heuristic must not force a combined spatial-scaling WSI
+    /// replacement. That path can be reached precisely while the application
+    /// is under acute device-memory pressure, and reconstructing the complete
+    /// scaled context can turn a recoverable deficit into device loss. Natural
+    /// and profile-required recreations retain their existing ownership rules.
+    [[nodiscard]] constexpr bool automaticRecoveryRecreationAllowed(
+            const bool spatialScalingActive) noexcept {
+        return !spatialScalingActive;
+    }
+
     /// Ordinary readiness checks preserve progress. A new interruption must
     /// discard partial pre-interruption history and start a complete warm-up.
     [[nodiscard]] constexpr size_t historyWarmupFramesAfterRequest(

@@ -543,6 +543,9 @@ bool Swapchain::requestPersistentRecoveryRecreationAfterPresent(
     if (!surfaceRequestAvailable || !sustainedDeficit ||
             !this->gamescopeFocus.recoveryWindow(DiagnosticsClock::now()) ||
             !this->persistentAdaptiveRecoveryEligible() ||
+            !automaticRecoveryRecreationAllowed(
+                this->spatialScaler.has_value()
+            ) ||
             (lowerPresentResult != VK_SUCCESS &&
              lowerPresentResult != VK_SUBOPTIMAL_KHR) ||
             !this->lastLowerPresentRetirementProtected ||
@@ -570,6 +573,9 @@ bool Swapchain::requestLowerPresentStallRecreationAfterPresent(
         const VkResult lowerPresentResult,
         const bool surfaceRequestAvailable) {
     if (this->steamMenuSuspended || !this->privateOrderedTransport ||
+            !automaticRecoveryRecreationAllowed(
+                this->spatialScaler.has_value()
+            ) ||
             !effectiveFrameGenerationEnabled(
                 this->profile, this->gamescopeRefreshHz
             ) || !this->colorPipeline.generationSupported ||
@@ -603,6 +609,7 @@ bool Swapchain::requestLowerPresentStallRecreationAfterPresent(
 
 bool Swapchain::persistentAdaptiveRecoveryEligible() const {
     return this->adaptiveScheduler && this->privateOrderedTransport &&
+        automaticRecoveryRecreationAllowed(this->spatialScaler.has_value()) &&
         effectiveFrameGenerationEnabled(this->profile, this->gamescopeRefreshHz) &&
         this->colorPipeline.generationSupported;
 }
