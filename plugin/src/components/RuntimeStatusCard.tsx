@@ -195,6 +195,15 @@ export function RuntimeStatusCard({
     runtimeState.frameGenerationPending || runtimeState.scalingPending;
   const notices: StatusNotice[] = [];
 
+  if (runtimeState.frameGenerationMenuSuspended) {
+    notices.push({
+      key: "frame-generation-menu-suspended",
+      content: t(
+        "LIVE_STATUS_FG_MENU_SUSPENDED",
+        "Frame Generation is temporarily disabled while a Steam menu is open.",
+      ),
+    });
+  }
   if (runtimeState.supersamplingActive) {
     notices.push({
       key: "supersampling",
@@ -302,7 +311,10 @@ export function RuntimeStatusCard({
                 >
                   <StatusRow
                     label={t("CONTENT_FPS_MULTIPLIER", "Frame Generation")}
-                    active={runtimeState.frameGenerationActive}
+                    active={
+                      runtimeState.frameGenerationActive &&
+                      !runtimeState.frameGenerationMenuSuspended
+                    }
                   >
                     {runtimeState.frameGenerationActive ? (
                       <>

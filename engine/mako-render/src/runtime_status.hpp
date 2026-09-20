@@ -52,6 +52,7 @@ namespace mako::layer {
         ls::GameConf appliedProfile;
         size_t appliedGeneratedCapacity{0};
         bool frameGenerationActive{false};
+        bool frameGenerationMenuSuspended{false};
         bool frameGenerationPrivatePending{false};
         bool spatialPrivatePending{false};
         bool swapchainRecreationPending{false};

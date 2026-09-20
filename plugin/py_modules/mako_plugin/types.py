@@ -258,6 +258,7 @@ class RuntimeContextState(TypedDict):
     pending: RuntimePendingState
     applied_generated_capacity: int
     frame_generation_active: bool
+    frame_generation_menu_suspended: bool
     spatial_scaling: RuntimeSpatialScalingState
     requested: RuntimeProfileSnapshot
     applied: RuntimeProfileSnapshot

@@ -80,6 +80,7 @@ void Swapchain::applyGamescopeFocus(const DiagnosticsClock::time_point now) {
         effectiveFrameGenerationEnabled(this->profile, this->gamescopeRefreshHz) &&
         this->colorPipeline.generationSupported;
     const bool suspended = eligible && focused == false;
+    const bool suspensionChanged = suspended != this->steamMenuSuspended;
     const bool returned = this->gamescopeFocus.recoveryWindow(now) &&
         this->gamescopeFocus.returnSequence != this->lastFocusReturnSequence;
     if (returned)
@@ -106,6 +107,8 @@ void Swapchain::applyGamescopeFocus(const DiagnosticsClock::time_point now) {
         this->recoveryState.lowerPresentStallRecovery.reset();
     }
     this->steamMenuSuspended = suspended;
+    if (suspensionChanged)
+        this->publishRuntimeStatus("gamescope-focus");
     if (present_diagnostics::enabled() &&
             (!this->focusReported || focused != this->lastReportedGameFocus || returned)) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=gamescope-focus"

@@ -158,6 +158,41 @@ describe("authoritative live status", () => {
     expect(screen.queryByRole("list")).toBeNull();
   });
 
+  test("places Steam-menu Frame Generation suspension in the shared footer", () => {
+    window.SP_REACT = React;
+    const { container } = render(
+      <RuntimeStatusCard
+        runtimeState={{
+          ...EMPTY_RUNTIME_SCALING_UI_STATE,
+          hasContext: true,
+          frameGenerationActive: true,
+          frameGenerationEnabled: true,
+          frameGenerationMode: "fixed",
+          frameGenerationMultiplier: 2,
+          frameGenerationMenuSuspended: true,
+          frameGenerationPending: true,
+        }}
+      />,
+    );
+
+    const menuNotice = screen.getByText(
+      "Frame Generation is temporarily disabled while a Steam menu is open.",
+    );
+    const footer = menuNotice.closest(
+      '[data-mako-live-status-footer="true"]',
+    );
+    expect(footer).toBeTruthy();
+    expect(
+      container
+        .querySelector('[data-mako-live-status-grid="compact-two-column"]')
+        ?.contains(footer),
+    ).toBe(false);
+    expect(screen.queryByText(/not currently generating frames/)).toBeNull();
+    expect(screen.getByText("Fixed")).toBeTruthy();
+    expect(screen.getByText("2×")).toBeTruthy();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
   test("keeps the compact output resolution unchanged without supersampling", () => {
     window.SP_REACT = React;
     render(

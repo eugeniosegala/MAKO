@@ -60,6 +60,7 @@ int main() {
         .appliedProfile = applied,
         .appliedGeneratedCapacity = 1,
         .frameGenerationActive = true,
+        .frameGenerationMenuSuspended = true,
         .frameGenerationPrivatePending = true,
         .spatialScalingActive = false,
         .spatialScalingActivationSupported = false,
@@ -103,6 +104,9 @@ int main() {
     expect(json.find("\"frame_generation_active\":true") !=
             std::string::npos,
         "effective frame generation state missing");
+    expect(json.find("\"frame_generation_menu_suspended\":true") !=
+            std::string::npos,
+        "Steam-menu frame generation suspension missing");
     expect(json.find("\"presentation_width\":1280") !=
             std::string::npos,
         "spatial presentation width missing");

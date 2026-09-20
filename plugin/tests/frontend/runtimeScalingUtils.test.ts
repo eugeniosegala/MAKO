@@ -11,6 +11,7 @@ import {
 const context = {
   role: "frame-generation",
   frame_generation_active: true,
+  frame_generation_menu_suspended: false,
   pending: {
     frame_generation_private: false,
     spatial_private: false,
@@ -97,6 +98,7 @@ describe("runtime scaling availability", () => {
     ).toMatchObject({
       hasContext: true,
       frameGenerationActive: true,
+      frameGenerationMenuSuspended: false,
       frameGenerationMode: "adaptive",
       frameGenerationAdaptiveStyle: "fractional",
       frameGenerationTargetFps: 120,
@@ -104,6 +106,23 @@ describe("runtime scaling availability", () => {
       scalingActivationSupported: false,
       inactiveReason: "gamescope-wsi-surface-unproven",
       nonSupersamplingFactorCeiling: 4 / 3,
+    });
+  });
+
+  test("surfaces authoritative Steam-menu Frame Generation suspension", () => {
+    expect(
+      runtimeScalingUiState(
+        status([
+          {
+            ...context,
+            frame_generation_menu_suspended: true,
+          },
+        ]),
+        "game",
+      ),
+    ).toMatchObject({
+      frameGenerationActive: true,
+      frameGenerationMenuSuspended: true,
     });
   });
 

@@ -91,6 +91,7 @@ class RuntimeStateTests(unittest.TestCase):
             },
             "applied_generated_capacity": 1,
             "frame_generation_active": role == "frame-generation",
+            "frame_generation_menu_suspended": False,
             "spatial_scaling": {
                 "active": role == "spatial-scaling",
                 "activation_supported": True,
@@ -152,6 +153,9 @@ class RuntimeStateTests(unittest.TestCase):
             status["contexts"][0]["spatial_scaling"]["active"]
         )
         self.assertTrue(status["contexts"][0]["frame_generation_active"])
+        self.assertFalse(
+            status["contexts"][0]["frame_generation_menu_suspended"]
+        )
         self.assertEqual(
             status["contexts"][1]["spatial_scaling"]["active_method"],
             "ls1",
@@ -176,6 +180,18 @@ class RuntimeStateTests(unittest.TestCase):
 
         self.assertEqual(status["phase"], "failed")
         self.assertEqual(status["contexts"][0]["error"], "replacement failed")
+
+    def test_older_schema_five_record_defaults_menu_suspension_to_false(self):
+        record = self._record()
+        del record["frame_generation_menu_suspended"]
+        self._write("older-schema-five.json", record)
+
+        status = self.service.get_status("game-profile")
+
+        self.assertEqual(len(status["contexts"]), 1)
+        self.assertFalse(
+            status["contexts"][0]["frame_generation_menu_suspended"]
+        )
 
     def test_stale_pid_identity_is_ignored_without_mutating_files(self):
         path = self._write(
