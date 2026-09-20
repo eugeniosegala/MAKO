@@ -26,6 +26,44 @@ namespace mako::layer {
             (failedInPlaceRecovery && !spatialScalingMemoryConstrained);
     }
 
+    struct ScalingAdmissionRetryKey {
+        uint32_t sourceWidth{0};
+        uint32_t sourceHeight{0};
+        uint64_t policyRevision{0};
+
+        friend bool operator==(
+            const ScalingAdmissionRetryKey&,
+            const ScalingAdmissionRetryKey&) = default;
+    };
+
+    /// A live resolution change may sample VK_EXT_memory_budget before the
+    /// driver's usage estimate has caught up with the retired scaled context.
+    /// Permit one later recreation for that exact source/policy episode. A
+    /// replacement which is still constrained consumes the attempt instead of
+    /// creating a recreation loop; changing source or scaling policy starts a
+    /// distinct episode.
+    class ScalingAdmissionRetrySurfaceBudget {
+    public:
+        [[nodiscard]] bool available(
+                const ScalingAdmissionRetryKey& key) {
+            if (!this->key || *this->key != key) {
+                this->key = key;
+                this->attempted = false;
+            }
+            return !this->attempted;
+        }
+
+        void record(const ScalingAdmissionRetryKey& key) {
+            if (!this->key || *this->key != key)
+                this->key = key;
+            this->attempted = true;
+        }
+
+    private:
+        std::optional<ScalingAdmissionRetryKey> key;
+        bool attempted{false};
+    };
+
     /// Ordinary readiness checks preserve progress. A new interruption must
     /// discard partial pre-interruption history and start a complete warm-up.
     [[nodiscard]] constexpr size_t historyWarmupFramesAfterRequest(
@@ -441,6 +479,11 @@ namespace mako::layer {
         }
 
         [[nodiscard]] static constexpr auto
+        recreationQualificationDuration() {
+            return std::chrono::seconds{3};
+        }
+
+        [[nodiscard]] static constexpr auto
         nativeCadenceSaturationQualificationDuration() {
             return std::chrono::milliseconds{200};
         }
@@ -736,6 +779,26 @@ namespace mako::layer {
                 this->stabilizingUntil.has_value();
         }
 
+        /// Repeated bounded probes which cannot reacquire even one generated
+        /// image have exhausted this context's in-place recovery. The caller
+        /// still requires a recent compositor interruption, a successful
+        /// retirement-protected lower present, and a surface-level budget
+        /// before turning this into one application-owned recreation.
+        [[nodiscard]] bool recreationRequested(
+                const TimePoint now) const {
+            return !this->recreationSignaled && this->recoveryStartedAt &&
+                this->consecutiveFailures >= 3 &&
+                now - *this->recoveryStartedAt >=
+                    recreationQualificationDuration();
+        }
+
+        [[nodiscard]] bool signalRecreation(const TimePoint now) {
+            if (!this->recreationRequested(now))
+                return false;
+            this->recreationSignaled = true;
+            return true;
+        }
+
         /// A zero-wait guard miss is only one native relief frame, not proof of
         /// sustained starvation. A bounded post-drain probe miss is terminal
         /// for that attempt and returns to native backoff; probePending can
@@ -940,6 +1003,7 @@ namespace mako::layer {
         double nativeTargetFps{0.0};
         bool nativeCadenceSaturated{false};
         bool ignoreNextNativeInterval{true};
+        bool recreationSignaled{false};
     };
 
     /// Keep the application-present budget cumulative for 3x/4x/5x, while
@@ -1598,7 +1662,7 @@ namespace mako::layer {
 
     /// One guarded request per context, including after live/private resets.
     /// FPS/cadence changes alone never arm a game-owned recreation.
-    class PersistentAdaptiveRecoveryRecreation {
+    class PersistentGenerationRecoveryRecreation {
     public:
         [[nodiscard]] bool signal(const bool qualified = false) {
             if (!qualified || this->signaled)
@@ -1614,7 +1678,7 @@ namespace mako::layer {
     /// also has a two-attempt, 75-second episode limit, rather than a minutes-
     /// long cooldown that can outlive the interruption being repaired.
     [[nodiscard]] constexpr std::chrono::seconds
-    persistentAdaptiveRecoveryActionCooldown(
+    persistentGenerationRecoveryActionCooldown(
             const size_t completedRequests) noexcept {
         return completedRequests == 0 ? std::chrono::seconds::zero()
             : std::chrono::seconds{30};
@@ -1622,7 +1686,19 @@ namespace mako::layer {
 
     /// Process-surface budget shared by replacement swapchains. Only confirmed
     /// Steam focus-return episodes authorize the performance watchdog.
-    class PersistentAdaptiveRecoverySurfaceBudget {
+    [[nodiscard]] inline std::optional<uint32_t>
+    persistentGenerationRecoveryTargetFps(
+            const bool adaptiveMode,
+            const uint32_t adaptiveTargetFps,
+            const std::optional<uint32_t> refreshHz) noexcept {
+        if (adaptiveMode)
+            return adaptiveTargetFps > 0
+                ? std::optional<uint32_t>{adaptiveTargetFps}
+                : std::nullopt;
+        return refreshHz && *refreshHz > 0 ? refreshHz : std::nullopt;
+    }
+
+    class PersistentGenerationRecoverySurfaceBudget {
     public:
         using Clock = std::chrono::steady_clock;
         using TimePoint = Clock::time_point;
@@ -1631,6 +1707,7 @@ namespace mako::layer {
         struct RecoverySample {
             uint64_t contextId{0};
             uint64_t configurationRevision{0};
+            bool adaptiveMode{false};
             uint32_t targetFps{0};
             uint32_t refreshHz{0};
             std::array<uint32_t, 4> extents{};
@@ -1669,6 +1746,8 @@ namespace mako::layer {
             const bool policyChanged = this->lastRecoverySample &&
                 (sample->configurationRevision !=
                     this->lastRecoverySample->configurationRevision ||
+                 sample->adaptiveMode !=
+                    this->lastRecoverySample->adaptiveMode ||
                  sample->targetFps != this->lastRecoverySample->targetFps ||
                  sample->refreshHz != this->lastRecoverySample->refreshHz ||
                  sample->extents != this->lastRecoverySample->extents);
@@ -1819,7 +1898,7 @@ namespace mako::layer {
         [[nodiscard]] bool available(const TimePoint now) const {
             return !this->lastRequestedAt ||
                 now - *this->lastRequestedAt >=
-                    persistentAdaptiveRecoveryActionCooldown(
+                    persistentGenerationRecoveryActionCooldown(
                         this->completedRequestCount
                     );
         }
@@ -1873,7 +1952,7 @@ namespace mako::layer {
         [[nodiscard]] std::chrono::seconds nextCooldown() const {
             if (this->stagedScaledRecreationAt)
                 return stagedScaledRecreationDelay;
-            return persistentAdaptiveRecoveryActionCooldown(
+            return persistentGenerationRecoveryActionCooldown(
                 this->completedRequestCount
             );
         }
@@ -2351,6 +2430,10 @@ namespace mako::layer {
             this->probeActive = false;
             this->probeConfirmedSamples = 0;
             this->consecutiveFailures = 0;
+        }
+
+        [[nodiscard]] bool active() const {
+            return this->probeActive || this->verificationUntil.has_value();
         }
 
     private:

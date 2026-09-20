@@ -409,6 +409,21 @@ int main() {
             preacquiredImagesRequireRetirement(true, 1),
         "pre-acquired image retirement lost its ownership contract");
 
+    ScalingAdmissionRetrySurfaceBudget scalingRetryBudget;
+    const ScalingAdmissionRetryKey firstScalingEpisode{1920, 1080, 7};
+    const ScalingAdmissionRetryKey changedSourceEpisode{2560, 1440, 7};
+    const ScalingAdmissionRetryKey changedPolicyEpisode{2560, 1440, 8};
+    expect(scalingRetryBudget.available(firstScalingEpisode),
+        "fresh scaling admission episode did not allow one retry");
+    scalingRetryBudget.record(firstScalingEpisode);
+    expect(!scalingRetryBudget.available(firstScalingEpisode) &&
+            scalingRetryBudget.available(changedSourceEpisode),
+        "scaling admission retry looped or failed to reset for a new source");
+    scalingRetryBudget.record(changedSourceEpisode);
+    expect(!scalingRetryBudget.available(changedSourceEpisode) &&
+            scalingRetryBudget.available(changedPolicyEpisode),
+        "scaling admission retry did not distinguish a new policy revision");
+
     OrderedAcquireRecovery acquireRecovery;
     const auto acquireStart = OrderedAcquireRecovery::TimePoint{};
     // RE4 timeouts returned beyond both the 12.5 and 16.7 ms test deadlines.
@@ -578,6 +593,49 @@ int main() {
             failedProbe.consecutiveFailures == 2 &&
             failedProbe.retryDelay == 500ms && acquireRecovery.active(),
         "failed bounded recovery probe did not return to native backoff");
+
+    OrderedAcquireRecovery recreationEscalation;
+    static_cast<void>(recreationEscalation.observe(
+        acquireStart, 50ms, 25ms, true
+    ));
+    auto recreationDecision = recreationEscalation.beforePresent(
+        acquireStart + 250ms
+    );
+    expect(recreationDecision.boundedAcquireProbe,
+        "ordered recreation setup did not arm its first bounded probe");
+    static_cast<void>(
+        recreationEscalation.reportNonblockingProbeUnavailable(
+            acquireStart + 251ms
+        )
+    );
+    recreationDecision = recreationEscalation.beforePresent(
+        acquireStart + 751ms
+    );
+    expect(recreationDecision.boundedAcquireProbe,
+        "ordered recreation setup did not arm its second bounded probe");
+    static_cast<void>(
+        recreationEscalation.reportNonblockingProbeUnavailable(
+            acquireStart + 752ms
+        )
+    );
+    expect(!recreationEscalation.recreationRequested(
+                acquireStart + 2999ms
+            ) &&
+            recreationEscalation.recreationRequested(
+                acquireStart + 3000ms
+            ) &&
+            recreationEscalation.signalRecreation(
+                acquireStart + 3000ms
+            ) &&
+            !recreationEscalation.signalRecreation(
+                acquireStart + 3001ms
+            ),
+        "persistent ordered starvation did not produce one bounded three-second recreation request");
+    recreationEscalation.reset();
+    expect(!recreationEscalation.recreationRequested(
+                acquireStart + 10s
+            ),
+        "an in-context reset rearmed an already signalled ordered recreation");
     acquireDecision = acquireRecovery.beforePresent(acquireStart + 800ms);
     expect(acquireDecision.bypassGeneration,
         "second ordered drain ended before its retry deadline");
@@ -1345,15 +1403,21 @@ int main() {
     expect(!outputHealth.outputFps(),
         "failed lower present retained a healthy output classification");
 
-    PersistentAdaptiveRecoveryRecreation request;
+    PersistentGenerationRecoveryRecreation request;
     expect(!request.signal() && request.signal(true) && !request.signal(true),
         "recreation requires qualification and stays one-shot for the context");
-    expect(persistentAdaptiveRecoveryActionCooldown(0) == 0s &&
-            persistentAdaptiveRecoveryActionCooldown(1) == 30s &&
-            persistentAdaptiveRecoveryActionCooldown(20) == 30s,
+    expect(persistentGenerationRecoveryActionCooldown(0) == 0s &&
+            persistentGenerationRecoveryActionCooldown(1) == 30s &&
+            persistentGenerationRecoveryActionCooldown(20) == 30s,
         "surface spacing must not turn a menu visit into a five-minute cooldown");
 
-    using SurfaceBudget = PersistentAdaptiveRecoverySurfaceBudget;
+    expect(persistentGenerationRecoveryTargetFps(true, 120, 90) == 120 &&
+            persistentGenerationRecoveryTargetFps(false, 120, 90) == 90 &&
+            !persistentGenerationRecoveryTargetFps(true, 0, 90) &&
+            !persistentGenerationRecoveryTargetFps(false, 120, std::nullopt),
+        "post-menu recovery did not select mode-consistent targets");
+
+    using SurfaceBudget = PersistentGenerationRecoverySurfaceBudget;
     using RecoverySample = SurfaceBudget::RecoverySample;
     SurfaceBudget spacing;
     auto spacingNow = SurfaceBudget::TimePoint{};
@@ -1372,6 +1436,7 @@ int main() {
     }
     const RecoverySample healthySample{
         .contextId = 1, .configurationRevision = 2,
+        .adaptiveMode = true,
         .targetFps = 120, .refreshHz = 120,
         .extents = {2560, 1440, 3840, 2160},
         .focus = {.gameFocused = true},
@@ -1594,7 +1659,7 @@ int main() {
             expect(!observe(normal, 250ms).qualified,
                 "ordinary low FPS or an unattainable target triggered recreation");
     }
-    for (int invalidation = 0; invalidation < 11; ++invalidation) {
+    for (int invalidation = 0; invalidation < 12; ++invalidation) {
         SurfaceBudget invalidated;
         watchdogNow = {}; sample = healthySample; baseline(invalidated);
         static_cast<void>(menu(invalidated, 1s));
@@ -1614,6 +1679,7 @@ int main() {
             expect(!invalidated.observeSustainedDeficit(watchdogNow, sample).qualified,
                 "stale focus authorized a rebuild");
         }
+        if (invalidation == 11) sample.adaptiveMode = false;
         static_cast<void>(observe(invalidated, 25ms));
         expect(!observe(invalidated, 5s).qualified,
             "invalid/stale evidence authorized a post-menu rebuild");

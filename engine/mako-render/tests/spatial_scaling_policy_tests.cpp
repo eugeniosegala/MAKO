@@ -1436,6 +1436,19 @@ int main() {
             largerSourceRequiresFreshAdmission.inactiveReason ==
                 SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
         "A larger source must not borrow a smaller source's live allocation proof");
+    expect(spatialScalingAdmissionRetryEligible(
+            SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+            sameSourceFourK, VkExtent2D{2560, 1440}, 1.5F) &&
+            !spatialScalingAdmissionRetryEligible(
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+                sameSourceFourK, VkExtent2D{2560, 1440}, 2.0F) &&
+            !spatialScalingAdmissionRetryEligible(
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget,
+                std::nullopt, VkExtent2D{2560, 1440}, 1.5F) &&
+            !spatialScalingAdmissionRetryEligible(
+                SpatialScalingInactiveReason::VariableSurfaceNoHeadroom,
+                sameSourceFourK, VkExtent2D{2560, 1440}, 1.5F),
+        "scaling admission retry did not stay inside a proven same-placement envelope");
 
     constexpr uint64_t measuredTransitionLivePixelBudget = 2'523'785;
     const auto largerSourceKeepsProvenFourKWithinLiveGrowthHeadroom =

@@ -1124,6 +1124,14 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                     : SpatialScalingInactiveReason::SwapchainFormatUnsupported));
     }
     modification.spatialScalingInactiveReason = inactiveReason;
+    modification.spatialScalingAdmissionRetryEligible =
+        spatialScalingAdmissionRetryEligible(
+            inactiveReason,
+            previousVariableExtents,
+            createInfo.imageExtent,
+            policySnapshot.policy.factor
+        );
+    modification.spatialScalingPolicyRevision = policySnapshot.revision;
     modification.retainVariableSurfaceProof =
         policySnapshot.policy.enabled &&
         policySnapshot.policy.factor <= 1.0F &&
@@ -1269,6 +1277,8 @@ SwapchainCreateModification Root::modifySwapchainCreateInfo(const vk::Vulkan& vk
                   << scalingDecision.retainedPreviousFixedSource
                   << "; inactive_reason="
                   << spatialScalingInactiveReasonName(inactiveReason)
+                  << "; admission_retry_eligible="
+                  << modification.spatialScalingAdmissionRetryEligible
                   << "; source_presentation_split="
                   << (scalingExtents && !sameExtent(
                         scalingExtents->source,
@@ -1642,6 +1652,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << (info.privateOrderedTransport ? 1 : 0)
                   << " spatial_scaling_activation_supported="
                   << (info.spatialScalingActivationSupported ? 1 : 0)
+                  << " spatial_scaling_admission_retry_eligible="
+                  << (info.spatialScalingAdmissionRetryEligible ? 1 : 0)
                   << " replacement=" << (info.replacement ? 1 : 0)
                   << " active_contexts=" << this->swapchains.size()
                   << " inserted=" << inserted

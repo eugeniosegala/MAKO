@@ -94,8 +94,11 @@ namespace {
         // A later independent collapse may repair the same long-lived game
         // surface, while fixed spacing and episode limits prevent loops.
         std::unordered_map<
-            VkSurfaceKHR, PersistentAdaptiveRecoverySurfaceBudget
+            VkSurfaceKHR, PersistentGenerationRecoverySurfaceBudget
         > persistentRecoveryStates;
+        std::unordered_map<
+            VkSurfaceKHR, ScalingAdmissionRetrySurfaceBudget
+        > scalingAdmissionRetryStates;
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
         std::unordered_set<VkSwapchainKHR> nativeSwapchains;
@@ -1693,6 +1696,7 @@ namespace {
                 instance_info->unprovenSplitSurfacesLogged.erase(surface);
                 instance_info->persistentRecoveryStates
                     .erase(surface);
+                instance_info->scalingAdmissionRetryStates.erase(surface);
             }
         }
         const auto lower = reinterpret_cast<PFN_vkDestroySurfaceKHR>(
@@ -2194,16 +2198,20 @@ namespace {
                         modification.applicationExtent,
                         modification.presentationExtent
                     );
-                const auto committed = committedVariableSurfaceScalingExtents(
-                    previousVariableExtents,
-                    layer_info->root.active(),
-                    modification.variableSurface,
-                    spatialScalingExtentSelected,
-                    modification.variableFeedbackSuppressed,
-                    modification.retainVariableSurfaceProof,
-                    modification.applicationExtent,
-                    modification.presentationExtent
-                );
+                const auto committed =
+                    modification.spatialScalingAdmissionRetryEligible &&
+                        previousVariableExtents
+                    ? previousVariableExtents
+                    : committedVariableSurfaceScalingExtents(
+                        previousVariableExtents,
+                        layer_info->root.active(),
+                        modification.variableSurface,
+                        spatialScalingExtentSelected,
+                        modification.variableFeedbackSuppressed,
+                        modification.retainVariableSurfaceProof,
+                        modification.applicationExtent,
+                        modification.presentationExtent
+                    );
                 if (committed) {
                     instance_info->variableSurfaceScalingExtents.insert_or_assign(
                         info->surface, *committed
@@ -2300,6 +2308,13 @@ namespace {
                 .variableSurface = modification.variableSurface,
                 .spatialScalingMemoryConstrained =
                     modification.spatialScalingMemoryConstrained,
+                .spatialScalingAdmissionRetryEligible =
+                    modification.spatialScalingAdmissionRetryEligible &&
+                    swapchainCreateIsReplacement(
+                        newInfo.oldSwapchain, retiredNullOldReplacement
+                    ),
+                .spatialScalingPolicyRevision =
+                    modification.spatialScalingPolicyRevision,
                 .spatialScalingInactiveReason =
                     modification.spatialScalingInactiveReason,
                 .spatialScalingActivationSupported =
@@ -2536,7 +2551,58 @@ namespace {
                     : metadata->second.surface;
                 const auto recoveryRequestedAt =
                     std::chrono::steady_clock::now();
-                const auto recoverySample = context.persistentAdaptiveRecoverySample();
+                std::optional<ScalingAdmissionRetryKey>
+                    scalingAdmissionRetryKey;
+                if (metadata != instance_info->swapchainInfos.end() &&
+                        metadata->second.
+                            spatialScalingAdmissionRetryEligible) {
+                    scalingAdmissionRetryKey = ScalingAdmissionRetryKey{
+                        .sourceWidth =
+                            metadata->second.applicationExtent.width,
+                        .sourceHeight =
+                            metadata->second.applicationExtent.height,
+                        .policyRevision = metadata->second.
+                            spatialScalingPolicyRevision,
+                    };
+                } else if (presentingSurface != VK_NULL_HANDLE &&
+                        metadata != instance_info->swapchainInfos.end() &&
+                        metadata->second.spatialScalingActive) {
+                    instance_info->scalingAdmissionRetryStates.erase(
+                        presentingSurface
+                    );
+                }
+                bool scalingAdmissionRetrySurfaceAvailable = false;
+                if (presentingSurface != VK_NULL_HANDLE &&
+                        scalingAdmissionRetryKey) {
+                    scalingAdmissionRetrySurfaceAvailable = instance_info
+                        ->scalingAdmissionRetryStates[presentingSurface]
+                        .available(*scalingAdmissionRetryKey);
+                }
+                const bool scalingAdmissionRetryRequested =
+                    context.requestSpatialScalingAdmissionRetryAfterPresent(
+                        result,
+                        !liveProfileRecreationRequested &&
+                            scalingAdmissionRetrySurfaceAvailable
+                    );
+                if (scalingAdmissionRetryRequested &&
+                        scalingAdmissionRetryKey) {
+                    instance_info->scalingAdmissionRetryStates[
+                        presentingSurface
+                    ].record(*scalingAdmissionRetryKey);
+                    if (present_diagnostics::enabled()) {
+                        std::cerr << "MAKO Renderer: present diagnostics: "
+                                     "operation=spatial-scaling-admission-retry-budget"
+                                  << " surface=" << presentingSurface
+                                  << " source="
+                                  << scalingAdmissionRetryKey->sourceWidth
+                                  << 'x'
+                                  << scalingAdmissionRetryKey->sourceHeight
+                                  << " policy_revision="
+                                  << scalingAdmissionRetryKey->policyRevision
+                                  << " action=episode-consumed\n";
+                    }
+                }
+                const auto recoverySample = context.persistentRecoverySample();
                 auto persistentRecoveryState = presentingSurface ==
                         VK_NULL_HANDLE
                     ? instance_info->persistentRecoveryStates.end()
@@ -2550,7 +2616,7 @@ namespace {
                         ->persistentRecoveryStates.try_emplace(
                             presentingSurface).first;
                 }
-                PersistentAdaptiveRecoverySurfaceBudget::DeficitObservation
+                PersistentGenerationRecoverySurfaceBudget::DeficitObservation
                     sustainedDeficit;
                 if (persistentRecoveryState !=
                         instance_info
@@ -2564,6 +2630,10 @@ namespace {
                                   << " context=" << context.diagnosticsId()
                                   << " phase=" << (sustainedDeficit.qualified
                                       ? "qualified" : "cancelled")
+                                  << " mode=" << (!recoverySample
+                                        ? "unavailable"
+                                        : recoverySample->adaptiveMode
+                                            ? "adaptive" : "fixed")
                                   << " reason=sustained-post-menu-deficit"
                                   << " retained_baseline="
                                   << sustainedDeficit.retainedBaselineUsed
@@ -2622,13 +2692,24 @@ namespace {
                     context.requestLowerPresentStallRecreationAfterPresent(
                         result,
                         !liveProfileRecreationRequested &&
+                            !scalingAdmissionRetryRequested &&
+                            lowerPresentRecoverySurfaceAvailable
+                    );
+                const bool orderedAcquireRecoveryRecreationRequested =
+                    context.requestOrderedAcquireRecreationAfterPresent(
+                        result,
+                        !liveProfileRecreationRequested &&
+                            !scalingAdmissionRetryRequested &&
+                            !lowerPresentRecoveryRecreationRequested &&
                             lowerPresentRecoverySurfaceAvailable
                     );
                 const bool persistentRecoveryRecreationRequested =
                     context.requestPersistentRecoveryRecreationAfterPresent(
                         result,
                         !liveProfileRecreationRequested &&
+                            !scalingAdmissionRetryRequested &&
                             !lowerPresentRecoveryRecreationRequested &&
+                            !orderedAcquireRecoveryRecreationRequested &&
                             (persistentRecoverySurfaceAvailable ||
                              stagedScaledRecoveryRecreationAvailable),
                         sustainedDeficit.qualified,
@@ -2638,13 +2719,16 @@ namespace {
                     context.requestPersistentRecoveryInPlaceAfterPresent(
                         result,
                         !liveProfileRecreationRequested &&
+                            !scalingAdmissionRetryRequested &&
                             !lowerPresentRecoveryRecreationRequested &&
+                            !orderedAcquireRecoveryRecreationRequested &&
                             !persistentRecoveryRecreationRequested &&
                             persistentRecoverySurfaceAvailable &&
                             !stagedScaledRecoveryRecreationPending,
                         sustainedDeficit.qualified
                     );
                 if (lowerPresentRecoveryRecreationRequested ||
+                        orderedAcquireRecoveryRecreationRequested ||
                         persistentRecoveryRecreationRequested ||
                         persistentRecoveryInPlaceRequested) {
                     auto& recoveryState = instance_info
@@ -2664,6 +2748,8 @@ namespace {
                                   << "operation="
                                   << (lowerPresentRecoveryRecreationRequested
                                         ? "lower-present-stall-recreation-budget"
+                                        : orderedAcquireRecoveryRecreationRequested
+                                            ? "ordered-acquire-recreation-budget"
                                         : persistentRecoveryRecreationRequested
                                             ? "adaptive-recovery-recreation-budget"
                                             : "adaptive-recovery-in-place-budget")
@@ -2682,7 +2768,9 @@ namespace {
                     }
                 }
                 if (liveProfileRecreationRequested ||
+                        scalingAdmissionRetryRequested ||
                         lowerPresentRecoveryRecreationRequested ||
+                        orderedAcquireRecoveryRecreationRequested ||
                         persistentRecoveryRecreationRequested) {
                     // This role owns the guarded request only after
                     // Swapchain::present() returned from a successful lower
@@ -2709,8 +2797,12 @@ namespace {
                               << " source="
                               << (liveProfileRecreationRequested
                                     ? "guarded-live-profile-request"
+                                    : scalingAdmissionRetryRequested
+                                        ? "spatial-scaling-admission-retry"
                                     : lowerPresentRecoveryRecreationRequested
                                         ? "persistent-lower-present-stall"
+                                    : orderedAcquireRecoveryRecreationRequested
+                                        ? "persistent-ordered-acquire-starvation"
                                     : persistentRecoveryRecreationRequested
                                         ? "persistent-adaptive-recovery"
                                     : "upstream-or-driver")

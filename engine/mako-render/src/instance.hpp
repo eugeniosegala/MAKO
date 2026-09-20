@@ -48,6 +48,8 @@ namespace mako::layer {
         bool variableFeedbackSuppressed{false};
         bool retainVariableSurfaceProof{false};
         bool spatialScalingMemoryConstrained{false};
+        bool spatialScalingAdmissionRetryEligible{false};
+        uint64_t spatialScalingPolicyRevision{0};
         SpatialScalingInactiveReason spatialScalingInactiveReason{
             SpatialScalingInactiveReason::None
         };

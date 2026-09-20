@@ -615,6 +615,55 @@ namespace mako::layer {
             factor <= ls::GameConfLimits::maximumScalingFactor;
     }
 
+    /// A memory-only native fallback after a game resolution change may be
+    /// retried once when the requested output remains inside the exact
+    /// presentation envelope already allocated on this surface. This does not
+    /// admit scaling by itself: it only identifies a bounded retry after the
+    /// driver's live usage estimate has had time to settle. Output growth,
+    /// placement changes, cold starts, and unrelated inactive reasons remain
+    /// ineligible.
+    [[nodiscard]] inline bool spatialScalingAdmissionRetryEligible(
+            const SpatialScalingInactiveReason inactiveReason,
+            const std::optional<SpatialScalingExtents>& previous,
+            const VkExtent2D requestedSource,
+            const float requestedFactor) noexcept {
+        if (inactiveReason !=
+                SpatialScalingInactiveReason::VariableSurfaceMemoryBudget ||
+                !previous || !validSpatialScalingFactor(requestedFactor) ||
+                requestedFactor <= 1.0F ||
+                sameExtent(previous->source, requestedSource) ||
+                sameExtent(previous->source, previous->presentation)) {
+            return false;
+        }
+
+        VkExtent2D requestedPresentation{
+            .width = static_cast<uint32_t>(std::floor(
+                static_cast<double>(requestedSource.width) *
+                    requestedFactor
+            )),
+            .height = static_cast<uint32_t>(std::floor(
+                static_cast<double>(requestedSource.height) *
+                    requestedFactor
+            )),
+        };
+        if (requestedPresentation.width > 1)
+            requestedPresentation.width &= ~uint32_t{1};
+        if (requestedPresentation.height > 1)
+            requestedPresentation.height &= ~uint32_t{1};
+        if (requestedPresentation.width <= requestedSource.width ||
+                requestedPresentation.height <= requestedSource.height ||
+                requestedPresentation.width > previous->presentation.width ||
+                requestedPresentation.height >
+                    previous->presentation.height) {
+            return false;
+        }
+        return selectSpatialFramePipelinePlacement(
+            previous->source, previous->presentation
+        ) == selectSpatialFramePipelinePlacement(
+            requestedSource, requestedPresentation
+        );
+    }
+
     /// Variable WSI surfaces do not expose a compositor-owned presentation
     /// extent. Bound their requested lower swapchain using a conservative
     /// fraction of the largest device-local heap so a high source resolution

@@ -127,6 +127,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
     const DiagnosticsContextScope diagnosticsContext(
         this->diagnosticsState.contextId
     );
+    if (this->info.spatialScalingAdmissionRetryEligible) {
+        this->spatialScalingAdmissionRetryAfter =
+            DiagnosticsClock::now() + std::chrono::seconds{3};
+    }
     const VkExtent2D extent = this->info.extent;
 
     if (swapchainMaintenance1Enabled && this->profile.scaling_enabled) {

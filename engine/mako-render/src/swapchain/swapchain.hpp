@@ -75,6 +75,11 @@ namespace mako::layer {
         // the requested presentation extent exceeded the create-time memory
         // admission envelope.
         bool spatialScalingMemoryConstrained{false};
+        // A replacement resolution change was rejected only by live memory
+        // admission while remaining inside the previous scaled envelope.
+        // One delayed, surface-budgeted retry may re-sample the driver.
+        bool spatialScalingAdmissionRetryEligible{false};
+        uint64_t spatialScalingPolicyRevision{0};
         // Exact create-time reason for retaining native geometry. Keep this
         // independent from activation support: memory and output-headroom
         // guards are actionable on an otherwise supported surface.
@@ -171,6 +176,16 @@ namespace mako::layer {
         [[nodiscard]] bool requestLiveProfileResourceRecreationAfterPresent(
             VkResult lowerPresentResult);
 
+        /// Re-sample a transient live-memory rejection once after a bounded
+        /// settling period. The entrypoint owns the per-surface episode budget.
+        [[nodiscard]] bool requestSpatialScalingAdmissionRetryAfterPresent(
+            VkResult lowerPresentResult, bool surfaceRequestAvailable);
+
+        /// Escalate persistent generated-image starvation after a confirmed
+        /// menu return. This is shared by Fixed and Adaptive policies.
+        [[nodiscard]] bool requestOrderedAcquireRecreationAfterPresent(
+            VkResult lowerPresentResult, bool surfaceRequestAvailable);
+
         /// Request one app-owned recreation for a qualified post-menu deficit.
         /// The entrypoint supplies the surface budget; the lower present carries
         /// same maintenance1 retirement proof as live resource transitions.
@@ -195,8 +210,8 @@ namespace mako::layer {
         /// Observed output for the process-surface recovery budget.
         /// Ineligible modes return no sample and break qualification.
         [[nodiscard]] std::optional<
-            PersistentAdaptiveRecoverySurfaceBudget::RecoverySample>
-        persistentAdaptiveRecoverySample() const;
+            PersistentGenerationRecoverySurfaceBudget::RecoverySample>
+        persistentRecoverySample() const;
 
         /// Wait for every layer-owned maintenance1 present fence associated
         /// with this swapchain. A zero timeout is a nonblocking retirement
@@ -221,7 +236,7 @@ namespace mako::layer {
         /// Stop generation in place when the active profile disappears.
         void disableFrameGeneration();
     private:
-        [[nodiscard]] bool persistentAdaptiveRecoveryMonitoringEligible() const;
+        [[nodiscard]] bool persistentRecoveryMonitoringEligible() const;
         void applyGamescopeFocus(std::chrono::steady_clock::time_point now);
         GamescopeFocusFeedback gamescopeFocus;
         bool steamMenuSuspended{false};
@@ -299,8 +314,8 @@ namespace mako::layer {
             GeneratedImageAdmission generatedImageAdmission;
             OrderedAcquireRecovery orderedAcquireRecovery;
             LowerPresentStallRecovery lowerPresentStallRecovery;
-            PersistentAdaptiveRecoveryRecreation
-                persistentAdaptiveRecoveryRecreation;
+            PersistentGenerationRecoveryRecreation
+                persistentRecoveryRecreation;
             PipelineBusyRecovery pipelineBusyRecovery;
             FixedCadenceCollapseRecovery fixedCadenceCollapseRecovery;
             ReplacementBackendStabilization replacementBackendStabilization;
@@ -419,6 +434,9 @@ namespace mako::layer {
         RuntimeStatusPublisher runtimeStatusPublisher;
         RuntimeStatusState runtimeStatusState;
         LiveProfileResourceRecreation liveProfileResourceRecreation;
+        std::optional<std::chrono::steady_clock::time_point>
+            spatialScalingAdmissionRetryAfter;
+        bool spatialScalingAdmissionRetrySignaled{false};
         std::optional<AdaptiveScheduler> adaptiveScheduler;
         // A partial native-first acquisition proves that this exact ordered
         // WSI context cannot reliably deliver its larger automatic batch.
