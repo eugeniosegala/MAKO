@@ -178,13 +178,20 @@ namespace mako::layer {
             VkResult lowerPresentResult, bool surfaceRequestAvailable,
             bool sustainedDeficit = false);
 
+        /// Rebuild only the generation scheduler and temporal history after a
+        /// qualified post-menu regression in a combined scaling context. This
+        /// is the bounded alternative to unsafe automatic WSI replacement.
+        [[nodiscard]] bool requestPersistentRecoveryInPlaceAfterPresent(
+            VkResult lowerPresentResult, bool surfaceRequestAvailable,
+            bool sustainedDeficit = false);
+
         /// Request one app-owned recreation when a severe lower present
         /// recurs while synthetic work is already quarantined. This applies
         /// to Fixed and Adaptive because the blocking persists without FG.
         [[nodiscard]] bool requestLowerPresentStallRecreationAfterPresent(
             VkResult lowerPresentResult, bool surfaceRequestAvailable);
 
-        /// Observed output for the process-surface recreation budget.
+        /// Observed output for the process-surface recovery budget.
         /// Ineligible modes return no sample and break qualification.
         [[nodiscard]] std::optional<
             PersistentAdaptiveRecoverySurfaceBudget::RecoverySample>
@@ -213,7 +220,7 @@ namespace mako::layer {
         /// Stop generation in place when the active profile disappears.
         void disableFrameGeneration();
     private:
-        [[nodiscard]] bool persistentAdaptiveRecoveryEligible() const;
+        [[nodiscard]] bool persistentAdaptiveRecoveryMonitoringEligible() const;
         void applyGamescopeFocus(std::chrono::steady_clock::time_point now);
         GamescopeFocusFeedback gamescopeFocus;
         bool steamMenuSuspended{false};

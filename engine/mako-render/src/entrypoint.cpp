@@ -89,12 +89,12 @@ namespace {
             variableSurfaceRollbackExtents;
         std::unordered_map<VkSurfaceKHR, SpatialSurfaceOrigin> surfaceOrigins;
         std::unordered_set<VkSurfaceKHR> unprovenSplitSurfacesLogged;
-        // Replacement swapchains retain a bounded recovery-recreation budget.
+        // Replacement swapchains retain a bounded surface recovery budget.
         // A later independent collapse may repair the same long-lived game
         // surface, while fixed spacing and episode limits prevent loops.
         std::unordered_map<
             VkSurfaceKHR, PersistentAdaptiveRecoverySurfaceBudget
-        > persistentRecoveryRecreationStates;
+        > persistentRecoveryStates;
         std::unordered_map<VkSwapchainKHR, ls::R<vk::Vulkan>> swapchains;
         std::unordered_map<VkSwapchainKHR, SwapchainInfo> swapchainInfos;
         std::unordered_set<VkSwapchainKHR> nativeSwapchains;
@@ -1679,7 +1679,7 @@ namespace {
                 instance_info->variableSurfaceRollbackExtents.erase(surface);
                 instance_info->surfaceOrigins.erase(surface);
                 instance_info->unprovenSplitSurfacesLogged.erase(surface);
-                instance_info->persistentRecoveryRecreationStates
+                instance_info->persistentRecoveryStates
                     .erase(surface);
             }
         }
@@ -2485,22 +2485,22 @@ namespace {
                 const auto recoverySample = context.persistentAdaptiveRecoverySample();
                 auto persistentRecoveryState = presentingSurface ==
                         VK_NULL_HANDLE
-                    ? instance_info->persistentRecoveryRecreationStates.end()
-                    : instance_info->persistentRecoveryRecreationStates.find(
+                    ? instance_info->persistentRecoveryStates.end()
+                    : instance_info->persistentRecoveryStates.find(
                         presentingSurface
                     );
                 if (presentingSurface != VK_NULL_HANDLE && recoverySample &&
                         persistentRecoveryState ==
-                            instance_info->persistentRecoveryRecreationStates.end()) {
+                            instance_info->persistentRecoveryStates.end()) {
                     persistentRecoveryState = instance_info
-                        ->persistentRecoveryRecreationStates.try_emplace(
+                        ->persistentRecoveryStates.try_emplace(
                             presentingSurface).first;
                 }
                 PersistentAdaptiveRecoverySurfaceBudget::DeficitObservation
                     sustainedDeficit;
                 if (persistentRecoveryState !=
                         instance_info
-                            ->persistentRecoveryRecreationStates.end()) {
+                            ->persistentRecoveryStates.end()) {
                     sustainedDeficit = persistentRecoveryState->second
                         .observeSustainedDeficit(recoveryRequestedAt, recoverySample);
                     if (present_diagnostics::enabled() &&
@@ -2511,8 +2511,14 @@ namespace {
                                   << " phase=" << (sustainedDeficit.qualified
                                       ? "qualified" : "cancelled")
                                   << " reason=sustained-post-menu-deficit"
+                                  << " baseline_output_fps="
+                                  << sustainedDeficit.baselineOutputFps.value_or(0.0)
+                                  << " baseline_lower_present_share="
+                                  << sustainedDeficit.baselineLowerPresentShare.value_or(0.0)
                                   << " output_fps=" << (recoverySample
                                       ? recoverySample->outputFps.value_or(0.0) : 0.0)
+                                  << " recovery_threshold_fps="
+                                  << sustainedDeficit.recoveryThresholdFps.value_or(0.0)
                                   << " lower_present_share=" << (recoverySample
                                       ? recoverySample->lowerPresentShare : 0.0)
                                   << " deficit_ms="
@@ -2528,7 +2534,7 @@ namespace {
                     presentingSurface != VK_NULL_HANDLE &&
                     (persistentRecoveryState ==
                             instance_info
-                                ->persistentRecoveryRecreationStates.end() ||
+                                ->persistentRecoveryStates.end() ||
                      persistentRecoveryState->second.available(
                          recoveryRequestedAt
                      ));
@@ -2536,7 +2542,7 @@ namespace {
                     presentingSurface != VK_NULL_HANDLE &&
                     (persistentRecoveryState ==
                             instance_info
-                                ->persistentRecoveryRecreationStates.end() ||
+                                ->persistentRecoveryStates.end() ||
                      persistentRecoveryState->second
                         .severeLowerPresentAvailable(recoveryRequestedAt));
                 const bool lowerPresentRecoveryRecreationRequested =
@@ -2553,20 +2559,35 @@ namespace {
                             persistentRecoverySurfaceAvailable,
                         sustainedDeficit.qualified
                     );
+                const bool persistentRecoveryInPlaceRequested =
+                    context.requestPersistentRecoveryInPlaceAfterPresent(
+                        result,
+                        !liveProfileRecreationRequested &&
+                            !lowerPresentRecoveryRecreationRequested &&
+                            !persistentRecoveryRecreationRequested &&
+                            persistentRecoverySurfaceAvailable,
+                        sustainedDeficit.qualified
+                    );
                 if (lowerPresentRecoveryRecreationRequested ||
-                        persistentRecoveryRecreationRequested) {
+                        persistentRecoveryRecreationRequested ||
+                        persistentRecoveryInPlaceRequested) {
                     auto& recoveryState = instance_info
-                        ->persistentRecoveryRecreationStates[
+                        ->persistentRecoveryStates[
                             presentingSurface
                         ];
                     recoveryState.recordRequest(recoveryRequestedAt,
-                        persistentRecoveryRecreationRequested && sustainedDeficit.qualified);
+                        (persistentRecoveryRecreationRequested ||
+                         persistentRecoveryInPlaceRequested) &&
+                            sustainedDeficit.qualified,
+                        !persistentRecoveryInPlaceRequested);
                     if (present_diagnostics::enabled()) {
                         std::cerr << "MAKO Renderer: present diagnostics: "
                                   << "operation="
                                   << (lowerPresentRecoveryRecreationRequested
                                         ? "lower-present-stall-recreation-budget"
-                                        : "adaptive-recovery-recreation-budget")
+                                        : persistentRecoveryRecreationRequested
+                                            ? "adaptive-recovery-recreation-budget"
+                                            : "adaptive-recovery-in-place-budget")
                                   << " surface=" << presentingSurface
                                   << " completed_requests="
                                   << recoveryState.completedRequests()

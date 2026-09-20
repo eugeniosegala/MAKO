@@ -1346,9 +1346,9 @@ int main() {
     PersistentAdaptiveRecoveryRecreation request;
     expect(!request.signal() && request.signal(true) && !request.signal(true),
         "recreation requires qualification and stays one-shot for the context");
-    expect(persistentAdaptiveRecoveryRecreationCooldown(0) == 0s &&
-            persistentAdaptiveRecoveryRecreationCooldown(1) == 30s &&
-            persistentAdaptiveRecoveryRecreationCooldown(20) == 30s,
+    expect(persistentAdaptiveRecoveryActionCooldown(0) == 0s &&
+            persistentAdaptiveRecoveryActionCooldown(1) == 30s &&
+            persistentAdaptiveRecoveryActionCooldown(20) == 30s,
         "surface spacing must not turn a menu visit into a five-minute cooldown");
 
     using SurfaceBudget = PersistentAdaptiveRecoverySurfaceBudget;
@@ -1434,6 +1434,39 @@ int main() {
     static_cast<void>(observe(stalled, 25ms));
     expect(!observe(stalled, 4s).qualified,
         "resolved menu recovery leaked into a later heavy scene");
+
+    SurfaceBudget belowTargetStable;
+    watchdogNow = {}; sample = healthySample;
+    sample.outputFps = 80.0;
+    sample.lowerPresentShare = 0.2;
+    baseline(belowTargetStable);
+    static_cast<void>(menu(belowTargetStable, 1s));
+    sample.outputFps = 70.0;
+    sample.lowerPresentShare = 0.7;
+    expect(!observe(belowTargetStable, 4s).qualified,
+        "gameplay close to its below-target pre-menu baseline was treated as degraded");
+
+    SurfaceBudget belowTargetCollapsed;
+    watchdogNow = {}; sample = healthySample;
+    sample.outputFps = 80.0;
+    sample.lowerPresentShare = 0.2;
+    baseline(belowTargetCollapsed);
+    static_cast<void>(menu(belowTargetCollapsed, 1s));
+    sample.outputFps = 50.0;
+    sample.lowerPresentShare = 0.7;
+    static_cast<void>(observe(belowTargetCollapsed, 25ms));
+    const auto relativeDeficit = observe(belowTargetCollapsed, 4s);
+    expect(relativeDeficit.qualified &&
+            relativeDeficit.baselineOutputFps &&
+            std::abs(*relativeDeficit.baselineOutputFps - 80.0) < 0.001 &&
+            relativeDeficit.recoveryThresholdFps &&
+            std::abs(*relativeDeficit.recoveryThresholdFps - 60.0) < 0.001,
+        "relative post-menu regression did not use the captured below-target baseline");
+    belowTargetCollapsed.recordRequest(watchdogNow, true, false);
+    ++sample.contextId;
+    static_cast<void>(observe(belowTargetCollapsed, 25ms));
+    expect(!observe(belowTargetCollapsed, 4s).qualified,
+        "an in-place recovery action incorrectly authorized a later context replacement");
 
     for (const bool hadBaseline : {false, true}) {
         SurfaceBudget normal;

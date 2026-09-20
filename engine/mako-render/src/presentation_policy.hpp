@@ -1608,11 +1608,11 @@ namespace mako::layer {
         bool signaled{false};
     };
 
-    /// All recovery requests share minimum surface spacing. The menu watchdog
+    /// All recovery actions share minimum surface spacing. The menu watchdog
     /// also has a two-attempt, 75-second episode limit, rather than a minutes-
     /// long cooldown that can outlive the interruption being repaired.
     [[nodiscard]] constexpr std::chrono::seconds
-    persistentAdaptiveRecoveryRecreationCooldown(
+    persistentAdaptiveRecoveryActionCooldown(
             const size_t completedRequests) noexcept {
         return completedRequests == 0 ? std::chrono::seconds::zero()
             : std::chrono::seconds{30};
@@ -1642,10 +1642,15 @@ namespace mako::layer {
             bool newlyQualified{false};
             bool cancelled{false};
             Duration duration{};
+            std::optional<double> baselineOutputFps;
+            std::optional<double> baselineLowerPresentShare;
+            std::optional<double> recoveryThresholdFps;
         };
 
-        /// Require a recent healthy baseline, an explicit Steam UI focus
-        /// round trip, and sustained output/present pressure after return.
+        /// Retain a tiny, allocation-free pre-menu performance history, then
+        /// compare returned gameplay with that exact baseline. This recognizes
+        /// recovery to a game's previous below-target performance instead of
+        /// treating the configured target as proof that the game was healthy.
         /// Keep the episode across our own replacement for one bounded retry.
         [[nodiscard]] DeficitObservation observeSustainedDeficit(
                 const TimePoint now,
@@ -1673,64 +1678,87 @@ namespace mako::layer {
             if (contextChanged) {
                 this->expectedReplacement = false;
                 this->deficitSince.reset();
-                this->baselineHealthySince.reset();
                 this->deficitRecoveredSince.reset();
+                this->clearPerformanceHistory();
             }
-            this->lastRecoverySample = sample;
             if (sample->focus.menuOpen(now)) {
-                // Preserve only the pre-menu baseline, never learn Steam's
-                // throttled output or accrue a rebuild while the menu is open.
-                this->baselineHealthySince.reset();
+                if (sample->focus.openedAt &&
+                        (!this->pendingOpenedAt ||
+                         *this->pendingOpenedAt != *sample->focus.openedAt)) {
+                    this->pendingOpenedAt = sample->focus.openedAt;
+                    this->pendingInterruptionBaseline =
+                        this->capturePerformanceBaseline(
+                            *sample->focus.openedAt
+                        );
+                }
+                // Never learn Steam's throttled output or accrue a recovery
+                // action while the menu is open.
+                this->lastRecoverySample = sample;
+                this->interruptionBaseline.reset();
                 this->deficitRecoveredSince.reset();
                 this->deficitSince.reset();
                 this->deficitQualified = false;
                 this->postInterruption = false;
                 return {.cancelled = wasQualified};
             }
-            const bool valid = sample->outputFps &&
-                std::isfinite(*sample->outputFps) && *sample->outputFps > 0.0;
-            const bool healthy = valid &&
-                *sample->outputFps >= sample->targetFps * 0.95;
-            if (interrupted && this->baselineQualified &&
-                    this->lastHealthyAt &&
-                    sample->focus.openedAt &&
-                    *sample->focus.openedAt - *this->lastHealthyAt <= std::chrono::seconds{15}) {
-                this->postInterruption = true;
+            if (interrupted) {
+                const bool pendingMatches = sample->focus.openedAt &&
+                    this->pendingOpenedAt &&
+                    *sample->focus.openedAt == *this->pendingOpenedAt;
+                this->interruptionBaseline = pendingMatches
+                    ? this->pendingInterruptionBaseline
+                    : sample->focus.openedAt
+                        ? this->capturePerformanceBaseline(
+                            *sample->focus.openedAt
+                        )
+                        : std::nullopt;
+                this->pendingInterruptionBaseline.reset();
+                this->pendingOpenedAt.reset();
+                this->postInterruption =
+                    this->interruptionBaseline.has_value();
                 this->episodeRequests = 0;
                 this->deficitRecoveredSince.reset();
             }
-            if (!sample->focus.recoveryWindow(now))
+            this->lastRecoverySample = sample;
+            const bool valid = sample->outputFps &&
+                std::isfinite(*sample->outputFps) && *sample->outputFps > 0.0;
+            const auto referenceOutputFps = this->interruptionBaseline
+                ? std::min(
+                    this->interruptionBaseline->outputFps,
+                    static_cast<double>(sample->targetFps)
+                )
+                : 0.0;
+            const auto recoveryThresholdFps = referenceOutputFps * 0.75;
+            const auto baselineOutputFps = this->interruptionBaseline
+                ? std::optional<double>{this->interruptionBaseline->outputFps}
+                : std::nullopt;
+            const auto baselineLowerPresentShare = this->interruptionBaseline
+                ? std::optional<double>{
+                    this->interruptionBaseline->lowerPresentShare
+                }
+                : std::nullopt;
+            if (!sample->focus.recoveryWindow(now)) {
                 this->postInterruption = false;
-            // Once delivered output leaves the severe-deficit band, a later
-            // workload slowdown needs a new interruption; do not retain a
-            // menu visit as permission for an unrelated future rebuild.
+                this->interruptionBaseline.reset();
+            }
+            // Once delivered output recovers to the pre-menu comparison band,
+            // a later workload slowdown needs a new interruption; do not retain
+            // a menu visit as permission for an unrelated future action.
             if (valid && !interrupted &&
-                    *sample->outputFps >= sample->targetFps * 0.75) {
+                    this->postInterruption &&
+                    *sample->outputFps >= recoveryThresholdFps) {
                 if (!this->deficitRecoveredSince)
                     this->deficitRecoveredSince = now;
-                if (now - *this->deficitRecoveredSince >= std::chrono::seconds{1})
+                if (now - *this->deficitRecoveredSince >= std::chrono::seconds{1}) {
                     this->postInterruption = false;
+                    this->interruptionBaseline.reset();
+                }
             } else {
                 this->deficitRecoveredSince.reset();
             }
-            if (healthy) {
-                this->lastHealthyAt = now;
-                if (!this->baselineHealthySince)
-                    this->baselineHealthySince = now;
-                if (now - *this->baselineHealthySince >= std::chrono::seconds{1}) {
-                    this->baselineQualified = true;
-                    this->postInterruption = false;
-                }
-            } else {
-                this->baselineHealthySince.reset();
-                if (!this->postInterruption && this->lastHealthyAt &&
-                        now - *this->lastHealthyAt > std::chrono::seconds{15}) {
-                    this->baselineQualified = false;
-                }
-            }
-            const bool deficit = valid && this->baselineQualified &&
+            const bool deficit = valid && this->interruptionBaseline &&
                 this->postInterruption && this->episodeRequests < 2 &&
-                *sample->outputFps < sample->targetFps * 0.75 &&
+                *sample->outputFps < recoveryThresholdFps &&
                 std::isfinite(sample->lowerPresentShare) &&
                 sample->lowerPresentShare >= 0.5;
             if (deficit) {
@@ -1742,18 +1770,25 @@ namespace mako::layer {
             const auto duration = this->deficitSince
                 ? now - *this->deficitSince : Duration{};
             this->deficitQualified = deficit && duration >= std::chrono::seconds{4};
+            if (valid && !sample->focus.menuOpen(now))
+                this->recordPerformanceSample(now, *sample);
             return {
                 .qualified = this->deficitQualified,
                 .newlyQualified = this->deficitQualified && !wasQualified,
                 .cancelled = wasQualified && !this->deficitQualified,
                 .duration = duration,
+                .baselineOutputFps = baselineOutputFps,
+                .baselineLowerPresentShare = baselineLowerPresentShare,
+                .recoveryThresholdFps = baselineOutputFps
+                    ? std::optional<double>{recoveryThresholdFps}
+                    : std::nullopt,
             };
         }
 
         [[nodiscard]] bool available(const TimePoint now) const {
             return !this->lastRequestedAt ||
                 now - *this->lastRequestedAt >=
-                    persistentAdaptiveRecoveryRecreationCooldown(
+                    persistentAdaptiveRecoveryActionCooldown(
                         this->completedRequestCount
                     );
         }
@@ -1765,15 +1800,15 @@ namespace mako::layer {
         }
 
         void recordRequest(const TimePoint now,
-                const bool sustainedDeficit = false) {
+                const bool sustainedDeficit = false,
+                const bool expectedReplacement = true) {
             this->completedRequestCount++;
             this->lastRequestedAt = now;
-            this->expectedReplacement = true;
+            this->expectedReplacement = expectedReplacement;
             if (sustainedDeficit)
                 ++this->episodeRequests;
             this->deficitQualified = false;
             this->deficitSince.reset();
-            this->baselineHealthySince.reset();
             this->deficitRecoveredSince.reset();
         }
 
@@ -1782,19 +1817,118 @@ namespace mako::layer {
         }
 
         [[nodiscard]] std::chrono::seconds nextCooldown() const {
-            return persistentAdaptiveRecoveryRecreationCooldown(
+            return persistentAdaptiveRecoveryActionCooldown(
                 this->completedRequestCount
             );
         }
 
     private:
+        struct PerformancePoint {
+            TimePoint sampledAt{};
+            double outputFps{0.0};
+            double lowerPresentShare{0.0};
+        };
+
+        struct PerformanceBaseline {
+            double outputFps{0.0};
+            double lowerPresentShare{0.0};
+            TimePoint firstSampledAt{};
+            TimePoint lastSampledAt{};
+            size_t sampleCount{0};
+        };
+
+        static constexpr size_t performanceHistoryCapacity = 8;
+
+        void recordPerformanceSample(const TimePoint now,
+                const RecoverySample& sample) {
+            if (!sample.outputFps ||
+                    !std::isfinite(*sample.outputFps) ||
+                    *sample.outputFps <= 0.0 ||
+                    !std::isfinite(sample.lowerPresentShare)) {
+                return;
+            }
+            if (this->lastPerformanceSampleAt) {
+                if (now < *this->lastPerformanceSampleAt) {
+                    this->clearPerformanceHistory();
+                } else if (now - *this->lastPerformanceSampleAt <
+                        std::chrono::milliseconds{250}) {
+                    return;
+                }
+            }
+            this->performanceHistory[this->performanceHistoryNext] = {
+                .sampledAt = now,
+                .outputFps = *sample.outputFps,
+                .lowerPresentShare = sample.lowerPresentShare,
+            };
+            this->performanceHistoryNext =
+                (this->performanceHistoryNext + 1) % performanceHistoryCapacity;
+            this->performanceHistoryCount = std::min(
+                this->performanceHistoryCount + 1,
+                performanceHistoryCapacity
+            );
+            this->lastPerformanceSampleAt = now;
+        }
+
+        [[nodiscard]] std::optional<PerformanceBaseline>
+        capturePerformanceBaseline(const TimePoint openedAt) const {
+            std::array<double, performanceHistoryCapacity> outputFps{};
+            std::array<double, performanceHistoryCapacity> lowerPresentShare{};
+            size_t selected = 0;
+            std::optional<TimePoint> firstSampledAt;
+            std::optional<TimePoint> lastSampledAt;
+            const size_t first =
+                (this->performanceHistoryNext + performanceHistoryCapacity -
+                 this->performanceHistoryCount) % performanceHistoryCapacity;
+            for (size_t index = 0;
+                    index < this->performanceHistoryCount; ++index) {
+                const auto& point = this->performanceHistory[
+                    (first + index) % performanceHistoryCapacity
+                ];
+                if (point.sampledAt > openedAt ||
+                        openedAt - point.sampledAt > std::chrono::seconds{15}) {
+                    continue;
+                }
+                outputFps[selected] = point.outputFps;
+                lowerPresentShare[selected] = point.lowerPresentShare;
+                if (!firstSampledAt)
+                    firstSampledAt = point.sampledAt;
+                lastSampledAt = point.sampledAt;
+                ++selected;
+            }
+            if (selected < 3 || !firstSampledAt || !lastSampledAt ||
+                    *lastSampledAt - *firstSampledAt < std::chrono::seconds{1}) {
+                return std::nullopt;
+            }
+            const auto median = [selected](auto& values) {
+                std::sort(values.begin(), values.begin() + selected);
+                const size_t middle = selected / 2;
+                return selected % 2 == 0
+                    ? (values[middle - 1] + values[middle]) / 2.0
+                    : values[middle];
+            };
+            return PerformanceBaseline{
+                .outputFps = median(outputFps),
+                .lowerPresentShare = median(lowerPresentShare),
+                .firstSampledAt = *firstSampledAt,
+                .lastSampledAt = *lastSampledAt,
+                .sampleCount = selected,
+            };
+        }
+
+        void clearPerformanceHistory() {
+            this->performanceHistoryCount = 0;
+            this->performanceHistoryNext = 0;
+            this->lastPerformanceSampleAt.reset();
+        }
+
         void resetDeficitWatch() {
             this->lastRecoverySample.reset();
-            this->baselineHealthySince.reset();
+            this->clearPerformanceHistory();
+            this->pendingInterruptionBaseline.reset();
+            this->pendingOpenedAt.reset();
+            this->interruptionBaseline.reset();
             this->deficitRecoveredSince.reset();
-            this->lastHealthyAt.reset();
             this->deficitSince.reset();
-            this->baselineQualified = false;
             this->postInterruption = false;
             this->episodeRequests = 0;
             this->deficitQualified = false;
@@ -1804,11 +1938,16 @@ namespace mako::layer {
         size_t completedRequestCount{0};
         std::optional<TimePoint> lastRequestedAt;
         std::optional<RecoverySample> lastRecoverySample;
-        std::optional<TimePoint> baselineHealthySince;
+        std::array<PerformancePoint, performanceHistoryCapacity>
+            performanceHistory{};
+        size_t performanceHistoryCount{0};
+        size_t performanceHistoryNext{0};
+        std::optional<TimePoint> lastPerformanceSampleAt;
+        std::optional<PerformanceBaseline> pendingInterruptionBaseline;
+        std::optional<TimePoint> pendingOpenedAt;
+        std::optional<PerformanceBaseline> interruptionBaseline;
         std::optional<TimePoint> deficitRecoveredSince;
-        std::optional<TimePoint> lastHealthyAt;
         std::optional<TimePoint> deficitSince;
-        bool baselineQualified{false};
         bool postInterruption{false};
         size_t episodeRequests{0};
         bool deficitQualified{false};

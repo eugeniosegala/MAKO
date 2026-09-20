@@ -210,6 +210,11 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     require(english.value(QStringLiteral("scalingFactor")).toString() ==
             QStringLiteral("Scale Factor"),
         "English scale-factor label does not match Decky");
+    require(english.value(QStringLiteral("scalingFactorDesc")).toString()
+                .contains(QStringLiteral("try Windowed mode")) &&
+            english.value(QStringLiteral("scalingFactorDesc")).toString()
+                .contains(QStringLiteral("fullscreen or borderless")),
+        "English scale-factor help does not explain the display-sized input workaround");
     require(english.value(QStringLiteral("scalingSharpnessDesc")).toString() ==
             QStringLiteral("For MAKO, applies this 0–100% multiplier to its 3x sharpening baseline. For LS1, selects one of five learned sharpness variants."),
         "English sharpening help does not describe the MAKO baseline");

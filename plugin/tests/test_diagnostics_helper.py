@@ -263,6 +263,7 @@ class DiagnosticsHelperTests(unittest.TestCase):
             "gamescope-focus",
             "adaptive-recovery-recreation-requested",
             "adaptive-recovery-recreation-watchdog",
+            "adaptive-recovery-in-place-requested",
             "runtime-transition-pending",
             "runtime-transition-prepared",
             "runtime-transition-failed",
@@ -287,6 +288,8 @@ class DiagnosticsHelperTests(unittest.TestCase):
             # Older builds emitted this obsolete cooldown-reset record.
             "adaptive-recovery-recreation-budget-reset",
             "adaptive-recovery-recreation-watchdog",
+            "adaptive-recovery-in-place-requested",
+            "adaptive-recovery-in-place-budget",
         )
         with tempfile.TemporaryDirectory() as temporary_directory:
             path = Path(temporary_directory) / "recovery.log"
