@@ -484,6 +484,26 @@ namespace mako::layer {
         }
 
         [[nodiscard]] static constexpr auto
+        repeatedRecoveryEpisodeWindow() {
+            return std::chrono::seconds{15};
+        }
+
+        [[nodiscard]] static constexpr size_t
+        repeatedRecoveryEpisodeThreshold() {
+            return 3;
+        }
+
+        [[nodiscard]] static constexpr auto
+        cadenceStyleTransitionRecoveryWindow() {
+            return std::chrono::seconds{60};
+        }
+
+        [[nodiscard]] static constexpr size_t
+        cadenceStyleTransitionEpisodeThreshold() {
+            return 3;
+        }
+
+        [[nodiscard]] static constexpr auto
         nativeCadenceSaturationQualificationDuration() {
             return std::chrono::milliseconds{200};
         }
@@ -779,22 +799,97 @@ namespace mako::layer {
                 this->stabilizingUntil.has_value();
         }
 
-        /// Repeated bounded probes which cannot reacquire even one generated
-        /// image have exhausted this context's in-place recovery. The caller
-        /// still requires a recent compositor interruption, a successful
-        /// retirement-protected lower present, and a surface-level budget
-        /// before turning this into one application-owned recreation.
+        [[nodiscard]] bool eventRecoveryWindowActive(
+                const TimePoint now,
+                const bool confirmedGamescopeReturn) const {
+            return confirmedGamescopeReturn ||
+                this->cadenceStyleTransitionRecoveryActive(now);
+        }
+
+        /// Repeated bounded-probe failure, or several short drain/recovery
+        /// episodes in one bounded window, proves that this context's ordered
+        /// transport remains unstable. That evidence may escalate only inside
+        /// an explicit menu-return or cadence-style transition window. Ordinary
+        /// gameplay retains the in-place transport safety used by 3.3 without
+        /// gaining an automatic recreation policy.
         [[nodiscard]] bool recreationRequested(
-                const TimePoint now) const {
-            return !this->recreationSignaled && this->recoveryStartedAt &&
+                const TimePoint now,
+                const bool confirmedGamescopeReturn) const {
+            if (!this->eventRecoveryWindowActive(
+                    now, confirmedGamescopeReturn)) {
+                return false;
+            }
+            const bool continuousStarvation = this->recoveryStartedAt &&
                 this->consecutiveFailures >= 3 &&
                 now - *this->recoveryStartedAt >=
                     recreationQualificationDuration();
+            return !this->recreationSignaled && this->recoveryStartedAt &&
+                (continuousStarvation ||
+                 this->repeatedRecoveryEpisodes(now) ||
+                 this->cadenceStyleTransitionRecoveryRequested(now));
         }
 
-        [[nodiscard]] bool signalRecreation(const TimePoint now) {
-            if (!this->recreationRequested(now))
+        /// A short successful probe can prove that one drain completed while
+        /// the same lower transport remains unstable. Keep a bounded episode
+        /// count so repeated drain/retry/stabilize loops cannot erase their
+        /// own direct starvation evidence. This is transport evidence, not an
+        /// FPS or workload heuristic.
+        [[nodiscard]] bool repeatedRecoveryEpisodes(
+                const TimePoint now) const {
+            return this->recoveryEpisodeWindowStartedAt &&
+                now >= *this->recoveryEpisodeWindowStartedAt &&
+                now - *this->recoveryEpisodeWindowStartedAt <=
+                    repeatedRecoveryEpisodeWindow() &&
+                this->recoveryEpisodeCount >=
+                    repeatedRecoveryEpisodeThreshold();
+        }
+
+        [[nodiscard]] size_t recoveryEpisodes(
+                const TimePoint now) const {
+            return this->recoveryEpisodeWindowStartedAt &&
+                now >= *this->recoveryEpisodeWindowStartedAt &&
+                now - *this->recoveryEpisodeWindowStartedAt <=
+                    repeatedRecoveryEpisodeWindow()
+                ? this->recoveryEpisodeCount : 0;
+        }
+
+        /// Fractional and Steady Adaptive deliberately change pacing
+        /// ownership without replacing resources. Arm a bounded direct-
+        /// transport watch so a slower drain/retry loop caused by that live
+        /// transition cannot fall between the ordinary 15-second burst rule
+        /// and the menu performance watchdog.
+        void beginCadenceStyleTransitionRecovery(const TimePoint now) {
+            this->cadenceStyleTransitionRecoveryUntil =
+                now + cadenceStyleTransitionRecoveryWindow();
+            this->cadenceStyleTransitionEpisodeCount = 0;
+        }
+
+        [[nodiscard]] bool cadenceStyleTransitionRecoveryActive(
+                const TimePoint now) const {
+            return this->cadenceStyleTransitionRecoveryUntil &&
+                now <= *this->cadenceStyleTransitionRecoveryUntil;
+        }
+
+        [[nodiscard]] bool cadenceStyleTransitionRecoveryRequested(
+                const TimePoint now) const {
+            return this->cadenceStyleTransitionRecoveryActive(now) &&
+                this->cadenceStyleTransitionEpisodeCount >=
+                    cadenceStyleTransitionEpisodeThreshold();
+        }
+
+        [[nodiscard]] size_t cadenceStyleTransitionRecoveryEpisodes(
+                const TimePoint now) const {
+            return this->cadenceStyleTransitionRecoveryActive(now)
+                ? this->cadenceStyleTransitionEpisodeCount : 0;
+        }
+
+        [[nodiscard]] bool signalRecreation(
+                const TimePoint now,
+                const bool confirmedGamescopeReturn) {
+            if (!this->recreationRequested(
+                    now, confirmedGamescopeReturn)) {
                 return false;
+            }
             this->recreationSignaled = true;
             return true;
         }
@@ -861,6 +956,10 @@ namespace mako::layer {
             this->consecutiveFailures = 0;
             this->bypassedFrames = 0;
             this->nonblockingProbeMisses = 0;
+            this->recoveryEpisodeWindowStartedAt.reset();
+            this->recoveryEpisodeCount = 0;
+            this->cadenceStyleTransitionRecoveryUntil.reset();
+            this->cadenceStyleTransitionEpisodeCount = 0;
             this->resetNativeCadenceObservation();
         }
 
@@ -945,8 +1044,26 @@ namespace mako::layer {
                 const bool timedOut, const bool deadlineExceeded,
                 const bool severe,
                 const size_t observedSlowFrames) {
-            if (!this->recoveryStartedAt)
+            if (!this->recoveryStartedAt) {
                 this->recoveryStartedAt = now;
+                if (!this->recoveryEpisodeWindowStartedAt ||
+                        now < *this->recoveryEpisodeWindowStartedAt ||
+                        now - *this->recoveryEpisodeWindowStartedAt >
+                            repeatedRecoveryEpisodeWindow()) {
+                    this->recoveryEpisodeWindowStartedAt = now;
+                    this->recoveryEpisodeCount = 1;
+                } else {
+                    this->recoveryEpisodeCount++;
+                }
+                if (this->cadenceStyleTransitionRecoveryUntil) {
+                    if (now <= *this->cadenceStyleTransitionRecoveryUntil) {
+                        this->cadenceStyleTransitionEpisodeCount++;
+                    } else {
+                        this->cadenceStyleTransitionRecoveryUntil.reset();
+                        this->cadenceStyleTransitionEpisodeCount = 0;
+                    }
+                }
+            }
             this->consecutiveFailures++;
             const auto delay = retryDelayForFailure(
                 this->consecutiveFailures
@@ -997,6 +1114,10 @@ namespace mako::layer {
         size_t consecutiveFailures{0};
         size_t bypassedFrames{0};
         size_t nonblockingProbeMisses{0};
+        std::optional<TimePoint> recoveryEpisodeWindowStartedAt;
+        size_t recoveryEpisodeCount{0};
+        std::optional<TimePoint> cadenceStyleTransitionRecoveryUntil;
+        size_t cadenceStyleTransitionEpisodeCount{0};
         std::optional<TimePoint> nativeCadenceSaturationSince;
         std::optional<TimePoint> nativeCadenceDemandSince;
         double nativeSmoothedIntervalSeconds{0.0};

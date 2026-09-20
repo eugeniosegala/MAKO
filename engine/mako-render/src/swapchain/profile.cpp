@@ -388,6 +388,14 @@ ProfileUpdateDecision Swapchain::updateProfile(
     );
     const bool enabling = !generationWasEnabled && generationWillBeEnabled;
     const bool disabling = generationWasEnabled && !generationWillBeEnabled;
+    const bool cadenceStyleChanged = generationWasEnabled &&
+        generationWillBeEnabled && this->profile.adaptive &&
+        plan.appliedProfile.adaptive &&
+        this->profile.adaptive_auto_base_fps_cap !=
+            plan.appliedProfile.adaptive_auto_base_fps_cap;
+    const bool previousSteadyCadenceStyle =
+        this->profile.adaptive_auto_base_fps_cap;
+    const auto profileUpdateNow = DiagnosticsClock::now();
     this->profile = std::move(plan.appliedProfile);
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
@@ -425,12 +433,35 @@ ProfileUpdateDecision Swapchain::updateProfile(
             : AdaptiveScheduler::historyWarmupFrameCount();
     }
 
+    if (cadenceStyleChanged && this->privateOrderedTransport) {
+        this->recoveryState.orderedAcquireRecovery
+            .beginCadenceStyleTransitionRecovery(profileUpdateNow);
+        if (present_diagnostics::enabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=ordered-acquire-transition-recovery-armed"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " transition="
+                      << (previousSteadyCadenceStyle
+                            ? "steady-to-fractional"
+                            : "fractional-to-steady")
+                      << " window_ms="
+                      << std::chrono::duration<double, std::milli>(
+                             OrderedAcquireRecovery::
+                                 cadenceStyleTransitionRecoveryWindow()
+                         ).count()
+                      << " required_episodes="
+                      << OrderedAcquireRecovery::
+                            cadenceStyleTransitionEpisodeThreshold()
+                      << " evidence=generated-image-native-drain"
+                      << " action=direct-transport-watch\n";
+        }
+    }
+
     const bool schedulerPolicyAvailable = generationSchedulerPolicy(
         this->profile, this->gamescopeRefreshHz
     ).has_value();
     const bool fixedSchedulerPolicyChanged = !this->profile.adaptive &&
         decision.fixedMultiplierChanged;
-    const auto profileUpdateNow = DiagnosticsClock::now();
     const bool resetSchedulerPolicy = schedulerPolicyAvailable &&
             (decision.generationPolicyChanged ||
              decision.generationModeChanged ||
@@ -582,8 +613,17 @@ bool Swapchain::requestOrderedAcquireRecreationAfterPresent(
         const VkResult lowerPresentResult,
         const bool surfaceRequestAvailable) {
     const auto now = DiagnosticsClock::now();
+    const bool confirmedGamescopeReturn =
+        this->gamescopeFocus.recoveryWindow(now);
+    const bool repeatedRecoveryEpisodes = this->recoveryState
+        .orderedAcquireRecovery.repeatedRecoveryEpisodes(now);
+    const bool cadenceStyleTransitionRecovery = this->recoveryState
+        .orderedAcquireRecovery.cadenceStyleTransitionRecoveryRequested(now);
+    const size_t recoveryEpisodes = cadenceStyleTransitionRecovery
+        ? this->recoveryState.orderedAcquireRecovery
+            .cadenceStyleTransitionRecoveryEpisodes(now)
+        : this->recoveryState.orderedAcquireRecovery.recoveryEpisodes(now);
     if (!surfaceRequestAvailable || this->steamMenuSuspended ||
-            !this->gamescopeFocus.recoveryWindow(now) ||
             !this->privateOrderedTransport ||
             !effectiveFrameGenerationEnabled(
                 this->profile, this->gamescopeRefreshHz
@@ -595,18 +635,25 @@ bool Swapchain::requestOrderedAcquireRecreationAfterPresent(
             (lowerPresentResult != VK_SUCCESS &&
              lowerPresentResult != VK_SUBOPTIMAL_KHR) ||
             !this->lastLowerPresentRetirementProtected ||
-            !this->recoveryState.orderedAcquireRecovery.signalRecreation(now)) {
+            !this->recoveryState.orderedAcquireRecovery.signalRecreation(
+                now, confirmedGamescopeReturn
+            )) {
         return false;
     }
 
-    std::cerr << "MAKO Renderer: persistent post-menu generated-image "
+    std::cerr << "MAKO Renderer: persistent generated-image "
                  "starvation requested one game-owned swapchain recreation "
                  "after bounded in-place recovery failed\n";
     if (present_diagnostics::enabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=ordered-acquire-recreation-requested"
                   << " context=" << this->diagnosticsState.contextId
-                  << " reason=persistent-post-menu-generated-image-starvation"
+                  << " reason=" << (cadenceStyleTransitionRecovery
+                        ? "post-cadence-style-transition-starvation-episodes"
+                        : repeatedRecoveryEpisodes
+                            ? "repeated-post-menu-generated-image-starvation-episodes"
+                        : "persistent-generated-image-starvation")
+                  << " recovery_episodes=" << recoveryEpisodes
                   << " lower_present_result=" << lowerPresentResult
                   << " signal=VK_ERROR_OUT_OF_DATE_KHR"
                   << " delivery=one-shot-per-context-after-retirement-fence-attachment\n";
@@ -703,7 +750,13 @@ bool Swapchain::requestPersistentRecoveryInPlaceAfterPresent(
 bool Swapchain::requestLowerPresentStallRecreationAfterPresent(
         const VkResult lowerPresentResult,
         const bool surfaceRequestAvailable) {
-    if (this->steamMenuSuspended || !this->privateOrderedTransport ||
+    const auto now = DiagnosticsClock::now();
+    const bool eventRecoveryWindow = this->recoveryState
+        .orderedAcquireRecovery.eventRecoveryWindowActive(
+            now, this->gamescopeFocus.recoveryWindow(now)
+        );
+    if (!eventRecoveryWindow || this->steamMenuSuspended ||
+            !this->privateOrderedTransport ||
             !automaticRecoveryRecreationAllowed(
                 this->spatialScaler.has_value()
             ) ||

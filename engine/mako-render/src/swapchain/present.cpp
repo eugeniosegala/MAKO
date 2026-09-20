@@ -1484,6 +1484,17 @@ VkResult Swapchain::presentGeneratedFrames(
                 acquireDeadlineExceeded,
                 plan.boundedOrderedAcquireProbe
             );
+        const bool eventRecoveryWindow = this->recoveryState
+            .orderedAcquireRecovery.eventRecoveryWindowActive(
+                observedAt,
+                this->gamescopeFocus.recoveryWindow(observedAt)
+            );
+        if (eventRecoveryWindow && observation.guardArmed &&
+                (timedOut || budgetExhausted) &&
+                this->adaptiveScheduler) {
+            static_cast<void>(this->adaptiveScheduler
+                ->rejectActiveRampForTransportMiss(observedAt));
+        }
         if (observation.stabilizing && this->adaptiveScheduler) {
             // The probe proves that lower transport traversal is possible,
             // not that the pre-timeout Adaptive cadence is still valid. Clear
@@ -1766,9 +1777,11 @@ VkResult Swapchain::presentGeneratedFrames(
             );
             // The explicit legacy timeout is an anti-freeze ceiling. Backend
             // work is already scheduled on this ordered path, so drain its
-            // final timeline value without reclassifying the miss as an
-            // Adaptive timing discontinuity. The next application present is
-            // already protected by a zero-wait guard or native quarantine.
+            // final timeline value. During an explicit menu/profile recovery
+            // window, a miss in an active higher-multiplier experiment rejects
+            // that probe above. Ordinary gameplay retains 3.3 behavior: the
+            // next application present uses the zero-wait guard or native
+            // quarantine without changing validated Adaptive state.
             const size_t skippedFrames =
                 plan.scheduledGeneratedFrames.size() - i;
             if (!this->adaptiveScheduler)

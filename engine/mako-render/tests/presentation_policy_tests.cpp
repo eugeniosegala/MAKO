@@ -619,23 +619,186 @@ int main() {
         )
     );
     expect(!recreationEscalation.recreationRequested(
-                acquireStart + 2999ms
+                acquireStart + 2999ms, true
+            ) &&
+            !recreationEscalation.recreationRequested(
+                acquireStart + 3000ms, false
             ) &&
             recreationEscalation.recreationRequested(
-                acquireStart + 3000ms
+                acquireStart + 3000ms, true
             ) &&
             recreationEscalation.signalRecreation(
-                acquireStart + 3000ms
+                acquireStart + 3000ms, true
             ) &&
             !recreationEscalation.signalRecreation(
-                acquireStart + 3001ms
+                acquireStart + 3001ms, true
             ),
-        "persistent ordered starvation did not produce one bounded three-second recreation request");
+        "persistent ordered starvation escaped event scoping or did not produce one bounded three-second recreation request");
     recreationEscalation.reset();
     expect(!recreationEscalation.recreationRequested(
-                acquireStart + 10s
+                acquireStart + 10s, true
             ),
         "an in-context reset rearmed an already signalled ordered recreation");
+
+    OrderedAcquireRecovery repeatedEpisodeEscalation;
+    const auto finishRecoveryEpisode = [&](const auto startedAt) {
+        auto episode = repeatedEpisodeEscalation.observe(
+            startedAt, 50ms, 25ms, true
+        );
+        expect(episode.quarantined,
+            "repeated recovery episode did not enter native drain");
+        auto decision = repeatedEpisodeEscalation.beforePresent(
+            startedAt + episode.retryDelay
+        );
+        expect(decision.boundedAcquireProbe,
+            "repeated recovery episode did not reach its bounded probe");
+        const auto recovered = repeatedEpisodeEscalation.observe(
+            startedAt + episode.retryDelay + 1ms,
+            5ms, 25ms, false, false, true
+        );
+        expect(recovered.recovered && recovered.stabilizing,
+            "repeated recovery episode did not begin stabilization");
+        decision = repeatedEpisodeEscalation.beforePresent(
+            startedAt + episode.retryDelay + 251ms
+        );
+        expect(decision.recoveryStabilized &&
+                !repeatedEpisodeEscalation.active(),
+            "repeated recovery episode did not complete stabilization");
+    };
+    finishRecoveryEpisode(acquireStart);
+    finishRecoveryEpisode(acquireStart + 5s);
+    expect(!repeatedEpisodeEscalation.recreationRequested(
+                acquireStart + 10s, true
+            ),
+        "two recovered starvation episodes requested recreation");
+    static_cast<void>(repeatedEpisodeEscalation.observe(
+        acquireStart + 10s, 50ms, 25ms, true
+    ));
+    expect(repeatedEpisodeEscalation.recoveryEpisodes(
+                acquireStart + 10s
+            ) == 3 &&
+            repeatedEpisodeEscalation.repeatedRecoveryEpisodes(
+                acquireStart + 10s
+            ) &&
+            !repeatedEpisodeEscalation.recreationRequested(
+                acquireStart + 10s, false
+            ) &&
+            repeatedEpisodeEscalation.recreationRequested(
+                acquireStart + 10s, true
+            ) &&
+            repeatedEpisodeEscalation.signalRecreation(
+                acquireStart + 10s, true
+            ) &&
+            !repeatedEpisodeEscalation.signalRecreation(
+                acquireStart + 10s + 1ms, true
+            ),
+        "three recovered starvation episodes escaped event scoping or did not request one recreation");
+
+    OrderedAcquireRecovery expiredEpisodeEscalation;
+    const auto finishExpiredEpisode = [&](const auto startedAt) {
+        auto episode = expiredEpisodeEscalation.observe(
+            startedAt, 50ms, 25ms, true
+        );
+        auto decision = expiredEpisodeEscalation.beforePresent(
+            startedAt + episode.retryDelay
+        );
+        expect(decision.boundedAcquireProbe,
+            "expired-window episode did not reach its bounded probe");
+        static_cast<void>(expiredEpisodeEscalation.observe(
+            startedAt + episode.retryDelay + 1ms,
+            5ms, 25ms, false, false, true
+        ));
+        static_cast<void>(expiredEpisodeEscalation.beforePresent(
+            startedAt + episode.retryDelay + 251ms
+        ));
+    };
+    finishExpiredEpisode(acquireStart);
+    finishExpiredEpisode(acquireStart + 8s);
+    static_cast<void>(expiredEpisodeEscalation.observe(
+        acquireStart + 16s, 50ms, 25ms, true
+    ));
+    expect(expiredEpisodeEscalation.recoveryEpisodes(
+                acquireStart + 16s
+            ) == 1 &&
+            !expiredEpisodeEscalation.recreationRequested(
+                acquireStart + 16s, true
+            ),
+        "widely spaced starvation episodes accumulated into recreation");
+
+    const auto finishCadenceTransitionEpisode = [&](
+            OrderedAcquireRecovery& recovery, const auto startedAt) {
+        const auto episode = recovery.observe(
+            startedAt, 50ms, 25ms, true
+        );
+        expect(episode.quarantined,
+            "cadence-transition recovery episode did not enter native drain");
+        auto decision = recovery.beforePresent(
+            startedAt + episode.retryDelay
+        );
+        expect(decision.boundedAcquireProbe,
+            "cadence-transition recovery episode did not reach its bounded probe");
+        const auto recovered = recovery.observe(
+            startedAt + episode.retryDelay + 1ms,
+            5ms, 25ms, false, false, true
+        );
+        expect(recovered.recovered && recovered.stabilizing,
+            "cadence-transition recovery episode did not stabilize");
+        decision = recovery.beforePresent(
+            startedAt + episode.retryDelay + 251ms
+        );
+        expect(decision.recoveryStabilized && !recovery.active(),
+            "cadence-transition recovery episode did not complete");
+    };
+
+    OrderedAcquireRecovery cadenceTransitionEscalation;
+    cadenceTransitionEscalation.beginCadenceStyleTransitionRecovery(
+        acquireStart
+    );
+    finishCadenceTransitionEpisode(
+        cadenceTransitionEscalation, acquireStart
+    );
+    finishCadenceTransitionEpisode(
+        cadenceTransitionEscalation, acquireStart + 20s
+    );
+    static_cast<void>(cadenceTransitionEscalation.observe(
+        acquireStart + 35s, 50ms, 25ms, true
+    ));
+    expect(!cadenceTransitionEscalation.repeatedRecoveryEpisodes(
+                acquireStart + 35s
+            ) &&
+            cadenceTransitionEscalation
+                .cadenceStyleTransitionRecoveryEpisodes(
+                    acquireStart + 35s
+                ) == 3 &&
+            cadenceTransitionEscalation
+                .cadenceStyleTransitionRecoveryRequested(
+                    acquireStart + 35s
+                ) &&
+            cadenceTransitionEscalation.recreationRequested(
+                acquireStart + 35s, false
+            ),
+        "three post-transition starvation episodes outside the ordinary burst window did not request recreation");
+
+    OrderedAcquireRecovery expiredCadenceTransitionEscalation;
+    expiredCadenceTransitionEscalation
+        .beginCadenceStyleTransitionRecovery(acquireStart);
+    finishCadenceTransitionEpisode(
+        expiredCadenceTransitionEscalation, acquireStart
+    );
+    finishCadenceTransitionEpisode(
+        expiredCadenceTransitionEscalation, acquireStart + 20s
+    );
+    static_cast<void>(expiredCadenceTransitionEscalation.observe(
+        acquireStart + 61s, 50ms, 25ms, true
+    ));
+    expect(expiredCadenceTransitionEscalation
+                .cadenceStyleTransitionRecoveryEpisodes(
+                    acquireStart + 61s
+                ) == 0 &&
+            !expiredCadenceTransitionEscalation.recreationRequested(
+                acquireStart + 61s, false
+            ),
+        "expired cadence-style transition armed a late recreation");
     acquireDecision = acquireRecovery.beforePresent(acquireStart + 800ms);
     expect(acquireDecision.bypassGeneration,
         "second ordered drain ended before its retry deadline");

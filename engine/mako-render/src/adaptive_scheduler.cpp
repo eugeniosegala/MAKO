@@ -2635,6 +2635,19 @@ void AdaptiveScheduler::beginTransportRecovery(const TimePoint now) {
         this->state.efficiencyProbe.retryAt = retainedEfficiencyRetryAt;
 }
 
+bool AdaptiveScheduler::rejectActiveRampForTransportMiss(
+        const TimePoint now) {
+    if (!this->state.ramp.evaluationAt)
+        return false;
+
+    // A generated image that times out while a higher multiplier is still
+    // experimental is direct evidence against that experiment. Do not let a
+    // mostly successful one-second delivery window validate the load and only
+    // discover the same FIFO pressure again after the next cadence refresh.
+    this->beginTransportRecovery(now);
+    return true;
+}
+
 MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         const std::chrono::steady_clock::time_point now,
         const double baseFps) {

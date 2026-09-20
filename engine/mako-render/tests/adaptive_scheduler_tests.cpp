@@ -3963,7 +3963,9 @@ namespace {
             require(probeStarted,
                 "precondition failed: generic higher-multiplier probe did not begin");
 
-            harness.scheduler.beginTransportRecovery(harness.now);
+            require(harness.scheduler.rejectActiveRampForTransportMiss(
+                    harness.now),
+                "ordered transport miss did not reject the active multiplier probe");
             const auto recovery = harness.scheduler.snapshot();
             require(recovery.phase == AdaptiveSchedulerPhase::Stabilizing &&
                     recovery.generationLimit ==
