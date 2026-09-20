@@ -1,21 +1,22 @@
-## What's new in MAKO Decky v3.3.0
+## What's new in MAKO Decky v3.4.0
 
-<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/neptune-fury.png" alt="Neptune Fury: a Renaissance-style pixel-art sea god commanding a storm beside a colossal mako, with sailing ships and a distant coastal city" width="100%">
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/unbroken-tide.png" alt="Unbroken Tide: a Renaissance-style pixel-art mako surging through an unbroken wave from a storm-dark fleet toward a sunlit fortified coast" width="100%">
 
-### Release codename: neptune-fury
+### Release codename: unbroken-tide
 
-> _“The realms of ocean and the fields of air are mine, not his.”_
+> _“Come, my friends, ’T is not too late to seek a newer world.”_
 >
-> **Virgil, _The Aeneid_, Book I, translated by John Dryden**
+> **Alfred, Lord Tennyson, _Ulysses_**
 
 ---
 
 <!-- Unreleased: complete release validation before publication. -->
 
-- **Independent upscaling:** Scaling no longer enables Gamescope WSI automatically. Supported 64-bit and 32-bit Gamescope games can upscale with WSI off.
-- **Lower CPU and memory use:** The updated MAKO Renderer reduces CPU overhead and RAM/VRAM use, with improved memory handling during resolution changes.
-- **Smoother Frame Generation cadence:** Smooth Cadence is on by default and uses validated ordered Gamescope presentation to stabilize delivery. Fractional Adaptive retains real frames, while Fixed and Steady Base Cap can favor an even cadence at the cost of real-frame rate and responsiveness; turn it off per game if preferred.
-- **A cleaner panel:** Press R1 for a compact view that retains Live Status and warnings. Centered headings, solid deep-blue dividers and preserved controller focus make navigation clearer.
-- **Clearer model warnings:** See LS1 and LSFG compatibility problems together, with troubleshooting guidance and separate instructions when Lossless Scaling is missing.
-- **Improved Japanese translations:** Translated scaling and Live Status messages, with consistent control names and updated Adaptive guidance across MAKO Decky and MAKO Renderer. Thanks to [Tak-attack](https://github.com/Tak-attack) for [PR #64](https://github.com/eugeniosegala/MAKO/pull/64).
-- **Clearer vkBasalt integration:** Updated controls and documentation cover 64-bit and 32-bit use, with a separate matching installation and links to official effect configuration guidance.
+MAKO Decky 3.4 makes live menu transitions easier to understand and brings a more resilient MAKO Renderer recovery policy to both Fixed and Adaptive Frame Generation.
+
+- **Clear menu status:** Live Status shows when Frame Generation is temporarily disabled because a Steam or Decky menu is open. Real frames and active scaling continue, and generation resumes with fresh history after returning to the game.
+- **One clean notice area:** Restart-pending, scaling, fallback, supersampling, memory-limit, and menu-suspension messages now appear together at the bottom of Live Status. Multiple simultaneous messages use a compact bullet list.
+- **More dependable recovery:** Fixed and Adaptive use the same pre-menu performance baseline and guarded post-menu repair where applicable. Recovery remains tied to confirmed menu and presentation evidence rather than ordinary gameplay FPS changes.
+- **More stable generated FPS:** Adaptive preserves a proven multiplier through transport recovery, and the Renderer can repair persistent generated-image starvation without repeatedly oscillating between native and multiplied output.
+- **Better resolution-change handling:** When a live resolution change temporarily reports insufficient GPU memory despite fitting a previously proven output, MAKO retries admission once after the old context has settled. A genuine memory limit remains enforced.
+- **Clearer scaling guidance:** Scaling controls and Live Status suggest Windowed mode when fullscreen or borderless keeps the game input at the display size, alongside the existing lower-resolution and Quality Supersampling options. The guidance is updated across supported languages and in the desktop GUI.
