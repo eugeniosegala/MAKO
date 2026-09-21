@@ -66,6 +66,7 @@ export type MakoConfig = ConfigurationData;
 export interface ConfigResult {
   success: boolean;
   config: Nullable<MakoConfig>;
+  vkbasalt_config_path?: string;
   message: string;
   error: Nullable<string>;
 }
@@ -209,15 +210,10 @@ export interface RuntimePendingState {
 }
 
 export type RuntimeScalingMethod =
-  | "native"
-  | "mako"
-  | "ls1"
-  | "ls1-performance";
+  "native" | "mako" | "ls1" | "ls1-performance";
 
 export type RuntimeScalingPipeline =
-  | "inactive"
-  | "pre-frame-generation"
-  | "post-frame-generation";
+  "inactive" | "pre-frame-generation" | "post-frame-generation";
 
 export interface RuntimeSpatialScalingState {
   active: boolean;

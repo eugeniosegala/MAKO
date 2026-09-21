@@ -94,6 +94,7 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
         standalone_files = [
             prefix / "lib/libmako-render.so",
             prefix / "lib/libmako-render-scaling.so",
+            service.standalone_vkbasalt_lib_file,
             prefix / "bin/mako-ui",
             prefix / "bin/mako-installer",
             prefix / "bin/mako-launch",
@@ -101,6 +102,7 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
             prefix / "share/applications/io.github.eugeniosegala.mako.desktop",
             service.json_file,
             service.spatial_scaling_json_file,
+            service.vkbasalt_manifest,
             service.registered_json_file,
             prefix / (
                 "share/vulkan/implicit_layer.d/"

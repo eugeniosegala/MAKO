@@ -52,6 +52,14 @@ from shared_config import (
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
     ULTRA_PERFORMANCE_FLOW_SCALE,
+    VKBASALT_ANTIALIASING_FXAA,
+    VKBASALT_ANTIALIASING_NONE,
+    VKBASALT_ANTIALIASING_SMAA,
+    VKBASALT_SHARPENING_CAS,
+    VKBASALT_SHARPENING_DLS,
+    VKBASALT_SHARPENING_NONE,
+    VKBASALT_STRENGTH_MAX,
+    VKBASALT_STRENGTH_MIN,
     ConfigFieldType,
 )
 
@@ -191,6 +199,22 @@ def generate_typescript_schema():
         "] as const;",
         "export type ExternalVulkanLayer =",
         "  (typeof EXTERNAL_VULKAN_LAYER_VALUES)[number];",
+        "",
+        "// Decky-owned vkBasalt controls",
+        "export const VKBASALT_SHARPENING_NONE = "
+        f'"{VKBASALT_SHARPENING_NONE}" as const;',
+        "export const VKBASALT_SHARPENING_CAS = "
+        f'"{VKBASALT_SHARPENING_CAS}" as const;',
+        "export const VKBASALT_SHARPENING_DLS = "
+        f'"{VKBASALT_SHARPENING_DLS}" as const;',
+        "export const VKBASALT_ANTIALIASING_NONE = "
+        f'"{VKBASALT_ANTIALIASING_NONE}" as const;',
+        "export const VKBASALT_ANTIALIASING_FXAA = "
+        f'"{VKBASALT_ANTIALIASING_FXAA}" as const;',
+        "export const VKBASALT_ANTIALIASING_SMAA = "
+        f'"{VKBASALT_ANTIALIASING_SMAA}" as const;',
+        f"export const VKBASALT_STRENGTH_MIN = {VKBASALT_STRENGTH_MIN} as const;",
+        f"export const VKBASALT_STRENGTH_MAX = {VKBASALT_STRENGTH_MAX} as const;",
         "",
         "// Configuration field type enum - matches Python",
         "export enum ConfigFieldType {",

@@ -170,10 +170,12 @@ export function useRuntimeScalingStatus(profileName: string, enabled: boolean) {
 
 export function useMakoConfig() {
   const [config, setConfig] = useState<ConfigurationData>(() => getDefaults());
+  const [vkBasaltConfigPath, setVkBasaltConfigPath] = useState("");
   const loadRequestId = useRef(0);
 
   const loadMakoConfig = useCallback(async (profileName?: string) => {
     const requestId = ++loadRequestId.current;
+    setVkBasaltConfigPath("");
     try {
       const result = profileName
         ? await getProfileConfig(profileName)
@@ -185,17 +187,20 @@ export function useMakoConfig() {
         // Preserve the generated defaults for any fields missing from the
         // response so an in-place plugin update never renders undefined values.
         setConfig({ ...getDefaults(), ...result.config });
+        setVkBasaltConfigPath(result.vkbasalt_config_path || "");
       } else {
         console.log(
           "MAKO Renderer config not available, using defaults:",
           result.error,
         );
         setConfig(getDefaults());
+        setVkBasaltConfigPath("");
       }
     } catch (error) {
       if (requestId !== loadRequestId.current) return;
       console.error("Error loading MAKO Renderer config:", error);
       setConfig(getDefaults());
+      setVkBasaltConfigPath("");
     }
   }, []);
 
@@ -246,6 +251,7 @@ export function useMakoConfig() {
 
   return {
     config,
+    vkBasaltConfigPath,
     setConfig,
     applyConfigPatch,
     replaceConfig,

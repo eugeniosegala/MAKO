@@ -94,7 +94,13 @@ class DllStatsResponse(DllStatsRequiredResponse, total=False):
     dll_source: Optional[str]
 
 
-class ConfigurationResponse(ServiceResponse):
+class ConfigurationPathFields(TypedDict, total=False):
+    """Optional editor metadata available from profile-read operations."""
+
+    vkbasalt_config_path: str
+
+
+class ConfigurationResponse(ServiceResponse, ConfigurationPathFields):
     """Response for configuration operations"""
     config: Optional[ConfigurationData]
 

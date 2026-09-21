@@ -2,6 +2,7 @@
 
 import json
 import re
+from pathlib import Path
 from threading import RLock
 from typing import Dict, Any, Optional
 
@@ -82,6 +83,8 @@ class ConfigurationService(BaseService):
             ),
             mangohud_layer_dir=self.mangohud_layer_dir,
             vkbasalt_layer_dir=self.vkbasalt_layer_dir,
+            vkbasalt_global_config_path=self.vkbasalt_global_config_path,
+            vkbasalt_profile_config_dir=self.vkbasalt_profile_config_dir,
             flatpak_implicit_layer_dir=FLATPAK_IMPLICIT_LAYER_DIR,
             gamescope_wsi_manifest_filename_64=(
                 GAMESCOPE_WSI_MANIFEST_FILENAME_64
@@ -128,14 +131,115 @@ class ConfigurationService(BaseService):
             self,
             profile_settings: profile_storage.WrapperProfileSettings,
     ) -> None:
+        normalized_profiles = {
+            profile_name: self._normalize_wrapper_settings(settings)
+            for profile_name, settings in profile_settings.items()
+        }
+        expected_profile_configs = self._write_vkbasalt_profile_configs(
+            normalized_profiles
+        )
         profile_storage.write_wrapper_profile_settings(
             self.config_dir,
             self.wrapper_profile_settings_path,
             self._WRAPPER_PROFILE_SETTINGS_VERSION,
-            profile_settings,
+            normalized_profiles,
             self._write_file,
             self._normalize_wrapper_settings,
         )
+        self._remove_stale_vkbasalt_profile_configs(expected_profile_configs)
+
+    def _write_vkbasalt_profile_configs(
+            self,
+            profile_settings: profile_storage.WrapperProfileSettings,
+    ) -> set[str]:
+        """Merge enabled configs while retaining files for existing profiles."""
+        expected_names = {
+            profile_storage.vkbasalt_profile_config_filename(profile_name)
+            for profile_name in profile_settings
+            if profile_name != DEFAULT_PROFILE_NAME
+        }
+        for profile_name, settings in profile_settings.items():
+            if not profile_storage.uses_vkbasalt(settings):
+                continue
+            config_path = profile_storage.vkbasalt_config_path(
+                profile_name,
+                self.vkbasalt_global_config_path,
+                self.vkbasalt_profile_config_dir,
+            )
+            config_path.parent.mkdir(
+                parents=True,
+                exist_ok=True,
+            )
+            legacy_default_path = (
+                self.vkbasalt_profile_config_dir /
+                profile_storage.vkbasalt_profile_config_filename(
+                    DEFAULT_PROFILE_NAME
+                )
+            )
+            source_path = config_path
+            if (
+                    profile_name == DEFAULT_PROFILE_NAME
+                    and not config_path.is_file()
+                    and legacy_default_path.is_file()
+            ):
+                source_path = legacy_default_path
+            existing_content = (
+                source_path.read_text(encoding="utf-8")
+                if source_path.is_file()
+                else ""
+            )
+            write_managed_text_atomically(
+                config_path,
+                profile_storage.merge_vkbasalt_config_content(
+                    existing_content,
+                    settings,
+                ),
+                0o644,
+                self.log,
+            )
+        return expected_names
+
+    def _vkbasalt_config_path(self, profile_name: str) -> Path:
+        """Return the advanced-edit file associated with one profile."""
+        return profile_storage.vkbasalt_config_path(
+            profile_name,
+            self.vkbasalt_global_config_path,
+            self.vkbasalt_profile_config_dir,
+        )
+
+    def _rename_vkbasalt_profile_config(
+            self,
+            old_name: str,
+            new_name: str,
+    ) -> None:
+        """Keep advanced edits with a saved profile when it is renamed."""
+        old_path = self._vkbasalt_config_path(old_name)
+        new_path = self._vkbasalt_config_path(new_name)
+        if not old_path.is_file():
+            return
+        new_path.parent.mkdir(parents=True, exist_ok=True)
+        old_path.replace(new_path)
+        self.log.info(
+            "Moved MAKO vkBasalt config from %s to %s",
+            old_path,
+            new_path,
+        )
+
+    def _remove_stale_vkbasalt_profile_configs(
+            self,
+            expected_names: set[str],
+    ) -> None:
+        """Remove only generated configs no longer referenced by the sidecar."""
+        if not self.vkbasalt_profile_config_dir.is_dir():
+            return
+        for path in self.vkbasalt_profile_config_dir.iterdir():
+            if (
+                path.is_file()
+                and re.fullmatch(r"[0-9a-f]{24}\.conf", path.name)
+                and path.name not in expected_names
+            ):
+                path.unlink()
+                self.log.info("Removed stale MAKO vkBasalt config %s", path)
 
     def _wrapper_settings_for_profile(
             self,
@@ -260,11 +364,18 @@ class ConfigurationService(BaseService):
         """
         try:
             profile_data = self._get_profile_data()
+            profile_name = profile_data["current_profile"]
             config = self._config_for_profile(
-                profile_data, profile_data["current_profile"]
+                profile_data, profile_name
             )
 
-            return self._success_response(ConfigurationResponse, config=config)
+            return self._success_response(
+                ConfigurationResponse,
+                config=config,
+                vkbasalt_config_path=str(
+                    self._vkbasalt_config_path(profile_name)
+                ),
+            )
 
         except (OSError, IOError) as e:
             error_msg = f"Error reading MAKO Renderer config: {str(e)}"
@@ -296,6 +407,9 @@ class ConfigurationService(BaseService):
                 ConfigurationResponse,
                 f"Profile '{profile_name}' retrieved successfully",
                 config=config,
+                vkbasalt_config_path=str(
+                    self._vkbasalt_config_path(profile_name)
+                ),
             )
         except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
             self.log.error("Error reading profile '%s': %s", profile_name, error)
@@ -339,6 +453,13 @@ class ConfigurationService(BaseService):
             ConfigurationResponse indicating success or failure
         """
         try:
+            normalized_wrapper_settings = self._normalize_wrapper_settings(config)
+            expected_profile_configs = self._write_vkbasalt_profile_configs({
+                DEFAULT_PROFILE_NAME: normalized_wrapper_settings,
+            })
+            self._remove_stale_vkbasalt_profile_configs(
+                expected_profile_configs
+            )
             script_content = self._generate_script_content(config)
 
             script_changed = write_managed_text_atomically(
@@ -404,7 +525,15 @@ class ConfigurationService(BaseService):
         return wrapper_generation.assemble_script_content(
             self._wrapper_generation_context(),
             self._generate_host_compatibility_guard_lines(),
-            self._script_configuration_lines(config),
+            [
+                *self._script_configuration_lines(config),
+                *wrapper_generation.vkbasalt_profile_environment_lines(
+                    DEFAULT_PROFILE_NAME,
+                    config,
+                    self.vkbasalt_global_config_path,
+                    self.vkbasalt_profile_config_dir,
+                ),
+            ],
             self._generate_layer_environment_lines(),
             self._profile_selection_lines(DEFAULT_PROFILE_NAME, config),
         )
@@ -452,8 +581,10 @@ class ConfigurationService(BaseService):
             profile_data,
             self._read_wrapper_profile_settings(),
             self._read_profile_metadata(profile_data),
-            self._config_for_profile,
-            self._script_configuration_lines,
+            vkbasalt_global_config_path=self.vkbasalt_global_config_path,
+            vkbasalt_profile_config_dir=self.vkbasalt_profile_config_dir,
+            profile_config=self._config_for_profile,
+            config_lines=self._script_configuration_lines,
         )
 
     @classmethod
@@ -733,6 +864,7 @@ class ConfigurationService(BaseService):
             profile_settings = self._read_wrapper_profile_settings()
             if old_name in profile_settings:
                 profile_settings[normalized_name] = profile_settings.pop(old_name)
+            self._rename_vkbasalt_profile_config(old_name, normalized_name)
             profile_storage.rename_profile_metadata(
                 metadata, old_name, normalized_name, new_name.strip()
             )

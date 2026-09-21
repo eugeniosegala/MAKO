@@ -95,7 +95,7 @@ Every game and display behaves differently, so compare one setting at a time. Fo
 
 ### Optional graphics integrations
 
-MAKO Decky provides a per-profile **Gamescope WSI** option and host-installed MangoHud or vkBasalt integrations. Scaling and Gamescope WSI are independent choices. Scaling uses the combined Renderer when WSI is off; enabling WSI selects the managed compatibility path inside a supported Gamescope session. The optional WSI path is limited to supported 64-bit launches. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
+MAKO Decky provides a per-profile **Gamescope WSI** option, host-installed MangoHud integration, and its own private 64-bit/32-bit vkBasalt build. Enable vkBasalt for a game to use MAKO-managed sharpening and anti-aliasing without installing vkBasalt separately; MAKO does not use a system-wide vkBasalt copy. Scaling and Gamescope WSI are independent choices. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
 
 ### How to configure MAKO with third-party launchers
 
@@ -136,6 +136,8 @@ Decky is optional. Desktop Linux users can install MAKO Renderer directly:
     ```
 
     Installation and profile editing alone do not activate MAKO. The launch option is required for each standalone native/Proton game; the configuration window can be closed during play. For direct desktop commands, see [Renderer usage](engine/README.md#usage).
+
+    To add the private bundled vkBasalt after MAKO Renderer, use `ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%`. An optional `VKBASALT_CONFIG_FILE` gives direct users the full standard vkBasalt configuration surface; assign a distinct file in each game's launch option for per-game settings. See [Optional graphics integrations](engine/docs/LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for isolation, ordering, and fallback behavior.
 
 5. For Flatpak games, launchers, or emulators, follow the [standalone Flatpak guide](engine/docs/FLATPAK-GUIDE.md) to install the matching extension and prepare each app, then launch it normally. The Renderer configuration window does not prepare Flatpaks, and the host `mako-launch` command cannot replace sandbox setup.
 

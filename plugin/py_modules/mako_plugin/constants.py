@@ -28,6 +28,8 @@ GAMESCOPE_WSI_COMPATIBILITY_LAYER_DIR = (
 )
 MANGOHUD_LAYER_DIR = f"{MAKO_ROOT}/vulkan/mangohud.d"
 VKBASALT_LAYER_DIR = f"{MAKO_ROOT}/vulkan/vkbasalt.d"
+VKBASALT_LIB_DIR = f"{LOCAL_LIB}/vkbasalt"
+VKBASALT_LIB32_DIR = f"{LOCAL_LIB32}/vkbasalt"
 USER_VULKAN_LAYER_DIR = ".local/share/vulkan/implicit_layer.d"
 CONFIG_DIR = ".config/mako-render"
 RUNTIME_STATE_DIRNAME = "runtime-state"
@@ -73,6 +75,9 @@ CONFIG_FILENAME = "conf.toml"
 # The engine reads conf.toml directly, so Decky-only launcher settings must be
 # stored separately rather than adding unknown keys to an upstream profile.
 WRAPPER_PROFILE_SETTINGS_FILENAME = "profile-wrapper-settings.json"
+# Saved-profile vkBasalt configurations live beside MAKO's other profile data.
+# The Default profile instead merges into ~/.config/vkBasalt/vkBasalt.conf.
+VKBASALT_PROFILE_CONFIG_DIRNAME = "vkbasalt"
 # Friendly game identity and Steam app matching for Decky's versioned profile
 # model. Renderer settings remain in conf.toml, their canonical engine format.
 PROFILE_METADATA_FILENAME = "profile-metadata.json"
@@ -120,12 +125,14 @@ MANGOHUD_MANIFEST_FILENAME_64 = "MangoHud.x86_64.json"
 MANGOHUD_MANIFEST_FILENAME_32 = "MangoHud.x86.json"
 MANGOHUD_LAYER_NAME_64 = "VK_LAYER_MANGOHUD_overlay_x86_64"
 MANGOHUD_LAYER_NAME_32 = "VK_LAYER_MANGOHUD_overlay_x86"
-VKBASALT_MANIFEST_FILENAMES_64 = ("vkBasalt.json", "vkBasalt.x86_64.json")
-VKBASALT_MANIFEST_FILENAME_64 = VKBASALT_MANIFEST_FILENAMES_64[0]
-VKBASALT_MANIFEST_FILENAMES_32 = ("vkBasalt.x86.json",)
-VKBASALT_MANIFEST_FILENAME_32 = VKBASALT_MANIFEST_FILENAMES_32[0]
+VKBASALT_MANIFEST_FILENAME_64 = "vkBasalt.json"
+VKBASALT_MANIFEST_FILENAME_32 = "vkBasalt.x86.json"
 VKBASALT_LAYER_NAME_64 = "VK_LAYER_VKBASALT_post_processing"
 VKBASALT_LAYER_NAME_32 = VKBASALT_LAYER_NAME_64
+VKBASALT_LIB_FILENAME = "libvkbasalt.so"
+VKBASALT_LAYER_ENABLE_ENV = "ENABLE_VKBASALT"
+VKBASALT_LAYER_DISABLE_ENV = "DISABLE_VKBASALT"
+VKBASALT_CONFIG_FILE_ENV = "VKBASALT_CONFIG_FILE"
 EXTERNAL_VULKAN_LAYER_ENV = "MAKO_EXTERNAL_VULKAN_LAYER"
 MAKO_LAYER_BUILD_MARKER = (
     f"MAKO Renderer: render layer active; identity={MAKO_LAYER_NAME}; build="
@@ -156,6 +163,8 @@ DECKY_NATIVE_RENDERER_RELATIVE_PATHS = (
     f"{LOCAL_LIB32}/{LIB_FILENAME}",
     f"{LOCAL_LIB}/{SPATIAL_SCALING_LIB_FILENAME}",
     f"{LOCAL_LIB32}/{SPATIAL_SCALING_LIB_FILENAME}",
+    f"{VKBASALT_LIB_DIR}/{VKBASALT_LIB_FILENAME}",
+    f"{VKBASALT_LIB32_DIR}/{VKBASALT_LIB_FILENAME}",
     f"{VULKAN_LAYER_DIR}/{JSON_FILENAME}",
     f"{VULKAN_LAYER_DIR}/{JSON32_FILENAME}",
     f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON_FILENAME}",

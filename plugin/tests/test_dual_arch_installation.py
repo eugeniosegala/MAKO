@@ -47,6 +47,9 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     VKBASALT_MANIFEST_FILENAME_64,
     VKBASALT_LAYER_NAME_32,
     VKBASALT_MANIFEST_FILENAME_32,
+    VKBASALT_LIB_FILENAME,
+    VKBASALT_LAYER_DISABLE_ENV,
+    VKBASALT_LAYER_ENABLE_ENV,
     JSON32_FILENAME,
     JSON_FILENAME,
     LIB_FILENAME,
@@ -121,6 +124,16 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.vkbasalt_layer_dir /
             VKBASALT_MANIFEST_FILENAME_32
         )
+        self.service.vkbasalt_lib_file = (
+            self.root / "lib/vkbasalt" / VKBASALT_LIB_FILENAME
+        )
+        self.service.vkbasalt_lib32_file = (
+            self.root / "lib32/vkbasalt" / VKBASALT_LIB_FILENAME
+        )
+        self.service.vkbasalt_lib_dir = self.service.vkbasalt_lib_file.parent
+        self.service.vkbasalt_lib32_dir = (
+            self.service.vkbasalt_lib32_file.parent
+        )
         registered_dir = self.root / "registered/vulkan/implicit_layer.d"
         self.service.user_vulkan_layer_dir = registered_dir
         self.service.registered_json_file = registered_dir / JSON_FILENAME
@@ -148,6 +161,14 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.standalone_install_prefix
             / "lib32"
             / SPATIAL_SCALING_LIB_FILENAME
+        )
+        self.service.standalone_vkbasalt_lib_file = (
+            self.service.standalone_install_prefix / "lib/vkbasalt" /
+            VKBASALT_LIB_FILENAME
+        )
+        self.service.standalone_vkbasalt_lib32_file = (
+            self.service.standalone_install_prefix / "lib32/vkbasalt" /
+            VKBASALT_LIB_FILENAME
         )
         self.service.standalone_installer_state_file = (
             self.service.standalone_install_prefix
@@ -189,6 +210,26 @@ class DualArchInstallationTests(unittest.TestCase):
             f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON_FILENAME}": (
                 self._manifest("64", spatial_scaling=True)
             ),
+            f"lib/vkbasalt/{VKBASALT_LIB_FILENAME}": (
+                b"ELF64 vkBasalt_GetInstanceProcAddr "
+                b"vkBasalt_GetDeviceProcAddr"
+            ),
+            f"share/mako-render/vulkan/vkbasalt.d/{VKBASALT_MANIFEST_FILENAME_64}": (
+                json.dumps({
+                    "file_format_version": "1.2.1",
+                    "layer": {
+                        "name": VKBASALT_LAYER_NAME_64,
+                        "library_path": "original-64",
+                        "library_arch": "64",
+                        "enable_environment": {
+                            VKBASALT_LAYER_ENABLE_ENV: "1"
+                        },
+                        "disable_environment": {
+                            VKBASALT_LAYER_DISABLE_ENV: "1"
+                        },
+                    },
+                }).encode("utf-8")
+            ),
         }
         if include_32bit:
             members.update({
@@ -203,6 +244,26 @@ class DualArchInstallationTests(unittest.TestCase):
                 ),
                 f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON32_FILENAME}": (
                     self._manifest("32", spatial_scaling=True)
+                ),
+                f"lib32/vkbasalt/{VKBASALT_LIB_FILENAME}": (
+                    b"ELF32 vkBasalt_GetInstanceProcAddr "
+                    b"vkBasalt_GetDeviceProcAddr"
+                ),
+                f"share/mako-render/vulkan/vkbasalt.d/{VKBASALT_MANIFEST_FILENAME_32}": (
+                    json.dumps({
+                        "file_format_version": "1.2.1",
+                        "layer": {
+                            "name": VKBASALT_LAYER_NAME_32,
+                            "library_path": "original-32",
+                            "library_arch": "32",
+                            "enable_environment": {
+                                VKBASALT_LAYER_ENABLE_ENV: "1"
+                            },
+                            "disable_environment": {
+                                VKBASALT_LAYER_DISABLE_ENV: "1"
+                            },
+                        },
+                    }).encode("utf-8")
                 ),
             })
 
@@ -220,6 +281,8 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.spatial_scaling_lib_file,
             self.service.spatial_scaling_json_file,
             self.service.registered_json_file,
+            self.service.vkbasalt_lib_file,
+            self.service.vkbasalt_manifest,
             self.service.mako_launch_script_path,
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -240,6 +303,8 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.standalone_spatial_scaling_lib_file,
             self.service.spatial_scaling_json_file,
             self.service.registered_json_file,
+            self.service.standalone_vkbasalt_lib_file,
+            self.service.vkbasalt_manifest,
             self.service.mako_launch_script_path,
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -307,6 +372,39 @@ class DualArchInstallationTests(unittest.TestCase):
             self.assertEqual(
                 manifest["layer"]["disable_environment"],
                 {SPATIAL_SCALING_LAYER_DISABLE_ENV: "1"},
+            )
+
+        vkbasalt_manifest64 = json.loads(
+            self.service.vkbasalt_manifest.read_text(encoding="utf-8")
+        )
+        vkbasalt_manifest32 = json.loads(
+            self.service.vkbasalt_manifest32.read_text(encoding="utf-8")
+        )
+        self.assertTrue(
+            self.service.vkbasalt_lib_file.read_bytes().startswith(b"ELF64")
+        )
+        self.assertTrue(
+            self.service.vkbasalt_lib32_file.read_bytes().startswith(b"ELF32")
+        )
+        self.assertEqual(
+            vkbasalt_manifest64["layer"]["library_path"],
+            "../../lib/vkbasalt/libvkbasalt.so",
+        )
+        self.assertEqual(
+            vkbasalt_manifest32["layer"]["library_path"],
+            "../../lib32/vkbasalt/libvkbasalt.so",
+        )
+        for manifest in (vkbasalt_manifest64, vkbasalt_manifest32):
+            self.assertEqual(
+                manifest["layer"]["name"], VKBASALT_LAYER_NAME_64
+            )
+            self.assertEqual(
+                manifest["layer"]["enable_environment"],
+                {VKBASALT_LAYER_ENABLE_ENV: "1"},
+            )
+            self.assertEqual(
+                manifest["layer"]["disable_environment"],
+                {VKBASALT_LAYER_DISABLE_ENV: "1"},
             )
 
         registered64 = json.loads(
@@ -414,7 +512,7 @@ class DualArchInstallationTests(unittest.TestCase):
 
         self.assertFalse(self.service.gamescope_wsi_compatibility_manifest.exists())
 
-    def test_stages_only_valid_selected_postprocess_manifests(self):
+    def test_stages_only_mangohud_and_preserves_bundled_vkbasalt(self):
         self.service.lib_file.parent.mkdir(parents=True)
         self.service.lib_file.write_bytes(b"installed")
         system_dir = self.root / "system-postprocess"
@@ -449,7 +547,8 @@ class DualArchInstallationTests(unittest.TestCase):
             }),
             encoding="utf-8",
         )
-        (system_dir / VKBASALT_MANIFEST_FILENAME_64).write_text(
+        host_vkbasalt_manifest = system_dir / VKBASALT_MANIFEST_FILENAME_64
+        host_vkbasalt_manifest.write_text(
             json.dumps({
                 "file_format_version": "1.0.0",
                 "layer": {
@@ -480,6 +579,18 @@ class DualArchInstallationTests(unittest.TestCase):
             '{"layer":{"name":"VK_LAYER_unrelated"}}',
             encoding="utf-8",
         )
+        self.service.vkbasalt_lib_file.parent.mkdir(parents=True)
+        self.service.vkbasalt_lib_file.write_bytes(b"bundled")
+        self.service.vkbasalt_lib32_file.parent.mkdir(parents=True)
+        self.service.vkbasalt_lib32_file.write_bytes(b"bundled32")
+        self.service.vkbasalt_manifest.parent.mkdir(parents=True)
+        bundled_vkbasalt = '{"layer":{"name":"bundled"}}\n'
+        self.service.vkbasalt_manifest.write_text(
+            bundled_vkbasalt, encoding="utf-8"
+        )
+        self.service.vkbasalt_manifest32.write_text(
+            bundled_vkbasalt, encoding="utf-8"
+        )
 
         with patch.object(
             installation_module,
@@ -498,11 +609,10 @@ class DualArchInstallationTests(unittest.TestCase):
         ))["layer"]
         self.assertEqual(mangohud64["name"], MANGOHUD_LAYER_NAME_64)
         self.assertEqual(mangohud64["library_arch"], "64")
-        vkbasalt64 = json.loads(self.service.vkbasalt_manifest.read_text(
-            encoding="utf-8"
-        ))["layer"]
-        self.assertEqual(vkbasalt64["name"], VKBASALT_LAYER_NAME_64)
-        self.assertEqual(vkbasalt64["library_arch"], "64")
+        self.assertEqual(
+            self.service.vkbasalt_manifest.read_text(encoding="utf-8"),
+            bundled_vkbasalt,
+        )
         self.assertEqual(
             json.loads(self.service.mangohud_manifest32.read_text(
                 encoding="utf-8"
@@ -510,10 +620,8 @@ class DualArchInstallationTests(unittest.TestCase):
             MANGOHUD_LAYER_NAME_32,
         )
         self.assertEqual(
-            json.loads(self.service.vkbasalt_manifest32.read_text(
-                encoding="utf-8"
-            ))["layer"]["library_arch"],
-            "32",
+            self.service.vkbasalt_manifest32.read_text(encoding="utf-8"),
+            bundled_vkbasalt,
         )
         self.assertEqual(
             set(self.service.mangohud_layer_dir.iterdir()),
@@ -529,6 +637,7 @@ class DualArchInstallationTests(unittest.TestCase):
                 self.service.vkbasalt_manifest32,
             },
         )
+        self.assertTrue(host_vkbasalt_manifest.exists())
 
     def test_invalid_postprocess_manifest_removes_stale_staged_copy(self):
         self.service.lib_file.parent.mkdir(parents=True)
@@ -553,6 +662,17 @@ class DualArchInstallationTests(unittest.TestCase):
 
         self.assertFalse(self.service.mangohud_manifest.exists())
 
+    def test_bundled_vkbasalt_manifest_without_library_is_removed(self):
+        self.service.lib_file.parent.mkdir(parents=True)
+        self.service.lib_file.write_bytes(b"installed")
+        self.service.vkbasalt_manifest.parent.mkdir(parents=True)
+        self.service.vkbasalt_manifest.write_text("stale", encoding="utf-8")
+
+        self.assertTrue(
+            self.service.refresh_guarded_postprocess_manifests_if_needed()
+        )
+        self.assertFalse(self.service.vkbasalt_manifest.exists())
+
     def test_installs_64bit_only_archive_and_removes_stale_32bit_files(self):
         self.service.lib32_file.parent.mkdir(parents=True, exist_ok=True)
         self.service.lib32_file.write_bytes(b"stale")
@@ -567,6 +687,16 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.spatial_scaling_json32_file.write_text(
             "stale", encoding="utf-8"
         )
+        self.service.vkbasalt_lib32_file.parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        self.service.vkbasalt_lib32_file.write_bytes(b"stale")
+        self.service.vkbasalt_manifest32.parent.mkdir(
+            parents=True, exist_ok=True
+        )
+        self.service.vkbasalt_manifest32.write_text(
+            "stale", encoding="utf-8"
+        )
 
         self.service._extract_and_install_files(self._archive(include_32bit=False))
         self.service._register_layer_manifests()
@@ -579,6 +709,8 @@ class DualArchInstallationTests(unittest.TestCase):
         self.assertFalse(self.service.registered_json32_file.exists())
         self.assertFalse(self.service.spatial_scaling_lib32_file.exists())
         self.assertFalse(self.service.spatial_scaling_json32_file.exists())
+        self.assertFalse(self.service.vkbasalt_lib32_file.exists())
+        self.assertFalse(self.service.vkbasalt_manifest32.exists())
 
     def test_rejects_payload_without_build_marker(self):
         archive_path = self._archive()
@@ -619,6 +751,26 @@ class DualArchInstallationTests(unittest.TestCase):
 
         self.assertFalse(self.service.lib_file.exists())
         self.assertFalse(self.service.lib32_file.exists())
+
+    def test_rejects_payload_without_vkbasalt_entry_points(self):
+        archive_path = self._archive()
+        replacement = self.root / "invalid-vkbasalt.tar.xz"
+        with tarfile.open(archive_path, "r:xz") as source, tarfile.open(
+            replacement, "w:xz"
+        ) as output:
+            for member in source.getmembers():
+                content = source.extractfile(member).read()
+                if member.name.endswith(f"/{VKBASALT_LIB_FILENAME}"):
+                    content = b"ELF-without-vkbasalt-entry-points"
+                copied = tarfile.TarInfo(member.name)
+                copied.size = len(content)
+                output.addfile(copied, io.BytesIO(content))
+
+        with self.assertRaisesRegex(OSError, "vkBasalt layer entrypoints"):
+            self.service._extract_and_install_files(replacement)
+
+        self.assertFalse(self.service.vkbasalt_lib_file.exists())
+        self.assertFalse(self.service.vkbasalt_lib32_file.exists())
 
     def test_bundled_archive_checksum_is_verified_before_installation(self):
         archive_path = self._archive()
@@ -902,6 +1054,7 @@ class DualArchInstallationTests(unittest.TestCase):
         for path in (
             standalone_library,
             self.service.standalone_spatial_scaling_lib_file,
+            self.service.standalone_vkbasalt_lib_file,
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.touch()

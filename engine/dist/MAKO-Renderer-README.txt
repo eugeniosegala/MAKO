@@ -34,6 +34,19 @@ For a direct desktop command, replace %command% with the actual game executable 
 
     ~/.local/bin/mako-launch "/path/to/your-game"
 
+Optional private vkBasalt post-processing
+-----------------------------------------
+
+The archive includes MAKO's pinned 64-bit and 32-bit vkBasalt payload. To add it after MAKO Renderer for one native Steam or Proton game, use this launch option:
+
+    ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%
+
+For the full vkBasalt option suite, create a standard config file and select it for that game:
+
+    ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
+
+The config path is optional. Renderer process matching does not select a vkBasalt file; assign a distinct VKBASALT_CONFIG_FILE in each game's launch option for per-game settings. Only MAKO's private bundled vkBasalt is used; a system installation is ignored. If the complete 64-bit/32-bit bundle or selected config is unavailable, the launcher reports it and safely continues with MAKO alone. Restart the game after changing activation or configuration. Flatpak applications require the separate setup guide below.
+
 Flatpak games, launchers, and emulators require the matching MAKO runtime extension and preparation for each application. The standalone configuration window edits profiles; it does not prepare Flatpaks. "Install MAKO Flatpak Extensions" installs extensions only. Follow the Flatpak setup link below for runtime selection, configuration/DLL access, and sandbox environment, then restart and launch the app normally. The host mako-launch command does not replace that preparation. MAKO Decky's Flatpak Setup provides managed preparation when using Decky.
 
 Update

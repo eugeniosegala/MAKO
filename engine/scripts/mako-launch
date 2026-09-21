@@ -14,6 +14,11 @@ directory for reliable swapchain ownership.
 Set environment variables before mako-launch to pass them to the game:
   MAKO_PROFILE=my-profile mako-launch COMMAND [ARG ...]
 
+Enable MAKO's private bundled vkBasalt after the Renderer:
+  ENABLE_VKBASALT=1 mako-launch COMMAND [ARG ...]
+
+VKBASALT_CONFIG_FILE=/absolute/path/vkBasalt.conf selects an optional config.
+
 Standalone launch compatibility settings are read from:
   ~/.config/mako-render/launcher.conf
 
@@ -155,6 +160,21 @@ if [[ "$mako_launch_force_alsa_audio" == 1 ]]; then
 fi
 unset mako_launch_enable_zink mako_launch_force_alsa_audio
 
+# Treat vkBasalt as an explicit standalone opt-in. Consume its upstream enable
+# gate here so the child can receive one ordered explicit chain instead of
+# discovering the same layer through both explicit and implicit activation.
+mako_vkbasalt_requested="${ENABLE_VKBASALT:-0}"
+case "$mako_vkbasalt_requested" in
+    0|1) ;;
+    *)
+        echo "ENABLE_VKBASALT must be 0 or 1 when used with mako-launch." >&2
+        exit 2
+        ;;
+esac
+mako_vkbasalt_config="${VKBASALT_CONFIG_FILE:-}"
+unset ENABLE_VKBASALT VKBASALT_CONFIG_FILE
+export DISABLE_VKBASALT=1
+
 allow_competing_layers="${MAKO_ALLOW_COMPETING_LAYERS:-0}"
 case "$allow_competing_layers" in
     0)
@@ -192,9 +212,70 @@ if [[ ! -d "$mako_implicit_layer_path" && -d "$mako_data_home/mako-render/vulkan
 elif [[ ! -d "$mako_implicit_layer_path" ]]; then
     mako_implicit_layer_path="$mako_install_prefix/share/vulkan/implicit_layer.d"
 fi
+
+# Remove any inherited vkBasalt request before deciding whether the private
+# bundled layer can join. This prevents a system-wide manifest or duplicate
+# caller entry from bypassing the standalone launcher's ownership boundary.
+mako_existing_instance_layers=":${VK_INSTANCE_LAYERS:-}:"
+while [[ "$mako_existing_instance_layers" == *":VK_LAYER_VKBASALT_post_processing:"* ]]; do
+    mako_existing_instance_layers="${mako_existing_instance_layers/:VK_LAYER_VKBASALT_post_processing:/:}"
+done
+mako_existing_instance_layers="${mako_existing_instance_layers#:}"
+mako_existing_instance_layers="${mako_existing_instance_layers%:}"
+
+mako_vkbasalt_enabled=0
+mako_vkbasalt_layer_path="$mako_install_prefix/share/mako-render/vulkan/vkbasalt.d"
+mako_vkbasalt_library64="$mako_install_prefix/lib/vkbasalt/libvkbasalt.so"
+mako_vkbasalt_library32="$mako_install_prefix/lib32/vkbasalt/libvkbasalt.so"
+if [[ ! -r "$mako_vkbasalt_layer_path/vkBasalt.json" ||
+        ! -r "$mako_vkbasalt_layer_path/vkBasalt.x86.json" ||
+        ! -r "$mako_vkbasalt_library64" ||
+        ! -r "$mako_vkbasalt_library32" ]]; then
+    mako_vkbasalt_layer_path="$mako_data_home/mako-render/vulkan/vkbasalt.d"
+    mako_vkbasalt_library64="$mako_data_home/../lib/vkbasalt/libvkbasalt.so"
+    mako_vkbasalt_library32="$mako_data_home/../lib32/vkbasalt/libvkbasalt.so"
+fi
+if [[ "$mako_vkbasalt_requested" == 1 && "${DISABLE_MAKO:-0}" != 1 ]]; then
+    if [[ ! -r "$mako_vkbasalt_layer_path/vkBasalt.json" ||
+            ! -r "$mako_vkbasalt_layer_path/vkBasalt.x86.json" ||
+            ! -r "$mako_vkbasalt_library64" ||
+            ! -r "$mako_vkbasalt_library32" ]]; then
+        echo "mako-launch: private 64-bit/32-bit vkBasalt payload is unavailable; continuing with MAKO Renderer only." >&2
+    elif [[ -n "$mako_vkbasalt_config" && ! -r "$mako_vkbasalt_config" ]]; then
+        echo "mako-launch: vkBasalt config is not readable: $mako_vkbasalt_config; continuing with MAKO Renderer only." >&2
+    else
+        mako_existing_instance_layers=":$mako_existing_instance_layers:"
+        while [[ "$mako_existing_instance_layers" == *":VK_LAYER_MAKO_render:"* ]]; do
+            mako_existing_instance_layers="${mako_existing_instance_layers/:VK_LAYER_MAKO_render:/:}"
+        done
+        mako_existing_instance_layers="${mako_existing_instance_layers#:}"
+        mako_existing_instance_layers="${mako_existing_instance_layers%:}"
+        if [[ -n "$mako_existing_instance_layers" ]]; then
+            export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing:$mako_existing_instance_layers"
+        else
+            export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing"
+        fi
+        mako_implicit_layer_path="$mako_implicit_layer_path:$mako_vkbasalt_layer_path"
+        unset DISABLE_VKBASALT
+        if [[ -n "$mako_vkbasalt_config" ]]; then
+            export VKBASALT_CONFIG_FILE="$mako_vkbasalt_config"
+        fi
+        mako_vkbasalt_enabled=1
+    fi
+fi
+if [[ "$mako_vkbasalt_enabled" != 1 ]]; then
+    if [[ -n "$mako_existing_instance_layers" ]]; then
+        export VK_INSTANCE_LAYERS="$mako_existing_instance_layers"
+    else
+        unset VK_INSTANCE_LAYERS
+    fi
+fi
 export VK_IMPLICIT_LAYER_PATH="$mako_implicit_layer_path"
 unset VK_ADD_IMPLICIT_LAYER_PATH
 unset mako_launcher_dir mako_install_prefix mako_data_home mako_implicit_layer_path
+unset mako_existing_instance_layers mako_vkbasalt_layer_path
+unset mako_vkbasalt_library64 mako_vkbasalt_library32
+unset mako_vkbasalt_requested mako_vkbasalt_config
 
 # Gamescope WSI implements its own FIFO policy above MAKO, while MAKO expands
 # one application present into a generated/original sequence below it. Keeping
@@ -209,6 +290,11 @@ unset ENABLE_GAMESCOPE_WSI
 # live compositor feedback. Keep the launch contract explicit on both sides.
 export MAKO_DISABLE_HDR_EXPOSURE=1
 unset DXVK_HDR
-export ENABLE_MAKO=1
+if [[ "$mako_vkbasalt_enabled" == 1 ]]; then
+    unset ENABLE_MAKO
+else
+    export ENABLE_MAKO=1
+fi
+unset mako_vkbasalt_enabled
 
 exec "$@"

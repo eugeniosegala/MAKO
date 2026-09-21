@@ -2,7 +2,6 @@ import { PanelSectionRow, ToggleField } from "@decky/ui";
 import {
   EXTERNAL_VULKAN_LAYER_MANGOHUD,
   EXTERNAL_VULKAN_LAYER_NONE,
-  EXTERNAL_VULKAN_LAYER_VKBASALT,
   EXTERNAL_VULKAN_LAYER,
 } from "../../config/configSchema";
 import t from "../../i18n/i18n";
@@ -55,35 +54,7 @@ export function ExternalToolsConfigurationGroup({
                     : EXTERNAL_VULKAN_LAYER_NONE,
                 )
               }
-            />
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <ToggleField
-              label={
-                <MakoRestartLabel
-                  label={t(
-                    "CONFIG_ENABLE_VKBASALT",
-                    "Enable vkBasalt (Restart)",
-                  )}
-                />
-              }
-              description={t(
-                "CONFIG_ENABLE_VKBASALT_DESC",
-                "Applies your configured vkBasalt effects, such as sharpening, anti-aliasing, and color adjustments. Requires vkBasalt to be installed separately.",
-              )}
               bottomSeparator="none"
-              checked={
-                config.external_vulkan_layer === EXTERNAL_VULKAN_LAYER_VKBASALT
-              }
-              onChange={(value) =>
-                onConfigChange(
-                  EXTERNAL_VULKAN_LAYER,
-                  value
-                    ? EXTERNAL_VULKAN_LAYER_VKBASALT
-                    : EXTERNAL_VULKAN_LAYER_NONE,
-                )
-              }
             />
           </PanelSectionRow>
         </>

@@ -31,7 +31,8 @@ from .constants import (
     MANGOHUD_LAYER_NAME_32, MANGOHUD_MANIFEST_FILENAME_32,
     VKBASALT_LAYER_NAME_64, VKBASALT_MANIFEST_FILENAME_64,
     VKBASALT_LAYER_NAME_32, VKBASALT_MANIFEST_FILENAME_32,
-    VKBASALT_MANIFEST_FILENAMES_64, VKBASALT_MANIFEST_FILENAMES_32,
+    VKBASALT_LIB_FILENAME,
+    VKBASALT_LAYER_ENABLE_ENV, VKBASALT_LAYER_DISABLE_ENV,
     HOST_SYSTEM_IMPLICIT_LAYER_DIR,
     ARMADA_DEVICE_ENV,
     ACTIVE_RENDERER_STATE_FILENAME,
@@ -121,6 +122,12 @@ class InstallationService(BaseService):
         self.vkbasalt_manifest32 = (
             self.vkbasalt_layer_dir / VKBASALT_MANIFEST_FILENAME_32
         )
+        self.vkbasalt_lib_file = (
+            self.vkbasalt_lib_dir / VKBASALT_LIB_FILENAME
+        )
+        self.vkbasalt_lib32_file = (
+            self.vkbasalt_lib32_dir / VKBASALT_LIB_FILENAME
+        )
         self.cli_file = self.user_home / CLI_DIR / CLI_FILENAME
         self.engine_state_file = self.local_lib_dir.parent / "installed-engine.json"
         self.active_renderer_state_file = (
@@ -142,6 +149,14 @@ class InstallationService(BaseService):
             self.standalone_install_prefix
             / "lib32"
             / SPATIAL_SCALING_LIB_FILENAME
+        )
+        self.standalone_vkbasalt_lib_file = (
+            self.standalone_install_prefix / "lib" / "vkbasalt" /
+            VKBASALT_LIB_FILENAME
+        )
+        self.standalone_vkbasalt_lib32_file = (
+            self.standalone_install_prefix / "lib32" / "vkbasalt" /
+            VKBASALT_LIB_FILENAME
         )
         self.standalone_installer_state_file = (
             self.user_home / STANDALONE_INSTALLER_STATE_RELATIVE_PATH
@@ -452,11 +467,15 @@ class InstallationService(BaseService):
             lib32_file = self.standalone_lib32_file
             scaling_lib_file = self.standalone_spatial_scaling_lib_file
             scaling_lib32_file = self.standalone_spatial_scaling_lib32_file
+            vkbasalt_lib_file = self.standalone_vkbasalt_lib_file
+            vkbasalt_lib32_file = self.standalone_vkbasalt_lib32_file
         else:
             lib_file = self.lib_file
             lib32_file = self.lib32_file
             scaling_lib_file = self.spatial_scaling_lib_file
             scaling_lib32_file = self.spatial_scaling_lib32_file
+            vkbasalt_lib_file = self.vkbasalt_lib_file
+            vkbasalt_lib32_file = self.vkbasalt_lib32_file
 
         required_files = (
             lib_file,
@@ -464,6 +483,8 @@ class InstallationService(BaseService):
             scaling_lib_file,
             self.spatial_scaling_json_file,
             self.registered_json_file,
+            vkbasalt_lib_file,
+            self.vkbasalt_manifest,
         )
         if not all(path.is_file() for path in required_files):
             return False
@@ -475,6 +496,8 @@ class InstallationService(BaseService):
             scaling_lib32_file,
             self.spatial_scaling_json32_file,
             self.registered_json32_file,
+            vkbasalt_lib32_file,
+            self.vkbasalt_manifest32,
         ))
 
     def prepare_active_standalone_for_decky(self) -> bool:
@@ -515,6 +538,10 @@ class InstallationService(BaseService):
                 self.spatial_scaling_lib_file,
             f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON_FILENAME}":
                 self.spatial_scaling_json_file,
+            f"lib/vkbasalt/{VKBASALT_LIB_FILENAME}":
+                self.vkbasalt_lib_file,
+            f"share/mako-render/vulkan/vkbasalt.d/{VKBASALT_MANIFEST_FILENAME_64}":
+                self.vkbasalt_manifest,
         }
         optional_32bit_destinations = {
             f"lib32/{LIB_FILENAME}": self.lib32_file,
@@ -523,6 +550,10 @@ class InstallationService(BaseService):
                 self.spatial_scaling_lib32_file,
             f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON32_FILENAME}":
                 self.spatial_scaling_json32_file,
+            f"lib32/vkbasalt/{VKBASALT_LIB_FILENAME}":
+                self.vkbasalt_lib32_file,
+            f"share/mako-render/vulkan/vkbasalt.d/{VKBASALT_MANIFEST_FILENAME_32}":
+                self.vkbasalt_manifest32,
         }
         destinations = {**required_destinations, **optional_32bit_destinations}
         # Keep staging in MAKO's user-owned data directory. Armada currently
@@ -574,11 +605,20 @@ class InstallationService(BaseService):
                 has_32bit_scaling_manifest = (
                     self.spatial_scaling_json32_file in staged_files
                 )
+                has_32bit_vkbasalt_library = (
+                    self.vkbasalt_lib32_file in staged_files
+                )
+                has_32bit_vkbasalt_manifest = (
+                    self.vkbasalt_manifest32 in staged_files
+                )
                 if (
                     has_32bit_library != has_32bit_manifest or
                     has_32bit_scaling_library !=
                         has_32bit_scaling_manifest or
-                    has_32bit_library != has_32bit_scaling_library
+                    has_32bit_library != has_32bit_scaling_library or
+                    has_32bit_vkbasalt_library !=
+                        has_32bit_vkbasalt_manifest or
+                    has_32bit_library != has_32bit_vkbasalt_library
                 ):
                     raise OSError(
                         "Archive contained an incomplete 32-bit MAKO layer chain"
@@ -603,6 +643,14 @@ class InstallationService(BaseService):
                     SPATIAL_SCALING_LAYER_BUILD_MARKER,
                     *scaling_binaries,
                 )
+                vkbasalt_binaries = [
+                    staged_files[self.vkbasalt_lib_file][0]
+                ]
+                if has_32bit_vkbasalt_library:
+                    vkbasalt_binaries.append(
+                        staged_files[self.vkbasalt_lib32_file][0]
+                    )
+                self._validate_vkbasalt_binary_identity(*vkbasalt_binaries)
 
                 for destination, (temp_file, filename) in staged_files.items():
                     destination.parent.mkdir(parents=True, exist_ok=True)
@@ -640,6 +688,36 @@ class InstallationService(BaseService):
                                 SPATIAL_SCALING_LAYER_DISABLE_ENV: "1"
                             },
                         )
+                    elif filename == VKBASALT_MANIFEST_FILENAME_64:
+                        self._copy_and_fix_json_file(
+                            temp_file,
+                            destination,
+                            f"../../lib/vkbasalt/{VKBASALT_LIB_FILENAME}",
+                            "64",
+                            layer_name=VKBASALT_LAYER_NAME_64,
+                            description="vkBasalt post processing layer (MAKO build)",
+                            enable_environment={
+                                VKBASALT_LAYER_ENABLE_ENV: "1"
+                            },
+                            disable_environment={
+                                VKBASALT_LAYER_DISABLE_ENV: "1"
+                            },
+                        )
+                    elif filename == VKBASALT_MANIFEST_FILENAME_32:
+                        self._copy_and_fix_json_file(
+                            temp_file,
+                            destination,
+                            f"../../lib32/vkbasalt/{VKBASALT_LIB_FILENAME}",
+                            "32",
+                            layer_name=VKBASALT_LAYER_NAME_32,
+                            description="vkBasalt post processing layer (MAKO build)",
+                            enable_environment={
+                                VKBASALT_LAYER_ENABLE_ENV: "1"
+                            },
+                            disable_environment={
+                                VKBASALT_LAYER_DISABLE_ENV: "1"
+                            },
+                        )
                     else:
                         # Replace the entry only after the complete file and its
                         # safe owner mode are ready. This avoids modifying a stale
@@ -659,6 +737,8 @@ class InstallationService(BaseService):
                     self._remove_if_exists(self.json32_file)
                     self._remove_if_exists(self.spatial_scaling_lib32_file)
                     self._remove_if_exists(self.spatial_scaling_json32_file)
+                    self._remove_if_exists(self.vkbasalt_lib32_file)
+                    self._remove_if_exists(self.vkbasalt_manifest32)
 
     @staticmethod
     def _validate_layer_binary_identity(
@@ -674,6 +754,19 @@ class InstallationService(BaseService):
                 raise OSError(
                     "MAKO layer does not support the profile-fallback wrapper "
                     f"protocol: {layer_binary}"
+                )
+
+    @staticmethod
+    def _validate_vkbasalt_binary_identity(*layer_binaries: Path) -> None:
+        """Reject a bundled file that is not the pinned vkBasalt layer."""
+        for layer_binary in layer_binaries:
+            content = layer_binary.read_bytes()
+            if (
+                b"vkBasalt_GetInstanceProcAddr" not in content
+                or b"vkBasalt_GetDeviceProcAddr" not in content
+            ):
+                raise OSError(
+                    f"vkBasalt layer entrypoints are missing from {layer_binary}"
                 )
 
     def _copy_and_fix_json_file(
@@ -892,12 +985,16 @@ class InstallationService(BaseService):
         return True
 
     def refresh_guarded_postprocess_manifests_if_needed(self) -> bool:
-        """Stage only the exact supported post-process manifests.
+        """Stage only the exact supported host post-process manifests.
 
         This is intentionally independent from profile selection. The wrapper
         exposes at most one private tool directory when its matching control
         is selected. Each directory may contain the validated 64-bit and
         32-bit identities for that one tool, never unrelated host layers.
+
+        vkBasalt is part of the checksummed Renderer payload and is never
+        replaced with a host-installed copy. Remove a damaged manifest if its
+        matching bundled library disappears so the wrapper fails closed.
         """
         if not self._active_renderer_library_file().is_file():
             return False
@@ -917,25 +1014,22 @@ class InstallationService(BaseService):
             {"MANGOHUD": "1"},
             {"DISABLE_MANGOHUD": "1"},
         )
-        vkbasalt_changed = self._stage_guarded_host_manifest(
-            VKBASALT_MANIFEST_FILENAMES_64,
-            self.vkbasalt_manifest,
-            VKBASALT_LAYER_NAME_64,
-            "64",
-            {"ENABLE_VKBASALT": "1"},
-            {"DISABLE_VKBASALT": "1"},
-        )
-        vkbasalt32_changed = self._stage_guarded_host_manifest(
-            VKBASALT_MANIFEST_FILENAMES_32,
-            self.vkbasalt_manifest32,
-            VKBASALT_LAYER_NAME_32,
-            "32",
-            {"ENABLE_VKBASALT": "1"},
-            {"DISABLE_VKBASALT": "1"},
-        )
+        vkbasalt_changed = False
+        for library, manifest in (
+            (self.vkbasalt_lib_file, self.vkbasalt_manifest),
+            (self.vkbasalt_lib32_file, self.vkbasalt_manifest32),
+        ):
+            if manifest.is_file() and not library.is_file():
+                vkbasalt_changed = (
+                    self._remove_if_exists(manifest) or vkbasalt_changed
+                )
+                self.log.warning(
+                    "Removed bundled vkBasalt manifest without its library: %s",
+                    manifest,
+                )
         return (
             mangohud_changed or mangohud32_changed or
-            vkbasalt_changed or vkbasalt32_changed
+            vkbasalt_changed
         )
 
     def _create_config_file(self) -> None:
@@ -1243,6 +1337,7 @@ class InstallationService(BaseService):
             self.gamescope_wsi_compatibility_manifest,
             self.gamescope_wsi_compatibility_library,
             self.mangohud_manifest, self.mangohud_manifest32,
+            self.vkbasalt_lib_file, self.vkbasalt_lib32_file,
             self.vkbasalt_manifest, self.vkbasalt_manifest32,
             self.cli_file, self.engine_state_file,
             self.active_renderer_state_file,

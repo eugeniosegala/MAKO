@@ -131,6 +131,18 @@ if(BUILD_TESTING AND UNIX)
     set_tests_properties(flatpak-vulkan-headers-freshness
         flatpak-vulkan-headers-contract PROPERTIES LABELS "portable-policy")
 
+    add_test(NAME vkbasalt-release-contract
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/manage-vkbasalt-release.py"
+            --check
+            --check-flatpak-module
+            "${CMAKE_CURRENT_SOURCE_DIR}/dist/flatpak/mako-render/vkbasalt-module.json")
+    add_test(NAME vkbasalt-release-validator
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-vkbasalt-release.py")
+    set_tests_properties(vkbasalt-release-contract
+        vkbasalt-release-validator PROPERTIES LABELS "portable-policy")
+
     add_test(NAME embedded-color-conversion-spirv-freshness
         COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate-color-conversion-spirv.py"

@@ -1,0 +1,22 @@
+{
+  "file_format_version": "1.0.0",
+  "layer": {
+    "name": "VK_LAYER_VKBASALT_post_processing",
+    "type": "GLOBAL",
+    "library_path": "/usr/lib/extensions/vulkan/makorender/lib64/vkbasalt/libvkbasalt.so",
+    "library_arch": "64",
+    "api_version": "1.3.223",
+    "implementation_version": "1",
+    "description": "vkBasalt post processing layer (MAKO build)",
+    "functions": {
+      "vkGetInstanceProcAddr": "vkBasalt_GetInstanceProcAddr",
+      "vkGetDeviceProcAddr": "vkBasalt_GetDeviceProcAddr"
+    },
+    "enable_environment": {
+      "ENABLE_VKBASALT": "1"
+    },
+    "disable_environment": {
+      "DISABLE_VKBASALT": "1"
+    }
+  }
+}

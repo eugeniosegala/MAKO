@@ -50,6 +50,9 @@ from .constants import (
     VK_ADD_IMPLICIT_LAYER_PATH_ENV,
     VK_IMPLICIT_LAYER_PATH_ENV,
     VK_INSTANCE_LAYERS_ENV,
+    VKBASALT_CONFIG_FILE_ENV,
+    VKBASALT_LAYER_DISABLE_ENV,
+    VKBASALT_LAYER_ENABLE_ENV,
     VKBASALT_LAYER_NAME_64,
     WAYLAND_DISPLAY_ENV,
 )
@@ -58,10 +61,11 @@ from .profile_storage import (
     WrapperProfileSettings,
     config_for_profile,
     processes_for_config,
+    vkbasalt_config_path,
 )
 
 
-WRAPPER_FORMAT_VERSION = 59
+WRAPPER_FORMAT_VERSION = 63
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -81,8 +85,12 @@ REQUIRED_WRAPPER_EXPORTS = (
     "mako_gamescope_wsi_skip_log=",
     f"export {SPATIAL_SCALING_LAYER_DISABLE_ENV}=1",
     f"unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
+    f"export {VKBASALT_LAYER_DISABLE_ENV}=1",
+    f"unset {VKBASALT_LAYER_ENABLE_ENV}",
     "mako_spatial_scaling_required=",
     f"export {EXTERNAL_VULKAN_LAYER_ENV}=",
+    "mako_vkbasalt_config=",
+    "mako_vkbasalt_enabled=",
     "mako_managed_instance_layers=",
     f"export {VK_INSTANCE_LAYERS_ENV}=",
     f"export {VK_IMPLICIT_LAYER_PATH_ENV}=",
@@ -120,6 +128,8 @@ class WrapperGenerationContext:
     gamescope_wsi_compatibility_dir: Path
     mangohud_layer_dir: Path
     vkbasalt_layer_dir: Path
+    vkbasalt_global_config_path: Path
+    vkbasalt_profile_config_dir: Path
     flatpak_implicit_layer_dir: str
     gamescope_wsi_manifest_filename_64: str
     spatial_scaling_manifest_filename_64: str
@@ -197,6 +207,25 @@ def script_configuration_lines(
         if line not in lines:
             lines.append(line)
     return lines
+
+
+def vkbasalt_profile_environment_lines(
+        profile_name: str,
+        config: ConfigurationData,
+        global_config_path: Path,
+        profile_config_dir: Path,
+) -> list[str]:
+    """Select the automatic global or saved-profile vkBasalt config."""
+    config_path = ""
+    if config.get("external_vulkan_layer") == EXTERNAL_VULKAN_LAYER_VKBASALT:
+        config_path = str(
+            vkbasalt_config_path(
+                profile_name,
+                global_config_path,
+                profile_config_dir,
+            )
+        )
+    return [f"mako_vkbasalt_config={shlex.quote(config_path)}"]
 
 
 def unsupported_host_passthrough_lines(
@@ -317,7 +346,24 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"unset {GAMESCOPE_WSI_ENABLE_ENV}",
         f"export {SPATIAL_SCALING_LAYER_DISABLE_ENV}=1",
         f"unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
-        f'mako_existing_instance_layers="${{{VK_INSTANCE_LAYERS_ENV}:-}}"',
+        f'mako_existing_instance_layers=":${{{VK_INSTANCE_LAYERS_ENV}:-}}:"',
+        (
+            'while [[ "$mako_existing_instance_layers" == *":'
+            f'{VKBASALT_LAYER_NAME_64}:"* ]]; do'
+        ),
+        (
+            '    mako_existing_instance_layers="'
+            '${mako_existing_instance_layers/:'
+            f'{VKBASALT_LAYER_NAME_64}:/:}}"'
+        ),
+        "done",
+        'mako_existing_instance_layers="${mako_existing_instance_layers#:}"',
+        'mako_existing_instance_layers="${mako_existing_instance_layers%:}"',
+        'if [ -n "$mako_existing_instance_layers" ]; then',
+        f'    export {VK_INSTANCE_LAYERS_ENV}="$mako_existing_instance_layers"',
+        "else",
+        f"    unset {VK_INSTANCE_LAYERS_ENV}",
+        "fi",
         "mako_managed_instance_layers=",
         "mako_managed_external_layer=",
         "mako_gamescope_wsi_session=0",
@@ -333,22 +379,32 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"mako_spatial_scaling_layer_dir={spatial_scaling_layer_dir}",
         f"mako_mangohud_layer_dir={mangohud_layer_dir}",
         f"mako_vkbasalt_layer_dir={vkbasalt_layer_dir}",
+        "mako_vkbasalt_enabled=0",
         "mako_flatpak_runtime=0",
         "mako_flatpak_launch=0",
         'if [ "${1##*/}" = flatpak ] && [ "${2:-}" = run ]; then',
         "    mako_flatpak_launch=1",
         "fi",
         "unset MANGOHUD",
-        "unset ENABLE_VKBASALT",
+        f"unset {VKBASALT_CONFIG_FILE_ENV}",
+        f"export {VKBASALT_LAYER_DISABLE_ENV}=1",
+        f"unset {VKBASALT_LAYER_ENABLE_ENV}",
         f"if [ -d {shlex.quote(context.flatpak_implicit_layer_dir)} ] || "
         '[ "$mako_flatpak_launch" = 1 ]; then',
         f"    mako_implicit_layer_path={shlex.quote(context.flatpak_implicit_layer_dir)}",
         "    mako_flatpak_runtime=1",
         "    mako_spatial_scaling_manifest=\"$mako_implicit_layer_path/"
         f"{context.spatial_scaling_manifest_filename_64}\"",
+        "    mako_vkbasalt_manifest=\"$mako_implicit_layer_path/"
+        f"{context.vkbasalt_manifest_filename_64}\"",
+        "    mako_vkbasalt_manifest32=\"$mako_implicit_layer_path/"
+        f"{context.vkbasalt_manifest_filename_32}\"",
+        '    mako_vkbasalt_layer_dir="$mako_implicit_layer_path"',
         "else",
         f"    mako_implicit_layer_path={shlex.quote(str(context.local_share_dir))}",
         f"    mako_spatial_scaling_manifest={spatial_scaling_manifest}",
+        f"    mako_vkbasalt_manifest={vkbasalt_manifest}",
+        f"    mako_vkbasalt_manifest32={vkbasalt_manifest32}",
         "fi",
         # Preserve the established Renderer -> Gamescope WSI -> spatial order.
         # Flatpak preparation stages the host's own WSI binary beside its
@@ -382,10 +438,10 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         '[ "$mako_gamescope_wsi_session" != 1 ]; then',
         '    mako_gamescope_wsi_skip_log="MAKO Decky: Gamescope WSI skipped: no active Gamescope session; continuing with the managed WSI and spatial chain disabled."',
         "fi",
-        'if [ "$mako_flatpak_runtime" != 1 ]; then',
-        '    case "$mako_external_vulkan_layer" in',
+        'case "$mako_external_vulkan_layer" in',
         f"        {EXTERNAL_VULKAN_LAYER_MANGOHUD})",
-        f"            if [ -r {mangohud_manifest} ] || [ -r {mangohud_manifest32} ]; then",
+        '            if [ "$mako_flatpak_runtime" != 1 ] && '
+        f"{{ [ -r {mangohud_manifest} ] || [ -r {mangohud_manifest32} ]; }}; then",
         "                unset DISABLE_MANGOHUD",
         "                export MANGOHUD=1",
         "                export NODEVICE_SELECT=1",
@@ -397,19 +453,29 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "            fi",
         "            ;;",
         f"        {EXTERNAL_VULKAN_LAYER_VKBASALT})",
-        f"            if [ -r {vkbasalt_manifest} ] || [ -r {vkbasalt_manifest32} ]; then",
-        "                unset DISABLE_VKBASALT",
-        "                export ENABLE_VKBASALT=1",
+        "            if { [ -z \"$mako_vkbasalt_config\" ] || "
+        "[ -r \"$mako_vkbasalt_config\" ]; } && "
+        "{ [ -r \"$mako_vkbasalt_manifest\" ] || "
+        "[ -r \"$mako_vkbasalt_manifest32\" ] || "
+        "[ \"$mako_flatpak_launch\" = 1 ]; }; then",
+        '                if [ -n "$mako_vkbasalt_config" ]; then',
+        f'                    export {VKBASALT_CONFIG_FILE_ENV}="$mako_vkbasalt_config"',
+        "                fi",
+        f"                unset {VKBASALT_LAYER_DISABLE_ENV}",
+        f"                export {VKBASALT_LAYER_ENABLE_ENV}=1",
+        "                mako_vkbasalt_enabled=1",
         "                export NODEVICE_SELECT=1",
         "                export DISABLE_LAYER_MESA_ANTI_LAG=1",
-        '                mako_implicit_layer_path="$mako_implicit_layer_path:$mako_vkbasalt_layer_dir"',
-        f"                if [ -r {vkbasalt_manifest} ]; then",
+        '                if [ "$mako_flatpak_runtime" != 1 ]; then',
+        '                    mako_implicit_layer_path="$mako_implicit_layer_path:$mako_vkbasalt_layer_dir"',
+        "                fi",
+        '                if [ -r "$mako_vkbasalt_manifest" ] || '
+        '[ "$mako_flatpak_launch" = 1 ]; then',
         f"                    mako_managed_external_layer={VKBASALT_LAYER_NAME_64}",
         "                fi",
         "            fi",
         "            ;;",
-        "    esac",
-        "fi",
+        "esac",
         'if [ -n "$mako_managed_instance_layers" ]; then',
         '    if [ -n "$mako_managed_external_layer" ]; then',
         '        mako_managed_instance_layers="$mako_managed_instance_layers:$mako_managed_external_layer"',
@@ -430,7 +496,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "        unset MANGOHUD",
         '    elif [ "$mako_managed_external_layer" = "'
         f'{VKBASALT_LAYER_NAME_64}" ]; then',
-        "        unset ENABLE_VKBASALT",
+        f"        unset {VKBASALT_LAYER_ENABLE_ENV}",
         "    fi",
         "fi",
         "unset mako_gamescope_wsi_required",
@@ -445,38 +511,62 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "unset mako_managed_instance_layers",
         "unset mako_managed_external_layer",
         "unset mako_spatial_scaling_manifest",
+        "unset mako_vkbasalt_manifest",
+        "unset mako_vkbasalt_manifest32",
         f'export {VK_IMPLICIT_LAYER_PATH_ENV}="$mako_implicit_layer_path"',
         f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
         f"export {MAKO_CONFIG_ENV}={shlex.quote(str(context.config_file_path))}",
         # A direct EmuDeck/Flatpak shortcut executes this wrapper on the host.
-        # Per-launch Flatpak options must override its persisted app-wide FG
-        # preparation so the explicit managed chain survives into the sandbox.
-        'if [ -n "${VK_INSTANCE_LAYERS:-}" ] && '
+        # Per-launch Flatpak options must override its persisted app-wide
+        # preparation so the explicit managed chain and the selected bundled
+        # vkBasalt profile survive into the sandbox.
+        'if { [ -n "${VK_INSTANCE_LAYERS:-}" ] || '
+        '[ "$mako_vkbasalt_enabled" = 1 ]; } && '
         '[ "${1##*/}" = flatpak ] && [ "${2:-}" = run ]; then',
         '    mako_flatpak_command="$1"',
         "    shift",
         '    mako_flatpak_subcommand="$1"',
         "    shift",
         '    set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
-        f'--env={VK_INSTANCE_LAYERS_ENV}="${{{VK_INSTANCE_LAYERS_ENV}}}" '
         f'--env={VK_IMPLICIT_LAYER_PATH_ENV}="${{{VK_IMPLICIT_LAYER_PATH_ENV}}}" '
         f'--env={MAKO_CONFIG_ENV}="${{{MAKO_CONFIG_ENV}}}" '
         f'--unset-env={VK_ADD_IMPLICIT_LAYER_PATH_ENV} '
+        '"$@"',
+        f'    if [ -n "${{{VK_INSTANCE_LAYERS_ENV}:-}}" ]; then',
+        '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--env={VK_INSTANCE_LAYERS_ENV}="${{{VK_INSTANCE_LAYERS_ENV}}}" '
         f'--unset-env={MAKO_LAYER_ENABLE_ENV} '
         f'--unset-env={MAKO_LAYER_DISABLE_ENV} '
         f'--unset-env={GAMESCOPE_WSI_ENABLE_ENV} '
         f'--unset-env={GAMESCOPE_WSI_DISABLE_ENV} '
         f'--unset-env={SPATIAL_SCALING_LAYER_ENABLE_ENV} '
         f'--unset-env={SPATIAL_SCALING_LAYER_DISABLE_ENV} '
-        '"$@"',
+        '"${@:3}"',
+        "    fi",
         f'    if [ -n "${{{MAKO_SPLIT_LAYER_CHAIN_ENV}:-}}" ]; then',
         '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
         f'--env={MAKO_SPLIT_LAYER_CHAIN_ENV}="${{{MAKO_SPLIT_LAYER_CHAIN_ENV}}}" '
         '"${@:3}"',
         "    fi",
+        '    if [ "$mako_vkbasalt_enabled" = 1 ]; then',
+        '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--unset-env={VKBASALT_LAYER_DISABLE_ENV} '
+        '"${@:3}"',
+        f'        if [ "${{{VKBASALT_LAYER_ENABLE_ENV}:-0}}" = 1 ]; then',
+        '            set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--env={VKBASALT_LAYER_ENABLE_ENV}=1 "${{@:3}}"',
+        "        fi",
+        f'        if [ -n "${{{VKBASALT_CONFIG_FILE_ENV}:-}}" ]; then',
+        '            set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--env={VKBASALT_CONFIG_FILE_ENV}="${{{VKBASALT_CONFIG_FILE_ENV}}}" '
+        '"${@:3}"',
+        "        fi",
+        "    fi",
         "    unset mako_flatpak_command",
         "    unset mako_flatpak_subcommand",
         "fi",
+        "unset mako_vkbasalt_config",
+        "unset mako_vkbasalt_enabled",
         "unset mako_flatpak_runtime",
         "unset mako_flatpak_launch",
         "# Heroic can discard a game's stderr. Capture opt-in engine diagnostics here instead.",
@@ -512,6 +602,8 @@ def wrapper_profile_configuration_lines(
         profile_data: ProfileData,
         profile_settings: WrapperProfileSettings,
         metadata: ProfileMetadata,
+        vkbasalt_global_config_path: Optional[Path] = None,
+        vkbasalt_profile_config_dir: Optional[Path] = None,
         profile_config: Callable[
             [ProfileData, str, WrapperProfileSettings], ConfigurationData
         ] = config_for_profile,
@@ -520,6 +612,16 @@ def wrapper_profile_configuration_lines(
         ] = script_configuration_lines,
 ) -> list[str]:
     """Select launcher-only settings by explicit profile or Steam app ID."""
+    global_config_path = (
+        vkbasalt_global_config_path
+        if vkbasalt_global_config_path is not None
+        else Path("/nonexistent/vkBasalt.conf")
+    )
+    profile_config_dir = (
+        vkbasalt_profile_config_dir
+        if vkbasalt_profile_config_dir is not None
+        else Path("/nonexistent/mako-vkbasalt")
+    )
     current_profile = profile_data["current_profile"]
     app_id_fallback = ""
     for environment_name in reversed(STEAM_APP_ID_ENV_KEYS):
@@ -589,6 +691,14 @@ def wrapper_profile_configuration_lines(
         lines.extend(
             f"        {line}" for line in config_lines(config)
         )
+        lines.extend(
+            f"        {line}" for line in vkbasalt_profile_environment_lines(
+                profile_name,
+                config,
+                global_config_path,
+                profile_config_dir,
+            )
+        )
         lines.append("        ;;")
 
     fallback_config = profile_config(
@@ -600,6 +710,14 @@ def wrapper_profile_configuration_lines(
     lines.extend(
         f"        {line}"
         for line in config_lines(fallback_config)
+    )
+    lines.extend(
+        f"        {line}" for line in vkbasalt_profile_environment_lines(
+            current_profile,
+            fallback_config,
+            global_config_path,
+            profile_config_dir,
+        )
     )
     lines.extend([
         "        ;;",
@@ -669,7 +787,15 @@ def generate_script_content(
             context.armada_game_launch,
             context.host_compatibility_marker,
         ),
-        script_configuration_lines(config),
+        [
+            *script_configuration_lines(config),
+            *vkbasalt_profile_environment_lines(
+                DEFAULT_PROFILE_NAME,
+                config,
+                context.vkbasalt_global_config_path,
+                context.vkbasalt_profile_config_dir,
+            ),
+        ],
         layer_environment_lines(context),
         profile_selection_lines(DEFAULT_PROFILE_NAME, config),
     )
@@ -709,6 +835,8 @@ def generate_profile_script_content(
             profile_data,
             profile_settings,
             metadata,
+            context.vkbasalt_global_config_path,
+            context.vkbasalt_profile_config_dir,
         ),
         layer_environment_lines(context),
         profile_selection_lines(

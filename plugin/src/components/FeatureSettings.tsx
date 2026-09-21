@@ -4,13 +4,17 @@ import t from "../i18n/i18n";
 import { FpsMultiplierControl } from "./FpsMultiplierControl";
 import { ScalingControl } from "./ScalingControl";
 import { PerformanceConfigurationGroup } from "./settings/PerformanceConfigurationGroup";
+import { ShadersConfigurationGroup } from "./settings/ShadersConfigurationGroup";
 import { FrameGenerationConfigurationSection } from "./ConfigurationSection";
 import { MakoSectionHeader } from "./MakoUi";
+import { DEFAULT_PROFILE_NAME } from "../config/configSchema";
 
 interface FeatureSettingsProps extends ConfigurationEditorProps {
   disabled?: boolean;
   runtimeState: RuntimeScalingUiState;
   scalingModelCompatible?: boolean | null;
+  profileName: string;
+  vkBasaltConfigPath: string;
 }
 
 export function FeatureSettings({
@@ -18,6 +22,8 @@ export function FeatureSettings({
   disabled = false,
   runtimeState,
   scalingModelCompatible = null,
+  profileName,
+  vkBasaltConfigPath,
   onConfigChange,
   onConfigUpdate,
 }: FeatureSettingsProps) {
@@ -50,6 +56,13 @@ export function FeatureSettings({
           runtimeState.activeMethod === "mako" &&
           Boolean(runtimeState.fallbackReason)
         }
+        onConfigChange={onConfigChange}
+      />
+
+      <ShadersConfigurationGroup
+        config={config}
+        isDefaultProfile={profileName === DEFAULT_PROFILE_NAME}
+        vkBasaltConfigPath={vkBasaltConfigPath}
         onConfigChange={onConfigChange}
       />
 

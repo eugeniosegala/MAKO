@@ -168,15 +168,18 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { ConfigurationSection } from "../../src/components/ConfigurationSection";
+import { ShadersConfigurationGroup } from "../../src/components/settings/ShadersConfigurationGroup";
 import {
+  EXTERNAL_VULKAN_LAYER_VKBASALT,
   GAMESCOPE_WSI_COMPATIBILITY,
   SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY,
+  VKBASALT_SHARPENING_DLS,
   getDefaults,
 } from "../../src/config/configSchema";
 
 afterEach(cleanup);
 
-describe("External Tools controls", () => {
+describe("Configuration controls", () => {
   beforeEach(() => {
     window.SP_REACT = React;
     localStorage.clear();
@@ -219,6 +222,57 @@ describe("External Tools controls", () => {
 
     expect(screen.queryByText("Flow Scale (70%)")).toBeNull();
     expect(screen.queryByText("Allow FP16 (Restart)")).toBeNull();
+  });
+
+  test("shows automatic per-game vkBasalt controls and the editable path", () => {
+    render(
+      <ShadersConfigurationGroup
+        config={{
+          ...getDefaults(),
+          external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+          vkbasalt_sharpening: VKBASALT_SHARPENING_DLS,
+          vkbasalt_sharpness: 0.55,
+          vkbasalt_dls_denoise: 0.2,
+        }}
+        isDefaultProfile={false}
+        vkBasaltConfigPath="/home/deck/.config/mako-render/vkbasalt/abc.conf"
+        onConfigChange={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(screen.getByText("Shaders")).toBeTruthy();
+    expect(screen.getByText("Enable vkBasalt (Restart)")).toBeTruthy();
+    expect(screen.getByText("Experimental")).toBeTruthy();
+    expect(screen.getByText("Sharpening (Restart)")).toBeTruthy();
+    expect(screen.getByText("Sharpness (55%) (Restart)")).toBeTruthy();
+    expect(screen.getByText("DLS Denoise (20%) (Restart)")).toBeTruthy();
+    expect(screen.getByText("Anti-aliasing (Restart)")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. This file belongs to the selected profile and is removed when that profile is deleted.",
+      ),
+    ).toBeTruthy();
+  });
+
+  test("shows the editable global file for Default without a mode selector", () => {
+    render(
+      <ShadersConfigurationGroup
+        config={{
+          ...getDefaults(),
+          external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+        }}
+        isDefaultProfile
+        vkBasaltConfigPath="/home/deck/.config/vkBasalt/vkBasalt.conf"
+        onConfigChange={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Advanced options can be edited in /home/deck/.config/vkBasalt/vkBasalt.conf. MAKO merges only the controls above and preserves every other setting. The Default profile uses this global file.",
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText("vkBasalt Configuration (Restart)")).toBeNull();
   });
 
   test("marks process-start controls as Restart without marking live controls", () => {
@@ -315,9 +369,11 @@ describe("External Tools controls", () => {
     );
 
     expect(
-      (screen.getByRole("button", {
-        name: "Base FPS Cap (Off)",
-      }) as HTMLButtonElement).disabled,
+      (
+        screen.getByRole("button", {
+          name: "Base FPS Cap (Off)",
+        }) as HTMLButtonElement
+      ).disabled,
     ).toBe(true);
   });
 
@@ -494,13 +550,8 @@ describe("External Tools controls", () => {
     fireEvent.click(collapseButton!);
 
     expect(screen.getByText("Enable MangoHud (Restart)")).toBeTruthy();
-    expect(screen.getByText("Enable vkBasalt (Restart)")).toBeTruthy();
+    expect(screen.queryByText("Enable vkBasalt (Restart)")).toBeNull();
     expect(screen.queryByText("Experimental")).toBeNull();
-    const vkBasaltDescription = screen.getByText(
-      "Applies your configured vkBasalt effects, such as sharpening, anti-aliasing, and color adjustments. Requires vkBasalt to be installed separately.",
-    );
-    expect(vkBasaltDescription).toBeTruthy();
-    expect(vkBasaltDescription.getAttribute("data-tone")).toBeNull();
     expect(localStorage.getItem("mako-external-tools-collapsed")).toBe("false");
   });
 

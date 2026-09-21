@@ -113,6 +113,11 @@ def generate_script_generation() -> str:
             # wrapper_generation.py combines this with Scaling Engine before
             # Vulkan instance creation; do not leak another environment knob.
             continue
+        if field_name.startswith("vkbasalt_"):
+            # wrapper_generation.py selects one validated managed config file
+            # for the resolved profile. Individual settings never become
+            # caller-visible environment variables.
+            continue
         env_var = get_env_var_name(field_name)
         field_type = ConfigFieldType(field_def["fieldType"])
 

@@ -48,8 +48,13 @@ export function Content() {
 
   const { dllDetected, dllDetectionStatus } = useDllDetection();
 
-  const { config, applyConfigPatch, replaceConfig, loadMakoConfig } =
-    useMakoConfig();
+  const {
+    config,
+    vkBasaltConfigPath,
+    applyConfigPatch,
+    replaceConfig,
+    loadMakoConfig,
+  } = useMakoConfig();
 
   const { updateProfileConfigFields, syncCurrentProfile } =
     useProfileManagement();
@@ -200,6 +205,8 @@ export function Content() {
               disabled={engineUpdateRequired}
               runtimeState={scalingRuntimeState}
               scalingModelCompatible={modelStatus.ls1?.compatible ?? null}
+              profileName={editingProfile}
+              vkBasaltConfigPath={vkBasaltConfigPath}
               onConfigChange={handleConfigChange}
               onConfigUpdate={handleConfigChanges}
             />

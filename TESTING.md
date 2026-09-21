@@ -30,7 +30,7 @@ Use [MAKO Decky packaging](plugin/docs/PACKAGING.md) for development and tester 
 The `Tests` workflow runs on every pull request and push to `main`:
 
 - MAKO Decky backend/frontend tests, type checking, coverage, generated-contract freshness, localization, production bundling, and package-license contracts;
-- MAKO Renderer CTest with GCC and Clang using the [native package Vulkan-Headers revision](engine/vulkan-headers-revision.txt) and its required-header check, including Qt, localization, synthetic model inspection, launch policy, generated-SPIR-V freshness, and shared Flatpak-header module freshness/mutation checks;
+- MAKO Renderer CTest with GCC and Clang using the [native package Vulkan-Headers revision](engine/vulkan-headers-revision.txt) and its required-header check, including Qt, localization, synthetic model inspection, launch policy, generated-SPIR-V freshness, shared Flatpak-header module freshness/mutation checks, and the pinned vkBasalt release/generated-module contract;
 - portable Renderer policy tests under ASan and UBSan;
 - protected-input, trace-producer, and Gym-selection contracts on their supported hosts; and
 - Markdown formatting.

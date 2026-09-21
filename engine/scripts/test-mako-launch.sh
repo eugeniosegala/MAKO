@@ -30,6 +30,7 @@ fi
 
 default_output="$({
     env -u ENABLE_MAKO -u DISABLE_MAKO \
+        -u ENABLE_VKBASALT -u DISABLE_VKBASALT -u VKBASALT_CONFIG_FILE \
         -u ENABLE_GAMESCOPE_WSI -u DISABLE_GAMESCOPE_WSI \
         -u MAKO_DISABLE_HDR_EXPOSURE -u DXVK_HDR \
         -u DISABLE_LSFG -u DISABLE_LSFGVK \
@@ -37,6 +38,7 @@ default_output="$({
         XDG_DATA_HOME="$test_data_home" \
         VK_IMPLICIT_LAYER_PATH="/caller/override" \
         VK_ADD_IMPLICIT_LAYER_PATH="/caller/additional" \
+        VK_INSTANCE_LAYERS="VK_LAYER_existing:VK_LAYER_VKBASALT_post_processing" \
         MAKO_PROFILE="profile with spaces" \
         "$launcher" bash -c '
             printf "%s\n" \
@@ -49,12 +51,16 @@ default_output="$({
                 "${DXVK_HDR:-unset}" \
                 "${VK_IMPLICIT_LAYER_PATH:-unset}" \
                 "${VK_ADD_IMPLICIT_LAYER_PATH:-unset}" \
+                "${VK_INSTANCE_LAYERS:-unset}" \
+                "${ENABLE_VKBASALT:-unset}" \
+                "${DISABLE_VKBASALT:-unset}" \
+                "${VKBASALT_CONFIG_FILE:-unset}" \
                 "${MAKO_PROFILE:-unset}" \
                 "$1" "$2"
         ' _ "argument with spaces" '$literal'
 } 2>&1)" || fail "default launch failed: $default_output"
 
-expected_default="$(printf '1\n1\n1\n1\nunset\n1\nunset\n%s\nunset\nprofile with spaces\nargument with spaces\n$literal' "$expected_layer_path")"
+expected_default="$(printf '1\n1\n1\n1\nunset\n1\nunset\n%s\nunset\nVK_LAYER_existing\nunset\n1\nunset\nprofile with spaces\nargument with spaces\n$literal' "$expected_layer_path")"
 if [[ "$default_output" != "$expected_default" ]]; then
     fail "default environment or argument forwarding changed:\n$default_output"
 fi
@@ -92,6 +98,87 @@ disable_output="$({
 } 2>&1)" || fail "MAKO disable-gate forwarding failed: $disable_output"
 if [[ "$disable_output" != $'1\n1' ]]; then
     fail "DISABLE_MAKO was not preserved:\n$disable_output"
+fi
+
+private_prefix="$test_root/private-prefix"
+private_launcher="$private_prefix/bin/mako-launch"
+private_mako_layer_dir="$private_prefix/share/mako-render/vulkan/implicit_layer.d"
+private_vkbasalt_layer_dir="$private_prefix/share/mako-render/vulkan/vkbasalt.d"
+private_vkbasalt_library64="$private_prefix/lib/vkbasalt/libvkbasalt.so"
+private_vkbasalt_library32="$private_prefix/lib32/vkbasalt/libvkbasalt.so"
+mkdir -p "$private_prefix/bin" "$private_mako_layer_dir" "$private_vkbasalt_layer_dir" \
+    "$(dirname -- "$private_vkbasalt_library64")" \
+    "$(dirname -- "$private_vkbasalt_library32")"
+cp -- "$launcher" "$private_launcher"
+chmod +x "$private_launcher"
+touch "$private_mako_layer_dir/VkLayer_MAKO_render.json"
+touch "$private_mako_layer_dir/VkLayer_MAKO_render.x86.json"
+touch "$private_vkbasalt_layer_dir/vkBasalt.json"
+touch "$private_vkbasalt_layer_dir/vkBasalt.x86.json"
+touch "$private_vkbasalt_library64"
+touch "$private_vkbasalt_library32"
+vkbasalt_config="$test_root/vkBasalt.conf"
+printf '%s\n' 'effects = cas' > "$vkbasalt_config"
+
+vkbasalt_output="$({
+    ENABLE_VKBASALT=1 \
+        DISABLE_VKBASALT=1 \
+        VKBASALT_CONFIG_FILE="$vkbasalt_config" \
+        VK_INSTANCE_LAYERS="VK_LAYER_existing:VK_LAYER_VKBASALT_post_processing:VK_LAYER_MAKO_render" \
+        VK_IMPLICIT_LAYER_PATH="/caller/override" \
+        VK_ADD_IMPLICIT_LAYER_PATH="/caller/additional" \
+        XDG_DATA_HOME="$test_data_home" \
+        "$private_launcher" bash -c '
+            printf "%s\n" \
+                "${ENABLE_MAKO:-unset}" \
+                "${ENABLE_VKBASALT:-unset}" \
+                "${DISABLE_VKBASALT:-unset}" \
+                "${VKBASALT_CONFIG_FILE:-unset}" \
+                "${VK_INSTANCE_LAYERS:-unset}" \
+                "${VK_IMPLICIT_LAYER_PATH:-unset}" \
+                "${VK_ADD_IMPLICIT_LAYER_PATH:-unset}"
+        '
+} 2>&1)" || fail "private vkBasalt launch failed: $vkbasalt_output"
+expected_vkbasalt="$(printf 'unset\nunset\nunset\n%s\nVK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing:VK_LAYER_existing\n%s:%s\nunset' \
+    "$vkbasalt_config" "$private_mako_layer_dir" "$private_vkbasalt_layer_dir")"
+if [[ "$vkbasalt_output" != "$expected_vkbasalt" ]]; then
+    fail "private vkBasalt order or isolation changed:\n$vkbasalt_output"
+fi
+
+rm -f -- "$private_vkbasalt_library32"
+missing_vkbasalt_output="$({
+    ENABLE_VKBASALT=1 \
+        VKBASALT_CONFIG_FILE="$vkbasalt_config" \
+        XDG_DATA_HOME="$test_data_home" \
+        "$private_launcher" bash -c '
+            printf "MAKO=%s VKBASALT=%s CONFIG=%s INSTANCE=%s\n" \
+                "${ENABLE_MAKO:-unset}" \
+                "${DISABLE_VKBASALT:-unset}" \
+                "${VKBASALT_CONFIG_FILE:-unset}" \
+                "${VK_INSTANCE_LAYERS:-unset}"
+        '
+} 2>&1)" || fail "missing private vkBasalt did not continue with MAKO"
+if [[ "$missing_vkbasalt_output" != *"private 64-bit/32-bit vkBasalt payload is unavailable"* ||
+        "$missing_vkbasalt_output" != *"MAKO=1 VKBASALT=1 CONFIG=unset INSTANCE=unset"* ]]; then
+    fail "missing private vkBasalt did not fail closed:\n$missing_vkbasalt_output"
+fi
+
+touch "$private_vkbasalt_library32"
+unreadable_vkbasalt_output="$({
+    ENABLE_VKBASALT=1 \
+        VKBASALT_CONFIG_FILE="$test_root/missing-vkBasalt.conf" \
+        XDG_DATA_HOME="$test_data_home" \
+        "$private_launcher" bash -c '
+            printf "MAKO=%s VKBASALT=%s CONFIG=%s INSTANCE=%s\n" \
+                "${ENABLE_MAKO:-unset}" \
+                "${DISABLE_VKBASALT:-unset}" \
+                "${VKBASALT_CONFIG_FILE:-unset}" \
+                "${VK_INSTANCE_LAYERS:-unset}"
+        '
+} 2>&1)" || fail "unreadable vkBasalt config did not continue with MAKO"
+if [[ "$unreadable_vkbasalt_output" != *"vkBasalt config is not readable"* ||
+        "$unreadable_vkbasalt_output" != *"MAKO=1 VKBASALT=1 CONFIG=unset INSTANCE=unset"* ]]; then
+    fail "unreadable vkBasalt config did not fail closed:\n$unreadable_vkbasalt_output"
 fi
 
 launch_config="$test_config_home/mako-render/launcher.conf"
@@ -135,6 +222,8 @@ no_command_output="$({ "$launcher"; } 2>&1)"
 no_command_status=$?
 invalid_flag_output="$({ MAKO_ALLOW_COMPETING_LAYERS=yes "$launcher" true; } 2>&1)"
 invalid_flag_status=$?
+invalid_vkbasalt_output="$({ ENABLE_VKBASALT=yes "$launcher" true; } 2>&1)"
+invalid_vkbasalt_status=$?
 "$launcher" bash -c 'exit 23'
 forwarded_status=$?
 set -e
@@ -144,6 +233,9 @@ if [[ $no_command_status -ne 2 || "$no_command_output" != *"requires a command"*
 fi
 if [[ $invalid_flag_status -ne 2 || "$invalid_flag_output" != *"must be 0 or 1"* ]]; then
     fail "invalid escape-hatch validation changed"
+fi
+if [[ $invalid_vkbasalt_status -ne 2 || "$invalid_vkbasalt_output" != *"ENABLE_VKBASALT must be 0 or 1"* ]]; then
+    fail "invalid vkBasalt activation was not rejected"
 fi
 if [[ $forwarded_status -ne 23 ]]; then
     fail "child exit status was not forwarded: $forwarded_status"

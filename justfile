@@ -36,6 +36,14 @@ generate-flatpak-headers:
 check-flatpak-headers:
     python3 engine/scripts/generate-flatpak-vulkan-headers.py --check
 
+# Generate Flatpak's runtime vkBasalt module from the pinned MAKO fork release.
+generate-vkbasalt-release:
+    python3 engine/scripts/manage-vkbasalt-release.py --check --generate-flatpak-module engine/dist/flatpak/mako-render/vkbasalt-module.json
+
+# Reject an invalid vkBasalt pin or stale generated Flatpak module.
+check-vkbasalt-release:
+    python3 engine/scripts/manage-vkbasalt-release.py --check --check-flatpak-module engine/dist/flatpak/mako-render/vkbasalt-module.json
+
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 

@@ -132,10 +132,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         defaults = ConfigurationManager.get_defaults()
         content = self.service._generate_script_content(defaults)
 
-        self.assertEqual(len(content.encode("utf-8")), 10392)
+        self.assertEqual(len(content.encode("utf-8")), 12465)
         self.assertEqual(
             _sha256(content),
-            "b86ff9bfae6a96b9cd176ec240dcf18174e4b34b9d9e2c05e340fc086d0a7bc4",
+            "fb8ce5f89eac0872de4f422544e37b49a5666dc9c6255979eb9bebe59c56ad7a",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -202,10 +202,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
                 profile_data
             )
 
-        self.assertEqual(len(content.encode("utf-8")), 12564)
+        self.assertEqual(len(content.encode("utf-8")), 14709)
         self.assertEqual(
             _sha256(content),
-            "d8b124552bd78ba91ecd71dd3e446bd51dfd592ec0f381ef4788249d75b797dd",
+            "3f806e4c1360ea1e12b8fc98d6149018d624fcfeb0e854bc6518eebff56818d9",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -243,7 +243,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             content = self.service._generate_script_content({})
 
         self.assertIn(
-            "host guard\nconfiguration\nlayers\nprofile\n",
+            "host guard\nconfiguration\nmako_vkbasalt_config=''\nlayers\nprofile\n",
             content,
         )
 
@@ -293,7 +293,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "9dd904ee5c6b57048ccdd8d96fe60d677c67a7037a696aba3fe7d75ddf05d077",
+            "32d1b8b56191c1aeecfae594fbb3bbe113bf669bd90527ba4d700201f19f4179",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):
@@ -333,7 +333,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertNotIn("retired_option", stored_wrapper_settings)
         self.assertEqual(
             _sha256(wrapper_content),
-            "b5c94c753f2b7b85bfaae74d98c53580ed0b0e03903e87b1d12199489b002dd6",
+            "620de4a657fdec99b8a22e7065803ca68ba0aab70490214e3dfc2c606ca0a4e2",
         )
         self.assertEqual(
             _sha256(metadata_content),

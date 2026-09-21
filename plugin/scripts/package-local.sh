@@ -434,11 +434,13 @@ fi
 manifest_paths=(
   "./share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
   "./share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"
+  "./share/mako-render/vulkan/vkbasalt.d/vkBasalt.json"
 )
 if [[ "$build_64_only" != true ]]; then
   manifest_paths+=(
     "./share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
     "./share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
+    "./share/mako-render/vulkan/vkbasalt.d/vkBasalt.x86.json"
   )
 fi
 for manifest_path in "${manifest_paths[@]}"; do
@@ -454,6 +456,10 @@ for manifest_path in "${manifest_paths[@]}"; do
     expected_manifest_identity='"name": "VK_LAYER_MAKO_spatial_scaling"'
     expected_manifest_enable='"ENABLE_MAKO_SPATIAL_SCALING": "1"'
     expected_manifest_disable='"DISABLE_MAKO_SPATIAL_SCALING": "1"'
+  elif [[ "$manifest_path" == *vkBasalt* ]]; then
+    expected_manifest_identity='"name": "VK_LAYER_VKBASALT_post_processing"'
+    expected_manifest_enable='"ENABLE_VKBASALT": "1"'
+    expected_manifest_disable='"DISABLE_VKBASALT": "1"'
   fi
   if [[ "$manifest_content" != *"$expected_manifest_identity"* ||
         "$manifest_content" != *"$expected_manifest_enable"* ||
@@ -466,16 +472,28 @@ done
 layer_binary_paths=(
   "./lib/libmako-render.so"
   "./lib/libmako-render-scaling.so"
+  "./lib/vkbasalt/libvkbasalt.so"
 )
 if [[ "$build_64_only" != true ]]; then
   layer_binary_paths+=(
     "./lib32/libmako-render.so"
     "./lib32/libmako-render-scaling.so"
+    "./lib32/vkbasalt/libvkbasalt.so"
   )
 fi
 for layer_binary_path in "${layer_binary_paths[@]}"; do
   verification_binary="$staging_dir/$(basename "$(dirname "$layer_binary_path")")-libmako-render.so"
   tar -xJOf "$package_dir/bin/$archive_name" "$layer_binary_path" > "$verification_binary"
+  if [[ "$layer_binary_path" == *vkbasalt* ]]; then
+    if ! strings "$verification_binary" |
+        grep -Fx "vkBasalt_GetInstanceProcAddr" >/dev/null ||
+        ! strings "$verification_binary" |
+          grep -Fx "vkBasalt_GetDeviceProcAddr" >/dev/null; then
+      echo "Engine archive has no vkBasalt layer entry point in $layer_binary_path" >&2
+      exit 1
+    fi
+    continue
+  fi
   expected_identity="VK_LAYER_MAKO_render"
   if [[ "$layer_binary_path" == *libmako-render-scaling.so ]]; then
     expected_identity="VK_LAYER_MAKO_spatial_scaling"

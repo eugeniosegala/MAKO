@@ -20,6 +20,7 @@ build-options:
 
 modules:
   - vulkan-headers.json
+  - vkbasalt-module.json
   - name: mako
     buildsystem: cmake-ninja
     subdir: engine

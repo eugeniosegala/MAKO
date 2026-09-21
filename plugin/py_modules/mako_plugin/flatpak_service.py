@@ -29,6 +29,9 @@ from .constants import (
     PLUGIN_ROOT,
     VK_ADD_IMPLICIT_LAYER_PATH_ENV,
     VK_IMPLICIT_LAYER_PATH_ENV,
+    VKBASALT_CONFIG_FILE_ENV,
+    VKBASALT_LAYER_DISABLE_ENV,
+    VKBASALT_LAYER_ENABLE_ENV,
 )
 from .host_environment import detect_host_environment
 from .types import ServiceResponse
@@ -62,6 +65,9 @@ _LAYER_ENVIRONMENT_VARIABLES = (
     DXVK_HDR_ENV,
     VK_IMPLICIT_LAYER_PATH_ENV,
     VK_ADD_IMPLICIT_LAYER_PATH_ENV,
+    VKBASALT_CONFIG_FILE_ENV,
+    VKBASALT_LAYER_ENABLE_ENV,
+    VKBASALT_LAYER_DISABLE_ENV,
 )
 
 
@@ -624,6 +630,9 @@ class FlatpakService(BaseService):
             output = result.stdout
             config_path, dll_directory = self._get_mako_paths()
             wrapper_path = str(self.mako_script_path)
+            vkbasalt_config_directory = str(
+                self.vkbasalt_global_config_path.parent
+            )
 
             filesystem_section = ""
             unset_environment = set()
@@ -651,9 +660,16 @@ class FlatpakService(BaseService):
                 filesystem_section,
                 str(self.gamescope_wsi_compatibility_dir),
             )
+            has_vkbasalt_config_fs = self._filesystem_override_present(
+                filesystem_section,
+                vkbasalt_config_directory,
+            )
 
             filesystem_override = (
-                has_config_fs and has_dll_fs and has_gamescope_wsi_fs
+                has_config_fs
+                and has_dll_fs
+                and has_gamescope_wsi_fs
+                and has_vkbasalt_config_fs
             )
 
             environment_values = {}
@@ -709,18 +725,23 @@ class FlatpakService(BaseService):
                     and not environment_values.get(GAMESCOPE_WSI_ENABLE_ENV)
                     and environment_values.get(HDR_EXPOSURE_DISABLE_ENV) == "1"
                     and not environment_values.get(DXVK_HDR_ENV)
+                    and environment_values.get(VKBASALT_LAYER_DISABLE_ENV)
+                    == "1"
+                    and VKBASALT_LAYER_ENABLE_ENV not in environment_values
+                    and VKBASALT_CONFIG_FILE_ENV not in environment_values
                     and compatible_layer_path
                 )
             )
 
             self.log.debug(
-                "Override status for %s: resources=%s (%s/%s/%s), wrapper=%s, "
+                "Override status for %s: resources=%s (%s/%s/%s/%s), wrapper=%s, "
                 "environment=%s, required_environment=%s",
                 app_id,
                 filesystem_override,
                 has_config_fs,
                 has_dll_fs,
                 has_gamescope_wsi_fs,
+                has_vkbasalt_config_fs,
                 has_wrapper_fs,
                 legacy_env_override,
                 required_env_override,
@@ -894,12 +915,16 @@ class FlatpakService(BaseService):
 
             config_path, dll_directory = self._get_mako_paths()
             wrapper_path = str(self.mako_script_path)
+            vkbasalt_config_directory = str(
+                self.vkbasalt_global_config_path.parent
+            )
 
             filesystem_overrides = [
                 f"--filesystem={config_path}:rw",
                 f"--filesystem={dll_directory}:ro",
                 f"--filesystem={wrapper_path}:ro",
                 f"--filesystem={self.gamescope_wsi_compatibility_dir}:ro",
+                f"--filesystem={vkbasalt_config_directory}:rw",
             ]
 
             for override in filesystem_overrides:
@@ -945,6 +970,9 @@ class FlatpakService(BaseService):
                     f"--unset-env={GAMESCOPE_WSI_ENABLE_ENV}",
                     f"--env={HDR_EXPOSURE_DISABLE_ENV}=1",
                     f"--unset-env={DXVK_HDR_ENV}",
+                    f"--unset-env={VKBASALT_CONFIG_FILE_ENV}",
+                    f"--unset-env={VKBASALT_LAYER_ENABLE_ENV}",
+                    f"--env={VKBASALT_LAYER_DISABLE_ENV}=1",
                     *layer_environment,
                 ]
 
@@ -979,12 +1007,16 @@ class FlatpakService(BaseService):
 
             config_path, dll_directory = self._get_mako_paths()
             wrapper_path = str(self.mako_script_path)
+            vkbasalt_config_directory = str(
+                self.vkbasalt_global_config_path.parent
+            )
 
             filesystem_overrides = [
                 f"--nofilesystem={dll_directory}",
                 f"--nofilesystem={config_path}",
                 f"--nofilesystem={wrapper_path}",
                 f"--nofilesystem={self.gamescope_wsi_compatibility_dir}",
+                f"--nofilesystem={vkbasalt_config_directory}",
             ]
 
             removal_errors = []

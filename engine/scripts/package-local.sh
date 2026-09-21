@@ -115,7 +115,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
             fi
             apt-get update -qq
             apt-get install -y -qq \
-                git curl llvm clang cmake ninja-build pkg-config g++-multilib \
+                git curl python3 llvm clang cmake ninja-build pkg-config g++-multilib \
                 libvulkan-dev mesa-common-dev \
                 qt6-base-dev qt6-base-dev-tools \
                 qt6-tools-dev qt6-tools-dev-tools \
@@ -132,7 +132,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
         '
 fi
 
-for command in cmake ninja clang++ nm readelf strings tar sha256sum; do
+for command in cmake ninja clang++ nm python3 readelf strings tar sha256sum; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         exit 1
@@ -315,6 +315,16 @@ if [[ "$build_32_bit" == true ]]; then
     cmake --install "$build32_dir" --strip
 fi
 
+vkbasalt_stage_args=(
+    --stage-native "$install_dir"
+    --cache-dir "$build_cache_root/vkbasalt"
+)
+if [[ "$build_32_bit" == false ]]; then
+    vkbasalt_stage_args+=(--64-bit-only)
+fi
+python3 "$repo_root/scripts/manage-vkbasalt-release.py" \
+    "${vkbasalt_stage_args[@]}"
+
 required_paths=(
     "bin/mako-cli" \
     "bin/mako-diagnostics" \
@@ -323,6 +333,7 @@ required_paths=(
     "bin/mako-ui" \
     "lib/libmako-render.so" \
     "lib/libmako-render-scaling.so" \
+    "lib/vkbasalt/libvkbasalt.so" \
     "share/doc/mako-render/ASSET_PROVENANCE.md" \
     "share/doc/mako-render/LICENSE.md" \
     "share/doc/mako-render/THIRD_PARTY_NOTICES.md" \
@@ -330,6 +341,11 @@ required_paths=(
     "share/applications/io.github.eugeniosegala.mako.uninstaller.desktop" \
     "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
     "share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json" \
+    "share/mako-render/vulkan/vkbasalt.d/vkBasalt.json" \
+    "share/doc/mako-render/vkbasalt/LICENSE" \
+    "share/doc/mako-render/vkbasalt/RESHade-LICENSE.md" \
+    "share/doc/mako-render/vkbasalt/SOURCE" \
+    "share/doc/mako-render/vkbasalt/MAKO-PIN.json" \
     "share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json" \
     "share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
 )
@@ -337,10 +353,12 @@ if [[ "$build_32_bit" == true ]]; then
     required_paths+=(
         "lib32/libmako-render.so"
         "lib32/libmako-render-scaling.so"
+        "lib32/vkbasalt/libvkbasalt.so"
         "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
         "share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
         "share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json"
         "share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
+        "share/mako-render/vulkan/vkbasalt.d/vkBasalt.x86.json"
     )
 fi
 for required_path in "${required_paths[@]}"; do
@@ -365,6 +383,7 @@ if [[ ! -s "$standalone_readme" ]]; then
 fi
 cp "$standalone_readme" "$install_dir/README.txt"
 if ! grep -Fq '~/.local/bin/mako-launch %command%' "$install_dir/README.txt" ||
+        ! grep -Fq 'ENABLE_VKBASALT=1' "$install_dir/README.txt" ||
         ! grep -Fq 'Uninstall MAKO Renderer' "$install_dir/README.txt" ||
         ! grep -Fq 'profiles, settings, and diagnostics' "$install_dir/README.txt"; then
     echo "Packaging failed: standalone Renderer README is incomplete" >&2
@@ -414,9 +433,46 @@ verify_elf_class() {
 
 verify_elf_class "$install_dir/lib/libmako-render.so" 2
 verify_elf_class "$install_dir/lib/libmako-render-scaling.so" 2
+verify_elf_class "$install_dir/lib/vkbasalt/libvkbasalt.so" 2
 if [[ "$build_32_bit" == true ]]; then
     verify_elf_class "$install_dir/lib32/libmako-render.so" 1
     verify_elf_class "$install_dir/lib32/libmako-render-scaling.so" 1
+    verify_elf_class "$install_dir/lib32/vkbasalt/libvkbasalt.so" 1
+fi
+for vkbasalt_library in "$install_dir/lib/vkbasalt/libvkbasalt.so"; do
+    if ! strings "$vkbasalt_library" |
+            grep -Fx "vkBasalt_GetInstanceProcAddr" >/dev/null ||
+            ! strings "$vkbasalt_library" |
+                grep -Fx "vkBasalt_GetDeviceProcAddr" >/dev/null; then
+        echo "Packaging failed: invalid bundled vkBasalt entry point in $vkbasalt_library" >&2
+        exit 1
+    fi
+done
+if [[ "$build_32_bit" == true ]] &&
+        { ! strings "$install_dir/lib32/vkbasalt/libvkbasalt.so" |
+            grep -Fx "vkBasalt_GetInstanceProcAddr" >/dev/null ||
+          ! strings "$install_dir/lib32/vkbasalt/libvkbasalt.so" |
+            grep -Fx "vkBasalt_GetDeviceProcAddr" >/dev/null; }; then
+    echo "Packaging failed: invalid bundled 32-bit vkBasalt entry point" >&2
+    exit 1
+fi
+
+vkbasalt_manifest64="$install_dir/share/mako-render/vulkan/vkbasalt.d/vkBasalt.json"
+if ! grep -Fq '"name": "VK_LAYER_VKBASALT_post_processing"' "$vkbasalt_manifest64" ||
+        ! grep -Fq '"library_arch": "64"' "$vkbasalt_manifest64" ||
+        ! grep -Fq '../../../../lib/vkbasalt/libvkbasalt.so' "$vkbasalt_manifest64" ||
+        ! grep -Fq '"ENABLE_VKBASALT": "1"' "$vkbasalt_manifest64" ||
+        ! grep -Fq '"DISABLE_VKBASALT": "1"' "$vkbasalt_manifest64"; then
+    echo "Packaging failed: bundled 64-bit vkBasalt manifest is incorrect" >&2
+    exit 1
+fi
+if [[ "$build_32_bit" == true ]]; then
+    vkbasalt_manifest32="$install_dir/share/mako-render/vulkan/vkbasalt.d/vkBasalt.x86.json"
+    if ! grep -Fq '"library_arch": "32"' "$vkbasalt_manifest32" ||
+            ! grep -Fq '../../../../lib32/vkbasalt/libvkbasalt.so' "$vkbasalt_manifest32"; then
+        echo "Packaging failed: bundled 32-bit vkBasalt manifest is incorrect" >&2
+        exit 1
+    fi
 fi
 
 scaling_manifest64="$install_dir/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"

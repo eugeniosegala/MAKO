@@ -36,6 +36,10 @@ from shared_config import (
     SCALING_SHARPNESS_MIN,
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
+    VKBASALT_ANTIALIASING_VALUES,
+    VKBASALT_SHARPENING_VALUES,
+    VKBASALT_STRENGTH_MAX,
+    VKBASALT_STRENGTH_MIN,
     ConfigFieldType,
     get_defaults,
 )
@@ -232,6 +236,38 @@ class ConfigurationManager:
                 "'vkbasalt'"
             )
         validated["external_vulkan_layer"] = external_vulkan_layer
+        vkbasalt_sharpening = validated["vkbasalt_sharpening"].strip().lower()
+        if vkbasalt_sharpening not in VKBASALT_SHARPENING_VALUES:
+            raise ValueError(
+                "vkbasalt_sharpening must be 'none', 'cas', or 'dls'"
+            )
+        validated["vkbasalt_sharpening"] = vkbasalt_sharpening
+        if not (
+            VKBASALT_STRENGTH_MIN
+            <= validated["vkbasalt_sharpness"]
+            <= VKBASALT_STRENGTH_MAX
+        ):
+            raise ValueError(
+                "vkbasalt_sharpness must be between "
+                f"{VKBASALT_STRENGTH_MIN} and {VKBASALT_STRENGTH_MAX}"
+            )
+        if not (
+            VKBASALT_STRENGTH_MIN
+            <= validated["vkbasalt_dls_denoise"]
+            <= VKBASALT_STRENGTH_MAX
+        ):
+            raise ValueError(
+                "vkbasalt_dls_denoise must be between "
+                f"{VKBASALT_STRENGTH_MIN} and {VKBASALT_STRENGTH_MAX}"
+            )
+        vkbasalt_antialiasing = (
+            validated["vkbasalt_antialiasing"].strip().lower()
+        )
+        if vkbasalt_antialiasing not in VKBASALT_ANTIALIASING_VALUES:
+            raise ValueError(
+                "vkbasalt_antialiasing must be 'none', 'fxaa', or 'smaa'"
+            )
+        validated["vkbasalt_antialiasing"] = vkbasalt_antialiasing
         if validated["dynamic_cadence_recovery"]:
             validated["adaptive_auto_base_fps_cap"] = False
             validated["base_fps_cap"] = 0

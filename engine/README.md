@@ -108,7 +108,21 @@ For a **direct desktop command**, pass the executable and its arguments to the s
 
 `%command%` is a Steam placeholder; do not use it in a terminal. For native Heroic or Lutris, put the absolute `mako-launch` path in the game's Wrapper or Command prefix field and let the launcher supply the game command; see [third-party launchers](../plugin/docs/LAUNCHERS.md). For an emulator, select its Vulkan graphics backend before playing.
 
-`mako-launch` enables MAKO only for that process and establishes the supported standalone Vulkan-layer boundary. Use one Frame Generation implementation per game. Gamescope WSI, MangoHud, and vkBasalt profile controls remain MAKO Decky features because they require managed manifest staging.
+`mako-launch` enables MAKO only for that process and establishes the supported standalone Vulkan-layer boundary. Use one Frame Generation implementation per game. Gamescope WSI and MangoHud profile controls remain MAKO Decky features.
+
+To add MAKO's private bundled vkBasalt after the Renderer for a native Steam or Proton game, use:
+
+```text
+ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%
+```
+
+For the complete vkBasalt option suite, create a normal vkBasalt configuration file and select it for that game:
+
+```text
+ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
+```
+
+The config path is optional. Renderer `active_in` matching selects only the MAKO profile; for per-game vkBasalt settings, give each game's launch option its own `VKBASALT_CONFIG_FILE`. The launcher admits only the private 64-bit and 32-bit vkBasalt manifests installed with MAKO, establishes the exact `MAKO Renderer -> vkBasalt` order, and ignores a system-wide vkBasalt copy. If the complete private bundle or a selected config is unreadable, it reports the problem and safely launches with MAKO alone. Restart the game after changing layer membership or the config file. See [Optional graphics integrations](docs/LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for the full contract; Flatpak applications use the [separate sandbox setup](docs/FLATPAK-GUIDE.md#optional-private-vkbasalt-chain).
 
 MAKO operates on Vulkan: native Vulkan and Proton games through DXVK or VKD3D-Proton are supported, while OpenGL requires the optional Zink launcher setting. If no profile matches the game process, MAKO remains dormant and presentation stays native.
 

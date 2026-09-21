@@ -32,6 +32,12 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     SPATIAL_SCALING_JSON_FILENAME,
     SPATIAL_SCALING_LAYER_DIR,
     SPATIAL_SCALING_LIB_FILENAME,
+    VKBASALT_LAYER_DIR,
+    VKBASALT_LIB32_DIR,
+    VKBASALT_LIB_DIR,
+    VKBASALT_LIB_FILENAME,
+    VKBASALT_MANIFEST_FILENAME_32,
+    VKBASALT_MANIFEST_FILENAME_64,
 )
 from shared_config import SUPPORTED_FLATPAK_RUNTIME_VERSIONS  # noqa: E402
 
@@ -123,6 +129,16 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
                 f"{LOCAL_LIB32}/{SPATIAL_SCALING_LIB_FILENAME}",
                 f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON_FILENAME}",
                 f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON32_FILENAME}",
+            ],
+        )
+        self.assertEqual(
+            read("vkbasalt-paths").splitlines(),
+            [
+                VKBASALT_LIB_FILENAME,
+                f"{VKBASALT_LIB_DIR}/{VKBASALT_LIB_FILENAME}",
+                f"{VKBASALT_LIB32_DIR}/{VKBASALT_LIB_FILENAME}",
+                f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_64}",
+                f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_32}",
             ],
         )
 
@@ -373,6 +389,15 @@ versions=26.08;25.08;24.08
                 [
                     "override",
                     "--user",
+                    f"--filesystem={self.service.vkbasalt_global_config_path.parent}:rw",
+                    app_id,
+                ],
+                calls,
+            )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
                     f"--env=VK_IMPLICIT_LAYER_PATH={FLATPAK_IMPLICIT_LAYER_DIR}",
                     app_id,
                 ],
@@ -430,6 +455,33 @@ versions=26.08;25.08;24.08
             )
             self.assertIn(
                 ["override", "--user", "--unset-env=DXVK_HDR", app_id],
+                calls,
+            )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
+                    "--unset-env=VKBASALT_CONFIG_FILE",
+                    app_id,
+                ],
+                calls,
+            )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
+                    "--unset-env=ENABLE_VKBASALT",
+                    app_id,
+                ],
+                calls,
+            )
+            self.assertIn(
+                [
+                    "override",
+                    "--user",
+                    "--env=DISABLE_VKBASALT=1",
+                    app_id,
+                ],
                 calls,
             )
 
@@ -520,6 +572,9 @@ versions=26.08;25.08;24.08
                     "DXVK_HDR",
                     "VK_IMPLICIT_LAYER_PATH",
                     "VK_ADD_IMPLICIT_LAYER_PATH",
+                    "VKBASALT_CONFIG_FILE",
+                    "ENABLE_VKBASALT",
+                    "DISABLE_VKBASALT",
                 ):
                     self.assertIn(
                         ["override", "--user", f"--unset-env={variable}", app_id],
@@ -626,11 +681,12 @@ versions=26.08;25.08;24.08
     def test_direct_override_status_requires_complete_activation_environment(self):
         app_id = "org.DolphinEmu.dolphin-emu"
         self.service._get_mako_paths = lambda: ("/config", "/dll")
+        self.service.config_dir = Path("/config")
         self.service.mako_launch_script_path = Path("/wrapper")
         self.service.gamescope_wsi_compatibility_dir = Path("/wsi")
 
         complete_override = """[Context]
-filesystems=/config;/dll;/wrapper;/wsi;
+filesystems=/config;/dll;/wrapper;/wsi;/vkBasalt;
 
 [Environment]
 MAKO_CONFIG=/config/conf.toml
@@ -639,6 +695,7 @@ DISABLE_LSFG=1
 DISABLE_LSFGVK=1
 DISABLE_GAMESCOPE_WSI=1
 MAKO_DISABLE_HDR_EXPOSURE=1
+DISABLE_VKBASALT=1
 VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implicit_layer.d
 """
         self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
@@ -661,6 +718,17 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
         status = self.service._check_app_override_status(app_id)
 
         self.assertTrue(status["legacy_env"])
+        self.assertFalse(status["required_env"])
+
+        missing_vkbasalt_guard = complete_override.replace(
+            "DISABLE_VKBASALT=1\n", ""
+        )
+        self.service._run_flatpak_command = lambda _args, **_kwargs: _result(
+            missing_vkbasalt_guard
+        )
+
+        status = self.service._check_app_override_status(app_id)
+
         self.assertFalse(status["required_env"])
 
         explicitly_unset_activation = complete_override.replace(
@@ -789,6 +857,9 @@ VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implic
                 "DXVK_HDR",
                 "VK_IMPLICIT_LAYER_PATH",
                 "VK_ADD_IMPLICIT_LAYER_PATH",
+                "VKBASALT_CONFIG_FILE",
+                "ENABLE_VKBASALT",
+                "DISABLE_VKBASALT",
             ):
                 self.assertIn(
                     ["override", "--user", f"--unset-env={variable}", app_id],

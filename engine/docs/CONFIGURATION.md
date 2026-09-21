@@ -124,11 +124,25 @@ MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" MAKO_PROFILE="My game" ~/.loca
 
 `DISABLE_MAKO=1` bypasses MAKO for every launch where that variable remains set. `mako-launch` otherwise selects the installed private MAKO manifests, disables competing LSFG-VK layers and Gamescope WSI in the child, and chooses the supported SDR boundary. If no profile matches, the Renderer remains dormant.
 
+To chain MAKO's private bundled vkBasalt after the Renderer for a native Steam or Proton game, opt in through the launcher:
+
+```text
+ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%
+```
+
+The complete vkBasalt configuration surface remains available through a per-game file without adding every field to the MAKO UI:
+
+```text
+ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
+```
+
+The config path is optional. Renderer `active_in` matching does not select a vkBasalt file; assign a distinct `VKBASALT_CONFIG_FILE` in each game's launch option for per-game settings. The launcher establishes the exact `MAKO Renderer -> vkBasalt` order using only MAKO's installed 64-bit and 32-bit private manifests. A missing architecture or unreadable selected config fails closed to MAKO alone instead of discovering a system copy. See [Optional graphics integrations](LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for ordering and support boundaries.
+
 The UI stores two optional, global process-start settings in `~/.config/mako-render/launcher.conf`: **Enable Zink for OpenGL (Restart)** and **Force ALSA Audio (Restart)**. The launcher accepts only its versioned allowlist; malformed, duplicate, unknown, or non-Boolean entries make all stored options inert for that launch. `MAKO_LAUNCH_CONFIG` may select another file for testing and is removed before the child starts.
 
 `MAKO_ALLOW_COMPETING_LAYERS=1` is an unsupported comparison escape hatch that stops the launcher from disabling another installed LSFG-VK layer. Do not use two frame-generation layers on one game.
 
-Steam Deck mode, Gamescope WSI compatibility, MangoHud, and vkBasalt remain MAKO Decky features because they require managed manifests and deterministic ordering. See [WSI isolation](WSI-ISOLATION.md) and [Optional graphics integrations](LAYER-CHAINING.md).
+Steam Deck mode, Gamescope WSI compatibility, MangoHud controls, and the compact per-profile vkBasalt UI remain MAKO Decky features. Standalone users can use the private vkBasalt launcher path above and edit the full standard configuration file directly. See [WSI isolation](WSI-ISOLATION.md) and [Optional graphics integrations](LAYER-CHAINING.md).
 
 ## Environment-only configuration
 

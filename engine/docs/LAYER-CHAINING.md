@@ -2,7 +2,7 @@
 
 This guide defines the named exceptions to MAKO's private implicit-layer boundary and the separate rules for game-local integrations. [WSI isolation](WSI-ISOLATION.md) owns the default launch and Gamescope presentation contract.
 
-Commands using `/home/deck/.local/bin/mako-run` apply to MAKO Decky. Standalone `mako-launch` does not provide a validated external-layer workflow.
+Commands using `/home/deck/.local/bin/mako-run` apply to MAKO Decky. Standalone `mako-launch` supports the private bundled vkBasalt path documented below, but it does not provide a general external-layer workflow.
 
 ## Default MAKO Decky launch
 
@@ -13,6 +13,30 @@ The normal Steam launch option is:
 ```
 
 The generated wrapper exposes only MAKO's managed manifests, removes additive implicit-layer discovery, disables Gamescope WSI and competing Frame Generation, and leaves the Gamescope compositor active. Keep this baseline unless a named per-profile exception is needed.
+
+## Standalone MAKO Renderer with vkBasalt
+
+The standalone native Renderer archive includes MAKO's pinned 64-bit and 32-bit vkBasalt libraries and manifests. A native Steam or Proton game can opt into that private bundle with:
+
+```text
+ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%
+```
+
+To use any vkBasalt option without expanding the MAKO UI, create a standard vkBasalt configuration and select it for the game:
+
+```text
+ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
+```
+
+`VKBASALT_CONFIG_FILE` is optional. When it is omitted, vkBasalt uses its normal configuration search. Renderer `active_in` matching selects only the MAKO profile and is not mapped to this file, so per-game vkBasalt settings require a distinct path in each game's launch option. `mako-launch` consumes the implicit activation request, selects only the manifests relative to the MAKO installation prefix, and creates the explicit `VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing` prefix. An inherited system vkBasalt manifest or duplicate instance-layer request cannot join that managed path. Caller-requested non-vkBasalt layers remain after the supported prefix but are not thereby supported integrations.
+
+Both private architecture manifests and libraries must be present, and a selected config must be readable before launch. If either check fails, the launcher prints a warning, keeps private vkBasalt disabled, and continues with MAKO Renderer alone. Layer membership is fixed when Vulkan starts, so restart the game after changing activation or configuration. This launcher flow covers native Vulkan and Proton games; use the [standalone Flatpak vkBasalt setup](FLATPAK-GUIDE.md#optional-private-vkbasalt-chain) for a sandboxed application.
+
+To return to MAKO Renderer alone, restore the normal launch option:
+
+```text
+~/.local/bin/mako-launch %command%
+```
 
 ## Supported per-profile exceptions
 
@@ -32,13 +56,13 @@ Layer membership cannot change after Vulkan starts. Restart the game after chang
 
 ### Enable MangoHud or vkBasalt
 
-1. Install the tool on the SteamOS host. For vkBasalt, follow the [upstream documentation and MAKO requirements below](#vkbasalt-with-mako-decky).
+1. Install MangoHud on the SteamOS host if that is the selected tool. vkBasalt is already included with MAKO Renderer.
 2. Keep `/home/deck/.local/bin/mako-run %command%` as the Steam launch option.
 3. Select the default profile or save a profile for the running game.
 4. Enable exactly one tool under **External Tools**.
 5. Restart the game.
 
-The controls do not enable host external layers inside Flatpak games.
+Host MangoHud is not enabled inside Flatpak games. Bundled vkBasalt is available to native games and prepared MAKO Flatpak runtimes.
 
 MangoHud continues to read `~/.config/MangoHud/MangoHud.conf`. To override a few values for one launch while the MangoHud profile control remains enabled, use:
 
@@ -50,25 +74,11 @@ Do not add activation or layer-path variables when the managed control is enable
 
 #### vkBasalt with MAKO Decky
 
-Use vkBasalt's official documentation for its installation, effects, and general troubleshooting:
+**Enable vkBasalt (Restart)** loads only MAKO Renderer's private bundled vkBasalt. MAKO ignores system-wide vkBasalt manifests and libraries, and a missing private bundle leaves vkBasalt disabled instead of falling back to another copy. No separate vkBasalt installation or launch option is needed.
 
-- [Installation and 64-bit/32-bit source builds](https://github.com/DadSchoorse/vkBasalt#building-from-source).
-- [Configuration, per-game effects, ReShade shaders, and the Home toggle](https://github.com/DadSchoorse/vkBasalt#configure).
-- [Annotated example configuration](https://github.com/DadSchoorse/vkBasalt/blob/master/config/vkBasalt.conf), including effect names and sharpening ranges.
-- [Debug logging](https://github.com/DadSchoorse/vkBasalt#debug-output) and [frequently asked questions](https://github.com/DadSchoorse/vkBasalt#faq).
+The compact controls set CAS or DLS sharpening, sharpening strength, DLS denoise, and optional FXAA or SMAA. MAKO Decky automatically uses vkBasalt's global file for the Default profile and an isolated file for every saved game or process profile; the UI shows the exact active path. Advanced edits are supported in that file because Decky merges only the compact controls and preserves other vkBasalt options. Changes apply after restarting the game.
 
-MAKO Decky controls which installed layer loads for a profile. vkBasalt reads its own configuration, normally `~/.config/vkBasalt/vkBasalt.conf`; MAKO does not install vkBasalt or edit its effects. For MAKO launches, keep the `mako-run` launch option above and use **Enable vkBasalt (Restart)** under **External Tools**. MAKO supplies activation, so do not add the upstream standalone `ENABLE_VKBASALT=1 %command%` launch option.
-
-MAKO's installation requirements are:
-
-- Install the library matching the game's Vulkan process architecture. MAKO currently discovers host manifests only in `/usr/share/vulkan/implicit_layer.d`: `vkBasalt.json` or `vkBasalt.x86_64.json` for 64-bit, and `vkBasalt.x86.json` for 32-bit. User-directory-only and Flatpak installations do not satisfy this discovery path.
-- A 32-bit source build using upstream's `-Dwith_json=false` does not install a manifest. Supply the separate `vkBasalt.x86.json` as well: copy the installed 64-bit vkBasalt manifest to that filename, set its `layer.library_arch` to `"32"`, and point `layer.library_path` to the installed 32-bit library, normally `/usr/lib32/libvkbasalt.so` on SteamOS. Keep the original 64-bit manifest.
-- Preserve the standard manifest activation gates: `ENABLE_VKBASALT=1` and `DISABLE_VKBASALT=1`. MAKO rejects manifests that change those gates.
-- Reload MAKO Decky after installing vkBasalt so it stages the matching manifests, then restart the game. Keep Gamescope WSI off for 32-bit launches. The external-tool controls do not enable host vkBasalt inside Flatpak games.
-
-If vkBasalt works on its own but is absent with MAKO, check these installation requirements and the game's selected profile, then collect a [MAKO Decky diagnostics report](../../plugin/docs/COLLECT_DIAGNOSTICS.md). Use the upstream links for effect selection, sharpening strength, hotkeys, and vkBasalt's own logs.
-
-User-reported SteamOS gameplay checks confirmed working vkBasalt effects in Resident Evil 4 and Black Mesa's 32-bit Windows build through Proton. A separate native 32-bit Vulkan loader check confirmed that MAKO's managed manifest loads the 32-bit vkBasalt library and its configuration. These checks cover those specific paths, not every game, runtime, or presentation scenario.
+For Flatpak games, install the matching MAKO extension and prepare the application in **Flatpak Setup**. If the effect does not appear, reinstall MAKO Renderer, update the Flatpak extension when applicable, and collect a [MAKO Decky diagnostics report](../../plugin/docs/COLLECT_DIAGNOSTICS.md).
 
 ## Manual MangoHud diagnostic path
 
@@ -93,7 +103,7 @@ Do not generalize the manual MangoHud command to a support claim. Every Vulkan l
 | Integration | MAKO status |
 | --- | --- |
 | MangoHud | Managed per-profile path; bounded manual diagnostic path above |
-| vkBasalt | Managed per-profile path; requires the matching host library and manifest |
+| vkBasalt | Bundled pinned 64-bit/32-bit layer; managed MAKO Decky profiles plus the named standalone native/Proton and Flatpak paths |
 | OBS Vulkan Capture | Unsupported candidate until the exact host/plugin/sandbox path and generated-frame capture are validated |
 | RenderDoc | Developer diagnostic only; use its own registration and activation flow and measure the resulting chain |
 | Other Frame Generation layers | Never combine with MAKO |

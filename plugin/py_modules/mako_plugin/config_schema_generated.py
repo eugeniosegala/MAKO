@@ -38,6 +38,10 @@ DISABLE_HDR_EXPOSURE = "disable_hdr_exposure"
 GAMESCOPE_WSI_COMPATIBILITY = "gamescope_wsi_compatibility"
 SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY = "swapchain_image_count_compatibility"
 EXTERNAL_VULKAN_LAYER = "external_vulkan_layer"
+VKBASALT_SHARPENING = "vkbasalt_sharpening"
+VKBASALT_SHARPNESS = "vkbasalt_sharpness"
+VKBASALT_DLS_DENOISE = "vkbasalt_dls_denoise"
+VKBASALT_ANTIALIASING = "vkbasalt_antialiasing"
 DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode"
 ENABLE_ZINK = "enable_zink"
 FORCE_ALSA_AUDIO = "force_alsa_audio"
@@ -74,6 +78,10 @@ class ConfigurationData(TypedDict):
     gamescope_wsi_compatibility: bool
     swapchain_image_count_compatibility: bool
     external_vulkan_layer: str
+    vkbasalt_sharpening: str
+    vkbasalt_sharpness: float
+    vkbasalt_dls_denoise: float
+    vkbasalt_antialiasing: str
     disable_steamdeck_mode: bool
     enable_zink: bool
     force_alsa_audio: bool
@@ -110,6 +118,10 @@ class ConfigurationPatch(TypedDict, total=False):
     gamescope_wsi_compatibility: bool
     swapchain_image_count_compatibility: bool
     external_vulkan_layer: str
+    vkbasalt_sharpening: str
+    vkbasalt_sharpness: float
+    vkbasalt_dls_denoise: float
+    vkbasalt_antialiasing: str
     disable_steamdeck_mode: bool
     enable_zink: bool
     force_alsa_audio: bool
@@ -121,6 +133,10 @@ class WrapperSettingsData(TypedDict):
     disable_hdr_exposure: bool
     gamescope_wsi_compatibility: bool
     external_vulkan_layer: str
+    vkbasalt_sharpening: str
+    vkbasalt_sharpness: float
+    vkbasalt_dls_denoise: float
+    vkbasalt_antialiasing: str
     disable_steamdeck_mode: bool
     enable_zink: bool
     force_alsa_audio: bool
@@ -158,4 +174,4 @@ def get_script_generation_logic():
     return generate_script_lines
 
 
-ALL_FIELDS = ['dll', 'allow_fp16', 'scaling_enabled', 'scaling_method', 'scaling_factor', 'scaling_supersampling', 'scaling_sharpness', 'frame_generation_enabled', 'frame_generation_refresh_threshold', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'dynamic_cadence_recovery', 'dynamic_cadence_probe_interval_seconds', 'ultra_performance', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'gamescope_wsi_compatibility', 'swapchain_image_count_compatibility', 'external_vulkan_layer', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']
+ALL_FIELDS = ['dll', 'allow_fp16', 'scaling_enabled', 'scaling_method', 'scaling_factor', 'scaling_supersampling', 'scaling_sharpness', 'frame_generation_enabled', 'frame_generation_refresh_threshold', 'base_fps_cap', 'multiplier', 'adaptive', 'adaptive_auto_base_fps_cap', 'target_fps', 'adaptive_max_multiplier', 'adaptive_stable_cadence', 'dynamic_cadence_recovery', 'dynamic_cadence_probe_interval_seconds', 'ultra_performance', 'flow_scale', 'performance_mode', 'pacing', 'active_in', 'gpu', 'disable_mako', 'disable_hdr_exposure', 'gamescope_wsi_compatibility', 'swapchain_image_count_compatibility', 'external_vulkan_layer', 'vkbasalt_sharpening', 'vkbasalt_sharpness', 'vkbasalt_dls_denoise', 'vkbasalt_antialiasing', 'disable_steamdeck_mode', 'enable_zink', 'force_alsa_audio']

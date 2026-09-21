@@ -1,0 +1,33 @@
+{
+  "name": "vkbasalt-mako-bundle",
+  "buildsystem": "simple",
+  "build-commands": [
+    "install -Dm755 lib/libvkbasalt.so $FLATPAK_DEST/lib64/vkbasalt/libvkbasalt.so",
+    "install -Dm755 lib32/libvkbasalt.so $FLATPAK_DEST/lib/i386-linux-gnu/vkbasalt/libvkbasalt.so",
+    "install -Dm644 vkBasalt.flatpak.json $FLATPAK_DEST/share/vulkan/implicit_layer.d/vkBasalt.json",
+    "install -Dm644 vkBasalt.flatpak.x86.json $FLATPAK_DEST/share/vulkan/implicit_layer.d/vkBasalt.x86.json",
+    "install -Dm644 share/doc/vkbasalt/LICENSE $FLATPAK_DEST/share/doc/mako-render/vkbasalt/LICENSE",
+    "install -Dm644 share/doc/vkbasalt/RESHade-LICENSE.md $FLATPAK_DEST/share/doc/mako-render/vkbasalt/RESHade-LICENSE.md",
+    "install -Dm644 share/doc/vkbasalt/SOURCE $FLATPAK_DEST/share/doc/mako-render/vkbasalt/SOURCE",
+    "install -Dm644 vkbasalt-release.json $FLATPAK_DEST/share/doc/mako-render/vkbasalt/MAKO-PIN.json"
+  ],
+  "sources": [
+    {
+      "type": "archive",
+      "url": "https://github.com/eugeniosegala/vkBasalt/releases/download/mako-v0.3.2.10-1/vkBasalt-mako-v0.3.2.10-1-linux-x86.tar.xz",
+      "sha256": "bfcbb8eb16a0a7dc0fd3bed38e384fdf65a4dc444d6223cfbd01cea80df552f0"
+    },
+    {
+      "type": "file",
+      "path": "vkBasalt.flatpak.json"
+    },
+    {
+      "type": "file",
+      "path": "vkBasalt.flatpak.x86.json"
+    },
+    {
+      "type": "file",
+      "path": "../../../vkbasalt-release.json"
+    }
+  ]
+}

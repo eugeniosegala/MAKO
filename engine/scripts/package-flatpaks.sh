@@ -75,6 +75,10 @@ for command in flatpak flatpak-builder nm python3 strings tar; do
 done
 
 python3 "$repo_root/scripts/generate-flatpak-vulkan-headers.py" --check
+python3 "$repo_root/scripts/manage-vkbasalt-release.py" \
+    --check \
+    --check-flatpak-module \
+    "$repo_root/dist/flatpak/mako-render/vkbasalt-module.json"
 
 verify_elf_class() {
     local path="$1"
@@ -174,13 +178,21 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
         "files/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json" \
         "files/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json" \
         "files/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json" \
+        "files/share/vulkan/implicit_layer.d/vkBasalt.json" \
+        "files/share/vulkan/implicit_layer.d/vkBasalt.x86.json" \
         "files/share/doc/mako-render/ASSET_PROVENANCE.md" \
         "files/share/doc/mako-render/LICENSE.md" \
         "files/share/doc/mako-render/THIRD_PARTY_NOTICES.md" \
+        "files/share/doc/mako-render/vkbasalt/LICENSE" \
+        "files/share/doc/mako-render/vkbasalt/RESHade-LICENSE.md" \
+        "files/share/doc/mako-render/vkbasalt/SOURCE" \
+        "files/share/doc/mako-render/vkbasalt/MAKO-PIN.json" \
         "files/lib64/libmako-render.so" \
         "files/lib64/libmako-render-scaling.so" \
+        "files/lib64/vkbasalt/libvkbasalt.so" \
         "files/lib/i386-linux-gnu/libmako-render.so" \
-        "files/lib/i386-linux-gnu/libmako-render-scaling.so"; do
+        "files/lib/i386-linux-gnu/libmako-render-scaling.so" \
+        "files/lib/i386-linux-gnu/vkbasalt/libvkbasalt.so"; do
         if [[ ! -f "$build_dir/$required_path" ]]; then
             echo "Flatpak packaging failed: missing $required_path for $runtime_version" >&2
             exit 1
@@ -189,8 +201,21 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
 
     verify_elf_class "$build_dir/files/lib64/libmako-render.so" 2
     verify_elf_class "$build_dir/files/lib64/libmako-render-scaling.so" 2
+    verify_elf_class "$build_dir/files/lib64/vkbasalt/libvkbasalt.so" 2
     verify_elf_class "$build_dir/files/lib/i386-linux-gnu/libmako-render.so" 1
     verify_elf_class "$build_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so" 1
+    verify_elf_class "$build_dir/files/lib/i386-linux-gnu/vkbasalt/libvkbasalt.so" 1
+    for vkbasalt_library in \
+            "$build_dir/files/lib64/vkbasalt/libvkbasalt.so" \
+            "$build_dir/files/lib/i386-linux-gnu/vkbasalt/libvkbasalt.so"; do
+        if ! strings "$vkbasalt_library" |
+                grep -Fx "vkBasalt_GetInstanceProcAddr" >/dev/null ||
+                ! strings "$vkbasalt_library" |
+                    grep -Fx "vkBasalt_GetDeviceProcAddr" >/dev/null; then
+            echo "Flatpak packaging failed: invalid vkBasalt entry point in $vkbasalt_library" >&2
+            exit 1
+        fi
+    done
 
     for layer_binary in \
             "$build_dir/files/lib64/libmako-render.so" \
@@ -217,6 +242,8 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
     manifest32="$build_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
     scaling_manifest64="$build_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"
     scaling_manifest32="$build_dir/files/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
+    vkbasalt_manifest64="$build_dir/files/share/vulkan/implicit_layer.d/vkBasalt.json"
+    vkbasalt_manifest32="$build_dir/files/share/vulkan/implicit_layer.d/vkBasalt.x86.json"
 
     if ! grep -Fq "/usr/lib/extensions/vulkan/makorender/lib64/libmako-render.so" \
         "$manifest64"; then
@@ -266,6 +293,26 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
             exit 1
         fi
     done
+    if ! grep -Fq "/usr/lib/extensions/vulkan/makorender/lib64/vkbasalt/libvkbasalt.so" \
+            "$vkbasalt_manifest64" ||
+            ! grep -Fq '"library_arch": "64"' "$vkbasalt_manifest64"; then
+        echo "Flatpak packaging failed: 64-bit vkBasalt manifest is incorrect for $runtime_version" >&2
+        exit 1
+    fi
+    if ! grep -Fq "/usr/lib/extensions/vulkan/makorender/lib/i386-linux-gnu/vkbasalt/libvkbasalt.so" \
+            "$vkbasalt_manifest32" ||
+            ! grep -Fq '"library_arch": "32"' "$vkbasalt_manifest32"; then
+        echo "Flatpak packaging failed: 32-bit vkBasalt manifest is incorrect for $runtime_version" >&2
+        exit 1
+    fi
+    for manifest in "$vkbasalt_manifest64" "$vkbasalt_manifest32"; do
+        if ! grep -Fq '"name": "VK_LAYER_VKBASALT_post_processing"' "$manifest" ||
+                ! grep -Fq '"ENABLE_VKBASALT": "1"' "$manifest" ||
+                ! grep -Fq '"DISABLE_VKBASALT": "1"' "$manifest"; then
+            echo "Flatpak packaging failed: vkBasalt gating is incorrect for $runtime_version" >&2
+            exit 1
+        fi
+    done
 
     flatpak build-bundle "$repo_dir" "$bundle" "$extension_id" "$runtime_version" --runtime
 
@@ -298,6 +345,23 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
         echo "Flatpak packaging failed: deployed spatial-layer library is missing for $runtime_version" >&2
         exit 1
     fi
+    if [[ ! -f "$deployed_dir/files/lib64/vkbasalt/libvkbasalt.so" ||
+          ! -f "$deployed_dir/files/lib/i386-linux-gnu/vkbasalt/libvkbasalt.so" ]]; then
+        echo "Flatpak packaging failed: deployed vkBasalt libraries are missing for $runtime_version" >&2
+        exit 1
+    fi
+    for deployed_vkbasalt_file in \
+            "share/vulkan/implicit_layer.d/vkBasalt.json" \
+            "share/vulkan/implicit_layer.d/vkBasalt.x86.json" \
+            "share/doc/mako-render/vkbasalt/LICENSE" \
+            "share/doc/mako-render/vkbasalt/RESHade-LICENSE.md" \
+            "share/doc/mako-render/vkbasalt/SOURCE" \
+            "share/doc/mako-render/vkbasalt/MAKO-PIN.json"; do
+        if [[ ! -f "$deployed_dir/files/$deployed_vkbasalt_file" ]]; then
+            echo "Flatpak packaging failed: deployed vkBasalt file is missing: $deployed_vkbasalt_file" >&2
+            exit 1
+        fi
+    done
     for legal_file in ASSET_PROVENANCE.md LICENSE.md THIRD_PARTY_NOTICES.md; do
         if [[ ! -f "$deployed_dir/files/share/doc/mako-render/$legal_file" ]]; then
             echo "Flatpak packaging failed: deployed legal file $legal_file is missing for $runtime_version" >&2
@@ -307,8 +371,21 @@ while IFS= read -r runtime_version || [[ -n "$runtime_version" ]]; do
 
     verify_elf_class "$deployed_dir/files/lib64/libmako-render.so" 2
     verify_elf_class "$deployed_dir/files/lib64/libmako-render-scaling.so" 2
+    verify_elf_class "$deployed_dir/files/lib64/vkbasalt/libvkbasalt.so" 2
     verify_elf_class "$deployed_dir/files/lib/i386-linux-gnu/libmako-render.so" 1
     verify_elf_class "$deployed_dir/files/lib/i386-linux-gnu/libmako-render-scaling.so" 1
+    verify_elf_class "$deployed_dir/files/lib/i386-linux-gnu/vkbasalt/libvkbasalt.so" 1
+    for vkbasalt_library in \
+            "$deployed_dir/files/lib64/vkbasalt/libvkbasalt.so" \
+            "$deployed_dir/files/lib/i386-linux-gnu/vkbasalt/libvkbasalt.so"; do
+        if ! strings "$vkbasalt_library" |
+                grep -Fx "vkBasalt_GetInstanceProcAddr" >/dev/null ||
+                ! strings "$vkbasalt_library" |
+                    grep -Fx "vkBasalt_GetDeviceProcAddr" >/dev/null; then
+            echo "Flatpak packaging failed: invalid deployed vkBasalt entry point in $vkbasalt_library" >&2
+            exit 1
+        fi
+    done
 
     for layer_binary in \
             "$deployed_dir/files/lib64/libmako-render.so" \

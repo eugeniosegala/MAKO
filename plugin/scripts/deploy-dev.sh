@@ -13,6 +13,9 @@ flatpak_runtime_bundle_output="$(
 renderer_path_output="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" renderer-paths
 )"
+vkbasalt_path_output="$(
+  python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" vkbasalt-paths
+)"
 flatpak_runtime_versions=()
 while IFS= read -r runtime_version; do
   [[ -n "$runtime_version" ]] && flatpak_runtime_versions+=("$runtime_version")
@@ -25,6 +28,10 @@ renderer_paths=()
 while IFS= read -r renderer_path; do
   [[ -n "$renderer_path" ]] && renderer_paths+=("$renderer_path")
 done <<< "$renderer_path_output"
+vkbasalt_paths=()
+while IFS= read -r vkbasalt_path; do
+  [[ -n "$vkbasalt_path" ]] && vkbasalt_paths+=("$vkbasalt_path")
+done <<< "$vkbasalt_path_output"
 if ((${#flatpak_runtime_versions[@]} == 0 ||
       ${#flatpak_runtime_versions[@]} != ${#flatpak_runtime_bundles[@]})); then
   echo "The shared Flatpak runtime contract is empty or inconsistent." >&2
@@ -32,6 +39,10 @@ if ((${#flatpak_runtime_versions[@]} == 0 ||
 fi
 if ((${#renderer_paths[@]} != 8)); then
   echo "The shared Renderer path contract is incomplete." >&2
+  exit 1
+fi
+if ((${#vkbasalt_paths[@]} != 5)); then
+  echo "The shared vkBasalt path contract is incomplete." >&2
   exit 1
 fi
 renderer_library_filename="${renderer_paths[0]}"
@@ -42,6 +53,11 @@ spatial_library_relative_path="${renderer_paths[4]}"
 spatial_library32_relative_path="${renderer_paths[5]}"
 spatial_manifest_relative_path="${renderer_paths[6]}"
 spatial_manifest32_relative_path="${renderer_paths[7]}"
+vkbasalt_library_filename="${vkbasalt_paths[0]}"
+vkbasalt_library_relative_path="${vkbasalt_paths[1]}"
+vkbasalt_library32_relative_path="${vkbasalt_paths[2]}"
+vkbasalt_manifest_relative_path="${vkbasalt_paths[3]}"
+vkbasalt_manifest32_relative_path="${vkbasalt_paths[4]}"
 flatpak_runtime_summary="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" summary
 )"
@@ -65,8 +81,9 @@ Usage: scripts/deploy-dev.sh [options]
 
 Updates an already installed local MAKO Decky plugin in place.
 With no options it rebuilds and deploys the Decky frontend and Python backend.
-It never builds a ZIP, downloads release payloads, publishes anything, or runs
-the full test suite. Flatpak options build local development extensions.
+It never builds a ZIP, publishes anything, or runs the full test suite. Host
+deployments validate and stage MAKO's pinned private vkBasalt dependency.
+Flatpak options build local development extensions.
 
 Options:
   --frontend              Rebuild and deploy dist/ with fresh dev-build metadata.
@@ -282,23 +299,55 @@ if resolved != installed_library_path:
 PY
 }
 
+rewrite_private_layer_manifest() {
+  local manifest_path="$1"
+  local installed_library_path="$2"
+  python3 - "$manifest_path" "$installed_library_path" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+manifest_path = Path(sys.argv[1])
+installed_library_path = Path(sys.argv[2]).resolve()
+try:
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    layer = manifest["layer"]
+except (OSError, KeyError, TypeError, json.JSONDecodeError) as error:
+    raise SystemExit(f"Invalid development layer manifest {manifest_path}: {error}")
+layer["library_path"] = str(installed_library_path)
+manifest_path.write_text(json.dumps(manifest, indent=4) + "\n", encoding="utf-8")
+PY
+}
+
 built_layer_64=""
 built_layer_32=""
 built_spatial_layer_64=""
 built_spatial_layer_32=""
 built_spatial_manifest_64=""
 built_spatial_manifest_32=""
+built_vkbasalt_library_64=""
+built_vkbasalt_library_32=""
+built_vkbasalt_manifest_64=""
+built_vkbasalt_manifest_32=""
 installed_layer_64=""
 installed_layer_32=""
 installed_spatial_layer_64=""
 installed_spatial_layer_32=""
 installed_spatial_manifest_64=""
 installed_spatial_manifest_32=""
+installed_vkbasalt_library_64=""
+installed_vkbasalt_library_32=""
+installed_vkbasalt_manifest_64=""
+installed_vkbasalt_manifest_32=""
 flatpak_archive=""
 flatpak_unpack_dir=""
+vkbasalt_stage_dir=""
 cleanup() {
   if [[ -n "$flatpak_unpack_dir" ]]; then
     rm -rf "$flatpak_unpack_dir"
+  fi
+  if [[ -n "$vkbasalt_stage_dir" ]]; then
+    rm -rf "$vkbasalt_stage_dir"
   fi
 }
 trap cleanup EXIT
@@ -317,6 +366,22 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
   fi
   "$engine_repo/scripts/build-steamos-dev.sh" "${engine_build_args[@]}"
 
+  if [[ ! -x "$engine_repo/scripts/manage-vkbasalt-release.py" ]]; then
+    echo "Pinned vkBasalt manager not found: $engine_repo/scripts/manage-vkbasalt-release.py" >&2
+    exit 1
+  fi
+  mkdir -p "$engine_repo/build/work"
+  vkbasalt_stage_dir="$(mktemp -d "$engine_repo/build/work/vkbasalt-dev.XXXXXX")"
+  vkbasalt_stage_args=(
+    --stage-native "$vkbasalt_stage_dir"
+    --cache-dir "$engine_repo/build/cache/vkbasalt"
+  )
+  if [[ "$deploy_engine_32" == false ]]; then
+    vkbasalt_stage_args+=(--64-bit-only)
+  fi
+  python3 "$engine_repo/scripts/manage-vkbasalt-release.py" \
+    "${vkbasalt_stage_args[@]}"
+
   engine_build_dir="${MAKO_BUILD_DIR:-$engine_repo/build/steamos-dev}"
   if [[ "$engine_build_dir" != /* ]]; then
     engine_build_dir="$engine_repo/$engine_build_dir"
@@ -328,6 +393,10 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     installed_layer_64="$HOME/$renderer_library_relative_path"
     installed_spatial_layer_64="$HOME/$spatial_library_relative_path"
     installed_spatial_manifest_64="$HOME/$spatial_manifest_relative_path"
+    built_vkbasalt_library_64="$vkbasalt_stage_dir/lib/vkbasalt/$vkbasalt_library_filename"
+    built_vkbasalt_manifest_64="$vkbasalt_stage_dir/share/mako-render/vulkan/vkbasalt.d/${vkbasalt_manifest_relative_path##*/}"
+    installed_vkbasalt_library_64="$HOME/$vkbasalt_library_relative_path"
+    installed_vkbasalt_manifest_64="$HOME/$vkbasalt_manifest_relative_path"
   fi
   if [[ "$deploy_engine_32" == true ]]; then
     engine_build_32_dir="${MAKO_BUILD_32_DIR:-${engine_build_dir}-32}"
@@ -340,11 +409,17 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     installed_layer_32="$HOME/$renderer_library32_relative_path"
     installed_spatial_layer_32="$HOME/$spatial_library32_relative_path"
     installed_spatial_manifest_32="$HOME/$spatial_manifest32_relative_path"
+    built_vkbasalt_library_32="$vkbasalt_stage_dir/lib32/vkbasalt/$vkbasalt_library_filename"
+    built_vkbasalt_manifest_32="$vkbasalt_stage_dir/share/mako-render/vulkan/vkbasalt.d/${vkbasalt_manifest32_relative_path##*/}"
+    installed_vkbasalt_library_32="$HOME/$vkbasalt_library32_relative_path"
+    installed_vkbasalt_manifest_32="$HOME/$vkbasalt_manifest32_relative_path"
   fi
   for layer_path in \
       "$built_layer_64" "$built_layer_32" \
       "$built_spatial_layer_64" "$built_spatial_layer_32" \
-      "$built_spatial_manifest_64" "$built_spatial_manifest_32"; do
+      "$built_spatial_manifest_64" "$built_spatial_manifest_32" \
+      "$built_vkbasalt_library_64" "$built_vkbasalt_library_32" \
+      "$built_vkbasalt_manifest_64" "$built_vkbasalt_manifest_32"; do
     if [[ -n "$layer_path" && ! -f "$layer_path" ]]; then
       echo "Incremental engine build did not produce: $layer_path" >&2
       exit 1
@@ -366,6 +441,20 @@ if [[ "$deploy_engine" == true || "$deploy_engine_32" == true ]]; then
     verify_private_layer_manifest \
       "$built_spatial_manifest_32" "$installed_spatial_manifest_32" \
       "$installed_spatial_layer_32" "VK_LAYER_MAKO_spatial_scaling"
+  fi
+  if [[ -n "$built_vkbasalt_manifest_64" ]]; then
+    rewrite_private_layer_manifest \
+      "$built_vkbasalt_manifest_64" "$installed_vkbasalt_library_64"
+    verify_private_layer_manifest \
+      "$built_vkbasalt_manifest_64" "$installed_vkbasalt_manifest_64" \
+      "$installed_vkbasalt_library_64" "VK_LAYER_VKBASALT_post_processing"
+  fi
+  if [[ -n "$built_vkbasalt_manifest_32" ]]; then
+    rewrite_private_layer_manifest \
+      "$built_vkbasalt_manifest_32" "$installed_vkbasalt_library_32"
+    verify_private_layer_manifest \
+      "$built_vkbasalt_manifest_32" "$installed_vkbasalt_manifest_32" \
+      "$installed_vkbasalt_library_32" "VK_LAYER_VKBASALT_post_processing"
   fi
 fi
 
@@ -477,13 +566,17 @@ if [[ -n "$built_layer_64" ]]; then
   copy_file "$built_layer_64" "$installed_layer_64"
   copy_file "$built_spatial_layer_64" "$installed_spatial_layer_64"
   copy_file "$built_spatial_manifest_64" "$installed_spatial_manifest_64"
-  echo "Deployed incremental 64-bit frame-generation and spatial-scaling layers."
+  copy_file "$built_vkbasalt_library_64" "$installed_vkbasalt_library_64"
+  copy_file "$built_vkbasalt_manifest_64" "$installed_vkbasalt_manifest_64"
+  echo "Deployed incremental 64-bit Renderer and private vkBasalt layers."
 fi
 if [[ -n "$built_layer_32" ]]; then
   copy_file "$built_layer_32" "$installed_layer_32"
   copy_file "$built_spatial_layer_32" "$installed_spatial_layer_32"
   copy_file "$built_spatial_manifest_32" "$installed_spatial_manifest_32"
-  echo "Deployed incremental 32-bit frame-generation and spatial-scaling layers."
+  copy_file "$built_vkbasalt_library_32" "$installed_vkbasalt_library_32"
+  copy_file "$built_vkbasalt_manifest_32" "$installed_vkbasalt_manifest_32"
+  echo "Deployed incremental 32-bit Renderer and private vkBasalt layers."
 fi
 if [[ -n "$flatpak_archive" ]]; then
   for flatpak_bundle in "${flatpak_runtime_bundles[@]}"; do

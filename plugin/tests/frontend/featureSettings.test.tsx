@@ -31,6 +31,9 @@ vi.mock("../../src/components/ScalingControl", () => ({
 vi.mock("../../src/components/settings/PerformanceConfigurationGroup", () => ({
   PerformanceConfigurationGroup: () => <div>FG performance controls</div>,
 }));
+vi.mock("../../src/components/settings/ShadersConfigurationGroup", () => ({
+  ShadersConfigurationGroup: () => <div>Shader controls</div>,
+}));
 vi.mock("../../src/components/ConfigurationSection", () => ({
   FrameGenerationConfigurationSection: () => <div>FG advanced controls</div>,
 }));
@@ -51,6 +54,8 @@ describe("primary feature organization", () => {
       <FeatureSettings
         config={getDefaults()}
         runtimeState={EMPTY_RUNTIME_SCALING_UI_STATE}
+        profileName="mako"
+        vkBasaltConfigPath="/home/deck/.config/vkBasalt/vkBasalt.conf"
         onConfigChange={vi.fn(async () => undefined)}
         onConfigUpdate={vi.fn(async () => undefined)}
       />,
@@ -60,6 +65,7 @@ describe("primary feature organization", () => {
     expect(screen.getByText("FG performance controls")).toBeTruthy();
     expect(screen.getByText("FG advanced controls")).toBeTruthy();
     expect(screen.getByText("Upscaling controls")).toBeTruthy();
+    expect(screen.getByText("Shader controls")).toBeTruthy();
     expect(screen.getByText("Spatial Settings")).toBeTruthy();
     expect(
       screen.queryByText(
@@ -75,6 +81,7 @@ describe("primary feature organization", () => {
 
     const frameGeneration = screen.getByText("Frame Generation controls");
     const spatialSettings = screen.getByText("Spatial Settings");
+    const shaders = screen.getByText("Shader controls");
     const performance = screen.getByText("FG performance controls");
     const advanced = screen.getByText("FG advanced controls");
     expect(
@@ -82,7 +89,11 @@ describe("primary feature organization", () => {
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(
-      spatialSettings.compareDocumentPosition(performance) &
+      spatialSettings.compareDocumentPosition(shaders) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
+    expect(
+      shaders.compareDocumentPosition(performance) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
     expect(

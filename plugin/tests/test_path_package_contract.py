@@ -24,6 +24,9 @@ from py_modules.mako_plugin.constants import (
     SPATIAL_SCALING_LAYER_ENABLE_ENV,
     SPATIAL_SCALING_LAYER_NAME,
     SPATIAL_SCALING_LIB_FILENAME,
+    VKBASALT_LIB_FILENAME,
+    VKBASALT_MANIFEST_FILENAME_32,
+    VKBASALT_MANIFEST_FILENAME_64,
     PLUGIN_ROOT,
     STEAM_COMMON_PATH,
 )
@@ -107,6 +110,9 @@ def _installer_archive_members() -> tuple[set[str], set[str]]:
         "SPATIAL_SCALING_LIB_FILENAME": SPATIAL_SCALING_LIB_FILENAME,
         "SPATIAL_SCALING_JSON_FILENAME": SPATIAL_SCALING_JSON_FILENAME,
         "SPATIAL_SCALING_JSON32_FILENAME": SPATIAL_SCALING_JSON32_FILENAME,
+        "VKBASALT_LIB_FILENAME": VKBASALT_LIB_FILENAME,
+        "VKBASALT_MANIFEST_FILENAME_64": VKBASALT_MANIFEST_FILENAME_64,
+        "VKBASALT_MANIFEST_FILENAME_32": VKBASALT_MANIFEST_FILENAME_32,
     }
     for node in ast.walk(tree):
         if not isinstance(node, ast.Assign) or not isinstance(node.value, ast.Dict):
@@ -153,12 +159,16 @@ class PathAndPackageContractTests(unittest.TestCase):
             f"share/vulkan/implicit_layer.d/{JSON_FILENAME}",
             f"lib/{SPATIAL_SCALING_LIB_FILENAME}",
             f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON_FILENAME}",
+            f"lib/vkbasalt/{VKBASALT_LIB_FILENAME}",
+            f"share/mako-render/vulkan/vkbasalt.d/{VKBASALT_MANIFEST_FILENAME_64}",
         }
         expected_optional_32bit = {
             f"lib32/{LIB_FILENAME}",
             f"share/vulkan/implicit_layer.d/{JSON32_FILENAME}",
             f"lib32/{SPATIAL_SCALING_LIB_FILENAME}",
             f"share/vulkan/implicit_layer.d/{SPATIAL_SCALING_JSON32_FILENAME}",
+            f"lib32/vkbasalt/{VKBASALT_LIB_FILENAME}",
+            f"share/mako-render/vulkan/vkbasalt.d/{VKBASALT_MANIFEST_FILENAME_32}",
         }
         self.assertEqual(required, expected_required)
         self.assertEqual(optional_32bit, expected_optional_32bit)
@@ -206,6 +216,20 @@ class PathAndPackageContractTests(unittest.TestCase):
         self.assertIn(
             'copy_file "$built_spatial_manifest_64" '
             '"$installed_spatial_manifest_64"',
+            deploy,
+        )
+        self.assertIn(
+            'scripts/manage-vkbasalt-release.py',
+            deploy,
+        )
+        self.assertIn(
+            'copy_file "$built_vkbasalt_library_64" '
+            '"$installed_vkbasalt_library_64"',
+            deploy,
+        )
+        self.assertIn(
+            'copy_file "$built_vkbasalt_library_32" '
+            '"$installed_vkbasalt_library_32"',
             deploy,
         )
         self.assertIn("verify_private_layer_manifest()", deploy)

@@ -91,6 +91,16 @@ export const EXTERNAL_VULKAN_LAYER_VALUES = [
 export type ExternalVulkanLayer =
   (typeof EXTERNAL_VULKAN_LAYER_VALUES)[number];
 
+// Decky-owned vkBasalt controls
+export const VKBASALT_SHARPENING_NONE = "none" as const;
+export const VKBASALT_SHARPENING_CAS = "cas" as const;
+export const VKBASALT_SHARPENING_DLS = "dls" as const;
+export const VKBASALT_ANTIALIASING_NONE = "none" as const;
+export const VKBASALT_ANTIALIASING_FXAA = "fxaa" as const;
+export const VKBASALT_ANTIALIASING_SMAA = "smaa" as const;
+export const VKBASALT_STRENGTH_MIN = 0.0 as const;
+export const VKBASALT_STRENGTH_MAX = 1.0 as const;
+
 // Configuration field type enum - matches Python
 export enum ConfigFieldType {
   BOOLEAN = "boolean",
@@ -129,6 +139,10 @@ export const DISABLE_HDR_EXPOSURE = "disable_hdr_exposure" as const;
 export const GAMESCOPE_WSI_COMPATIBILITY = "gamescope_wsi_compatibility" as const;
 export const SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY = "swapchain_image_count_compatibility" as const;
 export const EXTERNAL_VULKAN_LAYER = "external_vulkan_layer" as const;
+export const VKBASALT_SHARPENING = "vkbasalt_sharpening" as const;
+export const VKBASALT_SHARPNESS = "vkbasalt_sharpness" as const;
+export const VKBASALT_DLS_DENOISE = "vkbasalt_dls_denoise" as const;
+export const VKBASALT_ANTIALIASING = "vkbasalt_antialiasing" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
 export const FORCE_ALSA_AUDIO = "force_alsa_audio" as const;
@@ -317,6 +331,30 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: "",
     description: "optional guarded post-process Vulkan layer: MangoHud or vkBasalt"
   },
+  vkbasalt_sharpening: {
+    name: "vkbasalt_sharpening",
+    fieldType: ConfigFieldType.STRING,
+    default: "cas",
+    description: "MAKO-managed vkBasalt sharpening effect: none, CAS, or DLS"
+  },
+  vkbasalt_sharpness: {
+    name: "vkbasalt_sharpness",
+    fieldType: ConfigFieldType.FLOAT,
+    default: 0.5,
+    description: "MAKO-managed vkBasalt CAS or DLS sharpening strength"
+  },
+  vkbasalt_dls_denoise: {
+    name: "vkbasalt_dls_denoise",
+    fieldType: ConfigFieldType.FLOAT,
+    default: 0.17,
+    description: "MAKO-managed vkBasalt DLS denoise strength"
+  },
+  vkbasalt_antialiasing: {
+    name: "vkbasalt_antialiasing",
+    fieldType: ConfigFieldType.STRING,
+    default: "none",
+    description: "MAKO-managed vkBasalt anti-aliasing effect: none, FXAA, or SMAA"
+  },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",
     fieldType: ConfigFieldType.BOOLEAN,
@@ -368,6 +406,10 @@ export interface ConfigurationData {
   gamescope_wsi_compatibility: boolean;
   swapchain_image_count_compatibility: boolean;
   external_vulkan_layer: string;
+  vkbasalt_sharpening: string;
+  vkbasalt_sharpness: number;
+  vkbasalt_dls_denoise: number;
+  vkbasalt_antialiasing: string;
   disable_steamdeck_mode: boolean;
   enable_zink: boolean;
   force_alsa_audio: boolean;
@@ -412,6 +454,10 @@ export function getDefaults(): ConfigurationData {
     gamescope_wsi_compatibility: false,
     swapchain_image_count_compatibility: false,
     external_vulkan_layer: "",
+    vkbasalt_sharpening: "cas",
+    vkbasalt_sharpness: 0.5,
+    vkbasalt_dls_denoise: 0.17,
+    vkbasalt_antialiasing: "none",
     disable_steamdeck_mode: false,
     enable_zink: false,
     force_alsa_audio: false,
@@ -449,6 +495,10 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     gamescope_wsi_compatibility: ConfigFieldType.BOOLEAN,
     swapchain_image_count_compatibility: ConfigFieldType.BOOLEAN,
     external_vulkan_layer: ConfigFieldType.STRING,
+    vkbasalt_sharpening: ConfigFieldType.STRING,
+    vkbasalt_sharpness: ConfigFieldType.FLOAT,
+    vkbasalt_dls_denoise: ConfigFieldType.FLOAT,
+    vkbasalt_antialiasing: ConfigFieldType.STRING,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,
     force_alsa_audio: ConfigFieldType.BOOLEAN,

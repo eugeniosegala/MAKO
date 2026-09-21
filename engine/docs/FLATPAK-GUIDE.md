@@ -84,7 +84,9 @@ flatpak override --user --env=ENABLE_MAKO=1 "$appid"
 flatpak override --user --env=DISABLE_LSFG=1 "$appid"
 flatpak override --user --env=DISABLE_LSFGVK=1 "$appid"
 flatpak override --user --env=DISABLE_GAMESCOPE_WSI=1 "$appid"
+flatpak override --user --env=DISABLE_VKBASALT=1 "$appid"
 flatpak override --user --unset-env=ENABLE_GAMESCOPE_WSI "$appid"
+flatpak override --user --unset-env=ENABLE_VKBASALT "$appid"
 flatpak override --user --env=MAKO_DISABLE_HDR_EXPOSURE=1 "$appid"
 flatpak override --user --unset-env=DXVK_HDR "$appid"
 flatpak override --user --env=VK_IMPLICIT_LAYER_PATH=/usr/lib/extensions/vulkan/makorender/share/vulkan/implicit_layer.d "$appid"
@@ -96,6 +98,37 @@ These overrides persist for the selected application and apply to processes it s
 For standalone Flatpak Heroic or Lutris, prepare the launcher app and create profiles matching each game's executable. These manual overrides are app-wide; automatic process matching chooses the game profile. Avoid setting one app-wide `MAKO_PROFILE` for a launcher that runs several games. This workflow needs no host `mako-launch` path in a game's wrapper field. MAKO Decky's per-game sandbox wrapper is a separate managed workflow.
 
 For EmuDeck, prepare each emulator installed as a Flatpak and select **Vulkan** in its graphics settings. Keep the existing Steam shortcut target, ROM path, and launch arguments. Matching an emulator process applies that profile to games running in that process; it does not distinguish ROMs. Native or AppImage emulators use the [native Renderer launch instructions](../README.md#usage).
+
+## Optional private vkBasalt chain
+
+The MAKO Flatpak extension includes the same pinned 64-bit and 32-bit private vkBasalt payload as the native archive. After completing the normal application override above, replace implicit MAKO activation with the exact explicit `MAKO Renderer -> vkBasalt` chain:
+
+```bash
+flatpak override --user --unset-env=ENABLE_MAKO "$appid"
+flatpak override --user --unset-env=DISABLE_MAKO "$appid"
+flatpak override --user --unset-env=ENABLE_VKBASALT "$appid"
+flatpak override --user --unset-env=DISABLE_VKBASALT "$appid"
+flatpak override --user --env=VK_INSTANCE_LAYERS=VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing "$appid"
+```
+
+This uses only the two manifests in MAKO's runtime extension. A system or host vkBasalt installation is not exposed to the sandbox. The host `mako-launch` option does not configure a Flatpak application.
+
+For the full vkBasalt option suite, create a standard config inside the configuration directory already granted to the sandbox, then save its absolute path:
+
+```bash
+flatpak override --user --env=VKBASALT_CONFIG_FILE="$HOME/.config/mako-render/vkBasalt.conf" "$appid"
+```
+
+Omit that override to use vkBasalt's normal configuration search. Restart the application after changing activation or the file. To return this app to the normal MAKO-only setup without removing unrelated overrides, run:
+
+```bash
+flatpak override --user --unset-env=VK_INSTANCE_LAYERS "$appid"
+flatpak override --user --unset-env=VKBASALT_CONFIG_FILE "$appid"
+flatpak override --user --unset-env=ENABLE_VKBASALT "$appid"
+flatpak override --user --env=DISABLE_VKBASALT=1 "$appid"
+flatpak override --user --unset-env=DISABLE_MAKO "$appid"
+flatpak override --user --env=ENABLE_MAKO=1 "$appid"
+```
 
 ## Launch and verify
 
@@ -113,7 +146,7 @@ To inspect the saved per-user overrides:
 flatpak override --user --show "$appid"
 ```
 
-Check for the configuration path and `ENABLE_MAKO=1`, then check that the extension manifests and configuration file are actually available inside the sandbox:
+Check for the configuration path and either baseline `ENABLE_MAKO=1` activation or the optional `VK_INSTANCE_LAYERS=VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing` chain, then check that the extension manifests and configuration file are actually available inside the sandbox:
 
 ```bash
 flatpak run --command=sh "$appid" -c '

@@ -18,6 +18,12 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     SPATIAL_SCALING_JSON_FILENAME,
     SPATIAL_SCALING_LAYER_DIR,
     SPATIAL_SCALING_LIB_FILENAME,
+    VKBASALT_LAYER_DIR,
+    VKBASALT_LIB32_DIR,
+    VKBASALT_LIB_DIR,
+    VKBASALT_LIB_FILENAME,
+    VKBASALT_MANIFEST_FILENAME_32,
+    VKBASALT_MANIFEST_FILENAME_64,
 )
 
 
@@ -33,7 +39,13 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "field",
-        choices=("versions", "bundles", "summary", "renderer-paths"),
+        choices=(
+            "versions",
+            "bundles",
+            "summary",
+            "renderer-paths",
+            "vkbasalt-paths",
+        ),
     )
     args = parser.parse_args()
     versions = tuple(FLATPAK_RUNTIME_BUNDLES)
@@ -47,7 +59,7 @@ def main() -> None:
         )
     elif args.field == "summary":
         print(_summary(versions))
-    else:
+    elif args.field == "renderer-paths":
         print(
             LIB_FILENAME,
             f"{LOCAL_LIB}/{LIB_FILENAME}",
@@ -57,6 +69,15 @@ def main() -> None:
             f"{LOCAL_LIB32}/{SPATIAL_SCALING_LIB_FILENAME}",
             f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON_FILENAME}",
             f"{SPATIAL_SCALING_LAYER_DIR}/{SPATIAL_SCALING_JSON32_FILENAME}",
+            sep="\n",
+        )
+    else:
+        print(
+            VKBASALT_LIB_FILENAME,
+            f"{VKBASALT_LIB_DIR}/{VKBASALT_LIB_FILENAME}",
+            f"{VKBASALT_LIB32_DIR}/{VKBASALT_LIB_FILENAME}",
+            f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_64}",
+            f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_32}",
             sep="\n",
         )
 

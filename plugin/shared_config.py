@@ -99,6 +99,27 @@ EXTERNAL_VULKAN_LAYER_VALUES = (
     EXTERNAL_VULKAN_LAYER_VKBASALT,
 )
 
+# Decky-owned vkBasalt controls. The Default profile merges them into
+# vkBasalt's normal global file; every saved profile uses an isolated file.
+VKBASALT_SHARPENING_NONE = "none"
+VKBASALT_SHARPENING_CAS = "cas"
+VKBASALT_SHARPENING_DLS = "dls"
+VKBASALT_SHARPENING_VALUES = (
+    VKBASALT_SHARPENING_NONE,
+    VKBASALT_SHARPENING_CAS,
+    VKBASALT_SHARPENING_DLS,
+)
+VKBASALT_ANTIALIASING_NONE = "none"
+VKBASALT_ANTIALIASING_FXAA = "fxaa"
+VKBASALT_ANTIALIASING_SMAA = "smaa"
+VKBASALT_ANTIALIASING_VALUES = (
+    VKBASALT_ANTIALIASING_NONE,
+    VKBASALT_ANTIALIASING_FXAA,
+    VKBASALT_ANTIALIASING_SMAA,
+)
+VKBASALT_STRENGTH_MIN = 0.0
+VKBASALT_STRENGTH_MAX = 1.0
+
 
 class ConfigFieldType(str, Enum):
     """Configuration field types - must match TypeScript enum"""
@@ -325,6 +346,34 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "fieldType": ConfigFieldType.STRING,
         "default": "",
         "description": "optional guarded post-process Vulkan layer: MangoHud or vkBasalt",
+        "location": "script"
+    },
+
+    "vkbasalt_sharpening": {
+        "fieldType": ConfigFieldType.STRING,
+        "default": VKBASALT_SHARPENING_CAS,
+        "description": "MAKO-managed vkBasalt sharpening effect: none, CAS, or DLS",
+        "location": "script"
+    },
+
+    "vkbasalt_sharpness": {
+        "fieldType": ConfigFieldType.FLOAT,
+        "default": 0.5,
+        "description": "MAKO-managed vkBasalt CAS or DLS sharpening strength",
+        "location": "script"
+    },
+
+    "vkbasalt_dls_denoise": {
+        "fieldType": ConfigFieldType.FLOAT,
+        "default": 0.17,
+        "description": "MAKO-managed vkBasalt DLS denoise strength",
+        "location": "script"
+    },
+
+    "vkbasalt_antialiasing": {
+        "fieldType": ConfigFieldType.STRING,
+        "default": VKBASALT_ANTIALIASING_NONE,
+        "description": "MAKO-managed vkBasalt anti-aliasing effect: none, FXAA, or SMAA",
         "location": "script"
     },
 

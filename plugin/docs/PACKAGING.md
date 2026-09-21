@@ -73,7 +73,7 @@ pnpm run dev:e2e       # Decky, both host layers, and Flatpak bundles
 pnpm run dev:reload    # Reload only MAKO Decky
 ```
 
-The deployment commands write to `~/homebrew/plugins/Mako` and tell you when to reload; `dev:reload` only reloads the existing installation. Quit games before replacing the Renderer. `dev:engine` and `dev:all` intentionally omit package verification, CLI/UI archives, 32-bit, and Flatpak unless their scope says otherwise. Use `dev:host` for 32-bit processes, `dev:flatpaks` for sandbox work, and `dev:e2e` before a complete local regression pass.
+The deployment commands write to `~/homebrew/plugins/Mako` and tell you when to reload; `dev:reload` only reloads the existing installation. Quit games before replacing the Renderer. Host deployments also validate and stage MAKO's pinned private vkBasalt build for the selected architectures. `dev:engine` and `dev:all` intentionally omit package verification, CLI/UI archives, 32-bit, and Flatpak unless their scope says otherwise. Use `dev:host` for 32-bit processes, `dev:flatpaks` for sandbox work, and `dev:e2e` before a complete local regression pass.
 
 Flatpak development commands place verified bundles in the installed plugin; use **Flatpak Setup > Update** to install one into an application. The supported runtime list is owned by `shared_config.py` and cross-checked against the Renderer matrix. Complete SteamOS host builds require `lib32-glibc`; Flatpak builds also require `flatpak-builder`. See the [source-build guide](../../engine/docs/BUILDING-FROM-SOURCE.md).
 

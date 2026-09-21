@@ -80,6 +80,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "MANGOHUD_CONFIG=%s\\n" "${MANGOHUD_CONFIG:-}"',
             'printf "VKBASALT=%s\\n" "${ENABLE_VKBASALT:-}"',
             'printf "VKBASALT_DISABLED=%s\\n" "${DISABLE_VKBASALT:-}"',
+            'printf "VKBASALT_CONFIG=%s\\n" "${VKBASALT_CONFIG_FILE:-}"',
             'printf "DEVICE_SELECT_DISABLED=%s\\n" "${NODEVICE_SELECT:-}"',
             'printf "MESA_ANTI_LAG_DISABLED=%s\\n" "${DISABLE_LAYER_MESA_ANTI_LAG:-}"',
         ])
@@ -114,6 +115,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["EXTERNAL_SELECTOR"], "")
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "")
+        self.assertEqual(values["VKBASALT_DISABLED"], "1")
+        self.assertEqual(values["VKBASALT_CONFIG"], "")
 
     def test_scaling_without_wsi_uses_combined_renderer_with_staged_layers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -437,6 +440,32 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DEVICE_SELECT_DISABLED"], "")
         self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "")
 
+    def test_vkbasalt_profile_never_falls_back_to_host_activation(self):
+        with tempfile.TemporaryDirectory() as empty_private_dir:
+            self.service.vkbasalt_layer_dir = Path(empty_private_dir)
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "vkbasalt"
+            values = self._evaluate(
+                {
+                    "ENABLE_VKBASALT": "1",
+                    "VKBASALT_CONFIG_FILE": "/outside/vkbasalt.conf",
+                    "VK_IMPLICIT_LAYER_PATH":
+                        "/usr/share/vulkan/implicit_layer.d",
+                    "VK_ADD_IMPLICIT_LAYER_PATH":
+                        "/usr/local/share/vulkan/implicit_layer.d",
+                    "VK_INSTANCE_LAYERS":
+                        "VK_LAYER_VKBASALT_post_processing",
+                },
+                config,
+            )
+
+        self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
+        self.assertEqual(values["ADD"], "")
+        self.assertEqual(values["INSTANCE"], "")
+        self.assertEqual(values["VKBASALT"], "")
+        self.assertEqual(values["VKBASALT_DISABLED"], "1")
+        self.assertEqual(values["VKBASALT_CONFIG"], "")
+
     def test_vkbasalt_profile_is_mutually_exclusive_with_mangohud(self):
         with tempfile.TemporaryDirectory() as system_dir:
             self.service.vkbasalt_layer_dir = Path(system_dir)
@@ -524,6 +553,9 @@ class WrapperEnvironmentTests(unittest.TestCase):
             {
                 "MANGOHUD": "1",
                 "ENABLE_VKBASALT": "1",
+                "VKBASALT_CONFIG_FILE": "/outside/vkbasalt.conf",
+                "VK_INSTANCE_LAYERS":
+                    "VK_LAYER_existing:VK_LAYER_VKBASALT_post_processing",
             },
             ConfigurationManager.get_defaults(),
         )
@@ -531,6 +563,9 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["IMPLICIT"], "/private/mako/implicit_layer.d")
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "")
+        self.assertEqual(values["VKBASALT_DISABLED"], "1")
+        self.assertEqual(values["VKBASALT_CONFIG"], "")
+        self.assertEqual(values["INSTANCE"], "VK_LAYER_existing")
 
     def test_external_layer_schema_rejects_unknown_tools(self):
         config = ConfigurationManager.get_defaults()
@@ -545,6 +580,20 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "external_vulkan_layer"):
             ConfigurationManager.validate_config(config)
+
+    def test_vkbasalt_schema_rejects_invalid_managed_values(self):
+        invalid_values = {
+            "vkbasalt_sharpening": "unsharp-mask",
+            "vkbasalt_sharpness": 1.01,
+            "vkbasalt_dls_denoise": -0.01,
+            "vkbasalt_antialiasing": "taa",
+        }
+        for field_name, value in invalid_values.items():
+            with self.subTest(field_name=field_name):
+                config = ConfigurationManager.get_defaults()
+                config[field_name] = value
+                with self.assertRaisesRegex(ValueError, field_name):
+                    ConfigurationManager.validate_config(config)
 
     def test_existing_instance_layer_order_is_preserved(self):
         values = self._evaluate({
@@ -820,6 +869,29 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "")
 
+    def test_flatpak_admits_only_its_packaged_vkbasalt(self):
+        with tempfile.TemporaryDirectory() as flatpak_dir:
+            (
+                Path(flatpak_dir) /
+                configuration_module.VKBASALT_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "vkbasalt"
+            with patch.object(
+                configuration_module,
+                "FLATPAK_IMPLICIT_LAYER_DIR",
+                flatpak_dir,
+            ):
+                values = self._evaluate(
+                    {"DISABLE_VKBASALT": "1"},
+                    config,
+                )
+
+        self.assertEqual(values["IMPLICIT"], flatpak_dir)
+        self.assertEqual(values["MANGOHUD"], "")
+        self.assertEqual(values["VKBASALT"], "1")
+        self.assertEqual(values["VKBASALT_DISABLED"], "")
+
     def test_flatpak_admits_staged_gamescope_wsi_compatibility_mode(self):
         with tempfile.TemporaryDirectory() as flatpak_dir:
             with tempfile.TemporaryDirectory() as compatibility_dir:
@@ -976,6 +1048,62 @@ class WrapperEnvironmentTests(unittest.TestCase):
                     "--batch",
                 ],
             )
+
+    def test_direct_flatpak_shortcut_receives_vkbasalt_per_launch(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            flatpak_layer_dir = (
+                "/usr/lib/extensions/vulkan/makorender/"
+                "share/vulkan/implicit_layer.d"
+            )
+            self.service.config_dir = root / "config"
+            self.service.config_file_path = self.service.config_dir / "conf.toml"
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "vkbasalt"
+            self.service._write_vkbasalt_profile_configs({
+                "mako": self.service._normalize_wrapper_settings(config),
+            })
+            managed_config = self.service.vkbasalt_global_config_path
+            with patch.object(
+                configuration_module,
+                "FLATPAK_IMPLICIT_LAYER_DIR",
+                flatpak_layer_dir,
+            ):
+                wrapper = root / "mako-run"
+                wrapper.write_text(
+                    self.service._generate_script_content(config),
+                    encoding="utf-8",
+                )
+            wrapper.chmod(0o755)
+
+            captured = root / "flatpak-arguments"
+            fake_flatpak = root / "flatpak"
+            fake_flatpak.write_text(
+                "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$MAKO_CAPTURE\"\n",
+                encoding="utf-8",
+            )
+            fake_flatpak.chmod(0o755)
+            subprocess.run(
+                [str(wrapper), str(fake_flatpak), "run", "example.Game"],
+                check=True,
+                env={
+                    "PATH": os.environ.get("PATH", ""),
+                    "MAKO_CAPTURE": str(captured),
+                },
+            )
+
+            arguments = captured.read_text(encoding="utf-8").splitlines()
+            self.assertIn(
+                f"--env=VK_IMPLICIT_LAYER_PATH={flatpak_layer_dir}",
+                arguments,
+            )
+            self.assertIn("--env=ENABLE_VKBASALT=1", arguments)
+            self.assertIn("--unset-env=DISABLE_VKBASALT", arguments)
+            self.assertIn(
+                f"--env=VKBASALT_CONFIG_FILE={managed_config}",
+                arguments,
+            )
+            self.assertEqual(arguments[-1], "example.Game")
 
     def test_flatpak_sdr_boundary_keeps_gamescope_wsi_out_of_umu_chain(self):
         with tempfile.TemporaryDirectory() as temp_dir:

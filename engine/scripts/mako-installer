@@ -32,6 +32,8 @@ decky_renderer_relative_paths=(
     ".local/share/mako-render/lib32/libmako-render.so"
     ".local/share/mako-render/lib/libmako-render-scaling.so"
     ".local/share/mako-render/lib32/libmako-render-scaling.so"
+    ".local/share/mako-render/lib/vkbasalt/libvkbasalt.so"
+    ".local/share/mako-render/lib32/vkbasalt/libvkbasalt.so"
     ".local/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
     ".local/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
     ".local/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json"
