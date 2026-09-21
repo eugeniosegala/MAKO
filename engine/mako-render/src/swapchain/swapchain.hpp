@@ -215,6 +215,7 @@ namespace mako::layer {
     private:
         void applyGamescopeFocus(std::chrono::steady_clock::time_point now);
         GamescopeFocusFeedback gamescopeFocus;
+        GenerationPolicyResetGate generationPolicyResetGate;
         bool steamMenuSuspended{false};
         bool gamescopeFocusInitialized{false};
         uint64_t lastFocusReturnSequence{0};

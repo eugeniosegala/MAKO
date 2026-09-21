@@ -39,6 +39,24 @@ namespace {
 }
 
 int main() {
+    GenerationPolicyResetGate resetGate;
+    expect(!resetGate.pending() && !resetGate.consumeOnResume(),
+        "A fresh policy-reset gate must not invent deferred work");
+    expect(!resetGate.request(true) && resetGate.pending() &&
+            !resetGate.request(true) && resetGate.pending(),
+        "Steam-menu policy edits must coalesce behind one deferred reset");
+    expect(resetGate.consumeOnResume() && !resetGate.pending() &&
+            !resetGate.consumeOnResume(),
+        "Gameplay return must consume a deferred reset exactly once");
+    expect(!resetGate.request(true) && resetGate.request(false) &&
+            !resetGate.pending(),
+        "An immediate gameplay update must subsume older deferred work");
+    expect(!resetGate.request(true),
+        "The cancellation precondition must create deferred work");
+    resetGate.cancel();
+    expect(!resetGate.pending() && !resetGate.consumeOnResume(),
+        "Disabling scheduling must cancel a deferred reset");
+
     expect(!profileUpdateInvalidatesTransientGenerationRecovery({}) &&
             profileUpdateInvalidatesTransientGenerationRecovery({
                 .generationPolicyChanged = true,

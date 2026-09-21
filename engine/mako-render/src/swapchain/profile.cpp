@@ -84,8 +84,15 @@ void Swapchain::applyGamescopeFocus(const DiagnosticsClock::time_point now) {
     if (returned)
         this->lastFocusReturnSequence = this->gamescopeFocus.returnSequence;
     if ((this->steamMenuSuspended && !suspended) || (eligible && returned)) {
-        if (this->adaptiveScheduler)
+        const bool applyDeferredPolicy =
+            this->generationPolicyResetGate.consumeOnResume();
+        if (applyDeferredPolicy) {
+            static_cast<void>(this->resetGenerationScheduler(
+                now, "configuration-update-after-gamescope-return"
+            ));
+        } else if (this->adaptiveScheduler) {
             this->adaptiveScheduler->resumeAfterExternalInterruption(now, returned);
+        }
         this->ensureHistoryWarmup(true);
         this->fixedRefreshBudget.reset();
         this->realFramePacer.reset();
@@ -389,6 +396,10 @@ ProfileUpdateDecision Swapchain::updateProfile(
         this->profile.adaptive_auto_base_fps_cap !=
             plan.appliedProfile.adaptive_auto_base_fps_cap;
     const auto profileUpdateNow = DiagnosticsClock::now();
+    const bool confirmedSteamMenuSuspension =
+        this->privateOrderedTransport &&
+        this->gamescopeFocus.fresh(profileUpdateNow) &&
+        this->gamescopeFocus.gameFocused == false;
     this->profile = std::move(plan.appliedProfile);
     this->configuredFixedGeneratedFrames = fixedGeneratedFrameCount(
         this->profile.multiplier, this->destinationImages.size()
@@ -417,6 +428,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
     }
 
     if (disabling) {
+        this->generationPolicyResetGate.cancel();
         this->recoveryState.historyWarmupRemaining = 0;
         this->recoveryState.orderedAcquireRecovery.reset();
         if (this->adaptiveScheduler)
@@ -440,7 +452,7 @@ ProfileUpdateDecision Swapchain::updateProfile(
               decision.generationModeChanged ||
               decision.fixedMultiplierChanged || cadenceStyleChanged ||
               enabling);
-    if (transportLoadTransition) {
+    if (transportLoadTransition && !confirmedSteamMenuSuspension) {
         this->recoveryState.orderedAcquireRecovery
             .armTransitionRecreation();
         if (present_diagnostics::enabled()) {
@@ -463,10 +475,22 @@ ProfileUpdateDecision Swapchain::updateProfile(
              fixedSchedulerPolicyChanged ||
              decision.baseFpsCapChanged || enabling);
     if (resetSchedulerPolicy) {
-        static_cast<void>(this->resetGenerationScheduler(
-            profileUpdateNow, "configuration-update"
-        ));
+        const bool alreadyDeferred =
+            this->generationPolicyResetGate.pending();
+        if (this->generationPolicyResetGate.request(
+                confirmedSteamMenuSuspension)) {
+            static_cast<void>(this->resetGenerationScheduler(
+                profileUpdateNow, "configuration-update"
+            ));
+        } else if (!alreadyDeferred && present_diagnostics::enabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=generation-policy-reset-deferred"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " evidence=gamescope-steam-ui"
+                      << " action=coalesce-until-gameplay-return\n";
+        }
     } else if (hadGenerationScheduler && !schedulerPolicyAvailable) {
+        this->generationPolicyResetGate.cancel();
         this->adaptiveScheduler.reset();
         this->recoveryState.historyWarmupRemaining =
             AdaptiveScheduler::historyWarmupFrameCount();

@@ -49,6 +49,36 @@ namespace mako::layer {
         ProfileUpdateDecision decision;
     };
 
+    /// A confirmed Steam-menu suspension is already a scheduling boundary.
+    /// Coalesce any number of live policy writes behind that boundary and
+    /// construct only the final scheduler policy when gameplay resumes.
+    class GenerationPolicyResetGate {
+    public:
+        [[nodiscard]] bool request(const bool generationSuspended) noexcept {
+            if (generationSuspended) {
+                this->deferred = true;
+                return false;
+            }
+            this->deferred = false;
+            return true;
+        }
+
+        [[nodiscard]] bool consumeOnResume() noexcept {
+            return std::exchange(this->deferred, false);
+        }
+
+        void cancel() noexcept {
+            this->deferred = false;
+        }
+
+        [[nodiscard]] bool pending() const noexcept {
+            return this->deferred;
+        }
+
+    private:
+        bool deferred{false};
+    };
+
     /// A live change which reshapes generated work starts a new transport
     /// policy episode. Incomplete evidence from the old Fixed/Adaptive plan
     /// cannot classify the new plan as unhealthy. Resource-retirement and
