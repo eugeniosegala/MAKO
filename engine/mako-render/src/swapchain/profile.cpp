@@ -80,7 +80,6 @@ void Swapchain::applyGamescopeFocus(const DiagnosticsClock::time_point now) {
         effectiveFrameGenerationEnabled(this->profile, this->gamescopeRefreshHz) &&
         this->colorPipeline.generationSupported;
     const bool suspended = eligible && focused == false;
-    const bool suspensionChanged = suspended != this->steamMenuSuspended;
     const bool returned = this->gamescopeFocus.recoveryWindow(now) &&
         this->gamescopeFocus.returnSequence != this->lastFocusReturnSequence;
     if (returned)
@@ -105,10 +104,13 @@ void Swapchain::applyGamescopeFocus(const DiagnosticsClock::time_point now) {
         // Returned blocking calls while Steam owns input are not evidence
         // that gameplay's lower-present path failed. GPU/fence guards remain.
         this->recoveryState.lowerPresentStallRecovery.reset();
+        // Likewise, an incomplete generated-image guard or native drain
+        // belongs to the pre-menu transport. The return must qualify any
+        // renewed acquire pressure from fresh gameplay presents.
+        this->recoveryState.orderedAcquireRecovery.
+            pauseForExternalInterruption();
     }
     this->steamMenuSuspended = suspended;
-    if (suspensionChanged)
-        this->publishRuntimeStatus("gamescope-focus");
     if (present_diagnostics::enabled() &&
             (!this->focusReported || focused != this->lastReportedGameFocus || returned)) {
         std::cerr << "MAKO Renderer: present diagnostics: operation=gamescope-focus"
@@ -414,6 +416,18 @@ ProfileUpdateDecision Swapchain::updateProfile(
         this->realFramePacer.reset();
         this->smoothCadenceBaseCap.reset();
         this->smoothCadencePacerHandoff.reset();
+    }
+
+    if (profileUpdateInvalidatesTransientGenerationRecovery(decision)) {
+        // A new Fixed/Adaptive policy must not inherit a guard, backoff,
+        // stabilization deadline, or delivery-pressure sample produced by
+        // the previous requested workload. The policy owners' reset methods
+        // deliberately retain their per-context recreation one-shot guards.
+        this->recoveryState.generatedImageAdmission.reset();
+        this->recoveryState.orderedAcquireRecovery.reset();
+        this->recoveryState.lowerPresentStallRecovery.reset();
+        this->recoveryState.pipelineBusyRecovery.reset();
+        this->frameState.recoveryPresentHealth = {};
     }
 
     if (disabling) {
@@ -832,6 +846,7 @@ Swapchain::persistentRecoverySample() const {
         !this->recoveryState.backendPending &&
         !this->frameGenerationTransition.draining() &&
         !this->spatialTransition.draining();
+    const bool returnedOutputMeasurable = !this->steamMenuSuspended;
     return PersistentGenerationRecoverySurfaceBudget::RecoverySample{
         .contextId = this->diagnosticsState.contextId,
         .configurationRevision = this->runtimeStatusState.stateRevision,
@@ -842,9 +857,10 @@ Swapchain::persistentRecoverySample() const {
             this->info.applicationExtent.height,
             this->info.extent.width, this->info.extent.height},
         .focus = this->gamescopeFocus,
-        .outputFps = ordinaryDelivery
+        .outputFps = returnedOutputMeasurable
             ? this->frameState.recoveryPresentHealth.outputFps() : std::nullopt,
         .lowerPresentShare = this->frameState.recoveryPresentHealth.lowerPresentShare(),
+        .performanceHistoryEligible = ordinaryDelivery,
     };
 }
 

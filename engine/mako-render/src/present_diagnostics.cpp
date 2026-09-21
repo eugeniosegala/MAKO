@@ -53,7 +53,8 @@ namespace {
     void logAdaptiveRampResult(const bool accepted,
             const size_t previousLimit, const size_t testedLimit,
             const double previousBaseFps, const double currentBaseFps,
-            const double previousOutputFps, const double currentOutputFps) {
+            const double previousOutputFps, const double currentOutputFps,
+            const std::string_view reason) {
         if (!enabled())
             return;
 
@@ -65,7 +66,10 @@ namespace {
                   << " previous_base_fps=" << previousBaseFps
                   << " current_base_fps=" << currentBaseFps
                   << " previous_output_fps=" << previousOutputFps
-                  << " current_output_fps=" << currentOutputFps << '\n';
+                  << " current_output_fps=" << currentOutputFps;
+        if (!reason.empty())
+            std::cerr << " reason=" << reason;
+        std::cerr << '\n';
     }
 
     void logAdaptiveBridge(const size_t previousLimit,
@@ -563,10 +567,11 @@ namespace {
         void rampResult(const bool accepted, const size_t previousLimit,
                 const size_t testedLimit, const double previousBaseFps,
                 const double currentBaseFps, const double previousOutputFps,
-                const double currentOutputFps) override {
+                const double currentOutputFps,
+                const std::string_view reason) override {
             logAdaptiveRampResult(
                 accepted, previousLimit, testedLimit, previousBaseFps,
-                currentBaseFps, previousOutputFps, currentOutputFps
+                currentBaseFps, previousOutputFps, currentOutputFps, reason
             );
         }
 

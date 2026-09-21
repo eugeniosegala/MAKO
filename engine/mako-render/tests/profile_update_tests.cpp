@@ -39,6 +39,24 @@ namespace {
 }
 
 int main() {
+    expect(!profileUpdateInvalidatesTransientGenerationRecovery({}) &&
+            profileUpdateInvalidatesTransientGenerationRecovery({
+                .generationPolicyChanged = true,
+            }) &&
+            profileUpdateInvalidatesTransientGenerationRecovery({
+                .generationModeChanged = true,
+            }) &&
+            profileUpdateInvalidatesTransientGenerationRecovery({
+                .fixedMultiplierChanged = true,
+            }) &&
+            profileUpdateInvalidatesTransientGenerationRecovery({
+                .baseFpsCapChanged = true,
+            }) &&
+            !profileUpdateInvalidatesTransientGenerationRecovery({
+                .dynamicCadenceProbeIntervalChanged = true,
+            }),
+        "Only workload-shaping live policy changes must invalidate transient recovery");
+
     const auto current = adaptiveProfile();
     auto staticRequest = current;
     staticRequest.gpu = "1002:744c";
@@ -256,21 +274,24 @@ int main() {
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive,
         "Adaptive target changes must apply without rebuilding GPU resources");
-    expect(decision.generationPolicyChanged,
-        "Adaptive target changes must reset scheduler policy");
+    expect(decision.generationPolicyChanged &&
+            profileUpdateInvalidatesTransientGenerationRecovery(decision),
+        "Adaptive target changes must reset scheduler policy and old recovery");
 
     next = current;
     next.adaptive_stable_cadence = true;
     decision = classifyProfileUpdate(current, next, 3, true);
-    expect(decision.action == ProfileUpdateAction::ApplyLive,
-        "Stable cadence must be a live policy update");
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            profileUpdateInvalidatesTransientGenerationRecovery(decision),
+        "Smooth Cadence must start a fresh recovery episode");
 
     next = current;
     next.dynamic_cadence_recovery = true;
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive &&
-            decision.generationPolicyChanged,
-        "Dynamic cadence recovery must be a live policy update");
+            decision.generationPolicyChanged &&
+            profileUpdateInvalidatesTransientGenerationRecovery(decision),
+        "Adaptive Dynamic Cadence Recovery must start a fresh recovery episode");
     expect(dynamicCadenceRecoveryEnabled(next),
         "An uncapped Adaptive profile must allow dynamic cadence recovery");
     next.base_fps_cap = 30;
@@ -319,8 +340,9 @@ int main() {
         fixedWithoutRecovery, fixedWithRecovery, 3, true
     );
     expect(decision.action == ProfileUpdateAction::ApplyLive &&
-            decision.generationPolicyChanged,
-        "Fixed recovery must be a live generation-policy change");
+            decision.generationPolicyChanged &&
+            profileUpdateInvalidatesTransientGenerationRecovery(decision),
+        "Fixed Dynamic Cadence Recovery must start a fresh recovery episode");
 
     auto fasterRecovery = next;
     fasterRecovery.multiplier = 2;
@@ -375,8 +397,9 @@ int main() {
     decision = classifyProfileUpdate(current, next, 3, true);
     expect(decision.action == ProfileUpdateAction::ApplyLive,
         "Adaptive auto-cap changes must apply without rebuilding resources");
-    expect(decision.baseFpsCapChanged,
-        "Adaptive auto-cap changes must reset presentation timing");
+    expect(decision.baseFpsCapChanged &&
+            profileUpdateInvalidatesTransientGenerationRecovery(decision),
+        "Adaptive Steady mode must reset presentation timing and old recovery");
     expect(effectiveBaseFpsCap(next) == 45.0,
         "Adaptive auto-cap did not derive half of the 90 FPS target");
     const AdaptiveSchedulerSnapshot collapsedAutomaticCap{
@@ -1169,9 +1192,13 @@ int main() {
     expect(classifyProfileUpdate(fixed, next, 1, true).action ==
             ProfileUpdateAction::DeferUntilSwapchainRecreation,
         "Fixed-to-Adaptive must recreate when the fixed context lacks Adaptive capacity");
-    expect(classifyProfileUpdate(fixed, next, 2, true).action ==
-            ProfileUpdateAction::ApplyLive,
-        "Fixed-to-Adaptive must apply live when shared capacity is available");
+    const auto fixedToAdaptive = classifyProfileUpdate(
+        fixed, next, 2, true
+    );
+    expect(fixedToAdaptive.action == ProfileUpdateAction::ApplyLive &&
+            profileUpdateInvalidatesTransientGenerationRecovery(
+                fixedToAdaptive),
+        "Fixed-to-Adaptive must apply live with fresh recovery when shared capacity is available");
 
     next = fixed;
     next.multiplier = 3;
@@ -1189,9 +1216,11 @@ int main() {
     );
     expect(fixedThreeToTwo.decision.action == ProfileUpdateAction::ApplyLive &&
             fixedThreeToTwo.decision.fixedMultiplierChanged &&
+            profileUpdateInvalidatesTransientGenerationRecovery(
+                fixedThreeToTwo.decision) &&
             !fixedThreeToTwo.decision.swapchainRecreationDeferred &&
             fixedThreeToTwo.appliedProfile.multiplier == 2,
-        "Fixed 3x-to-2x must apply live without recreating the swapchain");
+        "Fixed 3x-to-2x must apply live with fresh recovery and no recreation");
 
     expect(generatedFrameCapacityForProfile(fixed) == 2,
         "Fixed 2x should reserve the configured Adaptive 3x capacity");

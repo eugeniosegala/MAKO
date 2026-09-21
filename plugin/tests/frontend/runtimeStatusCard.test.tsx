@@ -127,10 +127,10 @@ describe("authoritative live status", () => {
     ) as HTMLElement | null;
     expect(noticeList).toBeTruthy();
     expect(noticeList?.style.listStyleType).toBe("disc");
-    expect(screen.getAllByRole("listitem")).toHaveLength(4);
+    expect(screen.getAllByRole("listitem")).toHaveLength(5);
   });
 
-  test("places a Frame Generation restart notice in the shared footer", () => {
+  test("combines the fixed menu policy and restart notice in the shared footer", () => {
     window.SP_REACT = React;
     const { container } = render(
       <RuntimeStatusCard
@@ -155,10 +155,11 @@ describe("authoritative live status", () => {
         .querySelector('[data-mako-live-status-grid="compact-two-column"]')
         ?.contains(footer),
     ).toBe(false);
-    expect(screen.queryByRole("list")).toBeNull();
+    expect(screen.getByRole("list")).toBeTruthy();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
   });
 
-  test("places Steam-menu Frame Generation suspension in the shared footer", () => {
+  test("always places the Frame Generation menu policy in the shared footer", () => {
     window.SP_REACT = React;
     const { container } = render(
       <RuntimeStatusCard
@@ -169,14 +170,12 @@ describe("authoritative live status", () => {
           frameGenerationEnabled: true,
           frameGenerationMode: "fixed",
           frameGenerationMultiplier: 2,
-          frameGenerationMenuSuspended: true,
-          frameGenerationPending: true,
         }}
       />,
     );
 
     const menuNotice = screen.getByText(
-      "Frame Generation is temporarily disabled while a Steam menu is open.",
+      "Frame Generation is disabled while a Steam or Decky menu is open.",
     );
     const footer = menuNotice.closest(
       '[data-mako-live-status-footer="true"]',
@@ -190,7 +189,7 @@ describe("authoritative live status", () => {
     expect(screen.queryByText(/not currently generating frames/)).toBeNull();
     expect(screen.getByText("Fixed")).toBeTruthy();
     expect(screen.getByText("2×")).toBeTruthy();
-    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+    expect(screen.queryByRole("list")).toBeNull();
   });
 
   test("keeps the compact output resolution unchanged without supersampling", () => {

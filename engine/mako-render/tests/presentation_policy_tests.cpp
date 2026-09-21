@@ -210,12 +210,49 @@ namespace {
                 "ordinary persistent-pressure retry did not remain finite");
         }
     }
+
+    void testSteamMenuDiscardsAcquireRecoveryAcrossGenerationModes() {
+        constexpr std::array<std::string_view, 4> generationModes{
+            "exact Fixed",
+            "Fixed + Dynamic Cadence Recovery",
+            "Fractional Adaptive",
+            "Smooth/Steady Adaptive",
+        };
+        for (const auto mode : generationModes) {
+            OrderedAcquireRecovery recovery;
+            const auto now = OrderedAcquireRecovery::TimePoint{};
+            recovery.beginCadenceStyleTransitionRecovery(now);
+            const auto failure = recovery.observe(
+                now, 50ms, 25ms, true
+            );
+            expect(failure.quarantined && recovery.active() &&
+                    recovery.recoveryEpisodes(now) == 1 &&
+                    recovery.cadenceStyleTransitionRecoveryActive(now),
+                std::string{mode} +
+                    " did not reproduce pre-menu acquire recovery");
+
+            recovery.pauseForExternalInterruption();
+            const auto resumed = recovery.beforePresent(now + 10s);
+            expect(!recovery.active() &&
+                    recovery.recoveryEpisodes(now + 10s) == 0 &&
+                    !recovery.cadenceStyleTransitionRecoveryActive(
+                        now + 10s
+                    ) &&
+                    !resumed.bypassGeneration &&
+                    !resumed.beginHistoryWarmup &&
+                    !resumed.preacquireGeneratedFrame &&
+                    !resumed.boundedAcquireProbe,
+                std::string{mode} +
+                    " resumed stale pre-menu acquire recovery");
+        }
+    }
 }
 
 int main() {
     testEmptyFixedBudgetDoesNotFailPendingAcquireProbe();
     testLongAcquireBackoffResumesOnNativeDemand();
     testLongAcquireBackoffRequiresQualifiedNativeCadence();
+    testSteamMenuDiscardsAcquireRecoveryAcrossGenerationModes();
     expect(!shouldRejectManagedMultiSwapchainPresent(1, true) &&
             !shouldRejectManagedMultiSwapchainPresent(2, false) &&
             shouldRejectManagedMultiSwapchainPresent(2, true),
@@ -1476,6 +1513,23 @@ int main() {
             !unavailableRecreation.recreationRequested(),
         "missing retirement proof or surface budget latched native-only forever");
 
+    LowerPresentStallRecovery ordinaryGameplayStall;
+    static_cast<void>(ordinaryGameplayStall.observe(
+        presentStallStart, 300ms, 120));
+    for (size_t i = 1; i <= 2; ++i) {
+        static_cast<void>(ordinaryGameplayStall.observeNativeRecoveryPresent(
+            presentStallStart + i * 300ms, 280ms, 120));
+    }
+    expect(ordinaryGameplayStall.recreationRequested(),
+        "shared stall setup did not arm the event recreation watch");
+    ordinaryGameplayStall.cancelRecreationWait();
+    const auto ordinaryRetry = ordinaryGameplayStall.beforePresent(
+        presentStallStart + 2s);
+    expect(ordinaryRetry.beginHistoryWarmup &&
+            !ordinaryRetry.recreationWaitExpired &&
+            !ordinaryGameplayStall.recreationRequested(),
+        "ordinary gameplay inherited the event-only 30-second recreation wait");
+
     LowerPresentStallRecovery recoveredBeforeBudget;
     static_cast<void>(recoveredBeforeBudget.observe(
         presentStallStart, 300ms, 120));
@@ -1516,6 +1570,18 @@ int main() {
     }
     expect(menuWarmupRemaining == 0,
         "Fixed history warm-up did not complete after three fresh frames");
+
+    const auto warmupFrameStarted =
+        std::chrono::steady_clock::time_point{} + 100ms;
+    const auto warmupRecoveryCompleted = warmupFrameStarted + 12ms;
+    expect(historyWarmupCadenceBoundary(
+            warmupFrameStarted, warmupRecoveryCompleted, false) ==
+            warmupRecoveryCompleted,
+        "ordinary scheduler recovery stopped using the 3.3 completion boundary");
+    expect(historyWarmupCadenceBoundary(
+            warmupFrameStarted, warmupRecoveryCompleted, true) ==
+            warmupFrameStarted,
+        "event recovery included private work in resumed gameplay cadence");
 
     expect(automaticRecoveryRecreationAllowed(false) &&
             !automaticRecoveryRecreationAllowed(true) &&
@@ -1664,6 +1730,77 @@ int main() {
     static_cast<void>(observe(stalled, 25ms));
     expect(!observe(stalled, 4s).qualified,
         "resolved menu recovery leaked into a later heavy scene");
+
+    SurfaceBudget recoveryVisible;
+    watchdogNow = {}; sample = healthySample;
+    baseline(recoveryVisible);
+    static_cast<void>(menu(recoveryVisible, 1s));
+    sample.outputFps = 50.0;
+    sample.lowerPresentShare = 0.9;
+    sample.performanceHistoryEligible = false;
+    static_cast<void>(observe(recoveryVisible, 25ms));
+    const auto recoveryDeficit = observe(recoveryVisible, 4s);
+    expect(recoveryDeficit.qualified &&
+            recoveryDeficit.baselineOutputFps &&
+            std::abs(*recoveryDeficit.baselineOutputFps - 120.0) < 0.001,
+        "active transport recovery hid a sustained post-menu deficit");
+    sample.focus.gameFocused = false;
+    sample.focus.openedAt = watchdogNow;
+    sample.outputFps = 50.0;
+    static_cast<void>(observe(recoveryVisible, 1s));
+    sample.focus.gameFocused = true;
+    sample.focus.returnedAt = watchdogNow;
+    ++sample.focus.returnSequence;
+    static_cast<void>(observe(recoveryVisible, 25ms));
+    const auto unpollutedRecoveryDeficit = observe(recoveryVisible, 4s);
+    expect(unpollutedRecoveryDeficit.qualified &&
+            unpollutedRecoveryDeficit.baselineOutputFps &&
+            std::abs(*unpollutedRecoveryDeficit.baselineOutputFps - 120.0) <
+                0.001,
+        "recovery-only output polluted the retained healthy baseline");
+    sample.performanceHistoryEligible = true;
+
+    struct WatchdogPermutation {
+        bool adaptiveMode;
+        bool performanceHistoryEligible;
+        double outputFps;
+        double lowerPresentShare;
+        bool qualifies;
+    };
+    constexpr std::array watchdogPermutations{
+        WatchdogPermutation{false, false, 50.0, 0.4, false},
+        WatchdogPermutation{false, false, 50.0, 0.9, true},
+        WatchdogPermutation{false, false, 100.0, 0.4, false},
+        WatchdogPermutation{false, false, 100.0, 0.9, false},
+        WatchdogPermutation{false, true, 50.0, 0.4, false},
+        WatchdogPermutation{false, true, 50.0, 0.9, true},
+        WatchdogPermutation{false, true, 100.0, 0.4, false},
+        WatchdogPermutation{false, true, 100.0, 0.9, false},
+        WatchdogPermutation{true, false, 50.0, 0.4, false},
+        WatchdogPermutation{true, false, 50.0, 0.9, true},
+        WatchdogPermutation{true, false, 100.0, 0.4, false},
+        WatchdogPermutation{true, false, 100.0, 0.9, false},
+        WatchdogPermutation{true, true, 50.0, 0.4, false},
+        WatchdogPermutation{true, true, 50.0, 0.9, true},
+        WatchdogPermutation{true, true, 100.0, 0.4, false},
+        WatchdogPermutation{true, true, 100.0, 0.9, false},
+    };
+    for (const auto permutation : watchdogPermutations) {
+        SurfaceBudget budget;
+        watchdogNow = {};
+        sample = healthySample;
+        sample.adaptiveMode = permutation.adaptiveMode;
+        baseline(budget);
+        static_cast<void>(menu(budget, 1s));
+        sample.outputFps = permutation.outputFps;
+        sample.lowerPresentShare = permutation.lowerPresentShare;
+        sample.performanceHistoryEligible =
+            permutation.performanceHistoryEligible;
+        static_cast<void>(observe(budget, 25ms));
+        const auto result = observe(budget, 4s);
+        expect(result.qualified == permutation.qualifies,
+            "watchdog eligibility permutation produced the wrong decision");
+    }
 
     SurfaceBudget belowTargetStable;
     watchdogNow = {}; sample = healthySample;

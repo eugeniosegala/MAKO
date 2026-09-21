@@ -100,6 +100,9 @@ namespace {
     constexpr auto adaptiveRampMaximumRetryDelay = std::chrono::seconds(60);
     constexpr double adaptiveRampEarlyRetryBaseImprovement = 1.15;
     constexpr auto adaptiveRecoveryHigherProbeDelay = std::chrono::seconds(5);
+    constexpr auto adaptiveMenuReturnLoadGuardDuration =
+        std::chrono::seconds(15);
+    constexpr double adaptiveMenuReturnMinimumTargetRetentionRatio = 0.95;
     constexpr auto adaptiveStableCadenceEvaluationDuration = std::chrono::seconds(1);
     constexpr auto adaptiveStableCadenceExitGraceDuration = std::chrono::milliseconds(500);
     constexpr auto adaptiveStableCadenceRetryDelay = std::chrono::seconds(15);
@@ -2550,11 +2553,34 @@ void AdaptiveScheduler::resumeAfterExternalInterruption(
     // the last proven level, abandon interrupted experiments and remeasure
     // source cadence without retaining their elapsed timers or stale history.
     const auto retainedLimit = this->validatedGenerationLimit();
+    const double retainedBaseFps = this->state.stableCadence.limit &&
+            *this->state.stableCadence.limit == retainedLimit &&
+            this->state.stableCadence.baselineBaseFps > 0.0
+        ? this->state.stableCadence.baselineBaseFps
+        : this->state.cadence.smoothedIntervalSeconds > 0.0
+            ? 1.0 / this->state.cadence.smoothedIntervalSeconds
+            : 0.0;
     // A confirmed return can reuse proven capacity after a short settling
     // interval. Unknown focus and newly reset policies have no such proof.
     // Temporal warm-up and the caller's transport/fence guards still apply.
     const bool fastResume = confirmedReturn && retainedLimit > 0 &&
         this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr;
+    const double retainedOutputFps = retainedBaseFps *
+        static_cast<double>(retainedLimit + 1);
+    if (fastResume && retainedOutputFps >=
+            static_cast<double>(this->config.targetFps) *
+                adaptiveRampEscalationTargetRatio) {
+        // The menu interrupted a policy which had already proved the target.
+        // Keep that proof through the bounded recovery interval so a
+        // temporarily slow return cannot validate a higher multiplier merely
+        // by comparing it with the degraded first post-menu seconds.
+        this->state.menuReturnLoadGuard.until =
+            now + adaptiveMenuReturnLoadGuardDuration;
+        this->state.menuReturnLoadGuard.provenGenerationLimit = retainedLimit;
+        this->state.menuReturnLoadGuard.baselineBaseFps = retainedBaseFps;
+    } else {
+        this->state.menuReturnLoadGuard.reset();
+    }
     const auto remainingStabilization =
         this->state.stabilization.until.value_or(now) - now;
     // A menu event cannot advance an existing transport/lifecycle deadline.
@@ -2569,16 +2595,21 @@ void AdaptiveScheduler::resumeAfterExternalInterruption(
     this->beginHistoryWarmup(historyWarmupFrameCount(), true);
 }
 
-void AdaptiveScheduler::beginTransportRecovery(const TimePoint now) {
-    // A lower-image timeout invalidates cadence and stable-pacing proofs. When
-    // the active load was accepted from a measured lower generation level,
-    // the timeout is also direct evidence that the higher load is no longer
-    // safe for this transport. Requalify for one second at native cadence,
-    // then resume the proven lower level and delay another higher probe. Keep
-    // an unrelated long-lived efficiency-probe backoff intact.
+void AdaptiveScheduler::beginTransportRecovery(
+        const TimePoint now, const bool classifyActiveRampFailure) {
+    // A lower-image timeout invalidates cadence and stable-pacing proofs. An
+    // event-backed timeout may additionally prove that an active higher-load
+    // experiment is unsafe for this transport. Requalify for one second at
+    // native cadence, optionally resume the proven lower level and delay the
+    // next higher probe. Keep unrelated efficiency-probe backoff intact.
     const auto retainedEfficiencyRetryAt =
         this->state.efficiencyProbe.retryAt;
-    const bool failedRampProbe = this->state.ramp.evaluationAt.has_value();
+    // A timeout during ordinary gameplay is not sufficient evidence that the
+    // active multiplier experiment caused the transport miss. Preserve 3.3's
+    // generic recovery semantics there. Confirmed menu/profile recovery may
+    // classify the active experiment and retain exact proven-load backoff.
+    const bool failedRampProbe = classifyActiveRampFailure &&
+        this->state.ramp.evaluationAt.has_value();
     const size_t failedGenerationLimit =
         this->state.outputPlanner.generationLimit;
     const size_t previousProbeFailures =
@@ -2644,7 +2675,7 @@ bool AdaptiveScheduler::rejectActiveRampForTransportMiss(
     // experimental is direct evidence against that experiment. Do not let a
     // mostly successful one-second delivery window validate the load and only
     // discover the same FIFO pressure again after the next cadence refresh.
-    this->beginTransportRecovery(now);
+    this->beginTransportRecovery(now, true);
     return true;
 }
 
@@ -2799,6 +2830,25 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             static_cast<double>(this->config.targetFps),
             baseFps * static_cast<double>(testedLimit + 1)
         );
+        if (this->state.menuReturnLoadGuard.until &&
+                now >= *this->state.menuReturnLoadGuard.until) {
+            this->state.menuReturnLoadGuard.reset();
+        }
+        const double targetFps = static_cast<double>(this->config.targetFps);
+        const double menuBaselineOutputFps =
+            this->state.menuReturnLoadGuard.baselineBaseFps *
+            static_cast<double>(
+                this->state.menuReturnLoadGuard.provenGenerationLimit + 1
+            );
+        const bool menuReturnTargetRegression =
+            this->state.menuReturnLoadGuard.until &&
+            this->state.ramp.previousLimit ==
+                this->state.menuReturnLoadGuard.provenGenerationLimit &&
+            testedLimit > this->state.ramp.previousLimit &&
+            menuBaselineOutputFps >=
+                targetFps * adaptiveRampEscalationTargetRatio &&
+            currentOutputFps <
+                targetFps * adaptiveMenuReturnMinimumTargetRetentionRatio;
         const bool throughputRegressed =
             currentOutputFps < previousOutputFps * adaptiveRampThroughputTolerance;
         const bool baseCollapsedForMarginalGain =
@@ -2806,7 +2856,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             currentOutputFps < previousOutputFps * adaptiveRampMarginalGain;
         const bool deliveryHealthy = this->state.ramp.delivery.healthy();
         const bool accepted = deliveryHealthy && !throughputRegressed &&
-            !baseCollapsedForMarginalGain;
+            !baseCollapsedForMarginalGain && !menuReturnTargetRegression;
         const size_t bridgeLimit = std::min(configuredLimit, testedLimit + 1);
         const bool canBridge =
             !accepted &&
@@ -2847,7 +2897,10 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
             this->state.ramp.baselineBaseFps,
             baseFps,
             previousOutputFps,
-            currentOutputFps
+            currentOutputFps,
+            menuReturnTargetRegression
+                ? "post-menu-target-baseline"
+                : std::string_view{}
         );
 
         this->state.ramp.evaluationAt.reset();

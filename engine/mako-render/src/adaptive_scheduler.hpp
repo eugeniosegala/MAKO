@@ -143,7 +143,7 @@ namespace mako::layer {
             std::chrono::steady_clock::duration) {}
         virtual void ramp(size_t, size_t, double) {}
         virtual void rampResult(bool, size_t, size_t, double, double,
-            double, double) {}
+            double, double, std::string_view = {}) {}
         virtual void bridge(size_t, size_t, size_t, double, double,
             double, double) {}
         virtual void bridgeResult(bool, size_t, size_t, double, double,
@@ -208,7 +208,8 @@ namespace mako::layer {
         void updateDynamicCadenceProbeInterval(
             TimePoint now, std::chrono::milliseconds interval);
         void beginStabilization(TimePoint now, std::string_view reason);
-        void beginTransportRecovery(TimePoint now);
+        void beginTransportRecovery(
+            TimePoint now, bool classifyActiveRampFailure = false);
         [[nodiscard]] bool rejectActiveRampForTransportMiss(TimePoint now);
         void resumeAfterExternalInterruption(TimePoint now, bool confirmedReturn);
         void restoreGenerationLimit(TimePoint now, size_t generationLimit,
@@ -728,6 +729,18 @@ namespace mako::layer {
                     this->softRecoveryAttempted = false;
                 }
             } discontinuityRecovery;
+
+            struct MenuReturnLoadGuard {
+                std::optional<TimePoint> until;
+                size_t provenGenerationLimit{0};
+                double baselineBaseFps{0.0};
+
+                void reset() {
+                    this->until.reset();
+                    this->provenGenerationLimit = 0;
+                    this->baselineBaseFps = 0.0;
+                }
+            } menuReturnLoadGuard;
         };
 
         AdaptiveSchedulerConfig config;

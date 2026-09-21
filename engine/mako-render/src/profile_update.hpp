@@ -49,6 +49,19 @@ namespace mako::layer {
         ProfileUpdateDecision decision;
     };
 
+    /// A live change which reshapes generated work starts a new transport
+    /// policy episode. Incomplete evidence from the old Fixed/Adaptive plan
+    /// cannot classify the new plan as unhealthy. Resource-retirement and
+    /// per-context recreation one-shot state remain independently owned.
+    [[nodiscard]] constexpr bool
+    profileUpdateInvalidatesTransientGenerationRecovery(
+            const ProfileUpdateDecision& decision) noexcept {
+        return decision.generationPolicyChanged ||
+            decision.generationModeChanged ||
+            decision.fixedMultiplierChanged ||
+            decision.baseFpsCapChanged;
+    }
+
     [[nodiscard]] inline std::chrono::milliseconds
     spatialScalerRebuildQuietPeriod(
             const ls::GameConf& current,

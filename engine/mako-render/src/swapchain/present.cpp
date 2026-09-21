@@ -525,6 +525,18 @@ void Swapchain::observeLowerPresentHealth(
     const auto presentDuration = this->frameState.recoveryPresentHealth
         .maximumPresentDuration();
     if (this->recoveryState.lowerPresentStallRecovery.active()) {
+        const bool eventRecoveryWindow = this->recoveryState
+            .orderedAcquireRecovery.eventRecoveryWindowActive(
+                now, this->gamescopeFocus.recoveryWindow(now)
+            );
+        if (!eventRecoveryWindow) {
+            // Preserve the established local quarantine during ordinary
+            // gameplay. Only a confirmed user transition may extend it while
+            // waiting for an application-owned swapchain recreation.
+            this->recoveryState.lowerPresentStallRecovery
+                .cancelRecreationWait();
+            return;
+        }
         const auto nativeRecovery = this->recoveryState
             .lowerPresentStallRecovery.observeNativeRecoveryPresent(
                 now, presentDuration, this->gamescopeRefreshHz
@@ -1385,8 +1397,17 @@ VkResult Swapchain::presentHistoryOnly(
             this->adaptiveScheduler->historyWarmupIsRecovery(),
             std::nullopt
         );
+        const auto recoveryCompleted = DiagnosticsClock::now();
+        const bool eventRecoveryWindow = this->recoveryState
+            .orderedAcquireRecovery.eventRecoveryWindowActive(
+                recoveryCompleted,
+                this->gamescopeFocus.recoveryWindow(recoveryCompleted)
+            );
         this->adaptiveScheduler->consumeHistoryWarmupFrame(
-            invocation.cadenceStarted
+            historyWarmupCadenceBoundary(
+                invocation.cadenceStarted, recoveryCompleted,
+                eventRecoveryWindow
+            )
         );
     } else if (this->recoveryState.historyWarmupRemaining > 0) {
         logHistoryWarmup(
@@ -1500,7 +1521,9 @@ VkResult Swapchain::presentGeneratedFrames(
             // not that the pre-timeout Adaptive cadence is still valid. Clear
             // stable-cadence/FIFO handoff state now, concurrently with the
             // short transport guard, before generated frames may resume.
-            this->adaptiveScheduler->beginTransportRecovery(observedAt);
+            this->adaptiveScheduler->beginTransportRecovery(
+                observedAt, eventRecoveryWindow
+            );
         }
         if (observation.quarantined) {
             this->fixedRefreshBudget.reset();

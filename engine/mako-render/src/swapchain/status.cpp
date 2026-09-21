@@ -102,7 +102,6 @@ void Swapchain::publishRuntimeStatus(const std::string_view reason) noexcept {
         .frameGenerationActive = effectiveFrameGenerationEnabled(
             this->profile, this->gamescopeRefreshHz
         ) && !this->destinationImages.empty(),
-        .frameGenerationMenuSuspended = this->steamMenuSuspended,
         .frameGenerationPrivatePending =
             this->frameGenerationTransition.pendingRequest(),
         .spatialPrivatePending = this->spatialTransition.pendingRequest(),

@@ -195,12 +195,12 @@ export function RuntimeStatusCard({
     runtimeState.frameGenerationPending || runtimeState.scalingPending;
   const notices: StatusNotice[] = [];
 
-  if (runtimeState.frameGenerationMenuSuspended) {
+  if (runtimeState.frameGenerationEnabled) {
     notices.push({
-      key: "frame-generation-menu-suspended",
+      key: "frame-generation-menu-policy",
       content: t(
         "LIVE_STATUS_FG_MENU_SUSPENDED",
-        "Frame Generation is temporarily disabled while a Steam menu is open.",
+        "Frame Generation is disabled while a Steam or Decky menu is open.",
       ),
     });
   }
@@ -311,10 +311,7 @@ export function RuntimeStatusCard({
                 >
                   <StatusRow
                     label={t("CONTENT_FPS_MULTIPLIER", "Frame Generation")}
-                    active={
-                      runtimeState.frameGenerationActive &&
-                      !runtimeState.frameGenerationMenuSuspended
-                    }
+                    active={runtimeState.frameGenerationActive}
                   >
                     {runtimeState.frameGenerationActive ? (
                       <>

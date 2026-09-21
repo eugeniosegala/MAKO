@@ -72,6 +72,20 @@ namespace mako::layer {
         return restart || remaining == 0 ? required : remaining;
     }
 
+    /// Event recovery measures the resumed application's cadence from the
+    /// application-present boundary, excluding MAKO's private work. Ordinary
+    /// transport recovery retains the 3.3 completion boundary so a generated-
+    /// image timeout cannot turn its own recovery work into new gameplay
+    /// cadence evidence. Fixed + Dynamic Cadence Recovery and Adaptive share
+    /// this scheduler boundary.
+    [[nodiscard]] constexpr std::chrono::steady_clock::time_point
+    historyWarmupCadenceBoundary(
+            const std::chrono::steady_clock::time_point frameStarted,
+            const std::chrono::steady_clock::time_point recoveryCompleted,
+            const bool eventRecoveryWindow) noexcept {
+        return eventRecoveryWindow ? frameStarted : recoveryCompleted;
+    }
+
     struct GamescopeFocusFeedback {
         using Clock = std::chrono::steady_clock;
         std::optional<bool> gameFocused;
@@ -945,6 +959,16 @@ namespace mako::layer {
             };
         }
 
+        void pauseForExternalInterruption() {
+            // Steam-owned presentation is a discontinuity, not another
+            // sample of the game's ordered transport. Discard any incomplete
+            // guard, drain, probe, stabilization, or transition episode so
+            // it cannot resume with pre-menu failure counts after focus
+            // returns. reset() deliberately preserves recreationSignaled,
+            // keeping the per-context one-shot safety budget intact.
+            this->reset();
+        }
+
         void reset() {
             this->retryAt.reset();
             this->recoveryStartedAt.reset();
@@ -1739,6 +1763,16 @@ namespace mako::layer {
             return this->recreationArmed;
         }
 
+        void cancelRecreationWait() {
+            // The local 3.3 quarantine remains valid, but the longer wait for
+            // application-owned recreation is authorized only by a confirmed
+            // menu/profile recovery window. Do not let stale event evidence
+            // extend ordinary Fixed or Adaptive gameplay.
+            this->severeNativeStalls = 0;
+            this->recreationArmed = false;
+            this->nativeHealthySince.reset();
+        }
+
         [[nodiscard]] bool signalRecreation() {
             if (!this->recreationArmed || this->recreationSignaled)
                 return false;
@@ -1835,6 +1869,10 @@ namespace mako::layer {
             GamescopeFocusFeedback focus;
             std::optional<double> outputFps;
             double lowerPresentShare{0.0};
+            // Recovery output remains valid deficit evidence after a confirmed
+            // return, but it must never replace the healthy pre-menu history
+            // which authorizes that comparison.
+            bool performanceHistoryEligible{true};
         };
 
         struct DeficitObservation {
@@ -1999,8 +2037,10 @@ namespace mako::layer {
                 : std::chrono::seconds{4};
             this->deficitQualified = deficit &&
                 duration >= requiredDeficitDuration;
-            if (valid && !sample->focus.menuOpen(now))
+            if (valid && !sample->focus.menuOpen(now) &&
+                    sample->performanceHistoryEligible) {
                 this->recordPerformanceSample(now, *sample);
+            }
             return {
                 .qualified = this->deficitQualified,
                 .newlyQualified = this->deficitQualified && !wasQualified,

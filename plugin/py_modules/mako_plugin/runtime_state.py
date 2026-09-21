@@ -296,13 +296,6 @@ def _context(value: object) -> RuntimeContextState:
             value.get("frame_generation_active"),
             "frame_generation_active",
         ),
-        # This is additive within schema 5 so a newer MAKO Decky remains
-        # compatible with an already installed Renderer that predates menu
-        # suspension reporting.
-        "frame_generation_menu_suspended": _boolean(
-            value.get("frame_generation_menu_suspended", False),
-            "frame_generation_menu_suspended",
-        ),
         "spatial_scaling": _spatial_scaling(value.get("spatial_scaling")),
         "requested": _profile(value.get("requested"), "requested"),
         "applied": _profile(value.get("applied"), "applied"),

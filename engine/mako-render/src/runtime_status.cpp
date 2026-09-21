@@ -328,8 +328,6 @@ std::string mako::layer::runtimeStatusJson(
            << status.appliedGeneratedCapacity
            << ",\"frame_generation_active\":"
            << status.frameGenerationActive
-           << ",\"frame_generation_menu_suspended\":"
-           << status.frameGenerationMenuSuspended
            << ",\"spatial_scaling\":{"
            << "\"active\":" << status.spatialScalingActive
            << ",\"activation_supported\":"

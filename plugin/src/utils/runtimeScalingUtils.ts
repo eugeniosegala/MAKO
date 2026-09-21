@@ -30,7 +30,6 @@ export interface RuntimeScalingUiState {
   hasContext: boolean;
   phase: RuntimeApplicationPhase;
   frameGenerationActive: boolean;
-  frameGenerationMenuSuspended: boolean;
   frameGenerationEnabled: boolean;
   frameGenerationMode: "off" | "fixed" | "adaptive";
   frameGenerationAdaptiveStyle: "fractional" | "steady" | null;
@@ -63,7 +62,6 @@ export const EMPTY_RUNTIME_SCALING_UI_STATE: RuntimeScalingUiState = {
   hasContext: false,
   phase: "inactive",
   frameGenerationActive: false,
-  frameGenerationMenuSuspended: false,
   frameGenerationEnabled: false,
   frameGenerationMode: "off",
   frameGenerationAdaptiveStyle: null,
@@ -145,9 +143,6 @@ export function runtimeScalingUiState(
     hasContext: contexts.length > 0,
     phase: contexts.length > 0 ? status.phase : "inactive",
     frameGenerationActive: Boolean(frameContext?.frame_generation_active),
-    frameGenerationMenuSuspended: Boolean(
-      frameContext?.frame_generation_menu_suspended,
-    ),
     frameGenerationEnabled,
     frameGenerationMode,
     frameGenerationAdaptiveStyle: appliedFrameProfile?.adaptive

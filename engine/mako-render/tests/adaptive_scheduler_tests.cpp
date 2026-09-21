@@ -86,10 +86,10 @@ namespace {
 
         void rampResult(const bool accepted, const size_t previousLimit,
                 const size_t testedLimit, double, double, double,
-                double) override {
+                double, const std::string_view reason) override {
             this->events.push_back({
                 .operation = "ramp-result",
-                .reason = {},
+                .reason = std::string(reason),
                 .accepted = accepted,
                 .previousLimit = previousLimit,
                 .testedLimit = testedLimit,
@@ -2661,6 +2661,72 @@ namespace {
         }
     }
 
+    void testMenuReturnRejectsSelfHiddenHigherMultiplier() {
+        for (const bool smooth : {false, true}) {
+            for (const bool automaticBaseCap : {false, true}) {
+                for (const uint32_t maximumMultiplier : {3u, 4u, 5u}) {
+                    Harness harness(
+                        120, maximumMultiplier, smooth,
+                        AdaptiveRecoveryPolicy::OrderedSdr, false,
+                        ls::dynamicCadenceProbeIntervalDuration(
+                            ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+                        ),
+                        120, true, automaticBaseCap
+                    );
+                    harness.start();
+                    harness.runAtFps(60.0, 12s);
+                    auto snapshot = harness.scheduler.snapshot();
+                    require(snapshot.validatedGenerationLimit == 1 &&
+                            (!smooth || snapshot.stableCadenceLimit == 1),
+                        "precondition failed: menu return had no target-proven 2x cadence");
+
+                    harness.now += 2s;
+                    harness.scheduler.resumeAfterExternalInterruption(
+                        harness.now, true
+                    );
+                    for (size_t frame = 0; frame < 3; ++frame) {
+                        harness.now += 22ms;
+                        harness.scheduler.consumeHistoryWarmupFrame(harness.now);
+                    }
+
+                    for (size_t frame = 0;
+                            frame < 400 &&
+                                !harness.scheduler.snapshot().rampEvaluationActive;
+                            ++frame) {
+                        harness.frameAtFps(45.0);
+                    }
+                    snapshot = harness.scheduler.snapshot();
+                    require(snapshot.rampEvaluationActive &&
+                            snapshot.generationLimit == 2 &&
+                            snapshot.validatedGenerationLimit == 1,
+                        "post-menu deficit did not reach the bounded higher-level probe");
+
+                    for (size_t frame = 0;
+                            frame < 60 &&
+                                harness.scheduler.snapshot().rampEvaluationActive;
+                            ++frame) {
+                        harness.frameAtFps(33.0);
+                    }
+                    snapshot = harness.scheduler.snapshot();
+                    const auto* result = harness.diagnostics.last("ramp-result");
+                    require(result && !result->accepted &&
+                            result->previousLimit == 1 &&
+                            result->testedLimit == 2 &&
+                            result->reason == "post-menu-target-baseline",
+                        "post-menu 3x was compared only with the degraded return cadence");
+                    require(snapshot.validatedGenerationLimit == 1,
+                        "post-menu target guard discarded the proven 2x level");
+
+                    harness.runAtFps(60.0, 4s);
+                    require(
+                        harness.scheduler.snapshot().validatedGenerationLimit == 1,
+                        "recovered 2x cadence unnecessarily returned to the higher load"
+                    );
+                }
+            }
+        }
+    }
+
     AdaptiveFramePlan frameAfterFocusReturn(Harness& harness,
             const std::chrono::milliseconds interval) {
         harness.now += interval;
@@ -3988,6 +4054,65 @@ namespace {
         }
     }
 
+    void testOrdinaryTransportRecoveryDoesNotRejectMultiplierProbe() {
+        struct SchedulerCase {
+            bool dynamicCadenceRecovery;
+            std::optional<uint32_t> displayRefreshFps;
+            std::string_view mode;
+        };
+        constexpr std::array cases{
+            SchedulerCase{false, std::nullopt, "Adaptive"},
+            SchedulerCase{true, 120, "Fixed Dynamic Cadence Recovery"},
+        };
+
+        for (const auto& test : cases) {
+            Harness harness(
+                120,
+                3,
+                false,
+                AdaptiveRecoveryPolicy::OrderedSdr,
+                test.dynamicCadenceRecovery,
+                ls::dynamicCadenceProbeIntervalDuration(
+                    ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+                ),
+                test.displayRefreshFps,
+                false
+            );
+            harness.start();
+
+            bool probeStarted = false;
+            for (size_t frame = 0; frame < 3000; ++frame) {
+                harness.frameAtFps(50.0);
+                const auto snapshot = harness.scheduler.snapshot();
+                if (snapshot.rampEvaluationActive &&
+                        snapshot.generationLimit == 2 &&
+                        snapshot.validatedGenerationLimit == 1) {
+                    probeStarted = true;
+                    break;
+                }
+            }
+            require(probeStarted,
+                std::string(test.mode) +
+                    " did not begin the higher-multiplier test precondition");
+
+            const size_t abortedBefore =
+                harness.diagnostics.count("probe-aborted");
+            const size_t backoffsBefore =
+                harness.diagnostics.count("ramp-backoff");
+            harness.scheduler.beginTransportRecovery(harness.now, false);
+            require(harness.scheduler.snapshot().phase ==
+                    AdaptiveSchedulerPhase::Stabilizing,
+                std::string(test.mode) +
+                    " ordinary timeout did not retain transport stabilization");
+            require(harness.diagnostics.count("probe-aborted") ==
+                        abortedBefore + 1 &&
+                    harness.diagnostics.count("ramp-backoff") ==
+                        backoffsBefore,
+                std::string(test.mode) +
+                    " ordinary timeout did not retain the 3.3 interrupted-probe semantics");
+        }
+    }
+
     void testTransportProbeBackoffSurvivesCadenceRefresh() {
         Harness harness(
             120,
@@ -4018,7 +4143,7 @@ namespace {
 
         require(reachThreeXProbe(),
             "precondition failed: first 3x probe did not begin");
-        harness.scheduler.beginTransportRecovery(harness.now);
+        harness.scheduler.beginTransportRecovery(harness.now, true);
         const auto* firstBackoff = harness.diagnostics.last("ramp-backoff");
         require(firstBackoff && firstBackoff->previousLimit == 1,
             "first transport failure did not record its retry history");
@@ -4030,7 +4155,7 @@ namespace {
 
         require(reachThreeXProbe(),
             "3x probe did not retry after its bounded cooldown");
-        harness.scheduler.beginTransportRecovery(harness.now);
+        harness.scheduler.beginTransportRecovery(harness.now, true);
         const auto recovery = harness.scheduler.snapshot();
         const auto* secondBackoff = harness.diagnostics.last("ramp-backoff");
         require(recovery.validatedGenerationLimit == 1 &&
@@ -4138,6 +4263,7 @@ int main() {
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
         {"ordered SDR preserves useful below-target 3x", testOrderedSdrPreservesUsefulHigherLevelBelowTarget},
         {"confirmed focus return has bounded fast resume", testConfirmedFocusReturnBoundedFastResume},
+        {"menu return protects target-proven lower load", testMenuReturnRejectsSelfHiddenHigherMultiplier},
         {"focus return retains conservative fallbacks", testFocusReturnRetainsConservativeFallbacks},
         {"fast focus return retains history and transport settling", testFastFocusReturnCannotBypassHistoryOrTransportSettling},
         {"confirmed focus return retains proven generation", testConfirmedFocusReturnRetainsProvenLevel},
@@ -4175,6 +4301,7 @@ int main() {
         {"restored load keeps collapse guard", testRestoredDiscontinuityLoadRetainsCollapseGuard},
         {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
         {"transport-failed multiplier probes keep proven load", testTransportFailureDuringAnyMultiplierProbeRetainsProvenLoad},
+        {"ordinary transport recovery keeps 3.3 multiplier semantics", testOrdinaryTransportRecoveryDoesNotRejectMultiplierProbe},
         {"transport probe backoff survives cadence refresh", testTransportProbeBackoffSurvivesCadenceRefresh},
         {"cadence replay is deterministic", testDeterministicReplay},
     };

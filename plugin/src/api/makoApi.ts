@@ -251,7 +251,6 @@ export interface RuntimeContextState {
   pending: RuntimePendingState;
   applied_generated_capacity: number;
   frame_generation_active: boolean;
-  frame_generation_menu_suspended: boolean;
   spatial_scaling: RuntimeSpatialScalingState;
   requested: RuntimeProfileSnapshot;
   applied: RuntimeProfileSnapshot;
