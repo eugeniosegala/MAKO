@@ -106,7 +106,11 @@ describe("primary feature organization", () => {
           '[data-mako-modality-selector="true"]',
         ) as HTMLElement
       ).style.margin,
-    ).toBe("6px 0px 12px");
+    ).toBe("14px 0px 12px");
+    const frameGenerationIcon = screen
+      .getByRole("tab", { name: "Frame Generation" })
+      .querySelector("svg") as SVGElement;
+    expect(frameGenerationIcon.style.transform).toBe("translateY(0) scale(1)");
     expect(screen.getByText("Frame Generation controls")).toBeTruthy();
     expect(screen.getByText("FG performance controls")).toBeTruthy();
     expect(screen.getByText("FG advanced controls")).toBeTruthy();
@@ -120,6 +124,9 @@ describe("primary feature organization", () => {
     expect(spatialRibbon.style.opacity).toBe("0");
     fireEvent.mouseEnter(spatialTab);
     expect(spatialRibbon.style.opacity).toBe("1");
+    expect(
+      (spatialTab.querySelector("svg") as SVGElement).style.transform,
+    ).toBe("translateY(-5px) scale(0.94)");
     fireEvent.mouseLeave(spatialTab);
     expect(spatialRibbon.style.opacity).toBe("0");
     fireEvent.focus(spatialTab);

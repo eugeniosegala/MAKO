@@ -91,7 +91,7 @@ export function ShadersConfigurationGroup({
           }
           description={t(
             "CONFIG_ENABLE_VKBASALT_DESC",
-            "Applies sharpening, anti-aliasing, and other configured effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used.",
+            "Applies sharpening, anti-aliasing, and other configured effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used. If effects are not visible, switch between Windowed and Fullscreen.",
           )}
           bottomSeparator={vkBasaltEnabled ? undefined : "none"}
           checked={vkBasaltEnabled}

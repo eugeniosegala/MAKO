@@ -30,7 +30,7 @@ function modalityButtonStyle(
     minWidth: 0,
     height: "46px",
     margin: 0,
-    padding: "5px 4px 15px",
+    padding: "0 4px",
     overflow: "hidden",
     display: "flex",
     alignItems: "center",
@@ -65,8 +65,9 @@ export function ModalityTabs({
   activeModality,
   onModalityChange,
 }: ModalityTabsProps) {
-  const [revealedModality, setRevealedModality] =
-    useState<ModalityId | null>(null);
+  const [revealedModality, setRevealedModality] = useState<ModalityId | null>(
+    null,
+  );
   const options: ModalityOption[] = [
     {
       id: "frame-generation",
@@ -89,9 +90,7 @@ export function ModalityTabs({
   ];
 
   const hideRibbon = (modality: ModalityId) => {
-    setRevealedModality((current) =>
-      current === modality ? null : current,
-    );
+    setRevealedModality((current) => (current === modality ? null : current));
   };
 
   return (
@@ -101,7 +100,7 @@ export function ModalityTabs({
         style={{
           width: "100%",
           boxSizing: "border-box",
-          margin: "6px 0 12px",
+          margin: "14px 0 12px",
           padding: "7px",
           border: "1px solid rgba(70, 146, 168, 0.3)",
           borderRadius: "11px",
@@ -187,8 +186,8 @@ export function ModalityTabs({
                       ? "drop-shadow(0 0 5px rgba(91, 220, 235, 0.58))"
                       : "none",
                     transform: revealed
-                      ? "translateY(-4px) scale(0.94)"
-                      : "translateY(1px) scale(1)",
+                      ? "translateY(-5px) scale(0.94)"
+                      : "translateY(0) scale(1)",
                     transition: "transform 140ms ease, filter 140ms ease",
                   }}
                 />
