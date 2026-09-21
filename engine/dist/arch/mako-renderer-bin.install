@@ -1,0 +1,163 @@
+# pacman scriptlet for mako-renderer-bin.
+#
+# This package installs MAKO Renderer system-wide under /usr. MAKO Decky and the
+# standalone archive manage an independent, user-local copy under ~/.local. This
+# script never modifies user files: it only reports coexisting installs and
+# prints usage guidance. It runs under /bin/sh and must always return 0.
+
+mako_renderer_bin_user_homes() {
+    # Candidate human homes. pacman usually runs as root, where HOME is /root,
+    # so the invoking user's home is recovered from SUDO_USER and from /home.
+    {
+        if [ -n "${HOME:-}" ] && [ -d "${HOME}" ]; then
+            printf '%s\n' "${HOME}"
+        fi
+
+        if [ -n "${SUDO_USER:-}" ] && [ "${SUDO_USER}" != "root" ]; then
+            mako_renderer_bin_sudo_home="$(timeout 5 getent passwd "${SUDO_USER}" 2>/dev/null | cut -d: -f6)"
+            if [ -n "${mako_renderer_bin_sudo_home}" ] && [ -d "${mako_renderer_bin_sudo_home}" ]; then
+                printf '%s\n' "${mako_renderer_bin_sudo_home}"
+            fi
+        fi
+
+        for mako_renderer_bin_dir in /home/*; do
+            if [ -d "${mako_renderer_bin_dir}" ]; then
+                printf '%s\n' "${mako_renderer_bin_dir}"
+            fi
+        done
+    } | sort -u
+
+    return 0
+}
+
+mako_renderer_bin_user_local_owner() {
+    mako_renderer_bin_home="${1:-}"
+    [ -n "${mako_renderer_bin_home}" ] || return 1
+
+    if [ -f "${mako_renderer_bin_home}/.local/share/mako-render/active-renderer.json" ] \
+        || [ -f "${mako_renderer_bin_home}/.local/share/mako-render/lib/libmako-render.so" ] \
+        || [ -f "${mako_renderer_bin_home}/.local/bin/mako-run" ] \
+        || [ -f "${mako_renderer_bin_home}/.local/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" ] \
+        || [ -f "${mako_renderer_bin_home}/homebrew/plugins/Mako/plugin.json" ]; then
+        mako_renderer_bin_owner="$(sed -n 's/.*"owner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${mako_renderer_bin_home}/.local/share/mako-render/active-renderer.json" 2>/dev/null | head -n 1)"
+        # The value is read from a file the invoking user can write and is then
+        # printed to the administrator's terminal, so accept only known owners
+        # and otherwise print a fixed label. This also blocks terminal-escape
+        # injection through the state file.
+        case "${mako_renderer_bin_owner}" in
+            decky | standalone) ;;
+            *) mako_renderer_bin_owner="unknown" ;;
+        esac
+        printf '%s\n' "${mako_renderer_bin_owner}"
+        return 0
+    fi
+
+    return 1
+}
+
+mako_renderer_bin_report_coexistence() {
+    mako_renderer_bin_found=0
+    mako_renderer_bin_owner=""
+    mako_renderer_bin_home=""
+    # The home list is newline separated, and command substitution splits on
+    # IFS, so restrict IFS to newline for the loop and restore it afterwards.
+    # The loop must stay in this shell so mako_renderer_bin_found reaches the
+    # caller.
+    mako_renderer_bin_ifs_saved="${IFS}"
+    IFS='
+'
+    for mako_renderer_bin_home in $(mako_renderer_bin_user_homes); do
+        [ -n "${mako_renderer_bin_home}" ] || continue
+        mako_renderer_bin_owner="$(mako_renderer_bin_user_local_owner "${mako_renderer_bin_home}")" || continue
+        mako_renderer_bin_found=1
+        printf '  - %s (owner: %s)\n' "${mako_renderer_bin_home}" "${mako_renderer_bin_owner}"
+    done
+    IFS="${mako_renderer_bin_ifs_saved}"
+
+    return 0
+}
+
+mako_renderer_bin_coexistence_notice() {
+    cat <<'EOF'
+A user-local MAKO Renderer installation was found. This package installs MAKO
+system-wide under /usr; it does not adopt, upgrade, or delete the user-local
+copy. Both can coexist on disk, and mako-launch and the MAKO Decky wrapper
+select their own private manifest directory through VK_IMPLICIT_LAYER_PATH, so a
+managed launch does not load both layer copies.
+
+Pick one owner per user: either keep this system package and stop using the
+user-local install, or remove this package and keep the user-local install.
+Nothing is deleted automatically.
+EOF
+    return 0
+}
+
+mako_renderer_bin_guidance() {
+    cat <<'EOF'
+Open mako-ui ("MAKO Renderer Configuration") and create a profile before
+launching a game; installing the package does not activate MAKO for any game.
+
+For a native or Proton game, set this Steam launch option:
+  /usr/bin/mako-launch %command%
+Use the absolute path: if you put ~/.local/bin ahead of /usr/bin in PATH, a
+user-local mako-launch would otherwise shadow the packaged one.
+
+Frame generation and LS1 spatial scaling need a user-owned Lossless.dll from
+Lossless Scaling; the open MAKO Scaler does not. LS1 additionally needs vkd3d
+(lib32-vkd3d for 32-bit games). Both are optional dependencies.
+
+Do not run upstream's "Install MAKO Renderer": it targets ~/.local and would
+create a second, independently managed copy. This package deliberately does not
+ship the "Uninstall MAKO Renderer" desktop entry, which would target that
+user-local copy. Remove the package with pacman instead.
+EOF
+    return 0
+}
+
+pre_install() {
+    printf '==> mako-renderer-bin: checking for user-local MAKO Renderer installs\n'
+    mako_renderer_bin_report_coexistence
+    if [ "${mako_renderer_bin_found:-0}" = "1" ]; then
+        mako_renderer_bin_coexistence_notice
+    fi
+    return 0
+}
+
+post_install() {
+    mako_renderer_bin_guidance
+    return 0
+}
+
+pre_upgrade() {
+    printf '==> mako-renderer-bin: checking for user-local MAKO Renderer installs\n'
+    mako_renderer_bin_report_coexistence
+    if [ "${mako_renderer_bin_found:-0}" = "1" ]; then
+        mako_renderer_bin_coexistence_notice
+    fi
+    return 0
+}
+
+post_upgrade() {
+    mako_renderer_bin_guidance
+    return 0
+}
+
+pre_remove() {
+    printf '==> mako-renderer-bin: pacman removes only package-owned files under /usr\n'
+    printf 'Profiles, settings, and diagnostics in ~/.config/mako-render are preserved;\n'
+    printf 'remove them manually if you no longer want them. Any user-local MAKO\n'
+    printf 'Renderer installation, including MAKO Decky, is left untouched.\n'
+    mako_renderer_bin_report_coexistence
+    if [ "${mako_renderer_bin_found:-0}" = "1" ]; then
+        printf 'The user-local installation listed above remains in place and stays usable.\n'
+    fi
+    return 0
+}
+
+post_remove() {
+    printf '==> mako-renderer-bin: user data was not removed\n'
+    printf 'Profiles, settings, and diagnostics in ~/.config/mako-render are preserved;\n'
+    printf 'remove them manually if you no longer want them. Any user-local MAKO\n'
+    printf 'Renderer installation, including MAKO Decky, is left untouched.\n'
+    return 0
+}
