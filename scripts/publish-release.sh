@@ -190,6 +190,7 @@ renderer_is_complete() {
   release_has_asset "$renderer_tag" "$renderer_archive" || return 1
   release_has_asset "$renderer_tag" "$flatpak_archive" || return 1
   renderer_pin_matches "$(git rev-list -n 1 "$renderer_tag")" || return 1
+  engine/dist/arch/check-release-pin.sh >/dev/null || return 1
   read -r native_checksum flatpak_checksum < <(
     node -e '
       const { resolve } = require("node:path");

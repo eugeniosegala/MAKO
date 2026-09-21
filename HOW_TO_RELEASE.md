@@ -71,7 +71,7 @@ The publisher:
 
 1. validates both release-note files and shared codename;
 2. versions, tests, builds, and publishes the 64-bit/32-bit Renderer host archive and supported Flatpak bundles;
-3. records the exact Renderer tag, source commit, URLs, and checksums in `plugin/package.json`;
+3. records the exact Renderer tag, source commit, URLs, and checksums in `plugin/package.json`, synchronizes the Arch `mako-renderer-bin` recipe to that immutable host archive, and verifies both pins;
 4. versions, tests, packages, and publishes the checksum-pinned MAKO Decky ZIP as GitHub's **Latest** release;
 5. updates release links, pushes `main`, triggers the website deployment from canonical metadata, and verifies remote tags, Renderer asset checksums and pins, and Decky asset presence; and
 6. removes rebuildable release output and disposable staging after verification while preserving reusable caches.

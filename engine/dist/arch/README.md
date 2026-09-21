@@ -2,7 +2,7 @@
 
 This directory contains the Arch Linux packaging for MAKO Renderer. `PKGBUILD` repackages the official prebuilt Linux host archive (`MAKO-Renderer-vX.Y.Z-linux.tar.xz`) from the upstream GitHub release into a system-wide `mako-renderer-bin` package. No MAKO source is built. Every payload file that upstream's checksum manifest covers is installed with the same content hash, so the installed layers, CLI, and configuration UI stay auditable against the archive's `MAKO-Renderer-install-manifest.txt`.
 
-The `-bin` suffix follows the convention for a package that repackages prebuilt deliverables instead of building them from source. A future source-built package would be named `mako-renderer`.
+The `-bin` suffix follows the convention for a package that repackages prebuilt deliverables instead of building them from source. A future source-built package would be named `mako-renderer`; this package provides and conflicts with that common package identity so pacman treats the two implementations as alternatives.
 
 ## Contents
 
@@ -59,6 +59,7 @@ Residual caveats:
 
 - A user who exports `ENABLE_MAKO=1` globally, outside any MAKO launcher, makes the same layer name discoverable from `/usr/share/vulkan/implicit_layer.d` (this package) and `~/.local/share/vulkan/implicit_layer.d` (registered by the user-local installer). The loader keeps the first manifest in search order, and `$XDG_DATA_HOME` is searched before `$XDG_DATA_DIRS`, so the user-local copy wins and this package's layer does not load in that process. Use a launcher rather than a global `ENABLE_MAKO`.
 - `~/.local/bin` is not part of the default Arch `PATH`; `/etc/profile` appends only `/usr/local/sbin`, `/usr/local/bin`, and `/usr/bin`. If you prepend `~/.local/bin` yourself, a user-local `mako-launch`, `mako-ui`, `mako-cli`, or `mako-diagnostics` shadows the packaged one. Use `/usr/bin/...` explicitly when you want this package's copy.
+- MAKO Decky's Flatpak integration owns `/usr/lib/extensions/vulkan/makorender` inside a prepared Flatpak runtime. This package never writes there. If a host exposes that path from another source, Decky's wrapper may select those extension manifests for a Decky-managed launch; remove or refresh the owning Flatpak extension rather than making this pacman package claim its files.
 - Both delivery paths share one configuration directory. See the next section.
 
 Pick one owner per user: either keep this system package and stop using the user-local install, or remove this package and keep the user-local install.
@@ -71,11 +72,13 @@ Because both delivery paths share that directory, do not run two different MAKO 
 
 ## Updating for a new release
 
-1. Bump `pkgver` to the new upstream version.
-2. Replace `sha256sums` with the checksum of the new release asset, taken from the published release (the same checksum upstream pins into `plugin/package.json` after the release gates run).
-3. Keep `pkgrel` at 1 for a new upstream version, and increment it only for packaging-only fixes.
+The MAKO Renderer publisher updates `plugin/package.json`, runs `sync-release-pin.py`, resets `pkgrel` to 1 for a new upstream version, and verifies the result with `check-release-pin.sh`. This keeps the recipe aligned with the immutable archive only after the Renderer release gates have passed and the asset checksum is known.
 
-`check-release-pin.sh` fails when `pkgver`, the source URL, or `sha256sums` drift from `plugin/package.json`, so the manual step above is verifiable. Wiring that check into `justfile` and CI is left to the maintainers.
+For a packaging-only fix, leave `pkgver` and `sha256sums` unchanged and increment `pkgrel`. Run `just check-arch-package` from the repository root before committing. `check-release-pin.sh` also runs in portable Renderer CTest and fails when `pkgver`, the source URL, or `sha256sums` drifts from `plugin/package.json`.
+
+## AUR publication
+
+This repository owns the reviewed `PKGBUILD`, but the release publisher does not push to the AUR. An AUR package needs its own package repository, generated `.SRCINFO`, and maintainer credentials; those are separate publication and trust boundaries. Until an official AUR repository is established, build the recipe from this source tree. If it is published later, generate `.SRCINFO` from this exact recipe after each synchronized Renderer release instead of maintaining a second independent pin.
 
 ## Verification
 

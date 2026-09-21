@@ -23,7 +23,7 @@ cp "$installer" "$package_root/bin/mako-installer"
 chmod 0755 "$package_root/Install MAKO Renderer" "$package_root/bin/mako-installer"
 printf '%s\n' '#!/usr/bin/env bash' 'exit 0' > "$package_root/bin/mako-ui"
 chmod 0755 "$package_root/bin/mako-ui"
-printf '%s\n' '[Desktop Entry]' 'Name=MAKO Renderer Configuration' 'Exec=mako-ui %U' > "$package_root/share/applications/io.github.eugeniosegala.mako.desktop"
+printf '%s\n' '[Desktop Entry]' 'Name=MAKO Renderer Configuration' 'Exec=mako-ui' > "$package_root/share/applications/io.github.eugeniosegala.mako.desktop"
 printf '%s\n' '[Desktop Entry]' 'Name=Uninstall MAKO Renderer' 'Exec=mako-installer --uninstall' > "$package_root/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
 printf '%s\n' 'test-version' > "$package_root/MAKO-Renderer-version.txt"
 (
@@ -82,7 +82,7 @@ grep -Fxq -- '--msgbox' "$dialog_capture" ||
 grep -Fq '"owner": "standalone"' \
     "$install_prefix/share/mako-render/active-renderer.json" ||
     fail "installer did not select the standalone Renderer as active"
-grep -Fxq "Exec=\"$install_prefix/bin/mako-ui\" %U" \
+grep -Fxq "Exec=\"$install_prefix/bin/mako-ui\"" \
     "$install_prefix/share/applications/io.github.eugeniosegala.mako.desktop" ||
     fail "configuration launcher does not use the absolute installed UI path"
 grep -Fxq "Exec=\"$install_prefix/bin/mako-installer\" --uninstall" \

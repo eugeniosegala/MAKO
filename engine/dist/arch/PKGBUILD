@@ -58,9 +58,12 @@ optdepends=(
 # MAKO-Renderer-install-manifest.txt. Do not strip them or generate debug symbols.
 options=('!strip' '!debug')
 
-# No provides/conflicts entries: this package owns only /usr, so pacman's own
-# file-conflict check already refuses to overwrite it, and a future source-built
-# mako-renderer package is expected to declare conflicts=('mako-renderer-bin').
+# Treat a future source-built mako-renderer package as the interchangeable
+# implementation. Pacman then resolves dependencies against either package and
+# removes one before installing the other instead of relying on a late file
+# conflict.
+provides=("mako-renderer=${pkgver}")
+conflicts=('mako-renderer')
 
 source=("MAKO-Renderer-v${pkgver}-linux.tar.xz::https://github.com/eugeniosegala/MAKO/releases/download/render-v${pkgver}/MAKO-Renderer-v${pkgver}-linux.tar.xz")
 sha256sums=('ca8d9f8c5537bf92edd68adae31926580b2bfb7e83543bf7a25bc21ac2976e6d')
@@ -104,7 +107,7 @@ package() {
     install -Dm644 share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json "$pkgdir/usr/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json"
     install -Dm644 share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json "$pkgdir/usr/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json"
 
-    # Desktop entry (Exec=mako-ui %U, Icon=io.github.eugeniosegala.mako).
+    # Configuration desktop entry.
     install -Dm644 share/applications/io.github.eugeniosegala.mako.desktop "$pkgdir/usr/share/applications/io.github.eugeniosegala.mako.desktop"
 
     # Icons, installed per file so no archive ownership or mode is inherited.

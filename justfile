@@ -44,6 +44,15 @@ generate-vkbasalt-release:
 check-vkbasalt-release:
     python3 engine/scripts/manage-vkbasalt-release.py --check --check-flatpak-module engine/dist/flatpak/mako-render/vkbasalt-module.json
 
+# Sync the Arch package recipe to the checksum-pinned Renderer release.
+sync-arch-package:
+    python3 engine/dist/arch/sync-release-pin.py plugin/package.json engine/dist/arch/PKGBUILD
+
+# Reject a stale or unsafe Arch package recipe and lifecycle script.
+check-arch-package:
+    engine/dist/arch/check-release-pin.sh
+    engine/dist/arch/test-package-contract.sh
+
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 

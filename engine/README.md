@@ -38,6 +38,8 @@ See the <a href="../README.md#install-and-use" target="_blank" rel="noopener nor
 
 Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.3.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. It verifies the archive, preserves profiles, opens **MAKO Renderer Configuration**, and shows the Steam/Proton launch option. Run the installer again to update; use **Uninstall MAKO Renderer** to remove the shared native installation. The included `README.txt` contains offline instructions.
 
+On Arch Linux, the tracked [`mako-renderer-bin` recipe](dist/arch/README.md) repackages that same checksum-pinned host archive as a system-wide pacman package. It excludes the user-local installer and uninstaller, preserves profiles, and documents coexistence with MAKO Decky.
+
 Close games using MAKO before updating. The installer validates and stages the complete payload before replacing files and restores the previous installation if a later step fails. It reports permission or storage failures without requesting root access. If restoration also fails, it retains recovery backups beside the affected files and reports their locations. Profiles and diagnostics remain untouched unless you explicitly choose to remove configuration during uninstall.
 
 For a manual installation, extract the archive into your user-local prefix:

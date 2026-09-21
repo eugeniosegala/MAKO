@@ -191,7 +191,11 @@ rewrite_desktop_exec() {
     : > "$temporary_path"
     while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" == Exec=* ]]; then
-            printf 'Exec=%s %s\n' "$quoted_executable" "$arguments" >> "$temporary_path"
+            if [[ -n "$arguments" ]]; then
+                printf 'Exec=%s %s\n' "$quoted_executable" "$arguments" >> "$temporary_path"
+            else
+                printf 'Exec=%s\n' "$quoted_executable" >> "$temporary_path"
+            fi
             exec_lines=$((exec_lines + 1))
         else
             printf '%s\n' "$line" >> "$temporary_path"
@@ -362,7 +366,7 @@ install_payload() {
             fail "The package file $manifest_path does not match its recorded checksum."
     done < "$payload_manifest"
 
-    rewrite_desktop_exec "$configuration_desktop_path" "$install_prefix/bin/mako-ui" "%U" "$install_staging/payload"
+    rewrite_desktop_exec "$configuration_desktop_path" "$install_prefix/bin/mako-ui" "" "$install_staging/payload"
     rewrite_desktop_exec "$uninstaller_desktop_path" "$install_prefix/bin/mako-installer" "--uninstall" "$install_staging/payload"
     write_installed_state_manifest "$install_staging/payload" "$install_staging/installed-files.sha256"
     write_active_renderer_state "$version" "$install_staging/active-renderer.json"

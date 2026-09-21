@@ -143,6 +143,13 @@ if(BUILD_TESTING AND UNIX)
     set_tests_properties(vkbasalt-release-contract
         vkbasalt-release-validator PROPERTIES LABELS "portable-policy")
 
+    add_test(NAME arch-package-release-pin
+        COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/dist/arch/check-release-pin.sh")
+    add_test(NAME arch-package-contract
+        COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/dist/arch/test-package-contract.sh")
+    set_tests_properties(arch-package-release-pin
+        arch-package-contract PROPERTIES LABELS "portable-policy")
+
     add_test(NAME embedded-color-conversion-spirv-freshness
         COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate-color-conversion-spirv.py"

@@ -55,7 +55,7 @@ if [[ -n "$requested_version" && ! "$requested_version" =~ ^[0-9]+\.[0-9]+\.[0-9
     exit 2
 fi
 
-for command in gh git node; do
+for command in gh git node python3; do
     if ! command -v "$command" >/dev/null 2>&1; then
         echo "Required command not found: $command" >&2
         exit 1
@@ -269,9 +269,20 @@ node "$repo_root/../plugin/scripts/pin-renderer-release.mjs" \
     "$flatpak_archive" \
     "$flatpak_checksum"
 
+python3 "$repo_root/dist/arch/sync-release-pin.py" \
+    "$repo_root/../plugin/package.json" \
+    "$repo_root/dist/arch/PKGBUILD"
+"$repo_root/dist/arch/check-release-pin.sh"
+
 node "$repository_root/scripts/update-release-links.mjs" \
     renderer "$version" "$release_repository"
-release_metadata_paths=(plugin/package.json README.md plugin/README.md engine/README.md)
+release_metadata_paths=(
+    plugin/package.json
+    engine/dist/arch/PKGBUILD
+    README.md
+    plugin/README.md
+    engine/README.md
+)
 if ! git -C "$repository_root" diff --quiet -- "${release_metadata_paths[@]}"; then
     git -C "$repository_root" add "${release_metadata_paths[@]}"
     git -C "$repository_root" commit -m "Pin MAKO Renderer v$version$ci_skip_suffix"
