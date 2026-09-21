@@ -50,6 +50,8 @@ namespace {
             bool accepted{false};
             size_t previousLimit{0};
             size_t testedLimit{0};
+            double previousBaseFps{0.0};
+            double currentBaseFps{0.0};
             std::chrono::milliseconds duration{0};
         };
 
@@ -85,7 +87,8 @@ namespace {
         }
 
         void rampResult(const bool accepted, const size_t previousLimit,
-                const size_t testedLimit, double, double, double,
+                const size_t testedLimit, const double previousBaseFps,
+                const double currentBaseFps, double,
                 double, const std::string_view reason) override {
             this->events.push_back({
                 .operation = "ramp-result",
@@ -93,6 +96,8 @@ namespace {
                 .accepted = accepted,
                 .previousLimit = previousLimit,
                 .testedLimit = testedLimit,
+                .previousBaseFps = previousBaseFps,
+                .currentBaseFps = currentBaseFps,
             });
         }
 
@@ -100,28 +105,6 @@ namespace {
             this->events.push_back({
                 .operation = "probe-aborted",
                 .reason = std::string(reason),
-                .testedLimit = testedLimit,
-            });
-        }
-
-        void bridge(size_t previousLimit, size_t testedLimit,
-                size_t bridgeLimit, double, double, double, double) override {
-            this->events.push_back({
-                .operation = "bridge",
-                .reason = {},
-                .previousLimit = previousLimit,
-                .testedLimit = bridgeLimit,
-            });
-            static_cast<void>(testedLimit);
-        }
-
-        void bridgeResult(bool accepted, size_t baselineLimit,
-                size_t testedLimit, double, double, double, double) override {
-            this->events.push_back({
-                .operation = "bridge-result",
-                .reason = {},
-                .accepted = accepted,
-                .previousLimit = baselineLimit,
                 .testedLimit = testedLimit,
             });
         }
@@ -141,14 +124,6 @@ namespace {
                 .operation = "ramp-backoff",
                 .reason = {},
                 .previousLimit = failures,
-                .testedLimit = testedLimit,
-            });
-        }
-
-        void rampEarlyRetry(size_t testedLimit, double, double) override {
-            this->events.push_back({
-                .operation = "ramp-early-retry",
-                .reason = {},
                 .testedLimit = testedLimit,
             });
         }
@@ -177,23 +152,6 @@ namespace {
             });
         }
 
-        void twoXGameplayHitchRecovery(size_t, double,
-                std::chrono::steady_clock::duration) override {
-            this->events.push_back({
-                .operation = "2x-hitch-recovery",
-                .reason = {},
-            });
-        }
-
-        void sdrGameplayHitchBridge(size_t generationLimit, double,
-                std::chrono::steady_clock::duration) override {
-            this->events.push_back({
-                .operation = "sdr-hitch-bridge",
-                .reason = {},
-                .testedLimit = generationLimit,
-            });
-        }
-
         void cadenceRefresh(std::string_view reason, size_t retainedLimit,
                 size_t historyFrames) override {
             this->events.push_back({
@@ -213,16 +171,6 @@ namespace {
                 .testedLimit = generationLimit,
                 .duration = std::chrono::duration_cast<
                     std::chrono::milliseconds>(higherProbeDelay),
-            });
-        }
-
-        void loadShed(size_t previousLimit, size_t resumedLimit,
-                double, double, std::string_view reason) override {
-            this->events.push_back({
-                .operation = "load-shed",
-                .reason = std::string(reason),
-                .previousLimit = previousLimit,
-                .testedLimit = resumedLimit,
             });
         }
 
@@ -578,11 +526,7 @@ namespace {
             "transport recovery did not request one fresh cadence qualification");
     }
 
-    void testIsolatedAcquireTimeoutPreservesValidatedCadence() {
-        // Issue #47: a 90 Hz image deadline of 16.7 ms returned VK_TIMEOUT
-        // after 17-19 ms, despite a 50 ms application-present budget. Replay
-        // sparse misses against both the reported 60 FPS cap and the 45 FPS
-        // cadence observed under ordered FIFO, using the production owners.
+    void testExplicitAcquireTimeoutPreservesValidatedCadence() {
         for (const size_t maximumMultiplier : {2U, 4U}) {
             for (const double baseFps : {45.0, 60.0}) {
                 Harness harness(
@@ -595,67 +539,25 @@ namespace {
                 const auto validated = harness.scheduler.snapshot();
                 require(validated.validatedGenerationLimit == 1,
                     "precondition failed: 90 FPS delivery was not validated");
-                const size_t stabilizations =
-                    harness.diagnostics.count("stabilization");
 
-                for (const auto wait : {17'248'900ns, 18'443'100ns,
-                        17'750'300ns, 18'854'000ns, 17'977'300ns}) {
-                    harness.runAtFps(baseFps, 30s);
-                    auto plan = harness.frameAtFps(baseFps);
-                    for (size_t frame = 0; plan.empty() && frame < 4; ++frame)
-                        plan = harness.frameAtFps(baseFps);
-                    require(!plan.empty(),
-                        "precondition failed: no generated delivery before timeout");
-                    harness.scheduler.reportGeneratedFrameDelivery({
-                        .requested = plan.size(),
-                        .acceptedForPresentation = 0,
-                    });
-                    const auto miss = recovery.observe(
-                        harness.now + wait, wait,
-                        OrderedAcquireRecovery::slowAcquireDuration(90),
-                        true
-                    );
-                    require(miss.guardArmed && !miss.quarantined,
-                        "isolated 90 Hz deadline miss started a native drain");
-                    const auto guard = recovery.beforePresent(
-                        harness.now + wait + 1ms
-                    );
-                    require(guard.limitGeneratedFrames &&
-                            guard.preacquireGeneratedFrame &&
-                            !guard.boundedAcquireProbe &&
-                            !guard.bypassGeneration,
-                        "deadline miss did not constrain the next acquire to zero wait");
-                    // The presentation path freezes the scheduler while its
-                    // forced single-image guard excludes transport delay.
-                    static_cast<void>(harness.frame(wait + 1ms, true));
-                    const auto ready = recovery.observe(
-                        harness.now, 0ns,
-                        OrderedAcquireRecovery::slowAcquireDuration(90),
-                        false
-                    );
-                    if (ready.stabilizing)
-                        harness.scheduler.beginTransportRecovery(harness.now);
-                    require(ready.guardCleared && !recovery.active(),
-                        "available guard image did not end isolated recovery");
-                    size_t generated = 0;
-                    for (size_t frame = 0; frame < 4; ++frame) {
-                        const auto resumed = harness.frameAtFps(baseFps);
-                        generated += resumed.size();
-                        if (!resumed.empty()) {
-                            static_cast<void>(recovery.observe(
-                                harness.now, 1ms,
-                                OrderedAcquireRecovery::slowAcquireDuration(90),
-                                false
-                            ));
-                        }
-                    }
-                    require(generated > 0 &&
-                            harness.scheduler.snapshot().validatedGenerationLimit ==
-                                validated.validatedGenerationLimit &&
-                            harness.diagnostics.count("stabilization") ==
-                                stabilizations,
-                        "sparse acquire misses discarded accepted generation or restarted Adaptive");
-                }
+                const auto miss = recovery.observe(harness.now, true);
+                require(miss.quarantined && recovery.active(),
+                    "explicit acquire timeout did not enter transport backoff");
+                require(harness.scheduler.snapshot().validatedGenerationLimit ==
+                        validated.validatedGenerationLimit,
+                    "transport timeout itself demoted accepted Adaptive state");
+                const auto retryAt = harness.now + miss.retryDelay;
+                const auto retry = recovery.beforePresent(retryAt);
+                require(retry.boundedAcquireProbe,
+                    "transport timeout did not reach its bounded retry");
+                const auto ready = recovery.observe(
+                    retryAt, false, false, true
+                );
+                require(ready.recovered && !recovery.active(),
+                    "successful bounded retry did not end transport recovery");
+                require(harness.scheduler.snapshot().validatedGenerationLimit ==
+                        validated.validatedGenerationLimit,
+                    "ordinary direct recovery changed the validated multiplier");
             }
         }
     }
@@ -2111,7 +2013,7 @@ namespace {
             "acquire backoff retained a stale fractional target phase");
     }
 
-    void testValidatedTwoXSurvivesShortGameplayHitch() {
+    void testValidatedTwoXUsesCommonCadenceStallPolicy() {
         Harness harness(90, 2);
         harness.start();
         harness.runAtFps(45.0, 7s);
@@ -2120,13 +2022,11 @@ namespace {
 
         const auto hitchPlan = harness.frame(200ms);
         require(hitchPlan.empty(),
-            "short hitch recovery generated from stale temporal history");
-        require(harness.scheduler.historyWarmupRemaining() == 3,
-            "short 2x hitch did not request a full history refresh");
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "short 2x hitch discarded its validated policy");
-        require(harness.diagnostics.contains("2x-hitch-recovery"),
-            "short 2x hitch recovery was not observable");
+            "2x cadence stall generated from stale temporal history");
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.discontinuityRecoveryActive &&
+                snapshot.generationLimit == 0,
+            "2x cadence stall bypassed the common recovery policy");
     }
 
     // On the Gamescope HDR transport a long gap is ambiguous: it can be a
@@ -2246,37 +2146,6 @@ namespace {
         const auto fourthResumedPlan = harness.frameAtFps(45.0);
         require(thirdResumedPlan.size() == 1 || fourthResumedPlan.size() == 1,
             "SDR did not resume its validated 2x level after confirmed recovery");
-    }
-
-    void testSdrStableTwoXBridgesIsolatedGameplayHitch() {
-        Harness harness(
-            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
-        );
-        harness.start();
-        harness.runAtFps(60.0, 12s);
-        const auto before = harness.scheduler.snapshot();
-        require(before.phase == AdaptiveSchedulerPhase::StableCadence &&
-                before.stableCadenceLimit == 1 &&
-                before.validatedGenerationLimit == 1,
-            "precondition failed: SDR Smooth Cadence 2x was not accepted");
-
-        const auto hitchPlan = harness.frame(150ms);
-        require(hitchPlan.size() == 1,
-            "isolated SDR gameplay hitch dropped the generated midpoint");
-        requireNear(hitchPlan.front(), 0.5F, 0.0001F,
-            "isolated SDR gameplay hitch changed the midpoint timestamp");
-        require(!harness.scheduler.historyWarmupActive(),
-            "isolated SDR gameplay hitch unnecessarily refreshed history");
-        const auto* bridge = harness.diagnostics.last("sdr-hitch-bridge");
-        require(bridge && bridge->testedLimit == 1,
-            "isolated SDR gameplay hitch bridge was not observable");
-
-        require(harness.frameAtFps(60.0).size() == 1,
-            "healthy frame after an isolated SDR hitch lost interpolation");
-        require(harness.frame(150ms).size() == 1,
-            "a later isolated SDR hitch did not rearm after healthy cadence");
-        require(harness.diagnostics.count("cadence-refresh") == 0,
-            "isolated SDR gameplay hitches entered cadence recovery");
     }
 
     void testUnconfirmedCadenceDropRetainsSlowSamples() {
@@ -2436,12 +2305,10 @@ namespace {
         // frames remain too slow for generation. They must remain
         // native/history-only rather than scheduling another two-frame refresh
         // indefinitely.
-        require(harness.frame(150ms).size() == 1,
-            "first short SDR stall did not use the isolated-hitch bridge");
+        require(harness.frame(150ms).empty(),
+            "first SDR stall generated from stale temporal history");
         require(harness.frame(150ms).empty(),
             "consecutive SDR stall bypassed history recovery");
-        require(harness.diagnostics.count("sdr-hitch-bridge") == 1,
-            "consecutive SDR stalls used more than one isolated-hitch bridge");
         for (size_t frame = 0; frame < 2; ++frame) {
             harness.now += 150ms;
             harness.scheduler.consumeHistoryWarmupFrame(harness.now);
@@ -2553,7 +2420,7 @@ namespace {
             "interrupted probe rearm decision was not observable");
     }
 
-    void testBridgeProbeCanRecoverMisleadingFirstStep() {
+    void testCounterproductiveFirstStepNeverEscalates() {
         Harness harness(180, 3);
         harness.start();
         for (size_t frame = 0;
@@ -2566,13 +2433,13 @@ namespace {
             "precondition failed: initial multiplier probe did not begin");
 
         harness.runAtFps(31.0, 3s);
-        require(harness.diagnostics.contains("bridge"),
-            "counterproductive-looking first step did not start a bridge probe");
-        const auto* result = harness.diagnostics.last("bridge-result");
-        require(result && result->accepted,
-            "useful bridge multiplier was not accepted");
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "accepted bridge multiplier was not retained as validated");
+        const auto* result = harness.diagnostics.last("ramp-result");
+        require(result && !result->accepted &&
+                result->reason == "unpaid-real-frame-cost",
+            "counterproductive first workload was not rejected by the common rule");
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 0 &&
+                harness.scheduler.snapshot().rearmRequired,
+            "rejected first workload escalated past the proven native level");
     }
 
     void testRejectedHigherLevelRetainsProvenLoadAndBacksOff() {
@@ -2607,7 +2474,7 @@ namespace {
             "higher-level rejection did not schedule first bounded retry delay");
     }
 
-    void testOrderedSdrPreservesUsefulHigherLevelBelowTarget() {
+    void testOrderedSdrRejectsUnpaidHigherLevelBelowTarget() {
         Harness harness(
             120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr
         );
@@ -2631,11 +2498,12 @@ namespace {
 
         const auto snapshot = harness.scheduler.snapshot();
         const auto* result = harness.diagnostics.last("ramp-result");
-        require(result && result->accepted &&
+        require(result && !result->accepted &&
                 result->previousLimit == 1 && result->testedLimit == 2,
-            "menu recovery policy rejected useful ordinary-gameplay 3x");
-        require(snapshot.validatedGenerationLimit == 2,
-            "below-target gameplay lost its accepted 3x level");
+            "ordered SDR accepted displayed gain smaller than its real-frame cost");
+        require(result->reason == "unpaid-real-frame-cost" &&
+                snapshot.validatedGenerationLimit == 1,
+            "rejected 3x workload did not retain the proven 2x level");
     }
 
     void testConfirmedFocusReturnRetainsProvenLevel() {
@@ -2712,7 +2580,7 @@ namespace {
                     require(result && !result->accepted &&
                             result->previousLimit == 1 &&
                             result->testedLimit == 2 &&
-                            result->reason == "post-menu-target-baseline",
+                            result->reason == "unpaid-real-frame-cost",
                         "post-menu 3x was compared only with the degraded return cadence");
                     require(snapshot.validatedGenerationLimit == 1,
                         "post-menu target guard discarded the proven 2x level");
@@ -2755,18 +2623,18 @@ namespace {
                 require(harness.scheduler.historyWarmupRemaining() == 3,
                     "fast return skipped three fresh history frames");
                 const auto* settling = harness.diagnostics.last("stabilization");
-                require(settling && settling->duration == 250ms,
-                    "confirmed return retained the full one-second delay");
+                require(settling && settling->duration == 0ms,
+                    "confirmed return invented a time-based settling delay");
                 AdaptiveFramePlan plan;
                 for (size_t frame = 0; frame < 12; ++frame) {
                     plan = frameAfterFocusReturn(harness, 25ms);
-                    if (harness.now - returnedAt < 250ms)
-                        require(plan.empty(), "menu resume bypassed its settling interval");
+                    if (frame < 3)
+                        require(plan.empty(), "menu resume bypassed fresh history");
                     if (!plan.empty())
                         break;
                 }
-                require(plan.size() == 2 && harness.now - returnedAt <= 300ms,
-                    "proven 3x did not return within 300 ms of confirmed focus");
+                require(plan.size() == 2 && harness.now - returnedAt <= 100ms,
+                    "proven 3x did not return after three fresh history frames");
                 harness.runAtFps(40.0, 1s);
                 require(harness.scheduler.validatedGenerationLimit() == 2 &&
                         harness.diagnostics.count("ramp") == ramps,
@@ -3555,255 +3423,110 @@ namespace {
             "oscillating load repeatedly toggled Smooth Cadence workload");
     }
 
-    // The HDR bridge measures real-only cadence before deciding whether a
-    // collapse was model load or compositor/colour-pipeline pressure.
-    void testHdrStrictLoadCollapseMeasuresBeforeFallback() {
-        Harness harness(180, 3);
-        harness.start();
-        harness.runAtFps(60.0, 10s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "precondition failed: 3x was not validated");
+    void testValidatedWorkloadIgnoresOrdinaryGameplaySlowdown() {
+        for (const uint32_t multiplier : {2u, 3u, 4u, 5u}) {
+            const double provenBaseFps = 120.0 /
+                static_cast<double>(multiplier);
+            Harness harness(
+                120, multiplier, false, AdaptiveRecoveryPolicy::OrderedSdr,
+                false, 2s, 120, false
+            );
+            harness.start();
+            harness.runAtFps(provenBaseFps, 20s);
+            require(harness.scheduler.snapshot().validatedGenerationLimit ==
+                    multiplier - 1,
+                "precondition failed: configured workload was not validated");
 
-        for (size_t frame = 0;
-                frame < 160 && !harness.diagnostics.contains("rescue-start");
-                ++frame) {
-            harness.frameAtFps(40.0);
+            harness.runAtFps(provenBaseFps * 0.70, 10s);
+            const auto snapshot = harness.scheduler.snapshot();
+            require(snapshot.validatedGenerationLimit == multiplier - 1 &&
+                    snapshot.phase != AdaptiveSchedulerPhase::RescueMeasurement,
+                "ordinary gameplay cadence changed an already validated workload");
         }
-        const auto* rescueStart = harness.diagnostics.last("rescue-start");
-        require(rescueStart && rescueStart->reason == "strict-load-collapse",
-            "sustained high-multiplier throughput collapse did not start rescue");
-        require(harness.scheduler.snapshot().phase ==
-                AdaptiveSchedulerPhase::RescueMeasurement,
-            "strict-load rescue was not exposed as scheduler state");
-
-        harness.runAtFps(60.0, 2s);
-        const auto* rescueComplete = harness.diagnostics.last("rescue-complete");
-        require(rescueComplete &&
-                rescueComplete->reason == "strict-load-restored",
-            "real-only throughput recovery did not select the cheaper proven level");
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "strict-load rescue did not restore the validated lower load");
     }
 
-    void testSdrStrictLoadCollapseKeepsGeneratedFallbackActive() {
-        // SDR's ordered transport can shed directly to the lower proven load;
-        // a real-only second would be the visible 120-to-60 FPS regression.
-        Harness harness(180, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
-        harness.start();
-        harness.runAtFps(60.0, 10s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "precondition failed: SDR 3x was not validated");
+    void testCommonWorkloadRuleCoversTwoXThroughFiveX() {
+        for (const uint32_t multiplier : {2u, 3u, 4u, 5u}) {
+            Harness harness(
+                60 * multiplier, multiplier, false,
+                AdaptiveRecoveryPolicy::OrderedSdr,
+                false, 2s, 60 * multiplier, false
+            );
+            harness.start();
+            for (size_t frame = 0; frame < 5000; ++frame) {
+                const auto snapshot = harness.scheduler.snapshot();
+                if (snapshot.rampEvaluationActive &&
+                        snapshot.generationLimit == multiplier - 1) {
+                    break;
+                }
+                harness.frameAtFps(60.0);
+            }
+            require(harness.scheduler.snapshot().rampEvaluationActive &&
+                    harness.scheduler.snapshot().generationLimit ==
+                        multiplier - 1,
+                "precondition failed: final configured workload probe did not begin");
 
-        AdaptiveFramePlan plan;
-        for (size_t frame = 0;
-                frame < 160 && !harness.diagnostics.contains("load-shed");
-                ++frame) {
-            plan = harness.frameAtFps(40.0);
+            while (harness.scheduler.snapshot().rampEvaluationActive)
+                harness.frameAtFps(31.0);
+            const auto* result = harness.diagnostics.last("ramp-result");
+            require(result && !result->accepted &&
+                    result->testedLimit == multiplier - 1 &&
+                    result->reason == "unpaid-real-frame-cost" &&
+                    harness.scheduler.snapshot().validatedGenerationLimit ==
+                        multiplier - 2,
+                "a 2x-5x workload bypassed the common adjacent-load rule at " +
+                    std::to_string(multiplier) + "x: accepted=" +
+                    std::to_string(result ? result->accepted : false) +
+                    ", tested=" + std::to_string(
+                        result ? result->testedLimit : 0
+                    ) + ", retained=" + std::to_string(
+                        harness.scheduler.snapshot().validatedGenerationLimit
+                    ));
         }
-        const auto* loadShed = harness.diagnostics.last("load-shed");
-        require(loadShed && loadShed->reason == "sdr-direct-fallback" &&
-                loadShed->previousLimit == 2 && loadShed->testedLimit == 1,
-            "SDR collapse did not select its cheaper proven multiplier");
-        require(harness.scheduler.snapshot().phase !=
-                AdaptiveSchedulerPhase::RescueMeasurement,
-            "SDR collapse entered a disruptive real-only measurement");
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "SDR collapse did not retain the proven generated fallback");
-        require(plan.size() == 1,
-            "SDR load shed dropped the transition frame to native-only");
     }
 
-    void testSdrStrictLoadRetainsHigherOutputLevel() {
-        // A higher multiplier that still improves displayed throughput is not
-        // a useful load-shed candidate, even when its real cadence falls far
-        // enough to satisfy the strict collapse threshold.
-        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
-        harness.start();
-        harness.runAtFps(50.0, 10s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "precondition failed: target-positive SDR 3x was not validated");
-
-        AdaptiveFramePlan plan;
-        for (size_t frame = 0; frame < 160; ++frame)
-            plan = harness.frameAtFps(36.0);
-
-        require(!harness.diagnostics.contains("load-shed"),
-            "SDR shed a higher multiplier that still improved displayed throughput");
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "SDR did not retain the target-positive higher multiplier");
-        require(plan.size() == 2,
-            "SDR stopped requesting the target-positive generated workload");
-    }
-
-    void testSdrModerateDeficitDoesNotTrustHistoricalFallback() {
-        // Reproduce the Resident Evil 4 trace: the earlier 2x sample could
-        // theoretically provide about 104 FPS, while the current 3x sample
-        // provides about 103 FPS. That stale cross-scene comparison is not
-        // enough reason to shed load while output remains above 75% of target.
-        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
-        harness.start();
-        harness.runAtFps(52.0, 10s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "precondition failed: moderate-deficit SDR 3x was not validated");
-
-        AdaptiveFramePlan plan;
-        for (size_t frame = 0; frame < 160; ++frame)
-            plan = harness.frameAtFps(34.5);
-
-        require(!harness.diagnostics.contains("load-shed"),
-            "SDR trusted a stale lower-level estimate during a moderate deficit");
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "SDR discarded usable 3x output during a moderate target deficit");
-        require(plan.size() == 2,
-            "SDR stopped requesting 3x work during a moderate target deficit");
-    }
-
-    void testSdrSevereMarginalGainFallsBackAndBacksOff() {
-        // Reproduce the ordered-FIFO collapse observed while the Decky overlay
-        // was open: 2x provides roughly 50 FPS, while 3x lowers the base rate
-        // enough to provide only a marginal displayed-rate improvement.
-        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
-        harness.start();
-        harness.runAtFps(50.0, 10s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "precondition failed: severe-deficit SDR 3x was not validated");
-
-        for (size_t frame = 0;
-                frame < 160 && harness.diagnostics.count("load-shed") < 1;
-                ++frame) {
-            harness.frameAtFps(29.0);
-        }
-        require(harness.diagnostics.count("load-shed") == 1 &&
-                harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "precondition failed: initial SDR collapse did not establish 2x fallback");
-
-        for (size_t frame = 0;
-                frame < 600 &&
-                    !harness.scheduler.snapshot().rampEvaluationActive;
-                ++frame) {
-            harness.frameAtFps(25.0);
-        }
-        require(harness.scheduler.snapshot().rampEvaluationActive,
-            "SDR fallback never retried its higher level");
-
-        for (size_t frame = 0;
-                frame < 160 &&
-                    harness.scheduler.snapshot().rampEvaluationActive;
-                ++frame) {
-            harness.frameAtFps(18.0);
-        }
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "precondition failed: marginal 3x probe was not initially accepted");
-
-        for (size_t frame = 0;
-                frame < 160 && harness.diagnostics.count("load-shed") < 2;
-                ++frame) {
-            harness.frameAtFps(18.0);
-        }
-        require(harness.diagnostics.count("load-shed") == 2 &&
-                harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "severe below-target marginal gain pinned the saturated 3x level");
-
-        const size_t rampsBeforeBackoff = harness.diagnostics.count("ramp");
-        harness.runAtFps(25.0, 20s);
-        require(harness.diagnostics.count("ramp") == rampsBeforeBackoff &&
-                harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "repeated saturated 3x probe did not extend its retry backoff");
-
-        const size_t earlyRetries = harness.diagnostics.count(
-            "ramp-early-retry"
+    void testFailedHigherLoadCannotRatchetToDegradedBaseline() {
+        Harness harness(
+            100, 3, false, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 100, false
         );
-        for (size_t frame = 0;
-                frame < 150 &&
-                    harness.diagnostics.count("ramp-early-retry") == earlyRetries;
-                ++frame) {
-            harness.frameAtFps(30.0);
-        }
-        require(harness.diagnostics.count("ramp-early-retry") > earlyRetries,
-            "sustained fallback-cadence recovery did not retry 3x early");
-    }
-
-    void testSdrThroughputRegressionFallsBackAndBacksOff() {
-        // Actual throughput regression remains a normal-gameplay load guard.
-        // It does not infer a menu or authorize a swapchain recreation.
-        Harness harness(120, 3, false, AdaptiveRecoveryPolicy::OrderedSdr);
         harness.start();
-        harness.runAtFps(50.0, 10s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "precondition failed: severe-deficit SDR 3x was not validated");
-
-        for (size_t frame = 0;
-                frame < 160 && harness.diagnostics.count("load-shed") < 1;
-                ++frame) {
-            harness.frameAtFps(29.0);
+        for (size_t frame = 0; frame < 2000; ++frame) {
+            const auto snapshot = harness.scheduler.snapshot();
+            if (snapshot.rampEvaluationActive &&
+                    snapshot.generationLimit == 2) {
+                break;
+            }
+            harness.frameAtFps(47.7504);
         }
-        require(harness.diagnostics.count("load-shed") == 1 &&
-                harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "precondition failed: initial SDR collapse did not establish 2x fallback");
+        require(harness.scheduler.snapshot().rampEvaluationActive &&
+                harness.scheduler.snapshot().generationLimit == 2,
+            "precondition failed: FF7-style 3x probe did not begin");
 
-        for (size_t frame = 0;
-                frame < 600 &&
-                    !harness.scheduler.snapshot().rampEvaluationActive;
-                ++frame) {
-            harness.frameAtFps(25.0);
+        while (harness.scheduler.snapshot().rampEvaluationActive)
+            harness.frameAtFps(33.3623);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "counterproductive FF7-style 3x probe was accepted");
+        const size_t rampsAfterFailure = harness.diagnostics.count("ramp");
+
+        harness.runAtFps(33.4459, 60s);
+        require(harness.diagnostics.count("ramp") == rampsAfterFailure &&
+                harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "failed 3x probe retried against a degraded 2x baseline");
+
+        for (size_t frame = 0; frame < 1000 &&
+                !harness.scheduler.snapshot().rampEvaluationActive; ++frame) {
+            harness.frameAtFps(48.0);
         }
         require(harness.scheduler.snapshot().rampEvaluationActive,
-            "SDR fallback never retried its higher level");
-
-        for (size_t frame = 0;
-                frame < 160 &&
-                    harness.scheduler.snapshot().rampEvaluationActive;
-                ++frame) {
-            harness.frameAtFps(16.0);
-        }
+            "recovered 2x baseline did not permit a fresh adjacent probe");
+        while (harness.scheduler.snapshot().rampEvaluationActive)
+            harness.frameAtFps(23.8233);
         const auto* result = harness.diagnostics.last("ramp-result");
         require(result && !result->accepted &&
+                result->reason == "unpaid-real-frame-cost" &&
                 harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "a throughput-regressing probe was not rejected");
-
-        const size_t rampsBeforeBackoff = harness.diagnostics.count("ramp");
-        harness.runAtFps(25.0, 4s);
-        require(harness.diagnostics.count("ramp") == rampsBeforeBackoff &&
-                harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "rejected saturated 3x probe did not enter retry backoff");
-
-        const size_t earlyRetries = harness.diagnostics.count(
-            "ramp-early-retry"
-        );
-        for (size_t frame = 0;
-                frame < 150 &&
-                    harness.diagnostics.count("ramp-early-retry") == earlyRetries;
-                ++frame) {
-            harness.frameAtFps(30.0);
-        }
-        require(harness.diagnostics.count("ramp-early-retry") > earlyRetries,
-            "sustained fallback-cadence recovery did not retry 3x early");
-    }
-
-    void testSdrTwoXCollapseRetainsMinimumGeneratedPolicy() {
-        Harness harness(180, 2, false, AdaptiveRecoveryPolicy::OrderedSdr);
-        harness.start();
-        harness.runAtFps(60.0, 10s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "precondition failed: SDR 2x was not validated");
-
-        AdaptiveFramePlan plan;
-        for (size_t frame = 0;
-                frame < 160 && !harness.diagnostics.contains("load-shed");
-                ++frame) {
-            plan = harness.frameAtFps(30.0);
-        }
-        const auto* loadShed = harness.diagnostics.last("load-shed");
-        require(loadShed && loadShed->reason == "sdr-retain-2x" &&
-                loadShed->previousLimit == 1 && loadShed->testedLimit == 1,
-            "SDR 2x collapse did not retain its minimum generated policy");
-        require(harness.scheduler.snapshot().phase !=
-                AdaptiveSchedulerPhase::RescueMeasurement,
-            "SDR 2x collapse entered a disruptive real-only measurement");
-        require(!harness.scheduler.snapshot().automaticBaseCapSuppressed,
-            "SDR 2x collapse altered an automatic cap that was not enabled");
-        require(plan.size() == 1,
-            "SDR 2x collapse dropped the transition frame to native-only");
+            "recovered retry forgot the original proven 2x baseline");
     }
 
     void testSmoothCadenceCollapseUsesRealOnlyMeasurement() {
@@ -3875,80 +3598,6 @@ namespace {
         }
         require(nativePlans > 0 && generatedPlans > 0,
             "post-collapse recovery returned to a constant 2x cadence instead of Fractional output");
-    }
-
-    void testOrderedSdrMinimumGeneratedCollapseReleasesAutomaticCap() {
-        Harness harness(
-            90, 2, false, AdaptiveRecoveryPolicy::OrderedSdr,
-            false, 2s, 90, true, true
-        );
-        harness.start();
-        harness.runAtFps(45.0, 8s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "precondition failed: Ordered-SDR 45-to-90 policy was not validated");
-
-        AdaptiveFramePlan transitionPlan;
-        for (size_t frame = 0;
-                frame < 120 && !harness.scheduler.snapshot().
-                    automaticBaseCapSuppressed;
-                ++frame) {
-            transitionPlan = harness.frameAtFps(30.0);
-        }
-        require(harness.scheduler.snapshot().automaticBaseCapSuppressed,
-            "30-to-60 collapse did not release the automatic 45 FPS cap");
-        const auto* capSuppressed = harness.diagnostics.last(
-            "automatic-base-cap-suppressed"
-        );
-        require(capSuppressed && capSuppressed->reason ==
-                "ordered-sdr-minimum-generated-collapse",
-            "30-to-60 collapse did not diagnose the minimum-generated cap release");
-        require(transitionPlan.size() == 1,
-            "minimum-generated collapse dropped its transition frame");
-
-        size_t nativePlans = 0;
-        size_t generatedPlans = 0;
-        for (size_t frame = 0; frame < 180; ++frame) {
-            const auto plan = harness.frameAtFps(60.0);
-            if (plan.empty())
-                nativePlans++;
-            else
-                generatedPlans++;
-        }
-        require(nativePlans > 0 && generatedPlans > 0,
-            "uncapped 60 FPS recovery did not use Fractional delivery toward 90 FPS");
-    }
-
-    void testRestoredDiscontinuityLoadRetainsCollapseGuard() {
-        Harness harness(110, 3);
-        harness.start();
-        harness.runAtFps(50.0, 10s);
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "precondition failed: 3x was not validated before interruption");
-
-        harness.frame(400ms);
-        require(harness.scheduler.discontinuityRecoveryActive(),
-            "precondition failed: menu-like interruption did not start recovery");
-        harness.runAtFps(64.0, 3s);
-        require(!harness.scheduler.discontinuityRecoveryActive() &&
-                harness.scheduler.snapshot().validatedGenerationLimit == 2,
-            "healthy real-only cadence did not restore the validated 3x level");
-
-        for (size_t frame = 0;
-                frame < 160 && !harness.diagnostics.contains("rescue-start");
-                ++frame) {
-            harness.frameAtFps(35.0);
-        }
-        const auto* rescueStart = harness.diagnostics.last("rescue-start");
-        require(rescueStart && rescueStart->reason == "strict-load-collapse",
-            "restored 3x load lost its delayed-collapse guard");
-
-        harness.runAtFps(64.0, 2s);
-        const auto* rescueComplete = harness.diagnostics.last("rescue-complete");
-        require(rescueComplete &&
-                rescueComplete->reason == "strict-load-restored",
-            "real-only recovery did not back off the harmful restored level");
-        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
-            "harmful restored 3x load did not fall back to proven 2x");
     }
 
     void testGeneratedImageRecoveryFallsBackToProvenLoad() {
@@ -4272,7 +3921,7 @@ int main() {
         {"startup warm-up is explicit", testStartupWarmupIsExplicit},
         {"swapchain recreation settles promptly", testSwapchainRecreationUsesBoundedSettlingGuard},
         {"transport recovery invalidates stable cadence", testTransportRecoveryInvalidatesStableCadence},
-        {"isolated acquire timeouts preserve validated cadence", testIsolatedAcquireTimeoutPreservesValidatedCadence},
+        {"explicit acquire timeout preserves validated cadence", testExplicitAcquireTimeoutPreservesValidatedCadence},
         {"busy warm-up notification is idempotent", testBusyWarmupNotificationIsIdempotent},
         {"transient busy frame does not rearm warm-up", testTransientBusyFrameDoesNotRearmCompletedWarmup},
         {"invalid configuration is rejected", testInvalidConfigurationIsRejectedAtBoundary},
@@ -4309,13 +3958,12 @@ int main() {
         {"5x timestamps remain evenly spaced", testFiveXPlanUsesEvenInterpolationTimestamps},
         {"above-target cadence remains real-only", testSchedulerCannotReduceAboveTargetCadence},
         {"acquire backoff freezes policy", testAcquireBackoffDoesNotAdvancePolicy},
-        {"validated 2x survives short hitch", testValidatedTwoXSurvivesShortGameplayHitch},
+        {"validated 2x uses common cadence-stall policy", testValidatedTwoXUsesCommonCadenceStallPolicy},
         {"HDR long hitch uses conservative recovery", testHdrLongHitchUsesConservativeDiscontinuityRecovery},
         {"healthy cadence restores validated level", testRecoveredCadenceRestoresValidatedLevel},
         {"discontinuity timeout restarts from zero", testDiscontinuityRecoveryTimesOutToFreshRamp},
         {"gameplay cadence drop rebases", testSustainedCadenceDropRebasesWithoutMenuRecovery},
         {"SDR long hitch keeps validated level", testSdrLongHitchRefreshesHistoryWithoutDroppingValidatedLevel},
-        {"SDR stable 2x bridges isolated hitch", testSdrStableTwoXBridgesIsolatedGameplayHitch},
         {"unconfirmed cadence drop retains slow samples", testUnconfirmedCadenceDropRetainsSlowSamples},
         {"bursty cadence retains both interval populations", testBurstySourceCadenceDoesNotLockOntoFastSamples},
         {"SDR cadence drop uses short refresh", testSdrCadenceDropRefreshesHistoryWithoutFullStabilization},
@@ -4324,9 +3972,9 @@ int main() {
         {"fast-present burst preserves cadence", testImpossibleFastBurstDoesNotCorruptCadence},
         {"harmful first probe enters rearm", testRejectedFirstProbeEntersBoundedRearm},
         {"interrupted probe rearms promptly", testInterruptedProbeRearmsWithoutFailurePenalty},
-        {"bridge probe handles misleading first step", testBridgeProbeCanRecoverMisleadingFirstStep},
+        {"counterproductive first step cannot escalate", testCounterproductiveFirstStepNeverEscalates},
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
-        {"ordered SDR preserves useful below-target 3x", testOrderedSdrPreservesUsefulHigherLevelBelowTarget},
+        {"ordered SDR rejects unpaid below-target 3x", testOrderedSdrRejectsUnpaidHigherLevelBelowTarget},
         {"confirmed focus return has bounded fast resume", testConfirmedFocusReturnBoundedFastResume},
         {"menu return protects target-proven lower load", testMenuReturnRejectsSelfHiddenHigherMultiplier},
         {"focus return retains conservative fallbacks", testFocusReturnRetainsConservativeFallbacks},
@@ -4353,17 +4001,11 @@ int main() {
         {"dynamic cadence rejects true 30 FPS", testDynamicCadenceProbeRejectsTrueThirtyFpsCadence},
         {"dynamic cadence remains opt-in and SDR-only", testDynamicCadenceRecoveryIsOptInAndSdrOnly},
         {"Smooth Cadence resists oscillating-load chatter", testSmoothCadenceDoesNotChatterOnOscillatingLoad},
-        {"HDR strict load collapse measures real-only", testHdrStrictLoadCollapseMeasuresBeforeFallback},
-        {"SDR load shed keeps generated fallback", testSdrStrictLoadCollapseKeepsGeneratedFallbackActive},
-        {"SDR load shed retains higher output", testSdrStrictLoadRetainsHigherOutputLevel},
-        {"SDR moderate deficit ignores stale fallback", testSdrModerateDeficitDoesNotTrustHistoricalFallback},
-        {"SDR severe marginal gain backs off", testSdrSevereMarginalGainFallsBackAndBacksOff},
-        {"SDR throughput regression backs off", testSdrThroughputRegressionFallsBackAndBacksOff},
-        {"SDR 2x load shed stays generated", testSdrTwoXCollapseRetainsMinimumGeneratedPolicy},
+        {"validated workloads ignore ordinary gameplay slowdown", testValidatedWorkloadIgnoresOrdinaryGameplaySlowdown},
+        {"common workload rule covers 2x through 5x", testCommonWorkloadRuleCoversTwoXThroughFiveX},
+        {"failed higher load cannot ratchet to degraded baseline", testFailedHigherLoadCannotRatchetToDegradedBaseline},
         {"Smooth Cadence collapse measures real-only", testSmoothCadenceCollapseUsesRealOnlyMeasurement},
         {"Ordered SDR Smooth collapse releases automatic cap", testOrderedSdrSmoothCollapseReleasesAutomaticCap},
-        {"Ordered SDR minimum-generated collapse releases automatic cap", testOrderedSdrMinimumGeneratedCollapseReleasesAutomaticCap},
-        {"restored load keeps collapse guard", testRestoredDiscontinuityLoadRetainsCollapseGuard},
         {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
         {"transport-failed multiplier probes keep proven load", testTransportFailureDuringAnyMultiplierProbeRetainsProvenLoad},
         {"qualified transport failure backs off accepted load", testQualifiedTransportFailureBacksOffAcceptedLoad},

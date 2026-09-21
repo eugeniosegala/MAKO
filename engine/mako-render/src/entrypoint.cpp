@@ -90,12 +90,6 @@ namespace {
             variableSurfaceRollbackExtents;
         std::unordered_map<VkSurfaceKHR, SpatialSurfaceOrigin> surfaceOrigins;
         std::unordered_set<VkSurfaceKHR> unprovenSplitSurfacesLogged;
-        // Replacement swapchains retain a bounded surface recovery budget.
-        // A later independent collapse may repair the same long-lived game
-        // surface, while fixed spacing and episode limits prevent loops.
-        std::unordered_map<
-            VkSurfaceKHR, PersistentGenerationRecoverySurfaceBudget
-        > persistentRecoveryStates;
         std::unordered_map<
             VkSurfaceKHR, ScalingAdmissionRetrySurfaceBudget
         > scalingAdmissionRetryStates;
@@ -1694,8 +1688,6 @@ namespace {
                 instance_info->variableSurfaceRollbackExtents.erase(surface);
                 instance_info->surfaceOrigins.erase(surface);
                 instance_info->unprovenSplitSurfacesLogged.erase(surface);
-                instance_info->persistentRecoveryStates
-                    .erase(surface);
                 instance_info->scalingAdmissionRetryStates.erase(surface);
             }
         }
@@ -2549,8 +2541,6 @@ namespace {
                         instance_info->swapchainInfos.end()
                     ? VK_NULL_HANDLE
                     : metadata->second.surface;
-                const auto recoveryRequestedAt =
-                    std::chrono::steady_clock::now();
                 std::optional<ScalingAdmissionRetryKey>
                     scalingAdmissionRetryKey;
                 if (metadata != instance_info->swapchainInfos.end() &&
@@ -2602,176 +2592,15 @@ namespace {
                                   << " action=episode-consumed\n";
                     }
                 }
-                const auto recoverySample = context.persistentRecoverySample();
-                auto persistentRecoveryState = presentingSurface ==
-                        VK_NULL_HANDLE
-                    ? instance_info->persistentRecoveryStates.end()
-                    : instance_info->persistentRecoveryStates.find(
-                        presentingSurface
-                    );
-                if (presentingSurface != VK_NULL_HANDLE && recoverySample &&
-                        persistentRecoveryState ==
-                            instance_info->persistentRecoveryStates.end()) {
-                    persistentRecoveryState = instance_info
-                        ->persistentRecoveryStates.try_emplace(
-                            presentingSurface).first;
-                }
-                PersistentGenerationRecoverySurfaceBudget::DeficitObservation
-                    sustainedDeficit;
-                if (persistentRecoveryState !=
-                        instance_info
-                            ->persistentRecoveryStates.end()) {
-                    sustainedDeficit = persistentRecoveryState->second
-                        .observeSustainedDeficit(recoveryRequestedAt, recoverySample);
-                    if (present_diagnostics::enabled() &&
-                            (sustainedDeficit.newlyQualified || sustainedDeficit.cancelled)) {
-                        std::cerr << "MAKO Renderer: present diagnostics: "
-                                     "operation=adaptive-recovery-recreation-watchdog"
-                                  << " context=" << context.diagnosticsId()
-                                  << " phase=" << (sustainedDeficit.qualified
-                                      ? "qualified" : "cancelled")
-                                  << " mode=" << (!recoverySample
-                                        ? "unavailable"
-                                        : recoverySample->adaptiveMode
-                                            ? "adaptive" : "fixed")
-                                  << " reason=sustained-post-menu-deficit"
-                                  << " retained_baseline="
-                                  << sustainedDeficit.retainedBaselineUsed
-                                  << " baseline_output_fps="
-                                  << sustainedDeficit.baselineOutputFps.value_or(0.0)
-                                  << " baseline_lower_present_share="
-                                  << sustainedDeficit.baselineLowerPresentShare.value_or(0.0)
-                                  << " output_fps=" << (recoverySample
-                                      ? recoverySample->outputFps.value_or(0.0) : 0.0)
-                                  << " recovery_threshold_fps="
-                                  << sustainedDeficit.recoveryThresholdFps.value_or(0.0)
-                                  << " lower_present_share=" << (recoverySample
-                                      ? recoverySample->lowerPresentShare : 0.0)
-                                  << " deficit_ms="
-                                  << std::chrono::duration<double, std::milli>(
-                                      sustainedDeficit.duration).count()
-                                  << " surface_available="
-                                  << persistentRecoveryState->second.available(
-                                      recoveryRequestedAt)
-                                  << " staged_scaled_recreation_pending="
-                                  << persistentRecoveryState->second
-                                        .stagedScaledRecreationPending()
-                                  << " staged_scaled_recreation_available="
-                                  << persistentRecoveryState->second
-                                        .stagedScaledRecreationAvailable(
-                                            recoveryRequestedAt)
-                                  << '\n';
-                    }
-                }
-                const bool persistentRecoverySurfaceAvailable =
-                    presentingSurface != VK_NULL_HANDLE &&
-                    (persistentRecoveryState ==
-                            instance_info
-                                ->persistentRecoveryStates.end() ||
-                     persistentRecoveryState->second.available(
-                         recoveryRequestedAt
-                     ));
-                const bool stagedScaledRecoveryRecreationPending =
-                    persistentRecoveryState !=
-                        instance_info->persistentRecoveryStates.end() &&
-                    persistentRecoveryState->second
-                        .stagedScaledRecreationPending();
-                const bool stagedScaledRecoveryRecreationAvailable =
-                    persistentRecoveryState !=
-                        instance_info->persistentRecoveryStates.end() &&
-                    persistentRecoveryState->second
-                        .stagedScaledRecreationAvailable(recoveryRequestedAt);
-                const bool lowerPresentRecoverySurfaceAvailable =
-                    presentingSurface != VK_NULL_HANDLE &&
-                    (persistentRecoveryState ==
-                            instance_info
-                                ->persistentRecoveryStates.end() ||
-                     persistentRecoveryState->second
-                        .severeLowerPresentAvailable(recoveryRequestedAt));
-                const bool lowerPresentRecoveryRecreationRequested =
-                    context.requestLowerPresentStallRecreationAfterPresent(
-                        result,
-                        !liveProfileRecreationRequested &&
-                            !scalingAdmissionRetryRequested &&
-                            lowerPresentRecoverySurfaceAvailable
-                    );
                 const bool orderedAcquireRecoveryRecreationRequested =
                     context.requestOrderedAcquireRecreationAfterPresent(
                         result,
                         !liveProfileRecreationRequested &&
-                            !scalingAdmissionRetryRequested &&
-                            !lowerPresentRecoveryRecreationRequested &&
-                            lowerPresentRecoverySurfaceAvailable
+                            !scalingAdmissionRetryRequested
                     );
-                const bool persistentRecoveryRecreationRequested =
-                    context.requestPersistentRecoveryRecreationAfterPresent(
-                        result,
-                        !liveProfileRecreationRequested &&
-                            !scalingAdmissionRetryRequested &&
-                            !lowerPresentRecoveryRecreationRequested &&
-                            !orderedAcquireRecoveryRecreationRequested &&
-                            (persistentRecoverySurfaceAvailable ||
-                             stagedScaledRecoveryRecreationAvailable),
-                        sustainedDeficit.qualified,
-                        stagedScaledRecoveryRecreationAvailable
-                    );
-                const bool persistentRecoveryInPlaceRequested =
-                    context.requestPersistentRecoveryInPlaceAfterPresent(
-                        result,
-                        !liveProfileRecreationRequested &&
-                            !scalingAdmissionRetryRequested &&
-                            !lowerPresentRecoveryRecreationRequested &&
-                            !orderedAcquireRecoveryRecreationRequested &&
-                            !persistentRecoveryRecreationRequested &&
-                            persistentRecoverySurfaceAvailable &&
-                            !stagedScaledRecoveryRecreationPending,
-                        sustainedDeficit.qualified
-                    );
-                if (lowerPresentRecoveryRecreationRequested ||
-                        orderedAcquireRecoveryRecreationRequested ||
-                        persistentRecoveryRecreationRequested ||
-                        persistentRecoveryInPlaceRequested) {
-                    auto& recoveryState = instance_info
-                        ->persistentRecoveryStates[
-                            presentingSurface
-                        ];
-                    recoveryState.recordRequest(recoveryRequestedAt,
-                        (persistentRecoveryRecreationRequested ||
-                         persistentRecoveryInPlaceRequested) &&
-                            sustainedDeficit.qualified,
-                        !persistentRecoveryInPlaceRequested,
-                        persistentRecoveryInPlaceRequested,
-                        persistentRecoveryRecreationRequested &&
-                            stagedScaledRecoveryRecreationAvailable);
-                    if (present_diagnostics::enabled()) {
-                        std::cerr << "MAKO Renderer: present diagnostics: "
-                                  << "operation="
-                                  << (lowerPresentRecoveryRecreationRequested
-                                        ? "lower-present-stall-recreation-budget"
-                                        : orderedAcquireRecoveryRecreationRequested
-                                            ? "ordered-acquire-recreation-budget"
-                                        : persistentRecoveryRecreationRequested
-                                            ? "adaptive-recovery-recreation-budget"
-                                            : "adaptive-recovery-in-place-budget")
-                                  << " surface=" << presentingSurface
-                                  << " completed_requests="
-                                  << recoveryState.completedRequests()
-                                  << " next_cooldown_ms="
-                                  << std::chrono::duration_cast<
-                                         std::chrono::milliseconds
-                                     >(
-                                         lowerPresentRecoveryRecreationRequested
-                                             ? std::chrono::seconds{30}
-                                             : recoveryState.nextCooldown()
-                                     ).count()
-                                  << '\n';
-                    }
-                }
                 if (liveProfileRecreationRequested ||
                         scalingAdmissionRetryRequested ||
-                        lowerPresentRecoveryRecreationRequested ||
-                        orderedAcquireRecoveryRecreationRequested ||
-                        persistentRecoveryRecreationRequested) {
+                        orderedAcquireRecoveryRecreationRequested) {
                     // This role owns the guarded request only after
                     // Swapchain::present() returned from a successful lower
                     // present. The application's acquired real image has
@@ -2799,12 +2628,8 @@ namespace {
                                     ? "guarded-live-profile-request"
                                     : scalingAdmissionRetryRequested
                                         ? "spatial-scaling-admission-retry"
-                                    : lowerPresentRecoveryRecreationRequested
-                                        ? "persistent-lower-present-stall"
                                     : orderedAcquireRecoveryRecreationRequested
-                                        ? "persistent-ordered-acquire-starvation"
-                                    : persistentRecoveryRecreationRequested
-                                        ? "persistent-adaptive-recovery"
+                                        ? "transition-scoped-acquire-timeout"
                                     : "upstream-or-driver")
                               << '\n';
                 }

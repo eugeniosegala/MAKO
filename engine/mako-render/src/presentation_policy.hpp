@@ -82,8 +82,8 @@ namespace mako::layer {
     historyWarmupCadenceBoundary(
             const std::chrono::steady_clock::time_point frameStarted,
             const std::chrono::steady_clock::time_point recoveryCompleted,
-            const bool eventRecoveryWindow) noexcept {
-        return eventRecoveryWindow ? frameStarted : recoveryCompleted;
+            const bool explicitTransitionActive) noexcept {
+        return explicitTransitionActive ? frameStarted : recoveryCompleted;
     }
 
     struct GamescopeFocusFeedback {
@@ -100,10 +100,6 @@ namespace mako::layer {
         }
         [[nodiscard]] bool menuOpen(const Clock::time_point now) const {
             return fresh(now) && gameFocused == false;
-        }
-        [[nodiscard]] bool recoveryWindow(const Clock::time_point now) const {
-            return fresh(now) && gameFocused == true && returnedAt &&
-                now >= *returnedAt && now - *returnedAt <= std::chrono::seconds{75};
         }
     };
 
@@ -273,45 +269,20 @@ namespace mako::layer {
         return *configuredBudget - consumedNanoseconds;
     }
 
-    /// Ordered 3x/4x/5x presentation can legitimately wait once per generated
-    /// image. Recovery classifies the longest individual wait; summing healthy
-    /// refresh-sized waits would falsely turn a normal multi-image sequence
-    /// into starvation. The separately enforced configured budget remains
-    /// cumulative across the whole application present.
-    [[nodiscard]] inline std::chrono::steady_clock::duration
-    orderedAcquireRecoveryClassificationDuration(
-            const std::chrono::steady_clock::duration totalDuration,
-            const std::chrono::steady_clock::duration maximumDuration) {
-        return std::min(totalDuration, maximumDuration);
-    }
-
-    /// A recovery probe owns one image and one small, display-relative wait.
-    /// Later failed attempts may span more refresh periods, but never exceed
-    /// 25 ms or the user's normal application-present acquire ceiling. This
-    /// gives ordered FIFO presentation a phase boundary to release an image
-    /// without reintroducing the ordinary 50 ms multi-image wait.
+    /// A recovery probe owns one image. An explicit configured acquire budget
+    /// remains authoritative; otherwise one confirmed display period bounds
+    /// the retry. Without either contract the retry stays nonblocking instead
+    /// of guessing a device-independent timeout.
     [[nodiscard]] inline uint64_t orderedRecoveryAcquireTimeout(
             const std::optional<uint32_t> refreshHz,
-            const std::optional<uint64_t> configuredTimeout,
-            const size_t consecutiveFailures) {
+            const std::optional<uint64_t> configuredTimeout) {
+        if (configuredTimeout)
+            return *configuredTimeout;
+        if (!refreshHz || *refreshHz == 0)
+            return 0;
+
         constexpr uint64_t nanosecondsPerSecond = 1'000'000'000;
-        constexpr uint64_t minimumProbePeriod = 8'000'000;
-        constexpr uint64_t maximumProbeTimeout = 25'000'000;
-        const uint64_t refreshPeriod = refreshHz && *refreshHz > 0
-            ? (nanosecondsPerSecond + *refreshHz - 1) / *refreshHz
-            : 16'666'667;
-        const uint64_t probePeriod = std::max(
-            refreshPeriod, minimumProbePeriod
-        );
-        const uint64_t probePeriods = std::clamp<size_t>(
-            consecutiveFailures, 1, 3
-        );
-        const uint64_t recoveryTimeout = std::min(
-            probePeriod * probePeriods, maximumProbeTimeout
-        );
-        return configuredTimeout
-            ? std::min(recoveryTimeout, *configuredTimeout)
-            : recoveryTimeout;
+        return (nanosecondsPerSecond + *refreshHz - 1) / *refreshHz;
     }
 
     /// Recovery can probe only when the current policy requests generated work.
@@ -392,14 +363,11 @@ namespace mako::layer {
         size_t bypassedFrames{0};
     };
 
-    /// Classifies generated-image starvation on the ordered SDR transport.
-    /// One isolated slow successful generated-image acquire arms a
-    /// zero-wait guard for the next present so transport delay cannot
-    /// immediately recur or contaminate Adaptive cadence. A guard miss gives
-    /// one native frame back to the FIFO before normal policy retries; only a
-    /// repeated slow image, an exhausted cumulative budget, or one severe
-    /// image requests a native-only drain. Recovery warms history and attempts
-    /// one bounded single-image probe, returning to backoff on failure.
+    /// Recovers the ordered SDR transport only from explicit Vulkan acquire
+    /// failure. Successful calls are never reclassified from their duration,
+    /// FPS, device, resolution, or workload. An explicit menu return or live
+    /// generation-policy transition may authorize one recreation if the next
+    /// generated-image transport actually fails.
     class OrderedAcquireRecovery {
     public:
         using Clock = std::chrono::steady_clock;
@@ -412,41 +380,20 @@ namespace mako::layer {
             // The first generated present after the drain is deliberately a
             // single-image transport probe, never the normal 3x/4x/5x plan.
             bool limitGeneratedFrames{false};
-            // A recovery probe must not spend the normal bounded acquire wait:
-            // the initial guard stays nonblocking, while a post-drain probe
-            // receives one small display-relative timeout.
+            // A post-failure recovery probe receives one small display-
+            // relative timeout instead of a whole multi-image budget.
             bool preacquireGeneratedFrame{false};
             bool boundedAcquireProbe{false};
-            // After one drain probe succeeds, native-only presentation remains
-            // deterministic until one fixed deadline. No availability miss may
-            // extend this interval or intermittently re-enable generation.
-            bool nativeOnlyStabilization{false};
-            bool recoveryStabilized{false};
-            // A drained native FIFO which already satisfies the requested
-            // output cadence needs no synthetic-image availability probe.
-            // Hold the native path without repeated history warm-up, then
-            // re-arm one bounded probe when native cadence materially falls.
-            bool nativeCadenceSaturated{false};
-            bool nativeCadenceSaturationEntered{false};
-            bool nativeCadenceDemandResumed{false};
             size_t bypassedFrames{0};
             size_t consecutiveFailures{0};
             Duration drainDuration{};
-            Duration stabilizationRemaining{};
-            double nativeBaseFps{0.0};
-            double nativeTargetFps{0.0};
         };
 
         struct Observation {
             bool quarantined{false};
             bool recovered{false};
-            bool stabilizing{false};
             bool timedOut{false};
             bool deadlineExceeded{false};
-            bool severe{false};
-            bool guardArmed{false};
-            bool guardCleared{false};
-            size_t consecutiveSlowFrames{0};
             size_t consecutiveFailures{0};
             size_t bypassedFrames{0};
             Duration retryDelay{};
@@ -456,7 +403,6 @@ namespace mako::layer {
         struct NonblockingMissObservation {
             bool diagnostic{false};
             bool quarantined{false};
-            bool guardBypassed{false};
             bool boundedProbeFailed{false};
             size_t consecutiveFailures{0};
             size_t bypassedFrames{0};
@@ -464,167 +410,12 @@ namespace mako::layer {
             Duration recoveryDuration{};
         };
 
-        [[nodiscard]] static constexpr auto minimumSlowAcquireDuration() {
-            return std::chrono::milliseconds{25};
-        }
-
-        [[nodiscard]] static Duration slowAcquireDuration(
-                const std::optional<uint32_t> refreshHz) {
-            if (!refreshHz || *refreshHz == 0)
-                return minimumSlowAcquireDuration();
-
-            const auto displayRelativeDuration =
-                std::chrono::duration_cast<Duration>(
-                    std::chrono::duration<double>(
-                        1.5 / static_cast<double>(*refreshHz)
-                    )
-                );
-            return std::max<Duration>(
-                minimumSlowAcquireDuration(), displayRelativeDuration
-            );
-        }
-
-        [[nodiscard]] static constexpr auto stabilizationDuration() {
-            return std::chrono::milliseconds{250};
-        }
-
         [[nodiscard]] static constexpr auto maximumRetryDelay() {
             return std::chrono::milliseconds{30000};
         }
 
-        [[nodiscard]] static constexpr auto
-        recreationQualificationDuration() {
-            return std::chrono::seconds{3};
-        }
-
-        [[nodiscard]] static constexpr auto
-        repeatedRecoveryEpisodeWindow() {
-            return std::chrono::seconds{15};
-        }
-
-        [[nodiscard]] static constexpr size_t
-        repeatedRecoveryEpisodeThreshold() {
-            return 3;
-        }
-
-        [[nodiscard]] static constexpr auto
-        cadenceStyleTransitionRecoveryWindow() {
-            return std::chrono::seconds{60};
-        }
-
-        [[nodiscard]] static constexpr size_t
-        cadenceStyleTransitionEpisodeThreshold() {
-            return 3;
-        }
-
-        [[nodiscard]] static constexpr auto
-        nativeCadenceSaturationQualificationDuration() {
-            return std::chrono::milliseconds{200};
-        }
-
-        [[nodiscard]] static constexpr auto
-        nativeCadenceDemandQualificationDuration() {
-            return std::chrono::milliseconds{100};
-        }
-
-        [[nodiscard]] static constexpr double
-        nativeCadenceSaturationRatio() {
-            return 0.95;
-        }
-
-        [[nodiscard]] static constexpr double
-        nativeCadenceDemandRatio() {
-            return 0.90;
-        }
-
-        [[nodiscard]] static constexpr Duration severeAcquireDuration(
-                const Duration slowAcquireThreshold) {
-            return slowAcquireThreshold * 2;
-        }
-
-        [[nodiscard]] PresentDecision beforePresent(const TimePoint now,
-                const std::optional<Duration> nativePresentInterval =
-                    std::nullopt,
-                const std::optional<double> nativeTargetFps = std::nullopt) {
-            if (this->retryAt) {
-                this->observeNativeCadence(
-                    now, nativePresentInterval, nativeTargetFps
-                );
-                if (this->nativeCadenceSaturated) {
-                    if (this->nativeCadenceDemandSince &&
-                            now - *this->nativeCadenceDemandSince >=
-                                nativeCadenceDemandQualificationDuration()) {
-                        const double nativeBaseFps =
-                            this->nativeCadenceBaseFps();
-                        const double targetFps = this->nativeTargetFps;
-                        this->nativeCadenceSaturated = false;
-                        this->nativeCadenceSaturationSince.reset();
-                        this->nativeCadenceDemandSince.reset();
-                        this->retryAt.reset();
-                        this->probePending = true;
-                        return {
-                            .beginHistoryWarmup = true,
-                            .limitGeneratedFrames = true,
-                            .preacquireGeneratedFrame = true,
-                            .boundedAcquireProbe = true,
-                            .nativeCadenceDemandResumed = true,
-                            .bypassedFrames = this->bypassedFrames,
-                            .consecutiveFailures =
-                                this->consecutiveFailures,
-                            .drainDuration = this->recoveryStartedAt
-                                ? now - *this->recoveryStartedAt
-                                : Duration{},
-                            .nativeBaseFps = nativeBaseFps,
-                            .nativeTargetFps = targetFps,
-                        };
-                    }
-
-                    this->bypassedFrames++;
-                    return {
-                        .bypassGeneration = true,
-                        .nativeCadenceSaturated = true,
-                        .bypassedFrames = this->bypassedFrames,
-                        .consecutiveFailures = this->consecutiveFailures,
-                        .drainDuration = this->recoveryStartedAt
-                            ? now - *this->recoveryStartedAt
-                            : Duration{},
-                        .nativeBaseFps = this->nativeCadenceBaseFps(),
-                        .nativeTargetFps = this->nativeTargetFps,
-                    };
-                }
-
-                // Qualify native cadence while the retry timer is running.
-                // Otherwise a menu-to-gameplay transition during a long
-                // backoff cannot re-arm a probe until that timer expires.
-                // Probe failure still retains the acquisition failure count.
-                if (this->nativeCadenceSaturationSince &&
-                        now - *this->nativeCadenceSaturationSince >=
-                            nativeCadenceSaturationQualificationDuration()) {
-                    this->nativeCadenceSaturated = true;
-                    this->nativeCadenceDemandSince.reset();
-                    this->bypassedFrames++;
-                    return {
-                        .bypassGeneration = true,
-                        .nativeCadenceSaturated = true,
-                        .nativeCadenceSaturationEntered = true,
-                        .bypassedFrames = this->bypassedFrames,
-                        .consecutiveFailures = this->consecutiveFailures,
-                        .drainDuration = this->recoveryStartedAt
-                            ? now - *this->recoveryStartedAt
-                            : Duration{},
-                        .nativeBaseFps = this->nativeCadenceBaseFps(),
-                        .nativeTargetFps = this->nativeTargetFps,
-                    };
-                }
-            }
-
+        [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
             if (!this->retryAt) {
-                if (this->guardPending) {
-                    return {
-                        .limitGeneratedFrames = true,
-                        .preacquireGeneratedFrame = true,
-                    };
-                }
                 if (this->probePending) {
                     return {
                         .limitGeneratedFrames = true,
@@ -633,46 +424,7 @@ namespace mako::layer {
                         .consecutiveFailures = this->consecutiveFailures,
                     };
                 }
-                if (this->stabilizingUntil &&
-                        now < *this->stabilizingUntil) {
-                    this->bypassedFrames++;
-                    return {
-                        .bypassGeneration = true,
-                        .nativeOnlyStabilization = true,
-                        .bypassedFrames = this->bypassedFrames,
-                        .consecutiveFailures = this->consecutiveFailures,
-                        .drainDuration = this->recoveryStartedAt
-                            ? now - *this->recoveryStartedAt
-                            : Duration{},
-                        .stabilizationRemaining =
-                            *this->stabilizingUntil - now,
-                    };
-                }
-                if (this->stabilizingUntil) {
-                    const size_t completedFailures =
-                        this->consecutiveFailures;
-                    const size_t completedBypassedFrames =
-                        this->bypassedFrames;
-                    const Duration completedRecoveryDuration =
-                        this->recoveryStartedAt
-                        ? now - *this->recoveryStartedAt
-                        : Duration{};
-                    this->stabilizingUntil.reset();
-                    this->recoveryStartedAt.reset();
-                    this->healthySince.reset();
-                    this->consecutiveFailures = 0;
-                    this->bypassedFrames = 0;
-                    this->nonblockingProbeMisses = 0;
-                    return {
-                        .beginHistoryWarmup = true,
-                        .recoveryStabilized = true,
-                        .bypassedFrames = completedBypassedFrames,
-                        .consecutiveFailures = completedFailures,
-                        .drainDuration = completedRecoveryDuration,
-                    };
-                }
-                return {
-                };
+                return {};
             }
 
             if (now < *this->retryAt) {
@@ -703,234 +455,74 @@ namespace mako::layer {
         }
 
         [[nodiscard]] Observation observe(const TimePoint now,
-                const Duration acquireDuration,
-                const Duration slowAcquireThreshold,
                 const bool timedOut,
                 const bool deadlineExceeded = false,
                 const bool boundedRecoveryProbe = false) {
-            const bool severe = deadlineExceeded ||
-                acquireDuration >= severeAcquireDuration(
-                    slowAcquireThreshold
-                );
-            const bool boundedProbeSucceeded = boundedRecoveryProbe &&
-                this->probePending && !timedOut;
-            const bool slow = !boundedProbeSucceeded &&
-                (timedOut || severe ||
-                 acquireDuration >= slowAcquireThreshold);
-            if (slow) {
-                this->healthySince.reset();
-                this->stabilizingUntil.reset();
-                this->nonblockingProbeMisses = 0;
-                this->consecutiveSlowFrames++;
-                const size_t observedSlowFrames =
-                    this->consecutiveSlowFrames;
-                const bool isolatedDeadlineMiss = timedOut &&
-                    acquireDuration < slowAcquireThreshold;
-                if ((!timedOut || isolatedDeadlineMiss) && !severe &&
-                        !this->guardPending &&
-                        !this->probePending &&
-                        observedSlowFrames < slowFrameThreshold) {
-                    // One slow successful acquire or a short per-image
-                    // deadline miss can be transient FIFO pressure. Neither
-                    // proves exhaustion of the cumulative present budget.
-                    // The next application present must not
-                    // repeat a blocking acquire or feed that transport delay
-                    // back into Adaptive's source-cadence clock. Reuse the
-                    // zero-wait guard; repeated or severe pressure still
-                    // enters native-drain recovery below.
-                    this->guardPending = true;
-                    return {
-                        .timedOut = timedOut,
-                        .guardArmed = true,
-                        .consecutiveSlowFrames = observedSlowFrames,
-                        .consecutiveFailures = this->consecutiveFailures,
-                        .bypassedFrames = this->bypassedFrames,
-                    };
-                }
-
+            if (timedOut || deadlineExceeded) {
+                if (this->transitionRecreationArmed)
+                    this->transitionTransportFailed = true;
                 return this->beginNativeDrain(
-                    now, timedOut, deadlineExceeded, severe,
-                    observedSlowFrames
+                    now, timedOut, deadlineExceeded
                 );
             }
 
-            const bool guardCleared = this->guardPending;
-            // A guard tests only one immediately available image. It permits
-            // a normal batch retry, but cannot prove that a 3x/4x/5x batch is
-            // healthy. Retain pressure until an unrestricted acquire succeeds
-            // so timeout/guard-success cycles cannot avoid native recovery.
-            if (!guardCleared)
-                this->consecutiveSlowFrames = 0;
             const bool drainProbeRecovered = this->probePending;
-            const bool recovered = guardCleared || drainProbeRecovered;
-            if (recovered) {
-                this->guardPending = false;
+            if (drainProbeRecovered) {
                 this->probePending = false;
-                this->healthySince = now;
-                // One immediately available image is enough to clear an
-                // isolated slow-acquire guard: the guarded scheduler sample
-                // already excluded transport delay and no native drain needs
-                // to be qualified. Reserve the sustained zero-wait window for
-                // recovery from an actual quarantine, where FIFO readiness
-                // has not yet been demonstrated across normal presentation.
-                if (drainProbeRecovered) {
-                    this->stabilizingUntil =
-                        now + stabilizationDuration();
-                }
-                this->nonblockingProbeMisses = 0;
-            } else if (this->consecutiveFailures > 0 &&
-                    !this->stabilizingUntil) {
-                if (!this->healthySince)
-                    this->healthySince = now;
-                if (now - *this->healthySince >= healthyResetDuration) {
-                    this->consecutiveFailures = 0;
-                    this->bypassedFrames = 0;
-                    this->recoveryStartedAt.reset();
-                    this->healthySince.reset();
-                }
-            } else if (!this->recoveryStartedAt) {
-                // A zero-wait guard miss owns one real-only relief frame. Once
-                // the following normal acquire is healthy, that isolated
-                // bypass must not leak into a later recovery's counters.
+                this->retryAt.reset();
+                this->recoveryStartedAt.reset();
+                this->consecutiveFailures = 0;
                 this->bypassedFrames = 0;
+            }
+            if (this->transitionRecreationArmed &&
+                    !this->transitionTransportFailed) {
+                this->transitionRecreationArmed = false;
             }
 
             return {
-                .recovered = recovered,
-                .stabilizing = drainProbeRecovered,
-                .guardCleared = guardCleared,
+                .recovered = drainProbeRecovered,
                 .consecutiveFailures = this->consecutiveFailures,
                 .bypassedFrames = this->bypassedFrames,
-                .recoveryDuration = this->recoveryStartedAt
-                    ? now - *this->recoveryStartedAt
-                    : Duration{},
             };
         }
 
         [[nodiscard]] bool active() const {
-            return this->retryAt.has_value() || this->guardPending ||
-                this->probePending ||
-                this->stabilizingUntil.has_value();
+            return this->retryAt.has_value() || this->probePending;
         }
 
-        [[nodiscard]] bool eventRecoveryWindowActive(
-                const TimePoint now,
-                const bool confirmedGamescopeReturn) const {
-            return confirmedGamescopeReturn ||
-                this->cadenceStyleTransitionRecoveryActive(now);
+        void armTransitionRecreation() {
+            this->transitionRecreationArmed = true;
+            this->transitionTransportFailed = false;
         }
 
-        /// Repeated bounded-probe failure, or several short drain/recovery
-        /// episodes in one bounded window, proves that this context's ordered
-        /// transport remains unstable. That evidence may escalate only inside
-        /// an explicit menu-return or cadence-style transition window. Ordinary
-        /// gameplay retains the in-place transport safety used by 3.3 without
-        /// gaining an automatic recreation policy.
-        [[nodiscard]] bool recreationRequested(
-                const TimePoint now,
-                const bool confirmedGamescopeReturn) const {
-            if (!this->eventRecoveryWindowActive(
-                    now, confirmedGamescopeReturn)) {
+        [[nodiscard]] bool transitionRecoveryActive() const {
+            return this->transitionRecreationArmed;
+        }
+
+        [[nodiscard]] bool signalRecreation() {
+            if (!this->transitionRecreationArmed ||
+                    !this->transitionTransportFailed ||
+                    this->recreationSignaled) {
                 return false;
             }
-            const bool continuousStarvation = this->recoveryStartedAt &&
-                this->consecutiveFailures >= 3 &&
-                now - *this->recoveryStartedAt >=
-                    recreationQualificationDuration();
-            return !this->recreationSignaled && this->recoveryStartedAt &&
-                (continuousStarvation ||
-                 this->repeatedRecoveryEpisodes(now) ||
-                 this->cadenceStyleTransitionRecoveryRequested(now));
-        }
-
-        /// A short successful probe can prove that one drain completed while
-        /// the same lower transport remains unstable. Keep a bounded episode
-        /// count so repeated drain/retry/stabilize loops cannot erase their
-        /// own direct starvation evidence. This is transport evidence, not an
-        /// FPS or workload heuristic.
-        [[nodiscard]] bool repeatedRecoveryEpisodes(
-                const TimePoint now) const {
-            return this->recoveryEpisodeWindowStartedAt &&
-                now >= *this->recoveryEpisodeWindowStartedAt &&
-                now - *this->recoveryEpisodeWindowStartedAt <=
-                    repeatedRecoveryEpisodeWindow() &&
-                this->recoveryEpisodeCount >=
-                    repeatedRecoveryEpisodeThreshold();
-        }
-
-        [[nodiscard]] size_t recoveryEpisodes(
-                const TimePoint now) const {
-            return this->recoveryEpisodeWindowStartedAt &&
-                now >= *this->recoveryEpisodeWindowStartedAt &&
-                now - *this->recoveryEpisodeWindowStartedAt <=
-                    repeatedRecoveryEpisodeWindow()
-                ? this->recoveryEpisodeCount : 0;
-        }
-
-        /// Fractional and Steady Adaptive deliberately change pacing
-        /// ownership without replacing resources. Arm a bounded direct-
-        /// transport watch so a slower drain/retry loop caused by that live
-        /// transition cannot fall between the ordinary 15-second burst rule
-        /// and the menu performance watchdog.
-        void beginCadenceStyleTransitionRecovery(const TimePoint now) {
-            this->cadenceStyleTransitionRecoveryUntil =
-                now + cadenceStyleTransitionRecoveryWindow();
-            this->cadenceStyleTransitionEpisodeCount = 0;
-        }
-
-        [[nodiscard]] bool cadenceStyleTransitionRecoveryActive(
-                const TimePoint now) const {
-            return this->cadenceStyleTransitionRecoveryUntil &&
-                now <= *this->cadenceStyleTransitionRecoveryUntil;
-        }
-
-        [[nodiscard]] bool cadenceStyleTransitionRecoveryRequested(
-                const TimePoint now) const {
-            return this->cadenceStyleTransitionRecoveryActive(now) &&
-                this->cadenceStyleTransitionEpisodeCount >=
-                    cadenceStyleTransitionEpisodeThreshold();
-        }
-
-        [[nodiscard]] size_t cadenceStyleTransitionRecoveryEpisodes(
-                const TimePoint now) const {
-            return this->cadenceStyleTransitionRecoveryActive(now)
-                ? this->cadenceStyleTransitionEpisodeCount : 0;
-        }
-
-        [[nodiscard]] bool signalRecreation(
-                const TimePoint now,
-                const bool confirmedGamescopeReturn) {
-            if (!this->recreationRequested(
-                    now, confirmedGamescopeReturn)) {
-                return false;
-            }
+            this->transitionRecreationArmed = false;
+            this->transitionTransportFailed = false;
             this->recreationSignaled = true;
             return true;
         }
 
-        /// A zero-wait guard miss is only one native relief frame, not proof of
-        /// sustained starvation. A bounded post-drain probe miss is terminal
-        /// for that attempt and returns to native backoff; probePending can
-        /// therefore never become a permanent real-only state.
+        /// A bounded post-failure probe miss returns to native backoff;
+        /// probePending can therefore never become a permanent real-only
+        /// state.
         [[nodiscard]] NonblockingMissObservation
         reportNonblockingProbeUnavailable(
                 const TimePoint now) {
-            if (this->guardPending) {
-                this->guardPending = false;
-                this->bypassedFrames++;
-                return {
-                    .diagnostic = true,
-                    .guardBypassed = true,
-                    .consecutiveFailures = this->consecutiveFailures,
-                    .bypassedFrames = this->bypassedFrames,
-                };
-            }
-
             if (this->probePending) {
                 this->bypassedFrames++;
+                if (this->transitionRecreationArmed)
+                    this->transitionTransportFailed = true;
                 const auto observation = this->beginNativeDrain(
-                    now, true, false, false,
-                    this->consecutiveSlowFrames
+                    now, true, false
                 );
                 return {
                     .diagnostic = true,
@@ -947,10 +539,8 @@ namespace mako::layer {
             // Normal presentation does not call this without a guard or probe.
             // Keep accidental calls observable without creating recovery state.
             this->bypassedFrames++;
-            this->nonblockingProbeMisses++;
             return {
-                .diagnostic = (this->nonblockingProbeMisses &
-                    (this->nonblockingProbeMisses - 1)) == 0,
+                .diagnostic = true,
                 .consecutiveFailures = this->consecutiveFailures,
                 .bypassedFrames = this->bypassedFrames,
                 .recoveryDuration = this->recoveryStartedAt
@@ -960,149 +550,37 @@ namespace mako::layer {
         }
 
         void pauseForExternalInterruption() {
-            // Steam-owned presentation is a discontinuity, not another
-            // sample of the game's ordered transport. Discard any incomplete
-            // guard, drain, probe, stabilization, or transition episode so
-            // it cannot resume with pre-menu failure counts after focus
-            // returns. reset() deliberately preserves recreationSignaled,
-            // keeping the per-context one-shot safety budget intact.
+            // Steam-owned presentation is a discontinuity, not a transport
+            // failure. Discard any incomplete retry before the return event
+            // arms a fresh one-shot permission.
             this->reset();
         }
 
         void reset() {
             this->retryAt.reset();
             this->recoveryStartedAt.reset();
-            this->healthySince.reset();
-            this->stabilizingUntil.reset();
-            this->guardPending = false;
             this->probePending = false;
-            this->consecutiveSlowFrames = 0;
             this->consecutiveFailures = 0;
             this->bypassedFrames = 0;
-            this->nonblockingProbeMisses = 0;
-            this->recoveryEpisodeWindowStartedAt.reset();
-            this->recoveryEpisodeCount = 0;
-            this->cadenceStyleTransitionRecoveryUntil.reset();
-            this->cadenceStyleTransitionEpisodeCount = 0;
-            this->resetNativeCadenceObservation();
+            this->transitionRecreationArmed = false;
+            this->transitionTransportFailed = false;
         }
 
     private:
-        void observeNativeCadence(const TimePoint now,
-                const std::optional<Duration> nativePresentInterval,
-                const std::optional<double> targetFps) {
-            if (!targetFps || !std::isfinite(*targetFps) ||
-                    *targetFps <= 0.0) {
-                this->resetNativeCadenceObservation();
-                return;
-            }
-            if (this->nativeTargetFps == 0.0 ||
-                    std::abs(this->nativeTargetFps - *targetFps) > 0.01) {
-                this->resetNativeCadenceObservation();
-                this->nativeTargetFps = *targetFps;
-            }
-            if (!nativePresentInterval)
-                return;
-            if (this->ignoreNextNativeInterval) {
-                this->ignoreNextNativeInterval = false;
-                return;
-            }
-
-            const double rawIntervalSeconds =
-                std::chrono::duration<double>(*nativePresentInterval).count();
-            if (!std::isfinite(rawIntervalSeconds) ||
-                    rawIntervalSeconds <= 0.0 ||
-                    rawIntervalSeconds > 0.25) {
-                this->nativeSmoothedIntervalSeconds = 0.0;
-                this->nativeCadenceSaturationSince.reset();
-                if (this->nativeCadenceSaturated &&
-                        !this->nativeCadenceDemandSince) {
-                    this->nativeCadenceDemandSince = now;
-                }
-                return;
-            }
-            if (this->nativeSmoothedIntervalSeconds == 0.0) {
-                this->nativeSmoothedIntervalSeconds = rawIntervalSeconds;
-            } else {
-                this->nativeSmoothedIntervalSeconds =
-                    this->nativeSmoothedIntervalSeconds * 0.75 +
-                    rawIntervalSeconds * 0.25;
-            }
-
-            const double baseFps = this->nativeCadenceBaseFps();
-            if (baseFps >= this->nativeTargetFps *
-                    nativeCadenceSaturationRatio()) {
-                if (!this->nativeCadenceSaturationSince)
-                    this->nativeCadenceSaturationSince = now;
-                this->nativeCadenceDemandSince.reset();
-                return;
-            }
-
-            this->nativeCadenceSaturationSince.reset();
-            if (this->nativeCadenceSaturated &&
-                    baseFps < this->nativeTargetFps *
-                        nativeCadenceDemandRatio()) {
-                if (!this->nativeCadenceDemandSince)
-                    this->nativeCadenceDemandSince = now;
-            } else {
-                this->nativeCadenceDemandSince.reset();
-            }
-        }
-
-        [[nodiscard]] double nativeCadenceBaseFps() const {
-            return this->nativeSmoothedIntervalSeconds > 0.0
-                ? 1.0 / this->nativeSmoothedIntervalSeconds
-                : 0.0;
-        }
-
-        void resetNativeCadenceObservation() {
-            this->nativeCadenceSaturationSince.reset();
-            this->nativeCadenceDemandSince.reset();
-            this->nativeSmoothedIntervalSeconds = 0.0;
-            this->nativeTargetFps = 0.0;
-            this->nativeCadenceSaturated = false;
-            this->ignoreNextNativeInterval = true;
-        }
-
         [[nodiscard]] Observation beginNativeDrain(const TimePoint now,
-                const bool timedOut, const bool deadlineExceeded,
-                const bool severe,
-                const size_t observedSlowFrames) {
-            if (!this->recoveryStartedAt) {
+                const bool timedOut, const bool deadlineExceeded) {
+            if (!this->recoveryStartedAt)
                 this->recoveryStartedAt = now;
-                if (!this->recoveryEpisodeWindowStartedAt ||
-                        now < *this->recoveryEpisodeWindowStartedAt ||
-                        now - *this->recoveryEpisodeWindowStartedAt >
-                            repeatedRecoveryEpisodeWindow()) {
-                    this->recoveryEpisodeWindowStartedAt = now;
-                    this->recoveryEpisodeCount = 1;
-                } else {
-                    this->recoveryEpisodeCount++;
-                }
-                if (this->cadenceStyleTransitionRecoveryUntil) {
-                    if (now <= *this->cadenceStyleTransitionRecoveryUntil) {
-                        this->cadenceStyleTransitionEpisodeCount++;
-                    } else {
-                        this->cadenceStyleTransitionRecoveryUntil.reset();
-                        this->cadenceStyleTransitionEpisodeCount = 0;
-                    }
-                }
-            }
             this->consecutiveFailures++;
             const auto delay = retryDelayForFailure(
                 this->consecutiveFailures
             );
             this->retryAt = now + delay;
-            this->guardPending = false;
             this->probePending = false;
-            this->consecutiveSlowFrames = 0;
-            this->resetNativeCadenceObservation();
             return {
                 .quarantined = true,
                 .timedOut = timedOut,
                 .deadlineExceeded = deadlineExceeded,
-                .severe = severe,
-                .consecutiveSlowFrames = observedSlowFrames,
                 .consecutiveFailures = this->consecutiveFailures,
                 .bypassedFrames = this->bypassedFrames,
                 .retryDelay = delay,
@@ -1124,72 +602,23 @@ namespace mako::layer {
             return delays.at(std::min(failures, delays.size()) - 1);
         }
 
-        static constexpr size_t slowFrameThreshold = 2;
-        static constexpr auto healthyResetDuration =
-            std::chrono::seconds{2};
-
         std::optional<TimePoint> retryAt;
         std::optional<TimePoint> recoveryStartedAt;
-        std::optional<TimePoint> healthySince;
-        std::optional<TimePoint> stabilizingUntil;
-        bool guardPending{false};
         bool probePending{false};
-        size_t consecutiveSlowFrames{0};
         size_t consecutiveFailures{0};
         size_t bypassedFrames{0};
-        size_t nonblockingProbeMisses{0};
-        std::optional<TimePoint> recoveryEpisodeWindowStartedAt;
-        size_t recoveryEpisodeCount{0};
-        std::optional<TimePoint> cadenceStyleTransitionRecoveryUntil;
-        size_t cadenceStyleTransitionEpisodeCount{0};
-        std::optional<TimePoint> nativeCadenceSaturationSince;
-        std::optional<TimePoint> nativeCadenceDemandSince;
-        double nativeSmoothedIntervalSeconds{0.0};
-        double nativeTargetFps{0.0};
-        bool nativeCadenceSaturated{false};
-        bool ignoreNextNativeInterval{true};
+        bool transitionRecreationArmed{false};
+        bool transitionTransportFailed{false};
         bool recreationSignaled{false};
     };
 
-    /// Keep the application-present budget cumulative for 3x/4x/5x, while
-    /// preventing one unavailable lower image from consuming the full legacy
-    /// 50 ms ceiling by itself. On a known-refresh ordered path, allow two and
-    /// a half display periods with an 8 ms floor. Any extension beyond the
-    /// original one-and-a-half-period window must leave half a display period
-    /// below the pressure threshold: a short deadline miss must still reach
-    /// the zero-wait guard instead of immediately starting native drain.
-    /// Unknown-refresh and unconfigured paths retain their historical 25 ms
-    /// and unbounded contracts respectively.
+    /// The configured application-present budget is the transport contract.
+    /// Do not derive a second per-image failure threshold from refresh rate or
+    /// measured duration; the remaining cumulative budget is authoritative.
     [[nodiscard]] inline uint64_t orderedGeneratedImageAcquireTimeout(
-            const std::optional<uint32_t> refreshHz,
+            const std::optional<uint32_t>,
             const std::optional<uint64_t> remainingBudget) {
-        if (!remainingBudget)
-            return std::numeric_limits<uint64_t>::max();
-        constexpr uint64_t nanosecondsPerSecond = 1'000'000'000;
-        constexpr uint64_t minimumPerImageTimeout = 8'000'000;
-        constexpr uint64_t unknownRefreshTimeout = 25'000'000;
-        const auto pressureCeiling = static_cast<uint64_t>(
-            std::chrono::duration_cast<std::chrono::nanoseconds>(
-                OrderedAcquireRecovery::slowAcquireDuration(refreshHz)
-            ).count()
-        );
-        uint64_t perImageCeiling = unknownRefreshTimeout;
-        if (refreshHz && *refreshHz > 0) {
-            const uint64_t divisor = static_cast<uint64_t>(*refreshHz) * 2;
-            const auto displayPeriods = [divisor](const uint64_t halves) {
-                return (nanosecondsPerSecond * halves + divisor - 1) / divisor;
-            };
-            const uint64_t guardMargin = displayPeriods(1);
-            const uint64_t extensionCeiling = pressureCeiling > guardMargin
-                ? pressureCeiling - guardMargin : 0;
-            perImageCeiling = std::max({minimumPerImageTimeout,
-                displayPeriods(3),
-                std::min(displayPeriods(5), extensionCeiling)});
-        }
-        return std::min(
-            *remainingBudget,
-            perImageCeiling
-        );
+        return remainingBudget.value_or(std::numeric_limits<uint64_t>::max());
     }
 
     struct PipelineBusyDecision {
@@ -1572,1155 +1001,6 @@ namespace mako::layer {
     private:
         bool handoffActive{false};
         std::optional<TimePoint> retryAt;
-    };
-
-    /// A successful lower QueuePresentKHR can still block long enough to make
-    /// Steam's overlay unresponsive. This is distinct from generated-image
-    /// acquisition pressure: once observed, stop adding synthetic presents
-    /// for one fixed stabilization window, then warm temporal history before
-    /// retrying. The deadline is absolute so recovery cannot become a
-    /// self-extending native-only mode.
-    class LowerPresentStallRecovery {
-    public:
-        using Clock = std::chrono::steady_clock;
-        using TimePoint = Clock::time_point;
-        using Duration = Clock::duration;
-
-        struct PresentDecision {
-            bool bypassGeneration{false};
-            bool beginHistoryWarmup{false};
-            bool recovered{false};
-            bool recreationWaitExpired{false};
-            size_t bypassedFrames{0};
-            Duration recoveryDuration{};
-        };
-
-        struct Observation {
-            bool quarantined{false};
-            Duration presentDuration{};
-            Duration threshold{};
-            Duration stabilizationDuration{};
-            size_t consecutiveStalls{0};
-        };
-
-        struct NativeRecoveryObservation {
-            bool newlyArmedRecreation{false};
-            bool cancelledRecreation{false};
-            Duration presentDuration{};
-            Duration threshold{};
-            size_t severeNativeStalls{0};
-        };
-
-        [[nodiscard]] static Duration stallThreshold(
-                const std::optional<uint32_t> refreshHz) {
-            constexpr auto minimumThreshold =
-                std::chrono::milliseconds{250};
-            if (!refreshHz || *refreshHz == 0)
-                return minimumThreshold;
-            const auto displayRelativeThreshold =
-                std::chrono::duration_cast<Duration>(
-                    std::chrono::duration<double>(
-                        4.0 / static_cast<double>(*refreshHz)
-                    )
-                );
-            return std::max<Duration>(
-                minimumThreshold, displayRelativeThreshold
-            );
-        }
-
-        [[nodiscard]] static constexpr auto stabilizationDuration(
-                const size_t consecutiveStalls = 1) {
-            if (consecutiveStalls >= 4)
-                return std::chrono::seconds{60};
-            if (consecutiveStalls == 3)
-                return std::chrono::seconds{30};
-            if (consecutiveStalls == 2)
-                return std::chrono::seconds{10};
-            return std::chrono::seconds{2};
-        }
-
-        [[nodiscard]] Observation observe(const TimePoint now,
-                const Duration maximumPresentDuration,
-                const std::optional<uint32_t> refreshHz) {
-            const auto threshold = stallThreshold(refreshHz);
-            if (maximumPresentDuration < threshold) {
-                if (this->lastStallAt &&
-                        now - *this->lastStallAt >=
-                            healthyResetDuration()) {
-                    this->consecutiveStalls = 0;
-                    this->lastStallAt.reset();
-                }
-                return {
-                    .presentDuration = maximumPresentDuration,
-                    .threshold = threshold,
-                };
-            }
-
-            if (this->lastStallAt &&
-                    now - *this->lastStallAt < healthyResetDuration()) {
-                this->consecutiveStalls++;
-            } else {
-                this->consecutiveStalls = 1;
-            }
-            this->lastStallAt = now;
-            const auto stabilization = stabilizationDuration(
-                this->consecutiveStalls
-            );
-            this->startedAt = now;
-            this->stabilizingUntil = now + stabilization;
-            this->bypassedFrames = 0;
-            this->nativeHealthySince.reset();
-            this->severeNativeStalls = 0;
-            this->recreationArmed = false;
-            return {
-                .quarantined = true,
-                .presentDuration = maximumPresentDuration,
-                .threshold = threshold,
-                .stabilizationDuration = stabilization,
-                .consecutiveStalls = this->consecutiveStalls,
-            };
-        }
-
-        /// Repeated severe native presents justify a guarded recreation, but
-        /// can also be external throttling. Cancel stale evidence after one
-        /// healthy second and never turn an unavailable rebuild into an
-        /// indefinite native-only latch.
-        [[nodiscard]] NativeRecoveryObservation observeNativeRecoveryPresent(
-                const TimePoint now, const Duration presentDuration,
-                const std::optional<uint32_t> refreshHz) {
-            const auto threshold = stallThreshold(refreshHz);
-            if (!this->active())
-                return {};
-            if (presentDuration < threshold) {
-                if (!this->nativeHealthySince)
-                    this->nativeHealthySince = now;
-                const bool healthy = now - *this->nativeHealthySince >=
-                    std::chrono::seconds{1};
-                const bool cancelled = healthy && this->recreationArmed;
-                if (healthy) {
-                    this->recreationArmed = false;
-                    this->severeNativeStalls = 0;
-                }
-                return {
-                    .cancelledRecreation = cancelled,
-                    .presentDuration = presentDuration,
-                    .threshold = threshold,
-                    .severeNativeStalls = this->severeNativeStalls,
-                };
-            }
-
-            this->nativeHealthySince.reset();
-            this->severeNativeStalls++;
-            const bool newlyArmed = !this->recreationArmed &&
-                !this->recreationSignaled && this->severeNativeStalls >= 2;
-            this->recreationArmed |= newlyArmed;
-            return {
-                .newlyArmedRecreation = newlyArmed,
-                .presentDuration = presentDuration,
-                .threshold = threshold,
-                .severeNativeStalls = this->severeNativeStalls,
-            };
-        }
-
-        [[nodiscard]] PresentDecision beforePresent(const TimePoint now) {
-            if (!this->stabilizingUntil)
-                return {};
-            const auto deadline = this->recreationArmed && this->startedAt
-                ? std::max(*this->stabilizingUntil,
-                    *this->startedAt + std::chrono::seconds{30})
-                : *this->stabilizingUntil;
-            if (now < deadline) {
-                this->bypassedFrames++;
-                return {
-                    .bypassGeneration = true,
-                    .bypassedFrames = this->bypassedFrames,
-                    .recoveryDuration = this->startedAt
-                        ? now - *this->startedAt : Duration{},
-                };
-            }
-
-            const PresentDecision decision{
-                .beginHistoryWarmup = true,
-                .recovered = true,
-                .recreationWaitExpired = this->recreationArmed,
-                .bypassedFrames = this->bypassedFrames,
-                .recoveryDuration = this->startedAt
-                    ? now - *this->startedAt : Duration{},
-            };
-            this->startedAt.reset();
-            this->stabilizingUntil.reset();
-            this->bypassedFrames = 0;
-            this->recreationArmed = false;
-            this->nativeHealthySince.reset();
-            return decision;
-        }
-
-        [[nodiscard]] bool active() const {
-            return this->stabilizingUntil.has_value();
-        }
-
-        [[nodiscard]] bool recreationRequested() const {
-            return this->recreationArmed;
-        }
-
-        void cancelRecreationWait() {
-            // The local 3.3 quarantine remains valid, but the longer wait for
-            // application-owned recreation is authorized only by a confirmed
-            // menu/profile recovery window. Do not let stale event evidence
-            // extend ordinary Fixed or Adaptive gameplay.
-            this->severeNativeStalls = 0;
-            this->recreationArmed = false;
-            this->nativeHealthySince.reset();
-        }
-
-        [[nodiscard]] bool signalRecreation() {
-            if (!this->recreationArmed || this->recreationSignaled)
-                return false;
-            this->recreationArmed = false;
-            this->recreationSignaled = true;
-            return true;
-        }
-
-        [[nodiscard]] size_t severeRecoveryStalls() const {
-            return this->severeNativeStalls;
-        }
-
-        void reset() {
-            this->startedAt.reset();
-            this->stabilizingUntil.reset();
-            this->bypassedFrames = 0;
-            this->lastStallAt.reset();
-            this->consecutiveStalls = 0;
-            this->severeNativeStalls = 0;
-            this->recreationArmed = false;
-            this->nativeHealthySince.reset();
-            // One request per game-owned context, including live Off/On or
-            // private resource changes if the application ignored OUT_OF_DATE.
-        }
-
-    private:
-        [[nodiscard]] static constexpr std::chrono::seconds
-        healthyResetDuration() {
-            return std::chrono::seconds{30};
-        }
-
-        std::optional<TimePoint> startedAt;
-        std::optional<TimePoint> stabilizingUntil;
-        size_t bypassedFrames{0};
-        std::optional<TimePoint> lastStallAt;
-        size_t consecutiveStalls{0};
-        size_t severeNativeStalls{0};
-        bool recreationArmed{false};
-        bool recreationSignaled{false};
-        std::optional<TimePoint> nativeHealthySince;
-    };
-
-    /// One guarded request per context, including after live/private resets.
-    /// FPS/cadence changes alone never arm a game-owned recreation.
-    class PersistentGenerationRecoveryRecreation {
-    public:
-        [[nodiscard]] bool signal(const bool qualified = false) {
-            if (!qualified || this->signaled)
-                return false;
-            this->signaled = true;
-            return true;
-        }
-    private:
-        bool signaled{false};
-    };
-
-    /// All recovery actions share minimum surface spacing. The menu watchdog
-    /// also has a two-attempt, 75-second episode limit, rather than a minutes-
-    /// long cooldown that can outlive the interruption being repaired.
-    [[nodiscard]] constexpr std::chrono::seconds
-    persistentGenerationRecoveryActionCooldown(
-            const size_t completedRequests) noexcept {
-        return completedRequests == 0 ? std::chrono::seconds::zero()
-            : std::chrono::seconds{30};
-    }
-
-    /// Process-surface budget shared by replacement swapchains. Only confirmed
-    /// Steam focus-return episodes authorize the performance watchdog.
-    [[nodiscard]] inline std::optional<uint32_t>
-    persistentGenerationRecoveryTargetFps(
-            const bool adaptiveMode,
-            const uint32_t adaptiveTargetFps,
-            const std::optional<uint32_t> refreshHz) noexcept {
-        if (adaptiveMode)
-            return adaptiveTargetFps > 0
-                ? std::optional<uint32_t>{adaptiveTargetFps}
-                : std::nullopt;
-        return refreshHz && *refreshHz > 0 ? refreshHz : std::nullopt;
-    }
-
-    class PersistentGenerationRecoverySurfaceBudget {
-    public:
-        using Clock = std::chrono::steady_clock;
-        using TimePoint = Clock::time_point;
-        using Duration = Clock::duration;
-
-        struct RecoverySample {
-            uint64_t contextId{0};
-            uint64_t configurationRevision{0};
-            bool adaptiveMode{false};
-            uint32_t targetFps{0};
-            uint32_t refreshHz{0};
-            std::array<uint32_t, 4> extents{};
-            GamescopeFocusFeedback focus;
-            std::optional<double> outputFps;
-            double lowerPresentShare{0.0};
-            // Recovery output remains valid deficit evidence after a confirmed
-            // return, but it must never replace the healthy pre-menu history
-            // which authorizes that comparison.
-            bool performanceHistoryEligible{true};
-        };
-
-        struct DeficitObservation {
-            bool qualified{false};
-            bool newlyQualified{false};
-            bool cancelled{false};
-            bool retainedBaselineUsed{false};
-            Duration duration{};
-            std::optional<double> baselineOutputFps;
-            std::optional<double> baselineLowerPresentShare;
-            std::optional<double> recoveryThresholdFps;
-        };
-
-        /// Retain a tiny, allocation-free pre-menu performance history, then
-        /// compare returned gameplay with that exact baseline. This recognizes
-        /// recovery to a game's previous below-target performance instead of
-        /// treating the configured target as proof that the game was healthy.
-        /// Keep the episode across our own replacement for one bounded retry.
-        [[nodiscard]] DeficitObservation observeSustainedDeficit(
-                const TimePoint now,
-                const std::optional<RecoverySample>& sample) {
-            const bool wasQualified = this->deficitQualified;
-            if (!sample || sample->targetFps == 0 ||
-                    !sample->focus.fresh(now) || !sample->focus.gameFocused) {
-                this->resetDeficitWatch();
-                return {.cancelled = wasQualified};
-            }
-            const bool contextChanged = this->lastRecoverySample &&
-                sample->contextId != this->lastRecoverySample->contextId;
-            const bool policyChanged = this->lastRecoverySample &&
-                (sample->configurationRevision !=
-                    this->lastRecoverySample->configurationRevision ||
-                 sample->adaptiveMode !=
-                    this->lastRecoverySample->adaptiveMode ||
-                 sample->targetFps != this->lastRecoverySample->targetFps ||
-                 sample->refreshHz != this->lastRecoverySample->refreshHz ||
-                 sample->extents != this->lastRecoverySample->extents);
-            if (policyChanged || (contextChanged && !this->expectedReplacement))
-                this->resetDeficitWatch();
-            const bool interrupted = this->lastRecoverySample &&
-                sample->focus.returnSequence >
-                    this->lastRecoverySample->focus.returnSequence &&
-                sample->focus.recoveryWindow(now);
-            if (contextChanged) {
-                this->expectedReplacement = false;
-                this->deficitSince.reset();
-                this->deficitRecoveredSince.reset();
-                this->clearPerformanceHistory();
-                this->retainedPerformanceBaseline.reset();
-                this->stagedScaledRecreationAt.reset();
-            }
-            if (sample->focus.menuOpen(now)) {
-                if (sample->focus.openedAt &&
-                        (!this->pendingOpenedAt ||
-                         *this->pendingOpenedAt != *sample->focus.openedAt)) {
-                    this->pendingOpenedAt = sample->focus.openedAt;
-                    const auto selection = this->selectInterruptionBaseline(
-                        *sample->focus.openedAt
-                    );
-                    this->pendingInterruptionBaseline = selection.baseline;
-                    this->pendingRetainedBaselineUsed =
-                        selection.retainedBaselineUsed;
-                }
-                // Never learn Steam's throttled output or accrue a recovery
-                // action while the menu is open.
-                this->lastRecoverySample = sample;
-                this->interruptionBaseline.reset();
-                this->deficitRecoveredSince.reset();
-                this->deficitSince.reset();
-                this->deficitQualified = false;
-                this->postInterruption = false;
-                return {.cancelled = wasQualified};
-            }
-            if (interrupted) {
-                const bool pendingMatches = sample->focus.openedAt &&
-                    this->pendingOpenedAt &&
-                    *sample->focus.openedAt == *this->pendingOpenedAt;
-                if (pendingMatches) {
-                    this->interruptionBaseline =
-                        this->pendingInterruptionBaseline;
-                    this->interruptionRetainedBaselineUsed =
-                        this->pendingRetainedBaselineUsed;
-                } else if (sample->focus.openedAt) {
-                    const auto selection = this->selectInterruptionBaseline(
-                        *sample->focus.openedAt
-                    );
-                    this->interruptionBaseline = selection.baseline;
-                    this->interruptionRetainedBaselineUsed =
-                        selection.retainedBaselineUsed;
-                } else {
-                    this->interruptionBaseline.reset();
-                    this->interruptionRetainedBaselineUsed = false;
-                }
-                this->pendingInterruptionBaseline.reset();
-                this->pendingOpenedAt.reset();
-                this->pendingRetainedBaselineUsed = false;
-                this->postInterruption =
-                    this->interruptionBaseline.has_value();
-                this->episodeRequests = 0;
-                this->deficitRecoveredSince.reset();
-            }
-            this->lastRecoverySample = sample;
-            const bool valid = sample->outputFps &&
-                std::isfinite(*sample->outputFps) && *sample->outputFps > 0.0;
-            const auto referenceOutputFps = this->interruptionBaseline
-                ? std::min(
-                    this->interruptionBaseline->outputFps,
-                    static_cast<double>(sample->targetFps)
-                )
-                : 0.0;
-            const auto recoveryThresholdFps = referenceOutputFps * 0.75;
-            const auto baselineOutputFps = this->interruptionBaseline
-                ? std::optional<double>{this->interruptionBaseline->outputFps}
-                : std::nullopt;
-            const auto baselineLowerPresentShare = this->interruptionBaseline
-                ? std::optional<double>{
-                    this->interruptionBaseline->lowerPresentShare
-                }
-                : std::nullopt;
-            if (!sample->focus.recoveryWindow(now)) {
-                this->postInterruption = false;
-                this->interruptionBaseline.reset();
-                this->interruptionRetainedBaselineUsed = false;
-                this->stagedScaledRecreationAt.reset();
-            }
-            // Once delivered output recovers to the pre-menu comparison band,
-            // a later workload slowdown needs a new interruption; do not retain
-            // a menu visit as permission for an unrelated future action.
-            if (valid && !interrupted &&
-                    this->postInterruption &&
-                    *sample->outputFps >= recoveryThresholdFps) {
-                if (!this->deficitRecoveredSince)
-                    this->deficitRecoveredSince = now;
-                if (now - *this->deficitRecoveredSince >= std::chrono::seconds{1}) {
-                    this->postInterruption = false;
-                    this->interruptionBaseline.reset();
-                    this->interruptionRetainedBaselineUsed = false;
-                    this->stagedScaledRecreationAt.reset();
-                }
-            } else {
-                this->deficitRecoveredSince.reset();
-            }
-            const bool deficit = valid && this->interruptionBaseline &&
-                this->postInterruption &&
-                this->episodeRequests <
-                    (this->interruptionRetainedBaselineUsed &&
-                            !this->stagedScaledRecreationAt
-                        ? 1 : 2) &&
-                *sample->outputFps < recoveryThresholdFps &&
-                std::isfinite(sample->lowerPresentShare) &&
-                sample->lowerPresentShare >= 0.5;
-            if (deficit) {
-                if (!this->deficitSince)
-                    this->deficitSince = now;
-            } else {
-                this->deficitSince.reset();
-            }
-            const auto duration = this->deficitSince
-                ? now - *this->deficitSince : Duration{};
-            const auto requiredDeficitDuration = this->stagedScaledRecreationAt
-                ? stagedScaledRecreationDelay
-                : std::chrono::seconds{4};
-            this->deficitQualified = deficit &&
-                duration >= requiredDeficitDuration;
-            if (valid && !sample->focus.menuOpen(now) &&
-                    sample->performanceHistoryEligible) {
-                this->recordPerformanceSample(now, *sample);
-            }
-            return {
-                .qualified = this->deficitQualified,
-                .newlyQualified = this->deficitQualified && !wasQualified,
-                .cancelled = wasQualified && !this->deficitQualified,
-                .retainedBaselineUsed =
-                    this->interruptionRetainedBaselineUsed,
-                .duration = duration,
-                .baselineOutputFps = baselineOutputFps,
-                .baselineLowerPresentShare = baselineLowerPresentShare,
-                .recoveryThresholdFps = baselineOutputFps
-                    ? std::optional<double>{recoveryThresholdFps}
-                    : std::nullopt,
-            };
-        }
-
-        [[nodiscard]] bool available(const TimePoint now) const {
-            return !this->lastRequestedAt ||
-                now - *this->lastRequestedAt >=
-                    persistentGenerationRecoveryActionCooldown(
-                        this->completedRequestCount
-                    );
-        }
-
-        /// Returned severe native stalls share the same minimum spacing.
-        [[nodiscard]] bool severeLowerPresentAvailable(
-                const TimePoint now) const {
-            return this->available(now);
-        }
-
-        [[nodiscard]] bool stagedScaledRecreationPending() const {
-            return this->stagedScaledRecreationAt.has_value();
-        }
-
-        [[nodiscard]] bool stagedScaledRecreationAvailable(
-                const TimePoint now) const {
-            return this->stagedScaledRecreationAt &&
-                now >= *this->stagedScaledRecreationAt;
-        }
-
-        void recordRequest(const TimePoint now,
-                const bool sustainedDeficit = false,
-                const bool expectedReplacement = true,
-                const bool inPlaceScaledRecovery = false,
-                const bool stagedScaledRecreation = false) {
-            this->completedRequestCount++;
-            this->lastRequestedAt = now;
-            this->expectedReplacement = expectedReplacement;
-            if (sustainedDeficit)
-                ++this->episodeRequests;
-            if (stagedScaledRecreation)
-                this->episodeRequests = 2;
-            if (inPlaceScaledRecovery) {
-                this->stagedScaledRecreationAt =
-                    now + stagedScaledRecreationDelay;
-            } else if (expectedReplacement) {
-                this->stagedScaledRecreationAt.reset();
-            }
-            this->deficitQualified = false;
-            if (inPlaceScaledRecovery)
-                this->deficitSince = now;
-            else
-                this->deficitSince.reset();
-            this->deficitRecoveredSince.reset();
-        }
-
-        [[nodiscard]] size_t completedRequests() const {
-            return this->completedRequestCount;
-        }
-
-        [[nodiscard]] std::chrono::seconds nextCooldown() const {
-            if (this->stagedScaledRecreationAt)
-                return stagedScaledRecreationDelay;
-            return persistentGenerationRecoveryActionCooldown(
-                this->completedRequestCount
-            );
-        }
-
-    private:
-        struct PerformancePoint {
-            TimePoint sampledAt{};
-            double outputFps{0.0};
-            double lowerPresentShare{0.0};
-        };
-
-        struct PerformanceBaseline {
-            double outputFps{0.0};
-            double lowerPresentShare{0.0};
-            TimePoint firstSampledAt{};
-            TimePoint lastSampledAt{};
-            size_t sampleCount{0};
-        };
-
-        struct BaselineSelection {
-            std::optional<PerformanceBaseline> baseline;
-            bool retainedBaselineUsed{false};
-        };
-
-        static constexpr size_t performanceHistoryCapacity = 8;
-        static constexpr auto retainedBaselineLifetime =
-            std::chrono::minutes{3};
-        static constexpr auto stagedScaledRecreationDelay =
-            std::chrono::seconds{3};
-
-        void recordPerformanceSample(const TimePoint now,
-                const RecoverySample& sample) {
-            if (!sample.outputFps ||
-                    !std::isfinite(*sample.outputFps) ||
-                    *sample.outputFps <= 0.0 ||
-                    !std::isfinite(sample.lowerPresentShare)) {
-                return;
-            }
-            if (this->lastPerformanceSampleAt) {
-                if (now < *this->lastPerformanceSampleAt) {
-                    this->clearPerformanceHistory();
-                } else if (now - *this->lastPerformanceSampleAt <
-                        std::chrono::milliseconds{250}) {
-                    return;
-                }
-            }
-            this->performanceHistory[this->performanceHistoryNext] = {
-                .sampledAt = now,
-                .outputFps = *sample.outputFps,
-                .lowerPresentShare = sample.lowerPresentShare,
-            };
-            this->performanceHistoryNext =
-                (this->performanceHistoryNext + 1) % performanceHistoryCapacity;
-            this->performanceHistoryCount = std::min(
-                this->performanceHistoryCount + 1,
-                performanceHistoryCapacity
-            );
-            this->lastPerformanceSampleAt = now;
-        }
-
-        [[nodiscard]] std::optional<PerformanceBaseline>
-        capturePerformanceBaseline(const TimePoint openedAt) const {
-            std::array<double, performanceHistoryCapacity> outputFps{};
-            std::array<double, performanceHistoryCapacity> lowerPresentShare{};
-            size_t selected = 0;
-            std::optional<TimePoint> firstSampledAt;
-            std::optional<TimePoint> lastSampledAt;
-            const size_t first =
-                (this->performanceHistoryNext + performanceHistoryCapacity -
-                 this->performanceHistoryCount) % performanceHistoryCapacity;
-            for (size_t index = 0;
-                    index < this->performanceHistoryCount; ++index) {
-                const auto& point = this->performanceHistory[
-                    (first + index) % performanceHistoryCapacity
-                ];
-                if (point.sampledAt > openedAt ||
-                        openedAt - point.sampledAt > std::chrono::seconds{15}) {
-                    continue;
-                }
-                outputFps[selected] = point.outputFps;
-                lowerPresentShare[selected] = point.lowerPresentShare;
-                if (!firstSampledAt)
-                    firstSampledAt = point.sampledAt;
-                lastSampledAt = point.sampledAt;
-                ++selected;
-            }
-            if (selected < 3 || !firstSampledAt || !lastSampledAt ||
-                    *lastSampledAt - *firstSampledAt < std::chrono::seconds{1}) {
-                return std::nullopt;
-            }
-            const auto median = [selected](auto& values) {
-                std::sort(values.begin(), values.begin() + selected);
-                const size_t middle = selected / 2;
-                return selected % 2 == 0
-                    ? (values[middle - 1] + values[middle]) / 2.0
-                    : values[middle];
-            };
-            return PerformanceBaseline{
-                .outputFps = median(outputFps),
-                .lowerPresentShare = median(lowerPresentShare),
-                .firstSampledAt = *firstSampledAt,
-                .lastSampledAt = *lastSampledAt,
-                .sampleCount = selected,
-            };
-        }
-
-        /// A return can look healthy for one second and collapse later while
-        /// the same WSI context remains wedged. Preserve the last pre-menu
-        /// baseline across that apparent recovery. A later confirmed menu may
-        /// reuse it only when the immediate pre-menu history is severely
-        /// slower and QueuePresent owns most of the interval. This excludes a
-        /// game/GPU workload slowdown in the usual case and authorizes only
-        /// one action for the retained-reference episode.
-        [[nodiscard]] BaselineSelection selectInterruptionBaseline(
-                const TimePoint openedAt) {
-            const auto current = this->capturePerformanceBaseline(openedAt);
-            if (!current)
-                return {};
-
-            if (this->retainedPerformanceBaseline &&
-                    (openedAt <
-                        this->retainedPerformanceBaseline->lastSampledAt ||
-                     openedAt -
-                        this->retainedPerformanceBaseline->lastSampledAt >
-                            retainedBaselineLifetime)) {
-                this->retainedPerformanceBaseline.reset();
-            }
-
-            const bool transportBoundRegression =
-                this->retainedPerformanceBaseline &&
-                current->outputFps <
-                    this->retainedPerformanceBaseline->outputFps * 0.6 &&
-                current->lowerPresentShare >= 0.75;
-            if (transportBoundRegression) {
-                return {
-                    .baseline = this->retainedPerformanceBaseline,
-                    .retainedBaselineUsed = true,
-                };
-            }
-
-            this->retainedPerformanceBaseline = current;
-            return {.baseline = current};
-        }
-
-        void clearPerformanceHistory() {
-            this->performanceHistoryCount = 0;
-            this->performanceHistoryNext = 0;
-            this->lastPerformanceSampleAt.reset();
-        }
-
-        void resetDeficitWatch() {
-            this->lastRecoverySample.reset();
-            this->clearPerformanceHistory();
-            this->pendingInterruptionBaseline.reset();
-            this->pendingOpenedAt.reset();
-            this->pendingRetainedBaselineUsed = false;
-            this->interruptionBaseline.reset();
-            this->interruptionRetainedBaselineUsed = false;
-            this->retainedPerformanceBaseline.reset();
-            this->deficitRecoveredSince.reset();
-            this->deficitSince.reset();
-            this->postInterruption = false;
-            this->episodeRequests = 0;
-            this->deficitQualified = false;
-            this->expectedReplacement = false;
-            this->stagedScaledRecreationAt.reset();
-        }
-
-        size_t completedRequestCount{0};
-        std::optional<TimePoint> lastRequestedAt;
-        std::optional<RecoverySample> lastRecoverySample;
-        std::array<PerformancePoint, performanceHistoryCapacity>
-            performanceHistory{};
-        size_t performanceHistoryCount{0};
-        size_t performanceHistoryNext{0};
-        std::optional<TimePoint> lastPerformanceSampleAt;
-        std::optional<PerformanceBaseline> pendingInterruptionBaseline;
-        std::optional<TimePoint> pendingOpenedAt;
-        bool pendingRetainedBaselineUsed{false};
-        std::optional<PerformanceBaseline> interruptionBaseline;
-        bool interruptionRetainedBaselineUsed{false};
-        std::optional<PerformanceBaseline> retainedPerformanceBaseline;
-        std::optional<TimePoint> deficitRecoveredSince;
-        std::optional<TimePoint> deficitSince;
-        bool postInterruption{false};
-        size_t episodeRequests{0};
-        bool deficitQualified{false};
-        bool expectedReplacement{false};
-        std::optional<TimePoint> stagedScaledRecreationAt;
-    };
-
-    /// Count successful lower presents, not the selected multiplier. Close
-    /// each batch at the next application-present start so its output is
-    /// paired with the interval that actually contained its work. A short
-    /// window also handles fractional plans alternating real-only/FG frames.
-    class RecoveryPresentHealth {
-    public:
-        using Clock = std::chrono::steady_clock;
-        using Duration = Clock::duration;
-
-        void beginPresent(const Clock::time_point now) {
-            if (this->lastStarted) {
-                const auto interval = now - *this->lastStarted;
-                if (interval <= Duration::zero() ||
-                        interval >= std::chrono::seconds{1} ||
-                        this->batchFailed) {
-                    this->windowDuration = {};
-                    this->windowFrames = 0;
-                    this->windowLowerPresentDuration = {};
-                    this->observedDuration.reset();
-                } else {
-                    this->windowDuration += interval;
-                    this->windowFrames += this->batchFrames;
-                    this->windowLowerPresentDuration += this->batchLowerPresentDuration;
-                    if (this->windowDuration >= std::chrono::milliseconds{250}) {
-                        this->observedDuration = this->windowDuration;
-                        this->observedFrames = this->windowFrames;
-                        this->observedLowerPresentDuration = this->windowLowerPresentDuration;
-                        this->windowDuration = {};
-                        this->windowFrames = 0;
-                        this->windowLowerPresentDuration = {};
-                    }
-                }
-            }
-            this->lastStarted = now;
-            this->batchFrames = 0;
-            this->batchFailed = false;
-            this->maximumDuration = {};
-            this->batchLowerPresentDuration = {};
-        }
-
-        void observePresent(const Duration duration, const bool succeeded) {
-            this->maximumDuration = std::max(this->maximumDuration, duration);
-            this->batchLowerPresentDuration += duration;
-            this->batchFrames += succeeded ? 1 : 0;
-            this->batchFailed |= !succeeded;
-        }
-
-        [[nodiscard]] Duration maximumPresentDuration() const {
-            return this->maximumDuration;
-        }
-
-        [[nodiscard]] std::optional<double> outputFps() const {
-            if (this->batchFailed || !this->observedDuration ||
-                    *this->observedDuration <= Duration::zero())
-                return std::nullopt;
-            return this->observedFrames /
-                std::chrono::duration<double>(*this->observedDuration).count();
-        }
-
-        [[nodiscard]] double lowerPresentShare() const {
-            if (!this->observedDuration || *this->observedDuration <= Duration::zero())
-                return 0.0;
-            return std::chrono::duration<double>(this->observedLowerPresentDuration).count() /
-                std::chrono::duration<double>(*this->observedDuration).count();
-        }
-
-    private:
-        std::optional<Clock::time_point> lastStarted;
-        Duration windowDuration{};
-        size_t windowFrames{0};
-        std::optional<Duration> observedDuration;
-        size_t observedFrames{0};
-        size_t batchFrames{0};
-        bool batchFailed{false};
-        Duration maximumDuration{};
-        Duration batchLowerPresentDuration{};
-        Duration windowLowerPresentDuration{};
-        Duration observedLowerPresentDuration{};
-    };
-
-    [[nodiscard]] constexpr bool fixedCadenceCollapseRecoveryEligible(
-            const bool schedulerEnabled,
-            const bool privateOrderedTransport,
-            const bool orderedAcquireRecoveryActive,
-            const bool historyWarmupActive,
-            const std::optional<uint32_t> refreshHz,
-            const size_t maximumGeneratedFrames) noexcept {
-        return !schedulerEnabled && privateOrderedTransport &&
-            !orderedAcquireRecoveryActive && !historyWarmupActive &&
-            refreshHz && *refreshHz > 0 && maximumGeneratedFrames > 0;
-    }
-
-    /// Ordered FIFO can make a healthy Fixed source appear permanently slow:
-    /// one generated image plus the original holds the next application
-    /// present, so a temporary overlay/menu cadence collapse feeds back into
-    /// every following frame without producing an acquire or QueuePresent
-    /// timeout. Qualify a healthy target first, then use a short, history-only
-    /// native probe only after a sustained severe collapse. A true workload
-    /// slowdown rejects on the first probe sample and requires materially new
-    /// cadence evidence before another probe, in addition to bounded backoff;
-    /// a faster exposed cadence must survive both three native samples and a
-    /// generated-delivery verification window before the failure count clears.
-    class FixedCadenceCollapseRecovery {
-    public:
-        using Clock = std::chrono::steady_clock;
-        using TimePoint = Clock::time_point;
-        using Duration = Clock::duration;
-
-        struct Decision {
-            bool suppressGeneration{false};
-            bool probeStarted{false};
-            bool probeRejected{false};
-            bool probeRecovered{false};
-            bool recoveryUnstable{false};
-            bool recoveryVerified{false};
-            size_t confirmedSamples{0};
-            size_t consecutiveFailures{0};
-            double baselineBaseFps{0.0};
-            double observedBaseFps{0.0};
-            Duration retryDelay{};
-        };
-
-        [[nodiscard]] static constexpr auto healthyQualificationDuration() {
-            return std::chrono::seconds{1};
-        }
-
-        [[nodiscard]] static constexpr auto collapseQualificationDuration() {
-            return std::chrono::milliseconds{250};
-        }
-
-        [[nodiscard]] static constexpr auto verificationDuration() {
-            return std::chrono::seconds{1};
-        }
-
-        [[nodiscard]] static constexpr double healthyOutputRatio() {
-            return 0.95;
-        }
-
-        [[nodiscard]] static constexpr double collapsedOutputRatio() {
-            return 0.88;
-        }
-
-        [[nodiscard]] static constexpr double collapsedBaselineRatio() {
-            return 0.90;
-        }
-
-        [[nodiscard]] static constexpr double minimumProbeRiseRatio() {
-            return 1.25;
-        }
-
-        [[nodiscard]] Decision observe(const TimePoint now,
-                const std::optional<Duration> realInterval,
-                const std::optional<uint32_t> refreshHz,
-                const size_t maximumGeneratedFrames) {
-            if (!refreshHz || *refreshHz == 0 ||
-                    maximumGeneratedFrames == 0) {
-                this->reset();
-                return {};
-            }
-
-            const auto instantaneousBaseFps = baseFps(realInterval);
-            if (!instantaneousBaseFps) {
-                this->clearQualification();
-                return {};
-            }
-
-            if (this->probeActive) {
-                return this->advanceProbe(now, *instantaneousBaseFps);
-            }
-
-            this->updateSmoothedBaseFps(*instantaneousBaseFps);
-            const double targetFps = static_cast<double>(*refreshHz);
-            const double possibleOutputFps = this->smoothedBaseFps *
-                static_cast<double>(maximumGeneratedFrames + 1);
-            const bool targetHealthy = possibleOutputFps >=
-                targetFps * healthyOutputRatio();
-
-            if (this->verificationUntil) {
-                const bool collapsedAgain = possibleOutputFps <
-                        targetFps * collapsedOutputRatio() &&
-                    this->smoothedBaseFps < this->healthyBaseFps *
-                        collapsedBaselineRatio();
-                if (collapsedAgain) {
-                    const double baselineBaseFps = this->probeBaselineBaseFps;
-                    this->verificationUntil.reset();
-                    this->recordFailure(now);
-                    return {
-                        .recoveryUnstable = true,
-                        .consecutiveFailures = this->consecutiveFailures,
-                        .baselineBaseFps = baselineBaseFps,
-                        .observedBaseFps = this->smoothedBaseFps,
-                        .retryDelay = *this->retryAt - now,
-                    };
-                }
-                if (now >= *this->verificationUntil) {
-                    this->verificationUntil.reset();
-                    this->consecutiveFailures = 0;
-                    this->retryAt.reset();
-                    this->probeBaselineBaseFps = 0.0;
-                    return {
-                        .recoveryVerified = true,
-                        .observedBaseFps = this->smoothedBaseFps,
-                    };
-                }
-                return {};
-            }
-
-            if (targetHealthy) {
-                this->collapseSince.reset();
-                if (!this->healthySince)
-                    this->healthySince = now;
-                if (now - *this->healthySince >=
-                        healthyQualificationDuration()) {
-                    if (this->healthyBaseFps == 0.0) {
-                        this->healthyBaseFps = this->smoothedBaseFps;
-                    } else {
-                        this->healthyBaseFps =
-                            this->healthyBaseFps * 0.9 +
-                            this->smoothedBaseFps * 0.1;
-                    }
-                    this->retryAt.reset();
-                    this->consecutiveFailures = 0;
-                    this->rejectedProbeBaseFps = 0.0;
-                }
-                return {};
-            }
-            this->healthySince.reset();
-
-            if (this->healthyBaseFps <= 0.0 ||
-                    possibleOutputFps >=
-                        targetFps * collapsedOutputRatio() ||
-                    this->smoothedBaseFps >= this->healthyBaseFps *
-                        collapsedBaselineRatio()) {
-                this->collapseSince.reset();
-                return {};
-            }
-            if (this->retryAt && now < *this->retryAt)
-                return {};
-            if (this->rejectedProbeBaseFps > 0.0 &&
-                    this->smoothedBaseFps > this->rejectedProbeBaseFps /
-                        minimumProbeRiseRatio() &&
-                    this->smoothedBaseFps < this->rejectedProbeBaseFps *
-                        minimumProbeRiseRatio()) {
-                // The native sample already disproved a hidden faster rate.
-                // A retry timer alone is not fresh collapse evidence. Keep
-                // generation steady until cadence moves outside that band
-                // for the normal qualification window or becomes healthy.
-                this->collapseSince.reset();
-                return {};
-            }
-            if (!this->collapseSince) {
-                this->collapseSince = now;
-                return {};
-            }
-            if (now - *this->collapseSince <
-                    collapseQualificationDuration()) {
-                return {};
-            }
-
-            this->probeActive = true;
-            this->probeBaselineBaseFps = this->smoothedBaseFps;
-            this->minimumProbeBaseFps = 0.0;
-            this->probeConfirmedSamples = 0;
-            this->collapseSince.reset();
-            return {
-                .suppressGeneration = true,
-                .probeStarted = true,
-                .consecutiveFailures = this->consecutiveFailures,
-                .baselineBaseFps = this->probeBaselineBaseFps,
-                .observedBaseFps = this->smoothedBaseFps,
-            };
-        }
-
-        void reset() {
-            this->smoothedBaseFps = 0.0;
-            this->healthyBaseFps = 0.0;
-            this->probeBaselineBaseFps = 0.0;
-            this->rejectedProbeBaseFps = 0.0;
-            this->minimumProbeBaseFps = 0.0;
-            this->healthySince.reset();
-            this->collapseSince.reset();
-            this->retryAt.reset();
-            this->verificationUntil.reset();
-            this->probeActive = false;
-            this->probeConfirmedSamples = 0;
-            this->consecutiveFailures = 0;
-        }
-
-        [[nodiscard]] bool active() const {
-            return this->probeActive || this->verificationUntil.has_value();
-        }
-
-    private:
-        [[nodiscard]] static std::optional<double> baseFps(
-                const std::optional<Duration> interval) {
-            if (!interval)
-                return std::nullopt;
-            const double seconds = std::chrono::duration<double>(
-                *interval
-            ).count();
-            if (!std::isfinite(seconds) || seconds <= 0.0 || seconds > 0.25)
-                return std::nullopt;
-            return 1.0 / seconds;
-        }
-
-        void updateSmoothedBaseFps(const double instantaneousBaseFps) {
-            if (this->smoothedBaseFps == 0.0) {
-                this->smoothedBaseFps = instantaneousBaseFps;
-            } else {
-                this->smoothedBaseFps = this->smoothedBaseFps * 0.75 +
-                    instantaneousBaseFps * 0.25;
-            }
-        }
-
-        [[nodiscard]] Decision advanceProbe(const TimePoint now,
-                const double instantaneousBaseFps) {
-            const bool fasterCadence = instantaneousBaseFps >=
-                this->probeBaselineBaseFps * minimumProbeRiseRatio();
-            if (!fasterCadence) {
-                const double baselineBaseFps = this->probeBaselineBaseFps;
-                this->rejectedProbeBaseFps = baselineBaseFps;
-                this->probeActive = false;
-                this->minimumProbeBaseFps = 0.0;
-                this->probeConfirmedSamples = 0;
-                this->recordFailure(now);
-                return {
-                    .probeRejected = true,
-                    .consecutiveFailures = this->consecutiveFailures,
-                    .baselineBaseFps = baselineBaseFps,
-                    .observedBaseFps = instantaneousBaseFps,
-                    .retryDelay = *this->retryAt - now,
-                };
-            }
-
-            this->probeConfirmedSamples++;
-            this->minimumProbeBaseFps = this->minimumProbeBaseFps == 0.0
-                ? instantaneousBaseFps
-                : std::min(
-                    this->minimumProbeBaseFps, instantaneousBaseFps
-                );
-            if (this->probeConfirmedSamples < confirmationFrames) {
-                return {
-                    .suppressGeneration = true,
-                    .confirmedSamples = this->probeConfirmedSamples,
-                    .consecutiveFailures = this->consecutiveFailures,
-                    .baselineBaseFps = this->probeBaselineBaseFps,
-                    .observedBaseFps = instantaneousBaseFps,
-                };
-            }
-
-            const double recoveredBaseFps = this->minimumProbeBaseFps;
-            this->rejectedProbeBaseFps = 0.0;
-            this->probeActive = false;
-            this->probeConfirmedSamples = 0;
-            this->minimumProbeBaseFps = 0.0;
-            this->smoothedBaseFps = recoveredBaseFps;
-            this->healthyBaseFps = std::max(
-                this->healthyBaseFps, recoveredBaseFps
-            );
-            this->healthySince = now;
-            this->verificationUntil = now + verificationDuration();
-            return {
-                .suppressGeneration = true,
-                .probeRecovered = true,
-                .confirmedSamples = confirmationFrames,
-                .consecutiveFailures = this->consecutiveFailures,
-                .baselineBaseFps = this->probeBaselineBaseFps,
-                .observedBaseFps = recoveredBaseFps,
-            };
-        }
-
-        void recordFailure(const TimePoint now) {
-            this->consecutiveFailures++;
-            this->retryAt = now + retryDelayForFailure(
-                this->consecutiveFailures
-            );
-            this->collapseSince.reset();
-            this->healthySince.reset();
-        }
-
-        [[nodiscard]] static Duration retryDelayForFailure(
-                const size_t failures) {
-            constexpr std::array delays{
-                std::chrono::seconds{2},
-                std::chrono::seconds{5},
-                std::chrono::seconds{15},
-                std::chrono::seconds{30},
-            };
-            return delays.at(std::min(failures, delays.size()) - 1);
-        }
-
-        void clearQualification() {
-            this->smoothedBaseFps = 0.0;
-            this->healthySince.reset();
-            this->collapseSince.reset();
-            if (this->probeActive) {
-                this->probeActive = false;
-                this->minimumProbeBaseFps = 0.0;
-                this->probeConfirmedSamples = 0;
-            }
-        }
-
-        static constexpr size_t confirmationFrames = 3;
-
-        double smoothedBaseFps{0.0};
-        double healthyBaseFps{0.0};
-        double probeBaselineBaseFps{0.0};
-        double rejectedProbeBaseFps{0.0};
-        double minimumProbeBaseFps{0.0};
-        std::optional<TimePoint> healthySince;
-        std::optional<TimePoint> collapseSince;
-        std::optional<TimePoint> retryAt;
-        std::optional<TimePoint> verificationUntil;
-        bool probeActive{false};
-        size_t probeConfirmedSamples{0};
-        size_t consecutiveFailures{0};
     };
 
     /// Normally suppress synthetic frames that exceed confirmed refresh.

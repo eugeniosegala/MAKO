@@ -51,13 +51,14 @@ int main() {
         "brief focus flicker interrupted gameplay");
     static_cast<void>(focusTracker.observe(start + 750ms, false));
     focus = focusTracker.observe(start + 1s, false);
-    expect(focus.menuOpen(start + 1s) && !focus.recoveryWindow(start + 1s),
+    expect(focus.menuOpen(start + 1s),
         "confirmed Steam focus was not isolated from gameplay recovery");
     static_cast<void>(focusTracker.observe(start + 1250ms, true));
     focus = focusTracker.observe(start + 1500ms, true);
     expect(focus.gameFocused == true && focus.returnSequence == 1 &&
-            focus.openedAt == start + 750ms && focus.recoveryWindow(start + 1500ms) &&
-            !focus.recoveryWindow(start + 3s),
+            focus.openedAt == start + 750ms &&
+            focus.returnedAt == start + 1500ms &&
+            focus.fresh(start + 1500ms) && !focus.fresh(start + 3s),
         "confirmed return was lost or stale focus remained authoritative");
     static_cast<void>(focusTracker.observe(start + 1750ms, false));
     static_cast<void>(focusTracker.observe(start + 2s, false));
@@ -86,20 +87,21 @@ int main() {
         static_cast<void>(focusTracker.observe(focusTime, true));
         focusTime += 250ms;
         focus = focusTracker.observe(focusTime, true);
-        expect(focus.returnSequence == sequence && focus.recoveryWindow(focusTime),
+        expect(focus.returnSequence == sequence &&
+                focus.returnedAt == focusTime,
             "repeated menu returns were delayed or lost");
     }
     for (size_t sample = 0; sample < 480; ++sample) {
         focusTime += 250ms;
         focus = focusTracker.observe(focusTime, false);
     }
-    expect(focus.menuOpen(focusTime) && !focus.recoveryWindow(focusTime),
+    expect(focus.menuOpen(focusTime),
         "two minutes in a menu activated gameplay recovery");
     focusTime += 250ms;
     static_cast<void>(focusTracker.observe(focusTime, true));
     focusTime += 250ms;
     focus = focusTracker.observe(focusTime, true);
-    expect(focus.returnSequence == 22 && focus.recoveryWindow(focusTime),
+    expect(focus.returnSequence == 22 && focus.returnedAt == focusTime,
         "a long menu visit lost its immediately available return event");
 
     PrivateResourceTransition<int> resources;

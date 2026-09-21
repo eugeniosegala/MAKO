@@ -450,19 +450,10 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                       << "; slow operation threshold is "
                       << present_diagnostics::thresholdMilliseconds() << " ms\n";
             if (this->privateOrderedTransport) {
-                const auto slowAcquireThreshold =
-                    OrderedAcquireRecovery::slowAcquireDuration(
-                        this->gamescopeRefreshHz
-                    );
-                const auto firstRecoveryAcquireTimeout =
+                const auto recoveryAcquireTimeout =
                     orderedRecoveryAcquireTimeout(
                         this->gamescopeRefreshHz,
-                        configuredAcquireTimeout, 1
-                    );
-                const auto maximumRecoveryAcquireTimeout =
-                    orderedRecoveryAcquireTimeout(
-                        this->gamescopeRefreshHz,
-                        configuredAcquireTimeout, 3
+                        configuredAcquireTimeout
                     );
                 const auto perImageAcquireTimeout =
                     orderedGeneratedImageAcquireTimeout(
@@ -480,11 +471,7 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                 } else {
                     std::cerr << "unbounded";
                 }
-                std::cerr << " slow_threshold_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 slowAcquireThreshold
-                             ).count()
-                          << " per_image_timeout_ms="
+                std::cerr << " per_image_timeout_ms="
                           << (perImageAcquireTimeout ==
                                 std::numeric_limits<uint64_t>::max()
                                 ? 0.0
@@ -495,34 +482,16 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
                           << (perImageAcquireTimeout ==
                                 std::numeric_limits<uint64_t>::max()
                                 ? 1 : 0)
-                          << " severe_threshold_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 OrderedAcquireRecovery::
-                                     severeAcquireDuration(
-                                         slowAcquireThreshold
-                                     )
-                             ).count()
                           << " budget_scope=application-present"
-                          << " first_slow_action=zero-wait-protection"
-                          << " guard_miss_action=native-relief-history-warmup"
+                          << " failure_source=explicit-acquire-timeout"
                           << " recovery_probe_timeout_ms="
                           << static_cast<double>(
-                                 firstRecoveryAcquireTimeout
-                             ) / 1'000'000.0
-                          << " recovery_probe_timeout_max_ms="
-                          << static_cast<double>(
-                                 maximumRecoveryAcquireTimeout
+                                 recoveryAcquireTimeout
                              ) / 1'000'000.0
                           << " recovery_probe_failure=backoff"
                           << " recovery_retry_ceiling_ms="
                           << std::chrono::duration<double, std::milli>(
                                  OrderedAcquireRecovery::maximumRetryDelay()
-                             ).count()
-                          << " post_probe_policy=native-only"
-                          << " stabilization_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 OrderedAcquireRecovery::
-                                     stabilizationDuration()
                              ).count()
                           << '\n';
             }
@@ -577,13 +546,6 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             std::cerr << "MAKO Renderer: Dynamic Cadence Recovery is unavailable "
                          "for Fixed mode without a supported Gamescope refresh "
                          "signal and 2x-5x multiplier; exact Fixed policy retained\n";
-        } else if (fixedCadenceCollapseRecoveryEligible(
-                false, this->privateOrderedTransport, false, false,
-                this->gamescopeRefreshHz,
-                this->configuredFixedGeneratedFrames)) {
-            std::cerr << "MAKO Renderer: event-triggered Fixed cadence-collapse "
-                         "recovery enabled for ordered Gamescope presentation; "
-                         "healthy qualification=1 s, collapse qualification=250 ms\n";
         }
     } catch (const std::exception& e) {
         // Swapchain creation belongs to the game. A failure in MAKO's optional

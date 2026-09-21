@@ -243,7 +243,6 @@ void Swapchain::commitFrameGenerationResources(
     this->recoveryState.generatedImageAdmission.reset();
     this->recoveryState.orderedAcquireRecovery.reset();
     this->recoveryState.pipelineBusyRecovery.reset();
-    this->recoveryState.lowerPresentStallRecovery.reset();
     this->fixedRefreshBudget.reset();
     this->realFramePacer.reset();
     this->smoothCadenceBaseCap.reset();
@@ -654,8 +653,6 @@ void Swapchain::applyPendingSpatialScaler(const vk::Vulkan& vk) {
     try {
         this->ensureHistoryWarmup();
         this->fixedRefreshBudget.reset();
-        this->recoveryState.fixedCadenceCollapseRecovery.reset();
-        this->recoveryState.lowerPresentStallRecovery.reset();
 
         const auto activeMethod = this->spatialScaler->activeMethod();
         std::cerr << "MAKO Renderer: spatial scaling model changed live: "

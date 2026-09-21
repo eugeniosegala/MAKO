@@ -144,10 +144,6 @@ namespace mako::layer {
         virtual void ramp(size_t, size_t, double) {}
         virtual void rampResult(bool, size_t, size_t, double, double,
             double, double, std::string_view = {}) {}
-        virtual void bridge(size_t, size_t, size_t, double, double,
-            double, double) {}
-        virtual void bridgeResult(bool, size_t, size_t, double, double,
-            double, double) {}
         virtual void probeAborted(std::string_view, size_t) {}
         virtual void rearm(std::string_view, std::string_view, size_t, size_t,
             std::chrono::steady_clock::duration, double, double = 0.0,
@@ -158,7 +154,6 @@ namespace mako::layer {
             std::chrono::steady_clock::duration) {}
         virtual void rampBackoff(size_t, size_t, double,
             std::chrono::steady_clock::duration) {}
-        virtual void rampEarlyRetry(size_t, double, double) {}
         virtual void targetConstrained(uint32_t, size_t, double, double) {}
         virtual void recoveryResume(size_t,
             std::chrono::steady_clock::duration, std::string_view) {}
@@ -172,13 +167,7 @@ namespace mako::layer {
             std::string_view, std::chrono::steady_clock::duration) {}
         virtual void discontinuityRecoveryComplete(size_t, double, double,
             std::string_view) {}
-        virtual void twoXGameplayHitchRecovery(size_t, double,
-            std::chrono::steady_clock::duration) {}
-        virtual void sdrGameplayHitchBridge(size_t, double,
-            std::chrono::steady_clock::duration) {}
         virtual void cadenceRefresh(std::string_view, size_t, size_t) {}
-        virtual void loadShed(size_t, size_t, double, double,
-            std::string_view) {}
         virtual void automaticBaseCapSuppressed(size_t, double, double,
             std::string_view) {}
         virtual void nativeCadenceProbe(std::string_view, size_t, double,
@@ -256,15 +245,15 @@ namespace mako::layer {
         }
         [[nodiscard]] AdaptiveGenerationLoadBaseline generationLoadBaseline()
                 const {
-            if (this->state.strictLoad.baselineBaseFps <= 0.0 ||
+            if (this->state.acceptedLoadBaseline.baseFps <= 0.0 ||
                     this->validatedGenerationLimit() <=
-                        this->state.strictLoad.baselineLimit) {
+                        this->state.acceptedLoadBaseline.generationLimit) {
                 return {};
             }
             return {
                 .fallbackGenerationLimit =
-                    this->state.strictLoad.baselineLimit,
-                .baseFps = this->state.strictLoad.baselineBaseFps,
+                    this->state.acceptedLoadBaseline.generationLimit,
+                .baseFps = this->state.acceptedLoadBaseline.baseFps,
             };
         }
         [[nodiscard]] std::optional<TimePoint> discontinuityDeadline() const {
@@ -324,8 +313,6 @@ namespace mako::layer {
             size_t& generatedFrameCount);
         [[nodiscard]] inline bool advanceNearTargetNativePreference(
             TimePoint now, double baseFps, size_t configuredGenerationLimit);
-        [[nodiscard]] inline PlanningStageResult applyStrictLoadGuard(
-            TimePoint now, double baseFps, size_t& generatedFrameCount);
         void suppressAutomaticBaseCap(size_t generationLimit,
             double baselineBaseFps, double currentBaseFps,
             std::string_view reason);
@@ -358,11 +345,6 @@ namespace mako::layer {
                 // several clearly viable intervals.
                 bool sdrStallBypass{false};
                 size_t sdrResumeFrames{0};
-                // An accepted Smooth Cadence 2x policy can bridge one short
-                // gameplay hitch. A second consecutive stall must use normal
-                // history recovery so loading screens and genuinely collapsed
-                // cadence remain safe.
-                bool sdrIsolatedHitchBridged{false};
             } cadence;
 
             struct DiagnosticThrottle {
@@ -622,9 +604,6 @@ namespace mako::layer {
                 GeneratedDeliveryWindow delivery;
                 size_t previousLimit{0};
                 double baselineBaseFps{0.0};
-                bool bridgeActive{false};
-                size_t bridgeBaselineLimit{0};
-                double bridgeBaselineBaseFps{0.0};
                 size_t lastFailedLimit{0};
                 size_t consecutiveFailures{0};
                 double failedBaselineBaseFps{0.0};
@@ -634,7 +613,6 @@ namespace mako::layer {
                 bool required{false};
                 std::optional<TimePoint> notBefore;
                 std::optional<TimePoint> stableSince;
-                std::optional<TimePoint> improvementSince;
                 std::string reason;
                 double baselineBaseFps{0.0};
                 size_t fallbackLimit{0};
@@ -693,24 +671,16 @@ namespace mako::layer {
                 std::optional<TimePoint> cooldownUntil;
                 size_t previousLimit{0};
                 double baselineBaseFps{0.0};
-                bool fromStrictLoad{false};
-                size_t strictLoadLimit{0};
             } rescue;
 
             struct AutomaticBaseCap {
                 bool suppressed{false};
             } automaticBaseCap;
 
-            struct StrictLoad {
-                size_t baselineLimit{0};
-                double baselineBaseFps{0.0};
-                std::optional<TimePoint> collapseSince;
-                std::optional<TimePoint> healthySince;
-                std::optional<TimePoint> recoverySince;
-                size_t failedLimit{0};
-                size_t consecutiveFailures{0};
-                double failedBaselineBaseFps{0.0};
-            } strictLoad;
+            struct AcceptedLoadBaseline {
+                size_t generationLimit{0};
+                double baseFps{0.0};
+            } acceptedLoadBaseline;
 
             struct DiscontinuityRecovery {
                 std::optional<TimePoint> deadline;
@@ -731,12 +701,12 @@ namespace mako::layer {
             } discontinuityRecovery;
 
             struct MenuReturnLoadGuard {
-                std::optional<TimePoint> until;
+                bool active{false};
                 size_t provenGenerationLimit{0};
                 double baselineBaseFps{0.0};
 
                 void reset() {
-                    this->until.reset();
+                    this->active = false;
                     this->provenGenerationLimit = 0;
                     this->baselineBaseFps = 0.0;
                 }

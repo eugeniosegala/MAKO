@@ -186,33 +186,6 @@ namespace mako::layer {
         [[nodiscard]] bool requestOrderedAcquireRecreationAfterPresent(
             VkResult lowerPresentResult, bool surfaceRequestAvailable);
 
-        /// Request one app-owned recreation for a qualified post-menu deficit.
-        /// The entrypoint supplies the surface budget; the lower present carries
-        /// same maintenance1 retirement proof as live resource transitions.
-        [[nodiscard]] bool requestPersistentRecoveryRecreationAfterPresent(
-            VkResult lowerPresentResult, bool surfaceRequestAvailable,
-            bool sustainedDeficit = false,
-            bool stagedScaledRecreation = false);
-
-        /// Rebuild only the generation scheduler and temporal history after a
-        /// qualified post-menu regression in a combined scaling context. This
-        /// is the bounded alternative to unsafe automatic WSI replacement.
-        [[nodiscard]] bool requestPersistentRecoveryInPlaceAfterPresent(
-            VkResult lowerPresentResult, bool surfaceRequestAvailable,
-            bool sustainedDeficit = false);
-
-        /// Request one app-owned recreation when a severe lower present
-        /// recurs while synthetic work is already quarantined. This applies
-        /// to Fixed and Adaptive because the blocking persists without FG.
-        [[nodiscard]] bool requestLowerPresentStallRecreationAfterPresent(
-            VkResult lowerPresentResult, bool surfaceRequestAvailable);
-
-        /// Observed output for the process-surface recovery budget.
-        /// Ineligible modes return no sample and break qualification.
-        [[nodiscard]] std::optional<
-            PersistentGenerationRecoverySurfaceBudget::RecoverySample>
-        persistentRecoverySample() const;
-
         /// Wait for every layer-owned maintenance1 present fence associated
         /// with this swapchain. A zero timeout is a nonblocking retirement
         /// poll; finite waits are used only at application destruction.
@@ -230,16 +203,20 @@ namespace mako::layer {
         /// Update the compositor scanout budget without rebuilding resources.
         void updateGamescopeRefreshRate(std::optional<uint32_t> refreshHz);
         void updateGamescopeFocus(const GamescopeFocusFeedback& focus) {
+            if (!this->gamescopeFocusInitialized) {
+                this->lastFocusReturnSequence = focus.returnSequence;
+                this->gamescopeFocusInitialized = true;
+            }
             this->gamescopeFocus = focus;
         }
 
         /// Stop generation in place when the active profile disappears.
         void disableFrameGeneration();
     private:
-        [[nodiscard]] bool persistentRecoveryMonitoringEligible() const;
         void applyGamescopeFocus(std::chrono::steady_clock::time_point now);
         GamescopeFocusFeedback gamescopeFocus;
         bool steamMenuSuspended{false};
+        bool gamescopeFocusInitialized{false};
         uint64_t lastFocusReturnSequence{0};
         std::optional<bool> lastReportedGameFocus;
         bool focusReported{false};
@@ -295,7 +272,6 @@ namespace mako::layer {
         };
 
         struct FrameState {
-            RecoveryPresentHealth recoveryPresentHealth;
             size_t sequenceIndex{1};
             // The backend timeline is reset only when MAKO commits a new
             // private context. Diagnostics and binary-semaphore ring indices
@@ -304,20 +280,12 @@ namespace mako::layer {
             size_t realFrameIndex{0};
             size_t backendFrameIndex{0};
             bool renderFenceInFlight{false};
-            std::optional<std::chrono::steady_clock::time_point>
-                lastPresentStarted;
-            std::optional<std::chrono::steady_clock::duration>
-                recentRealInterval;
         };
 
         struct RecoveryState {
             GeneratedImageAdmission generatedImageAdmission;
             OrderedAcquireRecovery orderedAcquireRecovery;
-            LowerPresentStallRecovery lowerPresentStallRecovery;
-            PersistentGenerationRecoveryRecreation
-                persistentRecoveryRecreation;
             PipelineBusyRecovery pipelineBusyRecovery;
-            FixedCadenceCollapseRecovery fixedCadenceCollapseRecovery;
             ReplacementBackendStabilization replacementBackendStabilization;
             bool backendPending{false};
             size_t historyWarmupRemaining{0};
@@ -494,10 +462,6 @@ namespace mako::layer {
             std::string_view reason);
         void recordPresentCadence(
             std::chrono::steady_clock::time_point presentNow);
-        void observeLowerPresentHealth(
-            std::string_view source,
-            size_t requestedGenerated = 0,
-            size_t presentedGenerated = 0);
         [[nodiscard]] VkResult presentNativeFrame(
             const PresentInvocation& invocation);
         [[nodiscard]] VkResult presentDirectApplicationFrame(

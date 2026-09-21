@@ -72,44 +72,6 @@ namespace {
         std::cerr << '\n';
     }
 
-    void logAdaptiveBridge(const size_t previousLimit,
-            const size_t testedLimit, const size_t bridgeLimit,
-            const double previousBaseFps, const double currentBaseFps,
-            const double previousOutputFps, const double currentOutputFps) {
-        if (!enabled())
-            return;
-
-        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-bridge"
-                  << " context=" << activeContextId
-                  << " previous_generated_limit=" << previousLimit
-                  << " tested_generated_limit=" << testedLimit
-                  << " bridge_generated_limit=" << bridgeLimit
-                  << " previous_base_fps=" << previousBaseFps
-                  << " current_base_fps=" << currentBaseFps
-                  << " previous_output_fps=" << previousOutputFps
-                  << " current_output_fps=" << currentOutputFps << '\n';
-    }
-
-    void logAdaptiveBridgeResult(const bool accepted,
-            const size_t baselineLimit, const size_t testedLimit,
-            const double baselineBaseFps, const double currentBaseFps,
-            const double baselineOutputFps, const double currentOutputFps) {
-        if (!enabled())
-            return;
-
-        std::cerr << "MAKO Renderer: present diagnostics: operation="
-                  << (accepted
-                      ? "adaptive-bridge-accepted"
-                      : "adaptive-bridge-rejected")
-                  << " context=" << activeContextId
-                  << " baseline_generated_limit=" << baselineLimit
-                  << " tested_generated_limit=" << testedLimit
-                  << " baseline_base_fps=" << baselineBaseFps
-                  << " current_base_fps=" << currentBaseFps
-                  << " baseline_output_fps=" << baselineOutputFps
-                  << " current_output_fps=" << currentOutputFps << '\n';
-    }
-
     void logAdaptiveProbeAborted(const std::string_view reason,
             const size_t testedLimit) {
         if (!enabled())
@@ -208,18 +170,6 @@ namespace {
                          delay
                      ).count()
                   << '\n';
-    }
-
-    void logAdaptiveRampEarlyRetry(const size_t testedLimit,
-            const double failedBaseFps, const double currentBaseFps) {
-        if (!enabled())
-            return;
-
-        std::cerr << "MAKO Renderer: present diagnostics: operation=adaptive-ramp-early-retry"
-                  << " context=" << activeContextId
-                  << " tested_generated_limit=" << testedLimit
-                  << " failed_base_fps=" << failedBaseFps
-                  << " current_base_fps=" << currentBaseFps << '\n';
     }
 
     void logAdaptiveRecoveryResume(const size_t generationLimit,
@@ -352,45 +302,6 @@ namespace {
                   << " decision=" << decision << '\n';
     }
 
-    void logAdaptiveTwoXGameplayHitchRecovery(
-            const size_t generationLimit, const double baselineBaseFps,
-            const Clock::duration rawInterval) {
-        if (!enabled())
-            return;
-
-        std::cerr << "MAKO Renderer: present diagnostics: operation="
-                  << "adaptive-gameplay-hitch-recovery"
-                  << " context=" << activeContextId
-                  << " generated_limit=" << generationLimit
-                  << " baseline_base_fps=" << baselineBaseFps
-                  << " raw_interval_ms="
-                  << std::chrono::duration<double, std::milli>(
-                         rawInterval
-                     ).count()
-                  << " history_warmup_frames="
-                  << AdaptiveScheduler::historyWarmupFrameCount()
-                  << '\n';
-    }
-
-    void logAdaptiveSdrGameplayHitchBridge(
-            const size_t generationLimit, const double baselineBaseFps,
-            const Clock::duration rawInterval) {
-        if (!enabled())
-            return;
-
-        std::cerr << "MAKO Renderer: present diagnostics: operation="
-                  << "adaptive-sdr-gameplay-hitch-bridged"
-                  << " context=" << activeContextId
-                  << " generated_limit=" << generationLimit
-                  << " baseline_base_fps=" << baselineBaseFps
-                  << " raw_interval_ms="
-                  << std::chrono::duration<double, std::milli>(
-                         rawInterval
-                     ).count()
-                  << " action=retain-generated-frame"
-                  << '\n';
-    }
-
     void logAdaptiveCadenceRefresh(const std::string_view reason,
             const size_t retainedGenerationLimit, const size_t historyFrames) {
         if (!enabled())
@@ -403,23 +314,6 @@ namespace {
                   << " retained_generated_limit=" << retainedGenerationLimit
                   << " history_warmup_frames=" << historyFrames
                   << " policy=sdr-fast-resume\n";
-    }
-
-    void logAdaptiveLoadShed(const size_t previousLimit,
-            const size_t resumedLimit, const double baselineBaseFps,
-            const double currentBaseFps, const std::string_view reason) {
-        if (!enabled())
-            return;
-
-        std::cerr << "MAKO Renderer: present diagnostics: operation="
-                  << "adaptive-load-shed"
-                  << " context=" << activeContextId
-                  << " previous_generated_limit=" << previousLimit
-                  << " resumed_generated_limit=" << resumedLimit
-                  << " baseline_base_fps=" << baselineBaseFps
-                  << " current_base_fps=" << currentBaseFps
-                  << " reason=" << reason
-                  << " action=retain-generated-output\n";
     }
 
     void logDynamicCadenceRecovery(const std::string_view operation,
@@ -575,26 +469,6 @@ namespace {
             );
         }
 
-        void bridge(const size_t previousLimit, const size_t testedLimit,
-                const size_t bridgeLimit, const double previousBaseFps,
-                const double currentBaseFps, const double previousOutputFps,
-                const double currentOutputFps) override {
-            logAdaptiveBridge(
-                previousLimit, testedLimit, bridgeLimit, previousBaseFps,
-                currentBaseFps, previousOutputFps, currentOutputFps
-            );
-        }
-
-        void bridgeResult(const bool accepted, const size_t baselineLimit,
-                const size_t testedLimit, const double baselineBaseFps,
-                const double currentBaseFps, const double baselineOutputFps,
-                const double currentOutputFps) override {
-            logAdaptiveBridgeResult(
-                accepted, baselineLimit, testedLimit, baselineBaseFps,
-                currentBaseFps, baselineOutputFps, currentOutputFps
-            );
-        }
-
         void probeAborted(const std::string_view reason,
                 const size_t testedLimit) override {
             logAdaptiveProbeAborted(reason, testedLimit);
@@ -631,14 +505,6 @@ namespace {
                 const Clock::duration delay) override {
             logAdaptiveRampBackoff(
                 testedLimit, failures, baselineBaseFps, delay
-            );
-        }
-
-        void rampEarlyRetry(const size_t testedLimit,
-                const double failedBaseFps,
-                const double currentBaseFps) override {
-            logAdaptiveRampEarlyRetry(
-                testedLimit, failedBaseFps, currentBaseFps
             );
         }
 
@@ -723,36 +589,11 @@ namespace {
             );
         }
 
-        void twoXGameplayHitchRecovery(const size_t generationLimit,
-                const double baselineBaseFps,
-                const Clock::duration rawInterval) override {
-            logAdaptiveTwoXGameplayHitchRecovery(
-                generationLimit, baselineBaseFps, rawInterval
-            );
-        }
-
-        void sdrGameplayHitchBridge(const size_t generationLimit,
-                const double baselineBaseFps,
-                const Clock::duration rawInterval) override {
-            logAdaptiveSdrGameplayHitchBridge(
-                generationLimit, baselineBaseFps, rawInterval
-            );
-        }
-
         void cadenceRefresh(const std::string_view reason,
                 const size_t retainedGenerationLimit,
                 const size_t historyFrames) override {
             logAdaptiveCadenceRefresh(
                 reason, retainedGenerationLimit, historyFrames
-            );
-        }
-
-        void loadShed(const size_t previousLimit, const size_t resumedLimit,
-                const double baselineBaseFps, const double currentBaseFps,
-                const std::string_view reason) override {
-            logAdaptiveLoadShed(
-                previousLimit, resumedLimit, baselineBaseFps,
-                currentBaseFps, reason
             );
         }
 
