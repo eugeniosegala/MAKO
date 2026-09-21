@@ -16,6 +16,7 @@
   "CONFIG_VKBASALT_ANTIALIASING_SMAA": "SMAA",
   "CONTENT_HIDE_INFO": "정보 숨기기",
   "CONTENT_SHOW_INFO": "정보 표시",
+  "CONTENT_IMAGE_PROCESSING": "이미지 처리",
   "CONTENT_SCALING": "스케일링",
   "CONTENT_SHADERS": "셰이더",
   "SCALING_ENABLED": "스케일링 활성화 (재시작)",

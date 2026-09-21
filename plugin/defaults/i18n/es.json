@@ -16,6 +16,7 @@
   "CONFIG_VKBASALT_ANTIALIASING_SMAA": "SMAA",
   "CONTENT_HIDE_INFO": "Ocultar información",
   "CONTENT_SHOW_INFO": "Mostrar información",
+  "CONTENT_IMAGE_PROCESSING": "Procesamiento de imagen",
   "CONTENT_SCALING": "Escalado",
   "CONTENT_SHADERS": "Shaders",
   "SCALING_ENABLED": "Activar escalado (Reiniciar)",

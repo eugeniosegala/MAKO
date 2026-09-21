@@ -16,6 +16,7 @@
   "CONFIG_VKBASALT_ANTIALIASING_SMAA": "SMAA",
   "CONTENT_HIDE_INFO": "Сховати інформацію",
   "CONTENT_SHOW_INFO": "Показати інформацію",
+  "CONTENT_IMAGE_PROCESSING": "Обробка зображення",
   "CONTENT_SCALING": "Масштабування",
   "CONTENT_SHADERS": "Шейдери",
   "SCALING_ENABLED": "Увімкнути масштабування (перезапуск)",

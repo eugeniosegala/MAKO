@@ -76,7 +76,7 @@ Do not add activation or layer-path variables when the managed control is enable
 
 **Enable vkBasalt (Restart)** loads only MAKO Renderer's private bundled vkBasalt. MAKO ignores system-wide vkBasalt manifests and libraries, and a missing private bundle leaves vkBasalt disabled instead of falling back to another copy. No separate vkBasalt installation or launch option is needed.
 
-The compact controls set CAS or DLS sharpening, sharpening strength, DLS denoise, and optional FXAA or SMAA. MAKO Decky automatically uses vkBasalt's global file for the Default profile and an isolated file for every saved game or process profile; the UI shows the exact active path. Advanced edits are supported in that file because Decky merges only the compact controls and preserves other vkBasalt options. Changes apply after restarting the game.
+The compact controls set CAS or DLS sharpening, sharpening strength, DLS denoise, and optional FXAA or SMAA. MAKO Decky automatically uses vkBasalt's global file for the Default profile and an isolated file for every saved game or process profile; game files use their Steam app ID, including Steam-assigned non-Steam shortcut IDs, while profiles without one use a short fallback identity. The UI shows the exact active path. Advanced edits are supported in that file because Decky merges only the compact controls and preserves other vkBasalt options. Changes apply after restarting the game.
 
 For Flatpak games, install the matching MAKO extension and prepare the application in **Flatpak Setup**. If the effect does not appear, reinstall MAKO Renderer, update the Flatpak extension when applicable, and collect a [MAKO Decky diagnostics report](../../plugin/docs/COLLECT_DIAGNOSTICS.md).
 

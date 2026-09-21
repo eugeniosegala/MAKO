@@ -60,12 +60,13 @@ from .profile_storage import (
     ProfileMetadata,
     WrapperProfileSettings,
     config_for_profile,
+    metadata_steam_app_id,
     processes_for_config,
     vkbasalt_config_path,
 )
 
 
-WRAPPER_FORMAT_VERSION = 63
+WRAPPER_FORMAT_VERSION = 64
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -214,6 +215,7 @@ def vkbasalt_profile_environment_lines(
         config: ConfigurationData,
         global_config_path: Path,
         profile_config_dir: Path,
+        steam_app_id: Optional[str] = None,
 ) -> list[str]:
     """Select the automatic global or saved-profile vkBasalt config."""
     config_path = ""
@@ -223,6 +225,7 @@ def vkbasalt_profile_environment_lines(
                 profile_name,
                 global_config_path,
                 profile_config_dir,
+                steam_app_id,
             )
         )
     return [f"mako_vkbasalt_config={shlex.quote(config_path)}"]
@@ -697,6 +700,7 @@ def wrapper_profile_configuration_lines(
                 config,
                 global_config_path,
                 profile_config_dir,
+                metadata_steam_app_id(metadata, profile_name),
             )
         )
         lines.append("        ;;")
@@ -717,6 +721,7 @@ def wrapper_profile_configuration_lines(
             fallback_config,
             global_config_path,
             profile_config_dir,
+            metadata_steam_app_id(metadata, current_profile),
         )
     )
     lines.extend([

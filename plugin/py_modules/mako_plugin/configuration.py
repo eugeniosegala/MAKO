@@ -130,13 +130,19 @@ class ConfigurationService(BaseService):
     def _write_wrapper_profile_settings(
             self,
             profile_settings: profile_storage.WrapperProfileSettings,
+            metadata: Optional[profile_storage.ProfileMetadata] = None,
     ) -> None:
+        resolved_metadata = metadata
+        if resolved_metadata is None:
+            profile_data = self._get_profile_data()
+            resolved_metadata = self._read_profile_metadata(profile_data)
         normalized_profiles = {
             profile_name: self._normalize_wrapper_settings(settings)
             for profile_name, settings in profile_settings.items()
         }
         expected_profile_configs = self._write_vkbasalt_profile_configs(
-            normalized_profiles
+            normalized_profiles,
+            resolved_metadata,
         )
         profile_storage.write_wrapper_profile_settings(
             self.config_dir,
@@ -151,20 +157,41 @@ class ConfigurationService(BaseService):
     def _write_vkbasalt_profile_configs(
             self,
             profile_settings: profile_storage.WrapperProfileSettings,
+            metadata: Optional[profile_storage.ProfileMetadata] = None,
     ) -> set[str]:
         """Merge enabled configs while retaining files for existing profiles."""
+        resolved_metadata = metadata or {}
         expected_names = {
-            profile_storage.vkbasalt_profile_config_filename(profile_name)
+            profile_storage.vkbasalt_profile_config_filename(
+                profile_name,
+                profile_storage.metadata_steam_app_id(
+                    resolved_metadata,
+                    profile_name,
+                ),
+            )
             for profile_name in profile_settings
             if profile_name != DEFAULT_PROFILE_NAME
         }
         for profile_name, settings in profile_settings.items():
+            steam_app_id = profile_storage.metadata_steam_app_id(
+                resolved_metadata,
+                profile_name,
+            )
             if not profile_storage.uses_vkbasalt(settings):
+                self._migrate_vkbasalt_profile_config(
+                    profile_name,
+                    steam_app_id,
+                )
                 continue
             config_path = profile_storage.vkbasalt_config_path(
                 profile_name,
                 self.vkbasalt_global_config_path,
                 self.vkbasalt_profile_config_dir,
+                steam_app_id,
+            )
+            self._migrate_vkbasalt_profile_config(
+                profile_name,
+                steam_app_id,
             )
             config_path.parent.mkdir(
                 parents=True,
@@ -172,7 +199,7 @@ class ConfigurationService(BaseService):
             )
             legacy_default_path = (
                 self.vkbasalt_profile_config_dir /
-                profile_storage.vkbasalt_profile_config_filename(
+                profile_storage.legacy_vkbasalt_profile_config_filename(
                     DEFAULT_PROFILE_NAME
                 )
             )
@@ -199,22 +226,115 @@ class ConfigurationService(BaseService):
             )
         return expected_names
 
-    def _vkbasalt_config_path(self, profile_name: str) -> Path:
+    def _migrate_vkbasalt_profile_config(
+            self,
+            profile_name: str,
+            steam_app_id: Optional[str],
+    ) -> None:
+        """Move one retired opaque config to its compact canonical identity."""
+        if profile_name == DEFAULT_PROFILE_NAME:
+            return
+        legacy_path = (
+            self.vkbasalt_profile_config_dir /
+            profile_storage.legacy_vkbasalt_profile_config_filename(
+                profile_name
+            )
+        )
+        config_path = profile_storage.vkbasalt_config_path(
+            profile_name,
+            self.vkbasalt_global_config_path,
+            self.vkbasalt_profile_config_dir,
+            steam_app_id,
+        )
+        with self._configuration_write_lock:
+            if not legacy_path.is_file() or config_path.exists():
+                return
+            config_path.parent.mkdir(parents=True, exist_ok=True)
+            legacy_path.replace(config_path)
+        self.log.info(
+            "Migrated MAKO vkBasalt config from %s to %s",
+            legacy_path,
+            config_path,
+        )
+
+    def _move_vkbasalt_profile_config_identity(
+            self,
+            profile_name: str,
+            old_steam_app_id: Optional[str],
+            new_steam_app_id: Optional[str],
+    ) -> None:
+        """Keep advanced edits when a profile gains a Steam identity."""
+        self._migrate_vkbasalt_profile_config(
+            profile_name,
+            old_steam_app_id,
+        )
+        old_path = profile_storage.vkbasalt_config_path(
+            profile_name,
+            self.vkbasalt_global_config_path,
+            self.vkbasalt_profile_config_dir,
+            old_steam_app_id,
+        )
+        new_path = profile_storage.vkbasalt_config_path(
+            profile_name,
+            self.vkbasalt_global_config_path,
+            self.vkbasalt_profile_config_dir,
+            new_steam_app_id,
+        )
+        if old_path == new_path:
+            return
+        with self._configuration_write_lock:
+            if not old_path.is_file() or new_path.exists():
+                return
+            new_path.parent.mkdir(parents=True, exist_ok=True)
+            old_path.replace(new_path)
+        self.log.info(
+            "Moved MAKO vkBasalt config identity from %s to %s",
+            old_path,
+            new_path,
+        )
+
+    def _vkbasalt_config_path(
+            self,
+            profile_name: str,
+            metadata: Optional[profile_storage.ProfileMetadata] = None,
+    ) -> Path:
         """Return the advanced-edit file associated with one profile."""
+        resolved_metadata = metadata
+        if resolved_metadata is None and profile_name != DEFAULT_PROFILE_NAME:
+            profile_data = self._get_profile_data()
+            resolved_metadata = self._read_profile_metadata(profile_data)
+        steam_app_id = profile_storage.metadata_steam_app_id(
+            resolved_metadata or {},
+            profile_name,
+        )
+        self._migrate_vkbasalt_profile_config(profile_name, steam_app_id)
         return profile_storage.vkbasalt_config_path(
             profile_name,
             self.vkbasalt_global_config_path,
             self.vkbasalt_profile_config_dir,
+            steam_app_id,
         )
 
     def _rename_vkbasalt_profile_config(
             self,
             old_name: str,
             new_name: str,
+            metadata: profile_storage.ProfileMetadata,
     ) -> None:
         """Keep advanced edits with a saved profile when it is renamed."""
-        old_path = self._vkbasalt_config_path(old_name)
-        new_path = self._vkbasalt_config_path(new_name)
+        steam_app_id = profile_storage.metadata_steam_app_id(
+            metadata,
+            old_name,
+        )
+        old_path = self._vkbasalt_config_path(old_name, metadata)
+        new_path = profile_storage.vkbasalt_config_path(
+            new_name,
+            self.vkbasalt_global_config_path,
+            self.vkbasalt_profile_config_dir,
+            steam_app_id,
+        )
+        if old_path == new_path:
+            return
         if not old_path.is_file():
             return
         new_path.parent.mkdir(parents=True, exist_ok=True)
@@ -235,7 +355,10 @@ class ConfigurationService(BaseService):
         for path in self.vkbasalt_profile_config_dir.iterdir():
             if (
                 path.is_file()
-                and re.fullmatch(r"[0-9a-f]{24}\.conf", path.name)
+                and re.fullmatch(
+                    r"(?:[0-9a-f]{24}|profile-[0-9a-f]{12}|steam-[0-9]+)\.conf",
+                    path.name,
+                )
                 and path.name not in expected_names
             ):
                 path.unlink()
@@ -365,6 +488,7 @@ class ConfigurationService(BaseService):
         try:
             profile_data = self._get_profile_data()
             profile_name = profile_data["current_profile"]
+            metadata = self._read_profile_metadata(profile_data)
             config = self._config_for_profile(
                 profile_data, profile_name
             )
@@ -373,7 +497,7 @@ class ConfigurationService(BaseService):
                 ConfigurationResponse,
                 config=config,
                 vkbasalt_config_path=str(
-                    self._vkbasalt_config_path(profile_name)
+                    self._vkbasalt_config_path(profile_name, metadata)
                 ),
             )
 
@@ -402,13 +526,14 @@ class ConfigurationService(BaseService):
                     config=None,
                 )
 
+            metadata = self._read_profile_metadata(profile_data)
             config = self._config_for_profile(profile_data, profile_name)
             return self._success_response(
                 ConfigurationResponse,
                 f"Profile '{profile_name}' retrieved successfully",
                 config=config,
                 vkbasalt_config_path=str(
-                    self._vkbasalt_config_path(profile_name)
+                    self._vkbasalt_config_path(profile_name, metadata)
                 ),
             )
         except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:
@@ -781,7 +906,7 @@ class ConfigurationService(BaseService):
                 profile_name.strip(), PROFILE_KIND_PROCESS
             )
             self._save_profile_data(new_profile_data)
-            self._write_wrapper_profile_settings(profile_settings)
+            self._write_wrapper_profile_settings(profile_settings, metadata)
             self._write_profile_metadata(metadata)
 
             self.log.info(f"Created profile '{normalized_name}' from '{source_profile}'")
@@ -819,7 +944,7 @@ class ConfigurationService(BaseService):
             metadata.pop(profile_name, None)
             self._save_profile_data(new_profile_data)
             if self.wrapper_profile_settings_path.exists() or profile_settings:
-                self._write_wrapper_profile_settings(profile_settings)
+                self._write_wrapper_profile_settings(profile_settings, metadata)
             self._write_profile_metadata(metadata)
 
             script_result = self.update_mako_script_from_profile_data(new_profile_data)
@@ -864,13 +989,17 @@ class ConfigurationService(BaseService):
             profile_settings = self._read_wrapper_profile_settings()
             if old_name in profile_settings:
                 profile_settings[normalized_name] = profile_settings.pop(old_name)
-            self._rename_vkbasalt_profile_config(old_name, normalized_name)
+            self._rename_vkbasalt_profile_config(
+                old_name,
+                normalized_name,
+                metadata,
+            )
             profile_storage.rename_profile_metadata(
                 metadata, old_name, normalized_name, new_name.strip()
             )
             self._save_profile_data(new_profile_data)
             if self.wrapper_profile_settings_path.exists() or profile_settings:
-                self._write_wrapper_profile_settings(profile_settings)
+                self._write_wrapper_profile_settings(profile_settings, metadata)
             self._write_profile_metadata(metadata)
 
             script_result = self.update_mako_script_from_profile_data(new_profile_data)
@@ -1006,6 +1135,15 @@ class ConfigurationService(BaseService):
             profile_data = ConfigurationManager.set_current_profile(
                 profile_data, target_profile
             )
+            previous_app_id = profile_storage.metadata_steam_app_id(
+                metadata,
+                target_profile,
+            )
+            self._move_vkbasalt_profile_config_identity(
+                target_profile,
+                previous_app_id,
+                normalized_app_id,
+            )
             metadata[target_profile] = profile_storage.profile_metadata_entry(
                 friendly_name,
                 PROFILE_KIND_GAME,
@@ -1014,7 +1152,7 @@ class ConfigurationService(BaseService):
             )
 
             self._save_profile_data(profile_data)
-            self._write_wrapper_profile_settings(profile_settings)
+            self._write_wrapper_profile_settings(profile_settings, metadata)
             self._write_profile_metadata(metadata)
             script_result = self.update_mako_script_from_profile_data(profile_data)
             if not script_result["success"]:
@@ -1208,8 +1346,9 @@ class ConfigurationService(BaseService):
                     profile_data["global_config"][field_name] = config[field_name]
             profile_settings = self._read_wrapper_profile_settings()
             profile_settings[profile_name] = self._normalize_wrapper_settings(config)
+            metadata = self._read_profile_metadata(profile_data)
             self._save_profile_data(profile_data)
-            self._write_wrapper_profile_settings(profile_settings)
+            self._write_wrapper_profile_settings(profile_settings, metadata)
 
             # The wrapper embeds compatibility settings for every saved
             # profile, not only the currently active renderer profile.

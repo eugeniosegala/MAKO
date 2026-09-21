@@ -240,7 +240,6 @@ describe("Configuration controls", () => {
       />,
     );
 
-    expect(screen.getByText("Shaders")).toBeTruthy();
     expect(screen.getByText("Enable vkBasalt (Restart)")).toBeTruthy();
     expect(screen.getByText("Experimental")).toBeTruthy();
     expect(screen.getByText("Sharpening (Restart)")).toBeTruthy();

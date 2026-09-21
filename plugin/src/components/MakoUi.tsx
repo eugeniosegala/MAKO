@@ -211,7 +211,15 @@ export function MakoInlineTip({
           color: accentColor,
         }}
       />
-      <span style={{ minWidth: 0 }}>{children}</span>
+      <span
+        style={{
+          minWidth: 0,
+          overflowWrap: "anywhere",
+          wordBreak: "break-word",
+        }}
+      >
+        {children}
+      </span>
     </Container>
   );
 }
@@ -315,7 +323,7 @@ export function MakoSectionHeader({
           style={{
             paddingBottom: "8px",
             textAlign: "center",
-            borderBottom: "4px solid #315A86",
+            borderBottom: "4px solid #553878",
           }}
         >
           {children}

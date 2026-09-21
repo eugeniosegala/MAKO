@@ -625,6 +625,20 @@ class GameProfileTests(unittest.TestCase):
         self.assertTrue(
             self.service.update_profile_config(profile_name, config)["success"]
         )
+        vkbasalt_config = self.service.get_profile_config(profile_name)["config"]
+        vkbasalt_config["external_vulkan_layer"] = "vkbasalt"
+        self.assertTrue(
+            self.service.update_profile_config(
+                profile_name,
+                vkbasalt_config,
+            )["success"]
+        )
+        fallback_path = self.service._vkbasalt_config_path(profile_name)
+        fallback_path.write_text(
+            fallback_path.read_text(encoding="utf-8") +
+            "lutFile = adopted.cube\n",
+            encoding="utf-8",
+        )
 
         previous = configuration_module.detect_processes_for_steam_app
         configuration_module.detect_processes_for_steam_app = (
@@ -642,6 +656,14 @@ class GameProfileTests(unittest.TestCase):
         )
         details = self.service.get_profiles()["profile_details"]
         self.assertEqual(details[1]["steam_app_id"], "12345")
+        steam_path = self.service.vkbasalt_profile_config_dir / (
+            "steam-12345.conf"
+        )
+        self.assertFalse(fallback_path.exists())
+        self.assertIn(
+            "lutFile = adopted.cube",
+            steam_path.read_text(encoding="utf-8"),
+        )
 
     def test_profile_storage_is_not_limited_to_ten_entries(self):
         for index in range(1, 13):
@@ -972,7 +994,7 @@ class GameProfileTests(unittest.TestCase):
             },
         })
         legacy_default_path = self.service.vkbasalt_profile_config_dir / (
-            configuration_module.profile_storage.vkbasalt_profile_config_filename(
+            configuration_module.profile_storage.legacy_vkbasalt_profile_config_filename(
                 "mako"
             )
         )
@@ -1018,6 +1040,10 @@ class GameProfileTests(unittest.TestCase):
             unrelated["VKBASALT_CONFIG"],
         )
         self.assertEqual(
+            Path(matched["VKBASALT_CONFIG"]).name,
+            "steam-12345.conf",
+        )
+        self.assertEqual(
             Path(matched["VKBASALT_CONFIG"]).read_text(encoding="utf-8"),
             "# MAKO Decky merges its visible controls; other settings are preserved.\n"
             "effects = fxaa:dls\n"
@@ -1035,6 +1061,7 @@ class GameProfileTests(unittest.TestCase):
             self.service.vkbasalt_global_config_path,
         )
         self.assertFalse(legacy_default_path.exists())
+
         self.assertIn(
             "lutFile = default.cube",
             self.service.vkbasalt_global_config_path.read_text(encoding="utf-8"),
@@ -1085,6 +1112,66 @@ class GameProfileTests(unittest.TestCase):
         })
         self.assertFalse(stale_path.exists())
         self.assertTrue(self.service.vkbasalt_global_config_path.exists())
+
+    def test_vkbasalt_game_config_migrates_to_compact_steam_identity(self):
+        game = dict(ConfigurationManager.get_defaults())
+        game["active_in"] = "CoolGame.exe"
+        profile_data = ProfileData(
+            current_profile="cool-game",
+            profiles={
+                "mako": ConfigurationManager.get_defaults(),
+                "cool-game": game,
+            },
+            global_config=self.profile_data["global_config"],
+        )
+        self.service._save_profile_data(profile_data)
+        self.service._write_profile_metadata({
+            "mako": {
+                "display_name": "Default",
+                "kind": "default",
+                "steam_app_id": None,
+            },
+            "cool-game": {
+                "display_name": "Cool Game",
+                "kind": "game",
+                "steam_app_id": "12345",
+            },
+        })
+        legacy_path = self.service.vkbasalt_profile_config_dir / (
+            configuration_module.profile_storage.legacy_vkbasalt_profile_config_filename(
+                "cool-game"
+            )
+        )
+        legacy_path.parent.mkdir(parents=True)
+        legacy_path.write_text(
+            "effects = cas\n"
+            "casSharpness = 0.40\n"
+            "lutFile = preserved.cube\n",
+            encoding="utf-8",
+        )
+
+        self.service._write_wrapper_profile_settings({
+            "mako": {"external_vulkan_layer": ""},
+            "cool-game": {
+                "external_vulkan_layer": "vkbasalt",
+                "vkbasalt_sharpening": "cas",
+                "vkbasalt_sharpness": 0.7,
+            },
+        })
+
+        compact_path = self.service.vkbasalt_profile_config_dir / (
+            "steam-12345.conf"
+        )
+        self.assertFalse(legacy_path.exists())
+        self.assertTrue(compact_path.is_file())
+        self.assertIn(
+            "casSharpness = 0.70",
+            compact_path.read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "lutFile = preserved.cube",
+            compact_path.read_text(encoding="utf-8"),
+        )
 
     def test_default_vkbasalt_uses_global_file_and_ignores_caller_override(self):
         self.service._write_wrapper_profile_settings({
@@ -1173,6 +1260,7 @@ class GameProfileTests(unittest.TestCase):
             self.service.update_profile_config(name, config)["success"]
         )
         vkbasalt_path = self.service._vkbasalt_config_path(name)
+        self.assertRegex(vkbasalt_path.name, r"^profile-[0-9a-f]{12}\.conf$")
         self.assertTrue(vkbasalt_path.is_file())
         self.assertTrue(self.service.set_current_profile(name)["success"])
         deleted = self.service.delete_profile(name)

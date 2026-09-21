@@ -153,21 +153,37 @@ def normalize_wrapper_settings(
     })
 
 
-def vkbasalt_profile_config_filename(profile_name: str) -> str:
-    """Return a stable opaque filename for one persisted profile identity."""
+def legacy_vkbasalt_profile_config_filename(profile_name: str) -> str:
+    """Return the retired opaque filename used before app-aware identities."""
     digest = hashlib.sha256(profile_name.encode("utf-8")).hexdigest()[:24]
     return f"{digest}.conf"
+
+
+def vkbasalt_profile_config_filename(
+        profile_name: str,
+        steam_app_id: Optional[str] = None,
+) -> str:
+    """Return a compact stable filename for one persisted profile identity."""
+    normalized_app_id = str(steam_app_id or "").strip()
+    if re.fullmatch(r"\d+", normalized_app_id):
+        return f"steam-{normalized_app_id}.conf"
+    digest = hashlib.sha256(profile_name.encode("utf-8")).hexdigest()[:12]
+    return f"profile-{digest}.conf"
 
 
 def vkbasalt_config_path(
         profile_name: str,
         global_config_path: Path,
         profile_config_dir: Path,
+        steam_app_id: Optional[str] = None,
 ) -> Path:
     """Resolve Default globally and every saved profile to its own file."""
     if profile_name == DEFAULT_PROFILE_NAME:
         return global_config_path
-    return profile_config_dir / vkbasalt_profile_config_filename(profile_name)
+    return profile_config_dir / vkbasalt_profile_config_filename(
+        profile_name,
+        steam_app_id,
+    )
 
 
 _VKBASALT_ASSIGNMENT = re.compile(

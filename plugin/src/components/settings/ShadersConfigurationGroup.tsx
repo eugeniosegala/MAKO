@@ -27,7 +27,6 @@ import {
   MakoExperimentalSettingLabel,
   MakoInlineTip,
   MakoRestartLabel,
-  MakoSectionHeader,
 } from "../MakoUi";
 import type { ConfigurationControlProps } from "./types";
 
@@ -82,8 +81,6 @@ export function ShadersConfigurationGroup({
 
   return (
     <>
-      <MakoSectionHeader>{t("CONTENT_SHADERS", "Shaders")}</MakoSectionHeader>
-
       <PanelSectionRow>
         <ToggleField
           label={
