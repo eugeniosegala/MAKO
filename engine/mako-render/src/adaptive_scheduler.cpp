@@ -2596,19 +2596,21 @@ void AdaptiveScheduler::resumeAfterExternalInterruption(
 }
 
 void AdaptiveScheduler::beginTransportRecovery(
-        const TimePoint now, const bool classifyActiveRampFailure) {
-    // A lower-image timeout invalidates cadence and stable-pacing proofs. An
-    // event-backed timeout may additionally prove that an active higher-load
-    // experiment is unsafe for this transport. Requalify for one second at
-    // native cadence, optionally resume the proven lower level and delay the
-    // next higher probe. Keep unrelated efficiency-probe backoff intact.
+        const TimePoint now, const bool classifyGeneratedLoadFailure) {
+    // A lower-image timeout invalidates cadence and stable-pacing proofs. A
+    // confirmed event/ramp failure or qualified native-drain recovery may also
+    // prove the current generated load unsafe for this transport. Requalify
+    // for one second at native cadence, optionally resume the proven lower
+    // level and delay the next higher probe. Keep unrelated efficiency-probe
+    // backoff intact.
     const auto retainedEfficiencyRetryAt =
         this->state.efficiencyProbe.retryAt;
-    // A timeout during ordinary gameplay is not sufficient evidence that the
-    // active multiplier experiment caused the transport miss. Preserve 3.3's
-    // generic recovery semantics there. Confirmed menu/profile recovery may
-    // classify the active experiment and retain exact proven-load backoff.
-    const bool failedRampProbe = classifyActiveRampFailure &&
+    // One isolated timeout is not sufficient evidence against a generated
+    // load. The caller sets classifyGeneratedLoadFailure only after direct
+    // transport evidence has qualified a native drain and bounded probe. At
+    // that point the current generated level is unsafe regardless of whether
+    // it was still experimental or had previously reached stable cadence.
+    const bool failedRampProbe = classifyGeneratedLoadFailure &&
         this->state.ramp.evaluationAt.has_value();
     const size_t failedGenerationLimit =
         this->state.outputPlanner.generationLimit;
@@ -2636,6 +2638,9 @@ void AdaptiveScheduler::beginTransportRecovery(
         this->state.ramp.evaluationAt.reset();
         this->state.ramp.delivery.reset();
     }
+    const bool failedGeneratedLoad = classifyGeneratedLoadFailure &&
+        failedGenerationLimit > loadBaseline.fallbackGenerationLimit &&
+        loadBaseline.baseFps > 0.0;
     this->beginStabilization(now, "generated-image-recovery");
     if (loadBaseline.baseFps > 0.0) {
         this->restoreGenerationLimit(
@@ -2644,7 +2649,7 @@ void AdaptiveScheduler::beginTransportRecovery(
             "generated-image-pressure-fallback"
         );
     }
-    if (failedRampProbe && loadBaseline.baseFps > 0.0) {
+    if (failedGeneratedLoad) {
         const size_t failureCount = previousProbeFailures + 1;
         const auto retryDelay = adaptiveRampRetryDelayForFailures(
             failureCount
@@ -2860,6 +2865,7 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         const size_t bridgeLimit = std::min(configuredLimit, testedLimit + 1);
         const bool canBridge =
             !accepted &&
+            deliveryHealthy &&
             this->state.ramp.previousLimit == 0 &&
             testedLimit == 1 &&
             bridgeLimit >= 2 &&

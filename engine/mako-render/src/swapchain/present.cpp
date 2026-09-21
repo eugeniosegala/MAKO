@@ -1518,11 +1518,12 @@ VkResult Swapchain::presentGeneratedFrames(
         }
         if (observation.stabilizing && this->adaptiveScheduler) {
             // The probe proves that lower transport traversal is possible,
-            // not that the pre-timeout Adaptive cadence is still valid. Clear
-            // stable-cadence/FIFO handoff state now, concurrently with the
-            // short transport guard, before generated frames may resume.
+            // but the preceding native drain proves that the current generated
+            // load could not deliver. Clear stable-cadence/FIFO handoff state
+            // and retain backoff against that failed level before generated
+            // frames may resume. Isolated guard misses never reach this path.
             this->adaptiveScheduler->beginTransportRecovery(
-                observedAt, eventRecoveryWindow
+                observedAt, true
             );
         }
         if (observation.quarantined) {

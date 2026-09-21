@@ -209,7 +209,7 @@ namespace mako::layer {
             TimePoint now, std::chrono::milliseconds interval);
         void beginStabilization(TimePoint now, std::string_view reason);
         void beginTransportRecovery(
-            TimePoint now, bool classifyActiveRampFailure = false);
+            TimePoint now, bool classifyGeneratedLoadFailure = false);
         [[nodiscard]] bool rejectActiveRampForTransportMiss(TimePoint now);
         void resumeAfterExternalInterruption(TimePoint now, bool confirmedReturn);
         void restoreGenerationLimit(TimePoint now, size_t generationLimit,

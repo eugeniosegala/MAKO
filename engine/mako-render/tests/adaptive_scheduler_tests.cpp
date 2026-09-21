@@ -4054,6 +4054,71 @@ namespace {
         }
     }
 
+    void testQualifiedTransportFailureBacksOffAcceptedLoad() {
+        Harness harness(
+            100,
+            3,
+            true,
+            AdaptiveRecoveryPolicy::OrderedSdr,
+            false,
+            ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+            ),
+            120,
+            false
+        );
+        harness.start();
+        harness.runAtFps(50.0, 10s);
+        const auto before = harness.scheduler.snapshot();
+        const auto baseline = harness.scheduler.generationLoadBaseline();
+        require(before.validatedGenerationLimit == 1 &&
+                baseline.fallbackGenerationLimit == 0 &&
+                baseline.baseFps > 0.0,
+            "precondition failed: accepted 2x had no native load baseline");
+
+        harness.scheduler.beginTransportRecovery(harness.now, true);
+        const auto recovery = harness.scheduler.snapshot();
+        require(recovery.phase == AdaptiveSchedulerPhase::Stabilizing &&
+                recovery.generationLimit == 0 &&
+                recovery.validatedGenerationLimit == 0,
+            "qualified generated-image pressure retried the failed 2x load");
+        const auto* backoff = harness.diagnostics.last("ramp-backoff");
+        require(backoff && backoff->testedLimit == 1 &&
+                backoff->previousLimit == 1,
+            "qualified 2x delivery failure did not retain retry backoff");
+    }
+
+    void testDeliveryPressureCannotBridgeToHigherMultiplier() {
+        Harness harness(180, 3);
+        harness.start();
+        for (size_t frame = 0;
+                frame < 600 &&
+                    !harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(60.0);
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "precondition failed: initial multiplier probe did not begin");
+
+        const size_t bridgesBefore = harness.diagnostics.count("bridge");
+        for (size_t frame = 0; frame < 120; ++frame) {
+            const auto plan = harness.frameAtFps(31.0);
+            harness.scheduler.reportGeneratedFrameDelivery({
+                .requested = plan.size(),
+                .acceptedForPresentation = 0,
+            });
+            if (!harness.scheduler.snapshot().rampEvaluationActive)
+                break;
+        }
+
+        const auto after = harness.scheduler.snapshot();
+        const auto* result = harness.diagnostics.last("ramp-result");
+        require(harness.diagnostics.count("bridge") == bridgesBefore &&
+                result && !result->accepted && after.rearmRequired &&
+                after.validatedGenerationLimit == 0,
+            "failed generated delivery escalated into a higher bridge load");
+    }
+
     void testOrdinaryTransportRecoveryDoesNotRejectMultiplierProbe() {
         struct SchedulerCase {
             bool dynamicCadenceRecovery;
@@ -4301,6 +4366,8 @@ int main() {
         {"restored load keeps collapse guard", testRestoredDiscontinuityLoadRetainsCollapseGuard},
         {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
         {"transport-failed multiplier probes keep proven load", testTransportFailureDuringAnyMultiplierProbeRetainsProvenLoad},
+        {"qualified transport failure backs off accepted load", testQualifiedTransportFailureBacksOffAcceptedLoad},
+        {"delivery pressure cannot bridge upward", testDeliveryPressureCannotBridgeToHigherMultiplier},
         {"ordinary transport recovery keeps 3.3 multiplier semantics", testOrdinaryTransportRecoveryDoesNotRejectMultiplierProbe},
         {"transport probe backoff survives cadence refresh", testTransportProbeBackoffSurvivesCadenceRefresh},
         {"cadence replay is deterministic", testDeterministicReplay},
