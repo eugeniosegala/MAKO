@@ -8,12 +8,12 @@ A setting belongs to the earliest boundary that can safely establish all state i
 
 | Boundary | State | Completion |
 | --- | --- | --- |
-| Process start | Scaling enablement, Game Swapchain Images compatibility, layer membership and order, Gamescope WSI isolation, HDR exposure, Zink, and audio compatibility | Start a new game process |
+| Process start | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, layer membership and order, Gamescope WSI isolation, HDR exposure, Zink, and audio compatibility | Start a new game process |
 | Process-wide backend | DLL, FP16 permission, GPU, and Ultra Performance policy | Construct a new backend, normally by restarting the process |
 | Game-owned swapchain | Spatial extents and pacing shape | Natural recreation, or one eligible maintenance1-backed extent request |
 | Private spatial context | Scaling method and sharpness | Prepare, drain MAKO-owned work, and atomically replace |
 | Private FG context | Flow Scale, lighter model, and generated-output capacity | Prepare, drain MAKO-owned work, and atomically replace |
-| Live policy | Frame Generation switch, refresh guard, Fixed/Adaptive policy, target, caps, and cadence controls | Next successful reload and application present; policy edits received during confirmed Steam UI focus coalesce until gameplay returns |
+| Live policy | Frame Generation `0x`/active execution state, refresh guard, Fixed/Adaptive policy, target, caps, and cadence controls | Next successful reload and application present; policy edits received during confirmed Steam UI focus coalesce until gameplay returns |
 | Compositor feedback | Confirmed refresh and application HDR state | Stabilized sample, independent of profile reload |
 | Dormant value | A setting for an inactive mode or unavailable private resource | Save now; apply when its owning mode or resource becomes active |
 
@@ -44,14 +44,15 @@ The transition engine keeps three facts distinct:
 
 `ProfileUpdatePlan::appliedProfile` is a merge. It starts from the requested profile, restores values that cannot cross the current boundary, then classifies the remaining effective differences. A pending restart or recreation must not block an independent live update.
 
-For example, a write that changes Base FPS Cap and Flow Scale applies the cap while preparing a private FG replacement. The old Flow Scale remains applied until handoff. A later Frame Generation Off still applies immediately, and reverting Flow Scale before handoff cancels the replacement.
+For example, a write that changes Base FPS Cap and Flow Scale applies the cap while preparing a private FG replacement. The old Flow Scale remains applied until handoff. Selecting `0x` later still applies immediately, and reverting Flow Scale before handoff cancels the replacement.
 
 ## Transition matrix
 
 | Setting or input | Boundary | Effect |
 | --- | --- | --- |
-| Frame Generation Off | Live | Releases the effective base cap, resets relevant scheduler and recovery state, and takes the real-frame path without LSFG work. |
-| Frame Generation On | Live if startup provisioning succeeded; otherwise restart | Reuses retained interop and private resources, then warms temporal history where required. |
+| Frame Generation provisioning | Restart | Adds or removes LSFG application-device interop, backend ownership, and private resources. Scaling-only processes retain the combined Renderer without those FG resources. |
+| Frame Generation `0x` | Live | Releases the effective base cap, resets relevant scheduler and recovery state, and takes the real-frame path without LSFG work. |
+| Frame Generation `2x`–`5x` or Adaptive | Live when startup provisioning succeeded; otherwise restart | Reuses retained interop and private resources, then warms temporal history where required. |
 | Refresh threshold and Gamescope refresh | Live | Re-evaluates effective enablement and refresh-targeted scheduling. |
 | Fixed/Adaptive mode or multiplier | Live within current capacity; otherwise private FG replacement or recreation | Dormant mode values are saved without resetting the active mode. |
 | Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. |
@@ -113,9 +114,11 @@ Reset only state whose assumptions changed:
 
 A broad “configuration changed” reset would discard validated cadence after unrelated edits and is not allowed.
 
-## Frame Generation Off and Ultra Performance
+## Frame Generation provisioning, 0x, and Ultra Performance
 
-Frame Generation Off submits no LSFG model work, generated-image acquisition, or generated presents. The saved cap is dormant. A matched process still provisions interop, backend, private images, and synchronization when startup succeeds so Off can turn On live. Failed provisioning leaves real-frame or independent scaling active and reports restart pending.
+Disabling Frame Generation provisioning before launch omits LSFG device interop and backend/private generation ownership. A Scaling-only profile still loads the combined Renderer because it owns reconstruction, but it creates no Frame Generation resources. Decky can omit the Renderer layer entirely when Frame Generation provisioning and Scaling are both off; a selected post-processing layer remains independent.
+
+The `0x` execution state submits no LSFG model work, generated-image acquisition, or generated presents. The saved cap is dormant. When provisioning is on, the process retains interop, backend, private images, and synchronization so `0x` can return to an active factor live. Failed provisioning leaves real-frame or independent scaling active and reports restart pending.
 
 Ultra Performance remains a process-start policy: effective FP16, Flow Scale 0.7, lighter model, active-policy-sized capacity, and LS1 Performance when scaling is enabled. It never enables scaling. Compatible live controls still work, but changing Ultra itself waits for restart and cannot partially mutate the active backend.
 

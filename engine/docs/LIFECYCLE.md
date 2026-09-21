@@ -121,10 +121,10 @@ Settings are classified by the earliest boundary at which they can be applied sa
 
 | Class | Examples | Behavior after a live edit |
 | --- | --- | --- |
-| Process-static | Scaling enablement, Game Swapchain Images compatibility, layer chain, Gamescope WSI isolation, HDR exposure, GPU selection, and Ultra Performance | The requested value is reported as pending and becomes effective on the next process start |
+| Process-static | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, layer chain, Gamescope WSI isolation, HDR exposure, GPU selection, and Ultra Performance | The requested value is reported as pending and becomes effective on the next process start |
 | Swapchain-static | Source/presentation geometry, scaling placement, present transport, color format, WSI image pool, and generated-output headroom | Unrelated live settings apply immediately. The static change waits for application recreation or, on supported presentation boundaries, one safe recreation request |
 | Private-resource | Scaling method/sharpness, Flow Scale, lighter model, and capacity within WSI headroom | MAKO coalesces the request, constructs a complete candidate beside the old context, drains only MAKO-owned work, then switches atomically |
-| Live policy | Frame Generation switch, refresh threshold, Fixed multiplier within capacity, Adaptive target/limit, base cap, Smooth Cadence, and recovery controls | Applied on the next successful present without rebuilding the swapchain |
+| Live policy | Frame Generation `0x`/active execution state, refresh threshold, Fixed multiplier within capacity, Adaptive target/limit, base cap, Smooth Cadence, and recovery controls | Applied on the next successful present without rebuilding the swapchain |
 | Feedback-derived | Confirmed refresh, output target, HDR state, and presentation role | Consumed from the monitor cache; changes may update policy, start a color transition, or make a future geometry recreation necessary |
 | Dormant | Values for an inactive mode or absent resource | Saved and reported, but consume no resource until that mode becomes active |
 

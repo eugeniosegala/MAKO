@@ -192,10 +192,17 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "location": "toml"
     },
 
+    "frame_generation_provisioned": {
+        "fieldType": ConfigFieldType.BOOLEAN,
+        "default": True,
+        "description": "restart-bound Frame Generation provisioning switch; disable to omit LSFG interop and backend resources",
+        "location": "toml"
+    },
+
     "frame_generation_enabled": {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
-        "description": "on/off switch; leave on for fixed or adaptive generation, off stops both modes",
+        "description": "live Frame Generation execution switch represented by 0x in the factor control",
         "location": "toml"
     },
 

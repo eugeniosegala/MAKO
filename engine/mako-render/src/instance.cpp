@@ -510,11 +510,13 @@ Root::Root() :
     }
 
     this->active_profile = profileForLayer(profile->second);
-    // Every matched MAKO process reserves the application-device interop used
-    // by LSFG. The user's Frame Generation switch remains a live execution
-    // policy: Off performs no generation work, while On can reuse the retained
-    // backend and private resources without reconstructing the Vulkan device.
-    this->frameGenerationInteropProvisionedAtStartup = frameGenerationLayer;
+    // Frame Generation provisioning is a process-start choice because LSFG
+    // needs application-device interop. The separate execution switch remains
+    // live: 0x performs no generation work while 2x-5x or Adaptive can reuse
+    // already provisioned backend and private resources in place.
+    this->frameGenerationInteropProvisionedAtStartup =
+        frameGenerationLayer &&
+        this->active_profile->frame_generation_provisioned;
     this->scalingEngineConfiguredAtStartup =
         this->active_profile->scaling_enabled;
     this->swapchainImageCountCompatibilityConfiguredAtStartup =
@@ -653,6 +655,7 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
     auto runtimeProfile = requestedProfile;
     bool profileProcessRestartRequired = false;
     bool gpuSelectionPending = false;
+    bool frameGenerationProvisioningPending = false;
     bool ultraPerformancePending =
         activeUltraPerformance != requestedUltraPerformance;
     bool scalingEnginePending = false;
@@ -660,17 +663,27 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
     if (runtimeProfile && this->active_profile) {
         auto projection = projectProcessStaticProfileForLiveUpdate(
             *this->active_profile, *runtimeProfile,
+            this->frameGenerationInteropProvisionedAtStartup,
             this->scalingEngineConfiguredAtStartup,
             this->swapchainImageCountCompatibilityConfiguredAtStartup
         );
         *runtimeProfile = std::move(projection.runtimeProfile);
         gpuSelectionPending = projection.gpuSelectionPending;
+        frameGenerationProvisioningPending =
+            projection.frameGenerationProvisioningPending;
         ultraPerformancePending = projection.ultraPerformancePending;
         scalingEnginePending = projection.scalingEnginePending;
         swapchainImageCountCompatibilityPending =
             projection.swapchainImageCountCompatibilityPending;
         profileProcessRestartRequired = projection.restartRequired();
     } else if (runtimeProfile) {
+        if (runtimeProfile->frame_generation_provisioned !=
+                this->frameGenerationInteropProvisionedAtStartup) {
+            runtimeProfile->frame_generation_provisioned =
+                this->frameGenerationInteropProvisionedAtStartup;
+            frameGenerationProvisioningPending = true;
+            profileProcessRestartRequired = true;
+        }
         if (runtimeProfile->scaling_enabled !=
                 this->scalingEngineConfiguredAtStartup) {
             runtimeProfile->scaling_enabled =
@@ -685,6 +698,12 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
             swapchainImageCountCompatibilityPending = true;
             profileProcessRestartRequired = true;
         }
+    }
+    if (frameGenerationProvisioningPending) {
+        std::cerr << "MAKO Renderer: Frame Generation provisioning toggle "
+                     "deferred; restart the game to change LSFG device "
+                     "interop and backend ownership; 0x and compatible "
+                     "profile changes remain live\n";
     }
     if (ultraPerformancePending) {
         profileProcessRestartRequired = true;
@@ -717,6 +736,8 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
                       << " state_revision=" << this->runtimeStateRevision
                       << " reason=process-static-profile"
                       << " gpu_selection_pending=" << gpuSelectionPending
+                      << " frame_generation_provisioning_pending="
+                      << frameGenerationProvisioningPending
                       << " ultra_performance_pending="
                       << ultraPerformancePending
                       << " scaling_engine_pending="
@@ -1437,7 +1458,9 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
         const bool swapchainMaintenance1Enabled) {
     if (!this->active_profile.has_value())
         throw ls::error("attempted to create swapchain context while layer is inactive");
-    const auto profile = profileForLayerContext(*this->active_profile);
+    auto profile = profileForLayerContext(*this->active_profile);
+    profile.frame_generation_provisioned =
+        this->frameGenerationInteropProvisionedAtStartup;
     const auto& global = this->config.get().global();
 
     std::optional<std::filesystem::path> scalingShaderDll;
@@ -1461,6 +1484,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
 
     std::optional<std::string> backendInitializationError;
     const bool frameGenerationRequested =
+        profile.frame_generation_provisioned &&
         profile.frame_generation_enabled;
     const bool frameGenerationAvailableOnDevice =
         frameGenerationInteropForLayer(vk.frameGenerationInteropEnabled());

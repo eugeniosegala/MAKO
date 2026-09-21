@@ -71,6 +71,7 @@ namespace ls {
     /// Renderer defaults used when a game profile omits fields
     struct GameConfDefaults {
         static constexpr size_t multiplier = 2;
+        static constexpr bool frameGenerationProvisioned = true;
         static constexpr bool frameGenerationEnabled = true;
         static constexpr bool scalingEnabled = false;
         static constexpr bool swapchainImageCountCompatibility = false;
@@ -131,6 +132,10 @@ namespace ls {
         std::optional<std::string> gpu;
         /// multiplier for frame generation
         size_t multiplier{GameConfDefaults::multiplier};
+        /// provision LSFG device interop and backend resources at process start
+        bool frame_generation_provisioned{
+            GameConfDefaults::frameGenerationProvisioned
+        };
         /// allow frame synthesis to be toggled live without changing its mode
         bool frame_generation_enabled{GameConfDefaults::frameGenerationEnabled};
         /// provision the scaling engine independently from frame synthesis

@@ -254,6 +254,8 @@ namespace {
         else
             stream << "null";
         stream << ",\"multiplier\":" << profile.multiplier
+               << ",\"frame_generation_provisioned\":"
+               << profile.frame_generation_provisioned
                << ",\"frame_generation_enabled\":"
                << profile.frame_generation_enabled
                << ",\"scaling_enabled\":" << profile.scaling_enabled

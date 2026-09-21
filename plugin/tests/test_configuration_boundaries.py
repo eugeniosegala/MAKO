@@ -132,10 +132,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         defaults = ConfigurationManager.get_defaults()
         content = self.service._generate_script_content(defaults)
 
-        self.assertEqual(len(content.encode("utf-8")), 12465)
+        self.assertEqual(len(content.encode("utf-8")), 13792)
         self.assertEqual(
             _sha256(content),
-            "3885cb5cd6a07a8c3651eaa93458824268be5c2eb556c6672c98f8322a6c6e1d",
+            "1d80653eec9fa37eeb94aaa8545c4adfde6afcbc794f77299bf380741e64a6cc",
         )
         self.assertEqual(
             wrapper_generation.generate_script_content(
@@ -202,10 +202,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
                 profile_data
             )
 
-        self.assertEqual(len(content.encode("utf-8")), 14709)
+        self.assertEqual(len(content.encode("utf-8")), 16110)
         self.assertEqual(
             _sha256(content),
-            "dda26065e9684bbb87743bbc3bcbac7b3ed6fa451d8469da01b69268b5924849",
+            "7e736ef60d70421f450da0de1107652cbc06b5540e7ae8e9123631e6483ef71c",
         )
         self.assertEqual(
             wrapper_generation.generate_profile_script_content(
@@ -250,6 +250,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
     def test_renderer_profile_settings_remain_toml_only(self):
         scaling = {
             **ConfigurationManager.get_defaults(),
+            "frame_generation_provisioned": False,
             "scaling_enabled": True,
             "scaling_factor": 1.8,
             "scaling_supersampling": True,
@@ -261,6 +262,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         wrapper_content = self.service._generate_script_content(scaling)
         wrapper_settings = self.service._wrapper_settings_defaults()
 
+        self.assertIn("frame_generation_provisioned = false", toml_content)
         self.assertIn("scaling_enabled = true", toml_content)
         self.assertIn("scaling_factor = 1.8", toml_content)
         self.assertIn("scaling_supersampling = true", toml_content)
@@ -269,6 +271,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             "swapchain_image_count_compatibility = true", toml_content
         )
         for field in (
+            "frame_generation_provisioned",
             "scaling_enabled",
             "scaling_factor",
             "scaling_supersampling",
@@ -293,7 +296,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertEqual(len(content.encode("utf-8")), 515)
         self.assertEqual(
             _sha256(content),
-            "5a287ae5867274cf508f9acc52745fcea1325c889dab3e43c736cf78a3618648",
+            "ec2e47dc3bfee5d49ca3dfae7cc8801589c2042e1f7d8fa2bb2a74f8bd5e3347",
         )
 
     def test_profile_sidecar_bytes_are_characterized(self):

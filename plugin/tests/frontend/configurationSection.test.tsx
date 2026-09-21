@@ -248,12 +248,12 @@ describe("Configuration controls", () => {
     ).toBeTruthy();
     expect(screen.getByText("Experimental")).toBeTruthy();
     expect(screen.getByText("Sharpening (Restart)")).toBeTruthy();
-    expect(screen.getByText("Sharpness (55%) (Restart)")).toBeTruthy();
-    expect(screen.getByText("DLS Denoise (20%) (Restart)")).toBeTruthy();
+    expect(screen.getByText("Sharpness (55%)")).toBeTruthy();
+    expect(screen.getByText("DLS Denoise (20%)")).toBeTruthy();
     expect(screen.getByText("Anti-aliasing (Restart)")).toBeTruthy();
     expect(
       screen.getByText(
-        "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. This file belongs to the selected profile and is removed when that profile is deleted.",
+        "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes and effect selection apply on the next launch; sharpness and DLS denoise apply live. This file belongs to the selected profile and is removed when that profile is deleted.",
       ),
     ).toBeTruthy();
   });
@@ -273,7 +273,7 @@ describe("Configuration controls", () => {
 
     expect(
       screen.getByText(
-        "Advanced options can be edited in /home/deck/.config/vkBasalt/vkBasalt.conf. MAKO merges only the controls above and preserves every other setting. The Default profile uses this global file.",
+        "Advanced options can be edited in /home/deck/.config/vkBasalt/vkBasalt.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes and effect selection apply on the next launch; sharpness and DLS denoise apply live. The Default profile uses this global file.",
       ),
     ).toBeTruthy();
     expect(screen.queryByText("vkBasalt Configuration (Restart)")).toBeNull();
@@ -358,7 +358,7 @@ describe("Configuration controls", () => {
     ).toBe(2);
   });
 
-  test("locks Base FPS Cap while Frame Generation is off", () => {
+  test("locks Base FPS Cap while the Frame Generation factor is 0x", () => {
     render(
       <ConfigurationSection
         config={{

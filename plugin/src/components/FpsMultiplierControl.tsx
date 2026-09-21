@@ -16,6 +16,7 @@ import {
   FIXED_MULTIPLIER_UI_MAX,
   FIXED_MULTIPLIER_UI_MIN,
   FRAME_GENERATION_ENABLED,
+  FRAME_GENERATION_PROVISIONED,
   getDefaults,
   MULTIPLIER,
   PERFORMANCE_MODE,
@@ -33,6 +34,7 @@ import t from "../i18n/i18n";
 import {
   MakoInlineTip,
   MakoFocusable,
+  MakoRestartLabel,
   MakoSettingRelationship,
   makoDialogButtonStyle,
 } from "./MakoUi";
@@ -54,6 +56,9 @@ export function FpsMultiplierControl({
   const frameGenerationEnabled =
     config.frame_generation_enabled ??
     DEFAULT_CONFIGURATION.frame_generation_enabled;
+  const frameGenerationProvisioned =
+    config.frame_generation_provisioned ??
+    DEFAULT_CONFIGURATION.frame_generation_provisioned;
   const automaticBaseFpsCap = Math.max(
     ADAPTIVE_MINIMUM_BASE_FPS,
     targetFps / 2,
@@ -82,30 +87,41 @@ export function FpsMultiplierControl({
     <>
       <PanelSectionRow>
         <ToggleField
-          label={t("FRAME_GENERATION_ENABLED", "Frame Generation")}
+          label={
+            <MakoRestartLabel
+              label={t(
+                "FRAME_GENERATION_PROVISIONED",
+                "Enable Frame Generation (Restart)",
+              )}
+            />
+          }
           description={
             <>
               <div>
                 {t(
-                  "FRAME_GENERATION_ENABLED_DESC",
-                  "Leave it on to use Fixed or Adaptive Frame Generation. When off, neither mode generates frames; your settings stay saved.",
+                  "FRAME_GENERATION_PROVISIONED_DESC",
+                  "Loads and provisions MAKO Frame Generation when the game starts. Turn it off when you only want Scaling or Shaders.",
                 )}
               </div>
-              <MakoInlineTip tone="info">
-                {t(
-                  "FRAME_GENERATION_ENABLED_WARNING",
-                  "Keep this on if you want frame generation.",
-                )}
-              </MakoInlineTip>
+              {frameGenerationProvisioned && (
+                <MakoInlineTip tone="info">
+                  {t(
+                    "FRAME_GENERATION_PROVISIONED_NOTE",
+                    "Use 0x below to pause or resume Frame Generation live without unloading its resources.",
+                  )}
+                </MakoInlineTip>
+              )}
             </>
           }
-          checked={frameGenerationEnabled}
-          bottomSeparator={frameGenerationEnabled ? undefined : "none"}
-          onChange={(value) => onConfigChange(FRAME_GENERATION_ENABLED, value)}
+          checked={frameGenerationProvisioned}
+          bottomSeparator={frameGenerationProvisioned ? undefined : "none"}
+          onChange={(value) =>
+            onConfigChange(FRAME_GENERATION_PROVISIONED, value)
+          }
         />
       </PanelSectionRow>
 
-      {frameGenerationEnabled && (
+      {frameGenerationProvisioned && (
         <>
           <PanelSectionRow>
             <ToggleField
@@ -221,20 +237,23 @@ export function FpsMultiplierControl({
 
           <PanelSectionRow>
             <Field
-              label={t("MULTIPLIER_TITLE", "Fixed FPS Multiplier")}
+              label={t(
+                "FRAME_GENERATION_FACTOR",
+                "Frame Generation Factor",
+              )}
               description={
                 <>
                   <span style={{ display: "block", paddingTop: "8px" }}>
                     {t(
-                      "MULTIPLIER_DESC",
-                      "Sets Fixed mode to 2x–5x. Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. 5x is a high-cost option for high-refresh displays. Test both per game. With Dynamic Cadence Recovery, this is a ceiling against confirmed Gamescope refresh; Adaptive manages its own multiplier.",
+                      "FRAME_GENERATION_FACTOR_DESC",
+                      "0x pauses generation live. Fixed mode uses 2x–5x; 5x is a high-cost option for high-refresh displays. Adaptive manages its own multiplier while retaining the same live 0x pause.",
                     )}
                   </span>
                   {config.adaptive && (
                     <MakoSettingRelationship>
                       {t(
-                        "MULTIPLIER_ADAPTIVE_RELATION",
-                        "Unavailable while Adaptive Frame Generation is enabled.",
+                        "FRAME_GENERATION_FACTOR_ADAPTIVE_RELATION",
+                        "The 2x–5x Fixed factors are unavailable in Adaptive mode; 0x can still pause it live.",
                       )}
                     </MakoSettingRelationship>
                   )}
@@ -260,22 +279,23 @@ export function FpsMultiplierControl({
                     ...multiplierButtonStyle(focusedControl === "decrease"),
                     marginLeft: "0px",
                   }}
-                  onClick={() =>
-                    onConfigChange(
-                      MULTIPLIER,
-                      Math.max(FIXED_MULTIPLIER_UI_MIN, config.multiplier - 1),
-                    )
-                  }
+                  onClick={() => {
+                    if (
+                      config.adaptive ||
+                      config.multiplier <= FIXED_MULTIPLIER_UI_MIN
+                    ) {
+                      void onConfigChange(FRAME_GENERATION_ENABLED, false);
+                      return;
+                    }
+                    void onConfigChange(MULTIPLIER, config.multiplier - 1);
+                  }}
                   onGamepadFocus={() => setFocusedControl("decrease")}
                   onGamepadBlur={() =>
                     setFocusedControl((current) =>
                       current === "decrease" ? null : current,
                     )
                   }
-                  disabled={
-                    config.adaptive ||
-                    config.multiplier <= FIXED_MULTIPLIER_UI_MIN
-                  }
+                  disabled={!frameGenerationEnabled}
                 >
                   −
                 </DialogButton>
@@ -292,7 +312,9 @@ export function FpsMultiplierControl({
                     textAlign: "center",
                   }}
                 >
-                  {config.adaptive
+                  {!frameGenerationEnabled
+                    ? "0X"
+                    : config.adaptive
                     ? t("ADAPTIVE_VALUE", "Adaptive")
                     : `${config.multiplier}X`}
                 </div>
@@ -302,12 +324,13 @@ export function FpsMultiplierControl({
                     ...multiplierButtonStyle(focusedControl === "increase"),
                     marginLeft: "0px",
                   }}
-                  onClick={() =>
-                    onConfigChange(
-                      MULTIPLIER,
-                      Math.min(FIXED_MULTIPLIER_UI_MAX, config.multiplier + 1),
-                    )
-                  }
+                  onClick={() => {
+                    if (!frameGenerationEnabled) {
+                      void onConfigChange(FRAME_GENERATION_ENABLED, true);
+                      return;
+                    }
+                    void onConfigChange(MULTIPLIER, config.multiplier + 1);
+                  }}
                   onGamepadFocus={() => setFocusedControl("increase")}
                   onGamepadBlur={() =>
                     setFocusedControl((current) =>
@@ -315,8 +338,9 @@ export function FpsMultiplierControl({
                     )
                   }
                   disabled={
-                    config.adaptive ||
-                    config.multiplier >= FIXED_MULTIPLIER_UI_MAX
+                    frameGenerationEnabled &&
+                    (config.adaptive ||
+                      config.multiplier >= FIXED_MULTIPLIER_UI_MAX)
                   }
                 >
                   +

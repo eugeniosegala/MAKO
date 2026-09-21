@@ -330,6 +330,8 @@ class ConfigurationManager:
                 f"scaling_sharpness = {config['scaling_sharpness']}",
                 "swapchain_image_count_compatibility = "
                 f"{str(config['swapchain_image_count_compatibility']).lower()}",
+                "frame_generation_provisioned = "
+                f"{str(config['frame_generation_provisioned']).lower()}",
                 f"frame_generation_enabled = {str(config['frame_generation_enabled']).lower()}",
                 "frame_generation_refresh_threshold = "
                 f"{config['frame_generation_refresh_threshold']}",

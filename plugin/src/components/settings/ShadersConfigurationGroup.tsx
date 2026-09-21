@@ -138,18 +138,14 @@ export function ShadersConfigurationGroup({
           {sharpeningEnabled && (
             <PanelSectionRow>
               <SliderField
-                label={
-                  <MakoRestartLabel
-                    label={t(
-                      "CONFIG_VKBASALT_SHARPNESS",
-                      "Sharpness ({value}%) (Restart)",
-                      { value: Math.round(config.vkbasalt_sharpness * 100) },
-                    )}
-                  />
-                }
+                label={t(
+                  "CONFIG_VKBASALT_SHARPNESS",
+                  "Sharpness ({value}%)",
+                  { value: Math.round(config.vkbasalt_sharpness * 100) },
+                )}
                 description={t(
                   "CONFIG_VKBASALT_SHARPNESS_DESC",
-                  "Higher values produce a stronger effect but can exaggerate grain and create halos around high-contrast edges.",
+                  "Higher values produce a stronger effect but can exaggerate grain and create halos around high-contrast edges. Changes apply live while vkBasalt is active.",
                 )}
                 value={config.vkbasalt_sharpness}
                 min={VKBASALT_STRENGTH_MIN}
@@ -163,18 +159,14 @@ export function ShadersConfigurationGroup({
           {config.vkbasalt_sharpening === VKBASALT_SHARPENING_DLS && (
             <PanelSectionRow>
               <SliderField
-                label={
-                  <MakoRestartLabel
-                    label={t(
-                      "CONFIG_VKBASALT_DLS_DENOISE",
-                      "DLS Denoise ({value}%) (Restart)",
-                      { value: Math.round(config.vkbasalt_dls_denoise * 100) },
-                    )}
-                  />
-                }
+                label={t(
+                  "CONFIG_VKBASALT_DLS_DENOISE",
+                  "DLS Denoise ({value}%)",
+                  { value: Math.round(config.vkbasalt_dls_denoise * 100) },
+                )}
                 description={t(
                   "CONFIG_VKBASALT_DLS_DENOISE_DESC",
-                  "Limits how strongly DLS sharpens film grain and fine noise.",
+                  "Limits how strongly DLS sharpens film grain and fine noise. Changes apply live while vkBasalt is active.",
                 )}
                 value={config.vkbasalt_dls_denoise}
                 min={VKBASALT_STRENGTH_MIN}
@@ -219,12 +211,12 @@ export function ShadersConfigurationGroup({
               {isDefaultProfile
                 ? t(
                     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE",
-                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. The Default profile uses this global file.",
+                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes and effect selection apply on the next launch; sharpness and DLS denoise apply live. The Default profile uses this global file.",
                     { path: displayedConfigPath },
                   )
                 : t(
                     "CONFIG_VKBASALT_ADVANCED_PROFILE_NOTE",
-                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. This file belongs to the selected profile and is removed when that profile is deleted.",
+                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes and effect selection apply on the next launch; sharpness and DLS denoise apply live. This file belongs to the selected profile and is removed when that profile is deleted.",
                     { path: displayedConfigPath },
                   )}
             </MakoInlineTip>

@@ -71,7 +71,7 @@ namespace mako::layer {
 
         /// Whether this matched MAKO process provisioned frame-generation
         /// interop at device creation. Provisioning is independent from the
-        /// live Frame Generation switch so Off can become On in place.
+        /// live 0x execution state so 0x can become active in place.
         [[nodiscard]] bool frameGenerationInteropProvisioned() const {
             return this->frameGenerationInteropProvisionedAtStartup;
         }

@@ -51,6 +51,7 @@ from .constants import (
     VK_IMPLICIT_LAYER_PATH_ENV,
     VK_INSTANCE_LAYERS_ENV,
     VKBASALT_CONFIG_FILE_ENV,
+    VKBASALT_CONFIG_RELOAD_ENV,
     VKBASALT_LAYER_DISABLE_ENV,
     VKBASALT_LAYER_ENABLE_ENV,
     VKBASALT_LAYER_NAME_64,
@@ -66,7 +67,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 64
+WRAPPER_FORMAT_VERSION = 66
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -76,6 +77,8 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"export {PRESENT_ACQUIRE_TIMEOUT_ENV}=",
     f"export {PRESENT_DIAGNOSTICS_ENV}=",
     f"export {MAKO_LAYER_ENABLE_ENV}=1",
+    "mako_renderer_required=",
+    "mako_renderer_enabled=",
     f"unset {MAKO_SPLIT_LAYER_CHAIN_ENV}",
     f"export {MAKO_SPLIT_LAYER_CHAIN_ENV}={MAKO_SPLIT_LAYER_CHAIN_COMBINED_PIPELINE}",
     *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
@@ -88,6 +91,7 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
     f"export {VKBASALT_LAYER_DISABLE_ENV}=1",
     f"unset {VKBASALT_LAYER_ENABLE_ENV}",
+    f"unset {VKBASALT_CONFIG_RELOAD_ENV}",
     "mako_spatial_scaling_required=",
     f"export {EXTERNAL_VULKAN_LAYER_ENV}=",
     "mako_vkbasalt_config=",
@@ -199,6 +203,10 @@ def script_configuration_lines(
     lines.append(
         "mako_gamescope_wsi_required="
         f"{1 if config.get('gamescope_wsi_compatibility', False) else 0}"
+    )
+    lines.append(
+        "mako_renderer_required="
+        f"{1 if (config.get('frame_generation_provisioned', True) or config.get('scaling_enabled', False)) else 0}"
     )
     lines.append(
         "mako_spatial_scaling_required="
@@ -336,13 +344,41 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         context.vkbasalt_layer_dir / context.vkbasalt_manifest_filename_32
     ))
     vkbasalt_layer_dir = shlex.quote(str(context.vkbasalt_layer_dir))
+    inherited_managed_layer_removal_lines: list[str] = []
+    for layer_name in (
+        MAKO_LAYER_NAME,
+        SPATIAL_SCALING_LAYER_NAME,
+        GAMESCOPE_WSI_LAYER_NAME_64,
+        VKBASALT_LAYER_NAME_64,
+    ):
+        inherited_managed_layer_removal_lines.extend((
+            (
+                'while [[ "$mako_existing_instance_layers" == *":'
+                f'{layer_name}:"* ]]; do'
+            ),
+            (
+                '    mako_existing_instance_layers="'
+                '${mako_existing_instance_layers/:'
+                f'{layer_name}:/:}}"'
+            ),
+            "done",
+        ))
     return [
         f'export {PRESENT_ACQUIRE_TIMEOUT_ENV}="${{{PRESENT_ACQUIRE_TIMEOUT_ENV}:-{PRESENT_ACQUIRE_TIMEOUT_MS}}}"',
         # Presentation logging is intentionally opt-in for every build.
         # Slow-path records are synchronous and can distort the timing problem
         # being measured when a compositor is already congested.
         f'export {PRESENT_DIAGNOSTICS_ENV}="${{{PRESENT_DIAGNOSTICS_ENV}:-0}}"',
-        f"export {MAKO_LAYER_ENABLE_ENV}=1",
+        "mako_renderer_enabled=0",
+        'if [ "${mako_renderer_required:-0}" = 1 ] && '
+        f'[ "${{{MAKO_LAYER_DISABLE_ENV}:-0}}" != 1 ]; then',
+        f"    unset {MAKO_LAYER_DISABLE_ENV}",
+        f"    export {MAKO_LAYER_ENABLE_ENV}=1",
+        "    mako_renderer_enabled=1",
+        "else",
+        f"    unset {MAKO_LAYER_ENABLE_ENV}",
+        f"    export {MAKO_LAYER_DISABLE_ENV}=1",
+        "fi",
         f"unset {MAKO_SPLIT_LAYER_CHAIN_ENV}",
         *(f"export {variable}=1" for variable in COMPETING_LSFG_DISABLE_ENVS),
         f"export {GAMESCOPE_WSI_DISABLE_ENV}=1",
@@ -350,16 +386,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f"export {SPATIAL_SCALING_LAYER_DISABLE_ENV}=1",
         f"unset {SPATIAL_SCALING_LAYER_ENABLE_ENV}",
         f'mako_existing_instance_layers=":${{{VK_INSTANCE_LAYERS_ENV}:-}}:"',
-        (
-            'while [[ "$mako_existing_instance_layers" == *":'
-            f'{VKBASALT_LAYER_NAME_64}:"* ]]; do'
-        ),
-        (
-            '    mako_existing_instance_layers="'
-            '${mako_existing_instance_layers/:'
-            f'{VKBASALT_LAYER_NAME_64}:/:}}"'
-        ),
-        "done",
+        *inherited_managed_layer_removal_lines,
         'mako_existing_instance_layers="${mako_existing_instance_layers#:}"',
         'mako_existing_instance_layers="${mako_existing_instance_layers%:}"',
         'if [ -n "$mako_existing_instance_layers" ]; then',
@@ -390,6 +417,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "fi",
         "unset MANGOHUD",
         f"unset {VKBASALT_CONFIG_FILE_ENV}",
+        f"unset {VKBASALT_CONFIG_RELOAD_ENV}",
         f"export {VKBASALT_LAYER_DISABLE_ENV}=1",
         f"unset {VKBASALT_LAYER_ENABLE_ENV}",
         f"if [ -d {shlex.quote(context.flatpak_implicit_layer_dir)} ] || "
@@ -413,7 +441,8 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         # Flatpak preparation stages the host's own WSI binary beside its
         # guarded manifest, so Heroic and EmuDeck use this same chain without
         # exposing or searching the host's global Vulkan layer directory.
-        'if [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
+        'if [ "$mako_renderer_enabled" = 1 ] && '
+        '[ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
         '[ "$mako_gamescope_wsi_session" = 1 ] && [ -r '
         f"{gamescope_wsi_manifest} ] && "
         '( [ "${mako_spatial_scaling_required:-0}" != 1 ] || '
@@ -463,6 +492,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "[ \"$mako_flatpak_launch\" = 1 ]; }; then",
         '                if [ -n "$mako_vkbasalt_config" ]; then',
         f'                    export {VKBASALT_CONFIG_FILE_ENV}="$mako_vkbasalt_config"',
+        f"                    export {VKBASALT_CONFIG_RELOAD_ENV}=1",
         "                fi",
         f"                unset {VKBASALT_LAYER_DISABLE_ENV}",
         f"                export {VKBASALT_LAYER_ENABLE_ENV}=1",
@@ -523,9 +553,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         # Per-launch Flatpak options must override its persisted app-wide
         # preparation so the explicit managed chain and the selected bundled
         # vkBasalt profile survive into the sandbox.
-        'if { [ -n "${VK_INSTANCE_LAYERS:-}" ] || '
-        '[ "$mako_vkbasalt_enabled" = 1 ]; } && '
-        '[ "${1##*/}" = flatpak ] && [ "${2:-}" = run ]; then',
+        'if [ "${1##*/}" = flatpak ] && [ "${2:-}" = run ]; then',
         '    mako_flatpak_command="$1"',
         "    shift",
         '    mako_flatpak_subcommand="$1"',
@@ -535,6 +563,18 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f'--env={MAKO_CONFIG_ENV}="${{{MAKO_CONFIG_ENV}}}" '
         f'--unset-env={VK_ADD_IMPLICIT_LAYER_PATH_ENV} '
         '"$@"',
+        '    if [ "$mako_renderer_enabled" = 1 ] && '
+        f'[ -z "${{{VK_INSTANCE_LAYERS_ENV}:-}}" ]; then',
+        '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--env={MAKO_LAYER_ENABLE_ENV}=1 '
+        f'--unset-env={MAKO_LAYER_DISABLE_ENV} '
+        '"${@:3}"',
+        '    elif [ "$mako_renderer_enabled" != 1 ]; then',
+        '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
+        f'--unset-env={MAKO_LAYER_ENABLE_ENV} '
+        f'--env={MAKO_LAYER_DISABLE_ENV}=1 '
+        '"${@:3}"',
+        "    fi",
         f'    if [ -n "${{{VK_INSTANCE_LAYERS_ENV}:-}}" ]; then',
         '        set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
         f'--env={VK_INSTANCE_LAYERS_ENV}="${{{VK_INSTANCE_LAYERS_ENV}}}" '
@@ -562,6 +602,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f'        if [ -n "${{{VKBASALT_CONFIG_FILE_ENV}:-}}" ]; then',
         '            set -- "$mako_flatpak_command" "$mako_flatpak_subcommand" '
         f'--env={VKBASALT_CONFIG_FILE_ENV}="${{{VKBASALT_CONFIG_FILE_ENV}}}" '
+        f'--env={VKBASALT_CONFIG_RELOAD_ENV}=1 '
         '"${@:3}"',
         "        fi",
         "    fi",
@@ -570,6 +611,8 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "fi",
         "unset mako_vkbasalt_config",
         "unset mako_vkbasalt_enabled",
+        "unset mako_renderer_required",
+        "unset mako_renderer_enabled",
         "unset mako_flatpak_runtime",
         "unset mako_flatpak_launch",
         "# Heroic can discard a game's stderr. Capture opt-in engine diagnostics here instead.",

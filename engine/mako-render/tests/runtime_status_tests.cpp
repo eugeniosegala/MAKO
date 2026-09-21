@@ -94,6 +94,9 @@ int main() {
         "profile name was not JSON escaped");
     expect(json.find("\"multiplier\":5") != std::string::npos,
         "requested multiplier missing");
+    expect(json.find("\"frame_generation_provisioned\":true") !=
+            std::string::npos,
+        "Frame Generation provisioning state missing");
     expect(json.find("\"required_generated_capacity\":4") !=
             std::string::npos,
         "requested capacity missing");

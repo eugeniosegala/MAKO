@@ -117,6 +117,7 @@ export const SCALING_METHOD = "scaling_method" as const;
 export const SCALING_FACTOR = "scaling_factor" as const;
 export const SCALING_SUPERSAMPLING = "scaling_supersampling" as const;
 export const SCALING_SHARPNESS = "scaling_sharpness" as const;
+export const FRAME_GENERATION_PROVISIONED = "frame_generation_provisioned" as const;
 export const FRAME_GENERATION_ENABLED = "frame_generation_enabled" as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD = "frame_generation_refresh_threshold" as const;
 export const BASE_FPS_CAP = "base_fps_cap" as const;
@@ -199,11 +200,17 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: 0.8,
     description: "scaling sharpness from zero to one"
   },
+  frame_generation_provisioned: {
+    name: "frame_generation_provisioned",
+    fieldType: ConfigFieldType.BOOLEAN,
+    default: true,
+    description: "restart-bound Frame Generation provisioning switch; disable to omit LSFG interop and backend resources"
+  },
   frame_generation_enabled: {
     name: "frame_generation_enabled",
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
-    description: "on/off switch; leave on for fixed or adaptive generation, off stops both modes"
+    description: "live Frame Generation execution switch represented by 0x in the factor control"
   },
   frame_generation_refresh_threshold: {
     name: "frame_generation_refresh_threshold",
@@ -384,6 +391,7 @@ export interface ConfigurationData {
   scaling_factor: number;
   scaling_supersampling: boolean;
   scaling_sharpness: number;
+  frame_generation_provisioned: boolean;
   frame_generation_enabled: boolean;
   frame_generation_refresh_threshold: number;
   base_fps_cap: number;
@@ -432,6 +440,7 @@ export function getDefaults(): ConfigurationData {
     scaling_factor: 1.5,
     scaling_supersampling: false,
     scaling_sharpness: 0.8,
+    frame_generation_provisioned: true,
     frame_generation_enabled: true,
     frame_generation_refresh_threshold: 0,
     base_fps_cap: 0,
@@ -473,6 +482,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     scaling_factor: ConfigFieldType.FLOAT,
     scaling_supersampling: ConfigFieldType.BOOLEAN,
     scaling_sharpness: ConfigFieldType.FLOAT,
+    frame_generation_provisioned: ConfigFieldType.BOOLEAN,
     frame_generation_enabled: ConfigFieldType.BOOLEAN,
     frame_generation_refresh_threshold: ConfigFieldType.INTEGER,
     base_fps_cap: ConfigFieldType.INTEGER,

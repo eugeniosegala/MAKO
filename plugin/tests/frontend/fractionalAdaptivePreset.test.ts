@@ -92,7 +92,6 @@ describe("fractional Adaptive preset", () => {
 
   test("enables the fractional setup atomically and selects Steady 2x when disabled", () => {
     expect(fractionalAdaptivePresetChanges(true)).toEqual({
-      frame_generation_enabled: true,
       adaptive: true,
       adaptive_auto_base_fps_cap: false,
       dynamic_cadence_recovery: false,

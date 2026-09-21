@@ -86,6 +86,10 @@ def _profile(value: object, field: str) -> RuntimeProfileSnapshot:
         "name": _string(value.get("name"), f"{field}.name"),
         "gpu": gpu_value,
         "multiplier": _integer(value.get("multiplier"), f"{field}.multiplier"),
+        "frame_generation_provisioned": _boolean(
+            value.get("frame_generation_provisioned", True),
+            f"{field}.frame_generation_provisioned",
+        ),
         "frame_generation_enabled": _boolean(
             value.get("frame_generation_enabled"),
             f"{field}.frame_generation_enabled",

@@ -25,7 +25,7 @@ For one saved selection, `mako-cli inspect-dll --dll <path> --ls1 ls1 --sharpnes
 
 ## Activation and ownership
 
-Scaling must be enabled before the process starts because it changes layer membership and swapchain geometry. Once a scaled process is provisioned, method and sharpness changes replace only private scaler resources. A factor or supersampling change may need a game-owned swapchain recreation when it changes the effective source/presentation pair.
+Scaling must be enabled before the process starts because it changes layer membership and swapchain geometry. Frame Generation provisioning is an independent process-start choice: a Scaling-only profile keeps the combined Renderer but omits LSFG device interop, backend ownership, and generated-frame resources. Once a scaled process is provisioned, method and sharpness changes replace only private scaler resources. A factor or supersampling change may need a game-owned swapchain recreation when it changes the effective source/presentation pair.
 
 Standalone `mako-launch` and MAKO Decky with Gamescope WSI off use one combined Renderer role for scaling and Frame Generation, including inside Gamescope. Scaling does not load Gamescope WSI automatically. When both Scaling and the independent Gamescope WSI compatibility option are enabled in a supported session, MAKO Decky uses three ordered roles:
 

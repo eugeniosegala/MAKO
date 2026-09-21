@@ -79,10 +79,18 @@ vi.mock("@decky/ui", () => ({
   DialogButton: ({
     children,
     className,
+    disabled,
+    onClick,
   }: {
     children: React.ReactNode;
     className?: string;
-  }) => <button className={className}>{children}</button>,
+    disabled?: boolean;
+    onClick?: () => void;
+  }) => (
+    <button className={className} disabled={disabled} onClick={onClick}>
+      {children}
+    </button>
+  ),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
   MakoFocusable: ({
@@ -103,6 +111,7 @@ vi.mock("../../src/components/MakoUi", () => ({
     children: React.ReactNode;
     tone?: string;
   }) => <div data-tone={tone}>{children}</div>,
+  MakoRestartLabel: ({ label }: { label: string }) => label,
   MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
     <div data-mako-setting-relationship="true">{children}</div>
   ),
@@ -138,7 +147,7 @@ describe("Frame Generation controls", () => {
         .getAttribute("data-bottom-separator"),
     ).toBe("default");
     const fixedMultiplierField = screen
-      .getByText("Fixed FPS Multiplier")
+      .getByText("Frame Generation Factor")
       .closest<HTMLElement>('[data-field-kind="standard"]');
     expect(fixedMultiplierField).toBeTruthy();
     expect(fixedMultiplierField?.getAttribute("data-bottom-separator")).toBe(
@@ -153,7 +162,7 @@ describe("Frame Generation controls", () => {
     expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
     expect(
       screen
-        .getByText("Fixed FPS Multiplier")
+        .getByText("Frame Generation Factor")
         .compareDocumentPosition(smoothCadence) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -164,7 +173,7 @@ describe("Frame Generation controls", () => {
     fireEvent.click(lighterModel);
     expect(onConfigChange).toHaveBeenCalledWith("performance_mode", true);
     const fixedMultiplierDescription = screen.getByText(
-      /Fixed may perform better than Adaptive in some games, especially when frame pacing is uneven or unstable. 5x is a high-cost option for high-refresh displays. Test both per game/,
+      /0x pauses generation live. Fixed mode uses 2x–5x; 5x is a high-cost option for high-refresh displays/,
     );
     expect(fixedMultiplierDescription.style.paddingTop).toBe("8px");
     expect(fixedMultiplierDescription.style.marginBottom).toBe("");
@@ -179,7 +188,9 @@ describe("Frame Generation controls", () => {
     expect(screen.queryByText(/may require a restart/)).toBeNull();
     expect(
       screen
-        .getByText("Keep this on if you want frame generation.")
+        .getByText(
+          "Use 0x below to pause or resume Frame Generation live without unloading its resources.",
+        )
         .getAttribute("data-tone"),
     ).toBe("info");
     expect(screen.getByText("−").className).toBe("Mako_DialogButton");
@@ -204,7 +215,7 @@ describe("Frame Generation controls", () => {
     ).toBe("default");
     expect(
       screen
-        .getByText("Fixed FPS Multiplier")
+        .getByText("Frame Generation Factor")
         .closest('[data-field-kind="standard"]'),
     ).toBeTruthy();
     expect(
@@ -219,7 +230,7 @@ describe("Frame Generation controls", () => {
     ).toBeTruthy();
     expect(
       screen.getByText(
-        "Unavailable while Adaptive Frame Generation is enabled.",
+        "The 2x–5x Fixed factors are unavailable in Adaptive mode; 0x can still pause it live.",
       ),
     ).toBeTruthy();
     expect(screen.getByText(/^Interpolation ceiling/).style.paddingBottom).toBe(
@@ -238,7 +249,7 @@ describe("Frame Generation controls", () => {
     expect(lockedLighterModel.getAttribute("data-checked")).toBe("true");
   });
 
-  test("collapses mode controls while generation is off without changing saved state", () => {
+  test("uses 0x as the live generation switch without collapsing saved controls", () => {
     window.SP_REACT = React;
     const config = {
       ...getDefaults(),
@@ -258,19 +269,18 @@ describe("Frame Generation controls", () => {
     );
 
     expect(
-      screen.getByText("Frame Generation").getAttribute("data-checked"),
-    ).toBe("false");
-    expect(
       screen
-        .getByText("Frame Generation")
-        .getAttribute("data-bottom-separator"),
-    ).toBe("none");
-    expect(screen.queryByText("Adaptive Frame Generation")).toBeNull();
-    expect(screen.queryByText("Fractional Adaptive")).toBeNull();
-    expect(screen.queryByText(/Target FPS \(90\)$/)).toBeNull();
-    expect(screen.queryByText("Fixed FPS Multiplier")).toBeNull();
+        .getByText("Enable Frame Generation (Restart)")
+        .getAttribute("data-checked"),
+    ).toBe("true");
+    expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
+    expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
+    expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
+    expect(screen.getByText("Frame Generation Factor")).toBeTruthy();
+    expect(screen.getByText("0X")).toBeTruthy();
+    expect((screen.getByText("−") as HTMLButtonElement).disabled).toBe(true);
 
-    fireEvent.click(screen.getByText("Frame Generation"));
+    fireEvent.click(screen.getByText("+"));
     expect(onConfigChange).toHaveBeenCalledWith(
       "frame_generation_enabled",
       true,
@@ -287,15 +297,51 @@ describe("Frame Generation controls", () => {
 
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
     expect(
-      screen
-        .getByText("Frame Generation")
-        .getAttribute("data-bottom-separator"),
-    ).toBe("default");
+      screen.getByText("Adaptive").textContent,
+    ).toBe("Adaptive");
     expect(
       screen.getByText("Fractional Adaptive").getAttribute("data-checked"),
     ).toBe("true");
     expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
-    expect(screen.getByText("Fixed FPS Multiplier")).toBeTruthy();
+    fireEvent.click(screen.getByText("−"));
+    expect(onConfigChange).toHaveBeenLastCalledWith(
+      "frame_generation_enabled",
+      false,
+    );
+  });
+
+  test("collapses Frame Generation controls only when provisioning is off", () => {
+    window.SP_REACT = React;
+    const config = {
+      ...getDefaults(),
+      frame_generation_provisioned: false,
+    };
+    const onConfigChange = vi.fn(async () => undefined);
+
+    render(
+      <FpsMultiplierControl
+        config={config}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    const provision = screen.getByText("Enable Frame Generation (Restart)");
+    expect(provision.getAttribute("data-checked")).toBe("false");
+    expect(provision.getAttribute("data-bottom-separator")).toBe("none");
+    expect(screen.queryByText("Adaptive Frame Generation")).toBeNull();
+    expect(screen.queryByText("Frame Generation Factor")).toBeNull();
+    expect(
+      screen.queryByText(
+        "Use 0x below to pause or resume Frame Generation live without unloading its resources.",
+      ),
+    ).toBeNull();
+
+    fireEvent.click(provision);
+    expect(onConfigChange).toHaveBeenCalledWith(
+      "frame_generation_provisioned",
+      true,
+    );
   });
 
   test("preserves every Adaptive subsetting when the mode is re-enabled", () => {

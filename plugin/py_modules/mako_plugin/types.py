@@ -189,6 +189,7 @@ class RuntimeProfileSnapshot(TypedDict):
     name: str
     gpu: Optional[str]
     multiplier: int
+    frame_generation_provisioned: bool
     frame_generation_enabled: bool
     scaling_enabled: bool
     scaling_method: str

@@ -49,6 +49,8 @@ namespace {
             left.active_in == right.active_in &&
             left.gpu == right.gpu &&
             left.multiplier == right.multiplier &&
+            left.frame_generation_provisioned ==
+                right.frame_generation_provisioned &&
             left.frame_generation_enabled == right.frame_generation_enabled &&
             left.scaling_enabled == right.scaling_enabled &&
             left.swapchain_image_count_compatibility ==
@@ -85,6 +87,7 @@ name = "test"
 active_in = "game"
 removed_profile_option = true
 adaptive = false
+frame_generation_provisioned = false
 scaling_enabled = true
 swapchain_image_count_compatibility = true
 scaling_method = "ls1"
@@ -107,6 +110,8 @@ performance_mode = false
 int main() {
     const ls::GameConf defaults;
     expect(defaults.multiplier == ls::GameConfDefaults::multiplier &&
+            defaults.frame_generation_provisioned ==
+                ls::GameConfDefaults::frameGenerationProvisioned &&
             defaults.frame_generation_enabled ==
                 ls::GameConfDefaults::frameGenerationEnabled &&
             defaults.scaling_enabled ==
@@ -266,7 +271,8 @@ int main() {
         "The accepted configuration must expose the cadence probe interval");
     expect(config.get().profiles().front().frame_generation_refresh_threshold == 60,
         "The accepted configuration must expose the refresh-rate threshold");
-    expect(config.get().profiles().front().scaling_enabled &&
+    expect(!config.get().profiles().front().frame_generation_provisioned &&
+            config.get().profiles().front().scaling_enabled &&
             config.get().profiles().front()
                 .swapchain_image_count_compatibility &&
             config.get().profiles().front().scaling_method ==
@@ -424,6 +430,7 @@ multiplier = 6
     const auto scalingOnlyPath = directory / "scaling-only.toml";
     writeText(scalingOnlyPath, R"(version = 2
 [[profile]]
+frame_generation_provisioned = false
 frame_generation_enabled = false
 scaling_enabled = true
 scaling_factor = 1.5
@@ -432,7 +439,8 @@ scaling_sharpness = 0.5
     const ls::ConfigFile scalingOnlyConfiguration(scalingOnlyPath);
     const auto& scalingOnlyProfile =
         scalingOnlyConfiguration.profiles().front();
-    expect(!scalingOnlyProfile.frame_generation_enabled &&
+    expect(!scalingOnlyProfile.frame_generation_provisioned &&
+            !scalingOnlyProfile.frame_generation_enabled &&
             scalingOnlyProfile.scaling_enabled &&
             scalingOnlyProfile.scaling_factor == 1.5F &&
             scalingOnlyProfile.scaling_sharpness == 0.5F,
@@ -561,6 +569,7 @@ scaling_sharpness = 0.5
     setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS", "0.5", 1);
     setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
+    setenv("MAKO_FRAME_GENERATION_PROVISIONED", "0", 1);
     setenv("MAKO_ULTRA_PERFORMANCE", "1", 1);
     setenv("MAKO_SCALING_ENABLED", "1", 1);
     setenv("MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY", "1", 1);
@@ -574,6 +583,8 @@ scaling_sharpness = 0.5
                 .dynamic_cadence_probe_interval_seconds == 0.5F &&
             environmentConfig.get().profiles().front().frame_generation_refresh_threshold ==
                 130 &&
+            !environmentConfig.get().profiles().front()
+                .frame_generation_provisioned &&
             environmentConfig.get().profiles().front().base_fps_cap == 0 &&
             !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap &&
             environmentConfig.get().profiles().front().ultra_performance &&
@@ -591,6 +602,7 @@ scaling_sharpness = 0.5
     unsetenv("MAKO_DYNAMIC_CADENCE_RECOVERY");
     unsetenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS");
     unsetenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD");
+    unsetenv("MAKO_FRAME_GENERATION_PROVISIONED");
     unsetenv("MAKO_ULTRA_PERFORMANCE");
     unsetenv("MAKO_SCALING_ENABLED");
     unsetenv("MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY");

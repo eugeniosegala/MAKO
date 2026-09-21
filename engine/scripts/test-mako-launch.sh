@@ -30,7 +30,7 @@ fi
 
 default_output="$({
     env -u ENABLE_MAKO -u DISABLE_MAKO \
-        -u ENABLE_VKBASALT -u DISABLE_VKBASALT -u VKBASALT_CONFIG_FILE \
+        -u ENABLE_VKBASALT -u DISABLE_VKBASALT -u VKBASALT_CONFIG_FILE -u VKBASALT_CONFIG_RELOAD \
         -u ENABLE_GAMESCOPE_WSI -u DISABLE_GAMESCOPE_WSI \
         -u MAKO_DISABLE_HDR_EXPOSURE -u DXVK_HDR \
         -u DISABLE_LSFG -u DISABLE_LSFGVK \
@@ -55,12 +55,13 @@ default_output="$({
                 "${ENABLE_VKBASALT:-unset}" \
                 "${DISABLE_VKBASALT:-unset}" \
                 "${VKBASALT_CONFIG_FILE:-unset}" \
+                "${VKBASALT_CONFIG_RELOAD:-unset}" \
                 "${MAKO_PROFILE:-unset}" \
                 "$1" "$2"
         ' _ "argument with spaces" '$literal'
 } 2>&1)" || fail "default launch failed: $default_output"
 
-expected_default="$(printf '1\n1\n1\n1\nunset\n1\nunset\n%s\nunset\nVK_LAYER_existing\nunset\n1\nunset\nprofile with spaces\nargument with spaces\n$literal' "$expected_layer_path")"
+expected_default="$(printf '1\n1\n1\n1\nunset\n1\nunset\n%s\nunset\nVK_LAYER_existing\nunset\n1\nunset\nunset\nprofile with spaces\nargument with spaces\n$literal' "$expected_layer_path")"
 if [[ "$default_output" != "$expected_default" ]]; then
     fail "default environment or argument forwarding changed:\n$default_output"
 fi
@@ -134,12 +135,13 @@ vkbasalt_output="$({
                 "${ENABLE_VKBASALT:-unset}" \
                 "${DISABLE_VKBASALT:-unset}" \
                 "${VKBASALT_CONFIG_FILE:-unset}" \
+                "${VKBASALT_CONFIG_RELOAD:-unset}" \
                 "${VK_INSTANCE_LAYERS:-unset}" \
                 "${VK_IMPLICIT_LAYER_PATH:-unset}" \
                 "${VK_ADD_IMPLICIT_LAYER_PATH:-unset}"
         '
 } 2>&1)" || fail "private vkBasalt launch failed: $vkbasalt_output"
-expected_vkbasalt="$(printf 'unset\nunset\nunset\n%s\nVK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing:VK_LAYER_existing\n%s:%s\nunset' \
+expected_vkbasalt="$(printf 'unset\nunset\nunset\n%s\n1\nVK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing:VK_LAYER_existing\n%s:%s\nunset' \
     "$vkbasalt_config" "$private_mako_layer_dir" "$private_vkbasalt_layer_dir")"
 if [[ "$vkbasalt_output" != "$expected_vkbasalt" ]]; then
     fail "private vkBasalt order or isolation changed:\n$vkbasalt_output"

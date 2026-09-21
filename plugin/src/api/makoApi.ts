@@ -178,6 +178,7 @@ export interface RuntimeProfileSnapshot {
   name: string;
   gpu: Nullable<string>;
   multiplier: number;
+  frame_generation_provisioned: boolean;
   frame_generation_enabled: boolean;
   scaling_enabled: boolean;
   scaling_method: string;

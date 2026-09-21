@@ -194,6 +194,7 @@ test("uses localized restart markers only for process-start controls", async () 
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY",
     "CONFIG_ALLOW_FP16",
     "CONFIG_GPU",
+    "FRAME_GENERATION_PROVISIONED",
   ];
   const labelsWithoutRestartMarker = [
     "SCALING_METHOD",
@@ -205,8 +206,7 @@ test("uses localized restart markers only for process-start controls", async () 
     "CONFIG_PERFORMANCE_MODE",
     "CONFIG_DISABLE_MAKO_NEXT_LAUNCH",
     "CONFIG_DISABLE_HDR_EXPOSURE",
-    "FRAME_GENERATION_ENABLED",
-    "MULTIPLIER_TITLE",
+    "FRAME_GENERATION_FACTOR",
     "ADAPTIVE_TITLE",
     "ADAPTIVE_TARGET_FPS",
     "ADAPTIVE_MAX_MULTIPLIER",

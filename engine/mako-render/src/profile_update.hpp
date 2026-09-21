@@ -105,12 +105,14 @@ namespace mako::layer {
     struct ProcessStaticProfileProjection {
         ls::GameConf runtimeProfile;
         bool gpuSelectionPending{false};
+        bool frameGenerationProvisioningPending{false};
         bool ultraPerformancePending{false};
         bool scalingEnginePending{false};
         bool swapchainImageCountCompatibilityPending{false};
 
         [[nodiscard]] bool restartRequired() const {
             return this->gpuSelectionPending ||
+                this->frameGenerationProvisioningPending ||
                 this->ultraPerformancePending ||
                 this->scalingEnginePending ||
                 this->swapchainImageCountCompatibilityPending;
@@ -124,11 +126,15 @@ namespace mako::layer {
     projectProcessStaticProfileForLiveUpdate(
             const ls::GameConf& current,
             const ls::GameConf& requested,
+            const bool frameGenerationProvisionedAtStartup,
             const bool scalingEngineConfiguredAtStartup,
             const bool swapchainImageCountCompatibilityConfiguredAtStartup) {
         ProcessStaticProfileProjection projection{
             .runtimeProfile = requested,
             .gpuSelectionPending = requested.gpu != current.gpu,
+            .frameGenerationProvisioningPending =
+                requested.frame_generation_provisioned !=
+                    frameGenerationProvisionedAtStartup,
             .ultraPerformancePending = requested.ultra_performance !=
                 current.ultra_performance,
             .scalingEnginePending = requested.scaling_enabled !=
@@ -139,6 +145,10 @@ namespace mako::layer {
         };
         if (projection.gpuSelectionPending)
             projection.runtimeProfile.gpu = current.gpu;
+        if (projection.frameGenerationProvisioningPending) {
+            projection.runtimeProfile.frame_generation_provisioned =
+                frameGenerationProvisionedAtStartup;
+        }
         if (projection.ultraPerformancePending) {
             projection.runtimeProfile.ultra_performance =
                 current.ultra_performance;
@@ -166,7 +176,8 @@ namespace mako::layer {
     /// report an impossible generated-image-capacity transition of its own.
     [[nodiscard]] inline size_t generatedFrameCapacityForActivePolicy(
             const ls::GameConf& profile) {
-        if (!profile.frame_generation_enabled)
+        if (!profile.frame_generation_provisioned ||
+                !profile.frame_generation_enabled)
             return 0;
         const size_t activeMultiplier = profile.adaptive
             ? profile.adaptive_max_multiplier
@@ -384,7 +395,8 @@ namespace mako::layer {
     /// ceiling. Keep the engine's 10 FPS policy floor for unusually low targets.
     [[nodiscard]] inline double effectiveBaseFpsCap(
             const ls::GameConf& profile) {
-        if (!profile.frame_generation_enabled)
+        if (!profile.frame_generation_provisioned ||
+                !profile.frame_generation_enabled)
             return 0.0;
         if (profile.adaptive && profile.adaptive_auto_base_fps_cap) {
             return std::max(
@@ -420,7 +432,8 @@ namespace mako::layer {
     [[nodiscard]] inline bool effectiveFrameGenerationEnabled(
             const ls::GameConf& profile,
             const std::optional<uint32_t> gamescopeRefreshHz) {
-        if (!profile.frame_generation_enabled)
+        if (!profile.frame_generation_provisioned ||
+                !profile.frame_generation_enabled)
             return false;
         return profile.frame_generation_refresh_threshold == 0 ||
             !gamescopeRefreshHz ||
@@ -553,6 +566,8 @@ namespace mako::layer {
     /// atomically replaces MAKO's private frame-generation context.
     [[nodiscard]] inline size_t generatedFrameCapacityForProfile(
             const ls::GameConf& profile) {
+        if (!profile.frame_generation_provisioned)
+            return 0;
         if (profile.ultra_performance) {
             const size_t activeMultiplier = profile.adaptive
                 ? profile.adaptive_max_multiplier
@@ -584,12 +599,19 @@ namespace mako::layer {
         bool swapchainRecreationDeferred = false;
         bool processRestartDeferred = false;
 
-        // GPU, Ultra Performance, and Scaling Engine participate in
+        // GPU, Frame Generation provisioning, Ultra Performance, and Scaling
+        // Engine participate in
         // process-wide backend or Vulkan-layer construction. A natural
         // application swapchain recreation reuses those process owners and
         // therefore cannot satisfy any of these changes.
         if (current.gpu != next.gpu) {
             applied.gpu = current.gpu;
+            processRestartDeferred = true;
+        }
+        if (current.frame_generation_provisioned !=
+                next.frame_generation_provisioned) {
+            applied.frame_generation_provisioned =
+                current.frame_generation_provisioned;
             processRestartDeferred = true;
         }
         if (current.ultra_performance != next.ultra_performance) {

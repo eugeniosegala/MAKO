@@ -172,7 +172,7 @@ case "$mako_vkbasalt_requested" in
         ;;
 esac
 mako_vkbasalt_config="${VKBASALT_CONFIG_FILE:-}"
-unset ENABLE_VKBASALT VKBASALT_CONFIG_FILE
+unset ENABLE_VKBASALT VKBASALT_CONFIG_FILE VKBASALT_CONFIG_RELOAD
 export DISABLE_VKBASALT=1
 
 allow_competing_layers="${MAKO_ALLOW_COMPETING_LAYERS:-0}"
@@ -259,11 +259,13 @@ if [[ "$mako_vkbasalt_requested" == 1 && "${DISABLE_MAKO:-0}" != 1 ]]; then
         unset DISABLE_VKBASALT
         if [[ -n "$mako_vkbasalt_config" ]]; then
             export VKBASALT_CONFIG_FILE="$mako_vkbasalt_config"
+            export VKBASALT_CONFIG_RELOAD=1
         fi
         mako_vkbasalt_enabled=1
     fi
 fi
 if [[ "$mako_vkbasalt_enabled" != 1 ]]; then
+    unset VKBASALT_CONFIG_RELOAD
     if [[ -n "$mako_existing_instance_layers" ]]; then
         export VK_INSTANCE_LAYERS="$mako_existing_instance_layers"
     else

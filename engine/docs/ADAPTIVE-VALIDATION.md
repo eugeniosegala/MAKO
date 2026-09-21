@@ -113,7 +113,7 @@ For affected changes, cover these runtime boundaries:
 
 | Boundary | Minimum evidence |
 | --- | --- |
-| Generation modes | Frame Generation Off, Fixed 2x and affected higher multipliers, Fractional Adaptive, Smooth Cadence, and unreachable targets. |
+| Generation modes | Live `0x`, Fixed 2x and affected higher multipliers, Fractional Adaptive, Smooth Cadence, and unreachable targets. |
 | Cadence changes | Startup, gameplay/menu rate changes, true fixed-rate rejection, short hitches, long interruptions, and fast-present bursts. |
 | Presentation | Ordered SDR, explicit acquire failure, successful slow-call non-authority, focus and overlays, resize, recreation, and shutdown. |
 | Resource transitions | Live Off/On, Flow Scale or model replacement, capacity growth with and without WSI headroom, and history warm-up. |

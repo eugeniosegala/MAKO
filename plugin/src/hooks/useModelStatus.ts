@@ -48,7 +48,10 @@ export function useModelStatus(
     (method === SCALING_METHOD_LS1 ||
       method === SCALING_METHOD_LS1_PERFORMANCE);
   const lsfg =
-    enabled && !config.disable_mako && config.frame_generation_enabled;
+    enabled &&
+    !config.disable_mako &&
+    config.frame_generation_provisioned &&
+    config.frame_generation_enabled;
   const key = JSON.stringify([
     config.dll,
     ls1,

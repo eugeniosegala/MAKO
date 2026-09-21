@@ -1,6 +1,6 @@
 # Renderer memory management
 
-MAKO Renderer allocates private Vulkan resources when a swapchain or processing context is constructed, reuses them during presentation, and releases them after the owning GPU work completes. Live resource changes can temporarily keep both the active and replacement contexts allocated. Frame Generation Off retains provisioned resources for live reactivation, and the layer deliberately retains its private backend Vulkan device until process exit.
+MAKO Renderer allocates private Vulkan resources when a swapchain or processing context is constructed, reuses them during presentation, and releases them after the owning GPU work completes. Live resource changes can temporarily keep both the active and replacement contexts allocated. Frame Generation `0x` retains startup-provisioned resources for live reactivation, while disabling Frame Generation provisioning before launch omits LSFG interop and backend ownership. Once created, the layer deliberately retains its private backend Vulkan device until process exit.
 
 This guide owns the allocation, ownership, and accounting overview. [Spatial scaling](SCALING.md#extent-policy) owns memory-admission policy, [runtime transitions](RUNTIME-TRANSITIONS.md) owns replacement decisions, [lifecycle](LIFECYCLE.md#destruction-and-retirement) owns swapchain retirement, and [HDR](HDR-PIPELINE.md) owns transport and working-image formats. Those policies remain authoritative for their thresholds and compatibility rules.
 
@@ -68,7 +68,7 @@ Admission is an estimate, not an allocation reservation or a performance guarant
 
 Steady-state usage and replacement peaks answer different questions. A live Flow Scale, model, capacity, or scaler change constructs a complete candidate while the current resources remain usable. Until drain and handoff finish, both sets contribute to the live counters. Deferred backend contexts and lower WSI swapchains can extend that overlap. Do not interpret the cold graph estimate as an exact prediction of this transient peak.
 
-Frame Generation Off stops generation work while retaining resources when provisioning succeeded, so turning it off is not a request to reclaim its memory. A scaling-only process that never created a Frame Generation backend does not have that same retained FG allocation. FP16 arithmetic also does not imply that SDR image allocation sizes are halved; image formats, geometry, graph selection, and output capacity determine the allocation demand.
+Frame Generation `0x` stops generation work while retaining resources when provisioning succeeded, so selecting it is not a request to reclaim memory. A Scaling-only process that never created a Frame Generation backend does not have that retained FG allocation. FP16 arithmetic also does not imply that SDR image allocation sizes are halved; image formats, geometry, graph selection, and output capacity determine the allocation demand.
 
 ## Replacement, retirement, and process exit
 

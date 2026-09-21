@@ -81,6 +81,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "VKBASALT=%s\\n" "${ENABLE_VKBASALT:-}"',
             'printf "VKBASALT_DISABLED=%s\\n" "${DISABLE_VKBASALT:-}"',
             'printf "VKBASALT_CONFIG=%s\\n" "${VKBASALT_CONFIG_FILE:-}"',
+            'printf "VKBASALT_RELOAD=%s\\n" "${VKBASALT_CONFIG_RELOAD:-}"',
             'printf "DEVICE_SELECT_DISABLED=%s\\n" "${NODEVICE_SELECT:-}"',
             'printf "MESA_ANTI_LAG_DISABLED=%s\\n" "${DISABLE_LAYER_MESA_ANTI_LAG:-}"',
         ])
@@ -117,6 +118,55 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["VKBASALT"], "")
         self.assertEqual(values["VKBASALT_DISABLED"], "1")
         self.assertEqual(values["VKBASALT_CONFIG"], "")
+        self.assertEqual(values["VKBASALT_RELOAD"], "")
+
+    def test_frame_generation_off_omits_renderer_and_strips_inherited_mako(self):
+        config = ConfigurationManager.get_defaults()
+        config["frame_generation_provisioned"] = False
+        config["scaling_enabled"] = False
+
+        values = self._evaluate({
+            "ENABLE_MAKO": "1",
+            "VK_INSTANCE_LAYERS":
+                "VK_LAYER_existing:VK_LAYER_MAKO_render:"
+                "VK_LAYER_MAKO_spatial_scaling",
+        }, config)
+
+        self.assertEqual(values["ENABLE"], "")
+        self.assertEqual(values["DISABLE_MAKO"], "1")
+        self.assertEqual(values["INSTANCE"], "VK_LAYER_existing")
+        self.assertEqual(values["ENABLE_SCALING"], "")
+        self.assertEqual(values["VKBASALT"], "")
+
+    def test_scaling_only_keeps_combined_renderer_without_fg_provisioning(self):
+        config = ConfigurationManager.get_defaults()
+        config["frame_generation_provisioned"] = False
+        config["scaling_enabled"] = True
+
+        values = self._evaluate(config=config)
+
+        self.assertEqual(values["ENABLE"], "1")
+        self.assertEqual(values["DISABLE_MAKO"], "")
+        self.assertEqual(values["INSTANCE"], "")
+
+    def test_shaders_only_activates_vkbasalt_without_renderer(self):
+        with tempfile.TemporaryDirectory() as private_dir:
+            self.service.vkbasalt_layer_dir = Path(private_dir)
+            (
+                self.service.vkbasalt_layer_dir /
+                configuration_module.VKBASALT_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["frame_generation_provisioned"] = False
+            config["scaling_enabled"] = False
+            config["external_vulkan_layer"] = "vkbasalt"
+
+            values = self._evaluate(config=config)
+
+        self.assertEqual(values["ENABLE"], "")
+        self.assertEqual(values["DISABLE_MAKO"], "1")
+        self.assertEqual(values["VKBASALT"], "1")
+        self.assertEqual(values["VKBASALT_DISABLED"], "")
 
     def test_scaling_without_wsi_uses_combined_renderer_with_staged_layers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -490,6 +540,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "1")
         self.assertEqual(values["VKBASALT_DISABLED"], "")
+        self.assertEqual(values["VKBASALT_RELOAD"], "")
         self.assertEqual(values["DEVICE_SELECT_DISABLED"], "1")
         self.assertEqual(values["MESA_ANTI_LAG_DISABLED"], "1")
 
@@ -604,14 +655,14 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "VK_LAYER_existing_one:VK_LAYER_existing_two",
         )
 
-    def test_caller_requested_instance_layer_is_untouched(self):
+    def test_inherited_managed_layer_is_rebuilt_by_the_wrapper(self):
         values = self._evaluate({
             "VK_INSTANCE_LAYERS":
                 "VK_LAYER_existing:VK_LAYER_MAKO_render",
         })
         self.assertEqual(
             values["INSTANCE"],
-            "VK_LAYER_existing:VK_LAYER_MAKO_render",
+            "VK_LAYER_existing",
         )
 
     def test_scaling_chain_precedes_caller_requested_instance_layers(self):
@@ -1103,6 +1154,45 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 f"--env=VKBASALT_CONFIG_FILE={managed_config}",
                 arguments,
             )
+            self.assertIn("--env=VKBASALT_CONFIG_RELOAD=1", arguments)
+            self.assertEqual(arguments[-1], "example.Game")
+
+    def test_direct_flatpak_shortcut_disables_unprovisioned_renderer(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            self.service.config_dir = root / "config"
+            self.service.config_file_path = self.service.config_dir / "conf.toml"
+            config = ConfigurationManager.get_defaults()
+            config["frame_generation_provisioned"] = False
+            config["scaling_enabled"] = False
+            wrapper = root / "mako-run"
+            wrapper.write_text(
+                self.service._generate_script_content(config),
+                encoding="utf-8",
+            )
+            wrapper.chmod(0o755)
+
+            captured = root / "flatpak-arguments"
+            fake_flatpak = root / "flatpak"
+            fake_flatpak.write_text(
+                "#!/bin/bash\nprintf '%s\\n' \"$@\" > \"$MAKO_CAPTURE\"\n",
+                encoding="utf-8",
+            )
+            fake_flatpak.chmod(0o755)
+            subprocess.run(
+                [str(wrapper), str(fake_flatpak), "run", "example.Game"],
+                check=True,
+                env={
+                    "PATH": os.environ.get("PATH", ""),
+                    "MAKO_CAPTURE": str(captured),
+                    "ENABLE_MAKO": "1",
+                },
+            )
+
+            arguments = captured.read_text(encoding="utf-8").splitlines()
+            self.assertIn("--unset-env=ENABLE_MAKO", arguments)
+            self.assertIn("--env=DISABLE_MAKO=1", arguments)
+            self.assertNotIn("--env=ENABLE_MAKO=1", arguments)
             self.assertEqual(arguments[-1], "example.Game")
 
     def test_flatpak_sdr_boundary_keeps_gamescope_wsi_out_of_umu_chain(self):

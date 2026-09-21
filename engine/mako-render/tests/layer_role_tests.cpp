@@ -41,7 +41,8 @@ int main() {
     expect(lower.scaling_enabled &&
             lower.scaling_method == ls::ScalingMethod::Ls1Performance,
         "the lower layer must retain Ultra Performance's effective scaler");
-    expect(!lower.frame_generation_enabled && !lower.adaptive,
+    expect(!lower.frame_generation_provisioned &&
+            !lower.frame_generation_enabled && !lower.adaptive,
         "the lower layer must never own frame generation");
     expect(generatedFrameCapacityForActivePolicy(lower) == 0,
         "the lower layer must not report a generated-image capacity request");

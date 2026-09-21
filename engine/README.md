@@ -12,7 +12,7 @@ MAKO Renderer is MAKO's Vulkan layer and standalone component for Steam Deck, St
 
 The layer descends directly from the GPL-3.0-or-later version 2 tree of <a href="https://github.com/PancakeTAS/lsfg-vk" target="_blank" rel="noopener noreferrer">lsfg-vk</a> at upstream commit <a href="https://github.com/PancakeTAS/lsfg-vk/commit/8b0da2661c6f3473a7fccc8ba643880050e71642" target="_blank" rel="noopener noreferrer"><code>8b0da266</code></a> and retains its open-source attribution and license obligations. MAKO Renderer does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LSFG frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO Scaler does not require it. MAKO Renderer does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="../THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a> and the exact <a href="../LICENSE.md#lsfg-vk-renderer-lineage" target="_blank" rel="noopener noreferrer">Renderer lineage</a>.
 
-Scaling must be enabled before the game starts. In a provisioned process, Frame Generation, scaler method, and sharpness can change through live or private-resource transitions; source/presentation geometry changes may wait for a game-owned swapchain recreation. See <a href="docs/RUNTIME-TRANSITIONS.md" target="_blank" rel="noopener noreferrer">runtime transitions</a> for the exact live, deferred, and restart boundaries.
+Frame Generation provisioning and Scaling must be selected before the game starts. In a Frame Generation-provisioned process, `0x` and active generation factors can change live; scaler method, sharpness, and compatible FG resource controls use live or private-resource transitions. Source/presentation geometry changes may wait for a game-owned swapchain recreation. See <a href="docs/RUNTIME-TRANSITIONS.md" target="_blank" rel="noopener noreferrer">runtime transitions</a> for the exact live, deferred, and restart boundaries.
 
 ## Downloads
 
@@ -124,7 +124,7 @@ For the complete vkBasalt option suite, create a normal vkBasalt configuration f
 ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
 ```
 
-The config path is optional. Renderer `active_in` matching selects only the MAKO profile; for per-game vkBasalt settings, give each game's launch option its own `VKBASALT_CONFIG_FILE`. The launcher admits only the private 64-bit and 32-bit vkBasalt manifests installed with MAKO, establishes the exact `MAKO Renderer -> vkBasalt` order, and ignores a system-wide vkBasalt copy. If the complete private bundle or a selected config is unreadable, it reports the problem and safely launches with MAKO alone. Restart the game after changing layer membership or the config file. See [Optional graphics integrations](docs/LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for the full contract; Flatpak applications use the [separate sandbox setup](docs/FLATPAK-GUIDE.md#optional-private-vkbasalt-chain).
+The config path is optional. Renderer `active_in` matching selects only the MAKO profile; for per-game vkBasalt settings, give each game's launch option its own `VKBASALT_CONFIG_FILE`. The launcher admits only the private 64-bit and 32-bit vkBasalt manifests installed with MAKO, establishes the exact `MAKO Renderer -> vkBasalt` order, and ignores a system-wide vkBasalt copy. If the complete private bundle or a selected config is unreadable, it reports the problem and safely launches with MAKO alone. CAS/DLS strength and DLS denoise changes in a selected config apply live; restart after changing layer membership, effect selection, or advanced options. See [Optional graphics integrations](docs/LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for the full contract; Flatpak applications use the [separate sandbox setup](docs/FLATPAK-GUIDE.md#optional-private-vkbasalt-chain).
 
 MAKO operates on Vulkan: native Vulkan and Proton games through DXVK or VKD3D-Proton are supported, while OpenGL requires the optional Zink launcher setting. If no profile matches the game process, MAKO remains dormant and presentation stays native.
 
@@ -152,6 +152,7 @@ allow_fp16 = true
 name = "My game"
 active_in = ["Game.exe"]
 multiplier = 2
+frame_generation_provisioned = true
 frame_generation_enabled = true
 ```
 

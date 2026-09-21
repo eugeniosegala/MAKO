@@ -37,6 +37,7 @@ active_in = [ # see the wiki for more info
 ]
 # gpu = 'NVIDIA GeForce RTX 5080' # see the wiki for more info
 multiplier = 4
+frame_generation_provisioned = true
 frame_generation_enabled = true
 scaling_enabled = false
 swapchain_image_count_compatibility = false
@@ -81,6 +82,8 @@ ConfigFile::ConfigFile() {
             "vkcubepp"
         },
         .multiplier = 4,
+        .frame_generation_provisioned =
+            GameConfDefaults::frameGenerationProvisioned,
         .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
         .scaling_enabled = GameConfDefaults::scalingEnabled,
         .swapchain_image_count_compatibility =
@@ -276,6 +279,10 @@ namespace {
             .active_in = activityFromString(tbl["active_in"]),
             .gpu = tbl["gpu"].value<std::string>(),
             .multiplier = tbl["multiplier"].value_or(GameConfDefaults::multiplier),
+            .frame_generation_provisioned =
+                tbl["frame_generation_provisioned"].value_or(
+                    GameConfDefaults::frameGenerationProvisioned
+                ),
             .frame_generation_enabled = tbl["frame_generation_enabled"].value_or(
                 GameConfDefaults::frameGenerationEnabled
             ),
@@ -368,6 +375,8 @@ namespace {
             .gpu = std::nullopt,
 
             .multiplier = GameConfDefaults::multiplier,
+            .frame_generation_provisioned =
+                GameConfDefaults::frameGenerationProvisioned,
             .frame_generation_enabled = GameConfDefaults::frameGenerationEnabled,
             .scaling_enabled = GameConfDefaults::scalingEnabled,
             .swapchain_image_count_compatibility =
@@ -398,6 +407,12 @@ namespace {
         if (gpu) conf.gpu = std::string(gpu);
         const char* multiplier = std::getenv("MAKO_MULTIPLIER");
         if (multiplier) conf.multiplier = static_cast<size_t>(std::stoul(multiplier));
+        const char* frame_generation_provisioned =
+            std::getenv("MAKO_FRAME_GENERATION_PROVISIONED");
+        if (frame_generation_provisioned) {
+            conf.frame_generation_provisioned =
+                std::string(frame_generation_provisioned) != "0";
+        }
         const char* frame_generation_enabled = std::getenv("MAKO_FRAME_GENERATION_ENABLED");
         if (frame_generation_enabled)
             conf.frame_generation_enabled = std::string(frame_generation_enabled) != "0";
@@ -533,6 +548,10 @@ void ConfigFile::write(const std::filesystem::path& path) const {
         if (conf.gpu)
             profile.insert("gpu", conf.gpu.value_or(""));
         profile.insert("multiplier", static_cast<int64_t>(conf.multiplier));
+        profile.insert(
+            "frame_generation_provisioned",
+            conf.frame_generation_provisioned
+        );
         profile.insert("frame_generation_enabled", conf.frame_generation_enabled);
         profile.insert("scaling_enabled", conf.scaling_enabled);
         profile.insert(

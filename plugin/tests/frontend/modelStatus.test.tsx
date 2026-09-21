@@ -157,6 +157,14 @@ test("checks enabled families sequentially and keeps their failures independent"
   );
   rerender({ ...config(), frame_generation_enabled: false });
   expect(result.current.lsfg).toBeNull();
+  rerender({
+    ...config(),
+    frame_generation_provisioned: false,
+    frame_generation_enabled: true,
+  });
+  await settle();
+  expect(result.current.lsfg).toBeNull();
+  expect(checkFrameGenerationModel).toHaveBeenCalledTimes(3);
 });
 
 test("a disabled Renderer and disabled features never probe or retain warnings", async () => {

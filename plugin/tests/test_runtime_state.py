@@ -25,6 +25,7 @@ def _profile(name: str, multiplier: int) -> dict[str, object]:
         "name": name,
         "gpu": None,
         "multiplier": multiplier,
+        "frame_generation_provisioned": True,
         "frame_generation_enabled": True,
         "scaling_enabled": True,
         "scaling_method": "ls1",
@@ -180,6 +181,8 @@ class RuntimeStateTests(unittest.TestCase):
     def test_legacy_menu_suspension_field_is_ignored(self):
         record = self._record()
         record["frame_generation_menu_suspended"] = True
+        record["requested"].pop("frame_generation_provisioned")
+        record["applied"].pop("frame_generation_provisioned")
         self._write("legacy-menu-status.json", record)
 
         status = self.service.get_status("game-profile")
@@ -187,6 +190,11 @@ class RuntimeStateTests(unittest.TestCase):
         self.assertEqual(len(status["contexts"]), 1)
         self.assertNotIn(
             "frame_generation_menu_suspended", status["contexts"][0]
+        )
+        self.assertTrue(
+            status["contexts"][0]["applied"][
+                "frame_generation_provisioned"
+            ]
         )
 
     def test_stale_pid_identity_is_ignored_without_mutating_files(self):

@@ -176,6 +176,7 @@ class GameProfileTests(unittest.TestCase):
         self.assertFalse(profile["scaling_enabled"])
         self.assertEqual(profile["scaling_factor"], 1.5)
         self.assertEqual(profile["scaling_sharpness"], 0.8)
+        self.assertTrue(profile["frame_generation_provisioned"])
         self.assertFalse(profile["frame_generation_enabled"])
 
     def test_explicit_fractional_choice_is_preserved_for_existing_profiles(self):
@@ -818,7 +819,7 @@ class GameProfileTests(unittest.TestCase):
                 str(self.service.mako_script_path),
                 "/bin/bash",
                 "-c",
-                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nIMPLICIT=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VK_IMPLICIT_LAYER_PATH:-}"',
+                'printf "PROFILE=%s\\nFALLBACK=%s\\nSDL=%s\\nDLLS=%s\\nMANGOHUD=%s\\nVKBASALT=%s\\nVKBASALT_CONFIG=%s\\nVKBASALT_RELOAD=%s\\nIMPLICIT=%s\\n" "${MAKO_PROFILE:-}" "${MAKO_PROFILE_FALLBACK:-}" "${SDL_AUDIODRIVER:-}" "${WINEDLLOVERRIDES:-}" "${MANGOHUD:-}" "${ENABLE_VKBASALT:-}" "${VKBASALT_CONFIG_FILE:-}" "${VKBASALT_CONFIG_RELOAD:-}" "${VK_IMPLICIT_LAYER_PATH:-}"',
             ],
             check=True,
             capture_output=True,
@@ -1035,6 +1036,8 @@ class GameProfileTests(unittest.TestCase):
         unrelated = self._run_wrapper("67890")
         self.assertEqual(matched["VKBASALT"], "1")
         self.assertEqual(unrelated["VKBASALT"], "1")
+        self.assertEqual(matched["VKBASALT_RELOAD"], "1")
+        self.assertEqual(unrelated["VKBASALT_RELOAD"], "1")
         self.assertNotEqual(
             matched["VKBASALT_CONFIG"],
             unrelated["VKBASALT_CONFIG"],

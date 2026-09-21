@@ -1,6 +1,6 @@
 # Configuration guide
 
-The default profile uses Fixed 2x Frame Generation with 80% Flow Scale, the full FG model, Ultra Performance off, FP16 allowed, and Smooth Cadence. If Adaptive is enabled, it starts with a 90 FPS target, a 3x ceiling, and Steady Base Cap. Scaling is off, with LS1 Quality, a 1.5x factor, 80% sharpness, and Quality Supersampling off saved for when it is enabled.
+The default profile provisions Frame Generation and uses Fixed 2x with 80% Flow Scale, the full FG model, Ultra Performance off, FP16 allowed, and Smooth Cadence. If Adaptive is enabled, it starts with a 90 FPS target, a 3x ceiling, and Steady Base Cap. Scaling is off, with LS1 Quality, a 1.5x factor, 80% sharpness, and Quality Supersampling off saved for when it is enabled.
 
 Test one change at a time and compare the game's V-Sync both on and off. Neither setting is universally best; keep whichever option feels smoother and more responsive for that game and display setup.
 
@@ -34,20 +34,22 @@ Method and sharpness changes rebuild only MAKO's private scaler. Factor or super
 
 The experimental **Enable vkBasalt (Restart)** setting is a per-profile control under **Shaders**. It uses only MAKO Renderer's private bundled copy, so it works without a separate installation and never falls back to a system-wide copy. The compact controls cover CAS or DLS sharpening, strength, DLS denoise, and optional FXAA or SMAA. The Default profile automatically uses `~/.config/vkBasalt/vkBasalt.conf`; each saved game or process profile automatically uses its own file under `~/.config/mako-render/vkbasalt/`. Captured Steam games and non-Steam shortcuts use the compact `steam-<app-id>.conf` identity; profiles without a Steam identity use `profile-<short-id>.conf`. The note below the controls shows the exact active path.
 
-You can edit the displayed file in Desktop Mode or over SSH for any advanced vkBasalt option. On the next MAKO save, Decky merges only the effects and values represented by its compact controls and preserves every other line, comment, and option. Renaming a profile moves its file, deleting that profile deletes the file, and disabling vkBasalt leaves it available for a later re-enable. Restart the game after changing vkBasalt settings. Prepared Flatpak games use the same private bundle and configuration files.
+You can edit the displayed file in Desktop Mode or over SSH for any advanced vkBasalt option. On the next MAKO save, Decky merges only the effects and values represented by its compact controls and preserves every other line, comment, and option. Renaming a profile moves its file, deleting that profile deletes the file, and disabling vkBasalt leaves it available for a later re-enable. Enabling or disabling vkBasalt, changing sharpening type, changing anti-aliasing, and editing advanced options require a game restart. Sharpness and DLS denoise changes apply live while the bundled vkBasalt layer is already active; if live reload is unavailable, the saved value applies on the next launch. Prepared Flatpak games use the same private bundle and configuration files.
 
 ## Frame Generation
 
-- **Frame Generation:** Enables or disables generated frames without discarding the selected Fixed or Adaptive settings. It normally applies live.
-- **Fixed FPS Multiplier:** Selects 2x–5x generation. Start at 2x; higher values require more GPU and memory headroom. With Smooth Cadence and ordered Gamescope presentation, MAKO can pace a proven stable source to the display divided by this multiplier for even output; disable Smooth Cadence to retain every real frame. With Dynamic Cadence Recovery, the multiplier becomes a ceiling against confirmed Gamescope refresh.
+- **Enable Frame Generation (Restart):** Provisions LSFG device interop, backend ownership, and private generation resources when the game starts. Turn it off for a Scaling-only or Shaders-only profile. When both Frame Generation and Scaling are off, Decky omits the MAKO Renderer layer; a selected shader remains independent.
+- **Frame Generation Factor:** Selects live `0x` or Fixed 2x–5x generation. `0x` pauses synthesis without discarding the selected Fixed or Adaptive settings or unloading provisioned resources. Start at 2x; higher values require more GPU and memory headroom. With Smooth Cadence and ordered Gamescope presentation, MAKO can pace a proven stable source to the display divided by this multiplier for even output; disable Smooth Cadence to retain every real frame. With Dynamic Cadence Recovery, the multiplier becomes a ceiling against confirmed Gamescope refresh.
 - **Adaptive Frame Generation:** Varies generation toward the Target FPS without slowing a game already above target or exceeding the selected ceiling.
 - **Fractional Adaptive:** Mixes generation ratios to retain more real frames, which may reduce latency and ghosting but can feel less smooth. It cannot be combined with Steady Base Cap; changing it also disables Dynamic Cadence Recovery.
 - **Target FPS:** Selects 30–240 displayed FPS for Adaptive mode.
 - **Steady Base Cap:** The default Adaptive mode. It starts with an even 2x cadence at half the target and may align a validated higher integer rung when Smooth Cadence is enabled. It is usually smoother but retains fewer real frames.
 - **Maximum Adaptive Multiplier:** Selects a 2x–5x ceiling. Lower ceilings usually preserve quality; higher ceilings need more headroom.
 - **Smooth Cadence:** Prefers a validated constant interpolation cadence. In Fractional Adaptive it stabilizes a validated generated-frame plan without imposing a real-frame cap. In Fixed mode, it can pace a stable source to the selected display/multiplier rung; with Steady Base Cap, it can align a validated higher Adaptive rung. It never overrides an explicit Base FPS Cap, Dynamic Cadence Recovery, transport recovery, or insufficient generated-output capacity. Disable it if the game feels more responsive without it.
-- **Base FPS Cap:** Caps real application frames from Off to 120 FPS in MAKO Decky. It is unavailable while Frame Generation is off or Steady Base Cap owns the cap; changing it disables Dynamic Cadence Recovery.
-- **Auto-disable Frame Generation by Refresh Rate:** Pauses generation at or below a 30–240 Hz Gamescope threshold and resumes it above the threshold. It does nothing without refresh feedback and never overrides the main Frame Generation switch.
+- **Base FPS Cap:** Caps real application frames from Off to 120 FPS in MAKO Decky. It is unavailable at `0x` or while Steady Base Cap owns the cap; changing it disables Dynamic Cadence Recovery.
+- **Auto-disable Frame Generation by Refresh Rate:** Pauses generation at or below a 30–240 Hz Gamescope threshold and resumes it above the threshold. It does nothing without refresh feedback and never overrides the selected `0x` factor.
+
+Profiles saved with the previous Frame Generation switch off migrate naturally to `0x`: provisioning defaults on for compatibility, while the saved execution state remains off. Their Fixed or Adaptive settings are preserved.
 
 Without confirmed ordered Gamescope refresh, Fixed Dynamic Cadence Recovery and refresh-matched Smooth Cadence refinements are unavailable. Fixed keeps its selected multiplier, while Adaptive continues toward its configured target.
 
@@ -57,19 +59,21 @@ Most generation controls apply live. Flow Scale and Lighter FG Model use a 500 m
 
 | Setting | Runtime behavior |
 | --- | --- |
+| Enable Frame Generation | Game restart |
 | Enable Scaling | Game restart |
 | Scaling Method | Live private-scaler rebuild |
 | Scaling Sharpness | Live, debounced private-scaler rebuild |
 | Scale Factor | Live when effective extents do not change; otherwise guarded game-owned or natural recreation |
 | Quality Supersampling | Same effective-extent and recreation boundary as Scale Factor |
-| Frame Generation, Fixed/Adaptive, target, Smooth Cadence, Base FPS Cap, refresh guard, and recovery | Live when startup resources are available |
+| Frame Generation Factor (`0x`/active), Fixed/Adaptive, target, Smooth Cadence, Base FPS Cap, refresh guard, and recovery | Live when Frame Generation was provisioned at startup |
 | Fixed or Adaptive multiplier | Live within current capacity; otherwise private FG replacement or recreation |
 | Flow Scale and Lighter FG Model | Live, debounced private FG replacement |
 | Ultra Performance | Game restart |
 | Lossless.dll Path, Allow FP16, and GPU | Game restart |
 | Game Swapchain Images | Game restart |
 | Disable MAKO Renderer on Next Launch | Game restart; remains selected until turned off |
-| Gamescope WSI, MangoHud, vkBasalt, Steam Deck Mode, Zink, Force ALSA, and other launcher controls | Game restart |
+| Gamescope WSI, MangoHud, vkBasalt activation/effect selection, Steam Deck Mode, Zink, Force ALSA, and other launcher controls | Game restart |
+| vkBasalt sharpness and DLS denoise while vkBasalt is active | Live; saved fallback applies on next launch |
 
 A restart-bound change does not block unrelated live-safe changes. **Live Status** distinguishes saved values from applied values and reports pending restarts, scaler rebuilds, and recreations without transition pop-ups. The displayed Target is the configured Adaptive target, not a measurement of delivered FPS.
 
@@ -83,7 +87,7 @@ Both components use the shared [launcher exclusion registry](../../engine/mako-c
 
 The profile dropdown chooses which profile Decky edits; it does not override runtime matching. During play, MAKO follows the matched profile or Default. Outside a game, the selected profile remains available for editing.
 
-Renderer settings are stored in `conf.toml`; profile identity and launcher-only settings use versioned sidecars. Unknown keys are ignored and removed by the next canonical write. Scaling fields and **Game Swapchain Images** stay in Renderer configuration rather than becoming wrapper environment exports; the wrapper derives only the process-start layer chain from Scaling and launcher compatibility settings.
+Renderer settings are stored in `conf.toml`; profile identity and launcher-only settings use versioned sidecars. Unknown keys are ignored and removed by the next canonical write. Frame Generation provisioning, Scaling fields, and **Game Swapchain Images** stay in Renderer configuration rather than becoming wrapper environment exports; the wrapper derives process-start Renderer membership from Frame Generation provisioning and Scaling, plus any launcher compatibility settings.
 
 Decky sends typed field patches through one last-value-wins writer with one backend update in flight. Ordinary edits use a 250 ms trailing window, while Base FPS Cap changes use one second so a slider drag does not apply transient low caps to a running game. The writer preserves the profile selected for each edit and flushes pending changes when the quick-access panel closes, preventing rapid controls or profile changes from creating stale write queues.
 
@@ -99,7 +103,7 @@ Decky sends typed field patches through one last-value-wins writer with one back
 ## Compatibility and external tools
 
 - **Dynamic Cadence Recovery:** For games and emulators that switch native rates, such as 30 FPS gameplay and 60 FPS menus. It periodically probes the real cadence and recalibrates Fixed or Adaptive behavior. Enabling it disables Steady Base Cap and Base FPS Cap; in Adaptive mode it selects Fractional behavior. The interval ranges from 0.1–3 seconds and defaults to 2 seconds.
-- **Disable MAKO Renderer on Next Launch:** Prevents the complete Renderer from loading on launches while selected. Restart the game to compare, then turn the option off.
+- **Disable MAKO Renderer on Next Launch:** Troubleshooting override that prevents the complete Renderer from loading on launches while selected. For normal Scaling-only or Shaders-only profiles, use the Image Processing enable controls instead. Restart the game to compare, then turn the override off.
 - **Gamescope WSI (Restart):** Optional per-profile compatibility path for coloured or pixelated motion artifacts in supported 64-bit launches, with Scaling, Frame Generation, or both. The option remains independent and editable while Scaling is enabled. With WSI off, the combined Renderer handles scaling and Frame Generation; with both options on, MAKO uses the ordered three-role compatibility chain. MAKO stages only the validated manifest and library, supports direct 64-bit native Vulkan and Proton games plus prepared 64-bit Heroic and EmuDeck Flatpaks, and fails closed in Desktop Mode, mismatched nested Wayland sessions, unprepared Flatpaks, 32-bit WSI presentation, or HDR.
 - **Game Swapchain Images (Restart):** Preserves the game's requested swapchain image minimum for titles that fail to start with MAKO's normal generated-output headroom. Generated frames may be skipped when the compositor has no spare image, so leave it off unless needed.
 - **Disable Steam Deck Mode (Restart):** Unlocks hidden settings in some games.
@@ -112,6 +116,6 @@ Decky sends typed field patches through one last-value-wins writer with one back
 
 HDR Frame Generation and Scaling are unavailable in this release. **Disable HDR** remains enabled and read-only, and MAKO removes inherited `DXVK_HDR` activation.
 
-Profiles with Gamescope WSI off use the isolated combined Renderer for Scaling and Frame Generation. With WSI on, Scaling uses the managed Renderer → Gamescope WSI → Spatial Scaling order; FG-only profiles omit the lower spatial role. A selected 64-bit MangoHud or vkBasalt layer follows the managed chain on the host. Missing WSI or spatial-layer dependencies leave WSI disabled and select the combined Renderer, whose surface checks may keep scaling native; an unavailable optional external tool is omitted. Scaling never changes the saved WSI choice. Upgrades regenerate wrappers to honor that choice, so a profile that previously received WSI only because Scaling was enabled now uses the combined path unless WSI was explicitly saved as on. Restart the game after changing either option, and check Live Status for active scaling and the actual source/output sizes.
+Profiles with Gamescope WSI off use the isolated combined Renderer for provisioned Frame Generation, Scaling, or both. A Scaling-only profile retains that Renderer but provisions no LSFG interop or backend resources. With WSI on, Scaling uses the managed Renderer → Gamescope WSI → Spatial Scaling order; FG-only profiles omit the lower spatial role. When Frame Generation provisioning and Scaling are both off, Decky disables and removes inherited MAKO Renderer identities; a selected 64-bit MangoHud or vkBasalt layer can still run independently. Missing WSI or spatial-layer dependencies leave WSI disabled and select the combined Renderer when needed, whose surface checks may keep scaling native; an unavailable optional external tool is omitted. Scaling never changes the saved WSI choice. Restart the game after changing Frame Generation provisioning, Scaling, or WSI, and check Live Status for active scaling and the actual source/output sizes.
 
 Do not add unknown wrapper or HDR keys such as `enable_wsi` to `conf.toml`. Use the profile controls and leave the file writable so MAKO Decky can maintain it. For implementation details, see [Renderer configuration](../../engine/docs/CONFIGURATION.md), [runtime transitions](../../engine/docs/RUNTIME-TRANSITIONS.md), [spatial scaling](../../engine/docs/SCALING.md), [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md), [HDR](../../engine/docs/HDR-PIPELINE.md), and [troubleshooting](TROUBLESHOOTING.md).

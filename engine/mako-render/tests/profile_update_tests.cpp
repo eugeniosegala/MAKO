@@ -82,16 +82,21 @@ int main() {
     staticRequest.flow_scale = ls::GameConfDefaults::ultraPerformanceFlowScale;
     staticRequest.performance_mode = true;
     staticRequest.target_fps = 120;
+    staticRequest.frame_generation_provisioned = false;
     staticRequest.swapchain_image_count_compatibility = true;
     const auto staticProjection = projectProcessStaticProfileForLiveUpdate(
-        current, staticRequest, current.scaling_enabled,
+        current, staticRequest, current.frame_generation_provisioned,
+        current.scaling_enabled,
         current.swapchain_image_count_compatibility
     );
     expect(staticProjection.restartRequired() &&
             staticProjection.gpuSelectionPending &&
+            staticProjection.frameGenerationProvisioningPending &&
             staticProjection.ultraPerformancePending &&
             staticProjection.swapchainImageCountCompatibilityPending &&
             staticProjection.runtimeProfile.gpu == current.gpu &&
+            staticProjection.runtimeProfile.frame_generation_provisioned ==
+                current.frame_generation_provisioned &&
             staticProjection.runtimeProfile.ultra_performance ==
                 current.ultra_performance &&
             staticProjection.runtimeProfile.flow_scale == current.flow_scale &&
@@ -107,7 +112,8 @@ int main() {
     scalingEngineRequest.scaling_method = ls::ScalingMethod::Native;
     const auto scalingEngineProjection =
         projectProcessStaticProfileForLiveUpdate(
-            current, scalingEngineRequest, current.scaling_enabled,
+            current, scalingEngineRequest,
+            current.frame_generation_provisioned, current.scaling_enabled,
             current.swapchain_image_count_compatibility
         );
     expect(scalingEngineProjection.restartRequired() &&
@@ -121,6 +127,7 @@ int main() {
     scalingOnlyCurrent.frame_generation_enabled = false;
     const auto liveEnableProjection = projectProcessStaticProfileForLiveUpdate(
         scalingOnlyCurrent, current,
+        scalingOnlyCurrent.frame_generation_provisioned,
         scalingOnlyCurrent.scaling_enabled,
         scalingOnlyCurrent.swapchain_image_count_compatibility
     );
@@ -458,6 +465,16 @@ int main() {
     expect(effectiveBaseFpsCap(
                 fixedAutoCap, collapsedAutomaticCap) == 30.0,
         "Adaptive scheduler headroom incorrectly changed Fixed pacing");
+
+    next = current;
+    next.frame_generation_provisioned = false;
+    const auto provisioningPlan = planProfileUpdate(current, next, 3, true);
+    expect(provisioningPlan.decision.action ==
+                ProfileUpdateAction::DeferUntilProcessRestart &&
+            provisioningPlan.decision.processRestartDeferred &&
+            provisioningPlan.appliedProfile.frame_generation_provisioned &&
+            provisioningPlan.appliedProfile.frame_generation_enabled,
+        "Frame Generation provisioning must remain applied until restart");
 
     next = current;
     next.frame_generation_enabled = false;
@@ -1242,6 +1259,12 @@ int main() {
 
     expect(generatedFrameCapacityForProfile(fixed) == 2,
         "Fixed 2x should reserve the configured Adaptive 3x capacity");
+    auto unprovisioned = fixed;
+    unprovisioned.frame_generation_provisioned = false;
+    expect(generatedFrameCapacityForProfile(unprovisioned) == 0 &&
+            generatedFrameCapacityForActivePolicy(unprovisioned) == 0 &&
+            !effectiveFrameGenerationEnabled(unprovisioned, std::nullopt),
+        "an unprovisioned profile must own no generated-frame work");
     auto fixedUltra = fixed;
     fixedUltra.ultra_performance = true;
     expect(generatedFrameCapacityForProfile(fixedUltra) == 1,
