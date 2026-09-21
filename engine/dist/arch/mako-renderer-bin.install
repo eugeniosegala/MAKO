@@ -35,6 +35,8 @@ mako_renderer_bin_user_local_owner() {
     [ -n "${mako_renderer_bin_home}" ] || return 1
 
     if [ -f "${mako_renderer_bin_home}/.local/share/mako-render/active-renderer.json" ] \
+        || [ -f "${mako_renderer_bin_home}/.local/share/mako-render/lib/libmako-render.so" ] \
+        || [ -f "${mako_renderer_bin_home}/.local/share/mako-render/lib32/libmako-render.so" ] \
         || [ -f "${mako_renderer_bin_home}/.local/lib/libmako-render.so" ] \
         || [ -f "${mako_renderer_bin_home}/.local/lib32/libmako-render.so" ] \
         || [ -f "${mako_renderer_bin_home}/.local/bin/mako-run" ] \

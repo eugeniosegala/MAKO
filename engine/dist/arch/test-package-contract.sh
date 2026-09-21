@@ -76,6 +76,22 @@ printf '%s\n' future > "$mapping_root/share/mako-render/future/payload.dat"
 [[ ! -e "$mapping_pkgdir/usr/bin/mako-installer" ]]
 [[ ! -e "$mapping_pkgdir/usr/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop" ]]
 
+decky_marker_home="$work_dir/decky-marker-home"
+standalone_marker_home="$work_dir/standalone-marker-home"
+mkdir -p \
+    "$decky_marker_home/.local/share/mako-render/lib" \
+    "$standalone_marker_home/.local/lib"
+printf '%s\n' decky > \
+    "$decky_marker_home/.local/share/mako-render/lib/libmako-render.so"
+printf '%s\n' standalone > \
+    "$standalone_marker_home/.local/lib/libmako-render.so"
+(
+    # shellcheck disable=SC1091
+    . "$script_dir/mako-renderer-bin.install"
+    [[ "$(mako_renderer_bin_user_local_owner "$decky_marker_home")" == unknown ]]
+    [[ "$(mako_renderer_bin_user_local_owner "$standalone_marker_home")" == unknown ]]
+)
+
 cp "$script_dir/PKGBUILD" "$work_dir/PKGBUILD"
 python3 - "$repo_root/plugin/package.json" "$work_dir/package.json" <<'PY'
 import json
