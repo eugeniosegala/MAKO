@@ -34,6 +34,9 @@ depends=(
     'qt6-declarative'
     # libGLX.so.0, libOpenGL.so.0
     'libglvnd'
+    # libX11.so.6, used directly by the bundled private vkBasalt layer in
+    # releases that include it
+    'libx11'
     # fallback icon theme for the desktop entry
     'hicolor-icon-theme'
     # The Vulkan loader dlopens the layers. It is not a DT_NEEDED entry, but the
@@ -45,12 +48,15 @@ depends=(
     'lib32-gcc-libs'
     # 32-bit Vulkan loader for the lib32 layers
     'lib32-vulkan-icd-loader'
+    # 32-bit libX11.so.6 for the bundled private vkBasalt layer
+    'lib32-libx11'
 )
 
 optdepends=(
     'qt6-wayland: native configuration UI under Wayland sessions'
     'vkd3d: LS1 spatial scaling needs libvkd3d-shader.so.1 (64-bit)'
     'lib32-vkd3d: LS1 spatial scaling needs libvkd3d-shader.so.1 (32-bit)'
+    'lib32-mesa: Zink support for 32-bit OpenGL games'
 )
 
 # Upstream binaries are already stripped and must remain byte-identical to the
@@ -69,63 +75,119 @@ source=("MAKO-Renderer-v${pkgver}-linux.tar.xz::https://github.com/eugeniosegala
 sha256sums=('ca8d9f8c5537bf92edd68adae31926580b2bfb7e83543bf7a25bc21ac2976e6d')
 noextract=("MAKO-Renderer-v${pkgver}-linux.tar.xz")
 
-package() {
-    # The archive is noextract, so extract a private payload copy here instead of
-    # in prepare(). Removing it first keeps repeated builds from reusing stale
-    # files after a pkgver bump.
+_mako_install_payload_file() {
+    local relative_path="$1"
+    local destination_path=""
+    local install_mode=644
+
+    case "$relative_path" in
+        "" | /* | ../* | */../* | */.. | ./* | */./* | */.)
+            printf 'mako-renderer-bin: unsafe archive manifest path: %s\n' "$relative_path" >&2
+            return 1
+            ;;
+    esac
+    if [[ ! -f "$relative_path" ]]; then
+        printf 'mako-renderer-bin: archive manifest path is missing: %s\n' "$relative_path" >&2
+        return 1
+    fi
+
+    case "$relative_path" in
+        bin/mako-installer | share/applications/io.github.eugeniosegala.mako.uninstaller.desktop)
+            # The user-local installer and uninstaller must never manage a
+            # pacman-owned system prefix.
+            return 0
+            ;;
+        share/doc/mako-render/LICENSE.md | share/doc/mako-render/THIRD_PARTY_NOTICES.md)
+            destination_path="$pkgdir/usr/share/licenses/$pkgname/${relative_path##*/}"
+            ;;
+        share/doc/mako-render/vkbasalt/LICENSE | share/doc/mako-render/vkbasalt/RESHade-LICENSE.md)
+            destination_path="$pkgdir/usr/share/licenses/$pkgname/vkbasalt/${relative_path##*/}"
+            ;;
+        share/doc/mako-render/*)
+            destination_path="$pkgdir/usr/share/doc/$pkgname/${relative_path#share/doc/mako-render/}"
+            ;;
+        bin/*)
+            destination_path="$pkgdir/usr/$relative_path"
+            install_mode=755
+            ;;
+        lib/* | lib32/*)
+            destination_path="$pkgdir/usr/$relative_path"
+            install_mode=755
+            ;;
+        share/*)
+            destination_path="$pkgdir/usr/$relative_path"
+            ;;
+        *)
+            printf 'mako-renderer-bin: unsupported archive manifest path: %s\n' "$relative_path" >&2
+            return 1
+            ;;
+    esac
+
+    install -Dm"$install_mode" "$relative_path" "$destination_path"
+}
+
+prepare() {
+    # The archive is noextract so its root files never leak into srcdir. Recreate
+    # and verify one private payload copy outside fakeroot on every preparation.
     rm -rf payload
     mkdir -p payload
     tar -xJf "$srcdir/MAKO-Renderer-v${pkgver}-linux.tar.xz" -C payload
     cd "$srcdir/payload"
 
-    # Executables: configuration UI, CLI, per-game launcher, diagnostics.
-    install -Dm755 bin/mako-cli "$pkgdir/usr/bin/mako-cli"
-    install -Dm755 bin/mako-launch "$pkgdir/usr/bin/mako-launch"
-    install -Dm755 bin/mako-ui "$pkgdir/usr/bin/mako-ui"
-    install -Dm755 bin/mako-diagnostics "$pkgdir/usr/bin/mako-diagnostics"
+    if ! sha256sum --check --status MAKO-Renderer-install-manifest.txt; then
+        printf '%s\n' 'mako-renderer-bin: archive payload does not match its install manifest' >&2
+        return 1
+    fi
+}
 
-    # Shared libraries. Upstream ships these as 0644; Arch convention is 0755
-    # for shared libraries.
-    install -Dm755 lib/libmako-render.so "$pkgdir/usr/lib/libmako-render.so"
-    install -Dm755 lib/libmako-render-scaling.so "$pkgdir/usr/lib/libmako-render-scaling.so"
-    install -Dm755 lib32/libmako-render.so "$pkgdir/usr/lib32/libmako-render.so"
-    install -Dm755 lib32/libmako-render-scaling.so "$pkgdir/usr/lib32/libmako-render-scaling.so"
+package() {
+    cd "$srcdir/payload"
 
-    # Public Vulkan implicit-layer manifests. They are gated by the
-    # enable_environment ENABLE_MAKO / ENABLE_MAKO_SPATIAL_SCALING, so they stay
-    # dormant unless a launcher opts in.
-    install -Dm644 share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json "$pkgdir/usr/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
-    install -Dm644 share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json "$pkgdir/usr/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
-    install -Dm644 share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json "$pkgdir/usr/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json"
-    install -Dm644 share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json "$pkgdir/usr/share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json"
+    local required_path
+    local required_paths=(
+        bin/mako-cli
+        bin/mako-diagnostics
+        bin/mako-installer
+        bin/mako-launch
+        bin/mako-ui
+        lib/libmako-render-scaling.so
+        lib/libmako-render.so
+        lib32/libmako-render-scaling.so
+        lib32/libmako-render.so
+        share/applications/io.github.eugeniosegala.mako.desktop
+        share/applications/io.github.eugeniosegala.mako.uninstaller.desktop
+        share/doc/mako-render/ASSET_PROVENANCE.md
+        share/doc/mako-render/LICENSE.md
+        share/doc/mako-render/THIRD_PARTY_NOTICES.md
+        share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json
+        share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json
+        share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json
+        share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json
+        share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json
+        share/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json
+        share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.json
+        share/vulkan/implicit_layer.d/VkLayer_MAKO_spatial_scaling.x86.json
+    )
+    for required_path in "${required_paths[@]}"; do
+        if [[ ! -f "$required_path" ]]; then
+            printf 'mako-renderer-bin: required archive payload is missing: %s\n' "$required_path" >&2
+            return 1
+        fi
+    done
 
-    # Private manifests selected by mako-launch through VK_IMPLICIT_LAYER_PATH.
-    # The extra directory depth (share/mako-render/vulkan/...) is required for
-    # the relative library_path to resolve to /usr/lib and /usr/lib32.
-    install -Dm644 share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json "$pkgdir/usr/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json"
-    install -Dm644 share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json "$pkgdir/usr/share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.x86.json"
-    install -Dm644 share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json "$pkgdir/usr/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json"
-    install -Dm644 share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json "$pkgdir/usr/share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.x86.json"
+    local manifest_line manifest_checksum manifest_path
+    while IFS= read -r manifest_line || [[ -n "$manifest_line" ]]; do
+        manifest_checksum="${manifest_line%%  *}"
+        manifest_path="${manifest_line#*  }"
+        if [[ ! "$manifest_checksum" =~ ^[0-9a-f]{64}$ || "$manifest_path" == "$manifest_line" ]]; then
+            printf 'mako-renderer-bin: invalid archive manifest entry: %s\n' "$manifest_line" >&2
+            return 1
+        fi
+        _mako_install_payload_file "$manifest_path"
+    done < MAKO-Renderer-install-manifest.txt
 
-    # Configuration desktop entry.
-    install -Dm644 share/applications/io.github.eugeniosegala.mako.desktop "$pkgdir/usr/share/applications/io.github.eugeniosegala.mako.desktop"
-
-    # Icons, installed per file so no archive ownership or mode is inherited.
-    install -Dm644 share/icons/hicolor/16x16/apps/io.github.eugeniosegala.mako.png "$pkgdir/usr/share/icons/hicolor/16x16/apps/io.github.eugeniosegala.mako.png"
-    install -Dm644 share/icons/hicolor/24x24/apps/io.github.eugeniosegala.mako.png "$pkgdir/usr/share/icons/hicolor/24x24/apps/io.github.eugeniosegala.mako.png"
-    install -Dm644 share/icons/hicolor/32x32/apps/io.github.eugeniosegala.mako.png "$pkgdir/usr/share/icons/hicolor/32x32/apps/io.github.eugeniosegala.mako.png"
-    install -Dm644 share/icons/hicolor/48x48/apps/io.github.eugeniosegala.mako.png "$pkgdir/usr/share/icons/hicolor/48x48/apps/io.github.eugeniosegala.mako.png"
-    install -Dm644 share/icons/hicolor/64x64/apps/io.github.eugeniosegala.mako.png "$pkgdir/usr/share/icons/hicolor/64x64/apps/io.github.eugeniosegala.mako.png"
-    install -Dm644 share/icons/hicolor/128x128/apps/io.github.eugeniosegala.mako.png "$pkgdir/usr/share/icons/hicolor/128x128/apps/io.github.eugeniosegala.mako.png"
-    install -Dm644 share/icons/hicolor/256x256/apps/io.github.eugeniosegala.mako.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/io.github.eugeniosegala.mako.png"
-
-    # License texts (the archived share/doc/mako-render/* are relocated here).
-    install -Dm644 share/doc/mako-render/LICENSE.md "$pkgdir/usr/share/licenses/mako-renderer-bin/LICENSE.md"
-    install -Dm644 share/doc/mako-render/THIRD_PARTY_NOTICES.md "$pkgdir/usr/share/licenses/mako-renderer-bin/THIRD_PARTY_NOTICES.md"
-
-    # Provenance, version and the upstream checksum manifest are kept so the
-    # installed payload can be audited against the release archive.
-    install -Dm644 share/doc/mako-render/ASSET_PROVENANCE.md "$pkgdir/usr/share/doc/mako-renderer-bin/ASSET_PROVENANCE.md"
+    # Version and the upstream checksum manifest are outside the installer's
+    # managed payload but remain available for package provenance audits.
     install -Dm644 MAKO-Renderer-version.txt "$pkgdir/usr/share/doc/mako-renderer-bin/MAKO-Renderer-version.txt"
     install -Dm644 MAKO-Renderer-install-manifest.txt "$pkgdir/usr/share/doc/mako-renderer-bin/MAKO-Renderer-install-manifest.txt"
 

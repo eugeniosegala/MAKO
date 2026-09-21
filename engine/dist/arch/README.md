@@ -1,6 +1,6 @@
 # Arch Linux packaging
 
-This directory contains the Arch Linux packaging for MAKO Renderer. `PKGBUILD` repackages the official prebuilt Linux host archive (`MAKO-Renderer-vX.Y.Z-linux.tar.xz`) from the upstream GitHub release into a system-wide `mako-renderer-bin` package. No MAKO source is built. Every payload file that upstream's checksum manifest covers is installed with the same content hash, so the installed layers, CLI, and configuration UI stay auditable against the archive's `MAKO-Renderer-install-manifest.txt`.
+This directory contains the Arch Linux packaging for MAKO Renderer. `PKGBUILD` repackages the official prebuilt Linux host archive (`MAKO-Renderer-vX.Y.Z-linux.tar.xz`) from the upstream GitHub release into a system-wide `mako-renderer-bin` package. No MAKO source is built. Every included payload file is installed with the same content hash, so the installed layers, CLI, configuration UI, and release-owned private integrations stay auditable against the archive's `MAKO-Renderer-install-manifest.txt`.
 
 The `-bin` suffix follows the convention for a package that repackages prebuilt deliverables instead of building them from source. A future source-built package would be named `mako-renderer`; this package provides and conflicts with that common package identity so pacman treats the two implementations as alternatives.
 
@@ -12,6 +12,7 @@ The package installs:
 - the 64-bit Vulkan layers into `/usr/lib` and the 32-bit layers into `/usr/lib32`.
 - the public implicit-layer manifests into `/usr/share/vulkan/implicit_layer.d`, gated by `ENABLE_MAKO` and `ENABLE_MAKO_SPATIAL_SCALING`.
 - the private manifests used by `mako-launch` into `/usr/share/mako-render/vulkan/implicit_layer.d` and `/usr/share/mako-render/vulkan/spatial_scaling.d`.
+- any checksum-manifested private integration shipped by the pinned archive, including MAKO's private 64-bit and 32-bit vkBasalt libraries, manifests, licences, and provenance when present in that Renderer release.
 - the configuration desktop entry and its seven hicolor icons.
 - license texts into `/usr/share/licenses/mako-renderer-bin`.
 - `ASSET_PROVENANCE.md`, the version file, and the upstream checksum manifest into `/usr/share/doc/mako-renderer-bin`.
@@ -22,11 +23,11 @@ The package deliberately excludes:
 - `share/applications/io.github.eugeniosegala.mako.uninstaller.desktop`, whose `Exec` calls `mako-installer --uninstall` and would target the user-local install.
 - the archive's `README.txt`, which documents the user-local installer flow that this package does not provide.
 
-Two details differ from the archive layout: the archived `share/doc/mako-render/*` files are installed under `/usr/share/licenses/mako-renderer-bin/` and `/usr/share/doc/mako-renderer-bin/`, and the four shared libraries are installed as mode `0755` instead of the archive's `0644`, following Arch convention. Content hashes are unaffected, so the checksum manifest still matches.
+Two details differ from the archive layout: the archived `share/doc/mako-render/*` files are installed under `/usr/share/licenses/mako-renderer-bin/` and `/usr/share/doc/mako-renderer-bin/`, and shared libraries are installed as mode `0755` instead of the archive's `0644`, following Arch convention. Content hashes are unaffected, so the checksum manifest still matches.
 
 ## Build and install
 
-An `x86_64` Arch Linux system is required. Build and install from this directory:
+An `x86_64` Arch Linux system with the multilib repository enabled is required because one package carries both the 64-bit and 32-bit Vulkan layers and their runtime dependencies. Build and install from this directory:
 
 ```bash
 cd engine/dist/arch
@@ -51,7 +52,7 @@ Do not run the upstream installer or extract the archive with `MAKO_INSTALL_PREF
 
 ## Coexistence with MAKO Decky and other user-local installs
 
-MAKO Decky and the standalone archive manage a user-local renderer under `~/.local`, using `~/.local/share/mako-render`, `~/.local/bin/mako-run`, and `~/.local/share/vulkan/implicit_layer.d`. Ownership of that copy is recorded in `~/.local/share/mako-render/active-renderer.json`, and the Decky plugin lives at `~/homebrew/plugins/Mako`. Neither the user-local installers nor this package know about each other, and neither manages the other's files. This package never touches `~/.local`, and the user-local installers never touch `/usr`. The install hooks report any user-local copy they detect and delete nothing.
+MAKO Decky and the standalone archive manage a user-local renderer under `~/.local`, using `~/.local/share/mako-render`, `~/.local/bin/mako-run` or `~/.local/bin/mako-launch`, `~/.local/lib`, `~/.local/lib32`, and `~/.local/share/vulkan/implicit_layer.d`. Ownership of that copy is recorded in `~/.local/share/mako-render/active-renderer.json`, and the Decky plugin lives at `~/homebrew/plugins/Mako`. Neither the user-local installers nor this package know about each other, and neither manages the other's files. This package never touches `~/.local`, and the user-local installers never touch `/usr`. The install hooks report any user-local copy they detect and delete nothing.
 
 Managed launches are safe to mix. `mako-launch` sets `VK_IMPLICIT_LAYER_PATH` to its own private manifest directory (`/usr/share/mako-render/vulkan/implicit_layer.d` when installed system-wide), and Decky's generated wrapper does the same for the user-local directory. The loader uses that variable instead of the standard implicit-layer search paths (`$XDG_CONFIG_HOME`, `$XDG_CONFIG_DIRS`, `/etc`, `$XDG_DATA_HOME`, and `$XDG_DATA_DIRS`, each with the `vulkan/implicit_layer.d` suffix), and ignores `VK_ADD_IMPLICIT_LAYER_PATH` while it is set; both launchers also unset that variable. A managed launch therefore discovers implicit-layer manifests only in the active launcher's directory, and the loader drops duplicate layer names by keeping the first manifest in search order, so one process never loads both layer copies. MAKO ships no explicit-layer manifests, and explicit-layer paths such as `VK_LAYER_PATH` are unaffected. An enabled override layer that declares `override_paths` bypasses these variables as well, but MAKO does not use one.
 
@@ -72,7 +73,7 @@ Because both delivery paths share that directory, do not run two different MAKO 
 
 ## Updating for a new release
 
-The MAKO Renderer publisher updates `plugin/package.json`, runs `sync-release-pin.py`, resets `pkgrel` to 1 for a new upstream version, and verifies the result with `check-release-pin.sh`. This keeps the recipe aligned with the immutable archive only after the Renderer release gates have passed and the asset checksum is known.
+The MAKO Renderer publisher first builds and verifies the host archive from the release commit, then records that exact artifact's version, URL, and checksum in `plugin/package.json`, runs `sync-release-pin.py`, resets `pkgrel` to 1 for a new upstream version, and verifies the result with `check-release-pin.sh`. The archive's own install manifest remains the package payload source of truth, so the recipe neither selects files from an older archive nor maintains a second release payload list.
 
 For a packaging-only fix, leave `pkgver` and `sha256sums` unchanged and increment `pkgrel`. Run `just check-arch-package` from the repository root before committing. `check-release-pin.sh` also runs in portable Renderer CTest and fails when `pkgver`, the source URL, or `sha256sums` drifts from `plugin/package.json`.
 
@@ -83,7 +84,7 @@ This repository owns the reviewed `PKGBUILD`, but the release publisher does not
 ## Verification
 
 - `makepkg` verifies the release archive against `sha256sums` before packaging.
-- Every payload file this package installs has the same SHA-256 as its entry in `MAKO-Renderer-install-manifest.txt`. The manifest is installed unchanged at `/usr/share/doc/mako-renderer-bin/MAKO-Renderer-install-manifest.txt` so the claim can be re-checked. The only manifest entries without a matching installed file are `bin/mako-installer` and `share/applications/io.github.eugeniosegala.mako.uninstaller.desktop`, both excluded by design.
+- Every payload file this package installs has the same SHA-256 as its entry in `MAKO-Renderer-install-manifest.txt`. The recipe verifies the complete archive manifest, packages every supported entry instead of maintaining a second payload allowlist, and fails on unsafe or unsupported paths. The manifest is installed unchanged at `/usr/share/doc/mako-renderer-bin/MAKO-Renderer-install-manifest.txt` so the claim can be re-checked. The only manifest entries without a matching installed file are `bin/mako-installer` and `share/applications/io.github.eugeniosegala.mako.uninstaller.desktop`, both excluded by design.
 - `desktop-file-validate` accepts the installed desktop entry.
 - A Vulkan loader run with `VK_IMPLICIT_LAYER_PATH` pointed at each packaged manifest directory discovers and activates `VK_LAYER_MAKO_render` and `VK_LAYER_MAKO_spatial_scaling` for the public set, and the matching layer for each private directory, with the relative `library_path` values resolving to `/usr/lib` and `/usr/lib32`.
 - `bash -n PKGBUILD`, `sh -n mako-renderer-bin.install`, and `./check-release-pin.sh` all pass.

@@ -35,8 +35,10 @@ mako_renderer_bin_user_local_owner() {
     [ -n "${mako_renderer_bin_home}" ] || return 1
 
     if [ -f "${mako_renderer_bin_home}/.local/share/mako-render/active-renderer.json" ] \
-        || [ -f "${mako_renderer_bin_home}/.local/share/mako-render/lib/libmako-render.so" ] \
+        || [ -f "${mako_renderer_bin_home}/.local/lib/libmako-render.so" ] \
+        || [ -f "${mako_renderer_bin_home}/.local/lib32/libmako-render.so" ] \
         || [ -f "${mako_renderer_bin_home}/.local/bin/mako-run" ] \
+        || [ -f "${mako_renderer_bin_home}/.local/bin/mako-launch" ] \
         || [ -f "${mako_renderer_bin_home}/.local/share/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" ] \
         || [ -f "${mako_renderer_bin_home}/homebrew/plugins/Mako/plugin.json" ]; then
         mako_renderer_bin_owner="$(sed -n 's/.*"owner"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' "${mako_renderer_bin_home}/.local/share/mako-render/active-renderer.json" 2>/dev/null | head -n 1)"

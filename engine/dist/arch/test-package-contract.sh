@@ -28,6 +28,53 @@ PY
 }
 
 "$script_dir/check-release-pin.sh" >/dev/null
+grep -Fq "'libx11'" "$script_dir/PKGBUILD"
+grep -Fq "'lib32-libx11'" "$script_dir/PKGBUILD"
+grep -Fq 'done < MAKO-Renderer-install-manifest.txt' "$script_dir/PKGBUILD"
+
+mapping_root="$work_dir/mapping"
+mapping_pkgdir="$work_dir/mapping-package"
+mkdir -p \
+    "$mapping_root/bin" \
+    "$mapping_root/lib/vkbasalt" \
+    "$mapping_root/lib32/vkbasalt" \
+    "$mapping_root/share/applications" \
+    "$mapping_root/share/doc/mako-render/vkbasalt" \
+    "$mapping_root/share/mako-render/future"
+printf '%s\n' tool > "$mapping_root/bin/future-tool"
+printf '%s\n' installer > "$mapping_root/bin/mako-installer"
+printf '%s\n' library > "$mapping_root/lib/vkbasalt/libvkbasalt.so"
+printf '%s\n' library32 > "$mapping_root/lib32/vkbasalt/libvkbasalt.so"
+printf '%s\n' uninstaller > "$mapping_root/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop"
+printf '%s\n' license > "$mapping_root/share/doc/mako-render/vkbasalt/LICENSE"
+printf '%s\n' provenance > "$mapping_root/share/doc/mako-render/vkbasalt/SOURCE"
+printf '%s\n' future > "$mapping_root/share/mako-render/future/payload.dat"
+(
+    # shellcheck disable=SC1091
+    . "$script_dir/PKGBUILD"
+    pkgdir="$mapping_pkgdir"
+    cd "$mapping_root"
+    _mako_install_payload_file bin/future-tool
+    _mako_install_payload_file bin/mako-installer
+    _mako_install_payload_file lib/vkbasalt/libvkbasalt.so
+    _mako_install_payload_file lib32/vkbasalt/libvkbasalt.so
+    _mako_install_payload_file share/applications/io.github.eugeniosegala.mako.uninstaller.desktop
+    _mako_install_payload_file share/doc/mako-render/vkbasalt/LICENSE
+    _mako_install_payload_file share/doc/mako-render/vkbasalt/SOURCE
+    _mako_install_payload_file share/mako-render/future/payload.dat
+    if _mako_install_payload_file ../escape 2>/dev/null; then
+        echo "Arch package accepted an unsafe manifest path" >&2
+        exit 1
+    fi
+)
+[[ -x "$mapping_pkgdir/usr/bin/future-tool" ]]
+[[ -x "$mapping_pkgdir/usr/lib/vkbasalt/libvkbasalt.so" ]]
+[[ -x "$mapping_pkgdir/usr/lib32/vkbasalt/libvkbasalt.so" ]]
+[[ -f "$mapping_pkgdir/usr/share/licenses/mako-renderer-bin/vkbasalt/LICENSE" ]]
+[[ -f "$mapping_pkgdir/usr/share/doc/mako-renderer-bin/vkbasalt/SOURCE" ]]
+[[ -f "$mapping_pkgdir/usr/share/mako-render/future/payload.dat" ]]
+[[ ! -e "$mapping_pkgdir/usr/bin/mako-installer" ]]
+[[ ! -e "$mapping_pkgdir/usr/share/applications/io.github.eugeniosegala.mako.uninstaller.desktop" ]]
 
 cp "$script_dir/PKGBUILD" "$work_dir/PKGBUILD"
 python3 - "$repo_root/plugin/package.json" "$work_dir/package.json" <<'PY'
