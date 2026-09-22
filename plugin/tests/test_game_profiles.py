@@ -1121,6 +1121,29 @@ class GameProfileTests(unittest.TestCase):
         self.assertIn("dlsSharpness = 0.10", merged)
         self.assertIn("dlsDenoise = 0.11", merged)
 
+        self.service._write_wrapper_profile_settings({
+            "mako": {
+                "external_vulkan_layer": "vkbasalt",
+                "vkbasalt_sharpening": "cas",
+                "vkbasalt_sharpness": 0.25,
+            },
+            "cool-game": {
+                "external_vulkan_layer": "vkbasalt",
+                "vkbasalt_sharpening": "dls",
+                "vkbasalt_sharpness": 0.7,
+                "vkbasalt_dls_denoise": 0.35,
+                "vkbasalt_antialiasing": "fxaa",
+                "vkbasalt_shader": "vibrance",
+            },
+        })
+        remerged = game_config_path.read_text(encoding="utf-8")
+        self.assertIn(
+            "effects = deband:fxaa:makoVibrance:dls # preserve order",
+            remerged,
+        )
+        self.assertNotIn("makoCurves", remerged.splitlines()[1])
+        self.assertEqual(remerged.count("makoVibrance"), 2)
+
         game_config_path.unlink()
         missing = self._run_wrapper("12345")
         self.assertEqual(missing["VKBASALT"], "")
