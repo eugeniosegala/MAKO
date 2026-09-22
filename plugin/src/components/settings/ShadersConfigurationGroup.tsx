@@ -19,6 +19,11 @@ import {
   VKBASALT_SHARPENING_DLS,
   VKBASALT_SHARPENING_NONE,
   VKBASALT_SHARPNESS,
+  VKBASALT_SHADER,
+  VKBASALT_SHADER_CURVES,
+  VKBASALT_SHADER_DEBAND,
+  VKBASALT_SHADER_NONE,
+  VKBASALT_SHADER_VIBRANCE,
   VKBASALT_STRENGTH_MAX,
   VKBASALT_STRENGTH_MIN,
 } from "../../config/configSchema";
@@ -74,6 +79,24 @@ export function ShadersConfigurationGroup({
       label: t("CONFIG_VKBASALT_ANTIALIASING_SMAA", "SMAA"),
     },
   ];
+  const shaderOptions = [
+    {
+      data: VKBASALT_SHADER_NONE,
+      label: t("CONFIG_VKBASALT_EFFECT_NONE", "Off"),
+    },
+    {
+      data: VKBASALT_SHADER_VIBRANCE,
+      label: t("CONFIG_VKBASALT_SHADER_VIBRANCE", "Vibrance"),
+    },
+    {
+      data: VKBASALT_SHADER_CURVES,
+      label: t("CONFIG_VKBASALT_SHADER_CURVES", "Curves"),
+    },
+    {
+      data: VKBASALT_SHADER_DEBAND,
+      label: t("CONFIG_VKBASALT_SHADER_DEBAND", "Deband"),
+    },
+  ];
 
   return (
     <>
@@ -81,7 +104,7 @@ export function ShadersConfigurationGroup({
         <ToggleField
           label={
             <MakoExperimentalSettingLabel
-              label={t("CONFIG_ENABLE_VKBASALT", "Shaders (Restart)")}
+              label={t("CONFIG_ENABLE_VKBASALT", "MAKO vkBasalt (Restart)")}
               badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
             />
           }
@@ -181,6 +204,26 @@ export function ShadersConfigurationGroup({
                 selectedOption={config.vkbasalt_antialiasing}
                 onChange={(option) =>
                   onConfigChange(VKBASALT_ANTIALIASING, String(option.data))
+                }
+              />
+            </Field>
+          </PanelSectionRow>
+
+          <PanelSectionRow>
+            <Field
+              label={t("CONFIG_VKBASALT_SHADER", "Shaders")}
+              description={t(
+                "CONFIG_VKBASALT_SHADER_DESC",
+                "Choose one image effect: Vibrance enriches muted colours, Curves adds contrast, and Deband smooths visible colour bands. Changes apply live while vkBasalt is active.",
+              )}
+              childrenLayout="below"
+              childrenContainerWidth="max"
+            >
+              <Dropdown
+                rgOptions={shaderOptions}
+                selectedOption={config.vkbasalt_shader}
+                onChange={(option) =>
+                  onConfigChange(VKBASALT_SHADER, String(option.data))
                 }
               />
             </Field>

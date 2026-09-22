@@ -117,6 +117,16 @@ VKBASALT_ANTIALIASING_VALUES = (
     VKBASALT_ANTIALIASING_FXAA,
     VKBASALT_ANTIALIASING_SMAA,
 )
+VKBASALT_SHADER_NONE = "none"
+VKBASALT_SHADER_VIBRANCE = "vibrance"
+VKBASALT_SHADER_CURVES = "curves"
+VKBASALT_SHADER_DEBAND = "deband"
+VKBASALT_SHADER_VALUES = (
+    VKBASALT_SHADER_NONE,
+    VKBASALT_SHADER_VIBRANCE,
+    VKBASALT_SHADER_CURVES,
+    VKBASALT_SHADER_DEBAND,
+)
 VKBASALT_STRENGTH_MIN = 0.0
 VKBASALT_STRENGTH_MAX = 1.0
 
@@ -381,6 +391,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "fieldType": ConfigFieldType.STRING,
         "default": VKBASALT_ANTIALIASING_NONE,
         "description": "MAKO-managed vkBasalt anti-aliasing effect: none, FXAA, or SMAA",
+        "location": "script"
+    },
+
+    "vkbasalt_shader": {
+        "fieldType": ConfigFieldType.STRING,
+        "default": VKBASALT_SHADER_NONE,
+        "description": "MAKO-managed vkBasalt shader: none, Vibrance, Curves, or Deband",
         "location": "script"
     },
 

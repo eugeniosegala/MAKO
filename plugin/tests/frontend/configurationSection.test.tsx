@@ -240,7 +240,7 @@ describe("Configuration controls", () => {
       />,
     );
 
-    expect(screen.getByText("Shaders (Restart)")).toBeTruthy();
+    expect(screen.getByText("MAKO vkBasalt (Restart)")).toBeTruthy();
     expect(
       screen.getByText(
         "Applies sharpening, anti-aliasing, and other configured effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used. If effects are not visible, switch between Windowed and Fullscreen.",
@@ -251,6 +251,7 @@ describe("Configuration controls", () => {
     expect(screen.getByText("Sharpness (55%)")).toBeTruthy();
     expect(screen.getByText("DLS Denoise (20%)")).toBeTruthy();
     expect(screen.getByText("Anti-aliasing")).toBeTruthy();
+    expect(screen.getByText("Shaders")).toBeTruthy();
     expect(
       screen.getByText(
         "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. This file belongs to the selected profile and is removed when that profile is deleted.",

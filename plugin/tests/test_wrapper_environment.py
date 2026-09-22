@@ -650,6 +650,7 @@ class WrapperEnvironmentTests(unittest.TestCase):
             "vkbasalt_sharpness": 1.01,
             "vkbasalt_dls_denoise": -0.01,
             "vkbasalt_antialiasing": "taa",
+            "vkbasalt_shader": "bloom",
         }
         for field_name, value in invalid_values.items():
             with self.subTest(field_name=field_name):

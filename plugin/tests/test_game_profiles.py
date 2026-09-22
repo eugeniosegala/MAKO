@@ -1018,6 +1018,7 @@ class GameProfileTests(unittest.TestCase):
                 "vkbasalt_sharpness": 0.75,
                 "vkbasalt_dls_denoise": 0.4,
                 "vkbasalt_antialiasing": "fxaa",
+                "vkbasalt_shader": "vibrance",
             },
         })
 
@@ -1046,14 +1047,30 @@ class GameProfileTests(unittest.TestCase):
             Path(matched["VKBASALT_CONFIG"]).name,
             "steam-12345.conf",
         )
-        self.assertEqual(
-            Path(matched["VKBASALT_CONFIG"]).read_text(encoding="utf-8"),
-            "# MAKO Decky merges its visible controls; other settings are preserved.\n"
-            "effects = fxaa:dls\n"
-            "enableOnLaunch = True\n"
-            "toggleKey = Home\n"
-            "dlsSharpness = 0.75\n"
-            "dlsDenoise = 0.40\n",
+        game_content = Path(matched["VKBASALT_CONFIG"]).read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("effects = fxaa:makoVibrance:dls\n", game_content)
+        self.assertIn(
+            f'makoVibrance = "{self.service.vkbasalt_shader_dir / "Vibrance.fx"}"\n',
+            game_content,
+        )
+        self.assertIn(
+            f'makoCurves = "{self.service.vkbasalt_shader_dir / "Curves.fx"}"\n',
+            game_content,
+        )
+        self.assertIn("dlsSharpness = 0.75\n", game_content)
+        self.assertIn("dlsDenoise = 0.40\n", game_content)
+        for shader_asset in (
+            "Curves.fx",
+            "ReShade.fxh",
+            "Vibrance.fx",
+        ):
+            self.assertTrue(
+                (self.service.vkbasalt_shader_dir / shader_asset).is_file()
+            )
+        self.assertFalse(
+            (self.service.vkbasalt_shader_dir / "ReShadeUI.fxh").exists()
         )
         self.assertIn(
             "casSharpness = 0.25",
@@ -1090,11 +1107,15 @@ class GameProfileTests(unittest.TestCase):
                 "vkbasalt_sharpening": "cas",
                 "vkbasalt_sharpness": 0.6,
                 "vkbasalt_antialiasing": "smaa",
+                "vkbasalt_shader": "curves",
             },
         })
         merged = game_config_path.read_text(encoding="utf-8")
         self.assertIn("# Keep this advanced configuration.", merged)
-        self.assertIn("effects = deband:smaa:cas # preserve order", merged)
+        self.assertIn(
+            "effects = deband:smaa:makoCurves:cas # preserve order",
+            merged,
+        )
         self.assertIn("debandIterations = 2", merged)
         self.assertIn("casSharpness = 0.60", merged)
         self.assertIn("dlsSharpness = 0.10", merged)

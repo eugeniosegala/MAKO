@@ -1,10 +1,10 @@
 {
   "schema_version": 1,
   "repository": "eugeniosegala/vkBasalt",
-  "tag": "mako-v0.3.2.10-3",
-  "source_commit": "cf15d919074ab69ba096c84e1b93c3c9df41e09f",
+  "tag": "mako-v0.3.2.10-4",
+  "source_commit": "bc9fff8069447f24d8fbef7d784dfd3f4435de54",
   "upstream_commit": "4f97f09ffe91900e6ca136cc26cf7966f8f6970d",
-  "asset": "vkBasalt-mako-v0.3.2.10-3-linux-x86.tar.xz",
-  "url": "https://github.com/eugeniosegala/vkBasalt/releases/download/mako-v0.3.2.10-3/vkBasalt-mako-v0.3.2.10-3-linux-x86.tar.xz",
-  "sha256": "23633ec0258e6e6b6d9175f65af125775c063cb1686d8a7494a758ab1b138006"
+  "asset": "vkBasalt-mako-v0.3.2.10-4-linux-x86.tar.xz",
+  "url": "https://github.com/eugeniosegala/vkBasalt/releases/download/mako-v0.3.2.10-4/vkBasalt-mako-v0.3.2.10-4-linux-x86.tar.xz",
+  "sha256": "5d4ac42303a9634a6de14e74f0b019ea8d7a9c6183f4474185b6a28da0187fb8"
 }

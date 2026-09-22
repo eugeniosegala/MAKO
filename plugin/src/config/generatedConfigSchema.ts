@@ -98,6 +98,10 @@ export const VKBASALT_SHARPENING_DLS = "dls" as const;
 export const VKBASALT_ANTIALIASING_NONE = "none" as const;
 export const VKBASALT_ANTIALIASING_FXAA = "fxaa" as const;
 export const VKBASALT_ANTIALIASING_SMAA = "smaa" as const;
+export const VKBASALT_SHADER_NONE = "none" as const;
+export const VKBASALT_SHADER_VIBRANCE = "vibrance" as const;
+export const VKBASALT_SHADER_CURVES = "curves" as const;
+export const VKBASALT_SHADER_DEBAND = "deband" as const;
 export const VKBASALT_STRENGTH_MIN = 0.0 as const;
 export const VKBASALT_STRENGTH_MAX = 1.0 as const;
 
@@ -144,6 +148,7 @@ export const VKBASALT_SHARPENING = "vkbasalt_sharpening" as const;
 export const VKBASALT_SHARPNESS = "vkbasalt_sharpness" as const;
 export const VKBASALT_DLS_DENOISE = "vkbasalt_dls_denoise" as const;
 export const VKBASALT_ANTIALIASING = "vkbasalt_antialiasing" as const;
+export const VKBASALT_SHADER = "vkbasalt_shader" as const;
 export const DISABLE_STEAMDECK_MODE = "disable_steamdeck_mode" as const;
 export const ENABLE_ZINK = "enable_zink" as const;
 export const FORCE_ALSA_AUDIO = "force_alsa_audio" as const;
@@ -362,6 +367,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     default: "none",
     description: "MAKO-managed vkBasalt anti-aliasing effect: none, FXAA, or SMAA"
   },
+  vkbasalt_shader: {
+    name: "vkbasalt_shader",
+    fieldType: ConfigFieldType.STRING,
+    default: "none",
+    description: "MAKO-managed vkBasalt shader: none, Vibrance, Curves, or Deband"
+  },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",
     fieldType: ConfigFieldType.BOOLEAN,
@@ -418,6 +429,7 @@ export interface ConfigurationData {
   vkbasalt_sharpness: number;
   vkbasalt_dls_denoise: number;
   vkbasalt_antialiasing: string;
+  vkbasalt_shader: string;
   disable_steamdeck_mode: boolean;
   enable_zink: boolean;
   force_alsa_audio: boolean;
@@ -467,6 +479,7 @@ export function getDefaults(): ConfigurationData {
     vkbasalt_sharpness: 0.5,
     vkbasalt_dls_denoise: 0.17,
     vkbasalt_antialiasing: "none",
+    vkbasalt_shader: "none",
     disable_steamdeck_mode: false,
     enable_zink: false,
     force_alsa_audio: false,
@@ -509,6 +522,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     vkbasalt_sharpness: ConfigFieldType.FLOAT,
     vkbasalt_dls_denoise: ConfigFieldType.FLOAT,
     vkbasalt_antialiasing: ConfigFieldType.STRING,
+    vkbasalt_shader: ConfigFieldType.STRING,
     disable_steamdeck_mode: ConfigFieldType.BOOLEAN,
     enable_zink: ConfigFieldType.BOOLEAN,
     force_alsa_audio: ConfigFieldType.BOOLEAN,

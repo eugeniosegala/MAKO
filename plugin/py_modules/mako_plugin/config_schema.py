@@ -37,6 +37,7 @@ from shared_config import (
     TARGET_FPS_MAX,
     TARGET_FPS_MIN,
     VKBASALT_ANTIALIASING_VALUES,
+    VKBASALT_SHADER_VALUES,
     VKBASALT_SHARPENING_VALUES,
     VKBASALT_STRENGTH_MAX,
     VKBASALT_STRENGTH_MIN,
@@ -268,6 +269,13 @@ class ConfigurationManager:
                 "vkbasalt_antialiasing must be 'none', 'fxaa', or 'smaa'"
             )
         validated["vkbasalt_antialiasing"] = vkbasalt_antialiasing
+        vkbasalt_shader = validated["vkbasalt_shader"].strip().lower()
+        if vkbasalt_shader not in VKBASALT_SHADER_VALUES:
+            raise ValueError(
+                "vkbasalt_shader must be 'none', 'vibrance', 'curves', or "
+                "'deband'"
+            )
+        validated["vkbasalt_shader"] = vkbasalt_shader
         if validated["dynamic_cadence_recovery"]:
             validated["adaptive_auto_base_fps_cap"] = False
             validated["base_fps_cap"] = 0

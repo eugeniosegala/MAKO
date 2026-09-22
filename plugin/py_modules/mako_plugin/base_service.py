@@ -111,6 +111,11 @@ class BaseService:
         return self.config_dir.parent / "vkBasalt" / "vkBasalt.conf"
 
     @property
+    def vkbasalt_shader_dir(self) -> Path:
+        """Return the shared directory for MAKO's managed shader sources."""
+        return self.vkbasalt_profile_config_dir / "shaders"
+
+    @property
     def mako_launch_script_path(self) -> Path:
         """Compatibility alias for the canonical generated-wrapper path."""
         return self.mako_script_path

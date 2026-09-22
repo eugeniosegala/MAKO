@@ -58,6 +58,10 @@ from shared_config import (
     VKBASALT_SHARPENING_CAS,
     VKBASALT_SHARPENING_DLS,
     VKBASALT_SHARPENING_NONE,
+    VKBASALT_SHADER_CURVES,
+    VKBASALT_SHADER_DEBAND,
+    VKBASALT_SHADER_NONE,
+    VKBASALT_SHADER_VIBRANCE,
     VKBASALT_STRENGTH_MAX,
     VKBASALT_STRENGTH_MIN,
     ConfigFieldType,
@@ -213,6 +217,14 @@ def generate_typescript_schema():
         f'"{VKBASALT_ANTIALIASING_FXAA}" as const;',
         "export const VKBASALT_ANTIALIASING_SMAA = "
         f'"{VKBASALT_ANTIALIASING_SMAA}" as const;',
+        "export const VKBASALT_SHADER_NONE = "
+        f'"{VKBASALT_SHADER_NONE}" as const;',
+        "export const VKBASALT_SHADER_VIBRANCE = "
+        f'"{VKBASALT_SHADER_VIBRANCE}" as const;',
+        "export const VKBASALT_SHADER_CURVES = "
+        f'"{VKBASALT_SHADER_CURVES}" as const;',
+        "export const VKBASALT_SHADER_DEBAND = "
+        f'"{VKBASALT_SHADER_DEBAND}" as const;',
         f"export const VKBASALT_STRENGTH_MIN = {VKBASALT_STRENGTH_MIN} as const;",
         f"export const VKBASALT_STRENGTH_MAX = {VKBASALT_STRENGTH_MAX} as const;",
         "",

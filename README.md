@@ -95,7 +95,7 @@ Every game and display behaves differently, so compare one setting at a time. Fo
 
 ### Optional graphics integrations
 
-MAKO Decky provides a per-profile **Gamescope WSI** option, host-installed MangoHud integration, and its own private 64-bit/32-bit vkBasalt build. Enable vkBasalt for a game to use MAKO-managed sharpening and anti-aliasing without installing vkBasalt separately; MAKO does not use a system-wide vkBasalt copy. Scaling and Gamescope WSI are independent choices. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
+MAKO Decky provides a per-profile **Gamescope WSI** option, host-installed MangoHud integration, and its own private 64-bit/32-bit vkBasalt build. Enable vkBasalt for a game to use MAKO-managed sharpening, anti-aliasing, Vibrance, Curves, or Deband without installing vkBasalt separately; MAKO does not use a system-wide vkBasalt copy. Scaling and Gamescope WSI are independent choices. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
 
 ### How to configure MAKO with third-party launchers
 

@@ -51,6 +51,12 @@ class ConfigurationService(BaseService):
     _WRAPPER_PROFILE_SETTINGS_VERSION = 1
     _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = wrapper_generation.REQUIRED_WRAPPER_EXPORTS
+    _VKBASALT_SHADER_ASSET_DIR = Path(__file__).with_name("vkbasalt_shaders")
+    _VKBASALT_SHADER_ASSETS = (
+        "Curves.fx",
+        "ReShade.fxh",
+        "Vibrance.fx",
+    )
 
     def __init__(
             self,
@@ -161,6 +167,8 @@ class ConfigurationService(BaseService):
     ) -> set[str]:
         """Merge enabled configs while retaining files for existing profiles."""
         resolved_metadata = metadata or {}
+        if any(profile_storage.uses_vkbasalt(value) for value in profile_settings.values()):
+            self._write_vkbasalt_shader_assets()
         expected_names = {
             profile_storage.vkbasalt_profile_config_filename(
                 profile_name,
@@ -220,11 +228,23 @@ class ConfigurationService(BaseService):
                 profile_storage.merge_vkbasalt_config_content(
                     existing_content,
                     settings,
+                    self.vkbasalt_shader_dir,
                 ),
                 0o644,
                 self.log,
             )
         return expected_names
+
+    def _write_vkbasalt_shader_assets(self) -> None:
+        """Install the immutable shader sources shared by every profile."""
+        for filename in self._VKBASALT_SHADER_ASSETS:
+            source = self._VKBASALT_SHADER_ASSET_DIR / filename
+            write_managed_text_atomically(
+                self.vkbasalt_shader_dir / filename,
+                source.read_text(encoding="utf-8"),
+                0o644,
+                self.log,
+            )
 
     def _migrate_vkbasalt_profile_config(
             self,

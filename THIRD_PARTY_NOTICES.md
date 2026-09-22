@@ -36,9 +36,13 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ## Bundled vkBasalt Vulkan layer
 
-MAKO Renderer native archives and Flatpak extensions include 64-bit and 32-bit vkBasalt libraries from MAKO's maintained fork release [`mako-v0.3.2.10-1`](https://github.com/eugeniosegala/vkBasalt/releases/tag/mako-v0.3.2.10-1), source commit [`e6d9ad459bd6872166fcc31f921c940fb694ceae`](https://github.com/eugeniosegala/vkBasalt/commit/e6d9ad459bd6872166fcc31f921c940fb694ceae), based on upstream vkBasalt commit [`4f97f09ffe91900e6ca136cc26cf7966f8f6970d`](https://github.com/DadSchoorse/vkBasalt/commit/4f97f09ffe91900e6ca136cc26cf7966f8f6970d). [`engine/vkbasalt-release.json`](engine/vkbasalt-release.json) records the immutable asset and checksum used by packaging.
+MAKO Renderer native archives and Flatpak extensions include 64-bit and 32-bit vkBasalt libraries from MAKO's maintained fork release [`mako-v0.3.2.10-4`](https://github.com/eugeniosegala/vkBasalt/releases/tag/mako-v0.3.2.10-4), source commit [`bc9fff8069447f24d8fbef7d784dfd3f4435de54`](https://github.com/eugeniosegala/vkBasalt/commit/bc9fff8069447f24d8fbef7d784dfd3f4435de54), based on upstream vkBasalt commit [`4f97f09ffe91900e6ca136cc26cf7966f8f6970d`](https://github.com/DadSchoorse/vkBasalt/commit/4f97f09ffe91900e6ca136cc26cf7966f8f6970d). [`engine/vkbasalt-release.json`](engine/vkbasalt-release.json) records the immutable asset and checksum used by packaging.
 
 vkBasalt is copyright © 2019–2022 Georg Lehmann and is distributed under the zlib License. Its bundled ReShade shader headers are copyright © 2014 Patrick Mours and distributed under the BSD 3-Clause License. MAKO packages the complete notices as `share/doc/mako-render/vkbasalt/LICENSE` and `share/doc/mako-render/vkbasalt/RESHade-LICENSE.md`, plus exact source provenance and the MAKO pin. Those files remain part of every archive and runtime extension containing vkBasalt.
+
+## Bundled vkBasalt shader presets
+
+MAKO Decky includes `Vibrance.fx` and `Curves.fx` derived from [CeeJayDK/SweetFX commit `407c11562950195c1b45461fbb59f4bd6bbe7ba4`](https://github.com/CeeJayDK/SweetFX/commit/407c11562950195c1b45461fbb59f4bd6bbe7ba4), copyright Christian Cann Schuldt Jensen and distributed under the MIT License. MAKO's only modification replaces the shaders' `ReShadeUI.fxh` slider macro with its equivalent explicit annotation; their algorithms and defaults are unchanged. MAKO also includes `ReShade.fxh` from [crosire/reshade-shaders `slim` commit `6db142b4b1a05c764222e5b0bd9a644b7ccfe1dc`](https://github.com/crosire/reshade-shaders/commit/6db142b4b1a05c764222e5b0bd9a644b7ccfe1dc), which declares [CC0-1.0](https://creativecommons.org/publicdomain/zero/1.0/legalcode). Exact provenance and the complete SweetFX MIT license are distributed beside the shader sources under `plugin/py_modules/mako_plugin/vkbasalt_shaders/`.
 
 ## MAKO Decky frontend
 
