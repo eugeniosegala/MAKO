@@ -1,30 +1,16 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@decky/ui", () => ({
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
-  ),
-  Field: ({
-    children,
-    label,
-    description,
-    bottomSeparator,
-  }: {
-    children: React.ReactNode;
-    label: React.ReactNode;
-    description?: React.ReactNode;
-    bottomSeparator?: string;
-  }) => (
-    <div
-      data-field-kind="standard"
-      data-bottom-separator={bottomSeparator ?? "default"}
-    >
-      <span>{label}</span>
-      {description && <span>{description}</span>}
-      {children}
-    </div>
   ),
   ToggleField: ({
     label,
@@ -56,54 +42,46 @@ vi.mock("@decky/ui", () => ({
   SliderField: ({
     label,
     description,
+    value,
+    min,
+    max,
+    step,
+    validValues,
+    notchCount,
+    notchTicksVisible,
+    onChange,
   }: {
     label: React.ReactNode;
     description?: React.ReactNode;
+    value: number;
+    min?: number;
+    max?: number;
+    step?: number;
+    validValues?: "steps" | "range" | ((value: number) => boolean);
+    notchCount?: number;
+    notchTicksVisible?: boolean;
+    onChange?: (value: number) => void;
   }) => (
-    <div>
+    <div
+      data-slider-field="true"
+      data-value={value}
+      data-min={min}
+      data-max={max}
+      data-step={step}
+      data-valid-values={
+        typeof validValues === "string" ? validValues : "callback"
+      }
+      data-notch-count={notchCount}
+      data-notch-ticks-visible={String(Boolean(notchTicksVisible))}
+    >
       {description}
-      {label}
+      <span>{label}</span>
+      <button onClick={() => onChange?.(0)}>Set 0x</button>
+      <button onClick={() => onChange?.(4)}>Set 5x</button>
     </div>
-  ),
-  Focusable: ({
-    children,
-    style,
-  }: {
-    children: React.ReactNode;
-    style?: React.CSSProperties;
-  }) => (
-    <div data-focusable="true" style={style}>
-      {children}
-    </div>
-  ),
-  DialogButton: ({
-    children,
-    className,
-    disabled,
-    onClick,
-  }: {
-    children: React.ReactNode;
-    className?: string;
-    disabled?: boolean;
-    onClick?: () => void;
-  }) => (
-    <button className={className} disabled={disabled} onClick={onClick}>
-      {children}
-    </button>
   ),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
-  MakoFocusable: ({
-    children,
-    style,
-  }: {
-    children: React.ReactNode;
-    style?: React.CSSProperties;
-  }) => (
-    <div data-focusable="true" style={style}>
-      {children}
-    </div>
-  ),
   MakoInlineTip: ({
     children,
     tone,
@@ -115,7 +93,6 @@ vi.mock("../../src/components/MakoUi", () => ({
   MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
     <div data-mako-setting-relationship="true">{children}</div>
   ),
-  makoDialogButtonStyle: () => ({}),
 }));
 vi.mock("../../src/i18n/i18n", () => ({
   default: (_key: string, fallback: string) => fallback,
@@ -127,7 +104,7 @@ import { getDefaults } from "../../src/config/configSchema";
 afterEach(cleanup);
 
 describe("Frame Generation controls", () => {
-  test("keeps Adaptive and Fixed Multiplier as standard rows", () => {
+  test("shows one 0x-capable multiplier slider for the selected mode", () => {
     window.SP_REACT = React;
     const onConfigChange = vi.fn(async () => undefined);
     const onConfigUpdate = vi.fn(async () => undefined);
@@ -147,22 +124,26 @@ describe("Frame Generation controls", () => {
         .getAttribute("data-bottom-separator"),
     ).toBe("default");
     const fixedMultiplierField = screen
-      .getByText("Frame Generation Factor")
-      .closest<HTMLElement>('[data-field-kind="standard"]');
+      .getByText("Fixed Multiplier (2x)")
+      .closest<HTMLElement>('[data-slider-field="true"]');
     expect(fixedMultiplierField).toBeTruthy();
-    expect(fixedMultiplierField?.getAttribute("data-bottom-separator")).toBe(
-      "default",
+    expect(fixedMultiplierField?.getAttribute("data-value")).toBe("1");
+    expect(fixedMultiplierField?.getAttribute("data-min")).toBe("0");
+    expect(fixedMultiplierField?.getAttribute("data-max")).toBe("4");
+    expect(fixedMultiplierField?.getAttribute("data-valid-values")).toBe(
+      "steps",
     );
-    const fixedMultiplierControls = screen
-      .getByText("0x")
-      .closest<HTMLElement>('[data-focusable="true"]');
-    expect(fixedMultiplierControls?.style.marginTop).toBe("6px");
+    expect(fixedMultiplierField?.getAttribute("data-notch-count")).toBe("5");
+    expect(fixedMultiplierField?.getAttribute("data-notch-ticks-visible")).toBe(
+      "true",
+    );
+    expect(screen.queryByText(/Maximum Adaptive Multiplier/)).toBeNull();
     const lighterModel = screen.getByText("Lighter FG Model");
     const smoothCadence = screen.getByText("Smooth Cadence");
     expect(lighterModel.getAttribute("data-bottom-separator")).toBe("none");
     expect(
       screen
-        .getByText("Frame Generation Factor")
+        .getByText("Fixed Multiplier (2x)")
         .compareDocumentPosition(smoothCadence) &
         Node.DOCUMENT_POSITION_FOLLOWING,
     ).not.toBe(0);
@@ -172,11 +153,11 @@ describe("Frame Generation controls", () => {
     ).not.toBe(0);
     fireEvent.click(lighterModel);
     expect(onConfigChange).toHaveBeenCalledWith("performance_mode", true);
-    const fixedMultiplierDescription = screen.getByText(
-      /0x pauses generation live. Fixed mode uses 2x–5x; 5x is a high-cost option for high-refresh displays/,
-    );
-    expect(fixedMultiplierDescription.style.paddingTop).toBe("8px");
-    expect(fixedMultiplierDescription.style.marginBottom).toBe("");
+    expect(
+      screen.getByText(
+        /0x pauses generation live. Select 2x–5x for a constant generation ratio/,
+      ),
+    ).toBeTruthy();
     expect(
       screen.getByText(
         /Enable Fractional Adaptive to keep more real frames, but test it per game/,
@@ -193,10 +174,9 @@ describe("Frame Generation controls", () => {
         )
         .getAttribute("data-tone"),
     ).toBe("info");
-    expect(screen.getByText("0x").className).toBe("Mako_DialogButton");
-    expect(screen.getByText("2x").className).toBe("Mako_DialogButton");
-    expect(screen.getByText("5x").className).toBe("Mako_DialogButton");
-    fireEvent.click(screen.getByText("5x"));
+    fireEvent.click(
+      within(fixedMultiplierField as HTMLElement).getByText("Set 5x"),
+    );
     expect(onConfigUpdate).toHaveBeenCalledWith({
       frame_generation_enabled: true,
       multiplier: 5,
@@ -219,11 +199,11 @@ describe("Frame Generation controls", () => {
         .getByText("Adaptive Frame Generation")
         .getAttribute("data-bottom-separator"),
     ).toBe("default");
-    expect(
-      screen
-        .getByText("Frame Generation Factor")
-        .closest('[data-field-kind="standard"]'),
-    ).toBeTruthy();
+    const adaptiveMultiplierField = screen
+      .getByText("Maximum Adaptive Multiplier (3x)")
+      .closest<HTMLElement>('[data-slider-field="true"]');
+    expect(adaptiveMultiplierField).toBeTruthy();
+    expect(screen.queryByText(/Fixed Multiplier/)).toBeNull();
     expect(
       screen.getByText(
         "Cannot be combined with Steady Base Cap. Changing it also turns Dynamic Cadence Recovery off.",
@@ -235,15 +215,16 @@ describe("Frame Generation controls", () => {
       ),
     ).toBeTruthy();
     expect(
-      screen.getByText(
-        "The 2x–5x Fixed factors are unavailable in Adaptive mode; 0x can still pause it live.",
-      ),
-    ).toBeTruthy();
-    expect(screen.getByText("0x").className).toBe("Mako_DialogButton");
-    expect(screen.getByText("Adaptive").className).toBe("Mako_DialogButton");
-    expect(screen.getByText(/^Interpolation ceiling/).style.paddingBottom).toBe(
-      "2px",
+      screen.getByText(/^0x pauses generation live. Otherwise this is/).style
+        .paddingBottom,
+    ).toBe("2px");
+    fireEvent.click(
+      within(adaptiveMultiplierField as HTMLElement).getByText("Set 5x"),
     );
+    expect(onConfigUpdate).toHaveBeenLastCalledWith({
+      frame_generation_enabled: true,
+      adaptive_max_multiplier: 5,
+    });
 
     rerender(
       <FpsMultiplierControl
@@ -284,16 +265,19 @@ describe("Frame Generation controls", () => {
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
     expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
-    expect(screen.getByText("Frame Generation Factor")).toBeTruthy();
-    expect(screen.getByText("0x")).toBeTruthy();
-    expect(screen.getByText("Adaptive")).toBeTruthy();
+    const pausedAdaptiveMultiplier = screen
+      .getByText("Maximum Adaptive Multiplier (0x)")
+      .closest<HTMLElement>('[data-slider-field="true"]');
+    expect(pausedAdaptiveMultiplier?.getAttribute("data-value")).toBe("0");
+    expect(screen.queryByText(/Fixed Multiplier/)).toBeNull();
 
-    fireEvent.click(screen.getByText("Adaptive"));
-    expect(onConfigChange).toHaveBeenCalledWith(
-      "frame_generation_enabled",
-      true,
+    fireEvent.click(
+      within(pausedAdaptiveMultiplier as HTMLElement).getByText("Set 5x"),
     );
-    expect(onConfigUpdate).not.toHaveBeenCalled();
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      frame_generation_enabled: true,
+      adaptive_max_multiplier: 5,
+    });
 
     rerender(
       <FpsMultiplierControl
@@ -304,12 +288,16 @@ describe("Frame Generation controls", () => {
     );
 
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
-    expect(screen.getByText("Adaptive").textContent).toBe("Adaptive");
+    const activeAdaptiveMultiplier = screen
+      .getByText("Maximum Adaptive Multiplier (3x)")
+      .closest<HTMLElement>('[data-slider-field="true"]');
     expect(
       screen.getByText("Fractional Adaptive").getAttribute("data-checked"),
     ).toBe("true");
     expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
-    fireEvent.click(screen.getByText("0x"));
+    fireEvent.click(
+      within(activeAdaptiveMultiplier as HTMLElement).getByText("Set 0x"),
+    );
     expect(onConfigChange).toHaveBeenLastCalledWith(
       "frame_generation_enabled",
       false,
@@ -336,7 +324,8 @@ describe("Frame Generation controls", () => {
     expect(provision.getAttribute("data-checked")).toBe("false");
     expect(provision.getAttribute("data-bottom-separator")).toBe("none");
     expect(screen.queryByText("Adaptive Frame Generation")).toBeNull();
-    expect(screen.queryByText("Frame Generation Factor")).toBeNull();
+    expect(screen.queryByText(/Fixed Multiplier/)).toBeNull();
+    expect(screen.queryByText(/Maximum Adaptive Multiplier/)).toBeNull();
     expect(
       screen.queryByText(
         "Use 0x below to pause or resume Frame Generation live without unloading its resources.",

@@ -206,7 +206,7 @@ test("uses localized restart markers only for process-start controls", async () 
     "CONFIG_PERFORMANCE_MODE",
     "CONFIG_DISABLE_MAKO_NEXT_LAUNCH",
     "CONFIG_DISABLE_HDR_EXPOSURE",
-    "FRAME_GENERATION_FACTOR",
+    "FIXED_MULTIPLIER",
     "ADAPTIVE_TITLE",
     "ADAPTIVE_TARGET_FPS",
     "ADAPTIVE_MAX_MULTIPLIER",

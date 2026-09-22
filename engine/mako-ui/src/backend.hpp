@@ -116,8 +116,13 @@ namespace mako::ui {
                 const ls::GameConf& conf) noexcept {
             if (!conf.frame_generation_enabled)
                 return 0;
-            if (conf.adaptive)
-                return 1;
+            if (conf.adaptive) {
+                return static_cast<uint>(std::clamp(
+                    conf.adaptive_max_multiplier,
+                    ls::GameConfLimits::minimumAdaptiveMaxMultiplier,
+                    ls::GameConfLimits::maximumAdaptiveMaxMultiplier
+                ) - ls::GameConfLimits::minimumAdaptiveMaxMultiplier + 1);
+            }
             return static_cast<uint>(std::clamp(
                 conf.multiplier,
                 ls::GameConfLimits::minimumMultiplier,
@@ -132,7 +137,13 @@ namespace mako::ui {
                 return;
             }
             conf.frame_generation_enabled = true;
-            if (!conf.adaptive) {
+            if (conf.adaptive) {
+                conf.adaptive_max_multiplier = std::clamp(
+                    ls::GameConfLimits::minimumAdaptiveMaxMultiplier + index - 1,
+                    ls::GameConfLimits::minimumAdaptiveMaxMultiplier,
+                    ls::GameConfLimits::maximumAdaptiveMaxMultiplier
+                );
+            } else {
                 conf.multiplier = std::clamp(
                     ls::GameConfLimits::minimumMultiplier + index - 1,
                     ls::GameConfLimits::minimumMultiplier,

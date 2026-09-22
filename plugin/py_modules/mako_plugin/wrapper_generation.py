@@ -67,7 +67,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 66
+WRAPPER_FORMAT_VERSION = 68
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (

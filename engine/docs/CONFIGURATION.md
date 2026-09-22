@@ -56,7 +56,7 @@ The CLI's `benchmark`, `debug`, `quality-regression`, and `combined-quality-regr
 | `name` | String | `unnamed` | Display name and `MAKO_PROFILE` value when reading a profile from TOML. |
 | `active_in` | String or string array | Empty | Executable or process identities that select the profile. |
 | `frame_generation_provisioned` | Boolean | `true` | Provisions LSFG device interop, backend ownership, and private resources at process start. Set `false` for Scaling-only use; changing it requires a game restart. |
-| `frame_generation_enabled` | Boolean | `true` | Live Frame Generation execution state. `false` is the `0x` factor in Decky and the desktop GUI: no generation work is submitted, but startup-provisioned resources stay available for a later live enable. Fixed exposes `0x`, 2x–5x; Adaptive exposes `0x` and its active mode. |
+| `frame_generation_enabled` | Boolean | `true` | Live Frame Generation execution state. `false` is the `0x` position in Decky and the desktop GUI: no generation work is submitted, but startup-provisioned resources stay available for a later live enable. Fixed shows a **Fixed Multiplier** control with `0x` and 2x–5x; Adaptive replaces it with **Maximum Adaptive Multiplier** using the same choices. |
 | `multiplier` | 2–5 | `2` | Total output multiplier in Fixed mode. Higher values need more GPU time, private outputs, and WSI headroom. |
 | `frame_generation_refresh_threshold` | 0–1000 Hz | `0` | Pauses generation at or below a confirmed Gamescope refresh; `0` disables the guard. Missing refresh feedback does not pause generation. |
 | `base_fps_cap` | 0–1000 FPS | `0` | Caps real frames while generation is active; `0` disables the cap. The saved value is dormant while the Frame Generation factor is `0x`. |

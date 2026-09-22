@@ -1,19 +1,8 @@
 import type { ConfigurationEditorProps } from "./settings/types";
-import { useState } from "react";
+import { PanelSectionRow, SliderField, ToggleField } from "@decky/ui";
 import {
-  PanelSectionRow,
-  DialogButton,
-  Field,
-  SliderField,
-  ToggleField,
-} from "@decky/ui";
-import {
-  ADAPTIVE_MAX_MULTIPLIER_MAX,
-  ADAPTIVE_MAX_MULTIPLIER_MIN,
-  ADAPTIVE_MAX_MULTIPLIER,
   ADAPTIVE_MINIMUM_BASE_FPS,
   ADAPTIVE_STABLE_CADENCE,
-  FIXED_MULTIPLIER_UI_MIN,
   FRAME_GENERATION_ENABLED,
   FRAME_GENERATION_PROVISIONED,
   getDefaults,
@@ -31,20 +20,38 @@ import {
 import t from "../i18n/i18n";
 import {
   MakoInlineTip,
-  MakoFocusable,
   MakoRestartLabel,
   MakoSettingRelationship,
-  makoDialogButtonStyle,
 } from "./MakoUi";
 
 const DEFAULT_CONFIGURATION = getDefaults();
+const GENERATION_MULTIPLIER_CHOICES = [0, 2, 3, 4, 5] as const;
+const GENERATION_MULTIPLIER_SLIDER_MAX =
+  GENERATION_MULTIPLIER_CHOICES.length - 1;
+
+function multiplierSliderPosition(multiplier: number): number {
+  const position = GENERATION_MULTIPLIER_CHOICES.findIndex(
+    (choice) => choice === multiplier,
+  );
+  return position >= 0 ? position : 1;
+}
+
+function multiplierAtSliderPosition(position: number): number | undefined {
+  if (
+    !Number.isInteger(position) ||
+    position < 0 ||
+    position > GENERATION_MULTIPLIER_SLIDER_MAX
+  ) {
+    return undefined;
+  }
+  return GENERATION_MULTIPLIER_CHOICES[position];
+}
 
 export function FpsMultiplierControl({
   config,
   onConfigChange,
   onConfigUpdate,
 }: ConfigurationEditorProps) {
-  const [focusedControl, setFocusedControl] = useState<string | null>(null);
   const targetFps = config.target_fps;
   const adaptiveMaxMultiplier =
     config.adaptive_max_multiplier ??
@@ -55,6 +62,7 @@ export function FpsMultiplierControl({
   const frameGenerationProvisioned =
     config.frame_generation_provisioned ??
     DEFAULT_CONFIGURATION.frame_generation_provisioned;
+  const fixedMultiplier = config.multiplier ?? DEFAULT_CONFIGURATION.multiplier;
   const automaticBaseFpsCap = Math.max(
     ADAPTIVE_MINIMUM_BASE_FPS,
     targetFps / 2,
@@ -62,48 +70,6 @@ export function FpsMultiplierControl({
   const automaticBaseFpsCapLabel = Number.isInteger(automaticBaseFpsCap)
     ? automaticBaseFpsCap.toFixed(0)
     : automaticBaseFpsCap.toFixed(1);
-
-  const multiplierButtonStyle = (isFocused: boolean, isSelected: boolean) => {
-    const baseStyle = makoDialogButtonStyle(isFocused);
-    return {
-      ...baseStyle,
-      height: "34px",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      padding: "2px 6px 0px",
-      minWidth: config.adaptive ? "104px" : "46px",
-      fontSize: config.adaptive ? "14px" : "16px",
-      fontWeight: "bold",
-      border: isSelected
-        ? "1px solid rgba(101, 219, 236, 0.96)"
-        : baseStyle.border,
-      boxShadow: isSelected
-        ? "inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 10px rgba(43, 162, 184, 0.38)"
-        : baseStyle.boxShadow,
-      opacity: isSelected ? 1 : 0.78,
-      transform: isFocused ? "scale(1.04)" : "none",
-      scrollMarginTop: "28px",
-      scrollMarginBottom: "28px",
-    } as const;
-  };
-
-  const factorChoices = config.adaptive
-    ? [
-        { id: "off", label: "0x", enabled: false, multiplier: null },
-        {
-          id: "adaptive",
-          label: t("ADAPTIVE_VALUE", "Adaptive"),
-          enabled: true,
-          multiplier: null,
-        },
-      ]
-    : [0, 2, 3, 4, 5].map((value) => ({
-        id: `fixed-${value}`,
-        label: `${value}x`,
-        enabled: value !== 0,
-        multiplier: value === 0 ? null : value,
-      }));
 
   return (
     <>
@@ -228,116 +194,77 @@ export function FpsMultiplierControl({
               </PanelSectionRow>
               <PanelSectionRow>
                 <SliderField
-                  label={`${t("ADAPTIVE_MAX_MULTIPLIER", "Maximum Adaptive Multiplier")} (${adaptiveMaxMultiplier}x)`}
+                  label={`${t("ADAPTIVE_MAX_MULTIPLIER", "Maximum Adaptive Multiplier")} (${frameGenerationEnabled ? adaptiveMaxMultiplier : 0}x)`}
                   description={
                     <span style={{ display: "block", paddingBottom: "2px" }}>
                       {t(
                         "ADAPTIVE_MAX_MULTIPLIER_DESC",
-                        "Interpolation ceiling. 3x is balanced; 2x usually looks best, 4x gives more headroom, and 5x is for high-refresh displays with substantial GPU and memory headroom. Test per game.",
+                        "0x pauses generation live. Otherwise this is the interpolation ceiling, not a fixed ratio; Adaptive may use lower or fractional multipliers. Test 2x–5x per game.",
                       )}
                     </span>
                   }
-                  value={adaptiveMaxMultiplier}
-                  min={ADAPTIVE_MAX_MULTIPLIER_MIN}
-                  max={ADAPTIVE_MAX_MULTIPLIER_MAX}
+                  value={
+                    frameGenerationEnabled
+                      ? multiplierSliderPosition(adaptiveMaxMultiplier)
+                      : 0
+                  }
+                  min={0}
+                  max={GENERATION_MULTIPLIER_SLIDER_MAX}
                   step={1}
                   validValues="steps"
                   minimumDpadGranularity={1}
-                  notchCount={
-                    ADAPTIVE_MAX_MULTIPLIER_MAX -
-                    ADAPTIVE_MAX_MULTIPLIER_MIN +
-                    1
-                  }
+                  notchCount={GENERATION_MULTIPLIER_CHOICES.length}
                   notchTicksVisible
-                  onChange={(value) =>
-                    onConfigChange(ADAPTIVE_MAX_MULTIPLIER, value)
-                  }
+                  onChange={(position) => {
+                    const value = multiplierAtSliderPosition(position);
+                    if (value === 0) {
+                      void onConfigChange(FRAME_GENERATION_ENABLED, false);
+                    } else if (value !== undefined) {
+                      void onConfigUpdate({
+                        frame_generation_enabled: true,
+                        adaptive_max_multiplier: value,
+                      });
+                    }
+                  }}
                 />
               </PanelSectionRow>
             </>
           )}
 
-          <PanelSectionRow>
-            <Field
-              label={t("FRAME_GENERATION_FACTOR", "Frame Generation Factor")}
-              description={
-                <>
-                  <span style={{ display: "block", paddingTop: "8px" }}>
-                    {t(
-                      "FRAME_GENERATION_FACTOR_DESC",
-                      "0x pauses generation live. Fixed mode uses 2x–5x; 5x is a high-cost option for high-refresh displays. Adaptive manages its own multiplier while retaining the same live 0x pause.",
-                    )}
-                  </span>
-                  {config.adaptive && (
-                    <MakoSettingRelationship>
-                      {t(
-                        "FRAME_GENERATION_FACTOR_ADAPTIVE_RELATION",
-                        "The 2x–5x Fixed factors are unavailable in Adaptive mode; 0x can still pause it live.",
-                      )}
-                    </MakoSettingRelationship>
-                  )}
-                </>
-              }
-              childrenLayout="below"
-            >
-              <MakoFocusable
-                style={{
-                  width: "100%",
-                  boxSizing: "border-box",
-                  marginTop: "6px",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
+          {!config.adaptive && (
+            <PanelSectionRow>
+              <SliderField
+                label={`${t("FIXED_MULTIPLIER", "Fixed Multiplier")} (${frameGenerationEnabled ? fixedMultiplier : 0}x)`}
+                description={t(
+                  "FIXED_MULTIPLIER_DESC",
+                  "0x pauses generation live. Select 2x–5x for a constant generation ratio; 5x is a high-cost option for high-refresh displays.",
+                )}
+                value={
+                  frameGenerationEnabled
+                    ? multiplierSliderPosition(fixedMultiplier)
+                    : 0
+                }
+                min={0}
+                max={GENERATION_MULTIPLIER_SLIDER_MAX}
+                step={1}
+                validValues="steps"
+                minimumDpadGranularity={1}
+                notchCount={GENERATION_MULTIPLIER_CHOICES.length}
+                notchTicksVisible
+                onChange={(position) => {
+                  const value = multiplierAtSliderPosition(position);
+                  if (value === 0) {
+                    void onConfigChange(FRAME_GENERATION_ENABLED, false);
+                  } else if (value !== undefined) {
+                    void onConfigUpdate({
+                      frame_generation_enabled: true,
+                      multiplier: value,
+                    });
+                  }
                 }}
-                flow-children="row"
-                noFocusRing
-              >
-                {factorChoices.map((choice, index) => {
-                  const selected = choice.enabled
-                    ? frameGenerationEnabled &&
-                      (config.adaptive ||
-                        choice.multiplier === config.multiplier)
-                    : !frameGenerationEnabled;
-                  return (
-                    <DialogButton
-                      key={choice.id}
-                      className="Mako_DialogButton"
-                      style={{
-                        ...multiplierButtonStyle(
-                          focusedControl === choice.id,
-                          selected,
-                        ),
-                        marginLeft: index === 0 ? "0px" : "7px",
-                      }}
-                      onClick={() => {
-                        if (!choice.enabled) {
-                          void onConfigChange(FRAME_GENERATION_ENABLED, false);
-                          return;
-                        }
-                        if (config.adaptive) {
-                          void onConfigChange(FRAME_GENERATION_ENABLED, true);
-                          return;
-                        }
-                        void onConfigUpdate({
-                          frame_generation_enabled: true,
-                          multiplier:
-                            choice.multiplier ?? FIXED_MULTIPLIER_UI_MIN,
-                        });
-                      }}
-                      onGamepadFocus={() => setFocusedControl(choice.id)}
-                      onGamepadBlur={() =>
-                        setFocusedControl((current) =>
-                          current === choice.id ? null : current,
-                        )
-                      }
-                    >
-                      {choice.label}
-                    </DialogButton>
-                  );
-                })}
-              </MakoFocusable>
-            </Field>
-          </PanelSectionRow>
+              />
+            </PanelSectionRow>
+          )}
 
           <PanelSectionRow>
             <ToggleField

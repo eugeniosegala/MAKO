@@ -97,6 +97,7 @@ class LocalizationLanguageContractTests(unittest.TestCase):
             "ADAPTIVE_TITLE": "adaptiveFrameGen",
             "FRACTIONAL_ADAPTIVE_PRESET": "fractionalAdaptive",
             "ADAPTIVE_MAX_MULTIPLIER": "maxAdaptiveMultiplier",
+            "FIXED_MULTIPLIER": "multiplier",
             "CONFIG_BASE_FPS_CAP": "baseFpsCap",
             "SCALING_FACTOR": "scalingFactor",
             "SCALING_SUPERSAMPLING": "scalingSupersampling",

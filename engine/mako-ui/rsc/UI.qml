@@ -365,36 +365,24 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.maxAdaptiveMultiplier
                         description: t.maxAdaptiveMultiplierDesc
-                        visible: backend.frame_generation_provisioned
-                        enabled: backend.adaptive
+                        visible: backend.frame_generation_provisioned && backend.adaptive
 
-                        SpinBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            from: backend.minimum_adaptive_max_multiplier
-                            to: backend.maximum_adaptive_max_multiplier
-
-                            value: backend.adaptive_max_multiplier
-                            textFromValue: function (value) {
-                                return value + t.multiplierX;
-                            }
-                            valueFromText: function (text) {
-                                return parseInt(text);
-                            }
-                            onValueModified: backend.adaptive_max_multiplier = value
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: ["0" + t.multiplierX, "2" + t.multiplierX, "3" + t.multiplierX, "4" + t.multiplierX, "5" + t.multiplierX]
+                            currentIndex: backend.frame_generation_factor_index
+                            onActivated: index => backend.frame_generation_factor_index = index
                         }
                     }
 
                     GroupEntry {
                         title: t.multiplier
                         description: t.multiplierDesc
-                        visible: backend.frame_generation_provisioned
+                        visible: backend.frame_generation_provisioned && !backend.adaptive
 
                         ComboBox {
                             Layout.fillWidth: true
-                            model: backend.adaptive
-                                ? ["0" + t.multiplierX, t.adaptiveFrameGen]
-                                : ["0" + t.multiplierX, "2" + t.multiplierX, "3" + t.multiplierX, "4" + t.multiplierX, "5" + t.multiplierX]
+                            model: ["0" + t.multiplierX, "2" + t.multiplierX, "3" + t.multiplierX, "4" + t.multiplierX, "5" + t.multiplierX]
                             currentIndex: backend.frame_generation_factor_index
                             onActivated: index => backend.frame_generation_factor_index = index
                         }

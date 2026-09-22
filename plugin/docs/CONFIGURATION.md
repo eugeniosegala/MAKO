@@ -39,14 +39,14 @@ You can edit the displayed file in Desktop Mode or over SSH for any advanced vkB
 ## Frame Generation
 
 - **Frame Generation (Restart):** Provisions LSFG device interop, backend ownership, and private generation resources when the game starts. Turn it off for a Scaling-only or Shaders-only profile. When both Frame Generation and Scaling are off, Decky omits the MAKO Renderer layer; a selected shader remains independent.
-- **Frame Generation Factor:** Selects live `0x` or Fixed 2x–5x generation; while Adaptive is selected, the same selector explicitly offers `0x` and **Adaptive**. `0x` pauses synthesis without discarding the selected Fixed or Adaptive settings or unloading provisioned resources. Start at 2x; higher values require more GPU and memory headroom. With Smooth Cadence and ordered Gamescope presentation, MAKO can pace a proven stable source to the display divided by this multiplier for even output; disable Smooth Cadence to retain every real frame. With Dynamic Cadence Recovery, the multiplier becomes a ceiling against confirmed Gamescope refresh.
+- **Fixed Multiplier:** Appears only in Fixed mode and selects live `0x` or 2x–5x generation. `0x` pauses synthesis without discarding the saved Fixed multiplier or unloading provisioned resources. Start at 2x; higher values require more GPU and memory headroom. With Smooth Cadence and ordered Gamescope presentation, MAKO can pace a proven stable source to the display divided by this multiplier for even output; disable Smooth Cadence to retain every real frame. With Dynamic Cadence Recovery, the multiplier becomes a ceiling against confirmed Gamescope refresh.
 - **Adaptive Frame Generation:** Varies generation toward the Target FPS without slowing a game already above target or exceeding the selected ceiling.
 - **Fractional Adaptive:** Mixes generation ratios to retain more real frames, which may reduce latency and ghosting but can feel less smooth. It cannot be combined with Steady Base Cap; changing it also disables Dynamic Cadence Recovery.
 - **Target FPS:** Selects 30–240 displayed FPS for Adaptive mode.
 - **Steady Base Cap:** The default Adaptive mode. It starts with an even 2x cadence at half the target and may align a validated higher integer rung when Smooth Cadence is enabled. It is usually smoother but retains fewer real frames.
-- **Maximum Adaptive Multiplier:** Selects a 2x–5x ceiling. Lower ceilings usually preserve quality; higher ceilings need more headroom.
+- **Maximum Adaptive Multiplier:** Appears only in Adaptive mode and selects live `0x` or a 2x–5x ceiling. `0x` pauses synthesis without discarding the saved Adaptive ceiling. Lower ceilings usually preserve quality; higher ceilings need more headroom.
 - **Smooth Cadence:** Prefers a validated constant interpolation cadence. In Fractional Adaptive it stabilizes a validated generated-frame plan without imposing a real-frame cap. In Fixed mode, it can pace a stable source to the selected display/multiplier rung; with Steady Base Cap, it can align a validated higher Adaptive rung. It never overrides an explicit Base FPS Cap, Dynamic Cadence Recovery, transport recovery, or insufficient generated-output capacity. Disable it if the game feels more responsive without it.
-- **Base FPS Cap:** Caps real application frames from Off to 120 FPS in MAKO Decky. It is unavailable at `0x` or while Steady Base Cap owns the cap; changing it disables Dynamic Cadence Recovery.
+- **Base FPS Cap:** Caps real application frames from Off to 120 FPS in MAKO Decky. Its saved value remains editable but dormant at `0x`; it is unavailable while Steady Base Cap owns the cap. Changing it disables Dynamic Cadence Recovery.
 - **Auto-disable Frame Generation by Refresh Rate:** Pauses generation at or below a 30–240 Hz Gamescope threshold and resumes it above the threshold. It does nothing without refresh feedback and never overrides the selected `0x` factor.
 
 Profiles saved with the previous Frame Generation switch off migrate naturally to `0x`: provisioning defaults on for compatibility, while the saved execution state remains off. Their Fixed or Adaptive settings are preserved.
@@ -65,7 +65,7 @@ Most generation controls apply live. Flow Scale and Lighter FG Model use a 500 m
 | Scaling Sharpness | Live, debounced private-scaler rebuild |
 | Scale Factor | Live when effective extents do not change; otherwise guarded game-owned or natural recreation |
 | Quality Supersampling | Same effective-extent and recreation boundary as Scale Factor |
-| Frame Generation Factor (`0x`/active), Fixed/Adaptive, target, Smooth Cadence, Base FPS Cap, refresh guard, and recovery | Live when Frame Generation was provisioned at startup |
+| Fixed Multiplier or Maximum Adaptive Multiplier (`0x`/active), Fixed/Adaptive mode, target, Smooth Cadence, Base FPS Cap, refresh guard, and recovery | Live when Frame Generation was provisioned at startup |
 | Fixed or Adaptive multiplier | Live within current capacity; otherwise private FG replacement or recreation |
 | Flow Scale and Lighter FG Model | Live, debounced private FG replacement |
 | Ultra Performance | Game restart |

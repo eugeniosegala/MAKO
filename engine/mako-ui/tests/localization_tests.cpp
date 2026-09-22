@@ -207,13 +207,18 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
             .contains(QStringLiteral("Restart the game")),
         "English Frame Generation help does not explain its provisioning boundary");
     require(english.value(QStringLiteral("multiplier")).toString() ==
-            QStringLiteral("Frame Generation Factor"),
-        "English factor label does not match Decky");
+            QStringLiteral("Fixed Multiplier"),
+        "English Fixed multiplier label does not match Decky");
     require(english.value(QStringLiteral("multiplierDesc")).toString()
             .contains(QStringLiteral("0x pauses generation live")) &&
             english.value(QStringLiteral("multiplierDesc")).toString()
-            .contains(QStringLiteral("Adaptive")),
-        "English factor help does not explain the live 0x Adaptive choice");
+            .contains(QStringLiteral("2x–5x")),
+        "English Fixed multiplier help does not explain its live choices");
+    require(english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
+            .contains(QStringLiteral("0x pauses generation live")) &&
+            english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
+            .contains(QStringLiteral("interpolation ceiling")),
+        "English Adaptive multiplier help does not explain its live choices");
     require(english.value(QStringLiteral("scalingMethod")).toString() ==
             QStringLiteral("Scaling Method"),
         "English scaling method has an unexpected label");
