@@ -2117,11 +2117,18 @@ void AdaptiveScheduler::scheduleRearm(
         const size_t fallbackLimit,
         const double baselineBaseFps) {
     const bool interrupted = reason == "probe-interrupted";
-    const auto cooldown = interrupted
-        ? adaptiveInterruptedProbeCooldown
-        : adaptiveFailedProbeCooldown;
     if (!interrupted)
         this->state.rearm.consecutiveProbeFailures++;
+    const auto cooldown = interrupted
+        ? adaptiveInterruptedProbeCooldown
+        : std::max(
+            std::chrono::duration_cast<AdaptiveScheduler::Clock::duration>(
+                adaptiveFailedProbeCooldown
+            ),
+            adaptiveRampRetryDelayForFailures(
+                this->state.rearm.consecutiveProbeFailures + 1
+            )
+        );
     this->state.rearm.required = true;
     this->state.rearm.notBefore = now + cooldown;
     this->state.rearm.stableSince.reset();
@@ -2395,24 +2402,42 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         this->state.outputPlanner.generationLimit = std::min(
             this->state.rearm.fallbackLimit, configuredLimit
         );
-        if (!this->state.rearm.stableSince)
-            this->state.rearm.stableSince = now;
-
         const bool cooldownElapsed =
             !this->state.rearm.notBefore || now >= *this->state.rearm.notBefore;
-        const bool cadenceStable =
-            now - *this->state.rearm.stableSince >= adaptiveStableRearmDuration;
         const bool baselineRecovered =
             this->state.rearm.reason == "probe-interrupted" ||
             this->state.rearm.baselineBaseFps <= 0.0 ||
             baseFps >= this->state.rearm.baselineBaseFps;
-        if (!cadenceStable || !cooldownElapsed || !baselineRecovered)
+        const auto fallbackOutcome = adaptiveLoadOutcome(
+            this->config.targetFps,
+            this->state.rearm.fallbackLimit,
+            baseFps
+        );
+        const bool stableLowerBaselineEligible =
+            this->state.rearm.reason == "ramp-rejected" &&
+            this->state.rearm.fallbackLimit == 0 &&
+            fallbackOutcome.outputFps <
+                static_cast<double>(this->config.targetFps) *
+                    adaptiveNearTargetNativeMinimumOutputRatio;
+        const bool rearmEligible =
+            baselineRecovered || stableLowerBaselineEligible;
+        if (!rearmEligible) {
+            this->state.rearm.stableSince.reset();
+            return;
+        }
+        if (!this->state.rearm.stableSince)
+            this->state.rearm.stableSince = now;
+        const bool cadenceStable =
+            now - *this->state.rearm.stableSince >= adaptiveStableRearmDuration;
+        if (!cadenceStable || !cooldownElapsed)
             return;
 
         const std::string_view decision =
             this->state.rearm.reason == "probe-interrupted"
             ? "interruption-settled"
-            : "baseline-recovered";
+            : baselineRecovered
+                ? "baseline-recovered"
+                : "stable-target-deficit-rebased";
         this->diagnostics->rearm(
             "adaptive-rearm-ready",
             this->state.rearm.reason,

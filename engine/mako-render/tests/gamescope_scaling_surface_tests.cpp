@@ -148,6 +148,14 @@ int main() {
     expect(!needsGamescopeScalingSurface(true, true, false, false, "", ""), "desktop must retain its surface");
     expect(!needsGamescopeScalingSurface(true, true, false, false, "gamescope-0", "wayland-1"), "unrelated Wayland session must remain isolated");
     expect(needsGamescopeScalingSurface(true, true, false, false, "gamescope-0", "gamescope-0"), "matching active session");
+    expect(canAttemptGamescopeScalingSurface(VK_SUCCESS, true),
+        "advertised Wayland surface support must permit the bridge");
+    expect(!canAttemptGamescopeScalingSurface(VK_SUCCESS, false),
+        "a complete extension list without Wayland must reject the bridge");
+    expect(canAttemptGamescopeScalingSurface(VK_ERROR_LAYER_NOT_PRESENT, false),
+        "an opaque chained-layer extension list must permit the bridge attempt");
+    expect(!canAttemptGamescopeScalingSurface(VK_ERROR_INITIALIZATION_FAILED, false),
+        "unrelated enumeration failures must reject the bridge");
 
     for (int mode : {1, 2, 3}) {
         const auto start = std::chrono::steady_clock::now();

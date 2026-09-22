@@ -39,6 +39,17 @@ namespace mako::layer {
             (waylandDisplay.empty() || waylandDisplay == gamescopeDisplay);
     }
 
+    /// An application-facing layer below MAKO may own the global enumeration
+    /// entrypoint but report only its layer-specific extensions. In that case
+    /// VK_ERROR_LAYER_NOT_PRESENT means driver support is opaque, not absent.
+    /// The bridge remains fail-closed for every other enumeration failure.
+    [[nodiscard]] constexpr bool canAttemptGamescopeScalingSurface(
+            const VkResult enumerationResult,
+            const bool waylandSurfaceAdvertised) noexcept {
+        return waylandSurfaceAdvertised ||
+            enumerationResult == VK_ERROR_LAYER_NOT_PRESENT;
+    }
+
     /// Owns only Gamescope's X11-window -> Wayland-buffer association. Vulkan
     /// still owns acquisition, presentation, synchronization and retirement.
     /// No Gamescope WSI layer or frame-limiter/timing/HDR interface is loaded.

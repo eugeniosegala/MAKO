@@ -499,9 +499,13 @@ namespace {
                         "vkEnumerateInstanceExtensionProperties"));
                 uint32_t count{};
                 std::vector<VkExtensionProperties> extensions;
-                if (enumerate && enumerate(nullptr, &count, nullptr) == VK_SUCCESS) {
+                VkResult enumerationResult = VK_ERROR_INITIALIZATION_FAILED;
+                if (enumerate)
+                    enumerationResult = enumerate(nullptr, &count, nullptr);
+                if (enumerationResult == VK_SUCCESS) {
                     extensions.resize(count);
-                    if (enumerate(nullptr, &count, extensions.data()) != VK_SUCCESS)
+                    enumerationResult = enumerate(nullptr, &count, extensions.data());
+                    if (enumerationResult != VK_SUCCESS)
                         extensions.clear();
                 }
                 const bool waylandSupported = std::ranges::any_of(extensions,
@@ -509,7 +513,8 @@ namespace {
                         return std::strcmp(extension.extensionName,
                             "VK_KHR_wayland_surface") == 0;
                     });
-                if (waylandSupported) {
+                if (canAttemptGamescopeScalingSurface(
+                        enumerationResult, waylandSupported)) {
                     auto candidate = std::make_unique<GamescopeScalingSurface>();
                     if (candidate->connect())
                         scalingSurfaces = std::move(candidate);

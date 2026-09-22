@@ -2420,6 +2420,32 @@ namespace {
             "interrupted probe rearm decision was not observable");
     }
 
+    void testRejectedFirstProbeRebasesAfterPersistentNativeDeficit() {
+        Harness harness(120, 3);
+        harness.start();
+        for (size_t frame = 0;
+                frame < 600 &&
+                    !harness.scheduler.snapshot().rampEvaluationActive;
+                ++frame) {
+            harness.frameAtFps(100.0);
+        }
+        require(harness.scheduler.snapshot().rampEvaluationActive,
+            "precondition failed: initial multiplier probe did not begin");
+
+        harness.runAtFps(60.0, 2s);
+        require(harness.scheduler.snapshot().rearmRequired,
+            "harmful first probe did not enter rearm cooldown");
+
+        harness.runAtFps(75.0, 20s);
+        const auto snapshot = harness.scheduler.snapshot();
+        require(!snapshot.rearmRequired,
+            "stable lower gameplay cadence remained permanently native-only");
+        require(snapshot.validatedGenerationLimit >= 1,
+            "stable lower gameplay cadence did not retry useful generation");
+        require(harness.diagnostics.contains("adaptive-rearm-ready"),
+            "lower gameplay baseline rearm was not observable");
+    }
+
     void testCounterproductiveFirstStepNeverEscalates() {
         Harness harness(180, 3);
         harness.start();
@@ -3967,6 +3993,7 @@ int main() {
         {"fast-present burst preserves cadence", testImpossibleFastBurstDoesNotCorruptCadence},
         {"harmful first probe enters rearm", testRejectedFirstProbeEntersBoundedRearm},
         {"interrupted probe rearms promptly", testInterruptedProbeRearmsWithoutFailurePenalty},
+        {"rejected first probe rebases stable native deficit", testRejectedFirstProbeRebasesAfterPersistentNativeDeficit},
         {"counterproductive first step cannot escalate", testCounterproductiveFirstStepNeverEscalates},
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
         {"ordered SDR rejects unpaid below-target 3x", testOrderedSdrRejectsUnpaidHigherLevelBelowTarget},
