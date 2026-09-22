@@ -2529,7 +2529,7 @@ namespace {
         }
     }
 
-    void testMenuReturnRejectsSelfHiddenHigherMultiplier() {
+    void testMenuReturnHoldsTargetProvenLowerMultiplier() {
         for (const bool smooth : {false, true}) {
             for (const bool automaticBaseCap : {false, true}) {
                 for (const uint32_t maximumMultiplier : {3u, 4u, 5u}) {
@@ -2547,6 +2547,7 @@ namespace {
                     require(snapshot.validatedGenerationLimit == 1 &&
                             (!smooth || snapshot.stableCadenceLimit == 1),
                         "precondition failed: menu return had no target-proven 2x cadence");
+                    const auto ramps = harness.diagnostics.count("ramp");
 
                     harness.now += 2s;
                     harness.scheduler.resumeAfterExternalInterruption(
@@ -2557,8 +2558,23 @@ namespace {
                         harness.scheduler.consumeHistoryWarmupFrame(harness.now);
                     }
 
+                    const auto degradedPlan = harness.runAtFps(45.0, 12s);
+                    snapshot = harness.scheduler.snapshot();
+                    require(!snapshot.rampEvaluationActive &&
+                            snapshot.generationLimit == 1 &&
+                            snapshot.validatedGenerationLimit == 1 &&
+                            degradedPlan.size() == 1 &&
+                            harness.diagnostics.count("ramp") == ramps,
+                        "post-menu deficit increased work before the target-proven 2x level recovered");
+
+                    harness.runAtFps(60.0, 4s);
+                    snapshot = harness.scheduler.snapshot();
+                    require(snapshot.validatedGenerationLimit == 1 &&
+                            harness.diagnostics.count("ramp") == ramps,
+                        "recovered 2x cadence unnecessarily returned to the higher load");
+
                     for (size_t frame = 0;
-                            frame < 400 &&
+                            frame < 1200 &&
                                 !harness.scheduler.snapshot().rampEvaluationActive;
                             ++frame) {
                         harness.frameAtFps(45.0);
@@ -2566,30 +2582,9 @@ namespace {
                     snapshot = harness.scheduler.snapshot();
                     require(snapshot.rampEvaluationActive &&
                             snapshot.generationLimit == 2 &&
-                            snapshot.validatedGenerationLimit == 1,
-                        "post-menu deficit did not reach the bounded higher-level probe");
-
-                    for (size_t frame = 0;
-                            frame < 60 &&
-                                harness.scheduler.snapshot().rampEvaluationActive;
-                            ++frame) {
-                        harness.frameAtFps(33.0);
-                    }
-                    snapshot = harness.scheduler.snapshot();
-                    const auto* result = harness.diagnostics.last("ramp-result");
-                    require(result && !result->accepted &&
-                            result->previousLimit == 1 &&
-                            result->testedLimit == 2 &&
-                            result->reason == "unpaid-real-frame-cost",
-                        "post-menu 3x was compared only with the degraded return cadence");
-                    require(snapshot.validatedGenerationLimit == 1,
-                        "post-menu target guard discarded the proven 2x level");
-
-                    harness.runAtFps(60.0, 4s);
-                    require(
-                        harness.scheduler.snapshot().validatedGenerationLimit == 1,
-                        "recovered 2x cadence unnecessarily returned to the higher load"
-                    );
+                            snapshot.validatedGenerationLimit == 1 &&
+                            harness.diagnostics.count("ramp") == ramps + 1,
+                        "a recovered menu return permanently disabled ordinary Adaptive promotion");
                 }
             }
         }
@@ -3976,7 +3971,7 @@ int main() {
         {"rejected higher level backs off", testRejectedHigherLevelRetainsProvenLoadAndBacksOff},
         {"ordered SDR rejects unpaid below-target 3x", testOrderedSdrRejectsUnpaidHigherLevelBelowTarget},
         {"confirmed focus return has bounded fast resume", testConfirmedFocusReturnBoundedFastResume},
-        {"menu return protects target-proven lower load", testMenuReturnRejectsSelfHiddenHigherMultiplier},
+        {"menu return holds target-proven lower load", testMenuReturnHoldsTargetProvenLowerMultiplier},
         {"focus return retains conservative fallbacks", testFocusReturnRetainsConservativeFallbacks},
         {"fast focus return retains history and transport settling", testFastFocusReturnCannotBypassHistoryOrTransportSettling},
         {"confirmed focus return retains proven generation", testConfirmedFocusReturnRetainsProvenLevel},

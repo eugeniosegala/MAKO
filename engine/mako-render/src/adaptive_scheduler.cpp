@@ -2569,6 +2569,23 @@ MAKO_ADAPTIVE_STAGE_INLINE void AdaptiveScheduler::updateGenerationLimit(
         return;
     }
 
+    // A multiplier which reached the target before a confirmed menu visit is
+    // the last workload proven healthy for this game state. If the game comes
+    // back below that target, adding generated work can turn a recoverable
+    // source-cadence drop into sustained GPU/transport pressure. Hold the
+    // proven level until it reaches the configured target once; subsequent
+    // gameplay deficits then follow the ordinary adjacent-workload policy.
+    const bool awaitingMenuReturnTargetRecovery =
+        this->state.menuReturnLoadGuard.active &&
+        this->state.outputPlanner.generationLimit ==
+            this->state.menuReturnLoadGuard.provenGenerationLimit;
+    if (awaitingMenuReturnTargetRecovery) {
+        this->state.ramp.targetDeficitSince.reset();
+        this->state.ramp.targetConstraintSince.reset();
+        this->state.ramp.targetConstraintReported = false;
+        return;
+    }
+
     if (this->state.outputPlanner.generationLimit >= configuredLimit) {
         this->state.menuReturnLoadGuard.reset();
         this->state.ramp.targetDeficitSince.reset();
