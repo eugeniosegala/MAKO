@@ -8,6 +8,10 @@ import {
   FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
   FRAME_GENERATION_REFRESH_THRESHOLD_PRESET,
   FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
+  GAMESCOPE_HDR_BRIGHTNESS_BOOST,
+  GAMESCOPE_HDR_BRIGHTNESS_NITS,
+  GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX,
+  GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN,
 } from "../../config/configSchema";
 import { baseFpsCapChanges } from "../../config/fractionalAdaptivePreset";
 import t from "../../i18n/i18n";
@@ -44,6 +48,49 @@ export function AdvancedRenderingConfigurationGroup({
 
       {!collapsed && (
         <>
+          <PanelSectionRow>
+            <ToggleField
+              label={t(
+                "CONFIG_HDR_BRIGHTNESS_BOOST",
+                "HDR Brightness Boost",
+              )}
+              description={t(
+                "CONFIG_HDR_BRIGHTNESS_BOOST_DESC",
+                "Keep HDR enabled in Steam and HDR disabled in the game. MAKO remains SDR while Gamescope maps the final image through the display's HDR output for up to 1,000-nit peak luminance. This simulates HDR-like brightness, not HDR colours or highlight detail.",
+              )}
+              bottomSeparator={
+                config.gamescope_hdr_brightness_boost ? undefined : "none"
+              }
+              checked={config.gamescope_hdr_brightness_boost}
+              onChange={(value) =>
+                onConfigChange(GAMESCOPE_HDR_BRIGHTNESS_BOOST, value)
+              }
+            />
+          </PanelSectionRow>
+
+          {config.gamescope_hdr_brightness_boost && (
+            <PanelSectionRow>
+              <SliderField
+                label={t(
+                  "CONFIG_HDR_BRIGHTNESS_NITS",
+                  "Brightness Target ({value} nits)",
+                  { value: config.gamescope_hdr_brightness_nits },
+                )}
+                description={t(
+                  "CONFIG_HDR_BRIGHTNESS_NITS_DESC",
+                  "Sets Gamescope's SDR reference-white luminance. 203 nits is its normal SDR-on-HDR baseline; 1,000 nits is the upper peak target.",
+                )}
+                value={config.gamescope_hdr_brightness_nits}
+                min={GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN}
+                max={GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX}
+                step={1}
+                onChange={(value) =>
+                  onConfigChange(GAMESCOPE_HDR_BRIGHTNESS_NITS, value)
+                }
+              />
+            </PanelSectionRow>
+          )}
+
           <PanelSectionRow>
             <SliderField
               label={`${t("CONFIG_BASE_FPS_CAP", "Base FPS Cap")}${config.base_fps_cap > 0 ? ` (${config.base_fps_cap} FPS)` : ` (${t("CONFIG_BASE_FPS_CAP_OFF", "Off")})`}`}

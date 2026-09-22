@@ -548,6 +548,50 @@ ApplicationWindow {
                 }
 
                 Group {
+                    name: t.hdrOutputSettings
+                    enabled: backend.available
+
+                    GroupEntry {
+                        title: t.hdrBrightnessBoost
+                        description: t.hdrBrightnessBoostDesc
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+
+                            checked: backend.gamescope_hdr_brightness_boost
+                            onToggled: backend.gamescope_hdr_brightness_boost = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.hdrBrightnessTarget
+                        description: t.hdrBrightnessTargetDesc
+                        visible: backend.gamescope_hdr_brightness_boost
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Slider {
+                                Layout.fillWidth: true
+                                from: backend.minimum_gamescope_hdr_brightness_nits
+                                to: backend.maximum_gamescope_hdr_brightness_nits
+                                stepSize: 1
+                                snapMode: Slider.SnapAlways
+                                value: backend.gamescope_hdr_brightness_nits
+                                onMoved: backend.gamescope_hdr_brightness_nits = Math.round(value)
+                            }
+
+                            Label {
+                                Layout.preferredWidth: 72
+                                text: backend.gamescope_hdr_brightness_nits + t.nitsSuffix
+                                horizontalAlignment: Text.AlignHCenter
+                            }
+                        }
+                    }
+                }
+
+                Group {
                     name: t.compatibilitySettings
                     enabled: backend.available
 

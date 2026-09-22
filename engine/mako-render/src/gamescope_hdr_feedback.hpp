@@ -98,6 +98,10 @@ namespace mako::layer {
         std::optional<uint32_t> refreshHz;
         GamescopePresentationFeedback presentation;
         std::optional<bool> outputHdrEnabled;
+        std::optional<bool> displayHdrEnabled;
+        bool sdrBrightnessBoostRequested{false};
+        std::optional<uint32_t> sdrBrightnessBoostNits;
+        std::string sdrBrightnessBoostStatus;
         bool appHdrMetadataPresent{false};
         bool gamescopeDetected{false};
         std::optional<uint32_t> gamescopePid;
@@ -111,6 +115,32 @@ namespace mako::layer {
         std::string resolverCandidates;
         GamescopeFocusFeedback focus;
     };
+
+    struct GamescopeSdrBrightnessBoostDecision {
+        bool apply{false};
+        std::string_view status{"off"};
+    };
+
+    /// The brightness boost changes only Gamescope's final SDR-on-HDR mapping.
+    /// It must never opt the application or MAKO's model into HDR, and it
+    /// fails closed unless server zero and Steam's HDR output choice are
+    /// explicit.
+    [[nodiscard]] inline GamescopeSdrBrightnessBoostDecision
+    decideGamescopeSdrBrightnessBoost(
+            const bool requested,
+            const bool gamescopeDetected,
+            const std::optional<uint32_t> serverId,
+            const std::optional<bool> displayHdrEnabled) noexcept {
+        if (!requested)
+            return {};
+        if (!gamescopeDetected || !serverId || *serverId != 0)
+            return {.status = "gamescope-root-unavailable"};
+        if (!displayHdrEnabled)
+            return {.status = "steam-hdr-state-unavailable"};
+        if (!*displayHdrEnabled)
+            return {.status = "steam-hdr-required"};
+        return {.apply = true, .status = "ready"};
+    }
 
     struct GamescopePresentationTarget {
         uint32_t width{0};
@@ -246,6 +276,11 @@ namespace mako::layer {
         /// Return the value plus a stable diagnostic reason. This makes an
         /// unavailable feedback path distinguishable from confirmed SDR.
         [[nodiscard]] GamescopeHdrFeedbackSample diagnosticSample() const;
+
+        /// Apply or restore Gamescope's final SDR-on-HDR luminance mapping on
+        /// the background monitor. The game-facing HDR safety policy remains
+        /// unchanged and no X11 round trip enters the presentation path.
+        void setSdrBrightnessBoost(bool enabled, uint32_t targetNits);
 
     private:
         struct Impl;

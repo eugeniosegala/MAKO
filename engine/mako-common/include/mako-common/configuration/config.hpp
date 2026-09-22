@@ -81,6 +81,8 @@ namespace ls {
         static constexpr float scalingSharpness = 0.8F;
         static constexpr uint32_t frameGenerationRefreshThreshold = 0;
         static constexpr uint32_t baseFpsCap = 0;
+        static constexpr bool gamescopeHdrBrightnessBoost = false;
+        static constexpr uint32_t gamescopeHdrBrightnessNits = 1000;
         static constexpr bool adaptive = false;
         static constexpr bool adaptiveAutoBaseFpsCap = false;
         static constexpr uint32_t targetFps = 120;
@@ -107,6 +109,8 @@ namespace ls {
         static constexpr uint32_t maximumBaseFpsCap = 1000;
         static constexpr uint32_t minimumFrameGenerationRefreshThreshold = 0;
         static constexpr uint32_t maximumFrameGenerationRefreshThreshold = 1000;
+        static constexpr uint32_t minimumGamescopeHdrBrightnessNits = 203;
+        static constexpr uint32_t maximumGamescopeHdrBrightnessNits = 1000;
         static constexpr uint32_t minimumTargetFps = 10;
         static constexpr uint32_t maximumTargetFps = 1000;
         static constexpr size_t minimumAdaptiveMaxMultiplier = 2;
@@ -158,6 +162,14 @@ namespace ls {
         };
         /// maximum application-present rate before frame generation; zero disables it
         uint32_t base_fps_cap{GameConfDefaults::baseFpsCap};
+        /// map SDR through Gamescope's HDR output
+        bool gamescope_hdr_brightness_boost{
+            GameConfDefaults::gamescopeHdrBrightnessBoost
+        };
+        /// SDR reference-white luminance requested from Gamescope's HDR output
+        uint32_t gamescope_hdr_brightness_nits{
+            GameConfDefaults::gamescopeHdrBrightnessNits
+        };
         /// dynamically vary the generated-frame count toward a target framerate
         bool adaptive{GameConfDefaults::adaptive};
         /// cap Adaptive's real-frame input to half its target for even 2x cadence

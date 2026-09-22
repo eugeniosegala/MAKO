@@ -27,6 +27,7 @@ Published MAKO Renderer packages target x86_64 Linux hosts, with 64-bit and 32-b
 - Installs and updates the per-user MAKO Renderer Vulkan layer and common `mako-run` wrapper.
 - Saves per-game and per-process profiles, then selects them automatically by Steam application ID or process name.
 - Groups Fixed and Adaptive Frame Generation, Spatial Scaling, Shaders, performance, compatibility, external-tool, and manual controls. **Live Status** reports the active mode, scaler, resolutions, limits, fallbacks, and pending changes for the running game.
+- Provides HDR Brightness Boost with a per-profile 203–1000-nit target for supported Gamescope HDR displays, keeping the game and MAKO in SDR while Gamescope maps the final image through the display's HDR output.
 - Provides a per-profile Gamescope WSI compatibility option, host-installed MangoHud, and MAKO's private pinned 64-bit/32-bit vkBasalt build, including live per-game sharpening, anti-aliasing, and lightweight shader presets. Scaling uses the combined Renderer by default; the independent WSI option selects the managed compatibility path inside a supported Gamescope session.
 - Prepares matching Vulkan runtime extensions and application access for supported Flatpak workflows.
 - Shares one active native Renderer version with the standalone archive installer. Installing either version selects it for both launch workflows; a later MAKO Decky installation adopts a valid standalone Renderer and offers its bundled update when the versions differ.

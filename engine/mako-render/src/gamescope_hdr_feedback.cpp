@@ -1,6 +1,9 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "gamescope_hdr_feedback.hpp"
+#include "mako-common/configuration/config.hpp"
+#include <atomic>
+#include <bit>
 #include <chrono>
 #include <condition_variable>
 #include <filesystem>
@@ -10,6 +13,7 @@
 #include <mutex>
 #include <optional>
 #include <sstream>
+#include <iostream>
 #include <string_view>
 #include <thread>
 #include <utility>
@@ -37,6 +41,10 @@ namespace {
         "GAMESCOPE_COLOR_APP_HDR_METADATA_FEEDBACK";
     constexpr char gamescopeHdrOutputProperty[] =
         "GAMESCOPE_HDR_OUTPUT_FEEDBACK";
+    constexpr char gamescopeDisplayHdrEnabledProperty[] =
+        "GAMESCOPE_DISPLAY_HDR_ENABLED";
+    constexpr char gamescopeSdrOnHdrBrightnessProperty[] =
+        "GAMESCOPE_SDR_ON_HDR_CONTENT_BRIGHTNESS";
     constexpr char gamescopeRefreshProperty[] =
         "GAMESCOPE_DISPLAY_REFRESH_RATE_FEEDBACK";
     constexpr char gamescopeVrrEnabledProperty[] = "GAMESCOPE_VRR_ENABLED";
@@ -68,6 +76,20 @@ struct GamescopeHdrFeedbackReader::Impl {
     std::condition_variable monitorWake;
     GamescopeFocusTracker focusTracker;
     std::optional<uint32_t> focusGamescopePid;
+    std::atomic<bool> sdrBrightnessBoostRequested{false};
+    std::atomic<uint32_t> sdrBrightnessBoostTargetNits{
+        ls::GameConfDefaults::gamescopeHdrBrightnessNits
+    };
+    std::atomic<uint64_t> controlRevision{0};
+    bool lastBrightnessBoostRequested{false};
+    uint32_t lastBrightnessTargetNits{
+        ls::GameConfDefaults::gamescopeHdrBrightnessNits
+    };
+    bool brightnessOriginalCaptured{false};
+    std::optional<uint32_t> originalBrightnessRaw;
+    std::optional<uint32_t> writtenBrightnessRaw;
+    bool brightnessExternallyOverridden{false};
+    std::string lastBrightnessStatus;
     const std::optional<uint32_t> applicationId = [] {
         const char* value = std::getenv("SteamAppId");
         if (!value || !*value)
@@ -93,6 +115,9 @@ struct GamescopeHdrFeedbackReader::Impl {
     decltype(&XDefaultRootWindow) defaultRootWindow{nullptr};
     decltype(&XGetWindowAttributes) getWindowAttributes{nullptr};
     decltype(&XGetWindowProperty) getWindowProperty{nullptr};
+    decltype(&XChangeProperty) changeProperty{nullptr};
+    decltype(&XDeleteProperty) deleteProperty{nullptr};
+    decltype(&XFlush) flush{nullptr};
     decltype(&XFree) freeData{nullptr};
 
     template<typename Function>
@@ -153,6 +178,118 @@ struct GamescopeHdrFeedbackReader::Impl {
         if (data)
             this->freeData(data);
         return present;
+    }
+
+    bool writeCardinal(const char* propertyName, const uint32_t value) {
+        const Atom property = this->internAtom(
+            this->display, propertyName, False
+        );
+        if (property == None)
+            return false;
+        const unsigned long wireValue = value;
+        this->changeProperty(
+            this->display, this->root, property, XA_CARDINAL, 32,
+            PropModeReplace,
+            reinterpret_cast<const unsigned char*>(&wireValue), 1
+        );
+        this->flush(this->display);
+        return true;
+    }
+
+    void clearBrightnessOwnership() {
+        this->brightnessOriginalCaptured = false;
+        this->originalBrightnessRaw.reset();
+        this->writtenBrightnessRaw.reset();
+    }
+
+    void restoreSdrBrightness() {
+        if (!this->brightnessOriginalCaptured || !this->display ||
+                this->root == None) {
+            this->clearBrightnessOwnership();
+            return;
+        }
+
+        const auto current = this->readCardinal(
+            this->display, this->root,
+            gamescopeSdrOnHdrBrightnessProperty
+        );
+        if (current == this->writtenBrightnessRaw) {
+            if (this->originalBrightnessRaw) {
+                static_cast<void>(this->writeCardinal(
+                    gamescopeSdrOnHdrBrightnessProperty,
+                    *this->originalBrightnessRaw
+                ));
+            } else {
+                const Atom property = this->internAtom(
+                    this->display,
+                    gamescopeSdrOnHdrBrightnessProperty,
+                    True
+                );
+                if (property != None) {
+                    this->deleteProperty(this->display, this->root, property);
+                    this->flush(this->display);
+                }
+            }
+        }
+        this->clearBrightnessOwnership();
+    }
+
+    std::string updateSdrBrightnessBoost(
+            const GamescopeSdrBrightnessBoostDecision decision) {
+        const bool requested = this->sdrBrightnessBoostRequested.load(
+            std::memory_order_acquire
+        );
+        const uint32_t targetNits = this->sdrBrightnessBoostTargetNits.load(
+            std::memory_order_acquire
+        );
+        if (requested != this->lastBrightnessBoostRequested) {
+            this->restoreSdrBrightness();
+            this->brightnessExternallyOverridden = false;
+            this->lastBrightnessBoostRequested = requested;
+        }
+        if (targetNits != this->lastBrightnessTargetNits) {
+            this->brightnessExternallyOverridden = false;
+            this->lastBrightnessTargetNits = targetNits;
+        }
+
+        if (!decision.apply) {
+            this->restoreSdrBrightness();
+            return std::string(decision.status);
+        }
+        if (this->brightnessExternallyOverridden)
+            return "externally-overridden";
+
+        const uint32_t requestedRaw = std::bit_cast<uint32_t>(
+            static_cast<float>(targetNits)
+        );
+        if (this->writtenBrightnessRaw) {
+            const auto current = this->readCardinal(
+                this->display, this->root,
+                gamescopeSdrOnHdrBrightnessProperty
+            );
+            if (current != this->writtenBrightnessRaw) {
+                this->clearBrightnessOwnership();
+                this->brightnessExternallyOverridden = true;
+                return "externally-overridden";
+            }
+            if (*this->writtenBrightnessRaw == requestedRaw)
+                return "applied";
+        }
+
+        if (!this->brightnessOriginalCaptured) {
+            this->originalBrightnessRaw = this->readCardinal(
+                this->display, this->root,
+                gamescopeSdrOnHdrBrightnessProperty
+            );
+            this->brightnessOriginalCaptured = true;
+        }
+        if (!this->writeCardinal(
+                gamescopeSdrOnHdrBrightnessProperty, requestedRaw)) {
+            this->clearBrightnessOwnership();
+            return "property-write-failed";
+        }
+        this->writtenBrightnessRaw = requestedRaw;
+        return "applied";
     }
 
     GamescopeXwaylandDisplay identifyDisplay(
@@ -233,6 +370,7 @@ struct GamescopeHdrFeedbackReader::Impl {
     }
 
     void closeSelectedDisplay() {
+        this->restoreSdrBrightness();
         if (this->display && this->closeDisplay)
             this->closeDisplay(this->display);
         this->display = nullptr;
@@ -275,6 +413,9 @@ struct GamescopeHdrFeedbackReader::Impl {
                 this->resolve(
                     this->getWindowProperty, "XGetWindowProperty"
                 ) &&
+                this->resolve(this->changeProperty, "XChangeProperty") &&
+                this->resolve(this->deleteProperty, "XDeleteProperty") &&
+                this->resolve(this->flush, "XFlush") &&
                 this->resolve(this->freeData, "XFree");
             if (!resolved) {
                 this->resolverStatus = "x11-symbol-resolution-failed";
@@ -397,8 +538,13 @@ struct GamescopeHdrFeedbackReader::Impl {
     GamescopeHdrFeedbackSample sampleOnce() {
         const char* displayName = std::getenv("DISPLAY");
         GamescopeHdrFeedbackSample sample{.display = displayName ? displayName : ""};
+        sample.sdrBrightnessBoostRequested =
+            this->sdrBrightnessBoostRequested.load(std::memory_order_acquire);
         if (!displayName || !*displayName) {
             sample.status = "display-environment-missing";
+            sample.sdrBrightnessBoostStatus =
+                sample.sdrBrightnessBoostRequested
+                    ? "display-environment-missing" : "off";
             return sample;
         }
 
@@ -414,6 +560,13 @@ struct GamescopeHdrFeedbackReader::Impl {
             sample.status = this->resolverStatus;
             sample.resolverStatus = this->resolverStatus;
             sample.resolverCandidates = this->resolverCandidates;
+            sample.sdrBrightnessBoostStatus =
+                decideGamescopeSdrBrightnessBoost(
+                    sample.sdrBrightnessBoostRequested,
+                    sample.gamescopeDetected,
+                    sample.xwaylandServerId,
+                    std::nullopt
+                ).status;
             return sample;
         }
 
@@ -436,6 +589,13 @@ struct GamescopeHdrFeedbackReader::Impl {
         if (sample.gamescopeDetected && *sample.xwaylandServerId != 0) {
             sample.status = "gamescope-selected-display-not-root";
             sample.resolverStatus = sample.status;
+            sample.sdrBrightnessBoostStatus =
+                decideGamescopeSdrBrightnessBoost(
+                    sample.sdrBrightnessBoostRequested,
+                    sample.gamescopeDetected,
+                    sample.xwaylandServerId,
+                    std::nullopt
+                ).status;
             this->resolverStatus = sample.status;
             this->closeSelectedDisplay();
             return sample;
@@ -479,6 +639,26 @@ struct GamescopeHdrFeedbackReader::Impl {
                 this->display, this->root, gamescopeHdrOutputProperty)) {
             sample.outputHdrEnabled = *outputHdr != 0;
         }
+        sample.displayHdrEnabled = gamescopeBooleanFeedback(
+            this->readCardinal(
+                this->display, this->root,
+                gamescopeDisplayHdrEnabledProperty
+            )
+        );
+        const auto brightnessDecision = decideGamescopeSdrBrightnessBoost(
+            sample.sdrBrightnessBoostRequested,
+            sample.gamescopeDetected,
+            sample.xwaylandServerId,
+            sample.displayHdrEnabled
+        );
+        sample.sdrBrightnessBoostStatus = this->updateSdrBrightnessBoost(
+            brightnessDecision
+        );
+        if (sample.sdrBrightnessBoostStatus == "applied")
+            sample.sdrBrightnessBoostNits =
+                this->sdrBrightnessBoostTargetNits.load(
+                    std::memory_order_acquire
+                );
         sample.appHdrMetadataPresent = this->hasCardinalData(
             this->display, this->root, gamescopeHdrMetadataProperty
         );
@@ -585,6 +765,18 @@ struct GamescopeHdrFeedbackReader::Impl {
         }
         sample.focus = this->focusTracker.observe(
             now, sample.focus.gameFocused);
+        if (sample.sdrBrightnessBoostStatus != this->lastBrightnessStatus) {
+            this->lastBrightnessStatus = sample.sdrBrightnessBoostStatus;
+            std::cerr << "MAKO Renderer: Gamescope SDR brightness boost: requested="
+                      << sample.sdrBrightnessBoostRequested
+                      << "; applied_nits="
+                      << sample.sdrBrightnessBoostNits.value_or(0)
+                      << "; status="
+                      << (sample.sdrBrightnessBoostStatus.empty()
+                            ? "unavailable"
+                            : sample.sdrBrightnessBoostStatus)
+                      << '\n';
+        }
         std::scoped_lock lock(this->sampleMutex);
         this->latestSample = sample;
     }
@@ -605,14 +797,27 @@ struct GamescopeHdrFeedbackReader::Impl {
         if (!gamescopeHdrFeedbackMayChange())
             return;
 
-        this->monitor = std::jthread([this](const std::stop_token stop) {
+        const uint64_t initialControlRevision = this->controlRevision.load(
+            std::memory_order_acquire
+        );
+        this->monitor = std::jthread([this, initialControlRevision](
+                const std::stop_token stop) {
+            uint64_t observedControlRevision = initialControlRevision;
             while (!stop.stop_requested()) {
                 const auto interval = this->pollInterval();
                 std::unique_lock waitLock(this->monitorWaitMutex);
                 if (this->monitorWake.wait_for(
                         waitLock, interval,
-                        [&stop] { return stop.stop_requested(); }))
+                        [this, &stop, &observedControlRevision] {
+                            return stop.stop_requested() ||
+                                this->controlRevision.load(
+                                    std::memory_order_acquire
+                                ) != observedControlRevision;
+                        }) && stop.stop_requested())
                     break;
+                observedControlRevision = this->controlRevision.load(
+                    std::memory_order_acquire
+                );
                 waitLock.unlock();
                 this->refresh();
             }
@@ -654,4 +859,23 @@ GamescopeHdrFeedbackSample
 GamescopeHdrFeedbackReader::diagnosticSample() const {
     std::scoped_lock lock(this->impl->sampleMutex);
     return this->impl->latestSample;
+}
+
+void GamescopeHdrFeedbackReader::setSdrBrightnessBoost(
+        const bool enabled, const uint32_t targetNits) {
+    const uint32_t boundedTargetNits = std::clamp(
+        targetNits,
+        ls::GameConfLimits::minimumGamescopeHdrBrightnessNits,
+        ls::GameConfLimits::maximumGamescopeHdrBrightnessNits
+    );
+    const bool enabledChanged = this->impl->sdrBrightnessBoostRequested.exchange(
+        enabled, std::memory_order_acq_rel
+    ) != enabled;
+    const bool targetChanged = this->impl->sdrBrightnessBoostTargetNits.exchange(
+        boundedTargetNits, std::memory_order_acq_rel
+    ) != boundedTargetNits;
+    if (!enabledChanged && !targetChanged)
+        return;
+    this->impl->controlRevision.fetch_add(1, std::memory_order_release);
+    this->impl->monitorWake.notify_all();
 }

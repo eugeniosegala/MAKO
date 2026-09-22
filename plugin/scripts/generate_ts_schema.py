@@ -37,6 +37,8 @@ from shared_config import (
     FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
     FRAME_GENERATION_REFRESH_THRESHOLD_PRESET,
     FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
+    GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX,
+    GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN,
     MAKO_WRAPPER_RELATIVE_PATH,
     PER_GAME_WRAPPER_FLATPAK_APP_IDS,
     PROFILE_KIND_VALUES,
@@ -192,6 +194,10 @@ def generate_typescript_schema():
         f"{FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN} as const;",
         "export const FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = "
         f"{FRAME_GENERATION_REFRESH_THRESHOLD_PRESET} as const;",
+        "export const GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN = "
+        f"{GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN} as const;",
+        "export const GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX = "
+        f"{GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX} as const;",
         "",
         "// Stable persisted values for the optional post-process Vulkan layer",
         "export const EXTERNAL_VULKAN_LAYER_NONE = "

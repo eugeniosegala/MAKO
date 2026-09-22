@@ -51,6 +51,8 @@ int main() {
     requested.multiplier = 5;
     requested.performance_mode = true;
     requested.flow_scale = 0.5F;
+    requested.gamescope_hdr_brightness_boost = true;
+    requested.gamescope_hdr_brightness_nits = 750;
 
     const mako::layer::RuntimeStatusRecord record{
         .phase = mako::layer::RuntimeApplicationPhase::Draining,
@@ -97,6 +99,12 @@ int main() {
     expect(json.find("\"frame_generation_provisioned\":true") !=
             std::string::npos,
         "Frame Generation provisioning state missing");
+    expect(json.find("\"gamescope_hdr_brightness_boost\":true") !=
+            std::string::npos,
+        "Gamescope HDR brightness boost state missing");
+    expect(json.find("\"gamescope_hdr_brightness_nits\":750") !=
+            std::string::npos,
+        "Gamescope HDR brightness target missing");
     expect(json.find("\"required_generated_capacity\":4") !=
             std::string::npos,
         "requested capacity missing");

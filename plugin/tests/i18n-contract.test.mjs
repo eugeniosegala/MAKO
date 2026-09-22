@@ -183,20 +183,20 @@ test("uses localized restart markers only for process-start controls", async () 
     zh: "（重启）",
   };
   const processStartKeys = [
-    "SCALING_ENABLED",
     "CONFIG_ULTRA_PERFORMANCE",
     "CONFIG_DISABLE_STEAMDECK_MODE",
     "CONFIG_ENABLE_ZINK",
     "CONFIG_FORCE_ALSA_AUDIO",
     "CONFIG_ENABLE_MANGOHUD",
-    "CONFIG_ENABLE_VKBASALT",
     "CONFIG_DLL_PATH",
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY",
     "CONFIG_ALLOW_FP16",
     "CONFIG_GPU",
-    "FRAME_GENERATION_PROVISIONED",
   ];
   const labelsWithoutRestartMarker = [
+    "SCALING_ENABLED",
+    "CONFIG_ENABLE_VKBASALT",
+    "FRAME_GENERATION_PROVISIONED",
     "SCALING_METHOD",
     "SCALING_FACTOR",
     "SCALING_SHARPNESS",

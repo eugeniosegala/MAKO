@@ -113,7 +113,7 @@ export function ScalingControl({
         <ToggleField
           label={
             <MakoExperimentalSettingLabel
-              label={t("SCALING_ENABLED", "Scaling (Restart)")}
+              label={t("SCALING_ENABLED", "Enable Scaling")}
               badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
             />
           }

@@ -149,6 +149,18 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["DISABLE_MAKO"], "")
         self.assertEqual(values["INSTANCE"], "")
 
+    def test_hdr_brightness_boost_keeps_renderer_for_sdr_only_profile(self):
+        config = ConfigurationManager.get_defaults()
+        config["frame_generation_provisioned"] = False
+        config["scaling_enabled"] = False
+        config["gamescope_hdr_brightness_boost"] = True
+
+        values = self._evaluate(config=config)
+
+        self.assertEqual(values["ENABLE"], "1")
+        self.assertEqual(values["DISABLE_MAKO"], "")
+        self.assertEqual(values["DXVK_HDR"], "")
+
     def test_shaders_only_activates_vkbasalt_without_renderer(self):
         with tempfile.TemporaryDirectory() as private_dir:
             self.service.vkbasalt_layer_dir = Path(private_dir)

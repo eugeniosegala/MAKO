@@ -299,6 +299,26 @@ int main() {
     expect(!confirmedGamescopePresentationTarget(incompleteOutputSample),
         "incomplete Gamescope root geometry must fail closed");
 
+    const auto brightnessReady = decideGamescopeSdrBrightnessBoost(
+        true, true, 0, true
+    );
+    expect(brightnessReady.apply && brightnessReady.status == "ready",
+        "SDR brightness boost must accept the active Gamescope HDR display");
+    expect(decideGamescopeSdrBrightnessBoost(
+            false, true, 0, true).status == "off" &&
+            !decideGamescopeSdrBrightnessBoost(
+                true, false, std::nullopt, true).apply &&
+            decideGamescopeSdrBrightnessBoost(
+                true, true, 1, true).status ==
+                    "gamescope-root-unavailable" &&
+            decideGamescopeSdrBrightnessBoost(
+                true, true, 0, false).status ==
+                    "steam-hdr-required" &&
+            decideGamescopeSdrBrightnessBoost(
+                true, true, 0, std::nullopt).status ==
+                    "steam-hdr-state-unavailable",
+        "SDR brightness boost safety gates must fail closed");
+
     // Gamescope starts with app-HDR cached false and can therefore leave its
     // Boolean property absent. Prefer explicit app evidence and accept app HDR
     // metadata as an equivalent positive signal. Output capability is never

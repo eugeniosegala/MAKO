@@ -24,6 +24,8 @@ from shared_config import (
     FRAME_GENERATION_REFRESH_THRESHOLD_MAX,
     FRAME_GENERATION_REFRESH_THRESHOLD_MIN,
     FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
+    GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX,
+    GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN,
     PROFILE_KIND_DEFAULT,
     PROFILE_KIND_GAME,
     PROFILE_KIND_MANUAL,
@@ -174,6 +176,16 @@ class ConfigurationManager:
                 "frame_generation_refresh_threshold must be 0 or between "
                 f"{FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN} and "
                 f"{FRAME_GENERATION_REFRESH_THRESHOLD_MAX}"
+            )
+        if not (
+            GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN
+            <= validated["gamescope_hdr_brightness_nits"]
+            <= GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX
+        ):
+            raise ValueError(
+                "gamescope_hdr_brightness_nits must be between "
+                f"{GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN} and "
+                f"{GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX}"
             )
         if not TARGET_FPS_MIN <= validated["target_fps"] <= TARGET_FPS_MAX:
             raise ValueError(
@@ -343,6 +355,10 @@ class ConfigurationManager:
                 "frame_generation_refresh_threshold = "
                 f"{config['frame_generation_refresh_threshold']}",
                 f"base_fps_cap = {config['base_fps_cap']}",
+                "gamescope_hdr_brightness_boost = "
+                f"{str(config['gamescope_hdr_brightness_boost']).lower()}",
+                "gamescope_hdr_brightness_nits = "
+                f"{config['gamescope_hdr_brightness_nits']}",
                 f"multiplier = {config['multiplier']}",
                 f"adaptive = {str(config['adaptive']).lower()}",
                 f"adaptive_auto_base_fps_cap = {str(config['adaptive_auto_base_fps_cap']).lower()}",

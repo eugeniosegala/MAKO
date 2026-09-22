@@ -316,7 +316,7 @@ printf '%s\n' \
   '' \
   '## Known limitation' \
   '' \
-  '- **HDR frame generation and scaling are unavailable in this Decky release:** The engine foundation is included, but the plugin locks HDR exposure off and does not provide a per-game opt-in. In-game HDR controls may be unavailable by design. A later release can unlock the path after activation, presentation, colour, and performance are validated across games.' \
+  '- **HDR support is partial:** The per-profile HDR Brightness Boost can map an SDR game through a supported Gamescope HDR display when Steam HDR is on and in-game HDR is off. HDR game content, HDR Frame Generation, and HDR Scaling remain unavailable in this release.' \
   '' \
   '## Before you play' \
   '' \

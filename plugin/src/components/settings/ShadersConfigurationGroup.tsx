@@ -124,13 +124,13 @@ export function ShadersConfigurationGroup({
         <ToggleField
           label={
             <MakoExperimentalSettingLabel
-              label={t("CONFIG_ENABLE_VKBASALT", "MAKO vkBasalt (Restart)")}
+              label={t("CONFIG_ENABLE_VKBASALT", "Enable Shaders")}
               badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
             />
           }
           description={t(
             "CONFIG_ENABLE_VKBASALT_DESC",
-            "Applies sharpening, anti-aliasing, and shader effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used. If effects are not visible, switch between Windowed and Fullscreen.",
+            "Enable before starting the game. Applies MAKO's bundled sharpening, anti-aliasing, and shader effects. No separate installation is needed. If effects are not visible, switch between Windowed and Fullscreen.",
           )}
           bottomSeparator={vkBasaltEnabled ? undefined : "none"}
           checked={vkBasaltEnabled}

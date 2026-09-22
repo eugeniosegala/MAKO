@@ -187,6 +187,8 @@ export interface RuntimeProfileSnapshot {
   scaling_sharpness: number;
   frame_generation_refresh_threshold: number;
   base_fps_cap: number;
+  gamescope_hdr_brightness_boost: boolean;
+  gamescope_hdr_brightness_nits: number;
   adaptive: boolean;
   adaptive_auto_base_fps_cap: boolean;
   target_fps: number;

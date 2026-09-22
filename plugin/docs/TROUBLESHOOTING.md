@@ -2,9 +2,9 @@
 
 These instructions apply to published ZIPs and local development builds.
 
-## HDR is unavailable by design
+## HDR support is partial by design
 
-HDR frame generation and scaling are disabled in this release. **Disable HDR** is checked and read-only, and MAKO removes inherited `DXVK_HDR` activation.
+**HDR Brightness Boost** can map an SDR game through a supported Gamescope HDR display when Steam HDR is on and in-game HDR is off. Its 203–1000-nit target applies live; 203 matches Gamescope's standard SDR-on-HDR level, while 1000 is the upper peak target. HDR game content, Frame Generation, and Scaling remain disabled in this release. **Disable HDR** is checked and read-only, and MAKO removes inherited `DXVK_HDR` activation.
 
 Inside a supported Gamescope session, **Scaling (Restart)** uses the managed Frame Generation → Gamescope WSI → Spatial Scaling order. **Gamescope WSI (Restart)** provides the same guarded presentation path for affected 64-bit Frame Generation-only profiles. Host MangoHud or MAKO's private bundled vkBasalt can follow MAKO's roles without exposing the host's complete implicit-layer directory.
 

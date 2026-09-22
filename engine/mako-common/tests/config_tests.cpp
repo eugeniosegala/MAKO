@@ -62,6 +62,10 @@ namespace {
             left.frame_generation_refresh_threshold ==
                 right.frame_generation_refresh_threshold &&
             left.base_fps_cap == right.base_fps_cap &&
+            left.gamescope_hdr_brightness_boost ==
+                right.gamescope_hdr_brightness_boost &&
+            left.gamescope_hdr_brightness_nits ==
+                right.gamescope_hdr_brightness_nits &&
             left.adaptive == right.adaptive &&
             left.adaptive_auto_base_fps_cap ==
                 right.adaptive_auto_base_fps_cap &&
@@ -96,6 +100,8 @@ scaling_supersampling = true
 scaling_sharpness = 0.6
 frame_generation_refresh_threshold = 60
 base_fps_cap = 60
+gamescope_hdr_brightness_boost = true
+gamescope_hdr_brightness_nits = 750
 adaptive_auto_base_fps_cap = true
 target_fps = 144
 adaptive_max_multiplier = 4
@@ -128,6 +134,10 @@ int main() {
             defaults.frame_generation_refresh_threshold ==
                 ls::GameConfDefaults::frameGenerationRefreshThreshold &&
             defaults.base_fps_cap == ls::GameConfDefaults::baseFpsCap &&
+            defaults.gamescope_hdr_brightness_boost ==
+                ls::GameConfDefaults::gamescopeHdrBrightnessBoost &&
+            defaults.gamescope_hdr_brightness_nits ==
+                ls::GameConfDefaults::gamescopeHdrBrightnessNits &&
             defaults.adaptive == ls::GameConfDefaults::adaptive &&
             defaults.adaptive_auto_base_fps_cap ==
                 ls::GameConfDefaults::adaptiveAutoBaseFpsCap &&
@@ -290,6 +300,9 @@ int main() {
     expect(config.get().profiles().front().base_fps_cap == 0 &&
             !config.get().profiles().front().adaptive_auto_base_fps_cap,
         "Dynamic cadence recovery must disable both base FPS caps");
+    expect(config.get().profiles().front().gamescope_hdr_brightness_boost &&
+            config.get().profiles().front().gamescope_hdr_brightness_nits == 750,
+        "The accepted configuration must expose the Gamescope brightness boost");
     expect(config.get().profiles().front().multiplier == 2,
         "Unknown legacy options must be inert without disturbing known defaults");
 
@@ -402,6 +415,23 @@ multiplier = 6
         }
         expect(invalidIntervalRejected,
             "Cadence probe intervals outside 0.1-3 seconds must be rejected");
+    }
+
+    for (const std::string_view invalidNits : {"202", "1001"}) {
+        const auto invalidBrightnessPath = directory /
+            ("invalid-hdr-brightness-" + std::string(invalidNits) + ".toml");
+        writeText(invalidBrightnessPath,
+            "version = 2\n[[profile]]\n"
+            "gamescope_hdr_brightness_nits = " +
+            std::string(invalidNits) + "\n");
+        bool invalidBrightnessRejected = false;
+        try {
+            static_cast<void>(ls::ConfigFile(invalidBrightnessPath));
+        } catch (const std::exception&) {
+            invalidBrightnessRejected = true;
+        }
+        expect(invalidBrightnessRejected,
+            "HDR brightness values outside 203-1000 nits must be rejected");
     }
 
     for (const auto& [field, value] : {

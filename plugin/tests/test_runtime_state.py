@@ -34,6 +34,8 @@ def _profile(name: str, multiplier: int) -> dict[str, object]:
         "scaling_sharpness": 0.5,
         "frame_generation_refresh_threshold": 0,
         "base_fps_cap": 45,
+        "gamescope_hdr_brightness_boost": False,
+        "gamescope_hdr_brightness_nits": 1000,
         "adaptive": False,
         "adaptive_auto_base_fps_cap": False,
         "target_fps": 90,

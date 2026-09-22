@@ -79,7 +79,7 @@ export function FpsMultiplierControl({
             <MakoRestartLabel
               label={t(
                 "FRAME_GENERATION_PROVISIONED",
-                "Frame Generation (Restart)",
+                "Enable Frame-gen",
               )}
             />
           }

@@ -259,7 +259,7 @@ describe("Frame Generation controls", () => {
 
     expect(
       screen
-        .getByText("Frame Generation (Restart)")
+        .getByText("Enable Frame-gen")
         .getAttribute("data-checked"),
     ).toBe("true");
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
@@ -320,7 +320,7 @@ describe("Frame Generation controls", () => {
       />,
     );
 
-    const provision = screen.getByText("Frame Generation (Restart)");
+    const provision = screen.getByText("Enable Frame-gen");
     expect(provision.getAttribute("data-checked")).toBe("false");
     expect(provision.getAttribute("data-bottom-separator")).toBe("none");
     expect(screen.queryByText("Adaptive Frame Generation")).toBeNull();

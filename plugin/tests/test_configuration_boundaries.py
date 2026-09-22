@@ -255,6 +255,8 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             "scaling_factor": 1.8,
             "scaling_supersampling": True,
             "scaling_sharpness": 0.7,
+            "gamescope_hdr_brightness_boost": True,
+            "gamescope_hdr_brightness_nits": 750,
             "swapchain_image_count_compatibility": True,
         }
 
@@ -268,6 +270,10 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertIn("scaling_supersampling = true", toml_content)
         self.assertIn("scaling_sharpness = 0.7", toml_content)
         self.assertIn(
+            "gamescope_hdr_brightness_boost = true", toml_content
+        )
+        self.assertIn("gamescope_hdr_brightness_nits = 750", toml_content)
+        self.assertIn(
             "swapchain_image_count_compatibility = true", toml_content
         )
         for field in (
@@ -276,12 +282,27 @@ class ConfigurationBoundaryTests(unittest.TestCase):
             "scaling_factor",
             "scaling_supersampling",
             "scaling_sharpness",
+            "gamescope_hdr_brightness_boost",
+            "gamescope_hdr_brightness_nits",
             "swapchain_image_count_compatibility",
         ):
             with self.subTest(field=field):
                 self.assertNotIn(field, wrapper_settings)
                 self.assertNotIn(field, wrapper_content.lower())
         self.assertNotIn("MAKO_SCALING", wrapper_content)
+
+    def test_hdr_brightness_target_rejects_values_outside_panel_range(self):
+        for value in (202, 1001):
+            with self.subTest(value=value):
+                config = {
+                    **ConfigurationManager.get_defaults(),
+                    "gamescope_hdr_brightness_nits": value,
+                }
+                with self.assertRaisesRegex(
+                    ValueError,
+                    "gamescope_hdr_brightness_nits must be between 203 and 1000",
+                ):
+                    ConfigurationManager.validate_config(config)
 
     def test_unsupported_host_passthrough_bytes_are_characterized(self):
         lines = [
