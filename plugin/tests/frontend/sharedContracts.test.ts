@@ -155,4 +155,8 @@ describe("generated cross-language contracts", () => {
       sharpness: 0.8,
     });
   });
+
+  test("defaults DLS denoise to twenty percent", () => {
+    expect(getDefaults().vkbasalt_dls_denoise).toBe(0.2);
+  });
 });

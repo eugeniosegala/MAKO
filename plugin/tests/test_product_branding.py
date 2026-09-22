@@ -18,8 +18,8 @@ class ProductBrandingTests(unittest.TestCase):
         self.assertEqual(manifest["name"], "MAKO - Frame Generation")
         self.assertEqual(
             manifest["publish"]["description"],
-            "MAKO brings Lossless Scaling frame generation and Vulkan-powered "
-            "spatial scaling to Steam Deck, Steam Machine, and SteamOS gaming.",
+            "MAKO brings frame generation, Vulkan-powered spatial scaling, and "
+            "bundled shaders to Steam Deck, Steam Machine, and SteamOS gaming.",
         )
 
     def test_decky_component_identity_is_mako_decky(self):

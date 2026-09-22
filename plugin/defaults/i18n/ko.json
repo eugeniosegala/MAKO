@@ -87,7 +87,7 @@
   "CONFIG_ENABLE_MANGOHUD": "MangoHud 활성화 (재시작)",
   "CONFIG_ENABLE_MANGOHUD_DESC": "호스트에 설치된 MangoHud와 기존 MangoHud 설정을 사용합니다. 게임별 환경 변수 재정의는 전문가 가이드를 참조하세요.",
   "CONFIG_ENABLE_VKBASALT": "MAKO vkBasalt (재시작)",
-  "CONFIG_ENABLE_VKBASALT_DESC": "MAKO에 포함된 전용 vkBasalt 빌드로 선명도 향상, 안티앨리어싱 및 기타 구성된 효과를 적용합니다. vkBasalt를 별도로 설치할 필요가 없습니다. 효과가 보이지 않으면 창 모드와 전체 화면 모드를 전환해 보세요.",
+  "CONFIG_ENABLE_VKBASALT_DESC": "MAKO에 포함된 전용 vkBasalt 빌드로 선명도 향상, 안티앨리어싱 및 셰이더 효과를 적용합니다. vkBasalt를 별도로 설치할 필요가 없습니다. 효과가 보이지 않으면 창 모드와 전체 화면 모드를 전환해 보세요.",
   "INSTALL_INSTALLING": "MAKO Renderer 설치 중...",
   "INSTALL_UNINSTALLING": "MAKO Renderer 제거 중...",
   "FLATPAK_MODAL_TITLE": "Flatpak 확장",

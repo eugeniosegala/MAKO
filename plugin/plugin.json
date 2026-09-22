@@ -4,8 +4,8 @@
   "flags": [],
   "api_version": 1,
   "publish": {
-    "tags": ["installer", "vulkan", "mako", "framegen", "lossless-scaling", "scaling", "steam-machine"],
-    "description": "MAKO brings Lossless Scaling frame generation and Vulkan-powered spatial scaling to Steam Deck, Steam Machine, and SteamOS gaming.",
+    "tags": ["installer", "vulkan", "mako", "framegen", "lossless-scaling", "scaling", "shaders", "vkbasalt", "steam-machine"],
+    "description": "MAKO brings frame generation, Vulkan-powered spatial scaling, and bundled shaders to Steam Deck, Steam Machine, and SteamOS gaming.",
     "image": "https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/plugin/assets/mako-logo.webp"
   }
 }

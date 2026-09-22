@@ -87,7 +87,7 @@
   "CONFIG_ENABLE_MANGOHUD": "启用 MangoHud（重启）",
   "CONFIG_ENABLE_MANGOHUD_DESC": "使用主机上安装的 MangoHud 和现有 MangoHud 配置。每个游戏的环境变量覆盖方法请参阅专家指南。",
   "CONFIG_ENABLE_VKBASALT": "MAKO vkBasalt（重启）",
-  "CONFIG_ENABLE_VKBASALT_DESC": "使用 MAKO 内置的专用 vkBasalt 版本应用锐化、抗锯齿及其他已配置效果，无需单独安装 vkBasalt。如果效果未显示，请在窗口模式和全屏模式之间切换。",
+  "CONFIG_ENABLE_VKBASALT_DESC": "使用 MAKO 内置的专用 vkBasalt 版本应用锐化、抗锯齿及着色器效果，无需单独安装 vkBasalt。如果效果未显示，请在窗口模式和全屏模式之间切换。",
   "INSTALL_INSTALLING": "正在安装 MAKO Renderer...",
   "INSTALL_UNINSTALLING": "正在移除 MAKO Renderer...",
   "FLATPAK_MODAL_TITLE": "Flatpak 扩展",

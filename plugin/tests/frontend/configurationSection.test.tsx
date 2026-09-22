@@ -243,7 +243,7 @@ describe("Configuration controls", () => {
     expect(screen.getByText("MAKO vkBasalt (Restart)")).toBeTruthy();
     expect(
       screen.getByText(
-        "Applies sharpening, anti-aliasing, and other configured effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used. If effects are not visible, switch between Windowed and Fullscreen.",
+        "Applies sharpening, anti-aliasing, and shader effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used. If effects are not visible, switch between Windowed and Fullscreen.",
       ),
     ).toBeTruthy();
     expect(screen.getByText("Experimental")).toBeTruthy();

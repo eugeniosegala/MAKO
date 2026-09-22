@@ -336,7 +336,7 @@ class ConfigurationBoundaryTests(unittest.TestCase):
         self.assertNotIn("retired_option", stored_wrapper_settings)
         self.assertEqual(
             _sha256(wrapper_content),
-            "098eaae95260cc576330f9ad7dd9a24ff3264cb2079c68fddcf910ca919cc0cf",
+            "084fcde148a7a5f7cf6851063b2e17c26e0fd640500a1a1ee404507b71147c7a",
         )
         self.assertEqual(
             _sha256(metadata_content),

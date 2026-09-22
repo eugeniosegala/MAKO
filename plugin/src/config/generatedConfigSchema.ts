@@ -362,7 +362,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
   vkbasalt_dls_denoise: {
     name: "vkbasalt_dls_denoise",
     fieldType: ConfigFieldType.FLOAT,
-    default: 0.17,
+    default: 0.2,
     description: "MAKO-managed vkBasalt DLS denoise strength"
   },
   vkbasalt_antialiasing: {
@@ -375,7 +375,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "vkbasalt_shader",
     fieldType: ConfigFieldType.STRING,
     default: "none",
-    description: "MAKO-managed vkBasalt shader: none, Vibrance, Curves, or Deband"
+    description: "MAKO-managed vkBasalt shader: none, Vibrance, Curves, Deband, Technicolor, Sepia, Monochrome, or Vignette"
   },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",
@@ -481,7 +481,7 @@ export function getDefaults(): ConfigurationData {
     external_vulkan_layer: "",
     vkbasalt_sharpening: "cas",
     vkbasalt_sharpness: 0.5,
-    vkbasalt_dls_denoise: 0.17,
+    vkbasalt_dls_denoise: 0.2,
     vkbasalt_antialiasing: "none",
     vkbasalt_shader: "none",
     disable_steamdeck_mode: false,

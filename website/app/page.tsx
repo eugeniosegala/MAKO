@@ -69,11 +69,11 @@ const features = [
   },
   {
     index: '05',
-    code: 'FX',
-    title: 'Flatpak ready',
-    text: 'Prepare Heroic and EmuDeck Flatpaks through the same private configuration and renderer pipeline.',
-    stat: '23-25',
-    label: 'runtime matrix',
+    code: 'SH',
+    title: 'Per-game shaders',
+    text: 'Sharpen, smooth, or stylize each game with lightweight controls that update live while you play.',
+    stat: 'LIVE',
+    label: 'effect tuning',
     tone: 'blue',
   },
   {
@@ -126,9 +126,9 @@ export default function Home() {
           <div className="hero-glow hero-glow-cyan" />
           <div className="hero-glow hero-glow-orange" />
           <div className="hero-copy">
-            <p className="eyebrow"><span /> Frame generation + spatial scaling / Linux</p>
+            <p className="eyebrow"><span /> Frame generation + spatial scaling + shaders / Linux</p>
             <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
-            <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. LSFG frame generation and LS1 require a separate Lossless Scaling purchase; the built-in open MAKO Scaler works without it.</p>
+            <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. LSFG frame generation and LS1 require a separate Lossless Scaling purchase; the open MAKO Scaler and bundled shaders work without it.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
               <span className="open-source-sticker-copy"><strong>Fully open source</strong><span>Contribute. Fork it. Change it. Make it yours.</span></span>
@@ -164,7 +164,7 @@ export default function Home() {
             <div className="visual-card visual-card-renderer" onPointerMove={tiltCard} onPointerLeave={resetCardTilt}>
               <span className="card-index">02 / PIPELINE</span>
               <img src="assets/mako-render-logo.webp" alt="MAKO Renderer shark logo" width="154" height="154" draggable={false} />
-              <div><strong>MAKO Renderer</strong><span>Vulkan scaling + synthesis</span></div>
+              <div><strong>MAKO Renderer</strong><span>Scaling + synthesis + shaders</span></div>
             </div>
           </div>
         </section>
@@ -184,7 +184,7 @@ export default function Home() {
             <p className="section-kicker"><span>01</span> One system. Two precision layers.</p>
             <div>
               <h2>Controls above.<br /><em>Vulkan below.</em></h2>
-              <p>MAKO Decky manages the game. MAKO Renderer runs the frame pipeline. Together, they bring Lossless Scaling frame generation plus LS1 and open MAKO spatial scaling into Linux gaming.</p>
+              <p>MAKO Decky manages the game. MAKO Renderer runs the frame pipeline. Together, they bring frame generation, spatial scaling, and bundled shader effects into Linux gaming.</p>
             </div>
           </header>
 
@@ -196,7 +196,7 @@ export default function Home() {
               <h3>MAKO Decky</h3>
               <p>Per-game controls, profiles, installation, Flatpak preparation, and launch integration through one focused interface.</p>
               <ul>
-                <li><span /> Independent scaling &amp; generation controls</li>
+                <li><span /> Scaling, generation &amp; shader controls</li>
                 <li><span /> Steam, Heroic &amp; EmuDeck profiles</li>
                 <li><span /> Fixed &amp; Adaptive modes</li>
               </ul>
@@ -216,7 +216,7 @@ export default function Home() {
               <div className="panel-topline"><span>RENDER LAYER</span><i>VULKAN / LINUX</i></div>
               <img src="assets/mako-render-logo.webp" alt="MAKO Renderer" width="230" height="230" draggable={false} />
               <h3>MAKO Renderer</h3>
-              <p>A private Vulkan pipeline for selectable spatial reconstruction, frame synthesis, deterministic scheduling, and presentation recovery.</p>
+              <p>A private Vulkan pipeline for spatial reconstruction, frame synthesis, deterministic scheduling, and presentation recovery, with optional bundled shader effects.</p>
               <ul>
                 <li><span /> Proprietary LS1 or built-in open MAKO Scaler</li>
                 <li><span /> Lossless Scaling frame-generation models</li>
@@ -251,7 +251,9 @@ export default function Home() {
         </section>
 
         <div className="generation-scaling-stack section-shell">
-        <section className="adaptive-section">
+          <div className="generation-scaling-divider" aria-hidden="true"><span>FRAME GENERATION</span><i /><span>SPATIAL SCALING</span><i /><span>SHADERS</span></div>
+
+        <section className="adaptive-section processing-section">
           <div className="adaptive-copy">
             <p className="section-kicker"><span>03</span> Adaptive intelligence</p>
             <h2>It doesn’t just add frames.<br /><em>It reads the rhythm.</em></h2>
@@ -263,7 +265,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="telemetry-card" aria-label="Adaptive frame generation example: changing native cadence with generated-frame segments filling the output to a 90 FPS target.">
+          <div className="telemetry-card processing-visual" aria-label="Adaptive frame generation example: changing native cadence with generated-frame segments filling the output to a 90 FPS target.">
             <div className="telemetry-head"><span>ADAPTIVE TELEMETRY</span></div>
             <div className="telemetry-readout">
               <div><span>TARGET</span><strong>90<small> FPS</small></strong></div>
@@ -289,9 +291,9 @@ export default function Home() {
           </div>
         </section>
 
-          <div className="generation-scaling-divider" aria-hidden="true"><span>FRAME GENERATION</span><i /><span>SPATIAL SCALING</span></div>
+        <div className="processing-divider" aria-hidden="true" />
 
-        <section className="scaling-section" id="scaling">
+        <section className="scaling-section processing-section" id="scaling">
           <div className="scaling-copy">
             <p className="section-kicker"><span>04</span> Spatial scaling</p>
             <h2>Make each pixel.<br /><em>Count twice.</em></h2>
@@ -303,7 +305,7 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="scaling-visual" aria-label="Spatial scaling visual showing a 1280 by 720 render target reconstructed for a 1920 by 1080 display target.">
+          <div className="scaling-visual processing-visual" aria-label="Spatial scaling visual showing a 1280 by 720 render target reconstructed for a 1920 by 1080 display target.">
             <div className="scaling-visual-head"><span>SPATIAL RECONSTRUCTION</span><span>INPUT → DISPLAY</span></div>
             <div className="resolution-flow" aria-hidden="true">
               <div className="resolution-surface resolution-source">
@@ -321,18 +323,53 @@ export default function Home() {
             <div className="scaling-status"><span><i /> MAKO Scaler READY</span><span>1.50× SHOWN <b>·</b> UP TO 2.00×</span></div>
           </div>
         </section>
+
+        <div className="processing-divider" aria-hidden="true" />
+
+        <section className="shader-section processing-section" id="shaders">
+          <div className="shader-copy">
+            <p className="section-kicker"><span>05</span> Shaders</p>
+            <h2>Sharpen. Smooth.<br /><em>Stylize.</em></h2>
+            <p>Use per-game shaders to make details crisper, soften jagged edges, or shift the colour and mood. Compare the image before and after, then tune supported effects live while you play.</p>
+            <div className="shader-modes">
+              <div><span>DETAIL</span><strong>CAS or DLS sharpening</strong></div>
+              <div><span>EDGES</span><strong>FXAA or SMAA smoothing</strong></div>
+              <div className="shader-mode-active"><span>STYLE</span><strong>Seven finishing presets</strong></div>
+            </div>
+          </div>
+
+          <div className="shader-visual processing-visual" aria-label="Per-game shader preview with live sharpening, anti-aliasing, and colour controls.">
+            <div className="shader-visual-head"><span>SHADER PIPELINE</span><span>PER-GAME · LIVE</span></div>
+            <div className="shader-stage">
+              <div className="shader-preview" aria-hidden="true">
+                <span className="shader-before-label">BEFORE</span>
+                <span className="shader-after-label">SHADER</span>
+                <img className="shader-before-image" src="assets/mako-logo.webp" alt="" width="256" height="256" draggable={false} />
+                <img className="shader-after-image" src="assets/mako-logo.webp" alt="" width="256" height="256" draggable={false} />
+                <i className="shader-split"><b>↔</b></i>
+                <small>MOVE FROM NEUTRAL TO CRISP, SMOOTH, OR STYLIZED</small>
+              </div>
+              <div className="shader-controls" aria-hidden="true">
+                <div><span>SHARPENING</span><strong>DLS</strong><i><b style={{ width: '64%' }} /></i></div>
+                <div><span>ANTI-ALIASING</span><strong>SMAA</strong><i><b style={{ width: '48%' }} /></i></div>
+                <div><span>COLOUR</span><strong>VIBRANCE</strong><i><b style={{ width: '72%' }} /></i></div>
+              </div>
+            </div>
+            <div className="shader-status"><span><i /> EFFECTS ACTIVE</span><span>LIVE TUNING</span></div>
+          </div>
+        </section>
         </div>
 
         <section className="start-section">
           <div className="section-shell start-inner">
             <header className="start-heading">
-              <p className="section-kicker"><span>05</span> From zero to smoother</p>
+              <p className="section-kicker"><span>06</span> From zero to smoother</p>
               <h2>Three steps.<br /><em>Then dive in.</em></h2>
             </header>
             <ol className="steps">
               <li>
                 <span>01</span>
-                <div><strong>Choose your pipeline</strong><p>The open MAKO Scaler runs independently. For frame generation or LS1 scaling, purchase and install Lossless Scaling separately through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
+                <div><strong>Choose your pipeline</strong><p>The open MAKO Scaler and bundled shaders run independently. For frame generation or LS1 scaling, purchase and install Lossless Scaling separately through Steam so MAKO can read your licensed <code>Lossless.dll</code>.</p></div>
               </li>
               <li>
                 <span>02</span>
@@ -349,7 +386,7 @@ export default function Home() {
 
         <section className="downloads-section section-shell" id="downloads">
           <header className="downloads-heading">
-            <p className="section-kicker"><span>06</span> Latest release</p>
+            <p className="section-kicker"><span>07</span> Latest release</p>
             <h2>Choose your<br /><em>entry point.</em></h2>
             <p>Both components are open source and independently versioned. Current packages are MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion}.</p>
           </header>
@@ -375,7 +412,7 @@ export default function Home() {
               <div className="download-icon"><img src="assets/mako-render-logo.webp" alt="" width="88" height="88" draggable={false} /></div>
               <p className="download-type">STANDALONE VULKAN LAYER</p>
               <h3>MAKO Renderer</h3>
-              <p className="download-copy">The direct host archive for desktop Linux, with the UI, launcher, CLI, and both x86 Vulkan layers.</p>
+              <p className="download-copy">The direct host archive for desktop Linux, with the UI, launcher, CLI, both x86 Vulkan layers, and bundled shader effects.</p>
               <dl>
                 <div><dt>VERSION</dt><dd>{rendererVersion}</dd></div>
                 <div><dt>FORMAT</dt><dd>TAR.XZ</dd></div>
@@ -397,7 +434,7 @@ export default function Home() {
 
         <section className="faq-section section-shell">
           <header>
-            <p className="section-kicker"><span>07</span> Signal check</p>
+            <p className="section-kicker"><span>08</span> Signal check</p>
             <h2>Before you<br /><em>make the jump.</em></h2>
           </header>
           <div className="faq-list">
@@ -410,8 +447,8 @@ export default function Home() {
               <p>No. MAKO does not contain or distribute Lossless Scaling, <code>Lossless.dll</code>, or extracted proprietary model payloads. Frame generation and LS1 scaling require a separate Lossless Scaling purchase and installation from Steam, then MAKO discovers or lets you select its local DLL. The open MAKO Scaler does not need it.</p>
             </details>
             <details>
-              <summary><span>03</span> Can frame generation and scaling run together?<i>+</i></summary>
-              <p>Yes. Choose LS1 Quality, LS1 Performance, or the open MAKO Scaler, then run scaling alone or feed each reconstructed real frame into Fixed or Adaptive frame generation. The downloads above track MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion} from canonical release metadata.</p>
+              <summary><span>03</span> Can frame generation, scaling, and shaders run together?<i>+</i></summary>
+              <p>Yes. Scale with LS1 or the open MAKO Scaler, feed reconstructed real frames into Fixed or Adaptive frame generation, and apply per-game shader effects in the same profile. The downloads above track MAKO Decky v{deckyVersion} and MAKO Renderer v{rendererVersion} from canonical release metadata.</p>
             </details>
             <details>
               <summary><span>04</span> What hardware is published today?<i>+</i></summary>
@@ -425,7 +462,7 @@ export default function Home() {
           <img src="assets/mako-logo.webp" alt="MAKO shark" width="260" height="260" draggable={false} />
           <div>
             <p className="eyebrow"><span /> Motion-Adaptive Kernel Orchestration</p>
-            <h2>Bring frame generation and scaling<br /><em>to Linux.</em></h2>
+            <h2>Bring frame generation, scaling<br /><em>and shaders to Linux.</em></h2>
             <p>Choose MAKO Decky for the managed SteamOS workflow or MAKO Renderer for a direct Linux installation.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>Download MAKO <span>→</span></a>
@@ -439,7 +476,7 @@ export default function Home() {
       <footer className="site-footer">
         <div className="footer-brand">
           <a className="brand" href="#top"><img src="assets/mako-discord-icon.webp" alt="" width="42" height="42" draggable={false} /><span>MAKO</span></a>
-          <p>Lossless Scaling frame generation plus LS1 and the open MAKO Scaler for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
+          <p>Frame generation, spatial scaling, and bundled shaders for Steam Deck, Steam Machine, SteamOS, and Linux.</p>
         </div>
         <div className="footer-links">
           <div><span>PROJECT</span><a className="social-link" href={links.repository} {...newTabProps}><GitHubIcon /><span>GitHub</span></a><a className="social-link" href={links.discord} {...newTabProps}><DiscordIcon /><span>Discord</span></a><a href={links.docs} {...newTabProps}>Installation Guide</a><a href="third-party-notices.txt">Third-party notices</a><a href={links.issues} {...newTabProps}>Issues</a></div>

@@ -87,7 +87,7 @@
   "CONFIG_ENABLE_MANGOHUD": "Ativar o MangoHud (Reiniciar)",
   "CONFIG_ENABLE_MANGOHUD_DESC": "Usa o MangoHud instalado no sistema e sua configuração existente. Consulte o guia avançado para substituições de ambiente por jogo.",
   "CONFIG_ENABLE_VKBASALT": "MAKO vkBasalt (Reiniciar)",
-  "CONFIG_ENABLE_VKBASALT_DESC": "Aplica nitidez, suavização de serrilhado e outros efeitos configurados usando a compilação privada do vkBasalt incluída no MAKO. Não é necessário instalar o vkBasalt separadamente. Se os efeitos não aparecerem, alterne entre os modos Janela e Tela cheia.",
+  "CONFIG_ENABLE_VKBASALT_DESC": "Aplica nitidez, suavização de serrilhado e efeitos de shader usando a compilação privada do vkBasalt incluída no MAKO. Não é necessário instalar o vkBasalt separadamente. Se os efeitos não aparecerem, alterne entre os modos Janela e Tela cheia.",
   "INSTALL_INSTALLING": "Instalando o MAKO Renderer...",
   "INSTALL_UNINSTALLING": "Removendo o MAKO Renderer...",
   "FLATPAK_MODAL_TITLE": "Extensões Flatpak",

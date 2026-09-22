@@ -87,7 +87,7 @@
   "CONFIG_ENABLE_MANGOHUD": "Enable MangoHud (Restart)",
   "CONFIG_ENABLE_MANGOHUD_DESC": "Uses the host-installed MangoHud and your existing MangoHud configuration. See the expert guide for per-game environment overrides.",
   "CONFIG_ENABLE_VKBASALT": "MAKO vkBasalt (Restart)",
-  "CONFIG_ENABLE_VKBASALT_DESC": "Applies sharpening, anti-aliasing, and other configured effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used. If effects are not visible, switch between Windowed and Fullscreen.",
+  "CONFIG_ENABLE_VKBASALT_DESC": "Applies sharpening, anti-aliasing, and shader effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used. If effects are not visible, switch between Windowed and Fullscreen.",
   "INSTALL_INSTALLING": "Installing MAKO Renderer...",
   "INSTALL_UNINSTALLING": "Removing MAKO Renderer...",
   "FLATPAK_MODAL_TITLE": "Flatpak Extensions",

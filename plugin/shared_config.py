@@ -390,7 +390,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
 
     "vkbasalt_dls_denoise": {
         "fieldType": ConfigFieldType.FLOAT,
-        "default": 0.17,
+        "default": 0.2,
         "description": "MAKO-managed vkBasalt DLS denoise strength",
         "location": "script"
     },
@@ -405,7 +405,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "vkbasalt_shader": {
         "fieldType": ConfigFieldType.STRING,
         "default": VKBASALT_SHADER_NONE,
-        "description": "MAKO-managed vkBasalt shader: none, Vibrance, Curves, or Deband",
+        "description": "MAKO-managed vkBasalt shader: none, Vibrance, Curves, Deband, Technicolor, Sepia, Monochrome, or Vignette",
         "location": "script"
     },
 
