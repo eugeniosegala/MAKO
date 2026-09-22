@@ -1059,12 +1059,32 @@ class GameProfileTests(unittest.TestCase):
             f'makoCurves = "{self.service.vkbasalt_shader_dir / "Curves.fx"}"\n',
             game_content,
         )
+        self.assertIn(
+            f'makoTechnicolor = "{self.service.vkbasalt_shader_dir / "Technicolor.fx"}"\n',
+            game_content,
+        )
+        self.assertIn(
+            f'makoSepia = "{self.service.vkbasalt_shader_dir / "Sepia.fx"}"\n',
+            game_content,
+        )
+        self.assertIn(
+            f'makoMonochrome = "{self.service.vkbasalt_shader_dir / "Monochrome.fx"}"\n',
+            game_content,
+        )
+        self.assertIn(
+            f'makoVignette = "{self.service.vkbasalt_shader_dir / "Vignette.fx"}"\n',
+            game_content,
+        )
         self.assertIn("dlsSharpness = 0.75\n", game_content)
         self.assertIn("dlsDenoise = 0.40\n", game_content)
         for shader_asset in (
             "Curves.fx",
+            "Monochrome.fx",
             "ReShade.fxh",
+            "Sepia.fx",
+            "Technicolor.fx",
             "Vibrance.fx",
+            "Vignette.fx",
         ):
             self.assertTrue(
                 (self.service.vkbasalt_shader_dir / shader_asset).is_file()
@@ -1143,6 +1163,33 @@ class GameProfileTests(unittest.TestCase):
         )
         self.assertNotIn("makoCurves", remerged.splitlines()[1])
         self.assertEqual(remerged.count("makoVibrance"), 2)
+
+        for shader, effect in (
+            ("technicolor", "makoTechnicolor"),
+            ("sepia", "makoSepia"),
+            ("monochrome", "makoMonochrome"),
+            ("vignette", "makoVignette"),
+        ):
+            with self.subTest(shader=shader):
+                self.service._write_wrapper_profile_settings({
+                    "mako": {
+                        "external_vulkan_layer": "vkbasalt",
+                        "vkbasalt_sharpening": "cas",
+                        "vkbasalt_sharpness": 0.25,
+                    },
+                    "cool-game": {
+                        "external_vulkan_layer": "vkbasalt",
+                        "vkbasalt_sharpening": "cas",
+                        "vkbasalt_sharpness": 0.6,
+                        "vkbasalt_antialiasing": "smaa",
+                        "vkbasalt_shader": shader,
+                    },
+                })
+                current_effects = game_config_path.read_text(
+                    encoding="utf-8"
+                ).splitlines()[1]
+                self.assertIn(f"smaa:{effect}:cas", current_effects)
+                self.assertEqual(current_effects.count("mako"), 1)
 
         game_config_path.unlink()
         missing = self._run_wrapper("12345")

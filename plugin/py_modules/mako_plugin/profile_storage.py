@@ -19,8 +19,12 @@ from shared_config import (
     VKBASALT_ANTIALIASING_NONE,
     VKBASALT_SHADER_CURVES,
     VKBASALT_SHADER_DEBAND,
+    VKBASALT_SHADER_MONOCHROME,
     VKBASALT_SHADER_NONE,
+    VKBASALT_SHADER_SEPIA,
+    VKBASALT_SHADER_TECHNICOLOR,
     VKBASALT_SHADER_VIBRANCE,
+    VKBASALT_SHADER_VIGNETTE,
     VKBASALT_SHARPENING_CAS,
     VKBASALT_SHARPENING_DLS,
     VKBASALT_SHARPENING_NONE,
@@ -197,6 +201,10 @@ _VKBASALT_SHADER_EFFECTS = {
     VKBASALT_SHADER_VIBRANCE: "makoVibrance",
     VKBASALT_SHADER_CURVES: "makoCurves",
     VKBASALT_SHADER_DEBAND: "makoDeband",
+    VKBASALT_SHADER_TECHNICOLOR: "makoTechnicolor",
+    VKBASALT_SHADER_SEPIA: "makoSepia",
+    VKBASALT_SHADER_MONOCHROME: "makoMonochrome",
+    VKBASALT_SHADER_VIGNETTE: "makoVignette",
 }
 _VKBASALT_CONTROLLED_EFFECTS = frozenset(
     effect.casefold()
@@ -275,6 +283,10 @@ def merge_vkbasalt_config_content(
     desired_values: dict[str, str] = {
         "makoVibrance": f'"{shader_directory / "Vibrance.fx"}"',
         "makoCurves": f'"{shader_directory / "Curves.fx"}"',
+        "makoTechnicolor": f'"{shader_directory / "Technicolor.fx"}"',
+        "makoSepia": f'"{shader_directory / "Sepia.fx"}"',
+        "makoMonochrome": f'"{shader_directory / "Monochrome.fx"}"',
+        "makoVignette": f'"{shader_directory / "Vignette.fx"}"',
     }
     if sharpening == VKBASALT_SHARPENING_CAS:
         desired_values["casSharpness"] = f"{settings['vkbasalt_sharpness']:.2f}"

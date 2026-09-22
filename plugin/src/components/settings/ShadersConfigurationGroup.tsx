@@ -22,8 +22,12 @@ import {
   VKBASALT_SHADER,
   VKBASALT_SHADER_CURVES,
   VKBASALT_SHADER_DEBAND,
+  VKBASALT_SHADER_MONOCHROME,
   VKBASALT_SHADER_NONE,
+  VKBASALT_SHADER_SEPIA,
+  VKBASALT_SHADER_TECHNICOLOR,
   VKBASALT_SHADER_VIBRANCE,
+  VKBASALT_SHADER_VIGNETTE,
   VKBASALT_STRENGTH_MAX,
   VKBASALT_STRENGTH_MIN,
 } from "../../config/configSchema";
@@ -96,6 +100,22 @@ export function ShadersConfigurationGroup({
       data: VKBASALT_SHADER_DEBAND,
       label: t("CONFIG_VKBASALT_SHADER_DEBAND", "Deband"),
     },
+    {
+      data: VKBASALT_SHADER_TECHNICOLOR,
+      label: t("CONFIG_VKBASALT_SHADER_TECHNICOLOR", "Technicolor"),
+    },
+    {
+      data: VKBASALT_SHADER_SEPIA,
+      label: t("CONFIG_VKBASALT_SHADER_SEPIA", "Sepia"),
+    },
+    {
+      data: VKBASALT_SHADER_MONOCHROME,
+      label: t("CONFIG_VKBASALT_SHADER_MONOCHROME", "Monochrome"),
+    },
+    {
+      data: VKBASALT_SHADER_VIGNETTE,
+      label: t("CONFIG_VKBASALT_SHADER_VIGNETTE", "Vignette"),
+    },
   ];
 
   return (
@@ -127,6 +147,26 @@ export function ShadersConfigurationGroup({
 
       {vkBasaltEnabled && (
         <>
+          <PanelSectionRow>
+            <Field
+              label={t("CONFIG_VKBASALT_SHADER", "Shaders")}
+              description={t(
+                "CONFIG_VKBASALT_SHADER_DESC",
+                "Choose one lightweight colour or finishing effect. Changes apply live while vkBasalt is active.",
+              )}
+              childrenLayout="below"
+              childrenContainerWidth="max"
+            >
+              <Dropdown
+                rgOptions={shaderOptions}
+                selectedOption={config.vkbasalt_shader}
+                onChange={(option) =>
+                  onConfigChange(VKBASALT_SHADER, String(option.data))
+                }
+              />
+            </Field>
+          </PanelSectionRow>
+
           <PanelSectionRow>
             <Field
               label={t("CONFIG_VKBASALT_SHARPENING", "Sharpening")}
@@ -204,26 +244,6 @@ export function ShadersConfigurationGroup({
                 selectedOption={config.vkbasalt_antialiasing}
                 onChange={(option) =>
                   onConfigChange(VKBASALT_ANTIALIASING, String(option.data))
-                }
-              />
-            </Field>
-          </PanelSectionRow>
-
-          <PanelSectionRow>
-            <Field
-              label={t("CONFIG_VKBASALT_SHADER", "Shaders")}
-              description={t(
-                "CONFIG_VKBASALT_SHADER_DESC",
-                "Choose one image effect: Vibrance enriches muted colours, Curves adds contrast, and Deband smooths visible colour bands. Changes apply live while vkBasalt is active.",
-              )}
-              childrenLayout="below"
-              childrenContainerWidth="max"
-            >
-              <Dropdown
-                rgOptions={shaderOptions}
-                selectedOption={config.vkbasalt_shader}
-                onChange={(option) =>
-                  onConfigChange(VKBASALT_SHADER, String(option.data))
                 }
               />
             </Field>

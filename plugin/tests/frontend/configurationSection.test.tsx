@@ -253,6 +253,27 @@ describe("Configuration controls", () => {
     expect(screen.getByText("Anti-aliasing")).toBeTruthy();
     expect(screen.getByText("Shaders")).toBeTruthy();
     expect(
+      screen
+        .getAllByText(/^(Shaders|Sharpening)$/)
+        .map((element) => element.textContent),
+    ).toEqual(["Shaders", "Sharpening"]);
+    expect(
+      screen
+        .getAllByTestId("cadence-probe-interval-dropdown")
+        .map((element) => element.getAttribute("data-options")),
+    ).toContain(
+      JSON.stringify([
+        "none",
+        "vibrance",
+        "curves",
+        "deband",
+        "technicolor",
+        "sepia",
+        "monochrome",
+        "vignette",
+      ]),
+    );
+    expect(
       screen.getByText(
         "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. This file belongs to the selected profile and is removed when that profile is deleted.",
       ),

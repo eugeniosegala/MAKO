@@ -54,8 +54,12 @@ class ConfigurationService(BaseService):
     _VKBASALT_SHADER_ASSET_DIR = Path(__file__).with_name("vkbasalt_shaders")
     _VKBASALT_SHADER_ASSETS = (
         "Curves.fx",
+        "Monochrome.fx",
         "ReShade.fxh",
+        "Sepia.fx",
+        "Technicolor.fx",
         "Vibrance.fx",
+        "Vignette.fx",
     )
 
     def __init__(

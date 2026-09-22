@@ -272,8 +272,7 @@ class ConfigurationManager:
         vkbasalt_shader = validated["vkbasalt_shader"].strip().lower()
         if vkbasalt_shader not in VKBASALT_SHADER_VALUES:
             raise ValueError(
-                "vkbasalt_shader must be 'none', 'vibrance', 'curves', or "
-                "'deband'"
+                "vkbasalt_shader must be one of the supported shader values"
             )
         validated["vkbasalt_shader"] = vkbasalt_shader
         if validated["dynamic_cadence_recovery"]:

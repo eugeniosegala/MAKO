@@ -102,6 +102,10 @@ export const VKBASALT_SHADER_NONE = "none" as const;
 export const VKBASALT_SHADER_VIBRANCE = "vibrance" as const;
 export const VKBASALT_SHADER_CURVES = "curves" as const;
 export const VKBASALT_SHADER_DEBAND = "deband" as const;
+export const VKBASALT_SHADER_TECHNICOLOR = "technicolor" as const;
+export const VKBASALT_SHADER_SEPIA = "sepia" as const;
+export const VKBASALT_SHADER_MONOCHROME = "monochrome" as const;
+export const VKBASALT_SHADER_VIGNETTE = "vignette" as const;
 export const VKBASALT_STRENGTH_MIN = 0.0 as const;
 export const VKBASALT_STRENGTH_MAX = 1.0 as const;
 
