@@ -60,6 +60,9 @@ namespace mako::layer {
         // Proven Gamescope output geometry used to cap ordinary scaling and
         // to expose the live non-supersampling slider ceiling.
         std::optional<VkExtent2D> gamescopePresentationTarget;
+        // Preserve the incoming application's or upper layer's request before
+        // MAKO selects its immutable lower/compositor transport contract.
+        VkPresentModeKHR incomingPresentMode{VK_PRESENT_MODE_FIFO_KHR};
         VkPresentModeKHR presentMode;
         // Persist the exact create-time transport decision. HDR feedback can
         // change later, but Vulkan present mode/pNext compatibility cannot be
@@ -125,6 +128,7 @@ namespace mako::layer {
             std::optional<bool> gamescopeHdrActive,
             bool gamescopeDetected, bool hdrExposureDisabled,
             std::optional<uint32_t> gamescopeRefreshHz,
+            GamescopePresentationFeedback gamescopePresentationFeedback,
             uint64_t runtimeStateRevision,
             bool swapchainMaintenance1Enabled);
 
@@ -202,6 +206,8 @@ namespace mako::layer {
 
         /// Update the compositor scanout budget without rebuilding resources.
         void updateGamescopeRefreshRate(std::optional<uint32_t> refreshHz);
+        void updateGamescopePresentationFeedback(
+            const GamescopePresentationFeedback& feedback);
         void updateGamescopeFocus(const GamescopeFocusFeedback& focus) {
             if (!this->gamescopeFocusInitialized) {
                 this->lastFocusReturnSequence = focus.returnSequence;
@@ -418,6 +424,7 @@ namespace mako::layer {
         // inferred again from the current SDR/HDR colour pipeline.
         bool privateOrderedTransport{false};
         std::optional<uint32_t> gamescopeRefreshHz;
+        GamescopePresentationFeedback gamescopePresentationFeedback;
         FixedRefreshBudget fixedRefreshBudget;
         RealFramePacer realFramePacer;
         SmoothCadenceBaseCap smoothCadenceBaseCap;

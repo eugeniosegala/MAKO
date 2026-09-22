@@ -236,6 +236,9 @@ namespace {
 
     std::string hdrFeedbackDiagnosticKey(
             const GamescopeHdrFeedbackSample& sample) {
+        const auto booleanToken = [](const std::optional<bool> value) {
+            return value ? (*value ? "1" : "0") : "unknown";
+        };
         return sample.status + '\n' + sample.display + '\n' +
             sample.activationSource + '\n' +
             sample.resolverStatus + '\n' + sample.resolverCandidates + '\n' +
@@ -246,6 +249,10 @@ namespace {
             std::to_string(sample.outputWidth.value_or(0)) + 'x' +
             std::to_string(sample.outputHeight.value_or(0)) + '\n' +
             std::to_string(sample.refreshHz.value_or(0)) + '\n' +
+            booleanToken(sample.presentation.vrrEnabled) + '\n' +
+            booleanToken(sample.presentation.vrrCapable) + '\n' +
+            booleanToken(sample.presentation.vrrActive) + '\n' +
+            booleanToken(sample.presentation.allowTearing) + '\n' +
             (sample.outputHdrEnabled
                 ? (*sample.outputHdrEnabled ? "output-hdr" : "output-sdr")
                 : "output-unknown") + '\n' +
@@ -282,6 +289,26 @@ namespace {
                   << "; output_hdr=";
         if (sample.outputHdrEnabled)
             std::cerr << (*sample.outputHdrEnabled ? 1 : 0);
+        else
+            std::cerr << "unknown";
+        std::cerr << "; vrr_enabled=";
+        if (sample.presentation.vrrEnabled)
+            std::cerr << (*sample.presentation.vrrEnabled ? 1 : 0);
+        else
+            std::cerr << "unknown";
+        std::cerr << "; vrr_capable=";
+        if (sample.presentation.vrrCapable)
+            std::cerr << (*sample.presentation.vrrCapable ? 1 : 0);
+        else
+            std::cerr << "unknown";
+        std::cerr << "; vrr_active=";
+        if (sample.presentation.vrrActive)
+            std::cerr << (*sample.presentation.vrrActive ? 1 : 0);
+        else
+            std::cerr << "unknown";
+        std::cerr << "; allow_tearing=";
+        if (sample.presentation.allowTearing)
+            std::cerr << (*sample.presentation.allowTearing ? 1 : 0);
         else
             std::cerr << "unknown";
         std::cerr
@@ -422,6 +449,7 @@ Root::Root() :
     }
     this->lastGamescopeRefreshHz = initialHdrFeedback.refreshHz;
     this->gamescopeRefreshHz = initialHdrFeedback.refreshHz;
+    this->gamescopePresentationFeedback = initialHdrFeedback.presentation;
     this->lastHdrFeedbackDiagnosticKey = hdrFeedbackDiagnosticKey(
         initialHdrFeedback
     );
@@ -477,6 +505,10 @@ Root::Root() :
                         ? "(none)" : initialHdrFeedback.resolverCandidates)
                   << '\n';
     }
+    logHdrFeedbackDiagnostic(
+        "MAKO Renderer: Gamescope presentation feedback initialized: ",
+        initialHdrFeedback
+    );
 
     // find active profile
     const auto identification = ls::identify();
@@ -572,6 +604,20 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
         this->lastHdrFeedbackSample = hdrFeedbackSample.active;
         this->lastHdrActivationSource = hdrFeedbackSample.activationSource;
         this->gamescopeDetected = hdrFeedbackSample.gamescopeDetected;
+        const auto presentationFeedback =
+            mergeGamescopePresentationFeedback(
+                this->gamescopePresentationFeedback,
+                hdrFeedbackSample.presentation
+            );
+        if (presentationFeedback != this->gamescopePresentationFeedback) {
+            this->gamescopePresentationFeedback = presentationFeedback;
+            for (auto& [swapchain, context] : this->swapchains) {
+                static_cast<void>(swapchain);
+                context.updateGamescopePresentationFeedback(
+                    this->gamescopePresentationFeedback
+                );
+            }
+        }
         this->gamescopePresentationTarget.reset();
         if (const auto target = confirmedGamescopePresentationTarget(
                 hdrFeedbackSample)) {
@@ -1592,6 +1638,7 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
             this->gamescopeDetected,
             this->presentationEnvironment.hdrExposureDisabled,
             this->gamescopeRefreshHz,
+            this->gamescopePresentationFeedback,
             this->runtimeStateRevision,
             swapchainMaintenance1Enabled)).second;
     const auto memoryAfter = vk.deviceMemorySnapshot();
@@ -1671,6 +1718,8 @@ void Root::createSwapchainContext(const vk::Vulkan& vk,
                   << " images=" << info.images.size()
                   << " format=" << static_cast<int>(info.format)
                   << " color_space=" << static_cast<int>(info.colorSpace)
+                  << " incoming_present_mode="
+                  << static_cast<int>(info.incomingPresentMode)
                   << " present_mode=" << static_cast<int>(info.presentMode)
                   << " ordered_transport="
                   << (info.privateOrderedTransport ? 1 : 0)

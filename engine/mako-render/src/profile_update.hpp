@@ -5,6 +5,7 @@
 #include "adaptive_policy_limits.hpp"
 #include "adaptive_scheduler.hpp"
 #include "mako-common/configuration/config.hpp"
+#include "presentation_policy.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -450,13 +451,15 @@ namespace mako::layer {
             const bool privateOrderedTransport,
             const bool orderedAcquireRecoveryActive,
             const std::optional<uint32_t> gamescopeRefreshHz,
-            const AdaptiveSchedulerSnapshot& scheduler) {
+            const AdaptiveSchedulerSnapshot& scheduler,
+            const GamescopePresentationFeedback& presentationFeedback = {}) {
         return profile.adaptive &&
             profile.adaptive_auto_base_fps_cap &&
             profile.adaptive_stable_cadence &&
             effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
             privateOrderedTransport &&
             !orderedAcquireRecoveryActive &&
+            presentationFeedback.fixedRefreshPacingEligible() &&
             adaptiveTargetMatchesRefresh(
                 profile.target_fps, gamescopeRefreshHz
             ) &&
@@ -477,13 +480,15 @@ namespace mako::layer {
             const ls::GameConf& profile,
             const bool privateOrderedTransport,
             const bool orderedAcquireRecoveryActive,
-            const std::optional<uint32_t> gamescopeRefreshHz) {
+            const std::optional<uint32_t> gamescopeRefreshHz,
+            const GamescopePresentationFeedback& presentationFeedback = {}) {
         return profile.adaptive &&
             profile.adaptive_auto_base_fps_cap &&
             profile.adaptive_stable_cadence &&
             effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
             privateOrderedTransport &&
             !orderedAcquireRecoveryActive &&
+            presentationFeedback.fixedRefreshPacingEligible() &&
             adaptiveTargetMatchesRefresh(
                 profile.target_fps, gamescopeRefreshHz
             );
@@ -497,7 +502,8 @@ namespace mako::layer {
             const ls::GameConf& profile,
             const bool privateOrderedTransport,
             const bool orderedAcquireRecoveryActive,
-            const std::optional<uint32_t> gamescopeRefreshHz) {
+            const std::optional<uint32_t> gamescopeRefreshHz,
+            const GamescopePresentationFeedback& presentationFeedback = {}) {
         return !profile.adaptive &&
             profile.adaptive_stable_cadence &&
             profile.base_fps_cap == 0 &&
@@ -506,7 +512,37 @@ namespace mako::layer {
             effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
             privateOrderedTransport &&
             !orderedAcquireRecoveryActive &&
+            presentationFeedback.fixedRefreshPacingEligible() &&
             gamescopeRefreshHz.has_value() && *gamescopeRefreshHz > 0;
+    }
+
+    /// A compositor presentation update may reset pacing only when it changes
+    /// the active profile's eligibility for one of the fixed-refresh FIFO
+    /// handoff policies. Fractional Adaptive, ordinary Fixed, explicit caps,
+    /// and recovery paths do not acquire a new clock owner from this signal.
+    [[nodiscard]] inline bool gamescopePresentationPacingOwnerChanged(
+            const ls::GameConf& profile,
+            const bool privateOrderedTransport,
+            const bool orderedAcquireRecoveryActive,
+            const std::optional<uint32_t> gamescopeRefreshHz,
+            const GamescopePresentationFeedback& previous,
+            const GamescopePresentationFeedback& current) {
+        return fixedSmoothCadenceFifoEligible(
+                    profile, privateOrderedTransport,
+                    orderedAcquireRecoveryActive, gamescopeRefreshHz,
+                    previous) !=
+                fixedSmoothCadenceFifoEligible(
+                    profile, privateOrderedTransport,
+                    orderedAcquireRecoveryActive, gamescopeRefreshHz,
+                    current) ||
+            smoothCadenceBaseCapEligible(
+                    profile, privateOrderedTransport,
+                    orderedAcquireRecoveryActive, gamescopeRefreshHz,
+                    previous) !=
+                smoothCadenceBaseCapEligible(
+                    profile, privateOrderedTransport,
+                    orderedAcquireRecoveryActive, gamescopeRefreshHz,
+                    current);
     }
 
     struct GenerationSchedulerPolicy {

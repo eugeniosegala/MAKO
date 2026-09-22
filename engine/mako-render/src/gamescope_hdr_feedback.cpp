@@ -39,6 +39,11 @@ namespace {
         "GAMESCOPE_HDR_OUTPUT_FEEDBACK";
     constexpr char gamescopeRefreshProperty[] =
         "GAMESCOPE_DISPLAY_REFRESH_RATE_FEEDBACK";
+    constexpr char gamescopeVrrEnabledProperty[] = "GAMESCOPE_VRR_ENABLED";
+    constexpr char gamescopeVrrCapableProperty[] = "GAMESCOPE_VRR_CAPABLE";
+    constexpr char gamescopeVrrActiveProperty[] = "GAMESCOPE_VRR_FEEDBACK";
+    constexpr char gamescopeAllowTearingProperty[] =
+        "GAMESCOPE_ALLOW_TEARING";
 
 }
 
@@ -447,6 +452,29 @@ struct GamescopeHdrFeedbackReader::Impl {
         sample.refreshHz = this->readCardinal(
             this->display, this->root, gamescopeRefreshProperty
         );
+        if (sample.gamescopeDetected && sample.xwaylandServerId == 0) {
+            sample.presentation.vrrEnabled = gamescopeBooleanFeedback(
+                this->readCardinal(
+                    this->display, this->root, gamescopeVrrEnabledProperty
+                )
+            );
+            sample.presentation.vrrCapable = gamescopeBooleanFeedback(
+                this->readCardinal(
+                    this->display, this->root, gamescopeVrrCapableProperty
+                )
+            );
+            sample.presentation.vrrActive = gamescopeBooleanFeedback(
+                this->readCardinal(
+                    this->display, this->root, gamescopeVrrActiveProperty
+                )
+            );
+            sample.presentation.allowTearing = gamescopeBooleanFeedback(
+                this->readCardinal(
+                    this->display, this->root,
+                    gamescopeAllowTearingProperty
+                )
+            );
+        }
         if (const auto outputHdr = this->readCardinal(
                 this->display, this->root, gamescopeHdrOutputProperty)) {
             sample.outputHdrEnabled = *outputHdr != 0;

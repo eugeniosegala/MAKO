@@ -186,6 +186,7 @@ namespace mako::layer {
         bool gamescopeDetected{false};
         std::optional<VkExtent2D> gamescopePresentationTarget;
         std::optional<uint32_t> gamescopeRefreshHz;
+        GamescopePresentationFeedback gamescopePresentationFeedback;
         std::optional<bool> lastHdrFeedbackSample;
         std::string lastHdrActivationSource;
         std::optional<uint32_t> lastGamescopeRefreshHz;

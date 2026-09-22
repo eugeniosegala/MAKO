@@ -33,7 +33,9 @@ MAKO Renderer: present diagnostics: operation=process-identity pid=4242 executab
 MAKO Renderer: swapchain colour pipeline: format=64; color-space=1000104008; mode=hdr10-pq; source=gamescope-normalized; transport=packed-hdr10-32-bit; frame-generation=supported
 MAKO Renderer: HDR10 transport: mode=packed-10-bit; nominal_bytes=16384000; nominal_bytes_saved=16384000; application_device_supported=1; backend_device_supported=1
 MAKO Renderer: Gamescope application HDR feedback stabilized: active=1; contexts_pending_recreation=1
+MAKO Renderer: Gamescope presentation feedback initialized: vrr_enabled=1; vrr_capable=1; vrr_active=1; allow_tearing=0
 MAKO Renderer: present diagnostics: operation=swapchain-context-create context=1 pid=4242 swapchain=1234 width=1280 height=800 application_width=854 application_height=532 frame_generation_width=1280 frame_generation_height=800 spatial_pipeline=pre-frame-generation images=3 format=64 color_space=1000104008 present_mode=2 ordered_transport=1 active_contexts=1 inserted=1 live_profile_recreation=guarded-maintenance1-one-shot
+MAKO Renderer: present diagnostics: operation=gamescope-presentation-feedback context=1 vrr_enabled=1 vrr_capable=1 vrr_active=1 allow_tearing=0 pacing_owner=mako-target-clock action=reset-pacer-only scheduler_reset=0 recreation=0
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=1 state_revision=2 reason=profile-resources spatial_scaling_pending=1 frame_generation_backend_pending=1 flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 available_generated_capacity=1 requested_generated_capacity=3 process_restart_required=0 action=signal-out-of-date-after-successful-present
 MAKO Renderer: present diagnostics: operation=runtime-transition-pending context=2 state_revision=4 reason=frame-generation-resources flow_scale_pending=1 lighter_model_pending=1 generated_capacity_pending=1 active_generated_capacity=1 requested_generated_capacity=4 action=prepare-private-context
 MAKO Renderer: present diagnostics: operation=runtime-transition-prepared context=2 state_revision=4 reason=frame-generation-resources requested_generated_capacity=4 requested_flow_scale=0.75 requested_lighter_model=1 action=drain-private-work
@@ -306,6 +308,11 @@ class DiagnosticsHelperTests(unittest.TestCase):
                     self.assertIn("fingerprint=abc123.dirty.12345678", result.stdout)
                     self.assertIn("operation=process-identity", result.stdout)
                     self.assertIn("operation=swapchain-context-create", result.stdout)
+                    self.assertIn("Gamescope presentation feedback initialized", result.stdout)
+                    self.assertIn("operation=gamescope-presentation-feedback", result.stdout)
+                    self.assertIn("pacing_owner=mako-target-clock", result.stdout)
+                    self.assertIn("scheduler_reset=0", result.stdout)
+                    self.assertIn("recreation=0", result.stdout)
                     self.assertIn("operation=replacement-wsi-prime", result.stdout)
                     self.assertIn("operation=replacement-backend-stabilization", result.stdout)
                     self.assertIn("frame_generation_width=1280", result.stdout)

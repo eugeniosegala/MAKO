@@ -220,6 +220,14 @@ int main() {
     expect(smoothCadencePacerHandoffActive(
             steadyPacing, true, false, 120, acceptedTwoX),
         "accepted target-matched Steady 2x did not hand pacing to ordered FIFO");
+    const GamescopePresentationFeedback activeVrr{
+        .vrrEnabled = true,
+        .vrrCapable = true,
+        .vrrActive = true,
+    };
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX, activeVrr),
+        "Steady Adaptive handed pacing to fixed-refresh FIFO under VRR");
     expect(!smoothCadencePacerHandoffActive(
             steadyPacing, true, false, 90, acceptedTwoX),
         "target-mismatched refresh incorrectly bypassed the Steady base cap");
@@ -248,6 +256,9 @@ int main() {
             steadyPacing, true, false, 120),
         "target-matched ordered Steady mode did not enable integer-cap qualification");
     expect(!smoothCadenceBaseCapEligible(
+            steadyPacing, true, false, 120, activeVrr),
+        "Steady Adaptive enabled its fixed-refresh cap ladder under VRR");
+    expect(!smoothCadenceBaseCapEligible(
             steadyPacing, false, false, 120),
         "non-ordered transport enabled the Steady integer-cap ladder");
     expect(!smoothCadenceBaseCapEligible(
@@ -260,6 +271,7 @@ int main() {
     expect(!smoothCadenceBaseCapEligible(
             steadyPacing, true, false, 120),
         "Fractional policy enabled the Steady integer-cap ladder");
+    steadyPacing.adaptive_stable_cadence = true;
 
     auto fixedPacing = current;
     fixedPacing.adaptive = false;
@@ -270,6 +282,34 @@ int main() {
     expect(fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),
         "ordered Fixed Smooth Cadence did not select FIFO pacing");
+    expect(!fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, 120, activeVrr),
+        "Fixed Smooth Cadence assumed periodic FIFO pacing under VRR");
+    const GamescopePresentationFeedback vrrDisabled{
+        .vrrEnabled = false,
+        .vrrCapable = true,
+        .vrrActive = false,
+        .allowTearing = true,
+    };
+    expect(fixedSmoothCadenceFifoEligible(
+            fixedPacing, true, false, 120, vrrDisabled),
+        "Allow Tearing changed Fixed pacing while VRR was disabled");
+    expect(gamescopePresentationPacingOwnerChanged(
+            fixedPacing, true, false, 120, vrrDisabled, activeVrr),
+        "Fixed Smooth Cadence did not identify its VRR pacing-owner change");
+    auto ordinaryFixed = fixedPacing;
+    ordinaryFixed.adaptive_stable_cadence = false;
+    expect(!gamescopePresentationPacingOwnerChanged(
+            ordinaryFixed, true, false, 120, vrrDisabled, activeVrr),
+        "ordinary Fixed treated VRR feedback as a pacing-owner reset");
+    auto fractionalAdaptive = steadyPacing;
+    fractionalAdaptive.adaptive_stable_cadence = false;
+    expect(!gamescopePresentationPacingOwnerChanged(
+            fractionalAdaptive, true, false, 120, vrrDisabled, activeVrr),
+        "Fractional Adaptive treated VRR feedback as a pacing-owner reset");
+    expect(gamescopePresentationPacingOwnerChanged(
+            steadyPacing, true, false, 120, vrrDisabled, activeVrr),
+        "Steady Adaptive did not identify its VRR pacing-owner change");
     fixedPacing.adaptive_stable_cadence = false;
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),

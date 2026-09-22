@@ -750,7 +750,8 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             this->privateOrderedTransport,
             orderedAcquireRecoveryProbe ||
                 this->recoveryState.orderedAcquireRecovery.active(),
-            this->gamescopeRefreshHz
+            this->gamescopeRefreshHz,
+            this->gamescopePresentationFeedback
         ) && this->configuredFixedGeneratedFrames + 1 ==
             this->profile.multiplier;
     const size_t fixedGeneratedFrameCount = schedulerEnabled
@@ -1808,14 +1809,16 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->profile,
             this->privateOrderedTransport,
             this->recoveryState.orderedAcquireRecovery.active(),
-            this->gamescopeRefreshHz
+            this->gamescopeRefreshHz,
+            this->gamescopePresentationFeedback
         ) && !automaticBaseCapSuppressed;
         handoffEligible = smoothCadencePacerHandoffActive(
             this->profile,
             this->privateOrderedTransport,
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz,
-            schedulerSnapshot
+            schedulerSnapshot,
+            this->gamescopePresentationFeedback
         );
     }
     const auto cadenceBaseCap = this->smoothCadenceBaseCap.update(

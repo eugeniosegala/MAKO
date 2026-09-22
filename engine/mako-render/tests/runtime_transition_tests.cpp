@@ -30,6 +30,51 @@ int main() {
             !gamescopeApplicationId("769") && !gamescopeApplicationId("12x") &&
             !gamescopeApplicationId("4294967296"),
         "Steam application identity must be complete and representable");
+    expect(gamescopeBooleanFeedback(0) == false &&
+            gamescopeBooleanFeedback(1) == true &&
+            !gamescopeBooleanFeedback(std::nullopt) &&
+            !gamescopeBooleanFeedback(2),
+        "Gamescope Boolean properties must reject missing or malformed values");
+    const GamescopePresentationFeedback unknownPresentation;
+    expect(unknownPresentation.fixedRefreshPacingEligible(),
+        "missing Gamescope VRR properties changed legacy pacing");
+    const GamescopePresentationFeedback requestedVrr{
+        .vrrEnabled = true,
+        .vrrCapable = true,
+        .vrrActive = false,
+        .allowTearing = true,
+    };
+    expect(requestedVrr.variableRefreshRequested() &&
+            !requestedVrr.fixedRefreshPacingEligible(),
+        "requested capable VRR retained fixed-refresh pacing");
+    const GamescopePresentationFeedback unavailableVrr{
+        .vrrEnabled = true,
+        .vrrCapable = false,
+        .vrrActive = false,
+    };
+    expect(unavailableVrr.fixedRefreshPacingEligible(),
+        "an unavailable VRR connector disabled fixed-refresh pacing");
+    const GamescopePresentationFeedback activeVrr{
+        .vrrEnabled = false,
+        .vrrCapable = true,
+        .vrrActive = true,
+    };
+    expect(activeVrr.variableRefreshRequested(),
+        "active compositor VRR was overridden by stale preference feedback");
+    const auto retainedVrr = mergeGamescopePresentationFeedback(
+        requestedVrr,
+        GamescopePresentationFeedback{
+            .vrrEnabled = std::nullopt,
+            .vrrCapable = false,
+            .vrrActive = std::nullopt,
+            .allowTearing = false,
+        }
+    );
+    expect(retainedVrr.vrrEnabled == true &&
+            retainedVrr.vrrCapable == false &&
+            retainedVrr.vrrActive == false &&
+            retainedVrr.allowTearing == false,
+        "missing Gamescope properties erased previously confirmed values");
     expect(classifyGamescopeFocus(42, 42, 42) == true &&
             classifyGamescopeFocus(42, 769, 42) == false &&
             classifyGamescopeFocus(42, 769, 769) == false &&

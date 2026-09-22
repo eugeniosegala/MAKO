@@ -723,6 +723,73 @@ void Swapchain::updateGamescopeRefreshRate(
     this->publishRuntimeStatus("gamescope-refresh-rate");
 }
 
+void Swapchain::updateGamescopePresentationFeedback(
+        const GamescopePresentationFeedback& feedback) {
+    if (feedback == this->gamescopePresentationFeedback)
+        return;
+
+    const auto previous = this->gamescopePresentationFeedback;
+    this->gamescopePresentationFeedback = feedback;
+    const bool pacingOwnerChanged = gamescopePresentationPacingOwnerChanged(
+        this->profile,
+        this->privateOrderedTransport,
+        this->recoveryState.orderedAcquireRecovery.active(),
+        this->gamescopeRefreshHz,
+        previous,
+        this->gamescopePresentationFeedback
+    );
+    const bool fixedRefreshFifoEligible =
+        fixedSmoothCadenceFifoEligible(
+            this->profile,
+            this->privateOrderedTransport,
+            this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz,
+            this->gamescopePresentationFeedback
+        ) || smoothCadenceBaseCapEligible(
+            this->profile,
+            this->privateOrderedTransport,
+            this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz,
+            this->gamescopePresentationFeedback
+        );
+    if (pacingOwnerChanged) {
+        // The configured mode, multiplier and validated Adaptive level remain
+        // authoritative. Only pacing ownership changes between MAKO's target
+        // clock and the compositor's fixed-refresh FIFO boundary.
+        this->fixedRefreshBudget.reset();
+        this->realFramePacer.reset();
+        this->smoothCadenceBaseCap.reset();
+        this->smoothCadencePacerHandoff.reset();
+    }
+
+    if (present_diagnostics::enabled()) {
+        const auto writeBoolean = [](const std::optional<bool> value) {
+            return value ? (*value ? "1" : "0") : "unknown";
+        };
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=gamescope-presentation-feedback"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " vrr_enabled="
+                  << writeBoolean(feedback.vrrEnabled)
+                  << " vrr_capable="
+                  << writeBoolean(feedback.vrrCapable)
+                  << " vrr_active="
+                  << writeBoolean(feedback.vrrActive)
+                  << " allow_tearing="
+                  << writeBoolean(feedback.allowTearing)
+                  << " pacing_owner="
+                  << (fixedRefreshFifoEligible
+                        ? "fixed-refresh-fifo-eligible"
+                        : "mako-target-clock")
+                  << " action="
+                  << (pacingOwnerChanged
+                        ? "reset-pacer-only"
+                        : "diagnostic-only")
+                  << " scheduler_reset=0"
+                  << " recreation=0\n";
+    }
+}
+
 void Swapchain::disableFrameGeneration() {
     if (!this->profile.frame_generation_enabled)
         return;

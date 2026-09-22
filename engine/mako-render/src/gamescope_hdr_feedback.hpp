@@ -16,6 +16,13 @@
 
 namespace mako::layer {
 
+    [[nodiscard]] inline std::optional<bool> gamescopeBooleanFeedback(
+            const std::optional<uint32_t> value) noexcept {
+        if (!value || *value > 1)
+            return std::nullopt;
+        return *value != 0;
+    }
+
     [[nodiscard]] inline std::optional<uint32_t> gamescopeApplicationId(
             const std::string_view value) {
         if (value.empty())
@@ -89,6 +96,7 @@ namespace mako::layer {
     struct GamescopeHdrFeedbackSample {
         std::optional<bool> active;
         std::optional<uint32_t> refreshHz;
+        GamescopePresentationFeedback presentation;
         std::optional<bool> outputHdrEnabled;
         bool appHdrMetadataPresent{false};
         bool gamescopeDetected{false};

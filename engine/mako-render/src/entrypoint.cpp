@@ -2291,6 +2291,7 @@ namespace {
                 .extent = newInfo.imageExtent,
                 .gamescopePresentationTarget =
                     modification.gamescopePresentationTarget,
+                .incomingPresentMode = info->presentMode,
                 .presentMode = modification.gamescopeProtocolPresentMode
                     .value_or(newInfo.presentMode),
                 .privateOrderedTransport =

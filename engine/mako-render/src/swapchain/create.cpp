@@ -106,12 +106,15 @@ Swapchain::Swapchain(const vk::Vulkan& vk, backend::Instance* backend,
             const bool gamescopeDetected,
             const bool hdrExposureDisabled,
             const std::optional<uint32_t> gamescopeRefreshHz,
+            GamescopePresentationFeedback gamescopePresentationFeedback,
             const uint64_t runtimeStateRevision,
             const bool swapchainMaintenance1Enabled) :
         instance(backend),
         gamescopeDetected(gamescopeDetected),
         privateOrderedTransport(info.privateOrderedTransport),
         gamescopeRefreshHz(gamescopeRefreshHz),
+        gamescopePresentationFeedback(
+            std::move(gamescopePresentationFeedback)),
         colorPipeline(initialColorPipeline(
             info.format, info.colorSpace, gamescopeHdrActive, gamescopeDetected,
             hdrExposureDisabled

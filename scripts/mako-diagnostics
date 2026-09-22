@@ -216,6 +216,11 @@ add_pattern "$renderer_prefix render layer active; identity=VK_LAYER_MAKO_render
 # swapchain metadata in every focused report so policy and slow-operation
 # records can be attributed without expanding the report to unrelated output.
 add_pattern "$renderer_prefix present diagnostics: operation=(process-identity|swapchain-context-create)"
+# Gamescope's explicit presentation properties are low-frequency environment
+# metadata. Keep the initial snapshot and any live pacing-owner transition in
+# every report without collecting unrelated compositor output.
+add_pattern "$renderer_prefix Gamescope presentation feedback"
+add_pattern "$renderer_prefix present diagnostics: operation=gamescope-presentation-feedback"
 # Wrapper session admission failures are deliberately log-only. Retain this
 # line in every focused report so a Desktop-session fallback remains visible
 # without reproducing Gamescope WSI's modal error path.

@@ -14,6 +14,51 @@
 
 namespace mako::layer {
 
+    /// Explicit Gamescope presentation state published on the verified
+    /// server-zero root. Keep the Steam preference, connector capability and
+    /// compositor-active feedback separate: an overlay may temporarily stop
+    /// adaptive scanout without changing the user's VRR policy.
+    struct GamescopePresentationFeedback {
+        std::optional<bool> vrrEnabled;
+        std::optional<bool> vrrCapable;
+        std::optional<bool> vrrActive;
+        std::optional<bool> allowTearing;
+
+        friend bool operator==(
+            const GamescopePresentationFeedback&,
+            const GamescopePresentationFeedback&) = default;
+
+        /// Select VRR-aware pacing from an explicit active signal or from a
+        /// requested policy whose capability is not conclusively absent.
+        /// Missing properties preserve MAKO's existing fixed-refresh policy.
+        [[nodiscard]] bool variableRefreshRequested() const noexcept {
+            return this->vrrActive == true ||
+                (this->vrrEnabled == true && this->vrrCapable != false);
+        }
+
+        [[nodiscard]] bool fixedRefreshPacingEligible() const noexcept {
+            return !this->variableRefreshRequested();
+        }
+    };
+
+    /// Gamescope updates root properties independently. A missing or malformed
+    /// read is not an explicit policy transition, so retain the last valid
+    /// value for that field instead of flapping pacing ownership.
+    [[nodiscard]] inline GamescopePresentationFeedback
+    mergeGamescopePresentationFeedback(
+            GamescopePresentationFeedback current,
+            const GamescopePresentationFeedback& sampled) noexcept {
+        if (sampled.vrrEnabled)
+            current.vrrEnabled = sampled.vrrEnabled;
+        if (sampled.vrrCapable)
+            current.vrrCapable = sampled.vrrCapable;
+        if (sampled.vrrActive)
+            current.vrrActive = sampled.vrrActive;
+        if (sampled.allowTearing)
+            current.allowTearing = sampled.allowTearing;
+        return current;
+    }
+
     /// A combined spatial-scaling WSI replacement is a last-stage recovery.
     /// It requires a failed in-place attempt and is still forbidden when the
     /// create-time scaling admission was memory constrained. Natural and

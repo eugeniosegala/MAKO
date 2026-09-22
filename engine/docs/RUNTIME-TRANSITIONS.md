@@ -14,7 +14,7 @@ A setting belongs to the earliest boundary that can safely establish all state i
 | Private spatial context | Scaling method and sharpness | Prepare, drain MAKO-owned work, and atomically replace |
 | Private FG context | Flow Scale, lighter model, and generated-output capacity | Prepare, drain MAKO-owned work, and atomically replace |
 | Live policy | Frame Generation `0x`/active execution state, refresh guard, Fixed/Adaptive policy, target, caps, and cadence controls | Next successful reload and application present; policy edits received during confirmed Steam UI focus coalesce until gameplay returns |
-| Compositor feedback | Confirmed refresh and application HDR state | Stabilized sample, independent of profile reload |
+| Compositor feedback | Confirmed refresh, explicit VRR/tearing state, and application HDR state | Background sample, independent of profile reload |
 | Dormant value | A setting for an inactive mode or unavailable private resource | Save now; apply when its owning mode or resource becomes active |
 
 The process-wide backend is created lazily when the first active swapchain needs it. Once built, pending DLL, FP16, GPU, and Ultra changes are compared with the actual construction baseline, not merely the previous file.
@@ -23,7 +23,7 @@ The process-wide backend is created lazily when the first active swapchain needs
 
 `Root::update()` is reached from application presentation, but work is bounded and change-driven:
 
-1. Compositor refresh and HDR feedback update safety state independently.
+1. Compositor refresh, presentation, and HDR feedback update their owned state independently.
 2. Configuration is checked at most every 250 ms; an unchanged file is not reparsed or replanned.
 3. A changed file is parsed and profile matching is repeated.
 4. Process-static fields are projected back to their applied values while compatible fields continue.
@@ -54,6 +54,7 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Frame Generation `0x` | Live | Releases the effective base cap, resets relevant scheduler and recovery state, and takes the real-frame path without LSFG work. |
 | Frame Generation `2x`–`5x` or Adaptive | Live when startup provisioning succeeded; otherwise restart | Reuses retained interop and private resources, then warms temporal history where required. |
 | Refresh threshold and Gamescope refresh | Live | Re-evaluates effective enablement and refresh-targeted scheduling. |
+| Gamescope VRR and Allow Tearing feedback | Live | Explicit requested/capable/active VRR can switch between fixed-refresh FIFO eligibility and MAKO's target clock. Only affected pacing helpers reset; Allow Tearing is diagnostic only. |
 | Fixed/Adaptive mode or multiplier | Live within current capacity; otherwise private FG replacement or recreation | Dormant mode values are saved without resetting the active mode. |
 | Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. |
 | Dynamic Cadence probe interval | Live | Reschedules an inactive probe without discarding validated cadence or an active confirmation. |
@@ -109,6 +110,7 @@ Reset only state whose assumptions changed:
 - mode, target, ceiling, Smooth Cadence, or recovery-policy changes rebuild scheduler policy and affected real-frame pacing, coalesced into one final reset on return when confirmed Steam UI focus owns the transition;
 - effective cap changes reset the real-frame pacer and scheduler observations;
 - probe-interval-only changes update only the timer;
+- an explicit Gamescope VRR pacing-owner change resets the fixed-refresh budget and real-frame pacing helpers, but not scheduler history, validated multiplier, acquire recovery, or recreation authority;
 - private-resource, mode, multiplier, refresh, or transport-recovery changes clear transient transport evidence when its assumptions are no longer valid; and
 - dormant or deferred values reset nothing until they apply.
 
