@@ -13,12 +13,10 @@ import {
   ADAPTIVE_MAX_MULTIPLIER,
   ADAPTIVE_MINIMUM_BASE_FPS,
   ADAPTIVE_STABLE_CADENCE,
-  FIXED_MULTIPLIER_UI_MAX,
   FIXED_MULTIPLIER_UI_MIN,
   FRAME_GENERATION_ENABLED,
   FRAME_GENERATION_PROVISIONED,
   getDefaults,
-  MULTIPLIER,
   PERFORMANCE_MODE,
   TARGET_FPS,
   TARGET_FPS_MAX,
@@ -46,9 +44,7 @@ export function FpsMultiplierControl({
   onConfigChange,
   onConfigUpdate,
 }: ConfigurationEditorProps) {
-  const [focusedControl, setFocusedControl] = useState<
-    "decrease" | "increase" | null
-  >(null);
+  const [focusedControl, setFocusedControl] = useState<string | null>(null);
   const targetFps = config.target_fps;
   const adaptiveMaxMultiplier =
     config.adaptive_max_multiplier ??
@@ -67,21 +63,47 @@ export function FpsMultiplierControl({
     ? automaticBaseFpsCap.toFixed(0)
     : automaticBaseFpsCap.toFixed(1);
 
-  const multiplierButtonStyle = (isFocused: boolean) =>
-    ({
+  const multiplierButtonStyle = (isFocused: boolean, isSelected: boolean) => {
+    const baseStyle = makoDialogButtonStyle(isFocused);
+    return {
+      ...baseStyle,
       height: "34px",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      padding: "2px 0px 0px",
-      minWidth: "48px",
-      fontSize: "22px",
+      padding: "2px 6px 0px",
+      minWidth: config.adaptive ? "104px" : "46px",
+      fontSize: config.adaptive ? "14px" : "16px",
       fontWeight: "bold",
-      ...makoDialogButtonStyle(isFocused),
+      border: isSelected
+        ? "1px solid rgba(101, 219, 236, 0.96)"
+        : baseStyle.border,
+      boxShadow: isSelected
+        ? "inset 0 1px 0 rgba(255, 255, 255, 0.16), 0 0 10px rgba(43, 162, 184, 0.38)"
+        : baseStyle.boxShadow,
+      opacity: isSelected ? 1 : 0.78,
       transform: isFocused ? "scale(1.04)" : "none",
       scrollMarginTop: "28px",
       scrollMarginBottom: "28px",
-    }) as const;
+    } as const;
+  };
+
+  const factorChoices = config.adaptive
+    ? [
+        { id: "off", label: "0x", enabled: false, multiplier: null },
+        {
+          id: "adaptive",
+          label: t("ADAPTIVE_VALUE", "Adaptive"),
+          enabled: true,
+          multiplier: null,
+        },
+      ]
+    : [0, 2, 3, 4, 5].map((value) => ({
+        id: `fixed-${value}`,
+        label: `${value}x`,
+        enabled: value !== 0,
+        multiplier: value === 0 ? null : value,
+      }));
 
   return (
     <>
@@ -91,7 +113,7 @@ export function FpsMultiplierControl({
             <MakoRestartLabel
               label={t(
                 "FRAME_GENERATION_PROVISIONED",
-                "Enable Frame Generation (Restart)",
+                "Frame Generation (Restart)",
               )}
             />
           }
@@ -237,10 +259,7 @@ export function FpsMultiplierControl({
 
           <PanelSectionRow>
             <Field
-              label={t(
-                "FRAME_GENERATION_FACTOR",
-                "Frame Generation Factor",
-              )}
+              label={t("FRAME_GENERATION_FACTOR", "Frame Generation Factor")}
               description={
                 <>
                   <span style={{ display: "block", paddingTop: "8px" }}>
@@ -273,78 +292,49 @@ export function FpsMultiplierControl({
                 flow-children="row"
                 noFocusRing
               >
-                <DialogButton
-                  className="Mako_DialogButton"
-                  style={{
-                    ...multiplierButtonStyle(focusedControl === "decrease"),
-                    marginLeft: "0px",
-                  }}
-                  onClick={() => {
-                    if (
-                      config.adaptive ||
-                      config.multiplier <= FIXED_MULTIPLIER_UI_MIN
-                    ) {
-                      void onConfigChange(FRAME_GENERATION_ENABLED, false);
-                      return;
-                    }
-                    void onConfigChange(MULTIPLIER, config.multiplier - 1);
-                  }}
-                  onGamepadFocus={() => setFocusedControl("decrease")}
-                  onGamepadBlur={() =>
-                    setFocusedControl((current) =>
-                      current === "decrease" ? null : current,
-                    )
-                  }
-                  disabled={!frameGenerationEnabled}
-                >
-                  −
-                </DialogButton>
-                <div
-                  style={{
-                    marginLeft: "20px",
-                    marginRight: "20px",
-                    fontSize: "16px",
-                    fontWeight: "bold",
-                    color: config.adaptive
-                      ? "rgba(255, 255, 255, 0.45)"
-                      : "white",
-                    minWidth: "60px",
-                    textAlign: "center",
-                  }}
-                >
-                  {!frameGenerationEnabled
-                    ? "0X"
-                    : config.adaptive
-                    ? t("ADAPTIVE_VALUE", "Adaptive")
-                    : `${config.multiplier}X`}
-                </div>
-                <DialogButton
-                  className="Mako_DialogButton"
-                  style={{
-                    ...multiplierButtonStyle(focusedControl === "increase"),
-                    marginLeft: "0px",
-                  }}
-                  onClick={() => {
-                    if (!frameGenerationEnabled) {
-                      void onConfigChange(FRAME_GENERATION_ENABLED, true);
-                      return;
-                    }
-                    void onConfigChange(MULTIPLIER, config.multiplier + 1);
-                  }}
-                  onGamepadFocus={() => setFocusedControl("increase")}
-                  onGamepadBlur={() =>
-                    setFocusedControl((current) =>
-                      current === "increase" ? null : current,
-                    )
-                  }
-                  disabled={
-                    frameGenerationEnabled &&
-                    (config.adaptive ||
-                      config.multiplier >= FIXED_MULTIPLIER_UI_MAX)
-                  }
-                >
-                  +
-                </DialogButton>
+                {factorChoices.map((choice, index) => {
+                  const selected = choice.enabled
+                    ? frameGenerationEnabled &&
+                      (config.adaptive ||
+                        choice.multiplier === config.multiplier)
+                    : !frameGenerationEnabled;
+                  return (
+                    <DialogButton
+                      key={choice.id}
+                      className="Mako_DialogButton"
+                      style={{
+                        ...multiplierButtonStyle(
+                          focusedControl === choice.id,
+                          selected,
+                        ),
+                        marginLeft: index === 0 ? "0px" : "7px",
+                      }}
+                      onClick={() => {
+                        if (!choice.enabled) {
+                          void onConfigChange(FRAME_GENERATION_ENABLED, false);
+                          return;
+                        }
+                        if (config.adaptive) {
+                          void onConfigChange(FRAME_GENERATION_ENABLED, true);
+                          return;
+                        }
+                        void onConfigUpdate({
+                          frame_generation_enabled: true,
+                          multiplier:
+                            choice.multiplier ?? FIXED_MULTIPLIER_UI_MIN,
+                        });
+                      }}
+                      onGamepadFocus={() => setFocusedControl(choice.id)}
+                      onGamepadBlur={() =>
+                        setFocusedControl((current) =>
+                          current === choice.id ? null : current,
+                        )
+                      }
+                    >
+                      {choice.label}
+                    </DialogButton>
+                  );
+                })}
               </MakoFocusable>
             </Field>
           </PanelSectionRow>

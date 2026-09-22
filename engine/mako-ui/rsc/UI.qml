@@ -262,21 +262,22 @@ ApplicationWindow {
                     enabled: backend.available
 
                     GroupEntry {
-                        title: t.frameGeneration
-                        description: t.frameGenerationDesc
+                        title: t.frameGenerationProvisioned
+                        description: t.frameGenerationProvisionedDesc
+                        compactRestartMarker: true
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
 
-                            checked: backend.frame_generation_enabled
-                            onToggled: backend.frame_generation_enabled = checked
+                            checked: backend.frame_generation_provisioned
+                            onToggled: backend.frame_generation_provisioned = checked
                         }
                     }
 
                     GroupEntry {
                         title: t.baseFpsCap
                         description: t.baseFpsCapDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
                         enabled: !(backend.adaptive && backend.adaptive_auto_base_fps_cap)
 
                         SpinBox {
@@ -306,7 +307,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.adaptiveFrameGen
                         description: t.adaptiveFrameGenDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -319,7 +320,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.fractionalAdaptive
                         description: t.fractionalAdaptiveDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
                         enabled: backend.adaptive
 
                         CheckBox {
@@ -333,7 +334,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.targetFps
                         description: t.targetFpsDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
                         enabled: backend.adaptive
 
                         SpinBox {
@@ -350,7 +351,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.adaptiveFpsCapPrefix + (backend.target_fps / 2) + t.adaptiveFpsCapSuffix
                         description: t.adaptiveFpsCapDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
                         enabled: backend.adaptive
 
                         CheckBox {
@@ -364,7 +365,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.maxAdaptiveMultiplier
                         description: t.maxAdaptiveMultiplierDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
                         enabled: backend.adaptive
 
                         SpinBox {
@@ -387,24 +388,22 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.multiplier
                         description: t.multiplierDesc
-                        visible: backend.frame_generation_enabled
-                        enabled: !backend.adaptive
+                        visible: backend.frame_generation_provisioned
 
-                        SpinBox {
-                            Layout.alignment: Qt.AlignRight
-
-                            from: backend.minimum_multiplier
-                            to: backend.maximum_multiplier
-
-                            value: backend.multiplier
-                            onValueModified: backend.multiplier = value
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: backend.adaptive
+                                ? ["0" + t.multiplierX, t.adaptiveFrameGen]
+                                : ["0" + t.multiplierX, "2" + t.multiplierX, "3" + t.multiplierX, "4" + t.multiplierX, "5" + t.multiplierX]
+                            currentIndex: backend.frame_generation_factor_index
+                            onActivated: index => backend.frame_generation_factor_index = index
                         }
                     }
 
                     GroupEntry {
                         title: t.smoothCadence
                         description: t.smoothCadenceDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
 
                         CheckBox {
                             Layout.alignment: Qt.AlignRight
@@ -417,7 +416,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.performanceMode
                         description: t.performanceModeDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
                         enabled: !backend.ultra_performance
 
                         CheckBox {
@@ -431,7 +430,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.flowScale
                         description: t.flowScaleDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
                         enabled: !backend.ultra_performance
 
                         FlowSlider {
@@ -448,7 +447,7 @@ ApplicationWindow {
                     GroupEntry {
                         title: t.gpu
                         description: t.gpuDesc
-                        visible: backend.frame_generation_enabled
+                        visible: backend.frame_generation_provisioned
                         compactRestartMarker: true
 
                         ComboBox {

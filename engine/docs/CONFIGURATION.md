@@ -56,7 +56,7 @@ The CLI's `benchmark`, `debug`, `quality-regression`, and `combined-quality-regr
 | `name` | String | `unnamed` | Display name and `MAKO_PROFILE` value when reading a profile from TOML. |
 | `active_in` | String or string array | Empty | Executable or process identities that select the profile. |
 | `frame_generation_provisioned` | Boolean | `true` | Provisions LSFG device interop, backend ownership, and private resources at process start. Set `false` for Scaling-only use; changing it requires a game restart. |
-| `frame_generation_enabled` | Boolean | `true` | Live Frame Generation execution state. `false` is the Decky `0x` factor: no generation work is submitted, but startup-provisioned resources stay available for a later live enable. |
+| `frame_generation_enabled` | Boolean | `true` | Live Frame Generation execution state. `false` is the `0x` factor in Decky and the desktop GUI: no generation work is submitted, but startup-provisioned resources stay available for a later live enable. Fixed exposes `0x`, 2x–5x; Adaptive exposes `0x` and its active mode. |
 | `multiplier` | 2–5 | `2` | Total output multiplier in Fixed mode. Higher values need more GPU time, private outputs, and WSI headroom. |
 | `frame_generation_refresh_threshold` | 0–1000 Hz | `0` | Pauses generation at or below a confirmed Gamescope refresh; `0` disables the guard. Missing refresh feedback does not pause generation. |
 | `base_fps_cap` | 0–1000 FPS | `0` | Caps real frames while generation is active; `0` disables the cap. The saved value is dormant while the Frame Generation factor is `0x`. |
@@ -138,7 +138,7 @@ The complete vkBasalt configuration surface remains available through a per-game
 ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
 ```
 
-The config path is optional. Renderer `active_in` matching does not select a vkBasalt file; assign a distinct `VKBASALT_CONFIG_FILE` in each game's launch option for per-game settings. The launcher establishes the exact `MAKO Renderer -> vkBasalt` order using only MAKO's installed 64-bit and 32-bit private manifests. A missing architecture or unreadable selected config fails closed to MAKO alone instead of discovering a system copy. See [Optional graphics integrations](LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for ordering and support boundaries.
+The config path is optional. Renderer `active_in` matching does not select a vkBasalt file; assign a distinct `VKBASALT_CONFIG_FILE` in each game's launch option for per-game settings. With an explicit file, FXAA, SMAA, CAS, DLS, sharpening strength, and DLS denoise changes apply live; activation and custom/advanced effects remain restart-bound. The launcher establishes the exact `MAKO Renderer -> vkBasalt` order using only MAKO's installed 64-bit and 32-bit private manifests. A missing architecture or unreadable selected config fails closed to MAKO alone instead of discovering a system copy. See [Optional graphics integrations](LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for ordering and support boundaries.
 
 The UI stores two optional, global process-start settings in `~/.config/mako-render/launcher.conf`: **Enable Zink for OpenGL (Restart)** and **Force ALSA Audio (Restart)**. The launcher accepts only its versioned allowlist; malformed, duplicate, unknown, or non-Boolean entries make all stored options inert for that launch. `MAKO_LAUNCH_CONFIG` may select another file for testing and is removed before the child starts.
 

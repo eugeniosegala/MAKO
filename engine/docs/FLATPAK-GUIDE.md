@@ -117,13 +117,15 @@ For the full vkBasalt option suite, create a standard config inside the configur
 
 ```bash
 flatpak override --user --env=VKBASALT_CONFIG_FILE="$HOME/.config/mako-render/vkBasalt.conf" "$appid"
+flatpak override --user --env=VKBASALT_CONFIG_RELOAD=1 "$appid"
 ```
 
-Omit that override to use vkBasalt's normal configuration search. Restart the application after changing activation or the file. To return this app to the normal MAKO-only setup without removing unrelated overrides, run:
+Omit those overrides to use vkBasalt's normal configuration search without live reload. With an explicit watched file, FXAA, SMAA, CAS, DLS, sharpening strength, and DLS denoise changes apply live; restart after changing activation or custom/advanced effects. To return this app to the normal MAKO-only setup without removing unrelated overrides, run:
 
 ```bash
 flatpak override --user --unset-env=VK_INSTANCE_LAYERS "$appid"
 flatpak override --user --unset-env=VKBASALT_CONFIG_FILE "$appid"
+flatpak override --user --unset-env=VKBASALT_CONFIG_RELOAD "$appid"
 flatpak override --user --unset-env=ENABLE_VKBASALT "$appid"
 flatpak override --user --env=DISABLE_VKBASALT=1 "$appid"
 flatpak override --user --unset-env=DISABLE_MAKO "$appid"

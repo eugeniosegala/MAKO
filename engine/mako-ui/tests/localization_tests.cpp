@@ -147,13 +147,13 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("allowFp16"),
         QStringLiteral("gpu"),
         QStringLiteral("losslessDllPath"),
+        QStringLiteral("frameGenerationProvisioned"),
         QStringLiteral("scalingEnabled"),
         QStringLiteral("ultraPerformance"),
         QStringLiteral("enableZink"),
         QStringLiteral("forceAlsaAudio"),
     };
     const QStringList live_or_recreation_labels{
-        QStringLiteral("frameGeneration"),
         QStringLiteral("adaptiveFrameGen"),
         QStringLiteral("fractionalAdaptive"),
         QStringLiteral("multiplier"),
@@ -196,8 +196,24 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     localization.set_language(QStringLiteral("en"));
     const QVariantMap english = localization.strings();
     require(english.value(QStringLiteral("scalingEnabled")).toString() ==
-            QStringLiteral("Enable Scaling (Restart)"),
+            QStringLiteral("Scaling (Restart)"),
         "English scaling enablement has an unexpected label");
+    require(english.value(QStringLiteral("frameGenerationProvisioned")).toString() ==
+            QStringLiteral("Frame Generation (Restart)"),
+        "English Frame Generation provisioning has an unexpected label");
+    require(english.value(QStringLiteral("frameGenerationProvisionedDesc")).toString()
+            .contains(QStringLiteral("Loads and provisions")) &&
+            english.value(QStringLiteral("frameGenerationProvisionedDesc")).toString()
+            .contains(QStringLiteral("Restart the game")),
+        "English Frame Generation help does not explain its provisioning boundary");
+    require(english.value(QStringLiteral("multiplier")).toString() ==
+            QStringLiteral("Frame Generation Factor"),
+        "English factor label does not match Decky");
+    require(english.value(QStringLiteral("multiplierDesc")).toString()
+            .contains(QStringLiteral("0x pauses generation live")) &&
+            english.value(QStringLiteral("multiplierDesc")).toString()
+            .contains(QStringLiteral("Adaptive")),
+        "English factor help does not explain the live 0x Adaptive choice");
     require(english.value(QStringLiteral("scalingMethod")).toString() ==
             QStringLiteral("Scaling Method"),
         "English scaling method has an unexpected label");

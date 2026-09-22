@@ -110,7 +110,7 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 | Change runtime configuration transitions or setting lifetimes | `engine/docs/RUNTIME-TRANSITIONS.md`, `engine/docs/CONFIGURATION.md` | `engine/mako-render/src/profile_update.hpp`, `engine/mako-render/src/instance.cpp`, `engine/mako-render/src/swapchain/profile.cpp`, `engine/mako-render/src/swapchain/resources.cpp` |
 | Change Adaptive scheduling or generated-frame plans | `engine/docs/ADAPTIVE-VALIDATION.md` | `engine/mako-render/src/adaptive_scheduler.*`, `engine/mako-render/src/generated_frame_plan.hpp`, `engine/mako-render/src/generated_frame_delivery.hpp` |
 | Build host Renderer archives | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/scripts/package-local.sh` |
-| Change or verify the Arch binary package | `engine/dist/arch/README.md` | `just sync-arch-package`, `just check-arch-package` |
+| Change or verify the Arch binary package | `engine/dist/arch/README.md` | `just sync-arch-package`, `just check-arch-package`, `engine/dist/arch/verify-release-package.sh` |
 | Build Flatpak runtime extensions | `engine/docs/FLATPAK-GUIDE.md` | `engine/scripts/package-flatpaks.sh` |
 | Test AMD image quality | `engine/docs/IMAGE-QUALITY-REGRESSION.md`, sibling `MAKO-Gym/docs/AMD-QUALITY-REGRESSION.md` | `engine/mako-cli/src/tools/quality.cpp`, `engine/scripts/run-mako-gym.sh --suite quality` |
 | Test licensed-backend throughput or deterministic output | Sibling `MAKO-Gym/docs/RENDER-PERFORMANCE.md`, sibling `MAKO-Gym/docs/QUALITY-REPEATABILITY.md` | `engine/scripts/run-mako-gym.sh --suite performance`, `engine/scripts/run-mako-gym.sh --suite repeatability` |

@@ -273,6 +273,7 @@ python3 "$repo_root/dist/arch/sync-release-pin.py" \
     "$repo_root/../plugin/package.json" \
     "$repo_root/dist/arch/PKGBUILD"
 "$repo_root/dist/arch/check-release-pin.sh"
+"$repo_root/dist/arch/verify-release-package.sh" "$archive"
 
 node "$repository_root/scripts/update-release-links.mjs" \
     renderer "$version" "$release_repository"

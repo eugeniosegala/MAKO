@@ -23,11 +23,7 @@ import {
   VKBASALT_STRENGTH_MIN,
 } from "../../config/configSchema";
 import t from "../../i18n/i18n";
-import {
-  MakoExperimentalSettingLabel,
-  MakoInlineTip,
-  MakoRestartLabel,
-} from "../MakoUi";
+import { MakoExperimentalSettingLabel, MakoInlineTip } from "../MakoUi";
 import type { ConfigurationControlProps } from "./types";
 
 interface ShadersConfigurationGroupProps extends ConfigurationControlProps {
@@ -85,7 +81,7 @@ export function ShadersConfigurationGroup({
         <ToggleField
           label={
             <MakoExperimentalSettingLabel
-              label={t("CONFIG_ENABLE_VKBASALT", "Enable vkBasalt (Restart)")}
+              label={t("CONFIG_ENABLE_VKBASALT", "Shaders (Restart)")}
               badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
             />
           }
@@ -110,17 +106,10 @@ export function ShadersConfigurationGroup({
         <>
           <PanelSectionRow>
             <Field
-              label={
-                <MakoRestartLabel
-                  label={t(
-                    "CONFIG_VKBASALT_SHARPENING",
-                    "Sharpening (Restart)",
-                  )}
-                />
-              }
+              label={t("CONFIG_VKBASALT_SHARPENING", "Sharpening")}
               description={t(
                 "CONFIG_VKBASALT_SHARPENING_DESC",
-                "CAS is a crisp general-purpose sharpener. DLS can preserve noisy or grainy detail better when paired with denoise.",
+                "CAS is a crisp general-purpose sharpener. DLS can preserve noisy or grainy detail better when paired with denoise. Changes apply live while vkBasalt is active.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
@@ -138,11 +127,9 @@ export function ShadersConfigurationGroup({
           {sharpeningEnabled && (
             <PanelSectionRow>
               <SliderField
-                label={t(
-                  "CONFIG_VKBASALT_SHARPNESS",
-                  "Sharpness ({value}%)",
-                  { value: Math.round(config.vkbasalt_sharpness * 100) },
-                )}
+                label={t("CONFIG_VKBASALT_SHARPNESS", "Sharpness ({value}%)", {
+                  value: Math.round(config.vkbasalt_sharpness * 100),
+                })}
                 description={t(
                   "CONFIG_VKBASALT_SHARPNESS_DESC",
                   "Higher values produce a stronger effect but can exaggerate grain and create halos around high-contrast edges. Changes apply live while vkBasalt is active.",
@@ -181,17 +168,10 @@ export function ShadersConfigurationGroup({
 
           <PanelSectionRow>
             <Field
-              label={
-                <MakoRestartLabel
-                  label={t(
-                    "CONFIG_VKBASALT_ANTIALIASING",
-                    "Anti-aliasing (Restart)",
-                  )}
-                />
-              }
+              label={t("CONFIG_VKBASALT_ANTIALIASING", "Anti-aliasing")}
               description={t(
                 "CONFIG_VKBASALT_ANTIALIASING_DESC",
-                "Optionally smooth jagged edges before sharpening. FXAA is lighter and softer; SMAA is more selective and may cost more GPU time.",
+                "Optionally smooth jagged edges before sharpening. FXAA is lighter and softer; SMAA is more selective and may cost more GPU time. Changes apply live while vkBasalt is active.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
@@ -211,12 +191,12 @@ export function ShadersConfigurationGroup({
               {isDefaultProfile
                 ? t(
                     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE",
-                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes and effect selection apply on the next launch; sharpness and DLS denoise apply live. The Default profile uses this global file.",
+                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. The Default profile uses this global file.",
                     { path: displayedConfigPath },
                   )
                 : t(
                     "CONFIG_VKBASALT_ADVANCED_PROFILE_NOTE",
-                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes and effect selection apply on the next launch; sharpness and DLS denoise apply live. This file belongs to the selected profile and is removed when that profile is deleted.",
+                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. This file belongs to the selected profile and is removed when that profile is deleted.",
                     { path: displayedConfigPath },
                   )}
             </MakoInlineTip>

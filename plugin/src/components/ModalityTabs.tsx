@@ -71,20 +71,20 @@ export function ModalityTabs({
   const options: ModalityOption[] = [
     {
       id: "frame-generation",
-      label: t("CONTENT_FPS_MULTIPLIER", "Frame Generation"),
-      ribbonLabel: "FG",
+      label: t("CONTENT_TAB_FRAME_GENERATION", "Frame-gen"),
+      ribbonLabel: t("CONTENT_TAB_FRAME_GENERATION", "Frame-gen"),
       icon: FiFastForward,
     },
     {
       id: "spatial",
-      label: t("CONTENT_SCALING", "Spatial Settings"),
-      ribbonLabel: t("CONTENT_SCALING", "Spatial Settings"),
+      label: t("CONTENT_TAB_SCALING", "Scaling"),
+      ribbonLabel: t("CONTENT_TAB_SCALING", "Scaling"),
       icon: FiMaximize2,
     },
     {
       id: "shaders",
-      label: t("CONTENT_SHADERS", "Shaders"),
-      ribbonLabel: t("CONTENT_SHADERS", "Shaders"),
+      label: t("CONTENT_TAB_SHADERS", "Shaders"),
+      ribbonLabel: t("CONTENT_TAB_SHADERS", "Shaders"),
       icon: FiLayers,
     },
   ];

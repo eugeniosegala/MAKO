@@ -154,7 +154,7 @@ describe("Frame Generation controls", () => {
       "default",
     );
     const fixedMultiplierControls = screen
-      .getByText("−")
+      .getByText("0x")
       .closest<HTMLElement>('[data-focusable="true"]');
     expect(fixedMultiplierControls?.style.marginTop).toBe("6px");
     const lighterModel = screen.getByText("Lighter FG Model");
@@ -193,8 +193,14 @@ describe("Frame Generation controls", () => {
         )
         .getAttribute("data-tone"),
     ).toBe("info");
-    expect(screen.getByText("−").className).toBe("Mako_DialogButton");
-    expect(screen.getByText("+").className).toBe("Mako_DialogButton");
+    expect(screen.getByText("0x").className).toBe("Mako_DialogButton");
+    expect(screen.getByText("2x").className).toBe("Mako_DialogButton");
+    expect(screen.getByText("5x").className).toBe("Mako_DialogButton");
+    fireEvent.click(screen.getByText("5x"));
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      frame_generation_enabled: true,
+      multiplier: 5,
+    });
 
     rerender(
       <FpsMultiplierControl
@@ -233,6 +239,8 @@ describe("Frame Generation controls", () => {
         "The 2x–5x Fixed factors are unavailable in Adaptive mode; 0x can still pause it live.",
       ),
     ).toBeTruthy();
+    expect(screen.getByText("0x").className).toBe("Mako_DialogButton");
+    expect(screen.getByText("Adaptive").className).toBe("Mako_DialogButton");
     expect(screen.getByText(/^Interpolation ceiling/).style.paddingBottom).toBe(
       "2px",
     );
@@ -270,17 +278,17 @@ describe("Frame Generation controls", () => {
 
     expect(
       screen
-        .getByText("Enable Frame Generation (Restart)")
+        .getByText("Frame Generation (Restart)")
         .getAttribute("data-checked"),
     ).toBe("true");
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
     expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
     expect(screen.getByText("Frame Generation Factor")).toBeTruthy();
-    expect(screen.getByText("0X")).toBeTruthy();
-    expect((screen.getByText("−") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.getByText("0x")).toBeTruthy();
+    expect(screen.getByText("Adaptive")).toBeTruthy();
 
-    fireEvent.click(screen.getByText("+"));
+    fireEvent.click(screen.getByText("Adaptive"));
     expect(onConfigChange).toHaveBeenCalledWith(
       "frame_generation_enabled",
       true,
@@ -296,14 +304,12 @@ describe("Frame Generation controls", () => {
     );
 
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
-    expect(
-      screen.getByText("Adaptive").textContent,
-    ).toBe("Adaptive");
+    expect(screen.getByText("Adaptive").textContent).toBe("Adaptive");
     expect(
       screen.getByText("Fractional Adaptive").getAttribute("data-checked"),
     ).toBe("true");
     expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
-    fireEvent.click(screen.getByText("−"));
+    fireEvent.click(screen.getByText("0x"));
     expect(onConfigChange).toHaveBeenLastCalledWith(
       "frame_generation_enabled",
       false,
@@ -326,7 +332,7 @@ describe("Frame Generation controls", () => {
       />,
     );
 
-    const provision = screen.getByText("Enable Frame Generation (Restart)");
+    const provision = screen.getByText("Frame Generation (Restart)");
     expect(provision.getAttribute("data-checked")).toBe("false");
     expect(provision.getAttribute("data-bottom-separator")).toBe("none");
     expect(screen.queryByText("Adaptive Frame Generation")).toBeNull();

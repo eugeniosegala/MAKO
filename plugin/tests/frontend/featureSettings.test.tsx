@@ -87,19 +87,19 @@ describe("primary feature organization", () => {
     expect(screen.getAllByRole("tab")).toHaveLength(3);
     expect(
       screen
-        .getByRole("tab", { name: "Frame Generation" })
+        .getByRole("tab", { name: "Frame-gen" })
         .getAttribute("aria-selected"),
     ).toBe("true");
-    expect(
-      screen.getByRole("tab", { name: "Frame Generation" }).style.height,
-    ).toBe("46px");
-    expect(
-      screen.getByRole("tab", { name: "Frame Generation" }).style.boxSizing,
-    ).toBe("border-box");
+    expect(screen.getByRole("tab", { name: "Frame-gen" }).style.height).toBe(
+      "46px",
+    );
+    expect(screen.getByRole("tab", { name: "Frame-gen" }).style.boxSizing).toBe(
+      "border-box",
+    );
     expect(
       container.querySelector('[data-mako-modality-ribbon="frame-generation"]')
         ?.textContent,
-    ).toBe("FG");
+    ).toBe("Frame-gen");
     expect(
       (
         container.querySelector(
@@ -108,7 +108,7 @@ describe("primary feature organization", () => {
       ).style.margin,
     ).toBe("14px 0px 12px");
     const frameGenerationIcon = screen
-      .getByRole("tab", { name: "Frame Generation" })
+      .getByRole("tab", { name: "Frame-gen" })
       .querySelector("svg") as SVGElement;
     expect(frameGenerationIcon.style.transform).toBe("translateY(0) scale(1)");
     expect(screen.getByText("Frame Generation controls")).toBeTruthy();
@@ -117,7 +117,7 @@ describe("primary feature organization", () => {
     expect(screen.queryByText("Upscaling controls")).toBeNull();
     expect(screen.queryByText("Shader controls")).toBeNull();
 
-    const spatialTab = screen.getByRole("tab", { name: "Spatial Settings" });
+    const spatialTab = screen.getByRole("tab", { name: "Scaling" });
     const spatialRibbon = container.querySelector(
       '[data-mako-modality-ribbon="spatial"]',
     ) as HTMLElement;

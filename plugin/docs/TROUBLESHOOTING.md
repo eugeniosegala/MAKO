@@ -6,7 +6,7 @@ These instructions apply to published ZIPs and local development builds.
 
 HDR frame generation and scaling are disabled in this release. **Disable HDR** is checked and read-only, and MAKO removes inherited `DXVK_HDR` activation.
 
-Inside a supported Gamescope session, **Enable Scaling (Restart)** uses the managed Frame Generation → Gamescope WSI → Spatial Scaling order. **Gamescope WSI (Restart)** provides the same guarded presentation path for affected 64-bit Frame Generation-only profiles. Host MangoHud or MAKO's private bundled vkBasalt can follow MAKO's roles without exposing the host's complete implicit-layer directory.
+Inside a supported Gamescope session, **Scaling (Restart)** uses the managed Frame Generation → Gamescope WSI → Spatial Scaling order. **Gamescope WSI (Restart)** provides the same guarded presentation path for affected 64-bit Frame Generation-only profiles. Host MangoHud or MAKO's private bundled vkBasalt can follow MAKO's roles without exposing the host's complete implicit-layer directory.
 
 See [WSI isolation](../../engine/docs/WSI-ISOLATION.md), [optional graphics integrations](../../engine/docs/LAYER-CHAINING.md), and the [HDR pipeline](../../engine/docs/HDR-PIPELINE.md).
 

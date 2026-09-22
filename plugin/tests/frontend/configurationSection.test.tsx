@@ -240,20 +240,20 @@ describe("Configuration controls", () => {
       />,
     );
 
-    expect(screen.getByText("Enable vkBasalt (Restart)")).toBeTruthy();
+    expect(screen.getByText("Shaders (Restart)")).toBeTruthy();
     expect(
       screen.getByText(
         "Applies sharpening, anti-aliasing, and other configured effects using only MAKO's private bundled vkBasalt. A separate installation is neither needed nor used. If effects are not visible, switch between Windowed and Fullscreen.",
       ),
     ).toBeTruthy();
     expect(screen.getByText("Experimental")).toBeTruthy();
-    expect(screen.getByText("Sharpening (Restart)")).toBeTruthy();
+    expect(screen.getByText("Sharpening")).toBeTruthy();
     expect(screen.getByText("Sharpness (55%)")).toBeTruthy();
     expect(screen.getByText("DLS Denoise (20%)")).toBeTruthy();
-    expect(screen.getByText("Anti-aliasing (Restart)")).toBeTruthy();
+    expect(screen.getByText("Anti-aliasing")).toBeTruthy();
     expect(
       screen.getByText(
-        "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes and effect selection apply on the next launch; sharpness and DLS denoise apply live. This file belongs to the selected profile and is removed when that profile is deleted.",
+        "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. This file belongs to the selected profile and is removed when that profile is deleted.",
       ),
     ).toBeTruthy();
   });
@@ -273,7 +273,7 @@ describe("Configuration controls", () => {
 
     expect(
       screen.getByText(
-        "Advanced options can be edited in /home/deck/.config/vkBasalt/vkBasalt.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes and effect selection apply on the next launch; sharpness and DLS denoise apply live. The Default profile uses this global file.",
+        "Advanced options can be edited in /home/deck/.config/vkBasalt/vkBasalt.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. The Default profile uses this global file.",
       ),
     ).toBeTruthy();
     expect(screen.queryByText("vkBasalt Configuration (Restart)")).toBeNull();
@@ -545,7 +545,7 @@ describe("Configuration controls", () => {
       ),
     ).toBeNull();
     expect(screen.queryByText("Enable MangoHud (Restart)")).toBeNull();
-    expect(screen.queryByText("Enable vkBasalt (Restart)")).toBeNull();
+    expect(screen.queryByText("Shaders (Restart)")).toBeNull();
 
     const collapseButton = container.querySelector<HTMLButtonElement>(
       ".MAKO_ExternalToolsCollapseButton_Container button",
@@ -554,7 +554,7 @@ describe("Configuration controls", () => {
     fireEvent.click(collapseButton!);
 
     expect(screen.getByText("Enable MangoHud (Restart)")).toBeTruthy();
-    expect(screen.queryByText("Enable vkBasalt (Restart)")).toBeNull();
+    expect(screen.queryByText("Shaders (Restart)")).toBeNull();
     expect(screen.queryByText("Experimental")).toBeNull();
     expect(localStorage.getItem("mako-external-tools-collapsed")).toBe("false");
   });

@@ -91,12 +91,44 @@ void test_multiplier_limits() {
     require_property("maximum_multiplier", "uint", false, true);
     require_property("minimum_adaptive_max_multiplier", "uint", false, true);
     require_property("maximum_adaptive_max_multiplier", "uint", false, true);
+    require_property("frame_generation_provisioned", "bool", true, false);
+    require_property("frame_generation_enabled", "bool", true, false);
+    require_property("frame_generation_factor_index", "uint", true, false);
+
+    ls::GameConf configuration;
+    require(mako::ui::Backend::frameGenerationFactorIndex(configuration) == 1,
+        "Default Fixed 2x did not map to the first active factor choice");
+    mako::ui::Backend::applyFrameGenerationFactorIndex(configuration, 0);
+    require(!configuration.frame_generation_enabled &&
+            configuration.multiplier == 2,
+        "0x did not pause Fixed generation while preserving its multiplier");
+    mako::ui::Backend::applyFrameGenerationFactorIndex(configuration, 4);
+    require(configuration.frame_generation_enabled &&
+            configuration.multiplier == 5,
+        "The highest Fixed factor choice did not select 5x");
+    configuration.adaptive = true;
+    mako::ui::Backend::applyFrameGenerationFactorIndex(configuration, 0);
+    require(!configuration.frame_generation_enabled &&
+            configuration.adaptive && configuration.multiplier == 5,
+        "Adaptive 0x did not preserve its mode and dormant Fixed multiplier");
+    mako::ui::Backend::applyFrameGenerationFactorIndex(configuration, 1);
+    require(configuration.frame_generation_enabled &&
+            configuration.adaptive && configuration.multiplier == 5 &&
+            mako::ui::Backend::frameGenerationFactorIndex(configuration) == 1,
+        "Adaptive could not resume from its explicit active factor choice");
 
     QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString qml = QString::fromUtf8(file.readAll());
-    require(qml.contains(QStringLiteral("to: backend.maximum_multiplier")),
-        "Fixed multiplier spin box does not expose the Renderer maximum");
+    require(qml.contains(QStringLiteral(
+            "currentIndex: backend.frame_generation_factor_index")) &&
+            qml.contains(QStringLiteral(
+                "onActivated: index => backend.frame_generation_factor_index = index")) &&
+            qml.contains(QStringLiteral(
+                "[\"0\" + t.multiplierX, \"2\" + t.multiplierX, \"3\" + t.multiplierX, \"4\" + t.multiplierX, \"5\" + t.multiplierX]")) &&
+            qml.contains(QStringLiteral(
+                "[\"0\" + t.multiplierX, t.adaptiveFrameGen]")),
+        "Frame Generation factor does not expose 0x in both Fixed and Adaptive modes");
     require(qml.contains(QStringLiteral(
             "to: backend.maximum_adaptive_max_multiplier")),
         "Adaptive multiplier spin box does not expose the Renderer maximum");
@@ -111,8 +143,8 @@ void test_fractional_adaptive_preset() {
     configuration.adaptive_auto_base_fps_cap = true;
     configuration.dynamic_cadence_recovery = true;
     mako::ui::Backend::applyFractionalAdaptivePreset(configuration, true);
-    require(configuration.frame_generation_enabled,
-        "Fractional Adaptive did not enable Frame Generation");
+    require(!configuration.frame_generation_enabled,
+        "Editing Fractional Adaptive unexpectedly resumed Frame Generation from 0x");
     require(configuration.adaptive,
         "Fractional Adaptive did not enable Adaptive Frame Generation");
     require(!configuration.adaptive_auto_base_fps_cap,
@@ -172,8 +204,16 @@ void test_feature_group_order_and_ownership() {
     );
     require(frame_generation_group.count(QStringLiteral("GroupEntry {")) == 12 &&
             frame_generation_group.count(QStringLiteral(
-                "visible: backend.frame_generation_enabled")) == 11,
-        "Frame Generation must retain its switch while hiding every subordinate control when disabled");
+                "visible: backend.frame_generation_provisioned")) == 11,
+        "Frame Generation must retain its provisioning switch while keeping live controls visible at 0x");
+    require(frame_generation_group.contains(QStringLiteral(
+                "checked: backend.frame_generation_provisioned")) &&
+            frame_generation_group.contains(QStringLiteral(
+                "onToggled: backend.frame_generation_provisioned = checked")),
+        "Frame Generation provisioning is not exposed as the restart-bound switch");
+    require(!frame_generation_group.contains(QStringLiteral(
+                "enabled: backend.frame_generation_enabled")),
+        "A dormant live Frame Generation setting cannot be prepared while the factor is 0x");
     require(frame_generation_group.contains(
                 QStringLiteral("title: t.performanceMode")) &&
             frame_generation_group.contains(
@@ -244,6 +284,9 @@ void test_feature_group_order_and_ownership() {
     require(!scaling_group.contains(
             QStringLiteral("backend.frame_generation_enabled")),
         "Scaling group is coupled to Frame Generation");
+    require(!scaling_group.contains(
+            QStringLiteral("backend.frame_generation_provisioned")),
+        "Scaling group is coupled to Frame Generation provisioning");
 
     const qsizetype compatibility_group_start = qml.indexOf(
         QStringLiteral("name: t.compatibilitySettings")
@@ -271,7 +314,7 @@ void test_compact_restart_markers() {
     QFile ui_file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(ui_file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString ui_qml = QString::fromUtf8(ui_file.readAll());
-    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 8,
+    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 9,
         "Every restart-bound Renderer control must opt into the compact marker");
 
     QFile entry_file(QString::fromUtf8(MAKO_UI_GROUP_ENTRY_QML_FILE));

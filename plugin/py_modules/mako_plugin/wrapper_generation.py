@@ -466,7 +466,8 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         '            mako_implicit_layer_path="$mako_implicit_layer_path:$mako_spatial_scaling_layer_dir"',
         "        fi",
         "    fi",
-        'elif [ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
+        'elif [ "$mako_renderer_enabled" = 1 ] && '
+        '[ "${mako_gamescope_wsi_required:-0}" = 1 ] && '
         '[ "$mako_gamescope_wsi_session" != 1 ]; then',
         '    mako_gamescope_wsi_skip_log="MAKO Decky: Gamescope WSI skipped: no active Gamescope session; continuing with the managed WSI and spatial chain disabled."',
         "fi",

@@ -31,6 +31,56 @@ PY
 grep -Fq "'libx11'" "$script_dir/PKGBUILD"
 grep -Fq "'lib32-libx11'" "$script_dir/PKGBUILD"
 grep -Fq 'done < MAKO-Renderer-install-manifest.txt' "$script_dir/PKGBUILD"
+bash -n "$script_dir/verify-release-package.sh"
+
+fake_tools="$work_dir/fake-tools"
+mkdir -p "$fake_tools"
+cat > "$fake_tools/makepkg" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == "--nodeps --cleanbuild --noconfirm" ]]
+[[ -f "MAKO-Renderer-v${MAKO_TEST_PKGVER}-linux.tar.xz" ]]
+package_root="$(mktemp -d "${TMPDIR:-/tmp}/mako-arch-fake-package.XXXXXX")"
+trap 'rm -rf -- "$package_root"' EXIT
+mkdir -p \
+    "$package_root/usr/bin" \
+    "$package_root/usr/lib" \
+    "$package_root/usr/lib32" \
+    "$package_root/usr/share/applications"
+touch \
+    "$package_root/.INSTALL" \
+    "$package_root/usr/bin/mako-cli" \
+    "$package_root/usr/bin/mako-diagnostics" \
+    "$package_root/usr/bin/mako-launch" \
+    "$package_root/usr/bin/mako-ui" \
+    "$package_root/usr/lib/libmako-render.so" \
+    "$package_root/usr/lib/libmako-render-scaling.so" \
+    "$package_root/usr/lib32/libmako-render.so" \
+    "$package_root/usr/lib32/libmako-render-scaling.so" \
+    "$package_root/usr/share/applications/io.github.eugeniosegala.mako.desktop"
+tar -cf "mako-renderer-bin-${MAKO_TEST_PKGVER}-${MAKO_TEST_PKGREL}-x86_64.pkg.tar.zst" \
+    -C "$package_root" .INSTALL usr
+EOF
+cat > "$fake_tools/bsdtar" <<'EOF'
+#!/bin/sh
+exec tar "$@"
+EOF
+chmod +x "$fake_tools/makepkg" "$fake_tools/bsdtar"
+current_pkgver="$(sed -n 's/^pkgver=\(.*\)$/\1/p' "$script_dir/PKGBUILD")"
+current_pkgrel="$(sed -n 's/^pkgrel=\(.*\)$/\1/p' "$script_dir/PKGBUILD")"
+fake_archive="$work_dir/MAKO-Renderer-v${current_pkgver}-linux.tar.xz"
+touch "$fake_archive"
+MAKO_TEST_PKGVER="$current_pkgver" \
+    MAKO_TEST_PKGREL="$current_pkgrel" \
+    PATH="$fake_tools:/usr/bin:/bin" \
+    "$script_dir/verify-release-package.sh" "$fake_archive" >/dev/null
+touch "$work_dir/wrong-name.tar.xz"
+if PATH="$fake_tools:/usr/bin:/bin" \
+        "$script_dir/verify-release-package.sh" "$work_dir/wrong-name.tar.xz" \
+        >/dev/null 2>&1; then
+    echo "Arch release package verification accepted the wrong archive name" >&2
+    exit 1
+fi
 
 mapping_root="$work_dir/mapping"
 mapping_pkgdir="$work_dir/mapping-package"

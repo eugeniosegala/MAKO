@@ -168,6 +168,18 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["VKBASALT"], "1")
         self.assertEqual(values["VKBASALT_DISABLED"], "")
 
+    def test_inactive_renderer_does_not_report_a_stale_wsi_choice(self):
+        config = ConfigurationManager.get_defaults()
+        config["frame_generation_provisioned"] = False
+        config["scaling_enabled"] = False
+        config["gamescope_wsi_compatibility"] = True
+
+        values = self._evaluate(config=config)
+
+        self.assertEqual(values["DISABLE_MAKO"], "1")
+        self.assertEqual(values["DISABLE_GAMESCOPE"], "1")
+        self.assertNotIn("Gamescope WSI skipped", self.last_stderr)
+
     def test_scaling_without_wsi_uses_combined_renderer_with_staged_layers(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)

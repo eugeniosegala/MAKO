@@ -14,8 +14,8 @@
   "sources": [
     {
       "type": "archive",
-      "url": "https://github.com/eugeniosegala/vkBasalt/releases/download/mako-v0.3.2.10-2/vkBasalt-mako-v0.3.2.10-2-linux-x86.tar.xz",
-      "sha256": "82f59f456d7f03b9164bcce79763a600137b00e255eeee5b9956f64c824dac9c"
+      "url": "https://github.com/eugeniosegala/vkBasalt/releases/download/mako-v0.3.2.10-3/vkBasalt-mako-v0.3.2.10-3-linux-x86.tar.xz",
+      "sha256": "23633ec0258e6e6b6d9175f65af125775c063cb1686d8a7494a758ab1b138006"
     },
     {
       "type": "file",

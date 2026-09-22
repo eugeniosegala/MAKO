@@ -44,7 +44,9 @@ namespace mako::ui {
         Q_PROPERTY(int active_in_index READ getActiveInIndex WRITE activeInSelected NOTIFY refreshUI)
         Q_PROPERTY(QString matched_processes READ getMatchedProcesses NOTIFY refreshUI)
         Q_PROPERTY(size_t multiplier READ getMultiplier WRITE multiplierUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool frame_generation_provisioned READ getFrameGenerationProvisioned WRITE frameGenerationProvisionedUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool frame_generation_enabled READ getFrameGenerationEnabled WRITE frameGenerationEnabledUpdated NOTIFY refreshUI)
+        Q_PROPERTY(uint frame_generation_factor_index READ getFrameGenerationFactorIndex WRITE frameGenerationFactorIndexUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool scaling_enabled READ getScalingEnabled WRITE scalingEnabledUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool swapchain_image_count_compatibility READ getSwapchainImageCountCompatibility WRITE swapchainImageCountCompatibilityUpdated NOTIFY refreshUI)
         Q_PROPERTY(QString scaling_method READ getScalingMethod WRITE scalingMethodUpdated NOTIFY refreshUI)
@@ -106,9 +108,36 @@ namespace mako::ui {
                 ls::GameConf& conf, bool enabled) noexcept {
             conf.dynamic_cadence_recovery = false;
             conf.adaptive_auto_base_fps_cap = !enabled;
-            if (enabled) {
-                conf.frame_generation_enabled = true;
+            if (enabled)
                 conf.adaptive = true;
+        }
+
+        [[nodiscard]] static uint frameGenerationFactorIndex(
+                const ls::GameConf& conf) noexcept {
+            if (!conf.frame_generation_enabled)
+                return 0;
+            if (conf.adaptive)
+                return 1;
+            return static_cast<uint>(std::clamp(
+                conf.multiplier,
+                ls::GameConfLimits::minimumMultiplier,
+                ls::GameConfLimits::maximumMultiplier
+            ) - ls::GameConfLimits::minimumMultiplier + 1);
+        }
+
+        static void applyFrameGenerationFactorIndex(
+                ls::GameConf& conf, const uint index) noexcept {
+            if (index == 0) {
+                conf.frame_generation_enabled = false;
+                return;
+            }
+            conf.frame_generation_enabled = true;
+            if (!conf.adaptive) {
+                conf.multiplier = std::clamp(
+                    ls::GameConfLimits::minimumMultiplier + index - 1,
+                    ls::GameConfLimits::minimumMultiplier,
+                    ls::GameConfLimits::maximumMultiplier
+                );
             }
         }
 
@@ -162,9 +191,19 @@ namespace mako::ui {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::multiplier)
             return conf.multiplier;
         }
+        [[nodiscard]] bool getFrameGenerationProvisioned() const {
+            VALIDATE_AND_GET_PROFILE(
+                ls::GameConfDefaults::frameGenerationProvisioned
+            )
+            return conf.frame_generation_provisioned;
+        }
         [[nodiscard]] bool getFrameGenerationEnabled() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::frameGenerationEnabled)
             return conf.frame_generation_enabled;
+        }
+        [[nodiscard]] uint getFrameGenerationFactorIndex() const {
+            VALIDATE_AND_GET_PROFILE(1U)
+            return frameGenerationFactorIndex(conf);
         }
         [[nodiscard]] bool getScalingEnabled() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::scalingEnabled)
@@ -398,9 +437,20 @@ namespace mako::ui {
             );
             MARK_DIRTY()
         }
+        void frameGenerationProvisionedUpdated(
+                bool frame_generation_provisioned) {
+            VALIDATE_AND_GET_PROFILE()
+            conf.frame_generation_provisioned = frame_generation_provisioned;
+            MARK_DIRTY()
+        }
         void frameGenerationEnabledUpdated(bool frame_generation_enabled) {
             VALIDATE_AND_GET_PROFILE()
             conf.frame_generation_enabled = frame_generation_enabled;
+            MARK_DIRTY()
+        }
+        void frameGenerationFactorIndexUpdated(uint index) {
+            VALIDATE_AND_GET_PROFILE()
+            applyFrameGenerationFactorIndex(conf, index);
             MARK_DIRTY()
         }
         void scalingEnabledUpdated(bool scaling_enabled) {

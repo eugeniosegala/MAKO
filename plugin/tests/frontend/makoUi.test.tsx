@@ -69,17 +69,17 @@ describe("MAKO section headers", () => {
 describe("MAKO restart labels", () => {
   test("renders only the translated parenthetical marker at a smaller size", () => {
     const { container, rerender } = render(
-      <MakoRestartLabel label="Enable Scaling (Restart)" />,
+      <MakoRestartLabel label="Scaling (Restart)" />,
     );
 
     const marker = screen.getByText("(Restart)");
     expect(marker.getAttribute("data-mako-restart-marker")).toBe("true");
     expect(marker.style.fontSize).toBe("0.72em");
-    expect(container.textContent).toBe("Enable Scaling (Restart)");
+    expect(container.textContent).toBe("Scaling (Restart)");
 
-    rerender(<MakoRestartLabel label="スケーリングを有効化（再起動）" />);
+    rerender(<MakoRestartLabel label="スケーリング（再起動）" />);
     expect(screen.getByText("（再起動）").style.fontSize).toBe("0.72em");
-    expect(container.textContent).toBe("スケーリングを有効化（再起動）");
+    expect(container.textContent).toBe("スケーリング（再起動）");
   });
 
   test("leaves a label without a trailing marker unchanged", () => {
@@ -105,7 +105,7 @@ describe("MAKO experimental badges", () => {
   test("uses the original compact spacing between the setting and badge", () => {
     const { container } = render(
       <MakoExperimentalSettingLabel
-        label="Enable Scaling (Restart)"
+        label="Scaling (Restart)"
         badgeLabel="Experimental"
       />,
     );

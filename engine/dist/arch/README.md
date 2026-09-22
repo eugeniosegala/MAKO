@@ -38,7 +38,7 @@ makepkg -si
 
 ## Upgrade
 
-Upgrade with `pacman -Syu`, or rebuild and reinstall with `makepkg -si` when a new `pkgrel` is published. Pacman replaces all package-owned files under `/usr`. User profiles and configuration data are not package-owned and are never touched during an upgrade. The `pre_upgrade` hook re-reports any user-local MAKO install it detects.
+This recipe is not currently published through an official pacman repository or the AUR, so `pacman -Syu` alone cannot discover a new MAKO version. Update this source checkout, return to `engine/dist/arch`, and run `makepkg -si` again after a new `pkgver` or `pkgrel` is committed. Pacman replaces all package-owned files under `/usr`. User profiles and configuration data are not package-owned and are never touched during an upgrade. The `pre_upgrade` hook re-reports any user-local MAKO install it detects.
 
 ## Remove
 
@@ -73,7 +73,7 @@ Because both delivery paths share that directory, do not run two different MAKO 
 
 ## Updating for a new release
 
-The MAKO Renderer publisher first builds and verifies the host archive from the release commit, then records that exact artifact's version, URL, and checksum in `plugin/package.json`, runs `sync-release-pin.py`, resets `pkgrel` to 1 for a new upstream version, and verifies the result with `check-release-pin.sh`. The archive's own install manifest remains the package payload source of truth, so the recipe neither selects files from an older archive nor maintains a second release payload list.
+The MAKO Renderer publisher first builds and verifies the host archive from the release commit, then records that exact artifact's version, URL, and checksum in `plugin/package.json`, runs `sync-release-pin.py`, resets `pkgrel` to 1 for a new upstream version, verifies the pin with `check-release-pin.sh`, and uses `verify-release-package.sh` to build the synchronized recipe against that exact local archive. The archive's own install manifest remains the package payload source of truth, so the recipe neither selects files from an older archive nor maintains a second release payload list.
 
 For a packaging-only fix, leave `pkgver` and `sha256sums` unchanged and increment `pkgrel`. Run `just check-arch-package` from the repository root before committing. `check-release-pin.sh` also runs in portable Renderer CTest and fails when `pkgver`, the source URL, or `sha256sums` drifts from `plugin/package.json`.
 
@@ -84,6 +84,7 @@ This repository owns the reviewed `PKGBUILD`, but the release publisher does not
 ## Verification
 
 - `makepkg` verifies the release archive against `sha256sums` before packaging.
+- Renderer publication runs `verify-release-package.sh` after synchronizing the recipe and must successfully build one package from the exact release archive without installing or retaining it.
 - Every payload file this package installs has the same SHA-256 as its entry in `MAKO-Renderer-install-manifest.txt`. The recipe verifies the complete archive manifest, packages every supported entry instead of maintaining a second payload allowlist, and fails on unsafe or unsupported paths. The manifest is installed unchanged at `/usr/share/doc/mako-renderer-bin/MAKO-Renderer-install-manifest.txt` so the claim can be re-checked. The only manifest entries without a matching installed file are `bin/mako-installer` and `share/applications/io.github.eugeniosegala.mako.uninstaller.desktop`, both excluded by design.
 - `desktop-file-validate` accepts the installed desktop entry.
 - A Vulkan loader run with `VK_IMPLICIT_LAYER_PATH` pointed at each packaged manifest directory discovers and activates `VK_LAYER_MAKO_render` and `VK_LAYER_MAKO_spatial_scaling` for the public set, and the matching layer for each private directory, with the relative `library_path` values resolving to `/usr/lib` and `/usr/lib32`.
