@@ -50,6 +50,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 | 🔍 | **LS1 + open spatial scaling** | Reconstructs a lower-resolution game frame with LS1 Quality, LS1 Performance, or the open single-pass MAKO Scaler, independently or before Fixed or Adaptive generation. |
 | 🎨 | **Bundled per-game shaders** | Uses MAKO's private 64-bit and 32-bit vkBasalt to apply live sharpening, anti-aliasing, and a curated catalog of colour, cinematic, monochrome, retro, and finishing effects. |
 | 🎯 | **Adaptive Frame Generation** | Optionally targets 30–240 FPS while MAKO Renderer varies generated frames up to a selected 2x–5x ceiling. |
+| 🔄 | **Dual VRR/fixed-refresh pacing** | Automatically selects MAKO target-clock pacing for VRR or fixed-refresh FIFO pacing when eligible, preserving the validated Adaptive level across live Gamescope changes. |
 | 🌈 | **HDR foundation** | MAKO Renderer includes HDR10/PQ and linear-scRGB groundwork. MAKO Decky keeps HDR exposure disabled while activation, presentation, colour, and performance are validated across games. |
 | 🧩 | **64-bit and 32-bit x86 Vulkan** | Ships architecture-matched host and Flatpak layers so Vulkan can select the correct library for each game process. |
 | 🛡️ | **Gamescope recovery** | Bounded presentation recovery preserves native presentation and resumes generation only after the game cadence becomes stable again. |
