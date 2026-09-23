@@ -99,8 +99,16 @@ export function ShadersConfigurationGroup({
       label: t("CONFIG_VKBASALT_EFFECT_NONE", "Off"),
     },
     {
+      data: VKBASALT_SHADER_HDR_LOOK,
+      label: t("CONFIG_VKBASALT_SHADER_HDR_LOOK", "HDR Look (SDR)"),
+    },
+    {
       data: VKBASALT_SHADER_VIBRANCE,
       label: t("CONFIG_VKBASALT_SHADER_VIBRANCE", "Vibrance"),
+    },
+    {
+      data: VKBASALT_SHADER_COLOURFULNESS,
+      label: t("CONFIG_VKBASALT_SHADER_COLOURFULNESS", "Colourfulness"),
     },
     {
       data: VKBASALT_SHADER_CURVES,
@@ -109,30 +117,6 @@ export function ShadersConfigurationGroup({
     {
       data: VKBASALT_SHADER_DEBAND,
       label: t("CONFIG_VKBASALT_SHADER_DEBAND", "Deband"),
-    },
-    {
-      data: VKBASALT_SHADER_TECHNICOLOR,
-      label: t("CONFIG_VKBASALT_SHADER_TECHNICOLOR", "Technicolor"),
-    },
-    {
-      data: VKBASALT_SHADER_SEPIA,
-      label: t("CONFIG_VKBASALT_SHADER_SEPIA", "Sepia"),
-    },
-    {
-      data: VKBASALT_SHADER_MONOCHROME,
-      label: t("CONFIG_VKBASALT_SHADER_MONOCHROME", "Monochrome"),
-    },
-    {
-      data: VKBASALT_SHADER_VIGNETTE,
-      label: t("CONFIG_VKBASALT_SHADER_VIGNETTE", "Vignette"),
-    },
-    {
-      data: VKBASALT_SHADER_HDR_LOOK,
-      label: t("CONFIG_VKBASALT_SHADER_HDR_LOOK", "HDR Look (SDR)"),
-    },
-    {
-      data: VKBASALT_SHADER_COLOURFULNESS,
-      label: t("CONFIG_VKBASALT_SHADER_COLOURFULNESS", "Colourfulness"),
     },
     {
       data: VKBASALT_SHADER_TECHNICOLOR2,
@@ -151,8 +135,24 @@ export function ShadersConfigurationGroup({
       label: t("CONFIG_VKBASALT_SHADER_NOIR", "Noir"),
     },
     {
+      data: VKBASALT_SHADER_TECHNICOLOR,
+      label: t("CONFIG_VKBASALT_SHADER_TECHNICOLOR", "Technicolor"),
+    },
+    {
+      data: VKBASALT_SHADER_MONOCHROME,
+      label: t("CONFIG_VKBASALT_SHADER_MONOCHROME", "Monochrome"),
+    },
+    {
+      data: VKBASALT_SHADER_SEPIA,
+      label: t("CONFIG_VKBASALT_SHADER_SEPIA", "Sepia"),
+    },
+    {
       data: VKBASALT_SHADER_FILM_GRAIN,
       label: t("CONFIG_VKBASALT_SHADER_FILM_GRAIN", "Film Grain"),
+    },
+    {
+      data: VKBASALT_SHADER_VIGNETTE,
+      label: t("CONFIG_VKBASALT_SHADER_VIGNETTE", "Vignette"),
     },
     {
       data: VKBASALT_SHADER_CARTOON,
