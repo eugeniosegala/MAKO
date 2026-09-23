@@ -176,7 +176,7 @@ int main() {
         true, true, false, false, false, fixedRefresh, 1
     );
     expect(fixedPolicy ==
-                AdaptiveOrderedDeliveryPolicy::FixedRefreshNonblocking &&
+                AdaptiveOrderedDeliveryPolicy::NotApplicable &&
             selectAdaptiveOrderedDeliveryPolicy(
                 true, true, false, false, false,
                 fixedRefreshWithTearing, 1
@@ -187,7 +187,7 @@ int main() {
             selectAdaptiveOrderedDeliveryPolicy(
                 true, true, false, false, false, {}, 2
             ) == fixedPolicy,
-        "Adaptive fixed-refresh delivery lost its zero-wait boundary");
+        "Adaptive fixed-refresh delivery diverged from the 3.3 ordered path");
     const auto variablePolicy = selectAdaptiveOrderedDeliveryPolicy(
         true, true, false, false, false, requestedVrr, 1
     );

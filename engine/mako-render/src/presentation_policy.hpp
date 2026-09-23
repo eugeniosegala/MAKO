@@ -258,7 +258,6 @@ namespace mako::layer {
 
     enum class AdaptiveOrderedDeliveryPolicy {
         NotApplicable,
-        FixedRefreshNonblocking,
         VariableRefreshBounded,
     };
 
@@ -281,15 +280,15 @@ namespace mako::layer {
         }
         return presentationFeedback.variableRefreshRequested()
             ? AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded
-            : AdaptiveOrderedDeliveryPolicy::FixedRefreshNonblocking;
+            : AdaptiveOrderedDeliveryPolicy::NotApplicable;
     }
 
     /// Variable refresh retains the established finite application-present
     /// ceiling because lower-image release is not locked to a fixed output
-    /// period. Fixed refresh keeps its established zero-wait Adaptive contract
-    /// and therefore does not call this helper. Preserve any shorter explicit
-    /// ceiling and never derive it from source cadence that may already include
-    /// MAKO's own acquire wait.
+    /// period. Fixed refresh retains the 3.3 ordered acquire contract and does
+    /// not call this helper. Preserve any shorter explicit ceiling and never
+    /// derive it from source cadence that may already include MAKO's own
+    /// acquire wait.
     [[nodiscard]] inline std::optional<uint64_t>
     adaptiveVariableRefreshDeliveryAcquireBudget(
             const AdaptiveOrderedDeliveryPolicy policy,

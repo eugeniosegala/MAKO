@@ -1305,9 +1305,6 @@ VkResult Swapchain::presentGeneratedFrames(
         const PresentInvocation& invocation,
         const PresentationFramePlan& plan,
         const bool gamescopeHdrTransport) {
-    const bool adaptiveFixedRefreshNonblocking =
-        plan.adaptiveOrderedDeliveryPolicy ==
-            AdaptiveOrderedDeliveryPolicy::FixedRefreshNonblocking;
     const bool adaptiveVariableRefreshBounded =
         plan.adaptiveOrderedDeliveryPolicy ==
             AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded;
@@ -1439,16 +1436,11 @@ VkResult Swapchain::presentGeneratedFrames(
                         ? static_cast<uint64_t>(consumedAcquireNanoseconds)
                         : 0
                 );
-            acquireBudgetExhausted =
-                !adaptiveFixedRefreshNonblocking &&
-                remainingAcquireBudget &&
+            acquireBudgetExhausted = remainingAcquireBudget &&
                 *remainingAcquireBudget == 0;
-            const uint64_t acquireTimeout =
-                adaptiveFixedRefreshNonblocking
-                    ? 0
-                    : orderedGeneratedImageAcquireTimeout(
-                        this->gamescopeRefreshHz, remainingAcquireBudget
-                    );
+            const uint64_t acquireTimeout = orderedGeneratedImageAcquireTimeout(
+                this->gamescopeRefreshHz, remainingAcquireBudget
+            );
             lastAcquireTimeout = acquireTimeout;
             if (acquireBudgetExhausted) {
                 result = VK_TIMEOUT;
@@ -1466,8 +1458,7 @@ VkResult Swapchain::presentGeneratedFrames(
                 maximumAcquireDuration, acquireDuration
             );
             totalAcquireDuration += acquireDuration;
-            if (!adaptiveFixedRefreshNonblocking &&
-                    plan.configuredAcquireTimeout) {
+            if (plan.configuredAcquireTimeout) {
                 const auto acquireBudget =
                     std::chrono::duration_cast<DiagnosticsClock::duration>(
                         std::chrono::nanoseconds(
@@ -1510,21 +1501,19 @@ VkResult Swapchain::presentGeneratedFrames(
             );
         }
 
-        if ((adaptiveFixedRefreshNonblocking ||
-                plan.configuredAcquireTimeout) &&
+        if (plan.configuredAcquireTimeout &&
                 (result == VK_TIMEOUT || result == VK_NOT_READY)) {
             // Record this normal batch's delivery loss before changing its
             // transport state. Otherwise intermittent timeouts separated by
             // healthy batches disappear from Adaptive's multiplier evaluation
             // even though generated outputs were lost.
             this->reportAdaptiveDelivery(plan, i);
-            if (adaptiveFixedRefreshNonblocking ||
-                    adaptiveVariableRefreshBounded) {
+            if (adaptiveVariableRefreshBounded) {
                 const bool logPressure = this->recoveryState
                     .generatedImageAdmission.reportUnavailable();
                 this->handleGeneratedImageAdmissionPressure(
                     plan, i, logPressure, false,
-                    adaptiveFixedRefreshNonblocking,
+                    false,
                     lastAcquireTimeout,
                     "adaptive-fallback"
                 );
@@ -1534,11 +1523,11 @@ VkResult Swapchain::presentGeneratedFrames(
                 );
             }
             // Backend work is already scheduled on this ordered path, so drain
-            // its final timeline value. Fixed-refresh Adaptive retains its
-            // established direct load classification. A bounded VRR timeout
-            // instead arms zero-wait admission for later frames without
-            // changing the scheduler's validated load. Fixed and explicit
-            // recovery probes retain their direct transport contracts.
+            // its final timeline value. Fixed-refresh Adaptive retains the 3.3
+            // ordered recovery contract. A bounded VRR timeout instead arms
+            // zero-wait admission for later frames without changing the
+            // scheduler's validated load. Fixed and explicit recovery probes
+            // retain their direct transport contracts.
             const size_t skippedFrames =
                 plan.scheduledGeneratedFrames.size() - i;
             if (!this->adaptiveScheduler)
@@ -1807,8 +1796,7 @@ VkResult Swapchain::presentGeneratedFrames(
         "present-total", this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, invocation.started, result
     );
-    if (adaptiveFixedRefreshNonblocking ||
-            adaptiveVariableRefreshBounded) {
+    if (adaptiveVariableRefreshBounded) {
         if (plan.scheduledGeneratedFrames.size() ==
                 plan.requestedGeneratedFrames.size()) {
             const size_t requiredStableBatches =
@@ -2156,10 +2144,10 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     plan.boundedOrderedAcquireProbe = boundedOrderedAcquireProbe;
 
     // The Gamescope HDR bridge remains native-first. Normal fixed-refresh
-    // Adaptive ordered SDR retains its established zero-wait sequential
-    // acquisition. Requested VRR uses the finite application-present ceiling
-    // because its lower-image release is not fixed to an output-period ladder;
-    // a timeout moves later frames to zero-wait pressure preflight. Fixed and
+    // Adaptive ordered SDR retains the 3.3 bounded sequential acquisition.
+    // Requested VRR uses the same finite application-present ceiling because
+    // its lower-image release is not fixed to an output-period ladder; a
+    // timeout moves later frames to zero-wait pressure preflight. Fixed and
     // undersized-pool contracts remain unchanged.
     if (!this->generationPipelineReady(
             vk, gamescopeHdrTransport, plan, presentNow)) {

@@ -2304,8 +2304,8 @@ void AdaptiveScheduler::beginTransportRecovery(
     const auto retainedEfficiencyRetryAt =
         this->state.efficiencyProbe.retryAt;
     // The caller sets classifyGeneratedLoadFailure only for direct transport
-    // evidence such as fixed-refresh zero-wait admission, headroom failure
-    // during a higher-load evaluation, or a qualified native-drain probe.
+    // evidence such as headroom failure during a higher-load evaluation or a
+    // qualified native-drain probe.
     // Normal VRR deadline pressure uses a zero-wait circuit breaker and does
     // not enter this load-failure path.
     const bool failedRampProbe = classifyGeneratedLoadFailure &&
