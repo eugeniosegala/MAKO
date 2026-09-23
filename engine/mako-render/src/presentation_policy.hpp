@@ -256,25 +256,76 @@ namespace mako::layer {
             requestedGeneratedFrames;
     }
 
-    /// Adaptive work is optional and must never delay the application's real
-    /// present while waiting for generated swapchain images. Preserve the
-    /// established sequential acquire/present cadence, but use timeout zero
-    /// for each normal ordered acquire. The bounded one-image recovery probe
-    /// remains the sole exception because it owns a separate display-relative
-    /// timeout and native-drain contract.
-    [[nodiscard]] inline bool adaptiveOrderedDeliveryUsesNonblockingAcquire(
+    enum class AdaptiveOrderedDeliveryPolicy {
+        NotApplicable,
+        FixedRefreshNonblocking,
+        VariableRefreshBounded,
+    };
+
+    /// Adapt normal Adaptive ordered delivery to the compositor's explicit
+    /// pacing owner. Allow Tearing is deliberately not an input: MAKO's lower
+    /// SDR swapchain is FIFO regardless of that Steam preference.
+    [[nodiscard]] inline AdaptiveOrderedDeliveryPolicy
+    selectAdaptiveOrderedDeliveryPolicy(
             const bool adaptive,
             const bool orderedTransport,
             const bool orderedAcquireRecoveryProbe,
+            const bool gamescopeHdrTransport,
+            const bool headroomTightOrderedBatch,
+            const GamescopePresentationFeedback& presentationFeedback,
             const size_t requestedGeneratedFrames) noexcept {
-        return adaptive && orderedTransport &&
-            !orderedAcquireRecoveryProbe && requestedGeneratedFrames > 0;
+        if (!adaptive || !orderedTransport || orderedAcquireRecoveryProbe ||
+                gamescopeHdrTransport || headroomTightOrderedBatch ||
+                requestedGeneratedFrames == 0) {
+            return AdaptiveOrderedDeliveryPolicy::NotApplicable;
+        }
+        return presentationFeedback.variableRefreshRequested()
+            ? AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded
+            : AdaptiveOrderedDeliveryPolicy::FixedRefreshNonblocking;
     }
 
-    /// A normal Adaptive ordered shortfall is direct transport evidence
-    /// against the current generated load. The caller rejects an active ramp
-    /// or demotes an accepted load; Fixed and non-ordered paths retain their
-    /// own delivery contracts.
+    /// Variable refresh retains the established finite application-present
+    /// ceiling because lower-image release is not locked to a fixed output
+    /// period. Fixed refresh keeps its established zero-wait Adaptive contract
+    /// and therefore does not call this helper. Preserve any shorter explicit
+    /// ceiling and never derive it from source cadence that may already include
+    /// MAKO's own acquire wait.
+    [[nodiscard]] inline std::optional<uint64_t>
+    adaptiveVariableRefreshDeliveryAcquireBudget(
+            const AdaptiveOrderedDeliveryPolicy policy,
+            const std::optional<uint64_t> configuredBudget) noexcept {
+        if (policy !=
+                AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded) {
+            return configuredBudget;
+        }
+        constexpr uint64_t maximumVariableRefreshBudget = 50'000'000;
+        return std::min(
+            configuredBudget.value_or(maximumVariableRefreshBudget),
+            maximumVariableRefreshBudget
+        );
+    }
+
+    /// After one bounded Adaptive VRR acquire times out, retry lower-image
+    /// admission before backend work and without blocking. This circuit
+    /// breaker preserves the validated scheduler load while Gamescope is
+    /// temporarily holding every lower image, and automatically resumes as
+    /// soon as an image is available again.
+    [[nodiscard]] constexpr bool
+    adaptiveOrderedDeliveryNeedsPressurePreflight(
+            const AdaptiveOrderedDeliveryPolicy policy,
+            const bool generatedImageAdmissionUnderPressure,
+            const size_t requestedGeneratedFrames) noexcept {
+        return policy ==
+                AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded &&
+            generatedImageAdmissionUnderPressure &&
+            requestedGeneratedFrames > 0;
+    }
+
+    /// Some Adaptive ordered shortfalls are direct transport evidence against
+    /// the current generated load, such as headroom preflight during a higher
+    /// multiplier evaluation. A bounded VRR timeout instead uses the
+    /// pressure preflight above, so its caller preserves the scheduler while
+    /// transport availability is retried.
     [[nodiscard]] inline bool adaptiveOrderedDeliveryMissRequiresFallback(
             const bool adaptive,
             const bool orderedTransport,
@@ -383,7 +434,28 @@ namespace mako::layer {
         bool resumed{false};
         size_t missedAttempts{0};
         size_t bypassedFrames{0};
+        size_t stableBatches{0};
+        size_t requiredStableBatches{0};
     };
+
+    /// A successful generated batch presents every generated image plus the
+    /// application's real image. Require enough consecutive full batches to
+    /// account for one complete lower-swapchain turnover before re-arming a
+    /// bounded acquire. This is derived from owned WSI capacity rather than a
+    /// refresh-rate, source-rate, or device-specific timer.
+    [[nodiscard]] constexpr size_t
+    generatedImageAdmissionRecoveryBatches(
+            const size_t swapchainImages,
+            const size_t requestedGeneratedFrames) noexcept {
+        if (swapchainImages == 0 || requestedGeneratedFrames == 0)
+            return 1;
+        const size_t imagesPresentedPerBatch = requestedGeneratedFrames + 1;
+        return std::max<size_t>(
+            1,
+            (swapchainImages + imagesPresentedPerBatch - 1) /
+                imagesPresentedPerBatch
+        );
+    }
 
     /// Tracks temporary generated-swapchain pressure without turning it into
     /// an engine or temporal-history failure. Gamescope HDR and headroom-tight
@@ -403,10 +475,12 @@ namespace mako::layer {
                 this->pressure = true;
                 this->missedAttempts = 1;
                 this->bypassedFrames = 0;
+                this->stableBatches = 0;
                 return true;
             }
 
             this->missedAttempts++;
+            this->stableBatches = 0;
             return (this->missedAttempts & (this->missedAttempts - 1)) == 0;
         }
 
@@ -415,13 +489,23 @@ namespace mako::layer {
                 this->bypassedFrames++;
         }
 
-        [[nodiscard]] GeneratedImageAdmissionRecovery reportAvailable() {
+        [[nodiscard]] GeneratedImageAdmissionRecovery reportAvailable(
+                const size_t requiredStableBatches = 1) {
+            if (!this->pressure)
+                return {};
+            this->stableBatches++;
+            const size_t required = std::max<size_t>(
+                1, requiredStableBatches
+            );
             const GeneratedImageAdmissionRecovery recovery{
-                .resumed = this->pressure,
+                .resumed = this->stableBatches >= required,
                 .missedAttempts = this->missedAttempts,
                 .bypassedFrames = this->bypassedFrames,
+                .stableBatches = this->stableBatches,
+                .requiredStableBatches = required,
             };
-            this->reset();
+            if (recovery.resumed)
+                this->reset();
             return recovery;
         }
 
@@ -429,12 +513,14 @@ namespace mako::layer {
             this->pressure = false;
             this->missedAttempts = 0;
             this->bypassedFrames = 0;
+            this->stableBatches = 0;
         }
 
     private:
         bool pressure{false};
         size_t missedAttempts{0};
         size_t bypassedFrames{0};
+        size_t stableBatches{0};
     };
 
     /// Recovers the ordered SDR transport only from explicit Vulkan acquire

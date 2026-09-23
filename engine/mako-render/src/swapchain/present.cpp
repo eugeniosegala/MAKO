@@ -921,9 +921,12 @@ void Swapchain::handleGeneratedImageAdmissionPressure(
         const size_t admittedGeneratedFrames,
         const bool logPressure,
         const bool retainPartialAdmissionCapacity,
+        const bool classifyAdaptiveLoadFailure,
+        const uint64_t acquireTimeoutNanoseconds,
         const char* const action) {
     this->recoveryState.generatedImageAdmission.reportBypassedFrame();
-    const bool adaptiveOrderedAdmissionMiss = this->adaptiveScheduler &&
+    const bool adaptiveOrderedAdmissionMiss =
+        classifyAdaptiveLoadFailure && this->adaptiveScheduler &&
         adaptiveOrderedDeliveryMissRequiresFallback(
             this->profile.adaptive,
             this->privateOrderedTransport,
@@ -994,20 +997,26 @@ void Swapchain::handleGeneratedImageAdmissionPressure(
                   << " context=" << this->diagnosticsState.contextId
                   << " planned=" << plan.requestedGeneratedFrames.size()
                   << " admitted=" << admittedGeneratedFrames
-                  << " acquire_timeout_ns=0"
+                  << " acquire_timeout_ns=" << acquireTimeoutNanoseconds
                   << " action=" << action << '\n';
     }
 }
 
-void Swapchain::reportGeneratedImageAdmissionAvailable() {
+void Swapchain::reportGeneratedImageAdmissionAvailable(
+        const size_t requiredStableBatches) {
     const auto recovery =
-        this->recoveryState.generatedImageAdmission.reportAvailable();
+        this->recoveryState.generatedImageAdmission.reportAvailable(
+            requiredStableBatches
+        );
     if (recovery.resumed && presentDiagnosticsEnabled()) {
         std::cerr << "MAKO Renderer: present diagnostics: "
                      "operation=generated-admission-recovered"
                   << " context=" << this->diagnosticsState.contextId
                   << " missed_attempts=" << recovery.missedAttempts
                   << " bypassed_frames=" << recovery.bypassedFrames
+                  << " stable_batches=" << recovery.stableBatches
+                  << " required_stable_batches="
+                  << recovery.requiredStableBatches
                   << '\n';
     }
 }
@@ -1015,7 +1024,9 @@ void Swapchain::reportGeneratedImageAdmissionAvailable() {
 void Swapchain::preacquireGeneratedImages(
         const PresentInvocation& invocation,
         PresentationFramePlan& plan, const bool trackNonblockingAdmission,
-        const uint64_t acquireTimeout) {
+        const bool classifyAdaptiveLoadFailure,
+        const uint64_t acquireTimeout,
+        const bool reportAvailableOnFullAdmission) {
     if (plan.requestedGeneratedFrames.empty() || plan.historyWarmupActive)
         return;
 
@@ -1061,7 +1072,7 @@ void Swapchain::preacquireGeneratedImages(
 
     if (plan.admittedGeneratedFrameCount ==
             plan.requestedGeneratedFrames.size()) {
-        if (trackNonblockingAdmission)
+        if (trackNonblockingAdmission && reportAvailableOnFullAdmission)
             this->reportGeneratedImageAdmissionAvailable();
         return;
     }
@@ -1069,7 +1080,9 @@ void Swapchain::preacquireGeneratedImages(
     if (trackNonblockingAdmission) {
         this->handleGeneratedImageAdmissionPressure(
             plan, plan.admittedGeneratedFrameCount, logPressure, true,
-            "native-first"
+            classifyAdaptiveLoadFailure, 0,
+            classifyAdaptiveLoadFailure
+                ? "native-first" : "adaptive-pressure-retry"
         );
     }
 }
@@ -1292,6 +1305,12 @@ VkResult Swapchain::presentGeneratedFrames(
         const PresentInvocation& invocation,
         const PresentationFramePlan& plan,
         const bool gamescopeHdrTransport) {
+    const bool adaptiveFixedRefreshNonblocking =
+        plan.adaptiveOrderedDeliveryPolicy ==
+            AdaptiveOrderedDeliveryPolicy::FixedRefreshNonblocking;
+    const bool adaptiveVariableRefreshBounded =
+        plan.adaptiveOrderedDeliveryPolicy ==
+            AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded;
     auto maximumAcquireDuration = plan.preacquireDuration;
     auto totalAcquireDuration = plan.preacquireDuration;
     auto generatedSubmitDuration = DiagnosticsClock::duration::zero();
@@ -1421,11 +1440,11 @@ VkResult Swapchain::presentGeneratedFrames(
                         : 0
                 );
             acquireBudgetExhausted =
-                !plan.nonblockingGeneratedImageAcquire &&
+                !adaptiveFixedRefreshNonblocking &&
                 remainingAcquireBudget &&
                 *remainingAcquireBudget == 0;
             const uint64_t acquireTimeout =
-                plan.nonblockingGeneratedImageAcquire
+                adaptiveFixedRefreshNonblocking
                     ? 0
                     : orderedGeneratedImageAcquireTimeout(
                         this->gamescopeRefreshHz, remainingAcquireBudget
@@ -1447,7 +1466,7 @@ VkResult Swapchain::presentGeneratedFrames(
                 maximumAcquireDuration, acquireDuration
             );
             totalAcquireDuration += acquireDuration;
-            if (!plan.nonblockingGeneratedImageAcquire &&
+            if (!adaptiveFixedRefreshNonblocking &&
                     plan.configuredAcquireTimeout) {
                 const auto acquireBudget =
                     std::chrono::duration_cast<DiagnosticsClock::duration>(
@@ -1491,32 +1510,35 @@ VkResult Swapchain::presentGeneratedFrames(
             );
         }
 
-        if ((plan.nonblockingGeneratedImageAcquire ||
+        if ((adaptiveFixedRefreshNonblocking ||
                 plan.configuredAcquireTimeout) &&
                 (result == VK_TIMEOUT || result == VK_NOT_READY)) {
-            // Record this normal batch's delivery loss before recovery arms
-            // its guard and freezes observations. Otherwise intermittent
-            // timeouts separated by healthy batches disappear from Adaptive's
-            // multiplier evaluation even though generated outputs were lost.
+            // Record this normal batch's delivery loss before changing its
+            // transport state. Otherwise intermittent timeouts separated by
+            // healthy batches disappear from Adaptive's multiplier evaluation
+            // even though generated outputs were lost.
             this->reportAdaptiveDelivery(plan, i);
-            if (plan.nonblockingGeneratedImageAcquire) {
+            if (adaptiveFixedRefreshNonblocking ||
+                    adaptiveVariableRefreshBounded) {
                 const bool logPressure = this->recoveryState
                     .generatedImageAdmission.reportUnavailable();
                 this->handleGeneratedImageAdmissionPressure(
-                    plan, i, logPressure, false, "adaptive-fallback"
+                    plan, i, logPressure, false,
+                    adaptiveFixedRefreshNonblocking,
+                    lastAcquireTimeout,
+                    "adaptive-fallback"
                 );
             } else {
                 reportOrderedAcquire(
                     !acquireBudgetExhausted, acquireBudgetExhausted, i
                 );
             }
-            // The explicit legacy timeout is an anti-freeze ceiling. Backend
-            // work is already scheduled on this ordered path, so drain its
-            // final timeline value. Normal Adaptive reaches this branch only
-            // after a zero-timeout acquire reports pressure; it falls back
-            // without changing the healthy sequential FIFO cadence. Fixed
-            // retains its direct recovery contract; a transition-authorized
-            // Adaptive recovery probe can still reject its experiment above.
+            // Backend work is already scheduled on this ordered path, so drain
+            // its final timeline value. Fixed-refresh Adaptive retains its
+            // established direct load classification. A bounded VRR timeout
+            // instead arms zero-wait admission for later frames without
+            // changing the scheduler's validated load. Fixed and explicit
+            // recovery probes retain their direct transport contracts.
             const size_t skippedFrames =
                 plan.scheduledGeneratedFrames.size() - i;
             if (!this->adaptiveScheduler)
@@ -1590,11 +1612,9 @@ VkResult Swapchain::presentGeneratedFrames(
                           << " on_time=" << i
                           << " deadline_ms="
                           << static_cast<double>(
-                                plan.nonblockingGeneratedImageAcquire
-                                    ? 0
-                                    : acquireBudgetExhausted
-                                        ? *plan.configuredAcquireTimeout
-                                        : lastAcquireTimeout
+                                acquireBudgetExhausted
+                                    ? *plan.configuredAcquireTimeout
+                                    : lastAcquireTimeout
                              ) / 1'000'000.0
                           << " deadline_scope="
                           << (acquireBudgetExhausted
@@ -1787,8 +1807,21 @@ VkResult Swapchain::presentGeneratedFrames(
         "present-total", this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, invocation.started, result
     );
-    if (plan.nonblockingGeneratedImageAcquire) {
-        this->reportGeneratedImageAdmissionAvailable();
+    if (adaptiveFixedRefreshNonblocking ||
+            adaptiveVariableRefreshBounded) {
+        if (plan.scheduledGeneratedFrames.size() ==
+                plan.requestedGeneratedFrames.size()) {
+            const size_t requiredStableBatches =
+                adaptiveVariableRefreshBounded
+                    ? generatedImageAdmissionRecoveryBatches(
+                        this->info.images.size(),
+                        plan.requestedGeneratedFrames.size()
+                    )
+                    : 1;
+            this->reportGeneratedImageAdmissionAvailable(
+                requiredStableBatches
+            );
+        }
     } else {
         reportOrderedAcquire(
             false, false, plan.scheduledGeneratedFrames.size()
@@ -2122,11 +2155,12 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     );
     plan.boundedOrderedAcquireProbe = boundedOrderedAcquireProbe;
 
-    // The Gamescope HDR bridge remains native-first. Adaptive ordered SDR
-    // preserves its established sequential FIFO timing but never waits for a
-    // generated image during normal delivery. Fixed retains sequential FIFO
-    // delivery with a finite acquire budget when there is no relief image.
-    // Undersized pools remain opportunistic for both policies.
+    // The Gamescope HDR bridge remains native-first. Normal fixed-refresh
+    // Adaptive ordered SDR retains its established zero-wait sequential
+    // acquisition. Requested VRR uses the finite application-present ceiling
+    // because its lower-image release is not fixed to an output-period ladder;
+    // a timeout moves later frames to zero-wait pressure preflight. Fixed and
+    // undersized-pool contracts remain unchanged.
     if (!this->generationPipelineReady(
             vk, gamescopeHdrTransport, plan, presentNow)) {
         return this->presentNativeFrame(invocation);
@@ -2145,16 +2179,28 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->info.images.size(),
             plan.requestedGeneratedFrames.size()
         );
-    const bool adaptiveNonblockingOrderedDelivery =
-        adaptiveOrderedDeliveryUsesNonblockingAcquire(
-            this->profile.adaptive,
-            this->privateOrderedTransport,
-            orderedAcquireRecoveryProbe,
+    plan.adaptiveOrderedDeliveryPolicy =
+        selectAdaptiveOrderedDeliveryPolicy(
+            this->profile.adaptive, this->privateOrderedTransport,
+            orderedAcquireRecoveryProbe, gamescopeHdrTransport,
+            headroomTightOrderedBatch,
+            this->gamescopePresentationFeedback,
             plan.requestedGeneratedFrames.size()
         );
-    plan.nonblockingGeneratedImageAcquire =
-        adaptiveNonblockingOrderedDelivery &&
-        !gamescopeHdrTransport && !headroomTightOrderedBatch;
+    if (plan.adaptiveOrderedDeliveryPolicy ==
+            AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded) {
+        plan.configuredAcquireTimeout =
+            adaptiveVariableRefreshDeliveryAcquireBudget(
+                plan.adaptiveOrderedDeliveryPolicy,
+                plan.configuredAcquireTimeout
+            );
+    }
+    const bool adaptivePressureRetry =
+        adaptiveOrderedDeliveryNeedsPressurePreflight(
+            plan.adaptiveOrderedDeliveryPolicy,
+            this->recoveryState.generatedImageAdmission.underPressure(),
+            plan.requestedGeneratedFrames.size()
+        );
     const bool nativeFirstOrderedBatch = headroomTightOrderedBatch;
     if (nativeFirstOrderedBatch &&
             !this->diagnosticsState.orderedGeneratedAdmissionPolicyLogged &&
@@ -2170,10 +2216,11 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                   << " acquire_timeout_ns=0"
                   << " action=native-first\n";
     }
-    if (gamescopeHdrTransport || nativeFirstOrderedBatch) {
+    if (gamescopeHdrTransport || nativeFirstOrderedBatch ||
+            adaptivePressureRetry) {
         this->preacquireGeneratedImages(
-            invocation, plan, true,
-            0
+            invocation, plan, true, !adaptivePressureRetry, 0,
+            !adaptivePressureRetry
         );
     }
     size_t scheduledGeneratedFrameCount = plan.generatedImagesPreacquired
@@ -2213,7 +2260,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             )
             : 0;
         this->preacquireGeneratedImages(
-            invocation, plan, false, recoveryAcquireTimeout
+            invocation, plan, false, false, recoveryAcquireTimeout
         );
         if (plan.admittedGeneratedFrameCount == 0) {
             const auto probeFinishedAt = DiagnosticsClock::now();

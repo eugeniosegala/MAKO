@@ -261,11 +261,12 @@ namespace mako::layer {
             size_t admittedGeneratedFrameCount{0};
             bool historyWarmupActive{false};
             bool generatedImagesPreacquired{false};
-            // Normal Adaptive ordered delivery preserves sequential FIFO
-            // timing while refusing to wait for an unavailable generated
-            // image. Fixed and explicit recovery probes retain their own
-            // bounded acquire contracts.
-            bool nonblockingGeneratedImageAcquire{false};
+            // Fixed refresh retains zero-wait sequential acquire. Requested
+            // VRR uses a finite application-present ceiling, then zero-wait
+            // pressure preflight. One enum prevents contradictory modes.
+            AdaptiveOrderedDeliveryPolicy adaptiveOrderedDeliveryPolicy{
+                AdaptiveOrderedDeliveryPolicy::NotApplicable
+            };
             // Recovery probes are transport-owned synthetic delivery. Keep
             // them out of Adaptive ramp and Smooth Cadence qualification even
             // when an isolated guard clears before delivery is reported.
@@ -507,14 +508,19 @@ namespace mako::layer {
             const PresentInvocation& invocation,
             PresentationFramePlan& plan,
             bool trackNonblockingAdmission,
-            uint64_t acquireTimeout);
+            bool classifyAdaptiveLoadFailure,
+            uint64_t acquireTimeout,
+            bool reportAvailableOnFullAdmission = true);
         void handleGeneratedImageAdmissionPressure(
             const PresentationFramePlan& plan,
             size_t admittedGeneratedFrames,
             bool logPressure,
             bool retainPartialAdmissionCapacity,
+            bool classifyAdaptiveLoadFailure,
+            uint64_t acquireTimeoutNanoseconds,
             const char* action);
-        void reportGeneratedImageAdmissionAvailable();
+        void reportGeneratedImageAdmissionAvailable(
+            size_t requiredStableBatches = 1);
         void submitSourceCopy(const PresentInvocation& invocation,
             VkImage swapchainImage, const vk::Image& sourceImage);
         [[nodiscard]] VkResult presentHistoryOnly(

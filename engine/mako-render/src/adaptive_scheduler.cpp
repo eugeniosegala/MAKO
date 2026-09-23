@@ -2304,10 +2304,10 @@ void AdaptiveScheduler::beginTransportRecovery(
     const auto retainedEfficiencyRetryAt =
         this->state.efficiencyProbe.retryAt;
     // The caller sets classifyGeneratedLoadFailure only for direct transport
-    // evidence: a normal zero-wait Adaptive delivery miss or a qualified
-    // native-drain probe. At that point the current generated level is unsafe
-    // regardless of whether it was still experimental or had previously
-    // reached stable cadence.
+    // evidence such as fixed-refresh zero-wait admission, headroom failure
+    // during a higher-load evaluation, or a qualified native-drain probe.
+    // Normal VRR deadline pressure uses a zero-wait circuit breaker and does
+    // not enter this load-failure path.
     const bool failedRampProbe = classifyGeneratedLoadFailure &&
         this->state.ramp.evaluationAt.has_value();
     const size_t failedGenerationLimit =

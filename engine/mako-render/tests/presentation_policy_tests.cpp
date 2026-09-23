@@ -142,19 +142,100 @@ int main() {
             !orderedGeneratedBatchNeedsNonblockingAdmission(4, 6, 1) &&
             orderedGeneratedBatchNeedsNonblockingAdmission(4, 3, 1),
         "ordered admission did not distinguish a fitting batch from insufficient headroom");
-    expect(adaptiveOrderedDeliveryUsesNonblockingAcquire(
-                true, true, false, 1) &&
-            adaptiveOrderedDeliveryUsesNonblockingAcquire(
-                true, true, false, 2) &&
-            !adaptiveOrderedDeliveryUsesNonblockingAcquire(
-                false, true, false, 2) &&
-            !adaptiveOrderedDeliveryUsesNonblockingAcquire(
-                true, false, false, 2) &&
-            !adaptiveOrderedDeliveryUsesNonblockingAcquire(
-                true, true, true, 2) &&
-            !adaptiveOrderedDeliveryUsesNonblockingAcquire(
-                true, true, false, 0),
-        "Adaptive ordered batches lost zero-wait delivery boundaries");
+    const GamescopePresentationFeedback fixedRefresh{
+        .vrrEnabled = false,
+        .vrrCapable = true,
+        .vrrActive = false,
+        .allowTearing = false,
+    };
+    const GamescopePresentationFeedback fixedRefreshWithTearing{
+        .vrrEnabled = false,
+        .vrrCapable = true,
+        .vrrActive = false,
+        .allowTearing = true,
+    };
+    const GamescopePresentationFeedback requestedVrr{
+        .vrrEnabled = true,
+        .vrrCapable = true,
+        .vrrActive = false,
+        .allowTearing = false,
+    };
+    const GamescopePresentationFeedback activeVrr{
+        .vrrEnabled = true,
+        .vrrCapable = true,
+        .vrrActive = true,
+        .allowTearing = true,
+    };
+    const GamescopePresentationFeedback incapableVrr{
+        .vrrEnabled = true,
+        .vrrCapable = false,
+        .vrrActive = false,
+        .allowTearing = true,
+    };
+    const auto fixedPolicy = selectAdaptiveOrderedDeliveryPolicy(
+        true, true, false, false, false, fixedRefresh, 1
+    );
+    expect(fixedPolicy ==
+                AdaptiveOrderedDeliveryPolicy::FixedRefreshNonblocking &&
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, true, false, false, false,
+                fixedRefreshWithTearing, 1
+            ) == fixedPolicy &&
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, true, false, false, false, incapableVrr, 1
+            ) == fixedPolicy &&
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, true, false, false, false, {}, 2
+            ) == fixedPolicy,
+        "Adaptive fixed-refresh delivery lost its zero-wait boundary");
+    const auto variablePolicy = selectAdaptiveOrderedDeliveryPolicy(
+        true, true, false, false, false, requestedVrr, 1
+    );
+    expect(variablePolicy ==
+                AdaptiveOrderedDeliveryPolicy::VariableRefreshBounded &&
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, true, false, false, false, activeVrr, 2
+            ) == variablePolicy,
+        "Adaptive VRR feedback did not select bounded delivery");
+    for (const auto policy : {
+            selectAdaptiveOrderedDeliveryPolicy(
+                false, true, false, false, false, fixedRefresh, 1),
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, false, false, false, false, fixedRefresh, 1),
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, true, true, false, false, fixedRefresh, 1),
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, true, false, true, false, fixedRefresh, 1),
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, true, false, false, true, fixedRefresh, 1),
+            selectAdaptiveOrderedDeliveryPolicy(
+                true, true, false, false, false, fixedRefresh, 0),
+        }) {
+        expect(policy == AdaptiveOrderedDeliveryPolicy::NotApplicable,
+            "non-normal Adaptive delivery selected a pacing adapter");
+    }
+    expect(adaptiveVariableRefreshDeliveryAcquireBudget(
+                variablePolicy, 50'000'000) ==
+                    50'000'000 &&
+            adaptiveVariableRefreshDeliveryAcquireBudget(
+                variablePolicy, 20'000'000) ==
+                    20'000'000 &&
+            adaptiveVariableRefreshDeliveryAcquireBudget(
+                variablePolicy, std::nullopt) ==
+                    50'000'000 &&
+            adaptiveVariableRefreshDeliveryAcquireBudget(
+                fixedPolicy, 17'000'000) ==
+                    17'000'000,
+        "Adaptive VRR delivery lost its finite application-present ceiling");
+    expect(adaptiveOrderedDeliveryNeedsPressurePreflight(
+                variablePolicy, true, 1) &&
+            !adaptiveOrderedDeliveryNeedsPressurePreflight(
+                fixedPolicy, true, 1) &&
+            !adaptiveOrderedDeliveryNeedsPressurePreflight(
+                variablePolicy, false, 1) &&
+            !adaptiveOrderedDeliveryNeedsPressurePreflight(
+                variablePolicy, true, 0),
+        "Adaptive ordered pressure did not enter bounded zero-wait retry");
     expect(adaptiveOrderedDeliveryMissRequiresFallback(
                 true, true, 2, 0) &&
             adaptiveOrderedDeliveryMissRequiresFallback(
@@ -270,12 +351,28 @@ int main() {
     expect(!admission.reportUnavailable(),
         "third admission miss should be aggregated");
     admission.reportBypassedFrame();
-    const auto recovery = admission.reportAvailable();
-    expect(recovery.resumed && recovery.missedAttempts == 3 &&
-            recovery.bypassedFrames == 2,
+    const auto pendingRecovery = admission.reportAvailable(2);
+    expect(!pendingRecovery.resumed && admission.underPressure(),
+        "one available batch prematurely re-armed admission");
+    expect(admission.reportUnavailable(),
+        "a miss after partial recovery lost pressure diagnostics");
+    admission.reportBypassedFrame();
+    const auto pendingAgain = admission.reportAvailable(2);
+    expect(!pendingAgain.resumed && admission.underPressure(),
+        "interrupted admission stability was not reset");
+    const auto recovery = admission.reportAvailable(2);
+    expect(recovery.resumed && recovery.missedAttempts == 4 &&
+            recovery.bypassedFrames == 3 && recovery.stableBatches == 2 &&
+            recovery.requiredStableBatches == 2,
         "admission recovery lost its aggregated pressure counters");
     expect(!admission.underPressure(),
         "admission recovery did not reset pressure");
+    expect(generatedImageAdmissionRecoveryBatches(7, 2) == 3 &&
+            generatedImageAdmissionRecoveryBatches(7, 1) == 4 &&
+            generatedImageAdmissionRecoveryBatches(4, 3) == 1 &&
+            generatedImageAdmissionRecoveryBatches(0, 2) == 1 &&
+            generatedImageAdmissionRecoveryBatches(7, 0) == 1,
+        "admission recovery was not derived from lower WSI turnover");
 
     expect(OrderedAcquireRecovery::maximumRetryDelay() == 30s,
         "ordered acquire recovery must cap direct-failure retry delay");
