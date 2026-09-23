@@ -82,13 +82,6 @@ vi.mock("@decky/ui", () => ({
   ),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
-  MakoInlineTip: ({
-    children,
-    tone,
-  }: {
-    children: React.ReactNode;
-    tone?: string;
-  }) => <div data-tone={tone}>{children}</div>,
   MakoRestartLabel: ({ label }: { label: string }) => label,
   MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
     <div data-mako-setting-relationship="true">{children}</div>
@@ -154,8 +147,8 @@ describe("Frame Generation controls", () => {
     fireEvent.click(lighterModel);
     expect(onConfigChange).toHaveBeenCalledWith("performance_mode", true);
     expect(
-      screen.getByText(
-        /0x pauses generation live. Select 2x–5x for a constant generation ratio/,
+      within(fixedMultiplierField as HTMLElement).getByText(
+        /Use 0x to pause or resume Frame Generation live without unloading its resources. Select 2x–5x for a constant generation ratio/,
       ),
     ).toBeTruthy();
     expect(
@@ -167,13 +160,6 @@ describe("Frame Generation controls", () => {
       screen.queryByText(/MAKO prepares and swaps private resources live/),
     ).toBeNull();
     expect(screen.queryByText(/may require a restart/)).toBeNull();
-    expect(
-      screen
-        .getByText(
-          "Use 0x below to pause or resume Frame Generation live without unloading its resources.",
-        )
-        .getAttribute("data-tone"),
-    ).toBe("info");
     fireEvent.click(
       within(fixedMultiplierField as HTMLElement).getByText("Set 5x"),
     );
@@ -215,8 +201,9 @@ describe("Frame Generation controls", () => {
       ),
     ).toBeTruthy();
     expect(
-      screen.getByText(/^0x pauses generation live. Otherwise this is/).style
-        .paddingBottom,
+      within(adaptiveMultiplierField as HTMLElement).getByText(
+        /^Use 0x to pause or resume Frame Generation live without unloading its resources. Otherwise this is/,
+      ).style.paddingBottom,
     ).toBe("2px");
     fireEvent.click(
       within(adaptiveMultiplierField as HTMLElement).getByText("Set 5x"),
@@ -333,7 +320,7 @@ describe("Frame Generation controls", () => {
     expect(screen.queryByText(/Maximum Adaptive Multiplier/)).toBeNull();
     expect(
       screen.queryByText(
-        "Use 0x below to pause or resume Frame Generation live without unloading its resources.",
+        /Use 0x to pause or resume Frame Generation live without unloading its resources/,
       ),
     ).toBeNull();
 

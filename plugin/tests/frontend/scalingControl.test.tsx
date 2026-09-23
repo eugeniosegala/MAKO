@@ -324,12 +324,8 @@ describe("Scaling controls", () => {
       ),
     ).toBeTruthy();
     expect(
-      screen
-        .getByText(
-          "Leave Scaling off when you do not need it, as it consumes resources. Using it with Frame Generation may affect performance; try different performance settings or a lower in-game resolution.",
-        )
-        .closest('[data-tone="warning"]'),
-    ).toBeTruthy();
+      screen.queryByText(/Leave Scaling off when you do not need it/),
+    ).toBeNull();
     expect(
       screen.getByText(
         "Choose the scaling model. You can change it while the game is running.",

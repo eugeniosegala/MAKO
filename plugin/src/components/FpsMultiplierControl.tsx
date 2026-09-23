@@ -19,7 +19,6 @@ import {
 } from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
 import {
-  MakoInlineTip,
   MakoRestartLabel,
   MakoSettingRelationship,
 } from "./MakoUi";
@@ -84,22 +83,10 @@ export function FpsMultiplierControl({
             />
           }
           description={
-            <>
-              <div>
-                {t(
-                  "FRAME_GENERATION_PROVISIONED_DESC",
-                  "Enable before starting the game. Loads and provisions MAKO Frame Generation. Turn it off when you only want Scaling or Shaders.",
-                )}
-              </div>
-              {frameGenerationProvisioned && (
-                <MakoInlineTip tone="info">
-                  {t(
-                    "FRAME_GENERATION_PROVISIONED_NOTE",
-                    "Use 0x below to pause or resume Frame Generation live without unloading its resources.",
-                  )}
-                </MakoInlineTip>
-              )}
-            </>
+            t(
+              "FRAME_GENERATION_PROVISIONED_DESC",
+              "Enable before starting the game. Loads and provisions MAKO Frame Generation. Turn it off when you only want Scaling or Shaders.",
+            )
           }
           checked={frameGenerationProvisioned}
           bottomSeparator={frameGenerationProvisioned ? undefined : "none"}
@@ -199,7 +186,7 @@ export function FpsMultiplierControl({
                     <span style={{ display: "block", paddingBottom: "2px" }}>
                       {t(
                         "ADAPTIVE_MAX_MULTIPLIER_DESC",
-                        "0x pauses generation live. Otherwise this is the interpolation ceiling, not a fixed ratio; Adaptive may use lower or fractional multipliers. Test 2x–5x per game.",
+                        "Use 0x to pause or resume Frame Generation live without unloading its resources. Otherwise this is the interpolation ceiling, not a fixed ratio; Adaptive may use lower or fractional multipliers. Test 2x–5x per game.",
                       )}
                     </span>
                   }
@@ -237,7 +224,7 @@ export function FpsMultiplierControl({
                 label={`${t("FIXED_MULTIPLIER", "Fixed Multiplier")} (${frameGenerationEnabled ? fixedMultiplier : 0}x)`}
                 description={t(
                   "FIXED_MULTIPLIER_DESC",
-                  "0x pauses generation live. Select 2x–5x for a constant generation ratio; 5x is a high-cost option for high-refresh displays.",
+                  "Use 0x to pause or resume Frame Generation live without unloading its resources. Select 2x–5x for a constant generation ratio; 5x is a high-cost option for high-refresh displays.",
                 )}
                 value={
                   frameGenerationEnabled

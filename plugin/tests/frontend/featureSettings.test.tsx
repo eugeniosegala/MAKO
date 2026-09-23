@@ -20,6 +20,17 @@ vi.mock("../../src/components/MakoUi", () => ({
       {description}
     </div>
   ),
+  MakoInlineTip: ({
+    children,
+    tone,
+  }: {
+    children: React.ReactNode;
+    tone?: string;
+  }) => (
+    <div role="note" data-tone={tone}>
+      {children}
+    </div>
+  ),
   MakoFocusable: ({
     children,
     onActivate: _onActivate,
@@ -81,9 +92,18 @@ describe("primary feature organization", () => {
     );
 
     expect(screen.getByText("Image Processing")).toBeTruthy();
+    const sharedPerformanceInfo = screen.getByText(
+      "Combining Frame Generation, Scaling, and Shaders can affect performance. Test each game, disable features you do not need, and try both Windowed and Fullscreen modes.",
+    );
+    expect(sharedPerformanceInfo.closest('[data-tone="info"]')).toBeTruthy();
     expect(
       screen.getByRole("tablist", { name: "Image Processing" }),
     ).toBeTruthy();
+    expect(
+      sharedPerformanceInfo.compareDocumentPosition(
+        screen.getByRole("tablist", { name: "Image Processing" }),
+      ) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).not.toBe(0);
     expect(screen.getAllByRole("tab")).toHaveLength(3);
     expect(
       screen

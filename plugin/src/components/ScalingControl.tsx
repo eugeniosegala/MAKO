@@ -118,20 +118,10 @@ export function ScalingControl({
             />
           }
           description={
-            <>
-              <div>
-                {t(
-                  "SCALING_ENABLED_DESC",
-                  "Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO Scaler.",
-                )}
-              </div>
-              <MakoInlineTip tone="warning">
-                {t(
-                  "SCALING_ENABLED_WARNING",
-                  "Leave Scaling off when you do not need it, as it consumes resources. Using it with Frame Generation may affect performance; try different performance settings or a lower in-game resolution.",
-                )}
-              </MakoInlineTip>
-            </>
+            t(
+              "SCALING_ENABLED_DESC",
+              "Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO Scaler.",
+            )
           }
           checked={config.scaling_enabled}
           disabled={disabled}

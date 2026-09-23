@@ -1,3 +1,4 @@
+import { PanelSectionRow } from "@decky/ui";
 import { useState } from "react";
 import type { ConfigurationEditorProps } from "./settings/types";
 import type { RuntimeScalingUiState } from "../utils/runtimeScalingUtils";
@@ -7,7 +8,7 @@ import { ScalingControl } from "./ScalingControl";
 import { PerformanceConfigurationGroup } from "./settings/PerformanceConfigurationGroup";
 import { ShadersConfigurationGroup } from "./settings/ShadersConfigurationGroup";
 import { FrameGenerationConfigurationSection } from "./ConfigurationSection";
-import { MakoSectionHeader } from "./MakoUi";
+import { MakoInlineTip, MakoSectionHeader } from "./MakoUi";
 import { DEFAULT_PROFILE_NAME } from "../config/configSchema";
 import { ModalityTabs, type ModalityId } from "./ModalityTabs";
 
@@ -44,6 +45,14 @@ export function FeatureSettings({
       <MakoSectionHeader>
         {t("CONTENT_IMAGE_PROCESSING", "Image Processing")}
       </MakoSectionHeader>
+      <PanelSectionRow>
+        <MakoInlineTip tone="info">
+          {t(
+            "IMAGE_PROCESSING_PERFORMANCE_INFO",
+            "Combining Frame Generation, Scaling, and Shaders can affect performance. Test each game, disable features you do not need, and try both Windowed and Fullscreen modes.",
+          )}
+        </MakoInlineTip>
+      </PanelSectionRow>
       <ModalityTabs
         activeModality={activeModality}
         onModalityChange={setActiveModality}
