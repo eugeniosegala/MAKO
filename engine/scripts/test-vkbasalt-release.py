@@ -39,6 +39,7 @@ class VkBasaltReleaseTests(unittest.TestCase):
         }
 
     def _archive(self, root: Path) -> Path:
+        live_reload_markers = b" ".join(MODULE.LIVE_RELOAD_MARKERS)
         manifest = lambda architecture: (json.dumps({
             "file_format_version": "1.2.1",
             "layer": {
@@ -53,11 +54,11 @@ class VkBasaltReleaseTests(unittest.TestCase):
         members = {
             MODULE.SOURCE_PATHS["lib64"]: (
                 b"\x7fELF\x02vkBasalt_GetInstanceProcAddr "
-                b"vkBasalt_GetDeviceProcAddr"
+                b"vkBasalt_GetDeviceProcAddr " + live_reload_markers
             ),
             MODULE.SOURCE_PATHS["lib32"]: (
                 b"\x7fELF\x01vkBasalt_GetInstanceProcAddr "
-                b"vkBasalt_GetDeviceProcAddr"
+                b"vkBasalt_GetDeviceProcAddr " + live_reload_markers
             ),
             MODULE.SOURCE_PATHS["manifest64"]: manifest("64"),
             MODULE.SOURCE_PATHS["manifest32"]: manifest("32"),
@@ -118,6 +119,24 @@ class VkBasaltReleaseTests(unittest.TestCase):
             self.pin["sha256"] = "f" * 64
             with self.assertRaisesRegex(ValueError, "checksum mismatch"):
                 MODULE._validate_archive(self.pin, archive)
+
+    def test_rejects_library_without_complete_live_shader_catalog(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            archive = self._archive(root)
+            members = MODULE._archive_members(archive)
+            members[MODULE.SOURCE_PATHS["lib64"]] = members[
+                MODULE.SOURCE_PATHS["lib64"]
+            ].replace(b"makoHDRLook", b"missingHDRLook")
+
+            with self.assertRaisesRegex(
+                ValueError,
+                "lib64 library is missing MAKO live reload markers: makoHDRLook",
+            ):
+                MODULE._validate_live_reload_markers(
+                    "lib64",
+                    members[MODULE.SOURCE_PATHS["lib64"]],
+                )
 
 
 if __name__ == "__main__":

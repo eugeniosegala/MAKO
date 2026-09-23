@@ -33,6 +33,26 @@ SOURCE_PATHS = {
 LAYER_NAME = "VK_LAYER_VKBASALT_post_processing"
 ENABLE_ENVIRONMENT = {"ENABLE_VKBASALT": "1"}
 DISABLE_ENVIRONMENT = {"DISABLE_VKBASALT": "1"}
+LIVE_RELOAD_MARKERS = (
+    b"VKBASALT_CONFIG_RELOAD",
+    b"makoVibrance",
+    b"makoCurves",
+    b"makoDeband",
+    b"makoTechnicolor",
+    b"makoSepia",
+    b"makoMonochrome",
+    b"makoVignette",
+    b"makoHDRLook",
+    b"makoColourfulness",
+    b"makoTechnicolor2",
+    b"makoDPX",
+    b"makoBleachBypass",
+    b"makoNoir",
+    b"makoFilmGrain",
+    b"makoCartoon",
+    b"makoNostalgia",
+    b"makoChromaticAberration",
+)
 
 
 def _read_pin(path: Path) -> dict[str, Any]:
@@ -115,6 +135,19 @@ def _archive_members(archive_path: Path) -> dict[str, bytes]:
     return members
 
 
+def _validate_live_reload_markers(key: str, binary: bytes) -> None:
+    missing_live_markers = [
+        marker.decode("ascii")
+        for marker in LIVE_RELOAD_MARKERS
+        if marker not in binary
+    ]
+    if missing_live_markers:
+        raise ValueError(
+            f"vkBasalt {key} library is missing MAKO live reload markers: "
+            + ", ".join(missing_live_markers)
+        )
+
+
 def _validate_archive(pin: dict[str, Any], archive_path: Path) -> dict[str, bytes]:
     actual = _sha256(archive_path)
     if actual != pin["sha256"]:
@@ -144,6 +177,7 @@ def _validate_archive(pin: dict[str, Any], archive_path: Path) -> dict[str, byte
             or b"vkBasalt_GetDeviceProcAddr" not in binary
         ):
             raise ValueError(f"vkBasalt {key} library is missing its layer entrypoints")
+        _validate_live_reload_markers(key, binary)
     for key, architecture in (("manifest64", "64"), ("manifest32", "32")):
         manifest = json.loads(members[SOURCE_PATHS[key]])
         layer = manifest.get("layer", {})
