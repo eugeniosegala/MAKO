@@ -142,6 +142,32 @@ int main() {
             !orderedGeneratedBatchNeedsNonblockingAdmission(4, 6, 1) &&
             orderedGeneratedBatchNeedsNonblockingAdmission(4, 3, 1),
         "ordered admission did not distinguish a fitting batch from insufficient headroom");
+    expect(adaptiveOrderedDeliveryUsesNonblockingAcquire(
+                true, true, false, 1) &&
+            adaptiveOrderedDeliveryUsesNonblockingAcquire(
+                true, true, false, 2) &&
+            !adaptiveOrderedDeliveryUsesNonblockingAcquire(
+                false, true, false, 2) &&
+            !adaptiveOrderedDeliveryUsesNonblockingAcquire(
+                true, false, false, 2) &&
+            !adaptiveOrderedDeliveryUsesNonblockingAcquire(
+                true, true, true, 2) &&
+            !adaptiveOrderedDeliveryUsesNonblockingAcquire(
+                true, true, false, 0),
+        "Adaptive ordered batches lost zero-wait delivery boundaries");
+    expect(adaptiveOrderedDeliveryMissRequiresFallback(
+                true, true, 2, 0) &&
+            adaptiveOrderedDeliveryMissRequiresFallback(
+                true, true, 2, 1) &&
+            !adaptiveOrderedDeliveryMissRequiresFallback(
+                true, true, 2, 2) &&
+            !adaptiveOrderedDeliveryMissRequiresFallback(
+                true, true, 0, 0) &&
+            !adaptiveOrderedDeliveryMissRequiresFallback(
+                false, true, 2, 0) &&
+            !adaptiveOrderedDeliveryMissRequiresFallback(
+                true, false, 2, 0),
+        "Adaptive ordered delivery misses lost immediate fallback policy");
     for (uint32_t applicationImages = 2; applicationImages <= 4; ++applicationImages) {
         for (size_t generated = 1; generated <= 4; ++generated) {
             const size_t images = applicationImages + generated;

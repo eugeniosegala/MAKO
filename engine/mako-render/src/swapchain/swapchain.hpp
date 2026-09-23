@@ -261,6 +261,11 @@ namespace mako::layer {
             size_t admittedGeneratedFrameCount{0};
             bool historyWarmupActive{false};
             bool generatedImagesPreacquired{false};
+            // Normal Adaptive ordered delivery preserves sequential FIFO
+            // timing while refusing to wait for an unavailable generated
+            // image. Fixed and explicit recovery probes retain their own
+            // bounded acquire contracts.
+            bool nonblockingGeneratedImageAcquire{false};
             // Recovery probes are transport-owned synthetic delivery. Keep
             // them out of Adaptive ramp and Smooth Cadence qualification even
             // when an isolated guard clears before delivery is reported.
@@ -503,6 +508,13 @@ namespace mako::layer {
             PresentationFramePlan& plan,
             bool trackNonblockingAdmission,
             uint64_t acquireTimeout);
+        void handleGeneratedImageAdmissionPressure(
+            const PresentationFramePlan& plan,
+            size_t admittedGeneratedFrames,
+            bool logPressure,
+            bool retainPartialAdmissionCapacity,
+            const char* action);
+        void reportGeneratedImageAdmissionAvailable();
         void submitSourceCopy(const PresentInvocation& invocation,
             VkImage swapchainImage, const vk::Image& sourceImage);
         [[nodiscard]] VkResult presentHistoryOnly(

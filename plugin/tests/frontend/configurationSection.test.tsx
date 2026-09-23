@@ -130,7 +130,7 @@ vi.mock("../../src/components/MakoUi", () => ({
   }) => (
     <span
       data-mako-experimental-setting-label="true"
-      style={{ columnGap: "6px", rowGap: "6px" }}
+      style={{ alignItems: "flex-start", flexDirection: "column", rowGap: "4px" }}
     >
       <span>{label}</span>
       <span data-mako-experimental-badge="true">{badgeLabel}</span>
@@ -240,18 +240,25 @@ describe("Configuration controls", () => {
       />,
     );
 
-    expect(screen.getByText("Enable Shaders")).toBeTruthy();
+    expect(screen.getByText("Enable Shaders (Restart)")).toBeTruthy();
     expect(
       screen.getByText(
         "Enable before starting the game. Applies MAKO's bundled sharpening, anti-aliasing, and shader effects. No separate installation is needed. If effects are not visible, switch between Windowed and Fullscreen.",
       ),
     ).toBeTruthy();
-    expect(screen.getByText("Experimental")).toBeTruthy();
+    expect(
+      screen
+        .getByText("Experimental")
+        .getAttribute("data-mako-experimental-badge"),
+    ).toBe("true");
     expect(screen.getByText("Sharpening")).toBeTruthy();
     expect(screen.getByText("Sharpness (55%)")).toBeTruthy();
     expect(screen.getByText("DLS Denoise (20%)")).toBeTruthy();
     expect(screen.getByText("Anti-aliasing")).toBeTruthy();
     expect(screen.getByText("Shaders")).toBeTruthy();
+    expect(
+      screen.queryByText(/apply live while vkBasalt is active/i),
+    ).toBeNull();
     expect(
       screen
         .getAllByText(/^(Shaders|Sharpening)$/)
@@ -275,7 +282,7 @@ describe("Configuration controls", () => {
     );
     expect(
       screen.getByText(
-        "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. This file belongs to the selected profile and is removed when that profile is deleted.",
+        "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. This file belongs to the selected profile and is removed when that profile is deleted.",
       ),
     ).toBeTruthy();
   });
@@ -295,7 +302,7 @@ describe("Configuration controls", () => {
 
     expect(
       screen.getByText(
-        "Advanced options can be edited in /home/deck/.config/vkBasalt/vkBasalt.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. The Default profile uses this global file.",
+        "Advanced options can be edited in /home/deck/.config/vkBasalt/vkBasalt.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
       ),
     ).toBeTruthy();
     expect(screen.queryByText("vkBasalt Configuration (Restart)")).toBeNull();
@@ -567,7 +574,7 @@ describe("Configuration controls", () => {
       ),
     ).toBeNull();
     expect(screen.queryByText("Enable MangoHud (Restart)")).toBeNull();
-    expect(screen.queryByText("Shaders (Restart)")).toBeNull();
+    expect(screen.queryByText("Enable Shaders (Restart)")).toBeNull();
 
     const collapseButton = container.querySelector<HTMLButtonElement>(
       ".MAKO_ExternalToolsCollapseButton_Container button",
@@ -576,7 +583,7 @@ describe("Configuration controls", () => {
     fireEvent.click(collapseButton!);
 
     expect(screen.getByText("Enable MangoHud (Restart)")).toBeTruthy();
-    expect(screen.queryByText("Shaders (Restart)")).toBeNull();
+    expect(screen.queryByText("Enable Shaders (Restart)")).toBeNull();
     expect(screen.queryByText("Experimental")).toBeNull();
     expect(localStorage.getItem("mako-external-tools-collapsed")).toBe("false");
   });

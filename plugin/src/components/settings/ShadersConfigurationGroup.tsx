@@ -124,7 +124,7 @@ export function ShadersConfigurationGroup({
         <ToggleField
           label={
             <MakoExperimentalSettingLabel
-              label={t("CONFIG_ENABLE_VKBASALT", "Enable Shaders")}
+              label={t("CONFIG_ENABLE_VKBASALT", "Enable Shaders (Restart)")}
               badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
             />
           }
@@ -152,7 +152,7 @@ export function ShadersConfigurationGroup({
               label={t("CONFIG_VKBASALT_SHADER", "Shaders")}
               description={t(
                 "CONFIG_VKBASALT_SHADER_DESC",
-                "Choose one lightweight colour or finishing effect. Changes apply live while vkBasalt is active.",
+                "Choose one lightweight colour or finishing effect.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
@@ -172,7 +172,7 @@ export function ShadersConfigurationGroup({
               label={t("CONFIG_VKBASALT_SHARPENING", "Sharpening")}
               description={t(
                 "CONFIG_VKBASALT_SHARPENING_DESC",
-                "CAS is a crisp general-purpose sharpener. DLS can preserve noisy or grainy detail better when paired with denoise. Changes apply live while vkBasalt is active.",
+                "CAS is a crisp general-purpose sharpener. DLS can preserve noisy or grainy detail better when paired with denoise.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
@@ -195,7 +195,7 @@ export function ShadersConfigurationGroup({
                 })}
                 description={t(
                   "CONFIG_VKBASALT_SHARPNESS_DESC",
-                  "Higher values produce a stronger effect but can exaggerate grain and create halos around high-contrast edges. Changes apply live while vkBasalt is active.",
+                  "Higher values produce a stronger effect but can exaggerate grain and create halos around high-contrast edges.",
                 )}
                 value={config.vkbasalt_sharpness}
                 min={VKBASALT_STRENGTH_MIN}
@@ -216,7 +216,7 @@ export function ShadersConfigurationGroup({
                 )}
                 description={t(
                   "CONFIG_VKBASALT_DLS_DENOISE_DESC",
-                  "Limits how strongly DLS sharpens film grain and fine noise. Changes apply live while vkBasalt is active.",
+                  "Limits how strongly DLS sharpens film grain and fine noise.",
                 )}
                 value={config.vkbasalt_dls_denoise}
                 min={VKBASALT_STRENGTH_MIN}
@@ -234,7 +234,7 @@ export function ShadersConfigurationGroup({
               label={t("CONFIG_VKBASALT_ANTIALIASING", "Anti-aliasing")}
               description={t(
                 "CONFIG_VKBASALT_ANTIALIASING_DESC",
-                "Optionally smooth jagged edges before sharpening. FXAA is lighter and softer; SMAA is more selective and may cost more GPU time. Changes apply live while vkBasalt is active.",
+                "Optionally smooth jagged edges before sharpening. FXAA is lighter and softer; SMAA is more selective and may cost more GPU time.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
@@ -254,12 +254,12 @@ export function ShadersConfigurationGroup({
               {isDefaultProfile
                 ? t(
                     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE",
-                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. The Default profile uses this global file.",
+                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
                     { path: displayedConfigPath },
                   )
                 : t(
                     "CONFIG_VKBASALT_ADVANCED_PROFILE_NOTE",
-                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch; the controls above apply live while vkBasalt is active. This file belongs to the selected profile and is removed when that profile is deleted.",
+                    "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. This file belongs to the selected profile and is removed when that profile is deleted.",
                     { path: displayedConfigPath },
                   )}
             </MakoInlineTip>

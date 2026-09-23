@@ -2303,11 +2303,11 @@ void AdaptiveScheduler::beginTransportRecovery(
     // backoff intact.
     const auto retainedEfficiencyRetryAt =
         this->state.efficiencyProbe.retryAt;
-    // One isolated timeout is not sufficient evidence against a generated
-    // load. The caller sets classifyGeneratedLoadFailure only after direct
-    // transport evidence has qualified a native drain and bounded probe. At
-    // that point the current generated level is unsafe regardless of whether
-    // it was still experimental or had previously reached stable cadence.
+    // The caller sets classifyGeneratedLoadFailure only for direct transport
+    // evidence: a normal zero-wait Adaptive delivery miss or a qualified
+    // native-drain probe. At that point the current generated level is unsafe
+    // regardless of whether it was still experimental or had previously
+    // reached stable cadence.
     const bool failedRampProbe = classifyGeneratedLoadFailure &&
         this->state.ramp.evaluationAt.has_value();
     const size_t failedGenerationLimit =

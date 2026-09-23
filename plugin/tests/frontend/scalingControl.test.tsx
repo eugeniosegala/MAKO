@@ -253,8 +253,9 @@ describe("Scaling controls", () => {
     );
 
     const enabled = screen.getByRole("button", {
-      name: "Enable Scaling Experimental",
+      name: "Enable Scaling (Restart) Experimental",
     });
+    expect(screen.getByText("(Restart)")).toBeTruthy();
     expect(
       screen
         .getByText("Experimental")
@@ -286,7 +287,7 @@ describe("Scaling controls", () => {
     expect(
       screen
         .getByRole("button", {
-          name: "Enable Scaling Experimental",
+          name: "Enable Scaling (Restart) Experimental",
         })
         .getAttribute("data-bottom-separator"),
     ).toBe("default");
@@ -583,7 +584,7 @@ describe("Scaling controls", () => {
     expect(
       (
         screen.getByRole("button", {
-          name: "Enable Scaling Experimental",
+          name: "Enable Scaling (Restart) Experimental",
         }) as HTMLButtonElement
       ).disabled,
     ).toBe(true);

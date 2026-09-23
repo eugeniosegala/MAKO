@@ -119,6 +119,7 @@ export function MakoExperimentalBadge({ label }: { label: string }) {
       style={{
         display: "inline-flex",
         alignItems: "center",
+        alignSelf: "flex-start",
         padding: "1px 5px",
         border: "1px solid rgba(244, 162, 89, 0.5)",
         borderRadius: "999px",
@@ -137,7 +138,7 @@ export function MakoExperimentalBadge({ label }: { label: string }) {
   );
 }
 
-/** Keep experimental setting labels on one shared compact spacing rhythm. */
+/** Place the experimental badge on its own line below the complete setting label. */
 export function MakoExperimentalSettingLabel({
   label,
   badgeLabel,
@@ -147,10 +148,9 @@ export function MakoExperimentalSettingLabel({
       data-mako-experimental-setting-label="true"
       style={{
         display: "inline-flex",
-        alignItems: "center",
-        columnGap: "6px",
-        rowGap: "6px",
-        flexWrap: "wrap",
+        alignItems: "flex-start",
+        flexDirection: "column",
+        rowGap: "4px",
       }}
     >
       <MakoRestartLabel label={label} />

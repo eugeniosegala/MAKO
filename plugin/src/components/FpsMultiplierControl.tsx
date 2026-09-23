@@ -79,7 +79,7 @@ export function FpsMultiplierControl({
             <MakoRestartLabel
               label={t(
                 "FRAME_GENERATION_PROVISIONED",
-                "Enable Frame-gen",
+                "Enable Frame-gen (Restart)",
               )}
             />
           }
@@ -88,7 +88,7 @@ export function FpsMultiplierControl({
               <div>
                 {t(
                   "FRAME_GENERATION_PROVISIONED_DESC",
-                  "Loads and provisions MAKO Frame Generation when the game starts. Turn it off when you only want Scaling or Shaders.",
+                  "Enable before starting the game. Loads and provisions MAKO Frame Generation. Turn it off when you only want Scaling or Shaders.",
                 )}
               </div>
               {frameGenerationProvisioned && (

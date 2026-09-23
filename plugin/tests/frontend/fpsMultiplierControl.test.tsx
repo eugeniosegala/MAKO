@@ -259,9 +259,14 @@ describe("Frame Generation controls", () => {
 
     expect(
       screen
-        .getByText("Enable Frame-gen")
+        .getByText("Enable Frame-gen (Restart)")
         .getAttribute("data-checked"),
     ).toBe("true");
+    expect(
+      screen.getByText(
+        "Enable before starting the game. Loads and provisions MAKO Frame Generation. Turn it off when you only want Scaling or Shaders.",
+      ),
+    ).toBeTruthy();
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
     expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
@@ -320,7 +325,7 @@ describe("Frame Generation controls", () => {
       />,
     );
 
-    const provision = screen.getByText("Enable Frame-gen");
+    const provision = screen.getByText("Enable Frame-gen (Restart)");
     expect(provision.getAttribute("data-checked")).toBe("false");
     expect(provision.getAttribute("data-bottom-separator")).toBe("none");
     expect(screen.queryByText("Adaptive Frame Generation")).toBeNull();

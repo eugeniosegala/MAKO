@@ -3758,6 +3758,48 @@ namespace {
             "qualified 2x delivery failure did not retain retry backoff");
     }
 
+    void testQualifiedTransportFailureDemotesAcceptedThreeXToTwoX() {
+        Harness harness(
+            120,
+            3,
+            false,
+            AdaptiveRecoveryPolicy::OrderedSdr,
+            false,
+            ls::dynamicCadenceProbeIntervalDuration(
+                ls::GameConfDefaults::dynamicCadenceProbeIntervalSeconds
+            ),
+            120,
+            false
+        );
+        harness.start();
+        harness.runAtFps(45.0, 10s);
+
+        const auto before = harness.scheduler.snapshot();
+        const auto baseline = harness.scheduler.generationLoadBaseline();
+        require(before.validatedGenerationLimit == 2 &&
+                baseline.fallbackGenerationLimit == 1 &&
+                baseline.baseFps > 0.0,
+            "precondition failed: accepted 3x had no proven 2x fallback");
+
+        harness.scheduler.beginTransportRecovery(harness.now, true);
+        const auto recovery = harness.scheduler.snapshot();
+        require(recovery.phase == AdaptiveSchedulerPhase::Stabilizing &&
+                recovery.generationLimit == 1 &&
+                recovery.validatedGenerationLimit == 1,
+            "qualified 3x admission pressure did not fall back to proven 2x");
+        const auto* resume = harness.diagnostics.last(
+            "adaptive-recovery-resume-scheduled"
+        );
+        require(resume &&
+                resume->reason == "generated-image-pressure-fallback" &&
+                resume->testedLimit == 1,
+            "qualified 3x admission pressure lost its proven 2x resume level");
+        const auto* backoff = harness.diagnostics.last("ramp-backoff");
+        require(backoff && backoff->testedLimit == 2 &&
+                backoff->previousLimit == 1,
+            "qualified 3x admission pressure did not back off the failed load");
+    }
+
     void testDeliveryPressureCannotBridgeToHigherMultiplier() {
         Harness harness(180, 3);
         harness.start();
@@ -4031,6 +4073,7 @@ int main() {
         {"image recovery uses proven lower load", testGeneratedImageRecoveryFallsBackToProvenLoad},
         {"transport-failed multiplier probes keep proven load", testTransportFailureDuringAnyMultiplierProbeRetainsProvenLoad},
         {"qualified transport failure backs off accepted load", testQualifiedTransportFailureBacksOffAcceptedLoad},
+        {"qualified transport failure demotes accepted 3x to 2x", testQualifiedTransportFailureDemotesAcceptedThreeXToTwoX},
         {"delivery pressure cannot bridge upward", testDeliveryPressureCannotBridgeToHigherMultiplier},
         {"ordinary transport recovery keeps 3.3 multiplier semantics", testOrdinaryTransportRecoveryDoesNotRejectMultiplierProbe},
         {"transport probe backoff survives cadence refresh", testTransportProbeBackoffSurvivesCadenceRefresh},

@@ -196,16 +196,14 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     localization.set_language(QStringLiteral("en"));
     const QVariantMap english = localization.strings();
     require(english.value(QStringLiteral("scalingEnabled")).toString() ==
-            QStringLiteral("Scaling (Restart)"),
+            QStringLiteral("Enable Scaling (Restart)"),
         "English scaling enablement has an unexpected label");
     require(english.value(QStringLiteral("frameGenerationProvisioned")).toString() ==
-            QStringLiteral("Frame Generation (Restart)"),
+            QStringLiteral("Enable Frame-gen (Restart)"),
         "English Frame Generation provisioning has an unexpected label");
-    require(english.value(QStringLiteral("frameGenerationProvisionedDesc")).toString()
-            .contains(QStringLiteral("Loads and provisions")) &&
-            english.value(QStringLiteral("frameGenerationProvisionedDesc")).toString()
-            .contains(QStringLiteral("Restart the game")),
-        "English Frame Generation help does not explain its provisioning boundary");
+    require(english.value(QStringLiteral("frameGenerationProvisionedDesc")).toString() ==
+            QStringLiteral("Enable before starting the game. Loads and provisions MAKO Frame Generation. Turn it off when you only want Scaling or post-processing."),
+        "English Frame Generation help does not match the Decky startup guidance");
     require(english.value(QStringLiteral("multiplier")).toString() ==
             QStringLiteral("Fixed Multiplier"),
         "English Fixed multiplier label does not match Decky");
@@ -223,7 +221,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
             QStringLiteral("Scaling Method"),
         "English scaling method has an unexpected label");
     require(english.value(QStringLiteral("scalingEnabledDesc")).toString() ==
-            QStringLiteral("Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO Scaler. Restart the game after changing it."),
+            QStringLiteral("Enable before starting the game. When off, scaling is fully disabled. Supports Lossless Scaling models and MAKO Scaler."),
         "English scaling help does not match the Decky guidance");
     require(english.value(QStringLiteral("scalingMethodDesc")).toString() ==
             QStringLiteral("Choose the scaling model. You can change it while the game is running."),

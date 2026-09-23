@@ -192,11 +192,11 @@ test("uses localized restart markers only for process-start controls", async () 
     "CONFIG_GAMESCOPE_WSI_COMPATIBILITY",
     "CONFIG_ALLOW_FP16",
     "CONFIG_GPU",
-  ];
-  const labelsWithoutRestartMarker = [
     "SCALING_ENABLED",
     "CONFIG_ENABLE_VKBASALT",
     "FRAME_GENERATION_PROVISIONED",
+  ];
+  const labelsWithoutRestartMarker = [
     "SCALING_METHOD",
     "SCALING_FACTOR",
     "SCALING_SHARPNESS",

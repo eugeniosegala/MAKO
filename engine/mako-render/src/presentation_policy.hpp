@@ -256,6 +256,35 @@ namespace mako::layer {
             requestedGeneratedFrames;
     }
 
+    /// Adaptive work is optional and must never delay the application's real
+    /// present while waiting for generated swapchain images. Preserve the
+    /// established sequential acquire/present cadence, but use timeout zero
+    /// for each normal ordered acquire. The bounded one-image recovery probe
+    /// remains the sole exception because it owns a separate display-relative
+    /// timeout and native-drain contract.
+    [[nodiscard]] inline bool adaptiveOrderedDeliveryUsesNonblockingAcquire(
+            const bool adaptive,
+            const bool orderedTransport,
+            const bool orderedAcquireRecoveryProbe,
+            const size_t requestedGeneratedFrames) noexcept {
+        return adaptive && orderedTransport &&
+            !orderedAcquireRecoveryProbe && requestedGeneratedFrames > 0;
+    }
+
+    /// A normal Adaptive ordered shortfall is direct transport evidence
+    /// against the current generated load. The caller rejects an active ramp
+    /// or demotes an accepted load; Fixed and non-ordered paths retain their
+    /// own delivery contracts.
+    [[nodiscard]] inline bool adaptiveOrderedDeliveryMissRequiresFallback(
+            const bool adaptive,
+            const bool orderedTransport,
+            const size_t requestedGeneratedFrames,
+            const size_t admittedGeneratedFrames) noexcept {
+        return adaptive && orderedTransport &&
+            requestedGeneratedFrames > 0 &&
+            admittedGeneratedFrames < requestedGeneratedFrames;
+    }
+
     /// Without a relief image, FIFO may need to release an earlier present
     /// before the next output can be acquired. Allow that progress, but never
     /// introduce an unbounded wait on this path, even for standalone launches.

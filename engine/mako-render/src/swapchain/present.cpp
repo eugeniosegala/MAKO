@@ -916,6 +916,102 @@ void Swapchain::handleRenderFenceBudgetMiss(
     }
 }
 
+void Swapchain::handleGeneratedImageAdmissionPressure(
+        const PresentationFramePlan& plan,
+        const size_t admittedGeneratedFrames,
+        const bool logPressure,
+        const bool retainPartialAdmissionCapacity,
+        const char* const action) {
+    this->recoveryState.generatedImageAdmission.reportBypassedFrame();
+    const bool adaptiveOrderedAdmissionMiss = this->adaptiveScheduler &&
+        adaptiveOrderedDeliveryMissRequiresFallback(
+            this->profile.adaptive,
+            this->privateOrderedTransport,
+            plan.requestedGeneratedFrames.size(),
+            admittedGeneratedFrames
+        );
+    const bool higherMultiplierEvaluationActive =
+        adaptiveOrderedAdmissionMiss &&
+        this->adaptiveScheduler->snapshot().rampEvaluationActive;
+    if (adaptiveOrderedAdmissionMiss) {
+        const auto observedAt = DiagnosticsClock::now();
+        if (!this->adaptiveScheduler->rejectActiveRampForTransportMiss(
+                observedAt)) {
+            this->adaptiveScheduler->beginTransportRecovery(
+                observedAt, true
+            );
+        }
+    }
+    const auto constrainedAdaptiveOrderedWsiCapacity =
+        retainPartialAdmissionCapacity
+            ? adaptiveOrderedWsiLimitAfterPartialAdmission(
+                this->profile.adaptive,
+                this->privateOrderedTransport,
+                higherMultiplierEvaluationActive,
+                plan.requestedGeneratedFrames.size(),
+                admittedGeneratedFrames,
+                this->adaptiveOrderedWsiGeneratedCapacityLimit
+            )
+            : std::nullopt;
+    if (constrainedAdaptiveOrderedWsiCapacity) {
+        const size_t previousGeneratedCapacity =
+            this->adaptiveOrderedWsiGeneratedCapacityLimit.value_or(
+                this->destinationImages.size()
+            );
+        this->adaptiveOrderedWsiGeneratedCapacityLimit =
+            *constrainedAdaptiveOrderedWsiCapacity;
+        if (presentDiagnosticsEnabled()) {
+            std::cerr << "MAKO Renderer: present diagnostics: "
+                         "operation=adaptive-wsi-headroom-limit"
+                      << " context=" << this->diagnosticsState.contextId
+                      << " requested_min_images="
+                      << this->info.requestedMinImageCount
+                      << " images=" << this->info.images.size()
+                      << " requested_generated="
+                      << plan.requestedGeneratedFrames.size()
+                      << " admitted_generated="
+                      << admittedGeneratedFrames
+                      << " previous_generated_capacity="
+                      << previousGeneratedCapacity
+                      << " effective_generated_capacity="
+                      << *this->adaptiveOrderedWsiGeneratedCapacityLimit
+                      << " evidence=higher-multiplier-partial-admission"
+                      << " action=retain-proven-generated-capacity\n";
+        }
+        this->recoveryState.generatedImageAdmission.reset();
+        static_cast<void>(this->resetGenerationScheduler(
+            DiagnosticsClock::now(), "ordered-wsi-partial-admission"
+        ));
+    }
+    if (!this->adaptiveScheduler) {
+        this->diagnosticsState.fixedSkippedFrames +=
+            plan.requestedGeneratedFrames.size() -
+                admittedGeneratedFrames;
+    }
+    if (logPressure && presentDiagnosticsEnabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=generated-admission-pressure"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " planned=" << plan.requestedGeneratedFrames.size()
+                  << " admitted=" << admittedGeneratedFrames
+                  << " acquire_timeout_ns=0"
+                  << " action=" << action << '\n';
+    }
+}
+
+void Swapchain::reportGeneratedImageAdmissionAvailable() {
+    const auto recovery =
+        this->recoveryState.generatedImageAdmission.reportAvailable();
+    if (recovery.resumed && presentDiagnosticsEnabled()) {
+        std::cerr << "MAKO Renderer: present diagnostics: "
+                     "operation=generated-admission-recovered"
+                  << " context=" << this->diagnosticsState.contextId
+                  << " missed_attempts=" << recovery.missedAttempts
+                  << " bypassed_frames=" << recovery.bypassedFrames
+                  << '\n';
+    }
+}
+
 void Swapchain::preacquireGeneratedImages(
         const PresentInvocation& invocation,
         PresentationFramePlan& plan, const bool trackNonblockingAdmission,
@@ -965,78 +1061,16 @@ void Swapchain::preacquireGeneratedImages(
 
     if (plan.admittedGeneratedFrameCount ==
             plan.requestedGeneratedFrames.size()) {
-        if (!trackNonblockingAdmission)
-            return;
-        const auto recovery = this->recoveryState.generatedImageAdmission.reportAvailable();
-        if (recovery.resumed && presentDiagnosticsEnabled()) {
-            std::cerr << "MAKO Renderer: present diagnostics: "
-                         "operation=generated-admission-recovered"
-                      << " context=" << this->diagnosticsState.contextId
-                      << " missed_attempts=" << recovery.missedAttempts
-                      << " bypassed_frames=" << recovery.bypassedFrames
-                      << '\n';
-        }
+        if (trackNonblockingAdmission)
+            this->reportGeneratedImageAdmissionAvailable();
         return;
     }
 
-    if (!trackNonblockingAdmission)
-        return;
-    this->recoveryState.generatedImageAdmission.reportBypassedFrame();
-    const bool higherMultiplierEvaluationActive =
-        this->adaptiveScheduler &&
-        this->adaptiveScheduler->snapshot().rampEvaluationActive;
-    const auto constrainedAdaptiveOrderedWsiCapacity =
-        adaptiveOrderedWsiLimitAfterPartialAdmission(
-            this->profile.adaptive,
-            this->privateOrderedTransport,
-            higherMultiplierEvaluationActive,
-            plan.requestedGeneratedFrames.size(),
-            plan.admittedGeneratedFrameCount,
-            this->adaptiveOrderedWsiGeneratedCapacityLimit
+    if (trackNonblockingAdmission) {
+        this->handleGeneratedImageAdmissionPressure(
+            plan, plan.admittedGeneratedFrameCount, logPressure, true,
+            "native-first"
         );
-    if (constrainedAdaptiveOrderedWsiCapacity) {
-        const size_t previousGeneratedCapacity =
-            this->adaptiveOrderedWsiGeneratedCapacityLimit.value_or(
-                this->destinationImages.size()
-            );
-        this->adaptiveOrderedWsiGeneratedCapacityLimit =
-            *constrainedAdaptiveOrderedWsiCapacity;
-        if (presentDiagnosticsEnabled()) {
-            std::cerr << "MAKO Renderer: present diagnostics: "
-                         "operation=adaptive-wsi-headroom-limit"
-                      << " context=" << this->diagnosticsState.contextId
-                      << " requested_min_images="
-                      << this->info.requestedMinImageCount
-                      << " images=" << this->info.images.size()
-                      << " requested_generated="
-                      << plan.requestedGeneratedFrames.size()
-                      << " admitted_generated="
-                      << plan.admittedGeneratedFrameCount
-                      << " previous_generated_capacity="
-                      << previousGeneratedCapacity
-                      << " effective_generated_capacity="
-                      << *this->adaptiveOrderedWsiGeneratedCapacityLimit
-                      << " evidence=higher-multiplier-partial-admission"
-                      << " action=retain-proven-generated-capacity\n";
-        }
-        this->recoveryState.generatedImageAdmission.reset();
-        static_cast<void>(this->resetGenerationScheduler(
-            DiagnosticsClock::now(), "ordered-wsi-partial-admission"
-        ));
-    }
-    if (!this->adaptiveScheduler) {
-        this->diagnosticsState.fixedSkippedFrames +=
-            plan.requestedGeneratedFrames.size() -
-                plan.admittedGeneratedFrameCount;
-    }
-    if (logPressure && presentDiagnosticsEnabled()) {
-        std::cerr << "MAKO Renderer: present diagnostics: "
-                     "operation=generated-admission-pressure"
-                  << " context=" << this->diagnosticsState.contextId
-                  << " planned=" << plan.requestedGeneratedFrames.size()
-                  << " admitted=" << plan.admittedGeneratedFrameCount
-                  << " acquire_timeout_ns=0"
-                  << " action=native-first\n";
     }
 }
 
@@ -1386,12 +1420,16 @@ VkResult Swapchain::presentGeneratedFrames(
                         ? static_cast<uint64_t>(consumedAcquireNanoseconds)
                         : 0
                 );
-            acquireBudgetExhausted = remainingAcquireBudget &&
+            acquireBudgetExhausted =
+                !plan.nonblockingGeneratedImageAcquire &&
+                remainingAcquireBudget &&
                 *remainingAcquireBudget == 0;
             const uint64_t acquireTimeout =
-                orderedGeneratedImageAcquireTimeout(
-                    this->gamescopeRefreshHz, remainingAcquireBudget
-            );
+                plan.nonblockingGeneratedImageAcquire
+                    ? 0
+                    : orderedGeneratedImageAcquireTimeout(
+                        this->gamescopeRefreshHz, remainingAcquireBudget
+                    );
             lastAcquireTimeout = acquireTimeout;
             if (acquireBudgetExhausted) {
                 result = VK_TIMEOUT;
@@ -1409,7 +1447,8 @@ VkResult Swapchain::presentGeneratedFrames(
                 maximumAcquireDuration, acquireDuration
             );
             totalAcquireDuration += acquireDuration;
-            if (plan.configuredAcquireTimeout) {
+            if (!plan.nonblockingGeneratedImageAcquire &&
+                    plan.configuredAcquireTimeout) {
                 const auto acquireBudget =
                     std::chrono::duration_cast<DiagnosticsClock::duration>(
                         std::chrono::nanoseconds(
@@ -1452,23 +1491,32 @@ VkResult Swapchain::presentGeneratedFrames(
             );
         }
 
-        if (plan.configuredAcquireTimeout &&
+        if ((plan.nonblockingGeneratedImageAcquire ||
+                plan.configuredAcquireTimeout) &&
                 (result == VK_TIMEOUT || result == VK_NOT_READY)) {
             // Record this normal batch's delivery loss before recovery arms
             // its guard and freezes observations. Otherwise intermittent
             // timeouts separated by healthy batches disappear from Adaptive's
             // multiplier evaluation even though generated outputs were lost.
             this->reportAdaptiveDelivery(plan, i);
-            reportOrderedAcquire(
-                !acquireBudgetExhausted, acquireBudgetExhausted, i
-            );
+            if (plan.nonblockingGeneratedImageAcquire) {
+                const bool logPressure = this->recoveryState
+                    .generatedImageAdmission.reportUnavailable();
+                this->handleGeneratedImageAdmissionPressure(
+                    plan, i, logPressure, false, "adaptive-fallback"
+                );
+            } else {
+                reportOrderedAcquire(
+                    !acquireBudgetExhausted, acquireBudgetExhausted, i
+                );
+            }
             // The explicit legacy timeout is an anti-freeze ceiling. Backend
             // work is already scheduled on this ordered path, so drain its
-            // final timeline value. During an explicit menu/profile recovery
-            // window, a miss in an active higher-multiplier experiment rejects
-            // that probe above. Ordinary gameplay retains 3.3 behavior: the
-            // next application present uses the zero-wait guard or native
-            // quarantine without changing validated Adaptive state.
+            // final timeline value. Normal Adaptive reaches this branch only
+            // after a zero-timeout acquire reports pressure; it falls back
+            // without changing the healthy sequential FIFO cadence. Fixed
+            // retains its direct recovery contract; a transition-authorized
+            // Adaptive recovery probe can still reject its experiment above.
             const size_t skippedFrames =
                 plan.scheduledGeneratedFrames.size() - i;
             if (!this->adaptiveScheduler)
@@ -1541,16 +1589,20 @@ VkResult Swapchain::presentGeneratedFrames(
                           << plan.requestedGeneratedFrames.size()
                           << " on_time=" << i
                           << " deadline_ms="
-                          << static_cast<double>(acquireBudgetExhausted
-                                ? *plan.configuredAcquireTimeout
-                                : lastAcquireTimeout) / 1'000'000.0
+                          << static_cast<double>(
+                                plan.nonblockingGeneratedImageAcquire
+                                    ? 0
+                                    : acquireBudgetExhausted
+                                        ? *plan.configuredAcquireTimeout
+                                        : lastAcquireTimeout
+                             ) / 1'000'000.0
                           << " deadline_scope="
                           << (acquireBudgetExhausted
                                 ? "application-present"
                                 : "generated-image")
                           << " application_present_budget_ms="
                           << static_cast<double>(
-                                 *plan.configuredAcquireTimeout
+                                plan.configuredAcquireTimeout.value_or(0)
                              ) / 1'000'000.0
                           << '\n';
             }
@@ -1735,9 +1787,13 @@ VkResult Swapchain::presentGeneratedFrames(
         "present-total", this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, invocation.started, result
     );
-    reportOrderedAcquire(
-        false, false, plan.scheduledGeneratedFrames.size()
-    );
+    if (plan.nonblockingGeneratedImageAcquire) {
+        this->reportGeneratedImageAdmissionAvailable();
+    } else {
+        reportOrderedAcquire(
+            false, false, plan.scheduledGeneratedFrames.size()
+        );
+    }
     this->reportAdaptiveDelivery(
         plan, plan.scheduledGeneratedFrames.size()
     );
@@ -2066,10 +2122,11 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     );
     plan.boundedOrderedAcquireProbe = boundedOrderedAcquireProbe;
 
-    // The Gamescope HDR bridge remains native-first. Ordered SDR can deliver
-    // a batch that fits beyond application ownership sequentially, with a
-    // finite acquire budget when there is no relief image. Undersized pools
-    // still admit opportunistically before scheduling backend work.
+    // The Gamescope HDR bridge remains native-first. Adaptive ordered SDR
+    // preserves its established sequential FIFO timing but never waits for a
+    // generated image during normal delivery. Fixed retains sequential FIFO
+    // delivery with a finite acquire budget when there is no relief image.
+    // Undersized pools remain opportunistic for both policies.
     if (!this->generationPipelineReady(
             vk, gamescopeHdrTransport, plan, presentNow)) {
         return this->presentNativeFrame(invocation);
@@ -2088,7 +2145,18 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->info.images.size(),
             plan.requestedGeneratedFrames.size()
         );
-    if (headroomTightOrderedBatch &&
+    const bool adaptiveNonblockingOrderedDelivery =
+        adaptiveOrderedDeliveryUsesNonblockingAcquire(
+            this->profile.adaptive,
+            this->privateOrderedTransport,
+            orderedAcquireRecoveryProbe,
+            plan.requestedGeneratedFrames.size()
+        );
+    plan.nonblockingGeneratedImageAcquire =
+        adaptiveNonblockingOrderedDelivery &&
+        !gamescopeHdrTransport && !headroomTightOrderedBatch;
+    const bool nativeFirstOrderedBatch = headroomTightOrderedBatch;
+    if (nativeFirstOrderedBatch &&
             !this->diagnosticsState.orderedGeneratedAdmissionPolicyLogged &&
             presentDiagnosticsEnabled()) {
         this->diagnosticsState.orderedGeneratedAdmissionPolicyLogged = true;
@@ -2102,7 +2170,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                   << " acquire_timeout_ns=0"
                   << " action=native-first\n";
     }
-    if (gamescopeHdrTransport || headroomTightOrderedBatch) {
+    if (gamescopeHdrTransport || nativeFirstOrderedBatch) {
         this->preacquireGeneratedImages(
             invocation, plan, true,
             0
