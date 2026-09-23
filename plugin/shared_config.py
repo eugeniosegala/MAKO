@@ -125,6 +125,16 @@ VKBASALT_SHADER_TECHNICOLOR = "technicolor"
 VKBASALT_SHADER_SEPIA = "sepia"
 VKBASALT_SHADER_MONOCHROME = "monochrome"
 VKBASALT_SHADER_VIGNETTE = "vignette"
+VKBASALT_SHADER_HDR_LOOK = "hdr_look"
+VKBASALT_SHADER_COLOURFULNESS = "colourfulness"
+VKBASALT_SHADER_TECHNICOLOR2 = "technicolor2"
+VKBASALT_SHADER_DPX = "dpx"
+VKBASALT_SHADER_BLEACH_BYPASS = "bleach_bypass"
+VKBASALT_SHADER_NOIR = "noir"
+VKBASALT_SHADER_FILM_GRAIN = "film_grain"
+VKBASALT_SHADER_CARTOON = "cartoon"
+VKBASALT_SHADER_NOSTALGIA = "nostalgia"
+VKBASALT_SHADER_CHROMATIC_ABERRATION = "chromatic_aberration"
 VKBASALT_SHADER_VALUES = (
     VKBASALT_SHADER_NONE,
     VKBASALT_SHADER_VIBRANCE,
@@ -134,6 +144,16 @@ VKBASALT_SHADER_VALUES = (
     VKBASALT_SHADER_SEPIA,
     VKBASALT_SHADER_MONOCHROME,
     VKBASALT_SHADER_VIGNETTE,
+    VKBASALT_SHADER_HDR_LOOK,
+    VKBASALT_SHADER_COLOURFULNESS,
+    VKBASALT_SHADER_TECHNICOLOR2,
+    VKBASALT_SHADER_DPX,
+    VKBASALT_SHADER_BLEACH_BYPASS,
+    VKBASALT_SHADER_NOIR,
+    VKBASALT_SHADER_FILM_GRAIN,
+    VKBASALT_SHADER_CARTOON,
+    VKBASALT_SHADER_NOSTALGIA,
+    VKBASALT_SHADER_CHROMATIC_ABERRATION,
 )
 VKBASALT_STRENGTH_MIN = 0.0
 VKBASALT_STRENGTH_MAX = 1.0
@@ -405,7 +425,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "vkbasalt_shader": {
         "fieldType": ConfigFieldType.STRING,
         "default": VKBASALT_SHADER_NONE,
-        "description": "MAKO-managed vkBasalt shader: none, Vibrance, Curves, Deband, Technicolor, Sepia, Monochrome, or Vignette",
+        "description": "MAKO-managed vkBasalt shader effect selected from the bundled preset catalog",
         "location": "script"
     },
 

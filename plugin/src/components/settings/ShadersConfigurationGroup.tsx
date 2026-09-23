@@ -20,12 +20,22 @@ import {
   VKBASALT_SHARPENING_NONE,
   VKBASALT_SHARPNESS,
   VKBASALT_SHADER,
+  VKBASALT_SHADER_BLEACH_BYPASS,
+  VKBASALT_SHADER_CARTOON,
+  VKBASALT_SHADER_CHROMATIC_ABERRATION,
+  VKBASALT_SHADER_COLOURFULNESS,
   VKBASALT_SHADER_CURVES,
   VKBASALT_SHADER_DEBAND,
+  VKBASALT_SHADER_DPX,
+  VKBASALT_SHADER_FILM_GRAIN,
+  VKBASALT_SHADER_HDR_LOOK,
   VKBASALT_SHADER_MONOCHROME,
+  VKBASALT_SHADER_NOIR,
   VKBASALT_SHADER_NONE,
+  VKBASALT_SHADER_NOSTALGIA,
   VKBASALT_SHADER_SEPIA,
   VKBASALT_SHADER_TECHNICOLOR,
+  VKBASALT_SHADER_TECHNICOLOR2,
   VKBASALT_SHADER_VIBRANCE,
   VKBASALT_SHADER_VIGNETTE,
   VKBASALT_STRENGTH_MAX,
@@ -116,6 +126,49 @@ export function ShadersConfigurationGroup({
       data: VKBASALT_SHADER_VIGNETTE,
       label: t("CONFIG_VKBASALT_SHADER_VIGNETTE", "Vignette"),
     },
+    {
+      data: VKBASALT_SHADER_HDR_LOOK,
+      label: t("CONFIG_VKBASALT_SHADER_HDR_LOOK", "HDR Look (SDR)"),
+    },
+    {
+      data: VKBASALT_SHADER_COLOURFULNESS,
+      label: t("CONFIG_VKBASALT_SHADER_COLOURFULNESS", "Colourfulness"),
+    },
+    {
+      data: VKBASALT_SHADER_TECHNICOLOR2,
+      label: t("CONFIG_VKBASALT_SHADER_TECHNICOLOR2", "Technicolor 2"),
+    },
+    {
+      data: VKBASALT_SHADER_DPX,
+      label: t("CONFIG_VKBASALT_SHADER_DPX", "DPX / Cineon"),
+    },
+    {
+      data: VKBASALT_SHADER_BLEACH_BYPASS,
+      label: t("CONFIG_VKBASALT_SHADER_BLEACH_BYPASS", "Bleach Bypass"),
+    },
+    {
+      data: VKBASALT_SHADER_NOIR,
+      label: t("CONFIG_VKBASALT_SHADER_NOIR", "Noir"),
+    },
+    {
+      data: VKBASALT_SHADER_FILM_GRAIN,
+      label: t("CONFIG_VKBASALT_SHADER_FILM_GRAIN", "Film Grain"),
+    },
+    {
+      data: VKBASALT_SHADER_CARTOON,
+      label: t("CONFIG_VKBASALT_SHADER_CARTOON", "Cartoon"),
+    },
+    {
+      data: VKBASALT_SHADER_NOSTALGIA,
+      label: t("CONFIG_VKBASALT_SHADER_NOSTALGIA", "Nostalgia"),
+    },
+    {
+      data: VKBASALT_SHADER_CHROMATIC_ABERRATION,
+      label: t(
+        "CONFIG_VKBASALT_SHADER_CHROMATIC_ABERRATION",
+        "Chromatic Aberration",
+      ),
+    },
   ];
 
   return (
@@ -152,7 +205,7 @@ export function ShadersConfigurationGroup({
               label={t("CONFIG_VKBASALT_SHADER", "Effects")}
               description={t(
                 "CONFIG_VKBASALT_SHADER_DESC",
-                "Choose one lightweight colour or finishing effect.",
+                "Choose one colour or finishing effect. HDR Look is an SDR visual effect and does not enable HDR.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"

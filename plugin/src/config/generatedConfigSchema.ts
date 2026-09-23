@@ -106,6 +106,16 @@ export const VKBASALT_SHADER_TECHNICOLOR = "technicolor" as const;
 export const VKBASALT_SHADER_SEPIA = "sepia" as const;
 export const VKBASALT_SHADER_MONOCHROME = "monochrome" as const;
 export const VKBASALT_SHADER_VIGNETTE = "vignette" as const;
+export const VKBASALT_SHADER_HDR_LOOK = "hdr_look" as const;
+export const VKBASALT_SHADER_COLOURFULNESS = "colourfulness" as const;
+export const VKBASALT_SHADER_TECHNICOLOR2 = "technicolor2" as const;
+export const VKBASALT_SHADER_DPX = "dpx" as const;
+export const VKBASALT_SHADER_BLEACH_BYPASS = "bleach_bypass" as const;
+export const VKBASALT_SHADER_NOIR = "noir" as const;
+export const VKBASALT_SHADER_FILM_GRAIN = "film_grain" as const;
+export const VKBASALT_SHADER_CARTOON = "cartoon" as const;
+export const VKBASALT_SHADER_NOSTALGIA = "nostalgia" as const;
+export const VKBASALT_SHADER_CHROMATIC_ABERRATION = "chromatic_aberration" as const;
 export const VKBASALT_STRENGTH_MIN = 0.0 as const;
 export const VKBASALT_STRENGTH_MAX = 1.0 as const;
 
@@ -375,7 +385,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "vkbasalt_shader",
     fieldType: ConfigFieldType.STRING,
     default: "none",
-    description: "MAKO-managed vkBasalt shader: none, Vibrance, Curves, Deband, Technicolor, Sepia, Monochrome, or Vignette"
+    description: "MAKO-managed vkBasalt shader effect selected from the bundled preset catalog"
   },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",

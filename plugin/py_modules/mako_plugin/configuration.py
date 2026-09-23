@@ -53,11 +53,24 @@ class ConfigurationService(BaseService):
     _REQUIRED_WRAPPER_EXPORTS = wrapper_generation.REQUIRED_WRAPPER_EXPORTS
     _VKBASALT_SHADER_ASSET_DIR = Path(__file__).with_name("vkbasalt_shaders")
     _VKBASALT_SHADER_ASSETS = (
+        "BleachBypass.fx",
+        "Cartoon.fx",
+        "ChromaticAberration.fx",
+        "Colourfulness.fx",
         "Curves.fx",
+        "DPX.fx",
+        "FakeHDR.fx",
+        "FilmGrain.fx",
+        "LICENSE-Colourfulness",
+        "LICENSE-SweetFX",
         "Monochrome.fx",
+        "Noir.fx",
+        "Nostalgia.fx",
         "ReShade.fxh",
         "Sepia.fx",
+        "SOURCE.md",
         "Technicolor.fx",
+        "Technicolor2.fx",
         "Vibrance.fx",
         "Vignette.fx",
     )

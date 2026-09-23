@@ -48,7 +48,7 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 | 🖼️ | **Full-quality frame generation** | Uses the Lossless Scaling frame-generation models from the user's licensed installation, with quality and performance controls per profile. |
 | 👻 | **Significantly reduced ghosting** | The full-quality v2 model with Lighter FG Model off can show noticeably less ghosting than the older layer. Supported AMD GPUs also gain extra protection against ghosting and corrupted moving edges. Results remain game-dependent. |
 | 🔍 | **LS1 + open spatial scaling** | Reconstructs a lower-resolution game frame with LS1 Quality, LS1 Performance, or the open single-pass MAKO Scaler, independently or before Fixed or Adaptive generation. |
-| 🎨 | **Bundled per-game shaders** | Uses MAKO's private 64-bit and 32-bit vkBasalt to apply live sharpening, anti-aliasing, and presets including Vibrance, Curves, Deband, Technicolor, Sepia, Monochrome, and Vignette. |
+| 🎨 | **Bundled per-game shaders** | Uses MAKO's private 64-bit and 32-bit vkBasalt to apply live sharpening, anti-aliasing, and a curated catalog of colour, cinematic, monochrome, retro, and finishing effects. |
 | 🎯 | **Adaptive Frame Generation** | Optionally targets 30–240 FPS while MAKO Renderer varies generated frames up to a selected 2x–5x ceiling. |
 | 🌈 | **HDR foundation** | MAKO Renderer includes HDR10/PQ and linear-scRGB groundwork. MAKO Decky keeps HDR exposure disabled while activation, presentation, colour, and performance are validated across games. |
 | 🧩 | **64-bit and 32-bit x86 Vulkan** | Ships architecture-matched host and Flatpak layers so Vulkan can select the correct library for each game process. |
@@ -95,7 +95,7 @@ Every game and display behaves differently, so compare one setting at a time. Fo
 
 ### Optional graphics integrations
 
-MAKO Decky provides a per-profile **Gamescope WSI** option, host-installed MangoHud integration, and its own private 64-bit/32-bit vkBasalt build. Enable vkBasalt for a game to use MAKO-managed sharpening, anti-aliasing, Vibrance, Curves, or Deband without installing vkBasalt separately; MAKO does not use a system-wide vkBasalt copy. Scaling and Gamescope WSI are independent choices. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
+MAKO Decky provides a per-profile **Gamescope WSI** option, host-installed MangoHud integration, and its own private 64-bit/32-bit vkBasalt build. Enable Shaders for a game to use MAKO-managed sharpening, anti-aliasing, and its bundled effect catalog without installing vkBasalt separately; MAKO does not use a system-wide vkBasalt copy. Scaling and Gamescope WSI are independent choices. See <a href="engine/docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">optional graphics integrations</a> for ordering and limits.
 
 ### How to configure MAKO with third-party launchers
 

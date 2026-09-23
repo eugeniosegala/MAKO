@@ -1075,14 +1075,43 @@ class GameProfileTests(unittest.TestCase):
             f'makoVignette = "{self.service.vkbasalt_shader_dir / "Vignette.fx"}"\n',
             game_content,
         )
+        for effect_name, shader_asset in (
+            ("makoHDRLook", "FakeHDR.fx"),
+            ("makoColourfulness", "Colourfulness.fx"),
+            ("makoTechnicolor2", "Technicolor2.fx"),
+            ("makoDPX", "DPX.fx"),
+            ("makoBleachBypass", "BleachBypass.fx"),
+            ("makoNoir", "Noir.fx"),
+            ("makoFilmGrain", "FilmGrain.fx"),
+            ("makoCartoon", "Cartoon.fx"),
+            ("makoNostalgia", "Nostalgia.fx"),
+            ("makoChromaticAberration", "ChromaticAberration.fx"),
+        ):
+            self.assertIn(
+                f'{effect_name} = "{self.service.vkbasalt_shader_dir / shader_asset}"\n',
+                game_content,
+            )
         self.assertIn("dlsSharpness = 0.75\n", game_content)
         self.assertIn("dlsDenoise = 0.40\n", game_content)
         for shader_asset in (
+            "BleachBypass.fx",
+            "Cartoon.fx",
+            "ChromaticAberration.fx",
+            "Colourfulness.fx",
             "Curves.fx",
+            "DPX.fx",
+            "FakeHDR.fx",
+            "FilmGrain.fx",
+            "LICENSE-Colourfulness",
+            "LICENSE-SweetFX",
             "Monochrome.fx",
+            "Noir.fx",
+            "Nostalgia.fx",
             "ReShade.fxh",
             "Sepia.fx",
+            "SOURCE.md",
             "Technicolor.fx",
+            "Technicolor2.fx",
             "Vibrance.fx",
             "Vignette.fx",
         ):
@@ -1169,6 +1198,16 @@ class GameProfileTests(unittest.TestCase):
             ("sepia", "makoSepia"),
             ("monochrome", "makoMonochrome"),
             ("vignette", "makoVignette"),
+            ("hdr_look", "makoHDRLook"),
+            ("colourfulness", "makoColourfulness"),
+            ("technicolor2", "makoTechnicolor2"),
+            ("dpx", "makoDPX"),
+            ("bleach_bypass", "makoBleachBypass"),
+            ("noir", "makoNoir"),
+            ("film_grain", "makoFilmGrain"),
+            ("cartoon", "makoCartoon"),
+            ("nostalgia", "makoNostalgia"),
+            ("chromatic_aberration", "makoChromaticAberration"),
         ):
             with self.subTest(shader=shader):
                 self.service._write_wrapper_profile_settings({

@@ -32,6 +32,7 @@ from py_modules.mako_plugin.config_schema_generated import (  # noqa: E402
     ALL_FIELDS,
     get_script_generation_logic,
 )
+from shared_config import VKBASALT_SHADER_VALUES  # noqa: E402
 
 
 class WrapperEnvironmentTests(unittest.TestCase):
@@ -658,6 +659,18 @@ class WrapperEnvironmentTests(unittest.TestCase):
                 config[field_name] = value
                 with self.assertRaisesRegex(ValueError, field_name):
                     ConfigurationManager.validate_config(config)
+
+    def test_vkbasalt_schema_accepts_every_bundled_shader(self):
+        for shader in VKBASALT_SHADER_VALUES:
+            with self.subTest(shader=shader):
+                config = ConfigurationManager.get_defaults()
+                config["vkbasalt_shader"] = shader
+                self.assertEqual(
+                    ConfigurationManager.validate_config(config)[
+                        "vkbasalt_shader"
+                    ],
+                    shader,
+                )
 
     def test_existing_instance_layer_order_is_preserved(self):
         values = self._evaluate({

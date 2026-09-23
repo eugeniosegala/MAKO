@@ -130,7 +130,11 @@ vi.mock("../../src/components/MakoUi", () => ({
   }) => (
     <span
       data-mako-experimental-setting-label="true"
-      style={{ alignItems: "flex-start", flexDirection: "column", rowGap: "4px" }}
+      style={{
+        alignItems: "flex-start",
+        flexDirection: "column",
+        rowGap: "4px",
+      }}
     >
       <span>{label}</span>
       <span data-mako-experimental-badge="true">{badgeLabel}</span>
@@ -278,6 +282,16 @@ describe("Configuration controls", () => {
         "sepia",
         "monochrome",
         "vignette",
+        "hdr_look",
+        "colourfulness",
+        "technicolor2",
+        "dpx",
+        "bleach_bypass",
+        "noir",
+        "film_grain",
+        "cartoon",
+        "nostalgia",
+        "chromatic_aberration",
       ]),
     );
     expect(
