@@ -1,8 +1,8 @@
-## What's new in MAKO Renderer v3.4.0
+## What's new in MAKO Renderer v4.0.0
 
-<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/unbroken-tide.png" alt="Unbroken Tide: a Renaissance-style pixel-art mako surging through an unbroken wave from a storm-dark fleet toward a sunlit fortified coast" width="100%">
+<img src="https://raw.githubusercontent.com/eugeniosegala/MAKO/refs/heads/main/assets/inferno.png" alt="Inferno: a Renaissance-style pixel-art mako surges through a volcanic sea between lava-lit cities and ships beneath a moonlit infernal sky" width="100%">
 
-### Release codename: unbroken-tide
+### Release codename: inferno
 
 > _“To strive, to seek, to find, and not to yield.”_
 >
@@ -12,7 +12,7 @@
 
 <!-- Unreleased: complete release validation before publication. -->
 
-MAKO Renderer 3.4 adds live Frame Generation execution control, transition-driven recovery, VRR-aware pacing, and private shader integration.
+MAKO Renderer 4.0 adds live Frame Generation execution control, transition-driven recovery, VRR-aware pacing, and private shader integration.
 
 - **Live Frame Generation execution:** Restart-bound provisioning is separate from the live execution state, enabling an explicit `0x` pause in Decky and the desktop GUI without reallocating resources. Scaling-only processes can omit LSFG device interop and backend ownership.
 - **Transition-driven recovery:** Steam-menu focus and live policy changes restart temporal history and authorize bounded repair only when a generated-image acquire actually fails. Fixed and Adaptive no longer treat low FPS, scaling or shader cost, game-scene changes, or slow successful presents as recovery signals.
