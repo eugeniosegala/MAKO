@@ -149,7 +149,7 @@ export function ShadersConfigurationGroup({
         <>
           <PanelSectionRow>
             <Field
-              label={t("CONFIG_VKBASALT_SHADER", "Shaders")}
+              label={t("CONFIG_VKBASALT_SHADER", "Effects")}
               description={t(
                 "CONFIG_VKBASALT_SHADER_DESC",
                 "Choose one lightweight colour or finishing effect.",

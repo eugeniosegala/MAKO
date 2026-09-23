@@ -255,15 +255,15 @@ describe("Configuration controls", () => {
     expect(screen.getByText("Sharpness (55%)")).toBeTruthy();
     expect(screen.getByText("DLS Denoise (20%)")).toBeTruthy();
     expect(screen.getByText("Anti-aliasing")).toBeTruthy();
-    expect(screen.getByText("Shaders")).toBeTruthy();
+    expect(screen.getByText("Effects")).toBeTruthy();
     expect(
       screen.queryByText(/apply live while vkBasalt is active/i),
     ).toBeNull();
     expect(
       screen
-        .getAllByText(/^(Shaders|Sharpening)$/)
+        .getAllByText(/^(Effects|Sharpening)$/)
         .map((element) => element.textContent),
-    ).toEqual(["Shaders", "Sharpening"]);
+    ).toEqual(["Effects", "Sharpening"]);
     expect(
       screen
         .getAllByTestId("cadence-probe-interval-dropdown")

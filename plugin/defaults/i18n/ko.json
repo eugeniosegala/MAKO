@@ -14,7 +14,7 @@
   "CONFIG_VKBASALT_ANTIALIASING_DESC": "Optionally smooth jagged edges before sharpening. FXAA is lighter and softer; SMAA is more selective and may cost more GPU time.",
   "CONFIG_VKBASALT_ANTIALIASING_FXAA": "FXAA",
   "CONFIG_VKBASALT_ANTIALIASING_SMAA": "SMAA",
-  "CONFIG_VKBASALT_SHADER": "Shaders",
+  "CONFIG_VKBASALT_SHADER": "효과",
   "CONFIG_VKBASALT_SHADER_DESC": "Choose one lightweight colour or finishing effect.",
   "CONFIG_VKBASALT_SHADER_VIBRANCE": "Vibrance",
   "CONFIG_VKBASALT_SHADER_CURVES": "Curves",
