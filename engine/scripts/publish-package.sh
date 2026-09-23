@@ -219,7 +219,7 @@ Keep the previous archives until the new version has been tested with your games
 
 ## Known limitation
 
-- **HDR support is partial:** The brightness control can map an SDR game through a supported Gamescope HDR display when Steam HDR is on and in-game HDR is off. HDR game content, HDR Frame Generation, and HDR Scaling are not currently supported.
+- **HDR frame generation and scaling are not currently supported:** HDR pipeline groundwork remains in the renderer, but MAKO does not present either feature as an enabled HDR release path yet.
 
 ## Before you play
 

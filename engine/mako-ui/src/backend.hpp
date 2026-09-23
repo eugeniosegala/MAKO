@@ -55,8 +55,6 @@ namespace mako::ui {
         Q_PROPERTY(float scaling_sharpness READ getScalingSharpness WRITE scalingSharpnessUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint frame_generation_refresh_threshold READ getFrameGenerationRefreshThreshold WRITE frameGenerationRefreshThresholdUpdated NOTIFY refreshUI)
         Q_PROPERTY(uint base_fps_cap READ getBaseFPSCap WRITE baseFPSCapUpdated NOTIFY refreshUI)
-        Q_PROPERTY(bool gamescope_hdr_brightness_boost READ getGamescopeHdrBrightnessBoost WRITE gamescopeHdrBrightnessBoostUpdated NOTIFY refreshUI)
-        Q_PROPERTY(uint gamescope_hdr_brightness_nits READ getGamescopeHdrBrightnessNits WRITE gamescopeHdrBrightnessNitsUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive READ getAdaptive WRITE adaptiveUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool fractional_adaptive READ getFractionalAdaptive WRITE fractionalAdaptiveUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive_auto_base_fps_cap READ getAdaptiveAutoBaseFPSCap WRITE adaptiveAutoBaseFPSCapUpdated NOTIFY refreshUI)
@@ -81,8 +79,6 @@ namespace mako::ui {
         Q_PROPERTY(uint frame_generation_refresh_threshold_preset READ getFrameGenerationRefreshThresholdPreset CONSTANT)
         Q_PROPERTY(uint minimum_base_fps_cap READ getMinimumBaseFPSCap CONSTANT)
         Q_PROPERTY(uint maximum_base_fps_cap READ getMaximumBaseFPSCap CONSTANT)
-        Q_PROPERTY(uint minimum_gamescope_hdr_brightness_nits READ getMinimumGamescopeHdrBrightnessNits CONSTANT)
-        Q_PROPERTY(uint maximum_gamescope_hdr_brightness_nits READ getMaximumGamescopeHdrBrightnessNits CONSTANT)
         Q_PROPERTY(uint minimum_target_fps READ getMinimumTargetFPS CONSTANT)
         Q_PROPERTY(uint maximum_target_fps READ getMaximumTargetFPS CONSTANT)
         Q_PROPERTY(uint minimum_adaptive_max_multiplier READ getMinimumAdaptiveMaxMultiplier CONSTANT)
@@ -262,18 +258,6 @@ namespace mako::ui {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::baseFpsCap)
             return conf.base_fps_cap;
         }
-        [[nodiscard]] bool getGamescopeHdrBrightnessBoost() const {
-            VALIDATE_AND_GET_PROFILE(
-                ls::GameConfDefaults::gamescopeHdrBrightnessBoost
-            )
-            return conf.gamescope_hdr_brightness_boost;
-        }
-        [[nodiscard]] uint getGamescopeHdrBrightnessNits() const {
-            VALIDATE_AND_GET_PROFILE(
-                ls::GameConfDefaults::gamescopeHdrBrightnessNits
-            )
-            return conf.gamescope_hdr_brightness_nits;
-        }
         [[nodiscard]] bool getAdaptive() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptive)
             return conf.adaptive;
@@ -360,14 +344,6 @@ namespace mako::ui {
         }
         [[nodiscard]] uint getMaximumBaseFPSCap() const noexcept {
             return ls::GameConfLimits::maximumBaseFpsCap;
-        }
-        [[nodiscard]] uint getMinimumGamescopeHdrBrightnessNits()
-                const noexcept {
-            return ls::GameConfLimits::minimumGamescopeHdrBrightnessNits;
-        }
-        [[nodiscard]] uint getMaximumGamescopeHdrBrightnessNits()
-                const noexcept {
-            return ls::GameConfLimits::maximumGamescopeHdrBrightnessNits;
         }
         [[nodiscard]] uint getMinimumTargetFPS() const noexcept {
             return ls::GameConfLimits::minimumTargetFps;
@@ -550,20 +526,6 @@ namespace mako::ui {
             );
             if (conf.base_fps_cap > 0)
                 conf.dynamic_cadence_recovery = false;
-            MARK_DIRTY()
-        }
-        void gamescopeHdrBrightnessBoostUpdated(bool enabled) {
-            VALIDATE_AND_GET_PROFILE()
-            conf.gamescope_hdr_brightness_boost = enabled;
-            MARK_DIRTY()
-        }
-        void gamescopeHdrBrightnessNitsUpdated(uint target_nits) {
-            VALIDATE_AND_GET_PROFILE()
-            conf.gamescope_hdr_brightness_nits = std::clamp(
-                target_nits,
-                ls::GameConfLimits::minimumGamescopeHdrBrightnessNits,
-                ls::GameConfLimits::maximumGamescopeHdrBrightnessNits
-            );
             MARK_DIRTY()
         }
         void adaptiveUpdated(bool adaptive) {

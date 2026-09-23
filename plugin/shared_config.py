@@ -85,8 +85,6 @@ FRAME_GENERATION_REFRESH_THRESHOLD_MIN = 0
 FRAME_GENERATION_REFRESH_THRESHOLD_MAX = 240
 FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = 30
 FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = 60
-GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN = 203
-GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX = 1000
 
 # Stable persisted values for the mutually exclusive post-process layer.
 # Decky 2.2 stored Gamescope WSI in this released selector. Retain that exact
@@ -237,20 +235,6 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "fieldType": ConfigFieldType.INTEGER,
         "default": 0,
         "description": "backend-independent real framerate cap applied before frame generation",
-        "location": "toml"
-    },
-
-    "gamescope_hdr_brightness_boost": {
-        "fieldType": ConfigFieldType.BOOLEAN,
-        "default": False,
-        "description": "map SDR through Gamescope's HDR output while the game and MAKO remain SDR",
-        "location": "toml"
-    },
-
-    "gamescope_hdr_brightness_nits": {
-        "fieldType": ConfigFieldType.INTEGER,
-        "default": 1000,
-        "description": "Gamescope SDR-on-HDR reference-white target in nits, from its 203-nit baseline to the 1000-nit upper peak target",
         "location": "toml"
     },
 

@@ -542,10 +542,6 @@ Root::Root() :
     }
 
     this->active_profile = profileForLayer(profile->second);
-    this->hdrFeedbackReader.setSdrBrightnessBoost(
-        this->active_profile->gamescope_hdr_brightness_boost,
-        this->active_profile->gamescope_hdr_brightness_nits
-    );
     // Frame Generation provisioning is a process-start choice because LSFG
     // needs application-device interop. The separate execution switch remains
     // live: 0x performs no generation work while 2x-5x or Adaptive can reuse
@@ -801,13 +797,6 @@ ConfigurationUpdateResult Root::update(const bool forceConfigurationPoll) {
         this->active_profile = std::move(*runtimeProfile);
     else
         this->active_profile = std::nullopt;
-    this->hdrFeedbackReader.setSdrBrightnessBoost(
-        this->active_profile &&
-            this->active_profile->gamescope_hdr_brightness_boost,
-        this->active_profile
-            ? this->active_profile->gamescope_hdr_brightness_nits
-            : ls::GameConfDefaults::gamescopeHdrBrightnessNits
-    );
     this->publishSurfaceScalingPolicy();
 
     const auto currentProfileName = this->active_profile

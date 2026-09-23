@@ -421,6 +421,19 @@ namespace mako::layer {
         return effectiveBaseFpsCap(profile);
     }
 
+    /// Ordered-SDR rescue can release an automatic cap after FIFO masks source
+    /// headroom. Once Gamescope explicitly selects variable refresh, FIFO no
+    /// longer owns that clock; retain the configured automatic cap without
+    /// resetting the scheduler or discarding its validated multiplier.
+    [[nodiscard]] inline double effectiveBaseFpsCap(
+            const ls::GameConf& profile,
+            const AdaptiveSchedulerSnapshot& scheduler,
+            const GamescopePresentationFeedback& presentationFeedback) {
+        if (presentationFeedback.variableRefreshRequested())
+            return effectiveBaseFpsCap(profile);
+        return effectiveBaseFpsCap(profile, scheduler);
+    }
+
     [[nodiscard]] inline bool dynamicCadenceRecoveryEnabled(
             const ls::GameConf& profile) {
         return profile.dynamic_cadence_recovery &&
@@ -514,6 +527,32 @@ namespace mako::layer {
             !orderedAcquireRecoveryActive &&
             presentationFeedback.fixedRefreshPacingEligible() &&
             gamescopeRefreshHz.has_value() && *gamescopeRefreshHz > 0;
+    }
+
+    /// Fixed Smooth Cadence normally receives its real-frame clock from
+    /// ordered fixed-refresh FIFO back-pressure. Requested or active VRR makes
+    /// that boundary non-periodic, so pace real frames explicitly at one
+    /// configured multiplier below the confirmed output refresh instead.
+    [[nodiscard]] inline double fixedSmoothCadenceTargetClockBaseFps(
+            const ls::GameConf& profile,
+            const bool privateOrderedTransport,
+            const bool orderedAcquireRecoveryActive,
+            const std::optional<uint32_t> gamescopeRefreshHz,
+            const GamescopePresentationFeedback& presentationFeedback = {}) {
+        if (profile.adaptive ||
+                !profile.adaptive_stable_cadence ||
+                profile.base_fps_cap != 0 ||
+                profile.dynamic_cadence_recovery ||
+                profile.multiplier < 2 ||
+                !effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) ||
+                !privateOrderedTransport ||
+                orderedAcquireRecoveryActive ||
+                presentationFeedback.fixedRefreshPacingEligible() ||
+                !gamescopeRefreshHz || *gamescopeRefreshHz == 0) {
+            return 0.0;
+        }
+        return static_cast<double>(*gamescopeRefreshHz) /
+            static_cast<double>(profile.multiplier);
     }
 
     /// A compositor presentation update may reset pacing only when it changes

@@ -13,7 +13,7 @@ A setting belongs to the earliest boundary that can safely establish all state i
 | Game-owned swapchain | Spatial extents and pacing shape | Natural recreation, or one eligible maintenance1-backed extent request |
 | Private spatial context | Scaling method and sharpness | Prepare, drain MAKO-owned work, and atomically replace |
 | Private FG context | Flow Scale, lighter model, and generated-output capacity | Prepare, drain MAKO-owned work, and atomically replace |
-| Live policy | Frame Generation `0x`/active execution state, refresh guard, Fixed/Adaptive policy, target, caps, cadence controls, and Gamescope HDR Brightness Boost state and target | Next successful reload and application present; policy edits received during confirmed Steam UI focus coalesce until gameplay returns, while the compositor brightness control applies independently on its background monitor |
+| Live policy | Frame Generation `0x`/active execution state, refresh guard, Fixed/Adaptive policy, target, caps, and cadence controls | Next successful reload and application present; policy edits received during confirmed Steam UI focus coalesce until gameplay returns |
 | Compositor feedback | Confirmed refresh, explicit VRR/tearing state, and application HDR state | Background sample, independent of profile reload |
 | Dormant value | A setting for an inactive mode or unavailable private resource | Save now; apply when its owning mode or resource becomes active |
 
@@ -59,7 +59,6 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. |
 | Dynamic Cadence probe interval | Live | Reschedules an inactive probe without discarding validated cadence or an active confirmation. |
 | Base FPS Cap and Adaptive auto-cap | Live while generation is active; dormant while Off | Resets the real-frame pacer and affected scheduler policy. |
-| Gamescope HDR Brightness Boost and 203–1000-nit target | Live compositor output | Requires Steam HDR on, application HDR off, and Gamescope server zero. Changes only Gamescope's final SDR-on-HDR luminance mapping for the active display, restores the previous value when disabled or on process exit, and never changes MAKO's SDR colour/model path. The saved target is dormant while the boost is off. |
 | Scaling enable | Restart | Existing and naturally recreated contexts retain process-start scaling and layer membership. |
 | Game Swapchain Images compatibility | Restart | Existing contexts retain the process-start WSI image-count policy. |
 | Scaling method | Private spatial replacement when active; dormant otherwise | Applies at the next present, retains extents and WSI objects, and keeps the old method on failure. |
@@ -119,7 +118,7 @@ A broad “configuration changed” reset would discard validated cadence after 
 
 ## Frame Generation provisioning, 0x, and Ultra Performance
 
-Disabling Frame Generation provisioning before launch omits LSFG device interop and backend/private generation ownership. A Scaling-only profile still loads the combined Renderer because it owns reconstruction, but it creates no Frame Generation resources. Decky can omit the Renderer layer entirely when Frame Generation provisioning, Scaling, and HDR Brightness Boost are all off; a selected post-processing layer remains independent.
+Disabling Frame Generation provisioning before launch omits LSFG device interop and backend/private generation ownership. A Scaling-only profile still loads the combined Renderer because it owns reconstruction, but it creates no Frame Generation resources. Decky can omit the Renderer layer entirely when Frame Generation provisioning and Scaling are both off; a selected post-processing layer remains independent.
 
 The `0x` execution state submits no LSFG model work, generated-image acquisition, or generated presents. The saved cap is dormant. When provisioning is on, the process retains interop, backend, private images, and synchronization so `0x` can return to an active factor live. Failed provisioning leaves real-frame or independent scaling active and reports restart pending.
 

@@ -78,8 +78,6 @@ export const FRAME_GENERATION_REFRESH_THRESHOLD_MIN = 0 as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD_MAX = 240 as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN = 30 as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD_PRESET = 60 as const;
-export const GAMESCOPE_HDR_BRIGHTNESS_NITS_MIN = 203 as const;
-export const GAMESCOPE_HDR_BRIGHTNESS_NITS_MAX = 1000 as const;
 
 // Stable persisted values for the optional post-process Vulkan layer
 export const EXTERNAL_VULKAN_LAYER_NONE = "" as const;
@@ -131,8 +129,6 @@ export const FRAME_GENERATION_PROVISIONED = "frame_generation_provisioned" as co
 export const FRAME_GENERATION_ENABLED = "frame_generation_enabled" as const;
 export const FRAME_GENERATION_REFRESH_THRESHOLD = "frame_generation_refresh_threshold" as const;
 export const BASE_FPS_CAP = "base_fps_cap" as const;
-export const GAMESCOPE_HDR_BRIGHTNESS_BOOST = "gamescope_hdr_brightness_boost" as const;
-export const GAMESCOPE_HDR_BRIGHTNESS_NITS = "gamescope_hdr_brightness_nits" as const;
 export const MULTIPLIER = "multiplier" as const;
 export const ADAPTIVE = "adaptive" as const;
 export const ADAPTIVE_AUTO_BASE_FPS_CAP = "adaptive_auto_base_fps_cap" as const;
@@ -236,18 +232,6 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     fieldType: ConfigFieldType.INTEGER,
     default: 0,
     description: "backend-independent real framerate cap applied before frame generation"
-  },
-  gamescope_hdr_brightness_boost: {
-    name: "gamescope_hdr_brightness_boost",
-    fieldType: ConfigFieldType.BOOLEAN,
-    default: false,
-    description: "map SDR through Gamescope's HDR output while the game and MAKO remain SDR"
-  },
-  gamescope_hdr_brightness_nits: {
-    name: "gamescope_hdr_brightness_nits",
-    fieldType: ConfigFieldType.INTEGER,
-    default: 1000,
-    description: "Gamescope SDR-on-HDR reference-white target in nits, from its 203-nit baseline to the 1000-nit upper peak target"
   },
   multiplier: {
     name: "multiplier",
@@ -426,8 +410,6 @@ export interface ConfigurationData {
   frame_generation_enabled: boolean;
   frame_generation_refresh_threshold: number;
   base_fps_cap: number;
-  gamescope_hdr_brightness_boost: boolean;
-  gamescope_hdr_brightness_nits: number;
   multiplier: number;
   adaptive: boolean;
   adaptive_auto_base_fps_cap: boolean;
@@ -478,8 +460,6 @@ export function getDefaults(): ConfigurationData {
     frame_generation_enabled: true,
     frame_generation_refresh_threshold: 0,
     base_fps_cap: 0,
-    gamescope_hdr_brightness_boost: false,
-    gamescope_hdr_brightness_nits: 1000,
     multiplier: 2,
     adaptive: false,
     adaptive_auto_base_fps_cap: true,
@@ -523,8 +503,6 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     frame_generation_enabled: ConfigFieldType.BOOLEAN,
     frame_generation_refresh_threshold: ConfigFieldType.INTEGER,
     base_fps_cap: ConfigFieldType.INTEGER,
-    gamescope_hdr_brightness_boost: ConfigFieldType.BOOLEAN,
-    gamescope_hdr_brightness_nits: ConfigFieldType.INTEGER,
     multiplier: ConfigFieldType.INTEGER,
     adaptive: ConfigFieldType.BOOLEAN,
     adaptive_auto_base_fps_cap: ConfigFieldType.BOOLEAN,

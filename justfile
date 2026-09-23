@@ -124,6 +124,10 @@ test-engine-gym-runtime-overhead *args:
 test-engine-gym-sync-validation *args:
     ./engine/scripts/run-mako-gym.sh --suite sync-validation {{args}}
 
+# Exercise Fixed/Steady/Fractional pacing across synthetic Gamescope VRR feedback.
+test-engine-gym-pacing *args:
+    ./engine/scripts/run-mako-gym.sh --suite pacing {{args}}
+
 # Run selected scripted runtime-recovery rows; omit --filter to run the default matrix.
 test-engine-gym-recovery *args:
     ./engine/scripts/run-mako-gym.sh --suite recovery {{args}}

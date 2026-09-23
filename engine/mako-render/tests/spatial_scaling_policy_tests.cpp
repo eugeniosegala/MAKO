@@ -1707,10 +1707,9 @@ int main() {
         combinedCreate.presentMode, true, combinedPrivateTransport
     );
     expect(isolatedOrderedPresent.lowerPresentMode ==
-            VK_PRESENT_MODE_MAILBOX_KHR &&
-            isolatedOrderedPresent.compositorPresentMode ==
-                VK_PRESENT_MODE_FIFO_KHR,
-        "The isolated Gamescope scaling bridge must move ordered FIFO from the lower Wayland WSI to the compositor protocol");
+            VK_PRESENT_MODE_FIFO_KHR &&
+            !isolatedOrderedPresent.compositorPresentMode,
+        "The isolated Gamescope scaling bridge must retain lower FIFO so generated and real presents cannot be coalesced before a surface commit");
     const auto ordinaryOrderedPresent = gamescopeScalingPresentContract(
         combinedCreate.presentMode, false, combinedPrivateTransport
     );

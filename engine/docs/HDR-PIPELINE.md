@@ -29,14 +29,6 @@ MAKO Decky's scaling and explicit Gamescope WSI compatibility paths admit a guar
 
 If an explicit HDR swapchain reaches this SDR-only policy, MAKO disables generation for that swapchain and passes real frames through.
 
-## SDR brightness through the HDR display mode
-
-**HDR Brightness Boost** is a compositor-output control, not application HDR support. On a supported HDR display in Gaming Mode, keep HDR enabled in Steam and disabled in the game. MAKO continues to receive and process the game's ordinary SDR swapchain under `MAKO_DISABLE_HDR_EXPOSURE=1`; after MAKO presents that SDR image, Gamescope maps it to the display's HDR output with `GAMESCOPE_SDR_ON_HDR_CONTENT_BRIGHTNESS`. MAKO Decky and MAKO Renderer Configuration expose the same per-profile 203–1000-nit target: `203` is Gamescope's normal SDR-on-HDR reference level, while the enabled default of `1000` is the upper peak target.
-
-The control does not enable `DXVK_HDR`, change swapchain colour spaces, send PQ or scRGB through the model, enable Gamescope inverse tone mapping, or synthesize HDR colour and highlight detail. It only changes the luminance assigned to the final SDR white level, so the result is HDR-like brightness rather than HDR content. The panel may not sustain its 1,000-nit peak across a full bright frame.
-
-The Renderer changes the property only after proving Gamescope server zero and Steam's enabled HDR state for the active display. Toggle and target updates stay on the existing background compositor monitor and apply live. MAKO snapshots the previous brightness property and restores it when the option is disabled or the process exits, but it does not overwrite a value changed independently after MAKO applied its own. Missing or ambiguous compositor evidence fails closed. A profile with this option enabled keeps the Renderer in the launch chain even when Frame Generation and Scaling are both disabled.
-
 ## Gamescope application-HDR evidence
 
 `GamescopeHdrFeedbackReader` samples compositor properties outside the presentation path. A nested game server may publish the relevant properties on server zero, so the reader accepts a root display only when it belongs to the same Gamescope process.

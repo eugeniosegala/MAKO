@@ -178,47 +178,6 @@ void test_fractional_adaptive_preset() {
         "Fractional Adaptive control does not update the atomic preset property");
 }
 
-void test_hdr_brightness_properties() {
-    static_assert(!ls::GameConfDefaults::gamescopeHdrBrightnessBoost);
-    static_assert(ls::GameConfDefaults::gamescopeHdrBrightnessNits == 1000);
-    static_assert(
-        ls::GameConfLimits::minimumGamescopeHdrBrightnessNits == 203
-    );
-    static_assert(
-        ls::GameConfLimits::maximumGamescopeHdrBrightnessNits == 1000
-    );
-
-    require_property(
-        "gamescope_hdr_brightness_boost", "bool", true, false
-    );
-    require_property(
-        "gamescope_hdr_brightness_nits", "uint", true, false
-    );
-    require_property(
-        "minimum_gamescope_hdr_brightness_nits", "uint", false, true
-    );
-    require_property(
-        "maximum_gamescope_hdr_brightness_nits", "uint", false, true
-    );
-
-    QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
-    require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
-    const QString qml = QString::fromUtf8(file.readAll());
-    require(qml.contains(QStringLiteral("name: t.hdrOutputSettings")) &&
-            qml.contains(QStringLiteral(
-                "checked: backend.gamescope_hdr_brightness_boost")) &&
-            qml.contains(QStringLiteral(
-                "visible: backend.gamescope_hdr_brightness_boost")),
-        "Qt does not expose the per-profile HDR brightness toggle and target");
-    require(qml.contains(QStringLiteral(
-                "from: backend.minimum_gamescope_hdr_brightness_nits")) &&
-            qml.contains(QStringLiteral(
-                "to: backend.maximum_gamescope_hdr_brightness_nits")) &&
-            qml.contains(QStringLiteral(
-                "onMoved: backend.gamescope_hdr_brightness_nits = Math.round(value)")),
-        "Qt HDR brightness target is not bound to the validated live range");
-}
-
 void test_feature_group_order_and_ownership() {
     QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
@@ -389,8 +348,6 @@ void test_save_lifetime() {
         mako::ui::Backend backend;
         backend.targetFPSUpdated(90);
         backend.targetFPSUpdated(144);
-        backend.gamescopeHdrBrightnessBoostUpdated(true);
-        backend.gamescopeHdrBrightnessNitsUpdated(750);
         backend.enableZinkUpdated(true);
         require(!std::filesystem::exists(configPath), "UI edit was not debounced");
         QEventLoop events;
@@ -398,11 +355,6 @@ void test_save_lifetime() {
         events.exec();
         require(ls::ConfigFile(configPath).profiles().front().target_fps == 144,
             "UI timer did not save the latest edit");
-        require(ls::ConfigFile(configPath).profiles().front()
-                    .gamescope_hdr_brightness_boost &&
-                ls::ConfigFile(configPath).profiles().front()
-                    .gamescope_hdr_brightness_nits == 750,
-            "UI timer did not save the HDR brightness controls");
         require(ls::LaunchConfigFile(launchPath).settings().enable_zink,
             "UI timer did not save launcher settings");
         const auto timestamp = std::filesystem::last_write_time(configPath);
@@ -448,7 +400,6 @@ int main(int argc, char* argv[]) {
         test_scaling_properties();
         test_multiplier_limits();
         test_fractional_adaptive_preset();
-        test_hdr_brightness_properties();
         test_feature_group_order_and_ownership();
         test_compact_restart_markers();
         test_save_lifetime();

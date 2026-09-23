@@ -1803,7 +1803,10 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     if (this->adaptiveScheduler && !this->steamMenuSuspended) {
         schedulerSnapshot = this->adaptiveScheduler->snapshot();
         automaticBaseCapSuppressed =
-            effectiveBaseFpsCap(this->profile, schedulerSnapshot) <= 0.0 &&
+            effectiveBaseFpsCap(
+                this->profile, schedulerSnapshot,
+                this->gamescopePresentationFeedback
+            ) <= 0.0 &&
             effectiveBaseFpsCap(this->profile) > 0.0;
         cadenceBaseCapEligible = smoothCadenceBaseCapEligible(
             this->profile,
@@ -1870,11 +1873,24 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                 : "guard-restored-long-retry"
         );
     }
+    const double fixedSmoothTargetClockBaseFps =
+        fixedSmoothCadenceTargetClockBaseFps(
+            this->profile,
+            this->privateOrderedTransport,
+            this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz,
+            this->gamescopePresentationFeedback
+        );
     const double baseFpsCap = this->steamMenuSuspended || handoff.active
         ? 0.0
-        : cadenceBaseCap.framesPerSecond.value_or(
-            effectiveBaseFpsCap(this->profile, schedulerSnapshot)
-        );
+        : fixedSmoothTargetClockBaseFps > 0.0
+            ? fixedSmoothTargetClockBaseFps
+            : cadenceBaseCap.framesPerSecond.value_or(
+                effectiveBaseFpsCap(
+                    this->profile, schedulerSnapshot,
+                    this->gamescopePresentationFeedback
+                )
+            );
     const auto limiterDeadline = this->realFramePacer.schedule(
         limiterArrival, baseFpsCap
     );

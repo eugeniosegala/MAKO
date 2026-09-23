@@ -141,12 +141,6 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("scalingSharpnessDesc"),
         QStringLiteral("fractionalAdaptive"),
         QStringLiteral("fractionalAdaptiveDesc"),
-        QStringLiteral("hdrOutputSettings"),
-        QStringLiteral("hdrBrightnessBoost"),
-        QStringLiteral("hdrBrightnessBoostDesc"),
-        QStringLiteral("hdrBrightnessTarget"),
-        QStringLiteral("hdrBrightnessTargetDesc"),
-        QStringLiteral("nitsSuffix"),
     };
 
     const QStringList process_restart_labels{
@@ -170,8 +164,6 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("scalingFactor"),
         QStringLiteral("scalingSupersampling"),
         QStringLiteral("scalingSharpness"),
-        QStringLiteral("hdrBrightnessBoost"),
-        QStringLiteral("hdrBrightnessTarget"),
     };
 
     for (qsizetype index = 0; index < language_codes.size(); ++index) {
@@ -256,14 +248,6 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     require(english.value(QStringLiteral("fractionalAdaptiveDesc")).toString()
             .contains(QStringLiteral("60 real FPS → 90 displayed FPS")),
         "English Fractional Adaptive help does not explain fractional output");
-    require(english.value(QStringLiteral("hdrBrightnessBoost")).toString() ==
-            QStringLiteral("HDR Brightness Boost"),
-        "English HDR brightness label is stale");
-    require(english.value(QStringLiteral("hdrBrightnessTargetDesc")).toString()
-                .contains(QStringLiteral("203 nits")) &&
-            english.value(QStringLiteral("hdrBrightnessTargetDesc")).toString()
-                .contains(QStringLiteral("1,000 nits")),
-        "English HDR brightness help does not explain its validated range");
     require(!english.value(QStringLiteral("performanceModeDesc")).toString()
             .contains(QStringLiteral("private frame-generation context")),
         "English lighter-model help exposes an implementation detail");

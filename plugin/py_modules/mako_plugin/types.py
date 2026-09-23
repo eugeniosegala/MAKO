@@ -198,8 +198,6 @@ class RuntimeProfileSnapshot(TypedDict):
     scaling_sharpness: float
     frame_generation_refresh_threshold: int
     base_fps_cap: int
-    gamescope_hdr_brightness_boost: bool
-    gamescope_hdr_brightness_nits: int
     adaptive: bool
     adaptive_auto_base_fps_cap: bool
     target_fps: int

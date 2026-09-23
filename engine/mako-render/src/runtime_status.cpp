@@ -268,10 +268,6 @@ namespace {
                << ",\"frame_generation_refresh_threshold\":"
                << profile.frame_generation_refresh_threshold
                << ",\"base_fps_cap\":" << profile.base_fps_cap
-               << ",\"gamescope_hdr_brightness_boost\":"
-               << profile.gamescope_hdr_brightness_boost
-               << ",\"gamescope_hdr_brightness_nits\":"
-               << profile.gamescope_hdr_brightness_nits
                << ",\"adaptive\":" << profile.adaptive
                << ",\"adaptive_auto_base_fps_cap\":"
                << profile.adaptive_auto_base_fps_cap

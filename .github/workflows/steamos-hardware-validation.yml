@@ -234,7 +234,9 @@ jobs:
           smoke_root="$(mktemp -d "${TMPDIR:-/tmp}/mako-decky-payload.XXXXXX")"
           trap 'rm -rf -- "$smoke_root"' EXIT
           unzip -q "${{ steps.package.outputs.decky_archive }}" \
-            'Mako/bin/*-linux.tar.xz' -d "$smoke_root"
+            'Mako/bin/*-linux.tar.xz' \
+            'Mako/py_modules/mako_plugin/vkbasalt_shaders/*' \
+            -d "$smoke_root"
           mapfile -t renderer_archives < <(
             find "$smoke_root" -type f -name '*-linux.tar.xz' -print
           )
@@ -272,7 +274,8 @@ jobs:
             fi
           }
 
-          run_packaged_suite vulkan mako-gym
+          run_packaged_suite vulkan mako-gym \
+            --shader-root "$smoke_root/Mako/py_modules/mako_plugin/vkbasalt_shaders"
           run_packaged_suite recovery mako-gym-recovery
           run_packaged_suite external-recovery mako-gym-external-recovery
           run_packaged_suite gamescope-e2e mako-gym-gamescope-e2e
@@ -282,6 +285,7 @@ jobs:
           run_packaged_suite proton-compatibility mako-gym-proton-compatibility \
             --runtime-tier extended --case-tier extended --minimum-runtimes 4
           run_packaged_suite runtime-overhead mako-gym-runtime-overhead
+          run_packaged_suite pacing mako-gym-pacing
           run_packaged_suite constraints mako-gym-constraints \
             --cli "$matrix_prefix/bin/mako-cli" \
             --affected-suites "$MAKO_GYM_SUITES" --require-complete
@@ -306,6 +310,7 @@ jobs:
             engine/out/mako-gym-performance
             engine/out/mako-gym-spatial-performance
             engine/out/mako-gym-runtime-overhead
+            engine/out/mako-gym-pacing
             engine/out/mako-gym-sync-validation
             engine/out/mako-gym-repeatability
             engine/out/mako-gym

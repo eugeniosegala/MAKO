@@ -285,6 +285,12 @@ int main() {
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120, activeVrr),
         "Fixed Smooth Cadence assumed periodic FIFO pacing under VRR");
+    expect(fixedSmoothCadenceTargetClockBaseFps(
+            fixedPacing, true, false, 120, activeVrr) == 40.0,
+        "Fixed Smooth Cadence did not replace FIFO with its VRR target clock");
+    expect(fixedSmoothCadenceTargetClockBaseFps(
+            fixedPacing, true, false, 120) == 0.0,
+        "Fixed Smooth Cadence double-paced a fixed-refresh FIFO");
     const GamescopePresentationFeedback vrrDisabled{
         .vrrEnabled = false,
         .vrrCapable = true,
@@ -318,6 +324,9 @@ int main() {
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, std::nullopt),
         "Fixed selected full-cadence pacing without refresh feedback");
+    expect(fixedSmoothCadenceTargetClockBaseFps(
+            fixedPacing, true, false, std::nullopt, activeVrr) == 0.0,
+        "Fixed invented a VRR target clock without refresh feedback");
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, false, false, 120),
         "non-ordered transport enabled Fixed Smooth Cadence");
@@ -328,6 +337,9 @@ int main() {
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),
         "Fixed Smooth Cadence overrode an explicit real-frame cap");
+    expect(fixedSmoothCadenceTargetClockBaseFps(
+            fixedPacing, true, false, 120, activeVrr) == 0.0,
+        "Fixed Smooth Cadence overrode an explicit cap under VRR");
     fixedPacing.base_fps_cap = 0;
     fixedPacing.dynamic_cadence_recovery = true;
     expect(!fixedSmoothCadenceFifoEligible(
@@ -472,6 +484,9 @@ int main() {
     };
     expect(effectiveBaseFpsCap(next, collapsedAutomaticCap) == 0.0,
         "A proven Ordered-SDR collapse did not release the automatic cap");
+    expect(effectiveBaseFpsCap(
+            next, collapsedAutomaticCap, activeVrr) == 45.0,
+        "VRR did not restore the target clock after an Ordered-SDR cap release");
 
     auto overlappingCaps = next;
     overlappingCaps.base_fps_cap = 30;

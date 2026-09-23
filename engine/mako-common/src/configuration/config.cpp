@@ -47,8 +47,6 @@ scaling_supersampling = false
 scaling_sharpness = 0.8
 frame_generation_refresh_threshold = 0
 base_fps_cap = 0
-gamescope_hdr_brightness_boost = false
-gamescope_hdr_brightness_nits = 1000
 adaptive = false
 adaptive_auto_base_fps_cap = false
 target_fps = 120
@@ -97,10 +95,6 @@ ConfigFile::ConfigFile() {
         .frame_generation_refresh_threshold =
             GameConfDefaults::frameGenerationRefreshThreshold,
         .base_fps_cap = GameConfDefaults::baseFpsCap,
-        .gamescope_hdr_brightness_boost =
-            GameConfDefaults::gamescopeHdrBrightnessBoost,
-        .gamescope_hdr_brightness_nits =
-            GameConfDefaults::gamescopeHdrBrightnessNits,
         .adaptive = GameConfDefaults::adaptive,
         .adaptive_auto_base_fps_cap =
             GameConfDefaults::adaptiveAutoBaseFpsCap,
@@ -220,19 +214,6 @@ namespace {
                 )
             );
         }
-        if (conf.gamescope_hdr_brightness_nits <
-                GameConfLimits::minimumGamescopeHdrBrightnessNits ||
-                conf.gamescope_hdr_brightness_nits >
-                    GameConfLimits::maximumGamescopeHdrBrightnessNits) {
-            throw ls::error(
-                "gamescope_hdr_brightness_nits must be between " +
-                std::to_string(
-                    GameConfLimits::minimumGamescopeHdrBrightnessNits
-                ) + " and " + std::to_string(
-                    GameConfLimits::maximumGamescopeHdrBrightnessNits
-                )
-            );
-        }
         if (conf.target_fps < GameConfLimits::minimumTargetFps ||
                 conf.target_fps > GameConfLimits::maximumTargetFps) {
             throw ls::error(
@@ -331,14 +312,6 @@ namespace {
                     GameConfDefaults::frameGenerationRefreshThreshold
                 ),
             .base_fps_cap = tbl["base_fps_cap"].value_or(GameConfDefaults::baseFpsCap),
-            .gamescope_hdr_brightness_boost =
-                tbl["gamescope_hdr_brightness_boost"].value_or(
-                    GameConfDefaults::gamescopeHdrBrightnessBoost
-                ),
-            .gamescope_hdr_brightness_nits =
-                tbl["gamescope_hdr_brightness_nits"].value_or(
-                    GameConfDefaults::gamescopeHdrBrightnessNits
-                ),
             .adaptive = tbl["adaptive"].value_or(GameConfDefaults::adaptive),
             .adaptive_auto_base_fps_cap =
                 tbl["adaptive_auto_base_fps_cap"].value_or(
@@ -415,10 +388,6 @@ namespace {
             .frame_generation_refresh_threshold =
                 GameConfDefaults::frameGenerationRefreshThreshold,
             .base_fps_cap = GameConfDefaults::baseFpsCap,
-            .gamescope_hdr_brightness_boost =
-                GameConfDefaults::gamescopeHdrBrightnessBoost,
-            .gamescope_hdr_brightness_nits =
-                GameConfDefaults::gamescopeHdrBrightnessNits,
             .adaptive = GameConfDefaults::adaptive,
             .adaptive_auto_base_fps_cap =
                 GameConfDefaults::adaptiveAutoBaseFpsCap,
@@ -598,14 +567,6 @@ void ConfigFile::write(const std::filesystem::path& path) const {
             static_cast<int64_t>(conf.frame_generation_refresh_threshold)
         );
         profile.insert("base_fps_cap", static_cast<int64_t>(conf.base_fps_cap));
-        profile.insert(
-            "gamescope_hdr_brightness_boost",
-            conf.gamescope_hdr_brightness_boost
-        );
-        profile.insert(
-            "gamescope_hdr_brightness_nits",
-            static_cast<int64_t>(conf.gamescope_hdr_brightness_nits)
-        );
         profile.insert("adaptive", conf.adaptive);
         profile.insert(
             "adaptive_auto_base_fps_cap", conf.adaptive_auto_base_fps_cap

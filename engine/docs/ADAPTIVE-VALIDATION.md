@@ -105,9 +105,11 @@ Use the sibling MAKO Gym checkout between portable policy tests and commercial-g
 ```bash
 scripts/run-mako-gym.sh --suite recovery --list
 scripts/run-mako-gym.sh --suite recovery --filter '(stall|cadence-drop|recreate)$'
+scripts/run-mako-gym.sh --suite pacing --list
+scripts/run-mako-gym.sh --suite pacing --filter '^vrr-(fixed-smooth|steady)-'
 ```
 
-Select coverage according to [Testing MAKO](../../TESTING.md#selecting-mako-gym-coverage). Scheduler changes normally begin with `recovery`; external overlay pause/throttle and workload-proven source-return changes use `external-recovery`; construction changes add `vulkan`; Gamescope lifecycle changes add `gamescope-e2e`; translation changes add `proton-e2e` or `proton-compatibility`. A filtered pass proves only its selected rows.
+Select coverage according to [Testing MAKO](../../TESTING.md#selecting-mako-gym-coverage). Scheduler changes normally begin with `recovery`; pacing-owner and Gamescope VRR-feedback changes use `pacing`; external overlay pause/throttle and workload-proven source-return changes use `external-recovery`; construction changes add `vulkan`; Gamescope lifecycle changes add `gamescope-e2e`; translation changes add `proton-e2e` or `proton-compatibility`. A filtered pass proves only its selected rows.
 
 The external-recovery inventory pairs unidentified-overlay controls with confirmed Gamescope menu rows across Adaptive 2x and 3x, Fixed, Frame Generation-only, combined Frame Generation plus scaling, and scaling-only operation. Pause, covered-throttle, and repeated short/long menu journeys must independently prove source recovery, target-output recovery, focus sequencing, fresh history, generation suspension where applicable, and context stability. Portable policy tests separately cover Fractional/Smooth mode, automatic base-cap state, 2x–5x ceilings, failed-baseline retention, exact Fixed stability, transition-scoped acquire failure, inert successful transport, and the absence of FPS-authorized recovery so hardware rows do not carry the full combinatorial burden.
 

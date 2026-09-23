@@ -67,7 +67,7 @@ Use `-DMAKO_BUILD_UI=ON` when Qt 6 Base and Declarative development packages are
 
 MAKO Gym is an optional sibling checkout for local development and a required release-gate dependency. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.
 
-Gym contract version 18 requires defined-content benchmark inputs and performance baseline schema 4, while retaining explicit CLI precision selection: quality, synchronization, and performance runners pass `--no-fp16` for FP32 cases and `--allow-fp16` for FP16 cases. This preserves both matrix lanes now that CLI LSFG commands allow FP16 by default. Use a matching Gym checkout; older runners must not silently reinterpret an FP32 workload through the new default or compare incompatible benchmark recipes.
+Gym contract version 19 adds the release-gated `pacing` suite for explicit Gamescope VRR feedback, pacing-owner transitions, and independent compositor-completion evidence while retaining defined-content benchmark inputs, performance baseline schema 4, and explicit CLI precision selection. Use a matching Gym checkout; older runners must not silently omit VRR pacing coverage or reinterpret an FP32 workload through the CLI default.
 
 Before any hardware run, validate Gym's portable contracts with `(cd ../MAKO-Gym && ./scripts/check.sh)` or `just check` from its checkout.
 
@@ -94,7 +94,8 @@ Retained evidence may be reused instead of duplicated only when the exact gate-b
 | Present/frame tails, process CPU/RSS, Vulkan allocations, or “feels heavy” reports | `runtime-overhead` |
 | Barriers, image transitions, command recording, or exported-resource synchronization | `sync-validation` |
 | Initialization or unexplained pixel instability | `repeatability` |
-| Cadence, Steady/Fractional Adaptive, recovery, stalls, or swapchain lifetime | `recovery`; add `vulkan` if construction changed |
+| Fixed/Steady/Fractional cadence, Gamescope VRR feedback, pacing-owner transitions, or completion timing | `pacing`; add `recovery` when recovery, stalls, or swapchain lifetime changed |
+| Recovery, stalls, acquire pressure, or swapchain lifetime | `recovery`; add `vulkan` if construction changed |
 | External full-cover overlay pause/throttle or workload-proven source-return recovery | `external-recovery` |
 | Native compositor, WSI, cross-layer live transition, or resolution lifecycle | `gamescope-e2e` |
 | Native direct scaling/Frame Generation or Steam Desktop Proton Frame Generation and extent-override fallback | `direct-desktop-e2e` |

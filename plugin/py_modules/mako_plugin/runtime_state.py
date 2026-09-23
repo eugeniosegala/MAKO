@@ -117,14 +117,6 @@ def _profile(value: object, field: str) -> RuntimeProfileSnapshot:
         "base_fps_cap": _integer(
             value.get("base_fps_cap"), f"{field}.base_fps_cap"
         ),
-        "gamescope_hdr_brightness_boost": _boolean(
-            value.get("gamescope_hdr_brightness_boost", False),
-            f"{field}.gamescope_hdr_brightness_boost",
-        ),
-        "gamescope_hdr_brightness_nits": _integer(
-            value.get("gamescope_hdr_brightness_nits", 1000),
-            f"{field}.gamescope_hdr_brightness_nits",
-        ),
         "adaptive": _boolean(value.get("adaptive"), f"{field}.adaptive"),
         "adaptive_auto_base_fps_cap": _boolean(
             value.get("adaptive_auto_base_fps_cap"),

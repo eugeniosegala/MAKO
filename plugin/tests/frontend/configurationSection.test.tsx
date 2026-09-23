@@ -224,58 +224,6 @@ describe("Configuration controls", () => {
     expect(screen.queryByText("Allow FP16 (Restart)")).toBeNull();
   });
 
-  test("exposes the live SDR-on-HDR brightness boost with its safety contract", () => {
-    const onConfigChange = vi.fn(async () => undefined);
-    render(
-      <ConfigurationSection
-        config={getDefaults()}
-        onConfigChange={onConfigChange}
-        onConfigUpdate={vi.fn(async () => undefined)}
-      />,
-    );
-
-    expect(
-      screen.getByText("HDR Brightness Boost"),
-    ).toBeTruthy();
-    expect(
-      screen.getByText(
-        "Keep HDR enabled in Steam and HDR disabled in the game. MAKO remains SDR while Gamescope maps the final image through the display's HDR output for up to 1,000-nit peak luminance. This simulates HDR-like brightness, not HDR colours or highlight detail.",
-      ),
-    ).toBeTruthy();
-
-    fireEvent.click(
-      screen.getByText("HDR Brightness Boost"),
-    );
-    expect(onConfigChange).toHaveBeenCalledWith(
-      "gamescope_hdr_brightness_boost",
-      true,
-    );
-
-    cleanup();
-    render(
-      <ConfigurationSection
-        config={{
-          ...getDefaults(),
-          gamescope_hdr_brightness_boost: true,
-          gamescope_hdr_brightness_nits: 750,
-        }}
-        onConfigChange={onConfigChange}
-        onConfigUpdate={vi.fn(async () => undefined)}
-      />,
-    );
-    const target = screen.getByRole("button", {
-      name: "Brightness Target (750 nits)",
-    });
-    expect(target.getAttribute("data-minimum")).toBe("203");
-    expect(target.getAttribute("data-maximum")).toBe("1000");
-    expect(target.getAttribute("data-step")).toBe("1");
-    fireEvent.click(target);
-    expect(onConfigChange).toHaveBeenCalledWith(
-      "gamescope_hdr_brightness_nits",
-      751,
-    );
-  });
-
   test("shows automatic per-game vkBasalt controls and the editable path", () => {
     render(
       <ShadersConfigurationGroup

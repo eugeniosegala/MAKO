@@ -206,7 +206,7 @@ def script_configuration_lines(
     )
     lines.append(
         "mako_renderer_required="
-        f"{1 if (config.get('frame_generation_provisioned', True) or config.get('scaling_enabled', False) or config.get('gamescope_hdr_brightness_boost', False)) else 0}"
+        f"{1 if (config.get('frame_generation_provisioned', True) or config.get('scaling_enabled', False)) else 0}"
     )
     lines.append(
         "mako_spatial_scaling_required="

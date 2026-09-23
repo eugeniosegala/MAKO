@@ -32,8 +32,6 @@ active_in = ["Game.exe"]
 frame_generation_provisioned = true
 frame_generation_enabled = true
 multiplier = 2
-gamescope_hdr_brightness_boost = false
-gamescope_hdr_brightness_nits = 1000
 
 scaling_enabled = false
 scaling_method = "ls1"
@@ -62,8 +60,6 @@ The CLI's `benchmark`, `debug`, `quality-regression`, and `combined-quality-regr
 | `multiplier` | 2–5 | `2` | Total output multiplier in Fixed mode. Higher values need more GPU time, private outputs, and WSI headroom. |
 | `frame_generation_refresh_threshold` | 0–1000 Hz | `0` | Pauses generation at or below a confirmed Gamescope refresh; `0` disables the guard. Missing refresh feedback does not pause generation. |
 | `base_fps_cap` | 0–1000 FPS | `0` | Caps real frames while generation is active; `0` disables the cap. The saved value is dormant while the Frame Generation factor is `0x`. |
-| `gamescope_hdr_brightness_boost` | Boolean | `false` | Gaming Mode control for supported Gamescope HDR displays. With HDR enabled in Steam and disabled in the game, asks Gamescope to map the final SDR image through its HDR output. MAKO's game-facing colour pipeline remains SDR. Applies live while the Renderer is loaded and restores the previous compositor value when disabled or on process exit. |
-| `gamescope_hdr_brightness_nits` | 203–1000 nits | `1000` | Live target for HDR Brightness Boost. `203` is Gamescope's standard SDR-on-HDR reference level; `1000` is the upper peak target. This value is dormant while the boost is off. |
 | `adaptive` | Boolean | `false` | Uses Adaptive rather than Fixed policy and varies the generated count toward `target_fps`. |
 | `adaptive_auto_base_fps_cap` | Boolean | `false` | Starts Adaptive with a half-target real-frame cap and may select a proven integer cadence with Smooth Cadence. Recovery can release only this automatic cap when it becomes the bottleneck. |
 | `target_fps` | 10–1000 FPS | `120` | Adaptive output target. It is not a limiter for a game already above target and cannot override the multiplier ceiling. |
@@ -99,7 +95,7 @@ Outside Gamescope, MAKO does not infer the destination monitor size from an arbi
 
 | Boundary | Settings |
 | --- | --- |
-| Live policy | Frame Generation `0x`/active execution state, refresh threshold, supported Fixed/Adaptive mode changes, target, caps, Smooth Cadence, Dynamic Cadence Recovery, and Gamescope HDR Brightness Boost state and target while the Renderer is loaded. |
+| Live policy | Frame Generation `0x`/active execution state, refresh threshold, supported Fixed/Adaptive mode changes, target, caps, Smooth Cadence, and Dynamic Cadence Recovery. |
 | Private resource replacement | Scaler method, sharpness, Flow Scale, Lighter FG Model, and generated-output capacity when the current WSI pool has enough headroom. Method changes apply at the next present; continuous controls coalesce for 500 ms. |
 | Game-owned swapchain recreation | Effective Scale Factor or Quality Supersampling extent changes, and capacity growth that exceeds current WSI headroom. Eligible maintenance1 contexts may request one recreation; other paths wait for a natural recreation. |
 | Process restart | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, DLL, FP16, GPU, Ultra Performance, layer membership, HDR exposure, and launcher compatibility. |
