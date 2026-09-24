@@ -213,6 +213,36 @@ elif [[ ! -d "$mako_implicit_layer_path" ]]; then
     mako_implicit_layer_path="$mako_install_prefix/share/vulkan/implicit_layer.d"
 fi
 
+# Steam's Desktop Mode FPS counter is part of its Vulkan overlay. Preserve
+# only that named layer when Steam requested it and its per-user manifests are
+# available. The directory is exposed solely for explicit-layer discovery, so
+# Steam Fossilize and unrelated implicit layers remain outside MAKO's boundary.
+# Gaming Mode keeps its compositor-owned performance display unchanged.
+mako_steam_overlay_layers=""
+mako_steam_overlay_layer_dir="$mako_data_home/vulkan/implicit_layer.d"
+mako_gamescope_session=0
+mako_flatpak_launch=0
+if [[ "${1##*/}" == flatpak && "${2:-}" == run ]]; then
+    mako_flatpak_launch=1
+fi
+if [[ -n "${GAMESCOPE_WAYLAND_DISPLAY:-}" &&
+        ( -z "${WAYLAND_DISPLAY:-}" ||
+          "${WAYLAND_DISPLAY}" == "${GAMESCOPE_WAYLAND_DISPLAY}" ) ]]; then
+    mako_gamescope_session=1
+fi
+if [[ "${ENABLE_VK_LAYER_VALVE_steam_overlay_1:-0}" == 1 &&
+        "$mako_gamescope_session" != 1 && "$mako_flatpak_launch" != 1 ]]; then
+    if [[ -r "$mako_steam_overlay_layer_dir/steamoverlay_x86_64.json" ]]; then
+        mako_steam_overlay_layers=VK_LAYER_VALVE_steam_overlay_64
+    fi
+    if [[ -r "$mako_steam_overlay_layer_dir/steamoverlay_i386.json" ]]; then
+        mako_steam_overlay_layers="${mako_steam_overlay_layers:+$mako_steam_overlay_layers:}VK_LAYER_VALVE_steam_overlay_32"
+    fi
+    if [[ -n "$mako_steam_overlay_layers" ]]; then
+        export VK_LAYER_PATH="$mako_steam_overlay_layer_dir${VK_LAYER_PATH:+:$VK_LAYER_PATH}"
+    fi
+fi
+
 # Remove any inherited vkBasalt request before deciding whether the private
 # bundled layer can join. This prevents a system-wide manifest or duplicate
 # caller entry from bypassing the standalone launcher's ownership boundary.
@@ -220,6 +250,13 @@ mako_existing_instance_layers=":${VK_INSTANCE_LAYERS:-}:"
 while [[ "$mako_existing_instance_layers" == *":VK_LAYER_VKBASALT_post_processing:"* ]]; do
     mako_existing_instance_layers="${mako_existing_instance_layers/:VK_LAYER_VKBASALT_post_processing:/:}"
 done
+if [[ -n "$mako_steam_overlay_layers" ]]; then
+    for mako_steam_overlay_layer in VK_LAYER_VALVE_steam_overlay_64 VK_LAYER_VALVE_steam_overlay_32; do
+        while [[ "$mako_existing_instance_layers" == *":$mako_steam_overlay_layer:"* ]]; do
+            mako_existing_instance_layers="${mako_existing_instance_layers/:$mako_steam_overlay_layer:/:}"
+        done
+    done
+fi
 mako_existing_instance_layers="${mako_existing_instance_layers#:}"
 mako_existing_instance_layers="${mako_existing_instance_layers%:}"
 
@@ -251,9 +288,9 @@ if [[ "$mako_vkbasalt_requested" == 1 && "${DISABLE_MAKO:-0}" != 1 ]]; then
         mako_existing_instance_layers="${mako_existing_instance_layers#:}"
         mako_existing_instance_layers="${mako_existing_instance_layers%:}"
         if [[ -n "$mako_existing_instance_layers" ]]; then
-            export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing:$mako_existing_instance_layers"
+            export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing${mako_steam_overlay_layers:+:$mako_steam_overlay_layers}:$mako_existing_instance_layers"
         else
-            export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing"
+            export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing${mako_steam_overlay_layers:+:$mako_steam_overlay_layers}"
         fi
         mako_implicit_layer_path="$mako_implicit_layer_path:$mako_vkbasalt_layer_path"
         unset DISABLE_VKBASALT
@@ -264,7 +301,20 @@ if [[ "$mako_vkbasalt_requested" == 1 && "${DISABLE_MAKO:-0}" != 1 ]]; then
         mako_vkbasalt_enabled=1
     fi
 fi
-if [[ "$mako_vkbasalt_enabled" != 1 ]]; then
+if [[ "$mako_vkbasalt_enabled" != 1 && -n "$mako_steam_overlay_layers" &&
+        "${DISABLE_MAKO:-0}" != 1 ]]; then
+    if [[ -n "$mako_existing_instance_layers" ]]; then
+        export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:$mako_steam_overlay_layers:$mako_existing_instance_layers"
+    else
+        export VK_INSTANCE_LAYERS="VK_LAYER_MAKO_render:$mako_steam_overlay_layers"
+    fi
+elif [[ "$mako_vkbasalt_enabled" != 1 && -n "$mako_steam_overlay_layers" ]]; then
+    if [[ -n "$mako_existing_instance_layers" ]]; then
+        export VK_INSTANCE_LAYERS="$mako_steam_overlay_layers:$mako_existing_instance_layers"
+    else
+        export VK_INSTANCE_LAYERS="$mako_steam_overlay_layers"
+    fi
+elif [[ "$mako_vkbasalt_enabled" != 1 ]]; then
     unset VKBASALT_CONFIG_RELOAD
     if [[ -n "$mako_existing_instance_layers" ]]; then
         export VK_INSTANCE_LAYERS="$mako_existing_instance_layers"
@@ -278,6 +328,8 @@ unset mako_launcher_dir mako_install_prefix mako_data_home mako_implicit_layer_p
 unset mako_existing_instance_layers mako_vkbasalt_layer_path
 unset mako_vkbasalt_library64 mako_vkbasalt_library32
 unset mako_vkbasalt_requested mako_vkbasalt_config
+unset mako_steam_overlay_layer_dir mako_steam_overlay_layer
+unset mako_steam_overlay_layers mako_gamescope_session mako_flatpak_launch
 
 # Gamescope WSI implements its own FIFO policy above MAKO, while MAKO expands
 # one application present into a generated/original sequence below it. Keeping
@@ -292,7 +344,8 @@ unset ENABLE_GAMESCOPE_WSI
 # live compositor feedback. Keep the launch contract explicit on both sides.
 export MAKO_DISABLE_HDR_EXPOSURE=1
 unset DXVK_HDR
-if [[ "$mako_vkbasalt_enabled" == 1 ]]; then
+if [[ "$mako_vkbasalt_enabled" == 1 || -n "${VK_INSTANCE_LAYERS:-}" &&
+        ":${VK_INSTANCE_LAYERS}:" == *":VK_LAYER_MAKO_render:"* ]]; then
     unset ENABLE_MAKO
 else
     export ENABLE_MAKO=1

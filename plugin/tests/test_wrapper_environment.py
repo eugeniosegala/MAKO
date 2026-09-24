@@ -42,6 +42,9 @@ class WrapperEnvironmentTests(unittest.TestCase):
             development_build=False,
         )
         self.service.local_share_dir = Path("/private/mako/implicit_layer.d")
+        self.service.user_vulkan_layer_dir = Path(
+            "/private/user-vulkan/implicit_layer.d"
+        )
         self.service.spatial_scaling_layer_dir = Path(
             "/private/mako/spatial_scaling.d"
         )
@@ -75,6 +78,8 @@ class WrapperEnvironmentTests(unittest.TestCase):
             'printf "HDR_EXPOSURE_DISABLED=%s\\n" "${MAKO_DISABLE_HDR_EXPOSURE:-}"',
             'printf "DXVK_HDR=%s\\n" "${DXVK_HDR:-}"',
             'printf "INSTANCE=%s\\n" "${VK_INSTANCE_LAYERS:-}"',
+            'printf "LAYER_PATH=%s\\n" "${VK_LAYER_PATH:-}"',
+            'printf "ADD_LAYER_PATH=%s\\n" "${VK_ADD_LAYER_PATH:-}"',
             'printf "EXTERNAL_SELECTOR=%s\\n" "${MAKO_EXTERNAL_VULKAN_LAYER:-}"',
             'printf "MANGOHUD=%s\\n" "${MANGOHUD:-}"',
             'printf "MANGOHUD_DISABLED=%s\\n" "${DISABLE_MANGOHUD:-}"',
@@ -114,12 +119,106 @@ class WrapperEnvironmentTests(unittest.TestCase):
         self.assertEqual(values["ENABLE_SCALING"], "")
         self.assertEqual(values["DXVK_HDR"], "")
         self.assertEqual(values["INSTANCE"], "")
+        self.assertEqual(values["LAYER_PATH"], "")
+        self.assertEqual(values["ADD_LAYER_PATH"], "")
         self.assertEqual(values["EXTERNAL_SELECTOR"], "")
         self.assertEqual(values["MANGOHUD"], "")
         self.assertEqual(values["VKBASALT"], "")
         self.assertEqual(values["VKBASALT_DISABLED"], "1")
         self.assertEqual(values["VKBASALT_CONFIG"], "")
         self.assertEqual(values["VKBASALT_RELOAD"], "")
+
+    def test_desktop_steam_overlay_is_explicit_after_renderer(self):
+        with tempfile.TemporaryDirectory() as steam_layer_dir:
+            self.service.user_vulkan_layer_dir = Path(steam_layer_dir)
+            for filename in ("steamoverlay_x86_64.json", "steamoverlay_i386.json"):
+                (self.service.user_vulkan_layer_dir / filename).write_text(
+                    "{}", encoding="utf-8"
+                )
+
+            values = self._evaluate(
+                {
+                    "ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1",
+                    "VK_LAYER_PATH": "/caller/explicit",
+                    "VK_ADD_LAYER_PATH": "/caller/additional-explicit",
+                    "VK_INSTANCE_LAYERS":
+                        "VK_LAYER_existing:VK_LAYER_VALVE_steam_overlay_64",
+                },
+                ConfigurationManager.get_defaults(),
+            )
+
+        self.assertEqual(
+            values["INSTANCE"],
+            "VK_LAYER_MAKO_render:"
+            "VK_LAYER_VALVE_steam_overlay_64:"
+            "VK_LAYER_VALVE_steam_overlay_32:"
+            "VK_LAYER_existing",
+        )
+        self.assertEqual(
+            values["LAYER_PATH"],
+            f"{steam_layer_dir}:/caller/explicit",
+        )
+        self.assertEqual(
+            values["ADD_LAYER_PATH"], "/caller/additional-explicit"
+        )
+        self.assertEqual(values["ENABLE"], "")
+
+    def test_steam_overlay_preservation_is_not_used_in_gaming_mode(self):
+        with tempfile.TemporaryDirectory() as steam_layer_dir:
+            self.service.user_vulkan_layer_dir = Path(steam_layer_dir)
+            (self.service.user_vulkan_layer_dir / "steamoverlay_x86_64.json").write_text(
+                "{}", encoding="utf-8"
+            )
+            values = self._evaluate(
+                {
+                    **self.gamescope_environment,
+                    "ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1",
+                },
+                ConfigurationManager.get_defaults(),
+            )
+
+        self.assertEqual(values["INSTANCE"], "")
+        self.assertEqual(values["LAYER_PATH"], "")
+        self.assertEqual(values["ENABLE"], "1")
+
+    def test_desktop_steam_overlay_follows_managed_shader_layer(self):
+        with (
+            tempfile.TemporaryDirectory() as steam_layer_dir,
+            tempfile.TemporaryDirectory() as vkbasalt_layer_dir,
+        ):
+            self.service.user_vulkan_layer_dir = Path(steam_layer_dir)
+            self.service.vkbasalt_layer_dir = Path(vkbasalt_layer_dir)
+            (
+                self.service.user_vulkan_layer_dir /
+                "steamoverlay_x86_64.json"
+            ).write_text("{}", encoding="utf-8")
+            (
+                self.service.vkbasalt_layer_dir /
+                configuration_module.VKBASALT_MANIFEST_FILENAME_64
+            ).write_text("{}", encoding="utf-8")
+            config = ConfigurationManager.get_defaults()
+            config["external_vulkan_layer"] = "vkbasalt"
+            values = self._evaluate(
+                {"ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1"},
+                config,
+            )
+
+        self.assertEqual(
+            values["INSTANCE"],
+            "VK_LAYER_MAKO_render:"
+            "VK_LAYER_VKBASALT_post_processing:"
+            "VK_LAYER_VALVE_steam_overlay_64",
+        )
+
+    def test_desktop_steam_overlay_requires_a_readable_manifest(self):
+        values = self._evaluate(
+            {"ENABLE_VK_LAYER_VALVE_steam_overlay_1": "1"},
+            ConfigurationManager.get_defaults(),
+        )
+
+        self.assertEqual(values["INSTANCE"], "")
+        self.assertEqual(values["LAYER_PATH"], "")
+        self.assertEqual(values["ENABLE"], "1")
 
     def test_frame_generation_off_omits_renderer_and_strips_inherited_mako(self):
         config = ConfigurationManager.get_defaults()

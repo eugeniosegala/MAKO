@@ -125,7 +125,7 @@ Flatpak apps need a matching runtime extension and per-application sandbox setup
 MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" MAKO_PROFILE="My game" ~/.local/bin/mako-launch %command%
 ```
 
-`DISABLE_MAKO=1` bypasses MAKO for every launch where that variable remains set. `mako-launch` otherwise selects the installed private MAKO manifests, disables competing LSFG-VK layers and Gamescope WSI in the child, and chooses the supported SDR boundary. If no profile matches, the Renderer remains dormant.
+`DISABLE_MAKO=1` bypasses MAKO for every launch where that variable remains set. `mako-launch` otherwise selects the installed private MAKO manifests, disables competing LSFG-VK layers and Gamescope WSI in the child, and chooses the supported SDR boundary. For a native or Proton Steam launch in Desktop Mode, it also preserves Steam's requested Vulkan overlay after MAKO so Steam's FPS counter remains available; it does not expose Steam Fossilize or the full per-user implicit-layer directory. Gaming Mode and Flatpak launches keep their existing presentation boundaries. If no profile matches, the Renderer remains dormant.
 
 The Qt UI's **Shaders** group is per profile and uses the same compact settings as MAKO Decky: activation, one curated effect, CAS or DLS sharpening, sharpening and DLS-denoise strengths, and FXAA or SMAA. It reads and writes `~/.config/mako-render/profile-wrapper-settings.json`, so matching profiles configured in Decky populate the Qt controls and changes remain compatible in either direction. Steam-linked profiles reuse the app-ID-based config path recorded in `profile-metadata.json`; other saved profiles use the same stable short hash as Decky. The default `mako` profile uses vkBasalt's global config.
 

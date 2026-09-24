@@ -113,6 +113,8 @@ Decky sends typed field patches through one last-value-wins writer with one back
 
 **Enable MangoHud (Restart)** remains under **External Tools** and uses the host installation. It is mutually exclusive with vkBasalt under **Shaders** because both occupy MAKO's optional post-processing-layer slot for the selected profile.
 
+For native and Proton Steam games launched in Desktop Mode, MAKO automatically keeps Steam's requested Vulkan overlay after its managed layers when Steam's architecture manifests are available. This preserves Steam's own FPS counter without enabling Fossilize or opening the complete per-user implicit-layer directory. Gaming Mode continues to use its compositor-owned performance display, and prepared Flatpak applications retain their isolated extension path.
+
 ## HDR and isolation
 
 HDR Frame Generation and Scaling are unavailable in this release. **Disable HDR** remains enabled and read-only, and MAKO removes inherited `DXVK_HDR` activation.

@@ -66,6 +66,60 @@ if [[ "$default_output" != "$expected_default" ]]; then
     fail "default environment or argument forwarding changed:\n$default_output"
 fi
 
+steam_overlay_dir="$test_data_home/vulkan/implicit_layer.d"
+mkdir -p "$steam_overlay_dir"
+touch "$steam_overlay_dir/steamoverlay_x86_64.json"
+touch "$steam_overlay_dir/steamoverlay_i386.json"
+desktop_overlay_output="$({
+    ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
+        XDG_DATA_HOME="$test_data_home" \
+        VK_LAYER_PATH="/caller/explicit" \
+        VK_ADD_LAYER_PATH="/caller/additional-explicit" \
+        VK_INSTANCE_LAYERS="VK_LAYER_existing:VK_LAYER_VALVE_steam_overlay_64" \
+        "$launcher" bash -c '
+            printf "%s\n" \
+                "${ENABLE_MAKO:-unset}" \
+                "${VK_INSTANCE_LAYERS:-unset}" \
+                "${VK_LAYER_PATH:-unset}" \
+                "${VK_ADD_LAYER_PATH:-unset}"
+        '
+} 2>&1)" || fail "Desktop Steam overlay preservation failed: $desktop_overlay_output"
+expected_desktop_overlay="$(printf 'unset\nVK_LAYER_MAKO_render:VK_LAYER_VALVE_steam_overlay_64:VK_LAYER_VALVE_steam_overlay_32:VK_LAYER_existing\n%s:/caller/explicit\n/caller/additional-explicit' "$steam_overlay_dir")"
+if [[ "$desktop_overlay_output" != "$expected_desktop_overlay" ]]; then
+    fail "Desktop Steam overlay was not ordered after MAKO:\n$desktop_overlay_output"
+fi
+
+gaming_overlay_output="$({
+    ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
+        GAMESCOPE_WAYLAND_DISPLAY=gamescope-0 \
+        WAYLAND_DISPLAY=gamescope-0 \
+        XDG_DATA_HOME="$test_data_home" \
+        "$launcher" bash -c '
+            printf "%s\n" \
+                "${ENABLE_MAKO:-unset}" \
+                "${VK_INSTANCE_LAYERS:-unset}" \
+                "${VK_LAYER_PATH:-unset}"
+        '
+} 2>&1)" || fail "Gaming Mode overlay boundary failed: $gaming_overlay_output"
+if [[ "$gaming_overlay_output" != $'1\nunset\nunset' ]]; then
+    fail "Gaming Mode unexpectedly used Desktop Steam overlay preservation:\n$gaming_overlay_output"
+fi
+
+fake_flatpak="$test_root/flatpak"
+printf '%s\n' '#!/usr/bin/env bash' \
+    'printf "%s\n" "${VK_INSTANCE_LAYERS:-unset}" "${VK_LAYER_PATH:-unset}"' > "$fake_flatpak"
+chmod +x "$fake_flatpak"
+flatpak_overlay_output="$({
+    ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
+        XDG_DATA_HOME="$test_data_home" \
+        "$launcher" "$fake_flatpak" run example.App
+} 2>&1)" || fail "Flatpak overlay boundary failed: $flatpak_overlay_output"
+if [[ "$flatpak_overlay_output" != $'unset\nunset' ]]; then
+    fail "Flatpak unexpectedly used Desktop Steam overlay preservation:\n$flatpak_overlay_output"
+fi
+rm -f "$steam_overlay_dir/steamoverlay_x86_64.json"
+rm -f "$steam_overlay_dir/steamoverlay_i386.json"
+
 allow_output="$({
     DISABLE_LSFG=1 DISABLE_LSFGVK=1 ENABLE_GAMESCOPE_WSI=1 \
         MAKO_DISABLE_HDR_EXPOSURE=0 DXVK_HDR=1 \
@@ -120,9 +174,12 @@ touch "$private_vkbasalt_library64"
 touch "$private_vkbasalt_library32"
 vkbasalt_config="$test_root/vkBasalt.conf"
 printf '%s\n' 'effects = cas' > "$vkbasalt_config"
+touch "$steam_overlay_dir/steamoverlay_x86_64.json"
+touch "$steam_overlay_dir/steamoverlay_i386.json"
 
 vkbasalt_output="$({
-    ENABLE_VKBASALT=1 \
+    ENABLE_VK_LAYER_VALVE_steam_overlay_1=1 \
+        ENABLE_VKBASALT=1 \
         DISABLE_VKBASALT=1 \
         VKBASALT_CONFIG_FILE="$vkbasalt_config" \
         VK_INSTANCE_LAYERS="VK_LAYER_existing:VK_LAYER_VKBASALT_post_processing:VK_LAYER_MAKO_render" \
@@ -141,11 +198,13 @@ vkbasalt_output="$({
                 "${VK_ADD_IMPLICIT_LAYER_PATH:-unset}"
         '
 } 2>&1)" || fail "private vkBasalt launch failed: $vkbasalt_output"
-expected_vkbasalt="$(printf 'unset\nunset\nunset\n%s\n1\nVK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing:VK_LAYER_existing\n%s:%s\nunset' \
+expected_vkbasalt="$(printf 'unset\nunset\nunset\n%s\n1\nVK_LAYER_MAKO_render:VK_LAYER_VKBASALT_post_processing:VK_LAYER_VALVE_steam_overlay_64:VK_LAYER_VALVE_steam_overlay_32:VK_LAYER_existing\n%s:%s\nunset' \
     "$vkbasalt_config" "$private_mako_layer_dir" "$private_vkbasalt_layer_dir")"
 if [[ "$vkbasalt_output" != "$expected_vkbasalt" ]]; then
     fail "private vkBasalt order or isolation changed:\n$vkbasalt_output"
 fi
+rm -f "$steam_overlay_dir/steamoverlay_x86_64.json"
+rm -f "$steam_overlay_dir/steamoverlay_i386.json"
 
 rm -f -- "$private_vkbasalt_library32"
 missing_vkbasalt_output="$({
