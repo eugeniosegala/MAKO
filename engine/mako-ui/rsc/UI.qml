@@ -610,37 +610,70 @@ ApplicationWindow {
                                 modal: true
                                 focus: true
                                 title: t.shaderEffects
-                                standardButtons: Dialog.Close
-                                width: Math.min(460, parent.width - 32)
-                                height: Math.min(600, parent.height - 32)
+                                width: Math.min(520, parent.width - 32)
+                                height: Math.min(effectChoices.implicitHeight + effectDescription.implicitHeight + effectActions.implicitHeight + 124, parent.height - 32)
                                 x: (parent.width - width) / 2
                                 y: (parent.height - height) / 2
 
-                                contentItem: ScrollView {
-                                    clip: true
-                                    ColumnLayout {
-                                        width: effectsDialog.availableWidth
-                                        spacing: 2
+                                contentItem: ColumnLayout {
+                                    spacing: 8
+
+                                    Label {
+                                        id: effectDescription
+                                        Layout.fillWidth: true
+                                        text: t.shaderEffectsDesc
+                                        wrapMode: Text.WordWrap
+                                    }
+
+                                    ScrollView {
+                                        id: effectsScroll
+                                        Layout.fillWidth: true
+                                        Layout.fillHeight: true
+                                        contentWidth: availableWidth
+                                        contentHeight: effectChoices.implicitHeight
+                                        clip: true
+                                        ScrollBar.vertical.policy: ScrollBar.AsNeeded
+
+                                        GridLayout {
+                                            id: effectChoices
+                                            width: effectsScroll.availableWidth
+                                            height: implicitHeight
+                                            columns: width >= 460 ? 2 : 1
+                                            columnSpacing: 12
+                                            rowSpacing: 0
+
+                                            Repeater {
+                                                model: effectStack.effectIds.slice(1)
+                                                delegate: CheckBox {
+                                                    required property string modelData
+                                                    Layout.fillWidth: true
+                                                    text: (backend.vkbasalt_shader !== "none" && backend.vkbasalt_shader.split(":").indexOf(modelData) >= 0
+                                                        ? (backend.vkbasalt_shader.split(":").indexOf(modelData) + 1) + ". " : "")
+                                                        + effectStack.effectLabels[effectStack.effectIds.indexOf(modelData)]
+                                                    checked: backend.vkbasalt_shader !== "none" && backend.vkbasalt_shader.split(":").indexOf(modelData) >= 0
+                                                    onToggled: {
+                                                        const current = backend.vkbasalt_shader === "none" ? [] : backend.vkbasalt_shader.split(":")
+                                                        const next = checked ? current.concat(modelData) : current.filter(effect => effect !== modelData)
+                                                        backend.vkbasalt_shader = next.length ? next.join(":") : "none"
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    RowLayout {
+                                        id: effectActions
+                                        Layout.fillWidth: true
+                                        Layout.topMargin: 4
+
                                         Button {
-                                            Layout.fillWidth: true
                                             text: t.off
                                             onClicked: backend.vkbasalt_shader = "none"
                                         }
-                                        Repeater {
-                                            model: effectStack.effectIds.slice(1)
-                                            delegate: CheckBox {
-                                                required property string modelData
-                                                Layout.fillWidth: true
-                                                text: (backend.vkbasalt_shader !== "none" && backend.vkbasalt_shader.split(":").indexOf(modelData) >= 0
-                                                    ? (backend.vkbasalt_shader.split(":").indexOf(modelData) + 1) + ". " : "")
-                                                    + effectStack.effectLabels[effectStack.effectIds.indexOf(modelData)]
-                                                checked: backend.vkbasalt_shader !== "none" && backend.vkbasalt_shader.split(":").indexOf(modelData) >= 0
-                                                onToggled: {
-                                                    const current = backend.vkbasalt_shader === "none" ? [] : backend.vkbasalt_shader.split(":")
-                                                    const next = checked ? current.concat(modelData) : current.filter(effect => effect !== modelData)
-                                                    backend.vkbasalt_shader = next.length ? next.join(":") : "none"
-                                                }
-                                            }
+                                        Item { Layout.fillWidth: true }
+                                        Button {
+                                            text: t.close
+                                            onClicked: effectsDialog.close()
                                         }
                                     }
                                 }
