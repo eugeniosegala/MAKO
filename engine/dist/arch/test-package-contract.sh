@@ -229,8 +229,9 @@ node "$repo_root/plugin/scripts/pin-renderer-release.mjs" \
     "$arch_package" "$(printf '56%.0s' {1..32})" >/dev/null
 node -e '
 const binary = require(process.argv[1]).remote_binary[0];
-if (binary.arch_package?.name !== "mako-renderer-bin-9.8.7-7-x86_64.pkg.tar.zst" ||
-    binary.arch_package?.sha256hash !== "56".repeat(32)) process.exit(1);
+if (!binary.arch_package ||
+    binary.arch_package.name !== "mako-renderer-bin-9.8.7-7-x86_64.pkg.tar.zst" ||
+    binary.arch_package.sha256hash !== "56".repeat(32)) process.exit(1);
 ' "$work_dir/package.json"
 node "$repo_root/plugin/scripts/pin-renderer-release.mjs" \
     "$work_dir/package.json" \
@@ -240,7 +241,7 @@ node "$repo_root/plugin/scripts/pin-renderer-release.mjs" \
     "$flatpak_archive" "$(printf '34%.0s' {1..32})" >/dev/null
 node -e '
 const binary = require(process.argv[1]).remote_binary[0];
-if (Object.hasOwn(binary, "arch_package")) process.exit(1);
+if (Object.prototype.hasOwnProperty.call(binary, "arch_package")) process.exit(1);
 ' "$work_dir/package.json"
 
 test_home="$work_dir/home with spaces"

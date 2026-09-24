@@ -136,6 +136,13 @@ def _installer_archive_members() -> tuple[set[str], set[str]]:
 
 
 class PathAndPackageContractTests(unittest.TestCase):
+    def test_portable_engine_packager_installs_test_runtime_dependencies(self):
+        engine_package = _read(ENGINE_PACKAGE_SCRIPT)
+        portable_dependencies = engine_package.split(
+            "apt-get install -y -qq", 1
+        )[1].split("git clone", 1)[0]
+        self.assertRegex(portable_dependencies, r"\bnodejs\b")
+
     def test_services_share_the_installed_plugin_root(self):
         self.assertEqual(PLUGIN_ROOT.resolve(), PLUGIN_DIR)
         self.assertTrue((PLUGIN_ROOT / "package.json").is_file())

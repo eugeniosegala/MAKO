@@ -115,7 +115,7 @@ if [[ "$containerized_build" != "1" && ( "$(uname -s)" != "Linux" || "$portable_
             fi
             apt-get update -qq
             apt-get install -y -qq \
-                git curl python3 llvm clang cmake ninja-build pkg-config g++-multilib \
+                git curl nodejs python3 llvm clang cmake ninja-build pkg-config g++-multilib \
                 libvulkan-dev mesa-common-dev \
                 qt6-base-dev qt6-base-dev-tools \
                 qt6-tools-dev qt6-tools-dev-tools \
