@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: GPL-3.0-or-later */
 
 #include "mako-common/configuration/launch.hpp"
+#include "mako-common/configuration/vkbasalt.hpp"
 
 #include <cstdlib>
 #include <filesystem>
@@ -87,6 +88,32 @@ int main() {
     expect(rejects(directory / "duplicate-setting.conf",
             "version=1\nenable_zink=1\nenable_zink=0\n"),
         "duplicate launcher settings must be rejected");
+    ls::VkBasaltConf shaderSettings;
+    shaderSettings.enabled = true;
+    shaderSettings.sharpening = "dls";
+    shaderSettings.sharpness = 0.75F;
+    shaderSettings.dls_denoise = 0.4F;
+    shaderSettings.antialiasing = "fxaa";
+    shaderSettings.shader = "vibrance";
+    const auto shaderDirectory = directory / "shaders";
+    const std::string merged = ls::mergeVkBasaltConfiguration(
+        "# custom\neffects = makoDeband:customEffect:cas # order\n"
+        "customOption = keep\ndlsSharpness = 0.10\n",
+        shaderSettings,
+        shaderDirectory
+    );
+    expect(merged.find("effects = fxaa:makoVibrance:dls:customEffect # order\n") !=
+            std::string::npos,
+        "managed shader graph did not replace only controlled effects");
+    expect(merged.find("customOption = keep\n") != std::string::npos,
+        "managed shader merge discarded an advanced option");
+    expect(merged.find("dlsSharpness = 0.75\n") != std::string::npos &&
+            merged.find("dlsDenoise = 0.40\n") != std::string::npos,
+        "managed DLS strengths were not written");
+    expect(merged.find(
+            "makoVibrance = \"" + (shaderDirectory / "Vibrance.fx").string() +
+            "\"\n") != std::string::npos,
+        "managed shader source path was not written");
 
     setenv("MAKO_LAUNCH_CONFIG", canonicalPath.c_str(), 1);
     expect(ls::findLaunchConfigurationFile() == canonicalPath,

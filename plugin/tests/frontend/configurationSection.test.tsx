@@ -88,9 +88,12 @@ vi.mock("@decky/ui", () => ({
     selectedOption,
     onChange,
   }: {
-    rgOptions: Array<{ data: number; label: React.ReactNode }>;
-    selectedOption: number;
-    onChange: (option: { data: number; label: React.ReactNode }) => void;
+    rgOptions: Array<{ data: number | string; label: React.ReactNode }>;
+    selectedOption: number | string;
+    onChange: (option: {
+      data: number | string;
+      label: React.ReactNode;
+    }) => void;
   }) => (
     <button
       data-testid="cadence-probe-interval-dropdown"
@@ -392,7 +395,7 @@ describe("Configuration controls", () => {
 
     expect(
       screen.getByText(
-        "Turning this on disables Steady Base Cap and Base FPS Cap. Changing either cap later turns Recovery off.",
+        "Turning this on disables Steady Base Cap and Base FPS Cap, and resets Real Frame Priority to Automatic. Changing either cap or Real Frame Priority later turns Recovery off.",
       ),
     ).toBeTruthy();
     expect(
@@ -627,6 +630,7 @@ describe("Configuration controls", () => {
     expect(onConfigUpdate).toHaveBeenCalledWith({
       dynamic_cadence_recovery: true,
       adaptive_auto_base_fps_cap: false,
+      adaptive_fractional_real_frame_priority: "auto",
       base_fps_cap: 0,
     });
   });
@@ -740,8 +744,63 @@ describe("Configuration controls", () => {
 
     expect(onConfigUpdate).toHaveBeenCalledWith({
       base_fps_cap: 30,
+      adaptive_fractional_real_frame_priority: "auto",
       dynamic_cadence_recovery: false,
     });
+  });
+
+  test("lets explicit Real Frame Priority own the cap while Automatic preserves it", () => {
+    const { rerender } = render(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          adaptive: true,
+          adaptive_auto_base_fps_cap: false,
+          adaptive_fractional_real_frame_priority: "high",
+          target_fps: 120,
+          base_fps_cap: 35,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        "Controlled by Real Frame Priority (90 FPS). Your manual value remains saved.",
+      ),
+    ).toBeTruthy();
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Base FPS Cap (35 FPS)",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+
+    rerender(
+      <ConfigurationSection
+        config={{
+          ...getDefaults(),
+          adaptive: true,
+          adaptive_auto_base_fps_cap: false,
+          adaptive_fractional_real_frame_priority: "auto",
+          target_fps: 120,
+          base_fps_cap: 35,
+        }}
+        onConfigChange={vi.fn(async () => undefined)}
+        onConfigUpdate={vi.fn(async () => undefined)}
+      />,
+    );
+
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Base FPS Cap (35 FPS)",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(false);
+    expect(screen.queryByText(/Controlled by Real Frame Priority/)).toBeNull();
   });
 
   test("offers manual Base FPS caps through 120 FPS", () => {

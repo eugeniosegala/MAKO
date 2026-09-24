@@ -110,6 +110,58 @@ class PackageContractTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_accepts_release_renderer_with_arch_package(self):
+        renderer = self._renderer()
+        release_base = (
+            "https://github.com/eugeniosegala/MAKO/releases/download/render-v2.0.0"
+        )
+        renderer["url"] = f"{release_base}/MAKO-Renderer-v2.0.0-linux.tar.xz"
+        renderer["arch_package"] = {
+            "name": "mako-renderer-bin-2.0.0-1-x86_64.pkg.tar.zst",
+            "url": (
+                f"{release_base}/"
+                "mako-renderer-bin-2.0.0-1-x86_64.pkg.tar.zst"
+            ),
+            "sha256hash": "a" * 64,
+        }
+
+        result = self._validate(
+            {
+                "version": "2.1.0",
+                "remote_binary_bundling": True,
+                "remote_binary": [renderer],
+            },
+            "release",
+        )
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_rejects_arch_package_without_checksum(self):
+        renderer = self._renderer()
+        renderer["url"] = (
+            "https://github.com/eugeniosegala/MAKO/releases/download/"
+            "render-v2.0.0/MAKO-Renderer-v2.0.0-linux.tar.xz"
+        )
+        renderer["arch_package"] = {
+            "name": "mako-renderer-bin-2.0.0-1-x86_64.pkg.tar.zst",
+            "url": (
+                "https://github.com/eugeniosegala/MAKO/releases/download/"
+                "render-v2.0.0/mako-renderer-bin-2.0.0-1-x86_64.pkg.tar.zst"
+            ),
+        }
+
+        result = self._validate(
+            {
+                "version": "2.1.0",
+                "remote_binary_bundling": True,
+                "remote_binary": [renderer],
+            },
+            "release",
+        )
+
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("arch_package.sha256hash", result.stderr)
+
     def test_rejects_non_https_release_renderer(self):
         renderer = self._renderer()
         renderer["url"] = "local-worktree://renderer.tar.xz"

@@ -201,6 +201,34 @@ if (mode === "local") {
         }
         requireHttpsUrl(flatpak.url, "remote_binary.flatpak_bundle.url");
     }
+    if (renderer.arch_package !== undefined) {
+        const archPackage = renderer.arch_package;
+        if (
+            !archPackage ||
+            typeof archPackage !== "object" ||
+            Array.isArray(archPackage)
+        ) {
+            throw new Error("remote_binary.arch_package must be an object");
+        }
+        if (
+            typeof archPackage.name !== "string" ||
+            path.basename(archPackage.name) !== archPackage.name ||
+            !archPackage.name.endsWith(".pkg.tar.zst")
+        ) {
+            throw new Error(
+                "remote_binary.arch_package.name must be a .pkg.tar.zst filename",
+            );
+        }
+        if (!/^[0-9a-f]{64}$/i.test(archPackage.sha256hash ?? "")) {
+            throw new Error(
+                "remote_binary.arch_package.sha256hash must be a SHA-256 checksum",
+            );
+        }
+        requireHttpsUrl(
+            archPackage.url,
+            "remote_binary.arch_package.url",
+        );
+    }
     validateRendererMetadata(renderer, "remote_binary[0]");
 }
 

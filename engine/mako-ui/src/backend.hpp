@@ -8,15 +8,18 @@
 #include <QVariantList>
 #include <QTimer>
 #include <QThread>
+#include <QJsonObject>
 
 #include "process_detection.hpp"
 
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/launch.hpp"
+#include "mako-common/configuration/vkbasalt.hpp"
 
 #include <algorithm>
 #include <cmath>
 #include <memory>
+#include <map>
 #include <utility>
 
 #define getters public
@@ -38,6 +41,14 @@ namespace mako::ui {
         Q_PROPERTY(bool allow_fp16 READ getAllowFP16 WRITE allowFP16Updated NOTIFY refreshUI)
         Q_PROPERTY(bool enable_zink READ getEnableZink WRITE enableZinkUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool force_alsa_audio READ getForceAlsaAudio WRITE forceAlsaAudioUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool enable_vkbasalt READ getEnableVkBasalt WRITE enableVkBasaltUpdated NOTIFY refreshUI)
+        Q_PROPERTY(QString vkbasalt_sharpening READ getVkBasaltSharpening WRITE vkBasaltSharpeningUpdated NOTIFY refreshUI)
+        Q_PROPERTY(float vkbasalt_sharpness READ getVkBasaltSharpness WRITE vkBasaltSharpnessUpdated NOTIFY refreshUI)
+        Q_PROPERTY(float vkbasalt_dls_denoise READ getVkBasaltDlsDenoise WRITE vkBasaltDlsDenoiseUpdated NOTIFY refreshUI)
+        Q_PROPERTY(QString vkbasalt_antialiasing READ getVkBasaltAntialiasing WRITE vkBasaltAntialiasingUpdated NOTIFY refreshUI)
+        Q_PROPERTY(QString vkbasalt_shader READ getVkBasaltShader WRITE vkBasaltShaderUpdated NOTIFY refreshUI)
+        Q_PROPERTY(QString vkbasalt_config_path READ getVkBasaltConfigPath NOTIFY refreshUI)
+        Q_PROPERTY(QString launch_option READ getLaunchOption NOTIFY refreshUI)
 
         Q_PROPERTY(bool available READ isValidProfileIndex NOTIFY refreshUI)
         Q_PROPERTY(QStringListModel* active_in READ calculateActiveInModel NOTIFY refreshUI)
@@ -58,6 +69,8 @@ namespace mako::ui {
         Q_PROPERTY(bool adaptive READ getAdaptive WRITE adaptiveUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool fractional_adaptive READ getFractionalAdaptive WRITE fractionalAdaptiveUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive_auto_base_fps_cap READ getAdaptiveAutoBaseFPSCap WRITE adaptiveAutoBaseFPSCapUpdated NOTIFY refreshUI)
+        Q_PROPERTY(QString adaptive_fractional_real_frame_priority READ getAdaptiveFractionalRealFramePriority WRITE adaptiveFractionalRealFramePriorityUpdated NOTIFY refreshUI)
+        Q_PROPERTY(double adaptive_fractional_real_frame_priority_cap READ getAdaptiveFractionalRealFramePriorityCap NOTIFY refreshUI)
         Q_PROPERTY(uint target_fps READ getTargetFPS WRITE targetFPSUpdated NOTIFY refreshUI)
         Q_PROPERTY(size_t adaptive_max_multiplier READ getAdaptiveMaxMultiplier WRITE adaptiveMaxMultiplierUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool adaptive_stable_cadence READ getAdaptiveStableCadence WRITE adaptiveStableCadenceUpdated NOTIFY refreshUI)
@@ -88,6 +101,8 @@ namespace mako::ui {
         Q_PROPERTY(QVariantList dynamic_cadence_probe_interval_presets_seconds READ getDynamicCadenceProbeIntervalPresetsSeconds CONSTANT)
         Q_PROPERTY(float minimum_flow_scale READ getMinimumFlowScale CONSTANT)
         Q_PROPERTY(float maximum_flow_scale READ getMaximumFlowScale CONSTANT)
+        Q_PROPERTY(float minimum_vkbasalt_strength READ getMinimumVkBasaltStrength CONSTANT)
+        Q_PROPERTY(float maximum_vkbasalt_strength READ getMaximumVkBasaltStrength CONSTANT)
 
     public:
         explicit Backend(std::filesystem::path procRoot = "/proc");
@@ -98,6 +113,7 @@ namespace mako::ui {
         [[nodiscard]] bool captureFailed() const { return m_capture_failed; }
         Q_INVOKABLE void refreshRunningGames(bool includeAllApplications = false);
         Q_INVOKABLE bool captureRunningGame(int index, bool createProfile);
+        Q_INVOKABLE bool openVkBasaltConfig();
 
         [[nodiscard]] static bool isFractionalAdaptivePresetEnabled(
                 const ls::GameConf& conf) noexcept {
@@ -172,6 +188,49 @@ namespace mako::ui {
         [[nodiscard]] bool getForceAlsaAudio() const {
             return this->m_launch.force_alsa_audio;
         }
+        [[nodiscard]] bool getEnableVkBasalt() const {
+            if (!isValidProfileIndex()) return false;
+            return this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).enabled;
+        }
+        [[nodiscard]] QString getVkBasaltSharpening() const {
+            if (!isValidProfileIndex()) return QStringLiteral("cas");
+            return QString::fromStdString(this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).sharpening);
+        }
+        [[nodiscard]] float getVkBasaltSharpness() const {
+            if (!isValidProfileIndex()) return 0.5F;
+            return this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).sharpness;
+        }
+        [[nodiscard]] float getVkBasaltDlsDenoise() const {
+            if (!isValidProfileIndex()) return 0.2F;
+            return this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).dls_denoise;
+        }
+        [[nodiscard]] QString getVkBasaltAntialiasing() const {
+            if (!isValidProfileIndex()) return QStringLiteral("none");
+            return QString::fromStdString(this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).antialiasing);
+        }
+        [[nodiscard]] QString getVkBasaltShader() const {
+            if (!isValidProfileIndex()) return QStringLiteral("none");
+            return QString::fromStdString(this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).shader);
+        }
+        [[nodiscard]] QString getVkBasaltConfigPath() const {
+            if (!isValidProfileIndex()) return {};
+            return QString::fromStdString(vkBasaltConfigPath(
+                static_cast<size_t>(this->m_profile_index)
+            ).string());
+        }
+        [[nodiscard]] QString getLaunchOption() const;
 
 #define VALIDATE_AND_GET_PROFILE(default) \
     if (!isValidProfileIndex()) return default; \
@@ -269,6 +328,23 @@ namespace mako::ui {
         [[nodiscard]] bool getAdaptiveAutoBaseFPSCap() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::adaptiveAutoBaseFpsCap)
             return conf.adaptive_auto_base_fps_cap;
+        }
+        [[nodiscard]] QString getAdaptiveFractionalRealFramePriority() const {
+            VALIDATE_AND_GET_PROFILE(QStringLiteral("auto"))
+            return QString::fromUtf8(
+                ls::adaptiveFractionalRealFramePriorityName(
+                    conf.adaptive_fractional_real_frame_priority
+                )
+            );
+        }
+        [[nodiscard]] double getAdaptiveFractionalRealFramePriorityCap() const {
+            VALIDATE_AND_GET_PROFILE(0.0)
+            if (!isFractionalAdaptivePresetEnabled(conf))
+                return 0.0;
+            return ls::adaptiveFractionalRealFramePriorityCap(
+                conf.adaptive_fractional_real_frame_priority,
+                conf.target_fps
+            );
         }
         [[nodiscard]] uint getTargetFPS() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::targetFps)
@@ -388,6 +464,12 @@ namespace mako::ui {
         [[nodiscard]] float getMaximumFlowScale() const noexcept {
             return ls::GameConfLimits::maximumFlowScale;
         }
+        [[nodiscard]] float getMinimumVkBasaltStrength() const noexcept {
+            return ls::vkBasaltStrengthMinimum;
+        }
+        [[nodiscard]] float getMaximumVkBasaltStrength() const noexcept {
+            return ls::vkBasaltStrengthMaximum;
+        }
 
 #undef VALIDATE_AND_GET_PROFILE
 
@@ -412,6 +494,11 @@ namespace mako::ui {
     this->m_save_timer.start(); \
     emit refreshUI();
 
+#define MARK_SHADER_DIRTY() \
+    this->m_vkbasalt_dirty = true; \
+    this->m_save_timer.start(); \
+    emit refreshUI();
+
         void dllUpdated(const QString& dll) {
             auto& conf = this->m_global;
             if (dll.trimmed().isEmpty())
@@ -433,6 +520,64 @@ namespace mako::ui {
         void forceAlsaAudioUpdated(bool force_alsa_audio) {
             this->m_launch.force_alsa_audio = force_alsa_audio;
             MARK_LAUNCH_DIRTY()
+        }
+        void enableVkBasaltUpdated(bool enabled) {
+            if (!isValidProfileIndex()) return;
+            this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).enabled = enabled;
+            MARK_SHADER_DIRTY()
+        }
+        void vkBasaltSharpeningUpdated(const QString& sharpening) {
+            const auto value = sharpening.toStdString();
+            if (!ls::isVkBasaltSharpening(value)) return;
+            if (!isValidProfileIndex()) return;
+            this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).sharpening = value;
+            MARK_SHADER_DIRTY()
+        }
+        void vkBasaltSharpnessUpdated(float sharpness) {
+            if (!std::isfinite(sharpness)) return;
+            if (!isValidProfileIndex()) return;
+            this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).sharpness = std::clamp(
+                sharpness,
+                ls::vkBasaltStrengthMinimum,
+                ls::vkBasaltStrengthMaximum
+            );
+            MARK_SHADER_DIRTY()
+        }
+        void vkBasaltDlsDenoiseUpdated(float denoise) {
+            if (!std::isfinite(denoise)) return;
+            if (!isValidProfileIndex()) return;
+            this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).dls_denoise = std::clamp(
+                denoise,
+                ls::vkBasaltStrengthMinimum,
+                ls::vkBasaltStrengthMaximum
+            );
+            MARK_SHADER_DIRTY()
+        }
+        void vkBasaltAntialiasingUpdated(const QString& antialiasing) {
+            const auto value = antialiasing.toStdString();
+            if (!ls::isVkBasaltAntialiasing(value)) return;
+            if (!isValidProfileIndex()) return;
+            this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).antialiasing = value;
+            MARK_SHADER_DIRTY()
+        }
+        void vkBasaltShaderUpdated(const QString& shader) {
+            const auto value = shader.toStdString();
+            if (!ls::isVkBasaltShader(value)) return;
+            if (!isValidProfileIndex()) return;
+            this->m_vkbasalt_profiles.at(
+                static_cast<size_t>(this->m_profile_index)
+            ).shader = value;
+            MARK_SHADER_DIRTY()
         }
 
 #define VALIDATE_AND_GET_PROFILE() \
@@ -545,6 +690,18 @@ namespace mako::ui {
                 conf.dynamic_cadence_recovery = false;
             MARK_DIRTY()
         }
+        void adaptiveFractionalRealFramePriorityUpdated(
+                const QString& priority) {
+            VALIDATE_AND_GET_PROFILE()
+            const auto parsed = ls::adaptiveFractionalRealFramePriorityFromName(
+                priority.toStdString()
+            );
+            if (!parsed)
+                return;
+            conf.adaptive_fractional_real_frame_priority = *parsed;
+            conf.dynamic_cadence_recovery = false;
+            MARK_DIRTY()
+        }
         void targetFPSUpdated(uint target_fps) {
             VALIDATE_AND_GET_PROFILE()
             conf.target_fps = std::clamp(
@@ -573,6 +730,8 @@ namespace mako::ui {
             conf.dynamic_cadence_recovery = dynamic_cadence_recovery;
             if (dynamic_cadence_recovery) {
                 conf.adaptive_auto_base_fps_cap = false;
+                conf.adaptive_fractional_real_frame_priority =
+                    ls::AdaptiveFractionalRealFramePriority::Auto;
                 conf.base_fps_cap = 0;
             }
             MARK_DIRTY()
@@ -658,6 +817,7 @@ namespace mako::ui {
             ls::GameConf conf;
             conf.name = name.toStdString();
             this->m_profiles.push_back(std::move(conf));
+            this->m_vkbasalt_profiles.emplace_back();
             this->m_active_in_list_models.push_back(new QStringListModel({}, this));
 
             auto& model = this->m_profile_list_model;
@@ -671,6 +831,7 @@ namespace mako::ui {
             if (name.trimmed().isEmpty()) return;
 
             VALIDATE_AND_GET_PROFILE()
+            renameVkBasaltProfile(conf.name, name.toStdString());
             conf.name = name.toStdString();
             auto& model = this->m_profile_list_model;
             model->setData(model->index(this->m_profile_index), name);
@@ -680,8 +841,12 @@ namespace mako::ui {
             if (!isValidProfileIndex())
                 return;
 
+            deleteVkBasaltProfile(static_cast<size_t>(this->m_profile_index));
             auto& profiles = this->m_profiles;
             profiles.erase(profiles.begin() + this->m_profile_index);
+            this->m_vkbasalt_profiles.erase(
+                this->m_vkbasalt_profiles.begin() + this->m_profile_index
+            );
             auto& active_in_models = this->m_active_in_list_models;
             active_in_models.erase(active_in_models.begin() + this->m_profile_index);
             auto& model = this->m_profile_list_model;
@@ -696,6 +861,7 @@ namespace mako::ui {
 #undef VALIDATE_AND_GET_PROFILE
 #undef MARK_DIRTY
 #undef MARK_LAUNCH_DIRTY
+#undef MARK_SHADER_DIRTY
 
     signals:
         void refreshUI();
@@ -711,6 +877,7 @@ namespace mako::ui {
         ls::GlobalConf m_global;
         std::vector<ls::GameConf> m_profiles;
         ls::LaunchConf m_launch;
+        std::vector<ls::VkBasaltConf> m_vkbasalt_profiles;
 
         QStringListModel* m_profile_list_model;
         int m_profile_index{-1};
@@ -723,9 +890,34 @@ namespace mako::ui {
         void savePendingChanges();
         std::filesystem::path m_config_path;
         std::filesystem::path m_launch_path;
+        std::filesystem::path m_vkbasalt_profile_settings_path;
+        std::filesystem::path m_profile_metadata_path;
+        std::filesystem::path m_vkbasalt_profile_config_directory;
+        std::filesystem::path m_vkbasalt_global_config_path;
+        std::filesystem::path m_vkbasalt_shader_directory;
+        QJsonObject m_wrapper_settings_root;
+        QJsonObject m_profile_metadata_root;
+        std::map<std::string, std::string> m_profile_steam_ids;
         QTimer m_save_timer{this};
         bool m_config_dirty{false};
         bool m_launch_dirty{false};
+        bool m_vkbasalt_dirty{false};
+        bool m_profile_metadata_dirty{false};
+
+        void loadVkBasaltProfiles();
+        void writeVkBasaltProfiles() const;
+        void writeProfileMetadata() const;
+        void renameVkBasaltProfile(
+            const std::string& oldName,
+            const std::string& newName
+        );
+        void deleteVkBasaltProfile(size_t profileIndex);
+        [[nodiscard]] std::filesystem::path vkBasaltConfigPath(
+            size_t profileIndex
+        ) const;
+        [[nodiscard]] std::filesystem::path vkBasaltConfigPathForName(
+            const std::string& profileName
+        ) const;
     };
 
 }

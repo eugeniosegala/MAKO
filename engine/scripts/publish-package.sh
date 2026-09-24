@@ -152,6 +152,41 @@ MAKO_PORTABLE_PACKAGE=1 scripts/package-local.sh "$archive"
 checksum="$("${checksum_command[@]}" "$archive" | awk '{print $1}')"
 scripts/package-flatpaks.sh "$flatpak_archive"
 flatpak_checksum="$("${checksum_command[@]}" "$flatpak_archive" | awk '{print $1}')"
+
+pin_renderer_release() {
+    node "$repo_root/../plugin/scripts/pin-renderer-release.mjs" \
+        "$repo_root/../plugin/package.json" \
+        "$version" \
+        "$tag" \
+        "$source_commit" \
+        "$release_repository" \
+        "$archive" \
+        "$checksum" \
+        "$flatpak_archive" \
+        "$flatpak_checksum" \
+        "$@"
+}
+
+# The Arch recipe is derived from the newly built archive pin, then the exact
+# package that passes verification is retained and recorded for publication.
+pin_renderer_release
+python3 "$repo_root/dist/arch/sync-release-pin.py" \
+    "$repo_root/../plugin/package.json" \
+    "$repo_root/dist/arch/PKGBUILD"
+"$repo_root/dist/arch/check-release-pin.sh"
+arch_pkgver="$(sed -n 's/^pkgver=\(.*\)$/\1/p' "$repo_root/dist/arch/PKGBUILD" | head -n 1)"
+arch_pkgrel="$(sed -n 's/^pkgrel=\(.*\)$/\1/p' "$repo_root/dist/arch/PKGBUILD" | head -n 1)"
+if [[ "$arch_pkgver" != "$version" || -z "$arch_pkgrel" ]]; then
+    echo "Synchronized Arch package identity is invalid: ${arch_pkgver:-missing}-${arch_pkgrel:-missing}" >&2
+    exit 1
+fi
+arch_package="out/mako-renderer-bin-${arch_pkgver}-${arch_pkgrel}-x86_64.pkg.tar.zst"
+source_commit_epoch="$(git show -s --format=%ct "$source_commit")"
+SOURCE_DATE_EPOCH="$source_commit_epoch" \
+    "$repo_root/dist/arch/verify-release-package.sh" "$archive" "$arch_package"
+arch_checksum="$("${checksum_command[@]}" "$arch_package" | awk '{print $1}')"
+pin_renderer_release "$arch_package" "$arch_checksum"
+
 notes_file="$(mktemp "${TMPDIR:-/tmp}/mako-release-notes.XXXXXX")"
 cleanup() {
     rm -f "$notes_file"
@@ -178,6 +213,16 @@ Every game, renderer, and display setup behaves differently. Compare Fixed Frame
 
 ## Installation
 
+### Choose the right download
+
+| Release file | Use it for | Installation owner |
+| --- | --- | --- |
+| \`$(basename "$archive")\` | General Linux and direct user-local installation, including SteamOS without MAKO Decky | The included graphical installer manages files under \`~/.local\`. |
+| \`$(basename "$arch_package")\` | Arch Linux or a traditional writable Arch-based distribution—not SteamOS | Pacman manages the system-wide files under \`/usr\`. |
+| \`$(basename "$flatpak_archive")\` | Flatpak games, launchers, and emulators | The archive contains separate MAKO Vulkan extensions for the supported Freedesktop runtimes; it does not install the host UI or CLI. |
+
+GitHub's automatically generated **Source code** ZIP and tarball contain source code, not ready-to-run MAKO Renderer packages. SteamOS users who want the managed plugin workflow should use the separate [MAKO Decky release](https://github.com/$release_repository/releases/latest).
+
 ### Host archive
 
 Download \`$(basename "$archive")\`, extract it into a new folder, then use the included graphical installer:
@@ -197,6 +242,20 @@ Reopen the configuration UI after installation:
 
 Configure the profile in the UI or \`~/.config/mako-render/conf.toml\`. Select the licensed DLL path when using Frame Generation or LS1 scaling, then use \`~/.local/bin/mako-launch %command%\` for a direct Steam launch.
 
+### Arch Linux package
+
+Download \`$(basename "$arch_package")\` and install the verified system-wide package with:
+
+\`\`\`bash
+sudo pacman -U ./$(basename "$arch_package")
+\`\`\`
+
+The package installs MAKO Renderer under \`/usr\`, preserves profiles under \`~/.config/mako-render\`, and does not touch MAKO Decky's user-local Renderer under \`~/.local\`. Use either the system package or the user-local installation as the active owner for a user; see the [Arch package guide](https://github.com/$release_repository/blob/main/engine/dist/arch/README.md) for coexistence details.
+
+After installation, open **MAKO Renderer Configuration** from the application menu or run \`mako-ui\`, create a game profile, and use \`/usr/bin/mako-launch %command%\` as that native Steam or Proton game's launch option. Installing the package alone does not activate MAKO globally.
+
+- SHA-256: \`$arch_checksum\`
+
 ### Flatpak runtime extensions
 
 Download and extract \`$(basename "$flatpak_archive")\`. It contains one self-contained MAKO extension for each supported Flatpak runtime. Install the extension matching the application runtime, for example:
@@ -210,10 +269,9 @@ flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-24.08.fla
 ## Updating an existing MAKO Renderer installation
 
 1. Quit every game or application currently using MAKO Renderer.
-2. Download the newer host archive and extract it into a new folder.
-3. Run **Install MAKO Renderer** again and confirm the prompt. The wizard verifies and replaces MAKO-owned files while preserving \`~/.config/mako-render/\`.
-4. If you use Flatpak applications, download the matching Flatpak archive and reinstall the extension for each runtime you use.
-5. Restart the game. Revalidate the configuration with \`~/.local/bin/mako-cli validate\` if you changed the DLL path or profiles.
+2. For a user-local installation, download the newer host archive, extract it into a new folder, and run **Install MAKO Renderer** again. For the Arch package, download the newer \`.pkg.tar.zst\` and run \`sudo pacman -U\` on it.
+3. If you use Flatpak applications, download the matching Flatpak archive and reinstall the extension for each runtime you use.
+4. Restart the game. Revalidate the configuration with \`mako-cli validate\` if you changed the DLL path or profiles.
 
 Keep the previous archives until the new version has been tested with your games.
 
@@ -230,6 +288,7 @@ Keep the previous archives until the new version has been tested with your games
 ## MAKO Renderer release assets \`$version\`
 
 - Includes checksum-verified host archive \`$(basename "$archive")\` (SHA-256: \`$checksum\`).
+- Includes checksum-verified Arch Linux package \`$(basename "$arch_package")\` (SHA-256: \`$arch_checksum\`).
 - Includes checksum-verified Flatpak runtime archive \`$(basename "$flatpak_archive")\` (SHA-256: \`$flatpak_checksum\`).
 - The host archive contains the 64-bit and 32-bit Vulkan layers, CLI, Qt configuration UI, standalone \`mako-launch\` launcher, and desktop integration.
 - Corresponding source: [commit \`$source_commit\`](https://github.com/$release_repository/tree/$source_commit), also available from the release tag's source archives.
@@ -243,37 +302,21 @@ git push "$release_remote" "$tag"
 
 if gh release view "$tag" --repo "$release_repository" >/dev/null 2>&1; then
     node "$repository_root/scripts/upload-release-assets.mjs" \
-        "$release_repository" "$tag" "$archive" "$flatpak_archive"
+        "$release_repository" "$tag" \
+        "$archive" "$arch_package" "$flatpak_archive"
     gh release edit "$tag" \
         --repo "$release_repository" \
         --title "MAKO Renderer v$version" \
         --notes-file "$notes_file" \
         --latest=false
 else
-    gh release create "$tag" "$archive" "$flatpak_archive" \
+    gh release create "$tag" "$archive" "$arch_package" "$flatpak_archive" \
         --repo "$release_repository" \
         --title "MAKO Renderer v$version" \
         --latest=false \
         --notes-file "$notes_file" \
         --verify-tag
 fi
-
-node "$repo_root/../plugin/scripts/pin-renderer-release.mjs" \
-    "$repo_root/../plugin/package.json" \
-    "$version" \
-    "$tag" \
-    "$source_commit" \
-    "$release_repository" \
-    "$archive" \
-    "$checksum" \
-    "$flatpak_archive" \
-    "$flatpak_checksum"
-
-python3 "$repo_root/dist/arch/sync-release-pin.py" \
-    "$repo_root/../plugin/package.json" \
-    "$repo_root/dist/arch/PKGBUILD"
-"$repo_root/dist/arch/check-release-pin.sh"
-"$repo_root/dist/arch/verify-release-package.sh" "$archive"
 
 node "$repository_root/scripts/update-release-links.mjs" \
     renderer "$version" "$release_repository"

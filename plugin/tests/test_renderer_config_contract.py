@@ -300,7 +300,7 @@ class RendererConfigContractTests(unittest.TestCase):
         self.assertNotIn("backend.pacing_mode", ui_source)
         self.assertNotIn("Q_PROPERTY(int pacing_mode", backend_source)
 
-    def test_renderer_ui_exposes_only_safe_standalone_launch_controls(self):
+    def test_renderer_ui_exposes_safe_standalone_launch_controls(self):
         ui_source = (
             REPOSITORY_ROOT / "engine/mako-ui/rsc/UI.qml"
         ).read_text(encoding="utf-8")
@@ -311,17 +311,30 @@ class RendererConfigContractTests(unittest.TestCase):
         for field in (
             "enable_zink",
             "force_alsa_audio",
+            "enable_vkbasalt",
         ):
             with self.subTest(field=field):
                 self.assertIn(f"backend.{field}", ui_source)
                 self.assertIn(f"Q_PROPERTY(bool {field}", backend_source)
+
+        for field, property_type in (
+            ("vkbasalt_sharpening", "QString"),
+            ("vkbasalt_sharpness", "float"),
+            ("vkbasalt_dls_denoise", "float"),
+            ("vkbasalt_antialiasing", "QString"),
+            ("vkbasalt_shader", "QString"),
+        ):
+            with self.subTest(field=field):
+                self.assertIn(f"backend.{field}", ui_source)
+                self.assertIn(
+                    f"Q_PROPERTY({property_type} {field}", backend_source
+                )
 
         for unsupported_layer_control in (
             "disable_steamdeck_mode",
             "external_vulkan_layer",
             "gamescope_wsi",
             "mangohud",
-            "vkbasalt",
         ):
             with self.subTest(control=unsupported_layer_control):
                 self.assertNotIn(

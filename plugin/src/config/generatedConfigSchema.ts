@@ -40,6 +40,20 @@ export const TARGET_FPS_MAX = 240 as const;
 export const ADAPTIVE_MAX_MULTIPLIER_MIN = 2 as const;
 export const ADAPTIVE_MAX_MULTIPLIER_MAX = 5 as const;
 export const ADAPTIVE_MINIMUM_BASE_FPS = 10 as const;
+export const ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO = "auto" as const;
+export const ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW = "low" as const;
+export const ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM = "medium" as const;
+export const ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH = "high" as const;
+export const ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH = "very-high" as const;
+export const ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VALUES = [
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
+] as const;
+export type AdaptiveFractionalRealFramePriority =
+  (typeof ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VALUES)[number];
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.1 as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3 as const;
 export const DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES = [
@@ -142,6 +156,7 @@ export const BASE_FPS_CAP = "base_fps_cap" as const;
 export const MULTIPLIER = "multiplier" as const;
 export const ADAPTIVE = "adaptive" as const;
 export const ADAPTIVE_AUTO_BASE_FPS_CAP = "adaptive_auto_base_fps_cap" as const;
+export const ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY = "adaptive_fractional_real_frame_priority" as const;
 export const TARGET_FPS = "target_fps" as const;
 export const ADAPTIVE_MAX_MULTIPLIER = "adaptive_max_multiplier" as const;
 export const ADAPTIVE_STABLE_CADENCE = "adaptive_stable_cadence" as const;
@@ -260,6 +275,12 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     fieldType: ConfigFieldType.BOOLEAN,
     default: true,
     description: "start at a half-target real FPS cap and let Smooth Cadence align validated integer-ratio rungs"
+  },
+  adaptive_fractional_real_frame_priority: {
+    name: "adaptive_fractional_real_frame_priority",
+    fieldType: ConfigFieldType.STRING,
+    default: "auto",
+    description: "optional Fractional Adaptive real-frame cap selected from cadence-friendly target ratios"
   },
   target_fps: {
     name: "target_fps",
@@ -423,6 +444,7 @@ export interface ConfigurationData {
   multiplier: number;
   adaptive: boolean;
   adaptive_auto_base_fps_cap: boolean;
+  adaptive_fractional_real_frame_priority: string;
   target_fps: number;
   adaptive_max_multiplier: number;
   adaptive_stable_cadence: boolean;
@@ -473,6 +495,7 @@ export function getDefaults(): ConfigurationData {
     multiplier: 2,
     adaptive: false,
     adaptive_auto_base_fps_cap: true,
+    adaptive_fractional_real_frame_priority: "auto",
     target_fps: 90,
     adaptive_max_multiplier: 3,
     adaptive_stable_cadence: true,
@@ -516,6 +539,7 @@ export function getFieldTypes(): Record<string, ConfigFieldType> {
     multiplier: ConfigFieldType.INTEGER,
     adaptive: ConfigFieldType.BOOLEAN,
     adaptive_auto_base_fps_cap: ConfigFieldType.BOOLEAN,
+    adaptive_fractional_real_frame_priority: ConfigFieldType.STRING,
     target_fps: ConfigFieldType.INTEGER,
     adaptive_max_multiplier: ConfigFieldType.INTEGER,
     adaptive_stable_cadence: ConfigFieldType.BOOLEAN,

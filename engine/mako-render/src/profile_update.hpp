@@ -391,7 +391,25 @@ namespace mako::layer {
         );
     }
 
+    /// Return the Fractional Adaptive cap selected from short, stable
+    /// real/generated ratios. Auto leaves the saved manual cap authoritative.
+    [[nodiscard]] inline double fractionalRealFramePriorityCap(
+            const ls::GameConf& profile) {
+        return ls::adaptiveFractionalRealFramePriorityCap(
+            profile.adaptive_fractional_real_frame_priority,
+            profile.target_fps
+        );
+    }
+
+    [[nodiscard]] inline bool fractionalRealFramePriorityActive(
+            const ls::GameConf& profile) {
+        return profile.adaptive && !profile.adaptive_auto_base_fps_cap &&
+            profile.adaptive_fractional_real_frame_priority !=
+                ls::AdaptiveFractionalRealFramePriority::Auto;
+    }
+
     /// Auto-cap aligns the common healthy path with an exact 2x cadence.
+    /// Explicit Fractional priority instead selects its target-relative cap.
     /// Adaptive can still raise its multiplier when the game falls below this
     /// ceiling. Keep the engine's 10 FPS policy floor for unusually low targets.
     [[nodiscard]] inline double effectiveBaseFpsCap(
@@ -405,6 +423,8 @@ namespace mako::layer {
                 static_cast<double>(profile.target_fps) / 2.0
             );
         }
+        if (fractionalRealFramePriorityActive(profile))
+            return fractionalRealFramePriorityCap(profile);
         return static_cast<double>(profile.base_fps_cap);
     }
 

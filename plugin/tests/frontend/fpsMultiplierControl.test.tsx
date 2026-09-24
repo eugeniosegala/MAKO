@@ -9,6 +9,38 @@ import {
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@decky/ui", () => ({
+  Dropdown: ({
+    rgOptions,
+    selectedOption,
+    onChange,
+  }: {
+    rgOptions: Array<{ data: string; label: React.ReactNode }>;
+    selectedOption: string;
+    onChange: (option: { data: string; label: React.ReactNode }) => void;
+  }) => (
+    <button
+      data-testid="real-frame-priority-dropdown"
+      data-options={JSON.stringify(rgOptions.map((option) => option.data))}
+      onClick={() => onChange(rgOptions[2])}
+    >
+      {rgOptions.find((option) => option.data === selectedOption)?.label}
+    </button>
+  ),
+  Field: ({
+    label,
+    description,
+    children,
+  }: {
+    label: React.ReactNode;
+    description?: React.ReactNode;
+    children?: React.ReactNode;
+  }) => (
+    <div>
+      <span>{label}</span>
+      <span>{description}</span>
+      {children}
+    </div>
+  ),
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -177,6 +209,7 @@ describe("Frame Generation controls", () => {
     );
 
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
+    expect(screen.queryByText("Real Frame Priority")).toBeNull();
     expect(
       screen.queryByText(/MAKO prepares and swaps private resources live/),
     ).toBeNull();
@@ -256,6 +289,24 @@ describe("Frame Generation controls", () => {
     ).toBeTruthy();
     expect(screen.getByText("Adaptive Frame Generation")).toBeTruthy();
     expect(screen.getByText("Fractional Adaptive")).toBeTruthy();
+    expect(screen.getByText("Real Frame Priority")).toBeTruthy();
+    expect(
+      screen.getByText(
+        "Automatic keeps Fractional Adaptive's current behavior. Base FPS Cap remains available.",
+      ),
+    ).toBeTruthy();
+    const realFramePriority = screen.getByTestId(
+      "real-frame-priority-dropdown",
+    );
+    expect(realFramePriority.textContent).toBe("Automatic");
+    expect(
+      JSON.parse(realFramePriority.getAttribute("data-options") || "[]"),
+    ).toEqual(["auto", "low", "medium", "high", "very-high"]);
+    fireEvent.click(realFramePriority);
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      adaptive_fractional_real_frame_priority: "medium",
+      dynamic_cadence_recovery: false,
+    });
     expect(screen.getByText(/Target FPS \(90\)$/)).toBeTruthy();
     const pausedAdaptiveMultiplier = screen
       .getByText("Maximum Adaptive Multiplier (0x)")

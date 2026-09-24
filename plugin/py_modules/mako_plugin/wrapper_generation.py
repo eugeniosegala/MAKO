@@ -67,7 +67,7 @@ from .profile_storage import (
 )
 
 
-WRAPPER_FORMAT_VERSION = 68
+WRAPPER_FORMAT_VERSION = 69
 WRAPPER_FORMAT_MARKER = f"# mako-wrapper-format: {WRAPPER_FORMAT_VERSION}"
 HOST_COMPATIBILITY_MARKER = "# mako-host-compatibility: aarch64-passthrough-v1"
 DIAGNOSTICS_DEFAULT_MARKER = (
@@ -100,6 +100,7 @@ REQUIRED_WRAPPER_EXPORTS = (
     f"export {VK_INSTANCE_LAYERS_ENV}=",
     f"export {VK_IMPLICIT_LAYER_PATH_ENV}=",
     f"unset {VK_ADD_IMPLICIT_LAYER_PATH_ENV}",
+    "mako_steam_overlay_layers=",
     f"export {MAKO_PROFILE_FALLBACK_ENV}=",
     "mako_diagnostics_default=",
 )
@@ -129,6 +130,7 @@ class WrapperGenerationContext:
     config_dir: Path
     config_file_path: Path
     local_share_dir: Path
+    user_vulkan_layer_dir: Path
     spatial_scaling_layer_dir: Path
     gamescope_wsi_compatibility_dir: Path
     mangohud_layer_dir: Path
@@ -344,6 +346,13 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         context.vkbasalt_layer_dir / context.vkbasalt_manifest_filename_32
     ))
     vkbasalt_layer_dir = shlex.quote(str(context.vkbasalt_layer_dir))
+    steam_overlay_manifest64 = shlex.quote(str(
+        context.user_vulkan_layer_dir / "steamoverlay_x86_64.json"
+    ))
+    steam_overlay_manifest32 = shlex.quote(str(
+        context.user_vulkan_layer_dir / "steamoverlay_i386.json"
+    ))
+    user_vulkan_layer_dir = shlex.quote(str(context.user_vulkan_layer_dir))
     inherited_managed_layer_removal_lines: list[str] = []
     for layer_name in (
         MAKO_LAYER_NAME,
@@ -396,6 +405,7 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "fi",
         "mako_managed_instance_layers=",
         "mako_managed_external_layer=",
+        "mako_steam_overlay_layers=",
         "mako_gamescope_wsi_session=0",
         "mako_gamescope_wsi_skip_log=",
         f'if [ -n "${{{GAMESCOPE_WAYLAND_DISPLAY_ENV}:-}}" ] && '
@@ -510,9 +520,43 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "            fi",
         "            ;;",
         "esac",
+        # Steam installs its architecture-specific overlay manifests in the
+        # standard per-user implicit directory. MAKO keeps that directory out
+        # of implicit discovery, but Desktop Mode can safely expose it only as
+        # an explicit-layer source and place the overlay after MAKO. This keeps
+        # Steam's FPS counter without admitting Fossilize or arbitrary implicit
+        # layers. Gaming Mode retains its compositor-owned performance path.
+        f'if [ "${{ENABLE_VK_LAYER_VALVE_steam_overlay_1:-0}}" = 1 ] && '
+        '[ "$mako_gamescope_wsi_session" != 1 ] && '
+        '[ "$mako_flatpak_runtime" != 1 ] && '
+        f'{{ [ -r {steam_overlay_manifest64} ] || '
+        f'[ -r {steam_overlay_manifest32} ]; }}; then',
+        f"    if [ -r {steam_overlay_manifest64} ]; then",
+        "        mako_steam_overlay_layers=VK_LAYER_VALVE_steam_overlay_64",
+        "    fi",
+        f"    if [ -r {steam_overlay_manifest32} ]; then",
+        '        mako_steam_overlay_layers="${mako_steam_overlay_layers:+$mako_steam_overlay_layers:}VK_LAYER_VALVE_steam_overlay_32"',
+        "    fi",
+        f"    mako_steam_overlay_layer_dir={user_vulkan_layer_dir}",
+        '    export VK_LAYER_PATH="$mako_steam_overlay_layer_dir${VK_LAYER_PATH:+:$VK_LAYER_PATH}"',
+        "    for mako_steam_overlay_layer in VK_LAYER_VALVE_steam_overlay_64 VK_LAYER_VALVE_steam_overlay_32; do",
+        '        mako_existing_instance_layers=":$mako_existing_instance_layers:"',
+        '        while [[ "$mako_existing_instance_layers" == *":$mako_steam_overlay_layer:"* ]]; do',
+        '            mako_existing_instance_layers="${mako_existing_instance_layers/:$mako_steam_overlay_layer:/:}"',
+        "        done",
+        '        mako_existing_instance_layers="${mako_existing_instance_layers#:}"',
+        '        mako_existing_instance_layers="${mako_existing_instance_layers%:}"',
+        "    done",
+        '    if [ "$mako_renderer_enabled" = 1 ] && [ -z "$mako_managed_instance_layers" ]; then',
+        f"        mako_managed_instance_layers={MAKO_LAYER_NAME}",
+        "    fi",
+        "fi",
         'if [ -n "$mako_managed_instance_layers" ]; then',
         '    if [ -n "$mako_managed_external_layer" ]; then',
         '        mako_managed_instance_layers="$mako_managed_instance_layers:$mako_managed_external_layer"',
+        "    fi",
+        '    if [ -n "$mako_steam_overlay_layers" ]; then',
+        '        mako_managed_instance_layers="$mako_managed_instance_layers:$mako_steam_overlay_layers"',
         "    fi",
         '    if [ -n "$mako_existing_instance_layers" ]; then',
         f'        export {VK_INSTANCE_LAYERS_ENV}="$mako_managed_instance_layers:$mako_existing_instance_layers"',
@@ -532,6 +576,12 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         f'{VKBASALT_LAYER_NAME_64}" ]; then',
         f"        unset {VKBASALT_LAYER_ENABLE_ENV}",
         "    fi",
+        'elif [ -n "$mako_steam_overlay_layers" ]; then',
+        '    if [ -n "$mako_existing_instance_layers" ]; then',
+        f'        export {VK_INSTANCE_LAYERS_ENV}="$mako_steam_overlay_layers:$mako_existing_instance_layers"',
+        "    else",
+        f'        export {VK_INSTANCE_LAYERS_ENV}="$mako_steam_overlay_layers"',
+        "    fi",
         "fi",
         "unset mako_gamescope_wsi_required",
         "unset mako_gamescope_wsi_session",
@@ -541,6 +591,9 @@ def layer_environment_lines(context: WrapperGenerationContext) -> list[str]:
         "unset mako_spatial_scaling_layer_dir",
         "unset mako_mangohud_layer_dir",
         "unset mako_vkbasalt_layer_dir",
+        "unset mako_steam_overlay_layer_dir",
+        "unset mako_steam_overlay_layer",
+        "unset mako_steam_overlay_layers",
         "unset mako_existing_instance_layers",
         "unset mako_managed_instance_layers",
         "unset mako_managed_external_layer",

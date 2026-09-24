@@ -35,7 +35,7 @@ ApplicationWindow {
         }
         TextField {
             Layout.fillWidth: true
-            text: "~/.local/bin/mako-launch %command%"
+            text: backend.launch_option
             readOnly: true
             selectByMouse: true
         }
@@ -279,6 +279,8 @@ ApplicationWindow {
                         description: t.baseFpsCapDesc
                         visible: backend.frame_generation_provisioned
                         enabled: !(backend.adaptive && backend.adaptive_auto_base_fps_cap)
+                            && !(backend.fractional_adaptive
+                                && backend.adaptive_fractional_real_frame_priority !== "auto")
 
                         SpinBox {
                             Layout.alignment: Qt.AlignRight
@@ -345,6 +347,27 @@ ApplicationWindow {
 
                             value: backend.target_fps
                             onValueModified: backend.target_fps = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.realFramePriority
+                        description: backend.adaptive_fractional_real_frame_priority === "auto"
+                            ? t.realFramePriorityDesc + " " + t.realFramePriorityAutoDesc
+                            : t.realFramePriorityDesc + " "
+                                + t.realFramePriorityActivePrefix
+                                + Number(backend.adaptive_fractional_real_frame_priority_cap.toFixed(1))
+                                + t.realFramePriorityActiveSuffix
+                        visible: backend.frame_generation_provisioned
+                            && backend.fractional_adaptive
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [t.automatic, t.low, t.medium, t.high, t.veryHigh]
+                            currentIndex: ["auto", "low", "medium", "high", "very-high"]
+                                .indexOf(backend.adaptive_fractional_real_frame_priority)
+                            onActivated: index => backend.adaptive_fractional_real_frame_priority =
+                                ["auto", "low", "medium", "high", "very-high"][index]
                         }
                     }
 
@@ -524,6 +547,121 @@ ApplicationWindow {
 
                             value: backend.scaling_sharpness
                             onUpdate: value => backend.scaling_sharpness = value
+                        }
+                    }
+                }
+
+                Group {
+                    name: t.shaderSettings
+                    enabled: backend.available
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.Wrap
+                        text: t.shaderSettingsDesc
+                        color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                    }
+
+                    GroupEntry {
+                        title: t.enableShaders
+                        description: t.enableShadersDesc
+                        compactRestartMarker: true
+
+                        CheckBox {
+                            Layout.alignment: Qt.AlignRight
+                            checked: backend.enable_vkbasalt
+                            onToggled: backend.enable_vkbasalt = checked
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.shaderEffects
+                        description: t.shaderEffectsDesc
+                        visible: backend.enable_vkbasalt
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [t.off, "HDR Look (SDR)", "Vibrance", "Colourfulness", "Curves", "Deband", "Technicolor 2", "DPX / Cineon", "Bleach Bypass", "Noir", "Technicolor", "Monochrome", "Sepia", "Film Grain", "Vignette", "Cartoon", "Nostalgia", "Chromatic Aberration"]
+                            currentIndex: ["none", "hdr_look", "vibrance", "colourfulness", "curves", "deband", "technicolor2", "dpx", "bleach_bypass", "noir", "technicolor", "monochrome", "sepia", "film_grain", "vignette", "cartoon", "nostalgia", "chromatic_aberration"].indexOf(backend.vkbasalt_shader)
+                            onActivated: index => backend.vkbasalt_shader = ["none", "hdr_look", "vibrance", "colourfulness", "curves", "deband", "technicolor2", "dpx", "bleach_bypass", "noir", "technicolor", "monochrome", "sepia", "film_grain", "vignette", "cartoon", "nostalgia", "chromatic_aberration"][index]
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.shaderSharpening
+                        description: t.shaderSharpeningDesc
+                        visible: backend.enable_vkbasalt
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [t.off, "CAS", "DLS"]
+                            currentIndex: ["none", "cas", "dls"].indexOf(backend.vkbasalt_sharpening)
+                            onActivated: index => backend.vkbasalt_sharpening = ["none", "cas", "dls"][index]
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.shaderSharpness
+                        description: t.shaderSharpnessDesc
+                        visible: backend.enable_vkbasalt && backend.vkbasalt_sharpening !== "none"
+
+                        FlowSlider {
+                            Layout.fillWidth: true
+                            from: backend.minimum_vkbasalt_strength
+                            to: backend.maximum_vkbasalt_strength
+                            value: backend.vkbasalt_sharpness
+                            onUpdate: value => backend.vkbasalt_sharpness = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.shaderDlsDenoise
+                        description: t.shaderDlsDenoiseDesc
+                        visible: backend.enable_vkbasalt && backend.vkbasalt_sharpening === "dls"
+
+                        FlowSlider {
+                            Layout.fillWidth: true
+                            from: backend.minimum_vkbasalt_strength
+                            to: backend.maximum_vkbasalt_strength
+                            value: backend.vkbasalt_dls_denoise
+                            onUpdate: value => backend.vkbasalt_dls_denoise = value
+                        }
+                    }
+
+                    GroupEntry {
+                        title: t.shaderAntialiasing
+                        description: t.shaderAntialiasingDesc
+                        visible: backend.enable_vkbasalt
+
+                        ComboBox {
+                            Layout.fillWidth: true
+                            model: [t.off, "FXAA", "SMAA"]
+                            currentIndex: ["none", "fxaa", "smaa"].indexOf(backend.vkbasalt_antialiasing)
+                            onActivated: index => backend.vkbasalt_antialiasing = ["none", "fxaa", "smaa"][index]
+                        }
+                    }
+
+                    Label {
+                        Layout.fillWidth: true
+                        visible: backend.enable_vkbasalt
+                        wrapMode: Text.Wrap
+                        text: t.shaderAdvancedNote
+                        color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                    }
+
+                    Button {
+                        Layout.fillWidth: true
+                        visible: backend.enable_vkbasalt
+                        flat: true
+                        onClicked: backend.openVkBasaltConfig()
+
+                        contentItem: Label {
+                            text: backend.vkbasalt_config_path
+                            color: palette.link
+                            font.underline: true
+                            wrapMode: Text.WrapAnywhere
+                            horizontalAlignment: Text.AlignLeft
+                            verticalAlignment: Text.AlignVCenter
                         }
                     }
                 }

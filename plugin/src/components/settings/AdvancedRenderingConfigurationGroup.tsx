@@ -1,6 +1,8 @@
 import { PanelSectionRow, SliderField, ToggleField } from "@decky/ui";
 import {
   ADAPTIVE_MINIMUM_BASE_FPS,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+  type AdaptiveFractionalRealFramePriority,
   BASE_FPS_CAP_MIN,
   BASE_FPS_CAP_UI_MAX,
   DISABLE_MAKO,
@@ -9,7 +11,11 @@ import {
   FRAME_GENERATION_REFRESH_THRESHOLD_PRESET,
   FRAME_GENERATION_REFRESH_THRESHOLD_UI_MIN,
 } from "../../config/configSchema";
-import { baseFpsCapChanges } from "../../config/fractionalAdaptivePreset";
+import {
+  baseFpsCapChanges,
+  fractionalRealFramePriorityCap,
+  isFractionalAdaptivePresetEnabled,
+} from "../../config/fractionalAdaptivePreset";
 import t from "../../i18n/i18n";
 import { MakoSectionHeader, MakoSettingRelationship } from "../MakoUi";
 import type { ConfigurationUpdateGroupProps } from "./types";
@@ -29,6 +35,21 @@ export function AdvancedRenderingConfigurationGroup({
   const steadyBaseFpsCapLabel = Number.isInteger(steadyBaseFpsCap)
     ? steadyBaseFpsCap.toFixed(0)
     : steadyBaseFpsCap.toFixed(1);
+  const fractionalPriority = (config.adaptive_fractional_real_frame_priority ??
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO) as AdaptiveFractionalRealFramePriority;
+  const fractionalPriorityCap = fractionalRealFramePriorityCap(
+    config.target_fps,
+    fractionalPriority,
+  );
+  const fractionalPriorityCapLabel =
+    fractionalPriorityCap === undefined
+      ? undefined
+      : Number.isInteger(fractionalPriorityCap)
+        ? fractionalPriorityCap.toFixed(0)
+        : fractionalPriorityCap.toFixed(1);
+  const fractionalPriorityOwnsCap =
+    isFractionalAdaptivePresetEnabled(config) &&
+    fractionalPriorityCapLabel !== undefined;
 
   return (
     <>
@@ -63,6 +84,14 @@ export function AdvancedRenderingConfigurationGroup({
                         { fps: steadyBaseFpsCapLabel },
                       )}
                     </MakoSettingRelationship>
+                  ) : fractionalPriorityOwnsCap ? (
+                    <MakoSettingRelationship>
+                      {t(
+                        "CONFIG_BASE_FPS_CAP_FRACTIONAL_PRIORITY_RELATION",
+                        "Controlled by Real Frame Priority ({fps} FPS). Your manual value remains saved.",
+                        { fps: fractionalPriorityCapLabel },
+                      )}
+                    </MakoSettingRelationship>
                   ) : config.dynamic_cadence_recovery ? (
                     <MakoSettingRelationship>
                       {t(
@@ -79,7 +108,8 @@ export function AdvancedRenderingConfigurationGroup({
               step={1}
               disabled={
                 !config.frame_generation_enabled ||
-                (config.adaptive && config.adaptive_auto_base_fps_cap)
+                (config.adaptive && config.adaptive_auto_base_fps_cap) ||
+                fractionalPriorityOwnsCap
               }
               onChange={(value) => onConfigUpdate(baseFpsCapChanges(value))}
             />

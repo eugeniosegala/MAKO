@@ -48,6 +48,18 @@ TARGET_FPS_MAX = 240
 ADAPTIVE_MAX_MULTIPLIER_MIN = 2
 ADAPTIVE_MAX_MULTIPLIER_MAX = 5
 ADAPTIVE_MINIMUM_BASE_FPS = 10
+ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO = "auto"
+ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW = "low"
+ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM = "medium"
+ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH = "high"
+ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH = "very-high"
+ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VALUES = (
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM,
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
+)
 DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MIN = 0.1
 DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_MAX = 3
 DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS_VALUES = (
@@ -276,6 +288,13 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
         "fieldType": ConfigFieldType.BOOLEAN,
         "default": True,
         "description": "start at a half-target real FPS cap and let Smooth Cadence align validated integer-ratio rungs",
+        "location": "toml"
+    },
+
+    "adaptive_fractional_real_frame_priority": {
+        "fieldType": ConfigFieldType.STRING,
+        "default": ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+        "description": "optional Fractional Adaptive real-frame cap selected from cadence-friendly target ratios",
         "location": "toml"
     },
 

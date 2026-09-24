@@ -1,10 +1,15 @@
 """Licensing and dependency contracts for MAKO's bundled shader catalog."""
 
 from pathlib import Path
+import re
 import unittest
+
+import shared_config
+from py_modules.mako_plugin import profile_storage
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
+REPOSITORY_ROOT = PLUGIN_ROOT.parent
 SHADER_ROOT = PLUGIN_ROOT / "py_modules" / "mako_plugin" / "vkbasalt_shaders"
 
 SWEETFX_SHADERS = (
@@ -25,6 +30,57 @@ SWEETFX_SHADERS = (
 
 
 class ShaderAssetTests(unittest.TestCase):
+    def test_qt_shader_adapter_matches_decky_contract(self):
+        source = (
+            REPOSITORY_ROOT
+            / "engine/mako-common/src/configuration/vkbasalt.cpp"
+        ).read_text(encoding="utf-8")
+        header = (
+            REPOSITORY_ROOT
+            / "engine/mako-common/include/mako-common/configuration/vkbasalt.hpp"
+        ).read_text(encoding="utf-8")
+
+        def array_values(name: str) -> tuple[str, ...]:
+            match = re.search(
+                rf"constexpr std::array<std::string_view, \d+> {name}\{{(.*?)\n\}};",
+                source,
+                re.DOTALL,
+            )
+            self.assertIsNotNone(match, f"missing Qt {name} catalog")
+            return tuple(re.findall(r'"([^"]+)"', match.group(1)))
+
+        self.assertEqual(
+            array_values("SHARPENING"),
+            shared_config.VKBASALT_SHARPENING_VALUES,
+        )
+        self.assertEqual(
+            array_values("ANTIALIASING"),
+            shared_config.VKBASALT_ANTIALIASING_VALUES,
+        )
+        self.assertEqual(
+            array_values("SHADERS"),
+            shared_config.VKBASALT_SHADER_VALUES,
+        )
+
+        effect_block = re.search(
+            r"SHADER_EFFECTS\{(.*?)\n\};", source, re.DOTALL
+        )
+        self.assertIsNotNone(effect_block)
+        qt_effects = dict(re.findall(
+            r'\{"([^"]+)", "([^"]+)"\}', effect_block.group(1)
+        ))
+        self.assertEqual(qt_effects, profile_storage._VKBASALT_SHADER_EFFECTS)
+        for field in (
+            'std::string sharpening{"cas"}',
+            'float sharpness{0.5F}',
+            'float dls_denoise{0.2F}',
+            'std::string antialiasing{"none"}',
+            'std::string shader{"none"}',
+            "vkBasaltStrengthMinimum = 0.0F",
+            "vkBasaltStrengthMaximum = 1.0F",
+        ):
+            self.assertIn(field, header)
+
     def test_third_party_sources_have_pinned_provenance_and_licenses(self):
         provenance = (SHADER_ROOT / "SOURCE.md").read_text(encoding="utf-8")
         self.assertIn("407c11562950195c1b45461fbb59f4bd6bbe7ba4", provenance)

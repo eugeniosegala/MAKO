@@ -200,6 +200,7 @@ class RuntimeProfileSnapshot(TypedDict):
     base_fps_cap: int
     adaptive: bool
     adaptive_auto_base_fps_cap: bool
+    adaptive_fractional_real_frame_priority: str
     target_fps: int
     adaptive_max_multiplier: int
     adaptive_stable_cadence: bool

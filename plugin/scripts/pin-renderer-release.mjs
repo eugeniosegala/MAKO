@@ -3,6 +3,7 @@
 import { basename } from "node:path";
 import { readFile, writeFile } from "node:fs/promises";
 
+const arguments_ = process.argv.slice(2);
 const [
   packagePath,
   version,
@@ -12,8 +13,10 @@ const [
   archivePath,
   archiveChecksum,
   flatpakArchivePath,
-  flatpakArchiveChecksum
-] = process.argv.slice(2);
+  flatpakArchiveChecksum,
+  archPackagePath,
+  archPackageChecksum
+] = arguments_;
 
 if (
   !packagePath ||
@@ -24,14 +27,18 @@ if (
   !archivePath ||
   !archiveChecksum ||
   !flatpakArchivePath ||
-  !flatpakArchiveChecksum
+  !flatpakArchiveChecksum ||
+  ![9, 11].includes(arguments_.length)
 ) {
   console.error(
     "Usage: pin-renderer-release.mjs <package.json> <version> <release-tag> " +
       "<source-commit> <owner/repository> <archive> <archive-sha256> " +
-      "<flatpak-archive> <flatpak-sha256>"
+      "<flatpak-archive> <flatpak-sha256> [arch-package arch-package-sha256]"
   );
   process.exit(2);
+}
+if ((archPackagePath && !archPackageChecksum) || (!archPackagePath && archPackageChecksum)) {
+  throw new Error("The Arch package path and SHA-256 must be provided together");
 }
 
 if (releaseTag !== `render-v${version}`) {
@@ -46,12 +53,16 @@ if (!/^[0-9a-f]{64}$/i.test(archiveChecksum)) {
 if (!/^[0-9a-f]{64}$/i.test(flatpakArchiveChecksum)) {
   throw new Error("The Flatpak archive SHA-256 is invalid");
 }
+if (archPackageChecksum && !/^[0-9a-f]{64}$/i.test(archPackageChecksum)) {
+  throw new Error("The Arch package SHA-256 is invalid");
+}
 if (!/^[^/]+\/[^/]+$/.test(repository)) {
   throw new Error(`Expected owner/repository, received ${repository}`);
 }
 
 const archiveName = basename(archivePath);
 const flatpakArchiveName = basename(flatpakArchivePath);
+const archPackageName = archPackagePath ? basename(archPackagePath) : "";
 const expectedArchiveName = `MAKO-Renderer-v${version}-linux.tar.xz`;
 const expectedFlatpakArchiveName = `MAKO-Renderer-v${version}-flatpaks.tar.xz`;
 if (archiveName !== expectedArchiveName) {
@@ -61,6 +72,14 @@ if (flatpakArchiveName !== expectedFlatpakArchiveName) {
   throw new Error(
     `Expected ${expectedFlatpakArchiveName}, received ${flatpakArchiveName}`
   );
+}
+if (
+  archPackageName &&
+  !new RegExp(`^mako-renderer-bin-${version.replaceAll(".", "\\.")}-[1-9][0-9]*-x86_64\\.pkg\\.tar\\.zst$`).test(
+    archPackageName
+  )
+) {
+  throw new Error(`Invalid Arch package name for MAKO Renderer ${version}: ${archPackageName}`);
 }
 
 const manifest = JSON.parse(await readFile(packagePath, "utf8"));
@@ -84,6 +103,15 @@ binary.flatpak_bundle = {
   url: `${releaseBase}/${flatpakArchiveName}`,
   sha256hash: flatpakArchiveChecksum.toLowerCase()
 };
+if (archPackageName) {
+  binary.arch_package = {
+    name: archPackageName,
+    url: `${releaseBase}/${archPackageName}`,
+    sha256hash: archPackageChecksum.toLowerCase()
+  };
+} else {
+  delete binary.arch_package;
+}
 
 await writeFile(packagePath, `${JSON.stringify(manifest, null, 2)}\n`);
 console.log(`Pinned MAKO Renderer ${version} (${releaseTag}) in ${packagePath}`);

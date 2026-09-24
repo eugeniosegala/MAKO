@@ -390,11 +390,21 @@ ProfileUpdateDecision Swapchain::updateProfile(
     );
     const bool enabling = !generationWasEnabled && generationWillBeEnabled;
     const bool disabling = generationWasEnabled && !generationWillBeEnabled;
+    const bool currentFractionalPriorityActive =
+        fractionalRealFramePriorityActive(this->profile);
+    const bool nextFractionalPriorityActive =
+        fractionalRealFramePriorityActive(plan.appliedProfile);
+    const bool fractionalPriorityStyleChanged =
+        currentFractionalPriorityActive != nextFractionalPriorityActive ||
+        (currentFractionalPriorityActive && nextFractionalPriorityActive &&
+         this->profile.adaptive_fractional_real_frame_priority !=
+            plan.appliedProfile.adaptive_fractional_real_frame_priority);
     const bool cadenceStyleChanged = generationWasEnabled &&
         generationWillBeEnabled && this->profile.adaptive &&
         plan.appliedProfile.adaptive &&
-        this->profile.adaptive_auto_base_fps_cap !=
-            plan.appliedProfile.adaptive_auto_base_fps_cap;
+        (this->profile.adaptive_auto_base_fps_cap !=
+            plan.appliedProfile.adaptive_auto_base_fps_cap ||
+         fractionalPriorityStyleChanged);
     const auto profileUpdateNow = DiagnosticsClock::now();
     const bool confirmedSteamMenuSuspension =
         this->privateOrderedTransport &&
@@ -530,6 +540,10 @@ ProfileUpdateDecision Swapchain::updateProfile(
                   << " base_fps_cap=" << this->profile.base_fps_cap
                   << " adaptive_auto_base_fps_cap="
                   << this->profile.adaptive_auto_base_fps_cap
+                  << " adaptive_fractional_real_frame_priority="
+                  << ls::adaptiveFractionalRealFramePriorityName(
+                      this->profile.adaptive_fractional_real_frame_priority
+                  )
                   << " effective_base_fps_cap="
                   << effectiveBaseFpsCap(this->profile)
                   << " adaptive_max_multiplier="

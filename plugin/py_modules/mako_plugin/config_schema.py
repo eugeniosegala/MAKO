@@ -11,6 +11,8 @@ from typing import Any, Dict, TypedDict, Union, cast
 from shared_config import (
     ADAPTIVE_MAX_MULTIPLIER_MAX,
     ADAPTIVE_MAX_MULTIPLIER_MIN,
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VALUES,
     BASE_FPS_CAP_MAX,
     BASE_FPS_CAP_MIN,
     CONFIG_SCHEMA_DEF,
@@ -179,6 +181,17 @@ class ConfigurationManager:
             raise ValueError(
                 f"target_fps must be between {TARGET_FPS_MIN} and {TARGET_FPS_MAX}"
             )
+        fractional_priority = validated[
+            "adaptive_fractional_real_frame_priority"
+        ].strip().lower()
+        if fractional_priority not in ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VALUES:
+            raise ValueError(
+                "adaptive_fractional_real_frame_priority must be one of "
+                "'auto', 'low', 'medium', 'high', or 'very-high'"
+            )
+        validated["adaptive_fractional_real_frame_priority"] = (
+            fractional_priority
+        )
         if not (
             ADAPTIVE_MAX_MULTIPLIER_MIN
             <= validated["adaptive_max_multiplier"]
@@ -277,6 +290,9 @@ class ConfigurationManager:
         validated["vkbasalt_shader"] = vkbasalt_shader
         if validated["dynamic_cadence_recovery"]:
             validated["adaptive_auto_base_fps_cap"] = False
+            validated["adaptive_fractional_real_frame_priority"] = (
+                ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO
+            )
             validated["base_fps_cap"] = 0
         return cast(ConfigurationData, validated)
 
@@ -346,6 +362,8 @@ class ConfigurationManager:
                 f"multiplier = {config['multiplier']}",
                 f"adaptive = {str(config['adaptive']).lower()}",
                 f"adaptive_auto_base_fps_cap = {str(config['adaptive_auto_base_fps_cap']).lower()}",
+                "adaptive_fractional_real_frame_priority = "
+                f"{_toml_string(config['adaptive_fractional_real_frame_priority'])}",
                 f"target_fps = {config['target_fps']}",
                 f"adaptive_max_multiplier = {config['adaptive_max_multiplier']}",
                 f"adaptive_stable_cadence = {str(config['adaptive_stable_cadence']).lower()}",

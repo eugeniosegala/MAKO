@@ -1,6 +1,6 @@
 # Arch Linux packaging
 
-This directory contains the Arch Linux packaging for MAKO Renderer. `PKGBUILD` repackages the official prebuilt Linux host archive (`MAKO-Renderer-vX.Y.Z-linux.tar.xz`) from the upstream GitHub release into a system-wide `mako-renderer-bin` package. No MAKO source is built. Every included payload file is installed with the same content hash, so the installed layers, CLI, configuration UI, and release-owned private integrations stay auditable against the archive's `MAKO-Renderer-install-manifest.txt`.
+This directory contains the Arch Linux packaging for MAKO Renderer. `PKGBUILD` repackages the official prebuilt Linux host archive (`MAKO-Renderer-vX.Y.Z-linux.tar.xz`) from the upstream GitHub release into a system-wide `mako-renderer-bin` package, and starting with MAKO Renderer 4.0 the verified `.pkg.tar.zst` is published alongside that archive. No MAKO source is built. Every included payload file is installed with the same content hash, so the installed layers, CLI, configuration UI, and release-owned private integrations stay auditable against the archive's `MAKO-Renderer-install-manifest.txt`.
 
 The `-bin` suffix follows the convention for a package that repackages prebuilt deliverables instead of building them from source. A future source-built package would be named `mako-renderer`; this package provides and conflicts with that common package identity so pacman treats the two implementations as alternatives.
 
@@ -25,20 +25,46 @@ The package deliberately excludes:
 
 Two details differ from the archive layout: the archived `share/doc/mako-render/*` files are installed under `/usr/share/licenses/mako-renderer-bin/` and `/usr/share/doc/mako-renderer-bin/`, and shared libraries are installed as mode `0755` instead of the archive's `0644`, following Arch convention. Content hashes are unaffected, so the checksum manifest still matches.
 
-## Build and install
+## Install the release package
 
-An `x86_64` Arch Linux system with the multilib repository enabled is required because one package carries both the 64-bit and 32-bit Vulkan layers and their runtime dependencies. Build and install from this directory:
+An `x86_64` Arch Linux system with the multilib repository enabled is required because one package carries both the 64-bit and 32-bit Vulkan layers and their runtime dependencies. Download `mako-renderer-bin-X.Y.Z-1-x86_64.pkg.tar.zst` from the matching MAKO Renderer GitHub release and install it with:
+
+```bash
+sudo pacman -U ./mako-renderer-bin-X.Y.Z-1-x86_64.pkg.tar.zst
+```
+
+Pacman verifies the package database transaction, installs the declared dependencies, owns every installed path, and runs the non-mutating coexistence report. The GitHub release records the package's SHA-256 in its release notes and the repository's release metadata.
+
+### Configure and launch
+
+Installing the package does not activate MAKO for every game. Open **MAKO Renderer Configuration** from the application menu or run:
+
+```bash
+mako-ui
+```
+
+Create or select a game profile and configure Frame Generation, Scaling, and/or Shaders. Frame Generation and LS1 scaling require a lawful user-supplied `Lossless.dll`; the open MAKO Scaler and bundled shaders do not. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**:
+
+```text
+/usr/bin/mako-launch %command%
+```
+
+Use the absolute `/usr/bin` path so a separate `~/.local/bin/mako-launch` cannot shadow the pacman-owned launcher. Flatpak games additionally require the matching MAKO Flatpak runtime extension and application preparation described in the [Flatpak guide](../../docs/FLATPAK-GUIDE.md).
+
+## Build from the tracked recipe
+
+To reproduce the package from the official archive instead, build and install from this directory:
 
 ```bash
 cd engine/dist/arch
 makepkg -si
 ```
 
-`makepkg` downloads the release archive, verifies `sha256sums`, and repackages the extracted payload. The source is the official prebuilt archive; the package does not run a compiler.
+`makepkg` downloads the release archive, verifies `sha256sums`, and repackages the extracted payload. The package does not run a compiler.
 
 ## Upgrade
 
-This recipe is not currently published through an official pacman repository or the AUR, so `pacman -Syu` alone cannot discover a new MAKO version. Update this source checkout, return to `engine/dist/arch`, and run `makepkg -si` again after a new `pkgver` or `pkgrel` is committed. Pacman replaces all package-owned files under `/usr`. User profiles and configuration data are not package-owned and are never touched during an upgrade. The `pre_upgrade` hook re-reports any user-local MAKO install it detects.
+This package is not currently published through an official pacman repository or the AUR, so `pacman -Syu` alone cannot discover a new MAKO version. Download the newer `.pkg.tar.zst` from the matching GitHub release and run `sudo pacman -U` again. Pacman replaces all package-owned files under `/usr`. User profiles and configuration data are not package-owned and are never touched during an upgrade. The `pre_upgrade` hook re-reports any user-local MAKO install it detects.
 
 ## Remove
 
@@ -73,18 +99,19 @@ Because both delivery paths share that directory, do not run two different MAKO 
 
 ## Updating for a new release
 
-The MAKO Renderer publisher first builds and verifies the host archive from the release commit, then records that exact artifact's version, URL, and checksum in `plugin/package.json`, runs `sync-release-pin.py`, resets `pkgrel` to 1 for a new upstream version, verifies the pin with `check-release-pin.sh`, and uses `verify-release-package.sh` to build the synchronized recipe against that exact local archive. The archive's own install manifest remains the package payload source of truth, so the recipe neither selects files from an older archive nor maintains a second release payload list.
+The MAKO Renderer publisher first builds and verifies the host archive from the release commit, then records that exact artifact's version, URL, and checksum in `plugin/package.json`, runs `sync-release-pin.py`, resets `pkgrel` to 1 for a new upstream version, and verifies the pin with `check-release-pin.sh`. `verify-release-package.sh` builds the synchronized recipe against that exact local archive, validates its contents, and retains that exact `.pkg.tar.zst` for checksum recording and GitHub release publication. The archive's own install manifest remains the package payload source of truth, so the recipe neither selects files from an older archive nor maintains a second release payload list.
 
 For a packaging-only fix, leave `pkgver` and `sha256sums` unchanged and increment `pkgrel`. Run `just check-arch-package` from the repository root before committing. `check-release-pin.sh` also runs in portable Renderer CTest and fails when `pkgver`, the source URL, or `sha256sums` drifts from `plugin/package.json`.
 
 ## AUR publication
 
-This repository owns the reviewed `PKGBUILD`, but the release publisher does not push to the AUR. An AUR package needs its own package repository, generated `.SRCINFO`, and maintainer credentials; those are separate publication and trust boundaries. Until an official AUR repository is established, build the recipe from this source tree. If it is published later, generate `.SRCINFO` from this exact recipe after each synchronized Renderer release instead of maintaining a second independent pin.
+This repository owns the reviewed `PKGBUILD` and publishes its verified binary package on GitHub, but the release publisher does not push to the AUR. An AUR package needs its own package repository, generated `.SRCINFO`, and maintainer credentials; those are separate publication and trust boundaries. If it is published later, generate `.SRCINFO` from this exact recipe after each synchronized Renderer release instead of maintaining a second independent pin.
 
 ## Verification
 
 - `makepkg` verifies the release archive against `sha256sums` before packaging.
-- Renderer publication runs `verify-release-package.sh` after synchronizing the recipe and must successfully build one package from the exact release archive without installing or retaining it.
+- Renderer publication runs `verify-release-package.sh` after synchronizing the recipe, uploads that exact verified package, records its checksum in release metadata, and refuses to consider the release complete if the asset is missing or differs from the recorded checksum.
+- The build wrapper rejects a stale or renamed package unless its filename, `.PKGINFO` name/version/architecture, embedded `MAKO-Renderer-version.txt`, synchronized recipe, and source archive checksum all agree.
 - Every payload file this package installs has the same SHA-256 as its entry in `MAKO-Renderer-install-manifest.txt`. The recipe verifies the complete archive manifest, packages every supported entry instead of maintaining a second payload allowlist, and fails on unsafe or unsupported paths. The manifest is installed unchanged at `/usr/share/doc/mako-renderer-bin/MAKO-Renderer-install-manifest.txt` so the claim can be re-checked. The only manifest entries without a matching installed file are `bin/mako-installer` and `share/applications/io.github.eugeniosegala.mako.uninstaller.desktop`, both excluded by design.
 - `desktop-file-validate` accepts the installed desktop entry.
 - A Vulkan loader run with `VK_IMPLICIT_LAYER_PATH` pointed at each packaged manifest directory discovers and activates `VK_LAYER_MAKO_render` and `VK_LAYER_MAKO_spatial_scaling` for the public set, and the matching layer for each private directory, with the relative `library_path` values resolving to `/usr/lib` and `/usr/lib32`.

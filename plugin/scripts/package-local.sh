@@ -585,6 +585,7 @@ if [[ "$local_engine_mode" == true ]]; then
     // so expose it only through MAKO-owned package metadata.
     delete binary.url;
     delete binary.flatpak_bundle;
+    delete binary.arch_package;
     manifest.bundled_renderer = binary;
     delete manifest.remote_binary;
     delete manifest.remote_binary_bundling;
@@ -607,6 +608,7 @@ elif [[ "$local_plugin_mode" == true ]]; then
     // as local-engine packages.
     delete binary.url;
     delete binary.flatpak_bundle;
+    delete binary.arch_package;
     manifest.bundled_renderer = binary;
     delete manifest.remote_binary;
     delete manifest.remote_binary_bundling;

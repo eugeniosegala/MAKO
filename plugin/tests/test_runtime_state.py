@@ -36,6 +36,7 @@ def _profile(name: str, multiplier: int) -> dict[str, object]:
         "base_fps_cap": 45,
         "adaptive": False,
         "adaptive_auto_base_fps_cap": False,
+        "adaptive_fractional_real_frame_priority": "high",
         "target_fps": 90,
         "adaptive_max_multiplier": multiplier,
         "adaptive_stable_cadence": True,

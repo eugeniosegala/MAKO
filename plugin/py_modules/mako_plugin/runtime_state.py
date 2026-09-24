@@ -122,6 +122,10 @@ def _profile(value: object, field: str) -> RuntimeProfileSnapshot:
             value.get("adaptive_auto_base_fps_cap"),
             f"{field}.adaptive_auto_base_fps_cap",
         ),
+        "adaptive_fractional_real_frame_priority": _string(
+            value.get("adaptive_fractional_real_frame_priority", "auto"),
+            f"{field}.adaptive_fractional_real_frame_priority",
+        ),
         "target_fps": _integer(value.get("target_fps"), f"{field}.target_fps"),
         "adaptive_max_multiplier": _integer(
             value.get("adaptive_max_multiplier"),

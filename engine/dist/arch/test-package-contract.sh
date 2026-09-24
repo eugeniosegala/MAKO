@@ -46,9 +46,9 @@ mkdir -p \
     "$package_root/usr/bin" \
     "$package_root/usr/lib" \
     "$package_root/usr/lib32" \
-    "$package_root/usr/share/applications"
+    "$package_root/usr/share/applications" \
+    "$package_root/usr/share/doc/mako-renderer-bin"
 touch \
-    "$package_root/.INSTALL" \
     "$package_root/usr/bin/mako-cli" \
     "$package_root/usr/bin/mako-diagnostics" \
     "$package_root/usr/bin/mako-launch" \
@@ -58,8 +58,16 @@ touch \
     "$package_root/usr/lib32/libmako-render.so" \
     "$package_root/usr/lib32/libmako-render-scaling.so" \
     "$package_root/usr/share/applications/io.github.eugeniosegala.mako.desktop"
+printf '%s\n' install-script > "$package_root/.INSTALL"
+printf '%s\n' \
+    'pkgname = mako-renderer-bin' \
+    "pkgver = ${MAKO_TEST_PACKAGE_VERSION_OVERRIDE:-${MAKO_TEST_PKGVER}-${MAKO_TEST_PKGREL}}" \
+    'arch = x86_64' \
+    > "$package_root/.PKGINFO"
+printf '%s\n' "${MAKO_TEST_RENDERER_VERSION_OVERRIDE:-$MAKO_TEST_PKGVER}" \
+    > "$package_root/usr/share/doc/mako-renderer-bin/MAKO-Renderer-version.txt"
 tar -cf "mako-renderer-bin-${MAKO_TEST_PKGVER}-${MAKO_TEST_PKGREL}-x86_64.pkg.tar.zst" \
-    -C "$package_root" .INSTALL usr
+    -C "$package_root" .INSTALL .PKGINFO usr
 EOF
 cat > "$fake_tools/bsdtar" <<'EOF'
 #!/bin/sh
@@ -70,10 +78,41 @@ current_pkgver="$(sed -n 's/^pkgver=\(.*\)$/\1/p' "$script_dir/PKGBUILD")"
 current_pkgrel="$(sed -n 's/^pkgrel=\(.*\)$/\1/p' "$script_dir/PKGBUILD")"
 fake_archive="$work_dir/MAKO-Renderer-v${current_pkgver}-linux.tar.xz"
 touch "$fake_archive"
+retained_package="$work_dir/mako-renderer-bin-${current_pkgver}-${current_pkgrel}-x86_64.pkg.tar.zst"
 MAKO_TEST_PKGVER="$current_pkgver" \
     MAKO_TEST_PKGREL="$current_pkgrel" \
     PATH="$fake_tools:/usr/bin:/bin" \
-    "$script_dir/verify-release-package.sh" "$fake_archive" >/dev/null
+    "$script_dir/verify-release-package.sh" \
+        "$fake_archive" "$retained_package" >/dev/null
+[[ -f "$retained_package" ]]
+tar -tf "$retained_package" | grep -Fqx usr/bin/mako-launch
+if MAKO_TEST_PKGVER="$current_pkgver" \
+        MAKO_TEST_PKGREL="$current_pkgrel" \
+        PATH="$fake_tools:/usr/bin:/bin" \
+        "$script_dir/verify-release-package.sh" \
+        "$fake_archive" "$work_dir/wrong-package-name.pkg.tar.zst" \
+        >/dev/null 2>&1; then
+    echo "Arch release package verification accepted the wrong output name" >&2
+    exit 1
+fi
+if MAKO_TEST_PKGVER="$current_pkgver" \
+        MAKO_TEST_PKGREL="$current_pkgrel" \
+        MAKO_TEST_PACKAGE_VERSION_OVERRIDE="${current_pkgver}-99" \
+        PATH="$fake_tools:/usr/bin:/bin" \
+        "$script_dir/verify-release-package.sh" "$fake_archive" \
+        >/dev/null 2>&1; then
+    echo "Arch release package verification accepted a stale internal package version" >&2
+    exit 1
+fi
+if MAKO_TEST_PKGVER="$current_pkgver" \
+        MAKO_TEST_PKGREL="$current_pkgrel" \
+        MAKO_TEST_RENDERER_VERSION_OVERRIDE=0.0.0 \
+        PATH="$fake_tools:/usr/bin:/bin" \
+        "$script_dir/verify-release-package.sh" "$fake_archive" \
+        >/dev/null 2>&1; then
+    echo "Arch release package verification accepted a stale embedded Renderer version" >&2
+    exit 1
+fi
 touch "$work_dir/wrong-name.tar.xz"
 if PATH="$fake_tools:/usr/bin:/bin" \
         "$script_dir/verify-release-package.sh" "$work_dir/wrong-name.tar.xz" \
@@ -177,6 +216,32 @@ set_pkgrel "$work_dir/PKGBUILD" 7
 python3 "$script_dir/sync-release-pin.py" \
     "$work_dir/package.json" "$work_dir/PKGBUILD" >/dev/null
 grep -Fqx 'pkgrel=7' "$work_dir/PKGBUILD"
+
+native_archive="$work_dir/MAKO-Renderer-v9.8.7-linux.tar.xz"
+flatpak_archive="$work_dir/MAKO-Renderer-v9.8.7-flatpaks.tar.xz"
+arch_package="$work_dir/mako-renderer-bin-9.8.7-7-x86_64.pkg.tar.zst"
+node "$repo_root/plugin/scripts/pin-renderer-release.mjs" \
+    "$work_dir/package.json" \
+    9.8.7 render-v9.8.7 "$(printf 'cd%.0s' {1..20})" \
+    eugeniosegala/MAKO \
+    "$native_archive" "$(printf '12%.0s' {1..32})" \
+    "$flatpak_archive" "$(printf '34%.0s' {1..32})" \
+    "$arch_package" "$(printf '56%.0s' {1..32})" >/dev/null
+node -e '
+const binary = require(process.argv[1]).remote_binary[0];
+if (binary.arch_package?.name !== "mako-renderer-bin-9.8.7-7-x86_64.pkg.tar.zst" ||
+    binary.arch_package?.sha256hash !== "56".repeat(32)) process.exit(1);
+' "$work_dir/package.json"
+node "$repo_root/plugin/scripts/pin-renderer-release.mjs" \
+    "$work_dir/package.json" \
+    9.8.7 render-v9.8.7 "$(printf 'cd%.0s' {1..20})" \
+    eugeniosegala/MAKO \
+    "$native_archive" "$(printf '12%.0s' {1..32})" \
+    "$flatpak_archive" "$(printf '34%.0s' {1..32})" >/dev/null
+node -e '
+const binary = require(process.argv[1]).remote_binary[0];
+if (Object.hasOwn(binary, "arch_package")) process.exit(1);
+' "$work_dir/package.json"
 
 test_home="$work_dir/home with spaces"
 mkdir -p "$test_home/.local/share/mako-render"

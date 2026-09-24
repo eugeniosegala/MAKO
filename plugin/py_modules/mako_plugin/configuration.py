@@ -100,6 +100,7 @@ class ConfigurationService(BaseService):
             config_dir=self.config_dir,
             config_file_path=self.config_file_path,
             local_share_dir=self.local_share_dir,
+            user_vulkan_layer_dir=self.user_vulkan_layer_dir,
             spatial_scaling_layer_dir=self.spatial_scaling_layer_dir,
             gamescope_wsi_compatibility_dir=(
                 self.gamescope_wsi_compatibility_dir

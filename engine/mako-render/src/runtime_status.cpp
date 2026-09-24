@@ -271,6 +271,10 @@ namespace {
                << ",\"adaptive\":" << profile.adaptive
                << ",\"adaptive_auto_base_fps_cap\":"
                << profile.adaptive_auto_base_fps_cap
+               << ",\"adaptive_fractional_real_frame_priority\":"
+               << jsonString(ls::adaptiveFractionalRealFramePriorityName(
+                    profile.adaptive_fractional_real_frame_priority
+               ))
                << ",\"target_fps\":" << profile.target_fps
                << ",\"adaptive_max_multiplier\":"
                << profile.adaptive_max_multiplier

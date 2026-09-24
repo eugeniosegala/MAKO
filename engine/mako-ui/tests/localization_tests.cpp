@@ -152,6 +152,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("ultraPerformance"),
         QStringLiteral("enableZink"),
         QStringLiteral("forceAlsaAudio"),
+        QStringLiteral("enableShaders"),
     };
     const QStringList live_or_recreation_labels{
         QStringLiteral("adaptiveFrameGen"),

@@ -196,6 +196,42 @@ class GameProfileTests(unittest.TestCase):
         self.assertFalse(
             profile_data["profiles"]["mako"]["adaptive_auto_base_fps_cap"]
         )
+        self.assertEqual(
+            profile_data["profiles"]["mako"][
+                "adaptive_fractional_real_frame_priority"
+            ],
+            "auto",
+        )
+
+    def test_fractional_real_frame_priority_is_validated_and_persisted(self):
+        defaults = ConfigurationManager.get_defaults()
+        self.assertEqual(
+            defaults["adaptive_fractional_real_frame_priority"], "auto"
+        )
+
+        configured = ConfigurationManager.validate_config({
+            **defaults,
+            "adaptive_fractional_real_frame_priority": "VERY-HIGH",
+        })
+        self.assertEqual(
+            configured["adaptive_fractional_real_frame_priority"], "very-high"
+        )
+        content = ConfigurationManager.generate_toml_content(configured)
+        self.assertIn(
+            'adaptive_fractional_real_frame_priority = "very-high"', content
+        )
+        self.assertEqual(
+            ConfigurationManager.parse_toml_content(content)[
+                "adaptive_fractional_real_frame_priority"
+            ],
+            "very-high",
+        )
+
+        with self.assertRaisesRegex(ValueError, "must be one of"):
+            ConfigurationManager.validate_config({
+                **defaults,
+                "adaptive_fractional_real_frame_priority": "maximum",
+            })
 
     def test_rpc_validation_discards_unknown_profile_options(self):
         validated = ConfigurationManager.validate_config({
@@ -210,11 +246,15 @@ class GameProfileTests(unittest.TestCase):
             **ConfigurationManager.get_defaults(),
             "adaptive": True,
             "adaptive_auto_base_fps_cap": True,
+            "adaptive_fractional_real_frame_priority": "high",
             "base_fps_cap": 30,
             "dynamic_cadence_recovery": True,
         })
 
         self.assertFalse(validated["adaptive_auto_base_fps_cap"])
+        self.assertEqual(
+            validated["adaptive_fractional_real_frame_priority"], "auto"
+        )
         self.assertEqual(validated["base_fps_cap"], 0)
 
         fixed = ConfigurationManager.validate_config({

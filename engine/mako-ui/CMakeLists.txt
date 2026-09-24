@@ -49,6 +49,11 @@ target_link_libraries(mako-ui
     PRIVATE mako-ui-localization
     PRIVATE Qt6::Quick)
 
+set(MAKO_VKBASALT_SHADER_SOURCE_DIR
+    "${CMAKE_CURRENT_SOURCE_DIR}/../../plugin/py_modules/mako_plugin/vkbasalt_shaders")
+target_compile_definitions(mako-ui PRIVATE
+    MAKO_UI_VKBASALT_SHADER_SOURCE_DIR="${MAKO_VKBASALT_SHADER_SOURCE_DIR}")
+
 if(BUILD_TESTING)
     add_executable(mako-ui-process-detection-tests
         "tests/process_detection_tests.cpp"
@@ -57,7 +62,7 @@ if(BUILD_TESTING)
         "src/process_detection.cpp")
     set_target_properties(mako-ui-process-detection-tests PROPERTIES AUTOMOC ON)
     target_include_directories(mako-ui-process-detection-tests PRIVATE "src")
-    target_link_libraries(mako-ui-process-detection-tests PRIVATE mako-common Qt6::Core)
+    target_link_libraries(mako-ui-process-detection-tests PRIVATE mako-common Qt6::Core Qt6::Gui)
     add_test(NAME ui-process-detection COMMAND mako-ui-process-detection-tests)
 
     add_executable(mako-ui-backend-contract-tests
@@ -70,10 +75,12 @@ if(BUILD_TESTING)
     target_link_libraries(mako-ui-backend-contract-tests
         PRIVATE mako-common
         PRIVATE mako-backend
-        PRIVATE Qt6::Core)
+        PRIVATE Qt6::Core
+        PRIVATE Qt6::Gui)
     target_compile_definitions(mako-ui-backend-contract-tests PRIVATE
         MAKO_UI_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/UI.qml"
-        MAKO_UI_GROUP_ENTRY_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/panes/GroupEntry.qml")
+        MAKO_UI_GROUP_ENTRY_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/panes/GroupEntry.qml"
+        MAKO_UI_VKBASALT_SHADER_SOURCE_DIR="${MAKO_VKBASALT_SHADER_SOURCE_DIR}")
     add_test(NAME ui-backend-contract COMMAND mako-ui-backend-contract-tests)
 
     add_executable(mako-ui-localization-tests
@@ -88,6 +95,8 @@ endif()
 
 install(TARGETS mako-ui
     RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(DIRECTORY "${MAKO_VKBASALT_SHADER_SOURCE_DIR}/"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/mako-render/vkbasalt-shaders")
 if(MAKO_INSTALL_XDG_FILES)
     foreach(MAKO_ICON_SIZE IN ITEMS 16 24 32 48 64 128)
         install(FILES

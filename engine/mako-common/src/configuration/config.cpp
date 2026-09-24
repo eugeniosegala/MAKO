@@ -49,6 +49,7 @@ frame_generation_refresh_threshold = 0
 base_fps_cap = 0
 adaptive = false
 adaptive_auto_base_fps_cap = false
+adaptive_fractional_real_frame_priority = 'auto'
 target_fps = 120
 adaptive_max_multiplier = 3
 adaptive_stable_cadence = true
@@ -98,6 +99,8 @@ ConfigFile::ConfigFile() {
         .adaptive = GameConfDefaults::adaptive,
         .adaptive_auto_base_fps_cap =
             GameConfDefaults::adaptiveAutoBaseFpsCap,
+        .adaptive_fractional_real_frame_priority =
+            GameConfDefaults::adaptiveFractionalRealFramePriority,
         .target_fps = GameConfDefaults::targetFps,
         .adaptive_max_multiplier = GameConfDefaults::adaptiveMaxMultiplier,
         .adaptive_stable_cadence = GameConfDefaults::adaptiveStableCadence,
@@ -158,6 +161,16 @@ namespace {
         if (const auto method = scalingMethodFromName(value))
             return *method;
         throw ls::error("unknown scaling method: " + value);
+    }
+    AdaptiveFractionalRealFramePriority
+    adaptiveFractionalRealFramePriorityFromString(const std::string& value) {
+        if (const auto priority =
+                adaptiveFractionalRealFramePriorityFromName(value)) {
+            return *priority;
+        }
+        throw ls::error(
+            "unknown Adaptive Fractional real-frame priority: " + value
+        );
     }
     /// validate the shared file/environment game-profile contract
     void validateGameConf(const GameConf& conf) {
@@ -317,6 +330,16 @@ namespace {
                 tbl["adaptive_auto_base_fps_cap"].value_or(
                     GameConfDefaults::adaptiveAutoBaseFpsCap
                 ),
+            .adaptive_fractional_real_frame_priority =
+                adaptiveFractionalRealFramePriorityFromString(
+                    tbl["adaptive_fractional_real_frame_priority"]
+                        .value_or<std::string>(
+                            adaptiveFractionalRealFramePriorityName(
+                                GameConfDefaults::
+                                    adaptiveFractionalRealFramePriority
+                            )
+                        )
+                ),
             .target_fps = tbl["target_fps"].value_or(GameConfDefaults::targetFps),
             .adaptive_max_multiplier = tbl["adaptive_max_multiplier"].value_or(
                 GameConfDefaults::adaptiveMaxMultiplier
@@ -344,6 +367,8 @@ namespace {
         validateGameConf(conf);
         if (conf.dynamic_cadence_recovery) {
             conf.adaptive_auto_base_fps_cap = false;
+            conf.adaptive_fractional_real_frame_priority =
+                AdaptiveFractionalRealFramePriority::Auto;
             conf.base_fps_cap = 0;
         }
         return conf;
@@ -391,6 +416,8 @@ namespace {
             .adaptive = GameConfDefaults::adaptive,
             .adaptive_auto_base_fps_cap =
                 GameConfDefaults::adaptiveAutoBaseFpsCap,
+            .adaptive_fractional_real_frame_priority =
+                GameConfDefaults::adaptiveFractionalRealFramePriority,
             .target_fps = GameConfDefaults::targetFps,
             .adaptive_max_multiplier = GameConfDefaults::adaptiveMaxMultiplier,
             .adaptive_stable_cadence = GameConfDefaults::adaptiveStableCadence,
@@ -456,6 +483,14 @@ namespace {
             conf.adaptive_auto_base_fps_cap =
                 std::string(adaptive_auto_base_fps_cap) != "0";
         }
+        const char* adaptive_fractional_real_frame_priority =
+            std::getenv("MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY");
+        if (adaptive_fractional_real_frame_priority) {
+            conf.adaptive_fractional_real_frame_priority =
+                adaptiveFractionalRealFramePriorityFromString(
+                    adaptive_fractional_real_frame_priority
+                );
+        }
         const char* target_fps = std::getenv("MAKO_TARGET_FPS");
         if (target_fps) conf.target_fps = static_cast<uint32_t>(std::stoul(target_fps));
         const char* adaptive_max_multiplier = std::getenv("MAKO_ADAPTIVE_MAX_MULTIPLIER");
@@ -489,6 +524,8 @@ namespace {
         validateGameConf(conf);
         if (conf.dynamic_cadence_recovery) {
             conf.adaptive_auto_base_fps_cap = false;
+            conf.adaptive_fractional_real_frame_priority =
+                AdaptiveFractionalRealFramePriority::Auto;
             conf.base_fps_cap = 0;
         }
         return conf;
@@ -570,6 +607,12 @@ void ConfigFile::write(const std::filesystem::path& path) const {
         profile.insert("adaptive", conf.adaptive);
         profile.insert(
             "adaptive_auto_base_fps_cap", conf.adaptive_auto_base_fps_cap
+        );
+        profile.insert(
+            "adaptive_fractional_real_frame_priority",
+            adaptiveFractionalRealFramePriorityName(
+                conf.adaptive_fractional_real_frame_priority
+            )
         );
         profile.insert("target_fps", static_cast<int64_t>(conf.target_fps));
         profile.insert("adaptive_max_multiplier", static_cast<int64_t>(conf.adaptive_max_multiplier));

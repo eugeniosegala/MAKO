@@ -56,9 +56,9 @@ For example, a write that changes Base FPS Cap and Flow Scale applies the cap wh
 | Refresh threshold and Gamescope refresh | Live | Re-evaluates effective enablement and refresh-targeted scheduling. |
 | Gamescope VRR and Allow Tearing feedback | Live | Explicit requested/capable/active VRR can switch between fixed-refresh FIFO eligibility and MAKO's target clock. Only affected pacing helpers reset; Allow Tearing is diagnostic only. |
 | Fixed/Adaptive mode or multiplier | Live within current capacity; otherwise private FG replacement or recreation | Dormant mode values are saved without resetting the active mode. |
-| Adaptive target, ceiling, Smooth Cadence, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. |
+| Adaptive target, ceiling, Smooth Cadence, Fractional Real Frame Priority, and Dynamic Cadence Recovery | Live within capacity | Rebuilds only the scheduler and real-frame pacing state whose assumptions changed. Automatic Real Frame Priority preserves the existing Fractional policy. |
 | Dynamic Cadence probe interval | Live | Reschedules an inactive probe without discarding validated cadence or an active confirmation. |
-| Base FPS Cap and Adaptive auto-cap | Live while generation is active; dormant while Off | Resets the real-frame pacer and affected scheduler policy. |
+| Base FPS Cap, Adaptive auto-cap, and explicit Fractional priority cap | Live while generation is active; dormant while Off | Resets the real-frame pacer and affected scheduler policy. Explicit Fractional priority owns the effective cap only in Fractional Adaptive. |
 | Scaling enable | Restart | Existing and naturally recreated contexts retain process-start scaling and layer membership. |
 | Game Swapchain Images compatibility | Restart | Existing contexts retain the process-start WSI image-count policy. |
 | Scaling method | Private spatial replacement when active; dormant otherwise | Applies at the next present, retains extents and WSI objects, and keeps the old method on failure. |

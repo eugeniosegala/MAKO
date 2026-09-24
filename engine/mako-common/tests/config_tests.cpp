@@ -65,6 +65,8 @@ namespace {
             left.adaptive == right.adaptive &&
             left.adaptive_auto_base_fps_cap ==
                 right.adaptive_auto_base_fps_cap &&
+            left.adaptive_fractional_real_frame_priority ==
+                right.adaptive_fractional_real_frame_priority &&
             left.target_fps == right.target_fps &&
             left.adaptive_max_multiplier == right.adaptive_max_multiplier &&
             left.adaptive_stable_cadence == right.adaptive_stable_cadence &&
@@ -97,6 +99,7 @@ scaling_sharpness = 0.6
 frame_generation_refresh_threshold = 60
 base_fps_cap = 60
 adaptive_auto_base_fps_cap = true
+adaptive_fractional_real_frame_priority = "high"
 target_fps = 144
 adaptive_max_multiplier = 4
 dynamic_cadence_recovery = true
@@ -131,6 +134,8 @@ int main() {
             defaults.adaptive == ls::GameConfDefaults::adaptive &&
             defaults.adaptive_auto_base_fps_cap ==
                 ls::GameConfDefaults::adaptiveAutoBaseFpsCap &&
+            defaults.adaptive_fractional_real_frame_priority ==
+                ls::GameConfDefaults::adaptiveFractionalRealFramePriority &&
             defaults.target_fps == ls::GameConfDefaults::targetFps &&
             defaults.adaptive_max_multiplier ==
                 ls::GameConfDefaults::adaptiveMaxMultiplier &&
@@ -288,8 +293,11 @@ int main() {
             ls::effectivePerformanceMode(config.get().profiles().front()),
         "Ultra Performance must preserve saved settings while overriding backend construction");
     expect(config.get().profiles().front().base_fps_cap == 0 &&
-            !config.get().profiles().front().adaptive_auto_base_fps_cap,
-        "Dynamic cadence recovery must disable both base FPS caps");
+            !config.get().profiles().front().adaptive_auto_base_fps_cap &&
+            config.get().profiles().front()
+                    .adaptive_fractional_real_frame_priority ==
+                ls::AdaptiveFractionalRealFramePriority::Auto,
+        "Dynamic cadence recovery must disable every base FPS cap");
     expect(config.get().profiles().front().multiplier == 2,
         "Unknown legacy options must be inert without disturbing known defaults");
 
@@ -385,6 +393,33 @@ multiplier = 6
     }
     expect(invalidFixedMultiplierRejected,
         "Fixed multipliers above the supported 5x maximum must be rejected");
+
+    const auto priorityPath = directory / "fractional-priority.toml";
+    writeText(priorityPath, R"(version = 2
+[[profile]]
+adaptive = true
+adaptive_auto_base_fps_cap = false
+adaptive_fractional_real_frame_priority = "very-high"
+)");
+    const ls::ConfigFile priorityConfiguration(priorityPath);
+    expect(priorityConfiguration.profiles().front()
+                .adaptive_fractional_real_frame_priority ==
+            ls::AdaptiveFractionalRealFramePriority::VeryHigh,
+        "Fractional real-frame priority did not preserve its stable token");
+
+    const auto invalidPriorityPath = directory / "invalid-fractional-priority.toml";
+    writeText(invalidPriorityPath, R"(version = 2
+[[profile]]
+adaptive_fractional_real_frame_priority = "maximum"
+)");
+    bool invalidPriorityRejected = false;
+    try {
+        static_cast<void>(ls::ConfigFile(invalidPriorityPath));
+    } catch (const std::exception&) {
+        invalidPriorityRejected = true;
+    }
+    expect(invalidPriorityRejected,
+        "Unknown Fractional real-frame priorities must be rejected");
 
     for (const std::string_view invalidInterval : {"0.09", "4"}) {
         const auto invalidIntervalPath = directory /
@@ -566,6 +601,7 @@ scaling_sharpness = 0.5
     unsetenv("MAKO_NO_FP16");
     setenv("MAKO_BASE_FPS_CAP", "30", 1);
     setenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP", "1", 1);
+    setenv("MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY", "high", 1);
     setenv("MAKO_DYNAMIC_CADENCE_RECOVERY", "1", 1);
     setenv("MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS", "0.5", 1);
     setenv("MAKO_FRAME_GENERATION_REFRESH_THRESHOLD", "130", 1);
@@ -587,6 +623,9 @@ scaling_sharpness = 0.5
                 .frame_generation_provisioned &&
             environmentConfig.get().profiles().front().base_fps_cap == 0 &&
             !environmentConfig.get().profiles().front().adaptive_auto_base_fps_cap &&
+            environmentConfig.get().profiles().front()
+                    .adaptive_fractional_real_frame_priority ==
+                ls::AdaptiveFractionalRealFramePriority::Auto &&
             environmentConfig.get().profiles().front().ultra_performance &&
             environmentConfig.get().profiles().front().scaling_enabled &&
             environmentConfig.get().profiles().front()
@@ -612,6 +651,7 @@ scaling_sharpness = 0.5
     unsetenv("MAKO_SCALING_SHARPNESS");
     unsetenv("MAKO_ADAPTIVE");
     unsetenv("MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP");
+    unsetenv("MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY");
     unsetenv("MAKO_BASE_FPS_CAP");
     unsetenv("MAKO_ENV");
 

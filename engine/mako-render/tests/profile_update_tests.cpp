@@ -26,6 +26,8 @@ namespace {
             .base_fps_cap = 0,
             .adaptive = true,
             .adaptive_auto_base_fps_cap = false,
+            .adaptive_fractional_real_frame_priority =
+                ls::AdaptiveFractionalRealFramePriority::Auto,
             .target_fps = 90,
             .adaptive_max_multiplier = 3,
             .adaptive_stable_cadence = false,
@@ -506,6 +508,53 @@ int main() {
     expect(decision.action == ProfileUpdateAction::ApplyLive &&
             decision.baseFpsCapChanged,
         "Restoring the manual cap must reset presentation timing live");
+
+    auto fractionalPriority = resumedManualCap;
+    fractionalPriority.target_fps = 120;
+    fractionalPriority.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::Low;
+    expect(effectiveBaseFpsCap(fractionalPriority) == 72.0,
+        "Low Fractional priority did not select the stable 3:2 ratio");
+    fractionalPriority.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::Medium;
+    expect(effectiveBaseFpsCap(fractionalPriority) == 80.0,
+        "Medium Fractional priority did not select the stable 2:1 ratio");
+    fractionalPriority.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::High;
+    expect(effectiveBaseFpsCap(fractionalPriority) == 90.0,
+        "High Fractional priority did not select the stable 3:1 ratio");
+    fractionalPriority.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::VeryHigh;
+    expect(effectiveBaseFpsCap(fractionalPriority) == 96.0,
+        "Very High Fractional priority did not select the stable 4:1 ratio");
+    expect(fractionalRealFramePriorityActive(fractionalPriority),
+        "An explicit Fractional priority was not recognized as cap owner");
+    decision = classifyProfileUpdate(
+        resumedManualCap, fractionalPriority, 3, true
+    );
+    expect(decision.action == ProfileUpdateAction::ApplyLive &&
+            decision.baseFpsCapChanged,
+        "Fractional priority changes must reset presentation timing live");
+
+    fractionalPriority.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::Auto;
+    expect(!fractionalRealFramePriorityActive(fractionalPriority) &&
+            effectiveBaseFpsCap(fractionalPriority) == 30.0,
+        "Automatic Fractional priority changed today's manual-cap behavior");
+    fractionalPriority.adaptive = false;
+    fractionalPriority.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::VeryHigh;
+    expect(!fractionalRealFramePriorityActive(fractionalPriority) &&
+            effectiveBaseFpsCap(fractionalPriority) == 30.0,
+        "Dormant Fractional priority overrode Fixed mode's manual cap");
+    auto fixedPriorityChange = fractionalPriority;
+    fixedPriorityChange.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::Low;
+    decision = classifyProfileUpdate(
+        fractionalPriority, fixedPriorityChange, 3, true
+    );
+    expect(decision.action == ProfileUpdateAction::NoRuntimeChange,
+        "Dormant Fractional priority triggered a Fixed runtime transition");
 
     auto oddTarget = next;
     oddTarget.target_fps = 165;

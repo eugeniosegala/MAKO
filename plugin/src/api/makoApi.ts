@@ -189,6 +189,7 @@ export interface RuntimeProfileSnapshot {
   base_fps_cap: number;
   adaptive: boolean;
   adaptive_auto_base_fps_cap: boolean;
+  adaptive_fractional_real_frame_priority: string;
   target_fps: number;
   adaptive_max_multiplier: number;
   adaptive_stable_cadence: boolean;

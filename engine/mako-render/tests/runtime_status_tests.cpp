@@ -49,6 +49,8 @@ int main() {
 
     auto requested = applied;
     requested.multiplier = 5;
+    requested.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::High;
     requested.performance_mode = true;
     requested.flow_scale = 0.5F;
 
@@ -94,6 +96,10 @@ int main() {
         "profile name was not JSON escaped");
     expect(json.find("\"multiplier\":5") != std::string::npos,
         "requested multiplier missing");
+    expect(json.find(
+            "\"adaptive_fractional_real_frame_priority\":\"high\""
+        ) != std::string::npos,
+        "requested Fractional real-frame priority missing");
     expect(json.find("\"frame_generation_provisioned\":true") !=
             std::string::npos,
         "Frame Generation provisioning state missing");

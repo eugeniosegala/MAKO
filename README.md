@@ -29,7 +29,7 @@
 | Component | Recommended for | Releases |
 | --- | --- | --- |
 | **MAKO Decky** | Steam Deck, Steam Machine, and Decky Loader users (bundles MAKO Renderer) | <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">Latest MAKO Decky release (ZIP under Assets)</a> |
-| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.3.0" target="_blank" rel="noopener noreferrer">Latest MAKO Renderer release (Linux archive under Assets)</a> |
+| **MAKO Renderer** | Direct Vulkan-layer installation without Decky | <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.3.0" target="_blank" rel="noopener noreferrer">Latest MAKO Renderer release (Linux and Flatpak packages under Assets; Arch package from 4.0 onward)</a> |
 
 ## Community
 
@@ -129,7 +129,7 @@ Decky is optional. Desktop Linux users can install MAKO Renderer directly:
 
 1. To use frame generation or LS1 scaling, purchase and install the **default public version** of <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> through Steam. MAKO can use beta branches, but they are not validated; the default public branch is recommended. The open MAKO Scaler does not use `Lossless.dll`.
 2. Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.3.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. The installer opens **MAKO Renderer Configuration** and shows the launch option.
-3. Start the game, then use **Detect Running Game…** in **MAKO Renderer Configuration** to create or select its profile. You can also add its executable manually under **Profile Matching > Matched Processes**. Select Frame Generation and/or scaling, then restart the game with the launch option below; enable scaling before that restart.
+3. Start the game, then use **Detect Running Game…** in **MAKO Renderer Configuration** to create or select its profile. You can also add its executable manually under **Profile Matching > Matched Processes**. Select Frame Generation, scaling, and/or the per-profile shader options, then restart the game with the launch option shown by the configuration window.
 4. For a native Steam or Proton game, add this under **Steam Properties > General > Launch Options**, then start the game normally:
 
     ```text
@@ -138,7 +138,7 @@ Decky is optional. Desktop Linux users can install MAKO Renderer directly:
 
     Installation and profile editing alone do not activate MAKO. The launch option is required for each standalone native/Proton game; the configuration window can be closed during play. For direct desktop commands, see [Renderer usage](engine/README.md#usage).
 
-    To add the private bundled vkBasalt after MAKO Renderer, use `ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%`. An optional `VKBASALT_CONFIG_FILE` gives direct users the full standard vkBasalt configuration surface; assign a distinct file in each game's launch option for per-game settings. See [Optional graphics integrations](engine/docs/LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for isolation, ordering, and fallback behavior.
+    The configuration window adds `ENABLE_VKBASALT`, the selected profile, and its isolated `VKBASALT_CONFIG_FILE` to the displayed launch option when shaders are enabled. It shares MAKO Decky's profile shader sidecar, so existing Decky choices appear in the Qt UI and remain per game. See [Optional graphics integrations](engine/docs/LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for isolation, ordering, and fallback behavior.
 
 5. For Flatpak games, launchers, or emulators, follow the [standalone Flatpak guide](engine/docs/FLATPAK-GUIDE.md) to install the matching extension and prepare each app, then launch it normally. The Renderer configuration window does not prepare Flatpaks, and the host `mako-launch` command cannot replace sandbox setup.
 

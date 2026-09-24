@@ -4,8 +4,11 @@
 #include "utils.hpp"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QEventLoop>
 #include <QFile>
+#include <QFileInfo>
+#include <QJsonDocument>
 #include <QMetaObject>
 #include <QMetaProperty>
 #include <QString>
@@ -139,6 +142,23 @@ void test_multiplier_limits() {
 
 void test_fractional_adaptive_preset() {
     require_property("fractional_adaptive", "bool", true, false);
+    require_property(
+        "adaptive_fractional_real_frame_priority", "QString", true, false
+    );
+    require_property(
+        "adaptive_fractional_real_frame_priority_cap", "double", false, false
+    );
+    require(ls::adaptiveFractionalRealFramePriorityCap(
+                ls::AdaptiveFractionalRealFramePriority::Auto, 120) == 0.0 &&
+            ls::adaptiveFractionalRealFramePriorityCap(
+                ls::AdaptiveFractionalRealFramePriority::Low, 120) == 72.0 &&
+            ls::adaptiveFractionalRealFramePriorityCap(
+                ls::AdaptiveFractionalRealFramePriority::Medium, 120) == 80.0 &&
+            ls::adaptiveFractionalRealFramePriorityCap(
+                ls::AdaptiveFractionalRealFramePriority::High, 120) == 90.0 &&
+            ls::adaptiveFractionalRealFramePriorityCap(
+                ls::AdaptiveFractionalRealFramePriority::VeryHigh, 120) == 96.0,
+        "Fractional real-frame priorities lost their cadence-friendly ratios");
 
     ls::GameConf configuration;
     configuration.frame_generation_enabled = false;
@@ -176,6 +196,14 @@ void test_fractional_adaptive_preset() {
     require(qml.contains(QStringLiteral(
             "onToggled: backend.fractional_adaptive = checked")),
         "Fractional Adaptive control does not update the atomic preset property");
+    require(qml.contains(QStringLiteral(
+            "visible: backend.frame_generation_provisioned\n"
+            "                            && backend.fractional_adaptive")) &&
+            qml.contains(QStringLiteral(
+                "model: [t.automatic, t.low, t.medium, t.high, t.veryHigh]")) &&
+            qml.contains(QStringLiteral(
+                "backend.adaptive_fractional_real_frame_priority !== \"auto\"")),
+        "Fractional priority is not scoped to Fractional Adaptive or does not own its explicit cap");
 }
 
 void test_feature_group_order_and_ownership() {
@@ -205,9 +233,9 @@ void test_feature_group_order_and_ownership() {
         frame_generation_group_start,
         group_start - frame_generation_group_start
     );
-    require(frame_generation_group.count(QStringLiteral("GroupEntry {")) == 12 &&
+    require(frame_generation_group.count(QStringLiteral("GroupEntry {")) == 13 &&
             frame_generation_group.count(QStringLiteral(
-                "visible: backend.frame_generation_provisioned")) == 11,
+                "visible: backend.frame_generation_provisioned")) == 12,
         "Frame Generation must retain its provisioning switch while keeping live controls visible at 0x");
     require(frame_generation_group.contains(QStringLiteral(
                 "checked: backend.frame_generation_provisioned")) &&
@@ -317,11 +345,42 @@ void test_feature_group_order_and_ownership() {
         "Compatibility Settings does not expose the restart-bound swapchain image policy");
 }
 
+void test_shader_controls() {
+    require_property("enable_vkbasalt", "bool", true, false);
+    require_property("vkbasalt_sharpening", "QString", true, false);
+    require_property("vkbasalt_sharpness", "float", true, false);
+    require_property("vkbasalt_dls_denoise", "float", true, false);
+    require_property("vkbasalt_antialiasing", "QString", true, false);
+    require_property("vkbasalt_shader", "QString", true, false);
+    require_property("vkbasalt_config_path", "QString", false, false);
+    require(mako::ui::Backend::staticMetaObject.indexOfMethod(
+                "openVkBasaltConfig()") >= 0,
+        "Qt backend does not expose the advanced shader configuration opener");
+    require_property("launch_option", "QString", false, false);
+    require_property("minimum_vkbasalt_strength", "float", false, true);
+    require_property("maximum_vkbasalt_strength", "float", false, true);
+
+    QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
+    require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
+    const QString qml = QString::fromUtf8(file.readAll());
+    require(qml.contains(QStringLiteral("name: t.shaderSettings")) &&
+            qml.contains(QStringLiteral("checked: backend.enable_vkbasalt")) &&
+            qml.contains(QStringLiteral("backend.vkbasalt_shader")) &&
+            qml.contains(QStringLiteral("backend.vkbasalt_sharpening")) &&
+            qml.contains(QStringLiteral("backend.vkbasalt_sharpness")) &&
+            qml.contains(QStringLiteral("backend.vkbasalt_dls_denoise")) &&
+            qml.contains(QStringLiteral("backend.vkbasalt_antialiasing")) &&
+            qml.contains(QStringLiteral(
+                "onClicked: backend.openVkBasaltConfig()")) &&
+            qml.contains(QStringLiteral("text: backend.vkbasalt_config_path")),
+        "Qt shader group does not expose the Decky-compatible compact controls");
+}
+
 void test_compact_restart_markers() {
     QFile ui_file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(ui_file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString ui_qml = QString::fromUtf8(ui_file.readAll());
-    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 9,
+    require(ui_qml.count(QStringLiteral("compactRestartMarker: true")) == 10,
         "Every restart-bound Renderer control must opt into the compact marker");
 
     QFile entry_file(QString::fromUtf8(MAKO_UI_GROUP_ENTRY_QML_FILE));
@@ -342,13 +401,23 @@ void test_save_lifetime() {
     const auto launchPath = directory.filePath("launcher.conf").toStdString();
     const auto previousConfig = qgetenv("MAKO_CONFIG");
     const auto previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    const auto previousConfigHome = qgetenv("XDG_CONFIG_HOME");
+    const auto previousShaderDirectory = qgetenv("MAKO_VKBASALT_SHADER_DIR");
     qputenv("MAKO_CONFIG", QByteArray::fromStdString(configPath));
     qputenv("MAKO_LAUNCH_CONFIG", QByteArray::fromStdString(launchPath));
+    qputenv("XDG_CONFIG_HOME", directory.path().toUtf8());
+    qputenv("MAKO_VKBASALT_SHADER_DIR", directory.path().toUtf8());
     {
         mako::ui::Backend backend;
         backend.targetFPSUpdated(90);
         backend.targetFPSUpdated(144);
         backend.enableZinkUpdated(true);
+        backend.enableVkBasaltUpdated(true);
+        backend.vkBasaltSharpeningUpdated(QStringLiteral("dls"));
+        backend.vkBasaltSharpnessUpdated(0.75F);
+        backend.vkBasaltDlsDenoiseUpdated(0.4F);
+        backend.vkBasaltAntialiasingUpdated(QStringLiteral("fxaa"));
+        backend.vkBasaltShaderUpdated(QStringLiteral("vibrance"));
         require(!std::filesystem::exists(configPath), "UI edit was not debounced");
         QEventLoop events;
         QTimer::singleShot(700, &events, &QEventLoop::quit);
@@ -357,6 +426,28 @@ void test_save_lifetime() {
             "UI timer did not save the latest edit");
         require(ls::LaunchConfigFile(launchPath).settings().enable_zink,
             "UI timer did not save launcher settings");
+        const auto vkBasaltPath = directory.filePath(
+            "vkbasalt/profile-"
+        ).toStdString();
+        require(backend.getVkBasaltConfigPath().startsWith(
+                    QString::fromStdString(vkBasaltPath)) &&
+                std::filesystem::exists(
+                    backend.getVkBasaltConfigPath().toStdString()),
+            "UI did not create the selected profile's vkBasalt configuration");
+        const auto selectedProfile = backend.calculateProfileListModel()
+            ->data(backend.calculateProfileListModel()->index(0, 0)).toString();
+        require(backend.getLaunchOption().contains(
+                    QStringLiteral("ENABLE_VKBASALT=1")) &&
+                backend.getLaunchOption().contains(
+                    QStringLiteral("MAKO_PROFILE='") + selectedProfile +
+                    QStringLiteral("'")),
+            "UI did not produce the profile-specific shader launch option");
+        QFile sidecar(directory.filePath(
+            "profile-wrapper-settings.json"
+        ));
+        require(sidecar.open(QIODevice::ReadOnly) &&
+                sidecar.readAll().contains("\"external_vulkan_layer\": \"vkbasalt\""),
+            "UI did not reuse Decky's profile wrapper settings sidecar");
         const auto timestamp = std::filesystem::last_write_time(configPath);
         QTimer::singleShot(700, &events, &QEventLoop::quit);
         events.exec();
@@ -390,6 +481,144 @@ void test_save_lifetime() {
     else qputenv("MAKO_CONFIG", previousConfig);
     if (previousLaunch.isNull()) qunsetenv("MAKO_LAUNCH_CONFIG");
     else qputenv("MAKO_LAUNCH_CONFIG", previousLaunch);
+    if (previousConfigHome.isNull()) qunsetenv("XDG_CONFIG_HOME");
+    else qputenv("XDG_CONFIG_HOME", previousConfigHome);
+    if (previousShaderDirectory.isNull()) qunsetenv("MAKO_VKBASALT_SHADER_DIR");
+    else qputenv("MAKO_VKBASALT_SHADER_DIR", previousShaderDirectory);
+}
+
+void test_decky_shader_profile_round_trip_and_owned_deletion() {
+    QTemporaryDir directory;
+    require(directory.isValid(), "temporary configuration directory failed");
+    const auto configPath = directory.filePath("conf.toml").toStdString();
+    const auto launchPath = directory.filePath("launcher.conf").toStdString();
+    const auto previousConfig = qgetenv("MAKO_CONFIG");
+    const auto previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    const auto previousConfigHome = qgetenv("XDG_CONFIG_HOME");
+    const auto previousShaderDirectory = qgetenv("MAKO_VKBASALT_SHADER_DIR");
+    qputenv("MAKO_CONFIG", QByteArray::fromStdString(configPath));
+    qputenv("MAKO_LAUNCH_CONFIG", QByteArray::fromStdString(launchPath));
+    qputenv("XDG_CONFIG_HOME", directory.path().toUtf8());
+    qputenv("MAKO_VKBASALT_SHADER_DIR", directory.path().toUtf8());
+
+    ls::ConfigFile config;
+    config.profiles().front().name = "decky-game";
+    ls::GameConf unrelatedProfile;
+    unrelatedProfile.name = "other-game";
+    config.profiles().push_back(unrelatedProfile);
+    config.write(configPath);
+
+    QFile sidecar(directory.filePath("profile-wrapper-settings.json"));
+    require(sidecar.open(QIODevice::WriteOnly),
+        "Decky wrapper settings fixture could not be written");
+    sidecar.write(R"JSON({
+  "version": 1,
+  "profiles": {
+    "decky-game": {
+      "external_vulkan_layer": "vkbasalt",
+      "vkbasalt_sharpening": "dls",
+      "vkbasalt_sharpness": 0.65,
+      "vkbasalt_dls_denoise": 0.35,
+      "vkbasalt_antialiasing": "smaa",
+      "vkbasalt_shader": "technicolor2",
+      "future_setting": "keep"
+    },
+    "other-game": {
+      "external_vulkan_layer": "",
+      "vkbasalt_sharpening": "cas",
+      "vkbasalt_sharpness": 0.5,
+      "vkbasalt_dls_denoise": 0.2,
+      "vkbasalt_antialiasing": "none",
+      "vkbasalt_shader": "none",
+      "unrelated": true
+    }
+  }
+})JSON");
+    sidecar.close();
+
+    QFile metadata(directory.filePath("profile-metadata.json"));
+    require(metadata.open(QIODevice::WriteOnly),
+        "Decky profile metadata fixture could not be written");
+    metadata.write(R"JSON({
+  "version": 1,
+  "profiles": {
+    "decky-game": {"display_name": "Decky Game", "kind": "steam", "steam_app_id": "111", "captured_processes": []},
+    "other-game": {"display_name": "Other Game", "kind": "steam", "steam_app_id": "222", "captured_processes": []}
+  }
+})JSON");
+    metadata.close();
+
+    const auto profileDirectory = directory.filePath("vkbasalt");
+    require(QDir().mkpath(profileDirectory),
+        "profile shader directory fixture could not be created");
+    QFile ownedShader(profileDirectory + QStringLiteral("/steam-111.conf"));
+    require(ownedShader.open(QIODevice::WriteOnly),
+        "owned shader fixture could not be written");
+    ownedShader.write("effects = custom\n");
+    ownedShader.close();
+    QFile unrelatedShader(profileDirectory + QStringLiteral("/steam-222.conf"));
+    require(unrelatedShader.open(QIODevice::WriteOnly),
+        "unrelated shader fixture could not be written");
+    unrelatedShader.write("effects = unrelated\n");
+    unrelatedShader.close();
+    const auto globalShaderPath = directory.filePath("vkBasalt/vkBasalt.conf");
+    require(QDir().mkpath(QFileInfo(globalShaderPath).path()),
+        "global shader directory fixture could not be created");
+    QFile globalShader(globalShaderPath);
+    require(globalShader.open(QIODevice::WriteOnly),
+        "global shader fixture could not be written");
+    globalShader.write("effects = global\n");
+    globalShader.close();
+
+    {
+        mako::ui::Backend backend;
+        require(backend.getEnableVkBasalt() &&
+                backend.getVkBasaltSharpening() == QStringLiteral("dls") &&
+                std::abs(backend.getVkBasaltSharpness() - 0.65F) < 0.001F &&
+                std::abs(backend.getVkBasaltDlsDenoise() - 0.35F) < 0.001F &&
+                backend.getVkBasaltAntialiasing() == QStringLiteral("smaa") &&
+                backend.getVkBasaltShader() == QStringLiteral("technicolor2"),
+            "Qt did not load the selected profile's existing Decky shader settings");
+        require(backend.getVkBasaltConfigPath().endsWith(
+                    QStringLiteral("/steam-111.conf")),
+            "Qt did not reuse Decky's Steam-aware shader config identity");
+        backend.deleteProfile();
+        QEventLoop events;
+        QTimer::singleShot(700, &events, &QEventLoop::quit);
+        events.exec();
+    }
+
+    require(!QFileInfo::exists(profileDirectory + QStringLiteral("/steam-111.conf")),
+        "deleting the main profile left its attached shader config behind");
+    require(QFileInfo::exists(profileDirectory + QStringLiteral("/steam-222.conf")) &&
+            QFileInfo::exists(globalShaderPath),
+        "deleting one profile removed an unrelated or global shader config");
+
+    require(sidecar.open(QIODevice::ReadOnly),
+        "updated Decky wrapper settings could not be read");
+    const auto storedSettings = QJsonDocument::fromJson(sidecar.readAll())
+        .object().value(QStringLiteral("profiles")).toObject();
+    require(!storedSettings.contains(QStringLiteral("decky-game")) &&
+            storedSettings.value(QStringLiteral("other-game")).toObject()
+                .value(QStringLiteral("unrelated")).toBool(),
+        "profile deletion changed Decky settings outside the attached profile");
+    sidecar.close();
+    require(metadata.open(QIODevice::ReadOnly),
+        "updated Decky metadata could not be read");
+    const auto storedMetadata = QJsonDocument::fromJson(metadata.readAll())
+        .object().value(QStringLiteral("profiles")).toObject();
+    require(!storedMetadata.contains(QStringLiteral("decky-game")) &&
+            storedMetadata.contains(QStringLiteral("other-game")),
+        "profile deletion changed Decky metadata outside the attached profile");
+
+    if (previousConfig.isNull()) qunsetenv("MAKO_CONFIG");
+    else qputenv("MAKO_CONFIG", previousConfig);
+    if (previousLaunch.isNull()) qunsetenv("MAKO_LAUNCH_CONFIG");
+    else qputenv("MAKO_LAUNCH_CONFIG", previousLaunch);
+    if (previousConfigHome.isNull()) qunsetenv("XDG_CONFIG_HOME");
+    else qputenv("XDG_CONFIG_HOME", previousConfigHome);
+    if (previousShaderDirectory.isNull()) qunsetenv("MAKO_VKBASALT_SHADER_DIR");
+    else qputenv("MAKO_VKBASALT_SHADER_DIR", previousShaderDirectory);
 }
 
 } // namespace
@@ -401,8 +630,10 @@ int main(int argc, char* argv[]) {
         test_multiplier_limits();
         test_fractional_adaptive_preset();
         test_feature_group_order_and_ownership();
+        test_shader_controls();
         test_compact_restart_markers();
         test_save_lifetime();
+        test_decky_shader_profile_round_trip_and_owned_deletion();
     } catch (const std::exception& error) {
         std::cerr << "mako-ui backend contract test failed: "
                   << error.what() << '\n';

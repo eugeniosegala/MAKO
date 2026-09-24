@@ -1,17 +1,25 @@
 #!/usr/bin/env bash
 # Build the synchronized Arch recipe against one exact local Renderer archive.
-# This is a release-time validation: the resulting package is disposable and is
-# not published or installed.
+# With an output path, the exact verified package is retained for publication.
+# Without one, the validation build remains disposable and is not installed.
 
 set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+package_epoch="${SOURCE_DATE_EPOCH:-}"
+if [[ -n "$package_epoch" && ! "$package_epoch" =~ ^[0-9]+$ ]]; then
+    echo "SOURCE_DATE_EPOCH must be a Unix timestamp, received: $package_epoch" >&2
+    exit 2
+fi
+if [[ -n "$package_epoch" ]]; then
+    export SOURCE_DATE_EPOCH="$package_epoch"
+fi
 
 usage() {
-    echo "Usage: verify-release-package.sh <MAKO-Renderer-vX.Y.Z-linux.tar.xz>" >&2
+    echo "Usage: verify-release-package.sh <MAKO-Renderer-vX.Y.Z-linux.tar.xz> [output-package]" >&2
 }
 
-if (($# != 1)); then
+if (($# < 1 || $# > 2)); then
     usage
     exit 2
 fi
@@ -37,6 +45,19 @@ if [[ "$(basename "$archive_path")" != "$expected_archive" ]]; then
     exit 1
 fi
 
+expected_package="mako-renderer-bin-${pkgver}-${pkgrel}-x86_64.pkg.tar.zst"
+output_path=""
+if (($# == 2)); then
+    output_argument="$2"
+    output_name="$(basename "$output_argument")"
+    if [[ "$output_name" != "$expected_package" ]]; then
+        echo "Arch package output must be named $expected_package, received $output_name" >&2
+        exit 1
+    fi
+    output_dir="$(cd "$(dirname "$output_argument")" && pwd -P)"
+    output_path="$output_dir/$output_name"
+fi
+
 if ! command -v makepkg >/dev/null 2>&1; then
     container_runtime=""
     if command -v docker >/dev/null 2>&1; then
@@ -49,9 +70,24 @@ if ! command -v makepkg >/dev/null 2>&1; then
     fi
 
     echo "Using local linux/amd64 $container_runtime Arch packaging environment..."
-    exec "$container_runtime" run --rm --platform linux/amd64 \
-        -v "$script_dir:/package-source:ro" \
-        -v "$archive_path:/release-archive/$expected_archive:ro" \
+    container_arguments=(
+        run --rm --platform linux/amd64
+        -v "$script_dir:/package-source:ro"
+        -v "$archive_path:/release-archive/$expected_archive:ro"
+    )
+    container_output_path=""
+    if [[ -n "$output_path" ]]; then
+        container_arguments+=(
+            -v "$output_dir:/release-output"
+        )
+        container_output_path="/release-output/$output_name"
+    fi
+    if [[ -n "$package_epoch" ]]; then
+        container_arguments+=(
+            -e "SOURCE_DATE_EPOCH=$package_epoch"
+        )
+    fi
+    exec "$container_runtime" "${container_arguments[@]}" \
         archlinux:base-devel \
         bash -c '
             set -euo pipefail
@@ -64,10 +100,21 @@ if ! command -v makepkg >/dev/null 2>&1; then
                 "/release-archive/$1" \
                 /tmp/mako-arch-package-source/
             chown -R mako-builder:mako-builder /tmp/mako-arch-package-source
-            exec runuser -u mako-builder -- \
-                bash /tmp/mako-arch-package-source/verify-release-package.sh \
-                "/tmp/mako-arch-package-source/$1"
-        ' _ "$expected_archive"
+            if [[ -n "${2:-}" ]]; then
+                runuser -u mako-builder -- \
+                    bash /tmp/mako-arch-package-source/verify-release-package.sh \
+                    "/tmp/mako-arch-package-source/$1" \
+                    "/tmp/mako-arch-package-source/$3"
+                output_tmp="$2.tmp.$$"
+                trap 'rm -f -- "$output_tmp"' EXIT
+                install -Dm644 "/tmp/mako-arch-package-source/$3" "$output_tmp"
+                mv -f -- "$output_tmp" "$2"
+            else
+                exec runuser -u mako-builder -- \
+                    bash /tmp/mako-arch-package-source/verify-release-package.sh \
+                    "/tmp/mako-arch-package-source/$1"
+            fi
+        ' _ "$expected_archive" "$container_output_path" "$expected_package"
 fi
 
 for command in bsdtar find; do
@@ -127,6 +174,35 @@ done
 if grep -Eq '(^|/)mako-installer$|io\.github\.eugeniosegala\.mako\.uninstaller\.desktop$|(^|/)\.config/mako-render/' <<< "$package_entries"; then
     echo "Built Arch package contains a user-local installer, uninstaller, or profile path." >&2
     exit 1
+fi
+
+package_info="$(bsdtar -xOf "${package_files[0]}" .PKGINFO)"
+for required_identity in \
+    "pkgname = mako-renderer-bin" \
+    "pkgver = ${pkgver}-${pkgrel}" \
+    "arch = x86_64"; do
+    if ! grep -Fqx "$required_identity" <<< "$package_info"; then
+        echo "Built Arch package has the wrong internal identity; missing: $required_identity" >&2
+        exit 1
+    fi
+done
+
+packaged_renderer_version="$(
+    bsdtar -xOf "${package_files[0]}" \
+        usr/share/doc/mako-renderer-bin/MAKO-Renderer-version.txt |
+        tr -d '[:space:]'
+)"
+if [[ "$packaged_renderer_version" != "$pkgver" ]]; then
+    echo "Built Arch package contains Renderer $packaged_renderer_version instead of $pkgver." >&2
+    exit 1
+fi
+
+if [[ -n "$output_path" ]]; then
+    output_tmp="${output_path}.tmp.$$"
+    trap 'rm -rf -- "$work_dir"; rm -f -- "$output_tmp"' EXIT
+    install -Dm644 "${package_files[0]}" "$output_tmp"
+    mv -f -- "$output_tmp" "$output_path"
+    echo "Verified Arch release package: $output_path"
 fi
 
 echo "Verified Arch package build for MAKO Renderer $pkgver ($expected_archive)."

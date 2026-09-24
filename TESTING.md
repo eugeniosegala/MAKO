@@ -21,7 +21,7 @@ Portable MAKO tests must not require MAKO Gym, `Lossless.dll`, an AMD GPU, Games
 | Complete tester ZIP | Local source packages and installs as one self-contained build | A clean pushed commit, hardware release gate, or public asset |
 | SteamOS hardware gate | A pushed commit rebuilds the candidate and validates AMD loading, dual-bitness, Flatpak, package, and explicitly selected Gym boundaries | The complete commercial-game matrix or published download |
 | Manual release-candidate matrix | Selected games survive relevant presentation, focus, overlay, hitch, and recreation scenarios | Untested games and hardware |
-| Published-package check | The exact GitHub asset installs through the user-facing path | Universal compatibility |
+| Published-package check | The exact GitHub host, Flatpak, and Arch assets match their recorded checksums and install through their user-facing paths | Universal compatibility |
 
 Use [MAKO Decky packaging](plugin/docs/PACKAGING.md) for development and tester builds and [How to release MAKO](HOW_TO_RELEASE.md) for release validation and publication.
 

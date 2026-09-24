@@ -81,7 +81,7 @@ export function CompatibilityConfigurationGroup({
                   <MakoSettingRelationship>
                     {t(
                       "DYNAMIC_CADENCE_RECOVERY_RELATION",
-                      "Turning this on disables Steady Base Cap and Base FPS Cap. Changing either cap later turns Recovery off.",
+                      "Turning this on disables Steady Base Cap and Base FPS Cap, and resets Real Frame Priority to Automatic. Changing either cap or Real Frame Priority later turns Recovery off.",
                     )}
                   </MakoSettingRelationship>
                 </>

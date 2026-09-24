@@ -40,6 +40,70 @@ namespace ls {
         Ls1Performance,
     };
 
+    /// Optional Fractional Adaptive source cap selected from cadence-friendly
+    /// real/generated ratios. Auto preserves the ordinary Fractional policy.
+    enum class AdaptiveFractionalRealFramePriority : uint8_t {
+        Auto,
+        Low,
+        Medium,
+        High,
+        VeryHigh,
+    };
+
+    [[nodiscard]] constexpr const char*
+    adaptiveFractionalRealFramePriorityName(
+            const AdaptiveFractionalRealFramePriority priority) noexcept {
+        switch (priority) {
+            case AdaptiveFractionalRealFramePriority::Auto:
+                return "auto";
+            case AdaptiveFractionalRealFramePriority::Low:
+                return "low";
+            case AdaptiveFractionalRealFramePriority::Medium:
+                return "medium";
+            case AdaptiveFractionalRealFramePriority::High:
+                return "high";
+            case AdaptiveFractionalRealFramePriority::VeryHigh:
+                return "very-high";
+        }
+        return "auto";
+    }
+
+    [[nodiscard]] constexpr std::optional<
+        AdaptiveFractionalRealFramePriority>
+    adaptiveFractionalRealFramePriorityFromName(
+            const std::string_view value) noexcept {
+        if (value == "auto")
+            return AdaptiveFractionalRealFramePriority::Auto;
+        if (value == "low")
+            return AdaptiveFractionalRealFramePriority::Low;
+        if (value == "medium")
+            return AdaptiveFractionalRealFramePriority::Medium;
+        if (value == "high")
+            return AdaptiveFractionalRealFramePriority::High;
+        if (value == "very-high")
+            return AdaptiveFractionalRealFramePriority::VeryHigh;
+        return std::nullopt;
+    }
+
+    [[nodiscard]] constexpr double adaptiveFractionalRealFramePriorityCap(
+            const AdaptiveFractionalRealFramePriority priority,
+            const uint32_t targetFps) noexcept {
+        const double target = static_cast<double>(targetFps);
+        switch (priority) {
+            case AdaptiveFractionalRealFramePriority::Auto:
+                return 0.0;
+            case AdaptiveFractionalRealFramePriority::Low:
+                return target * 3.0 / 5.0;
+            case AdaptiveFractionalRealFramePriority::Medium:
+                return target * 2.0 / 3.0;
+            case AdaptiveFractionalRealFramePriority::High:
+                return target * 3.0 / 4.0;
+            case AdaptiveFractionalRealFramePriority::VeryHigh:
+                return target * 4.0 / 5.0;
+        }
+        return 0.0;
+    }
+
     [[nodiscard]] constexpr const char* scalingMethodName(
             const ScalingMethod method) noexcept {
         switch (method) {
@@ -83,6 +147,9 @@ namespace ls {
         static constexpr uint32_t baseFpsCap = 0;
         static constexpr bool adaptive = false;
         static constexpr bool adaptiveAutoBaseFpsCap = false;
+        static constexpr AdaptiveFractionalRealFramePriority
+            adaptiveFractionalRealFramePriority =
+                AdaptiveFractionalRealFramePriority::Auto;
         static constexpr uint32_t targetFps = 120;
         static constexpr size_t adaptiveMaxMultiplier = 3;
         static constexpr bool adaptiveStableCadence = true;
@@ -162,6 +229,11 @@ namespace ls {
         bool adaptive{GameConfDefaults::adaptive};
         /// cap Adaptive's real-frame input to half its target for even 2x cadence
         bool adaptive_auto_base_fps_cap{GameConfDefaults::adaptiveAutoBaseFpsCap};
+        /// optional cadence-friendly real-frame share for Fractional Adaptive
+        AdaptiveFractionalRealFramePriority
+            adaptive_fractional_real_frame_priority{
+                GameConfDefaults::adaptiveFractionalRealFramePriority
+            };
         /// desired displayed framerate when adaptive mode is enabled
         uint32_t target_fps{GameConfDefaults::targetFps};
         /// maximum total multiplier Adaptive may use

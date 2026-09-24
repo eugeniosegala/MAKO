@@ -1,10 +1,19 @@
 import { describe, expect, test } from "vitest";
-import { getDefaults } from "../../src/config/configSchema";
+import {
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
+  getDefaults,
+} from "../../src/config/configSchema";
 import {
   adaptiveModeChanges,
   baseFpsCapChanges,
   dynamicCadenceRecoveryChanges,
   fractionalAdaptivePresetChanges,
+  fractionalRealFramePriorityCap,
+  fractionalRealFramePriorityChanges,
   isFractionalAdaptivePresetEnabled,
   steadyBaseCapChanges,
 } from "../../src/config/fractionalAdaptivePreset";
@@ -30,6 +39,9 @@ describe("fractional Adaptive preset", () => {
     const config = getDefaults();
 
     expect(config.adaptive_auto_base_fps_cap).toBe(true);
+    expect(config.adaptive_fractional_real_frame_priority).toBe(
+      ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+    );
     expect(
       isFractionalAdaptivePresetEnabled({
         ...config,
@@ -151,6 +163,8 @@ describe("fractional Adaptive preset", () => {
     expect(dynamicCadenceRecoveryChanges(true)).toEqual({
       dynamic_cadence_recovery: true,
       adaptive_auto_base_fps_cap: false,
+      adaptive_fractional_real_frame_priority:
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
       base_fps_cap: 0,
     });
     expect(dynamicCadenceRecoveryChanges(false)).toEqual({
@@ -158,10 +172,14 @@ describe("fractional Adaptive preset", () => {
     });
     expect(baseFpsCapChanges(30)).toEqual({
       base_fps_cap: 30,
+      adaptive_fractional_real_frame_priority:
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
       dynamic_cadence_recovery: false,
     });
     expect(baseFpsCapChanges(0)).toEqual({
       base_fps_cap: 0,
+      adaptive_fractional_real_frame_priority:
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
       dynamic_cadence_recovery: false,
     });
     expect(steadyBaseCapChanges(true)).toEqual({
@@ -170,6 +188,48 @@ describe("fractional Adaptive preset", () => {
     });
     expect(steadyBaseCapChanges(false)).toEqual({
       adaptive_auto_base_fps_cap: false,
+      dynamic_cadence_recovery: false,
+    });
+  });
+
+  test("maps explicit priorities to stable real/generated ratios", () => {
+    expect(
+      fractionalRealFramePriorityCap(
+        120,
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+      ),
+    ).toBeUndefined();
+    expect(
+      fractionalRealFramePriorityCap(
+        120,
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
+      ),
+    ).toBe(72);
+    expect(
+      fractionalRealFramePriorityCap(
+        120,
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM,
+      ),
+    ).toBe(80);
+    expect(
+      fractionalRealFramePriorityCap(
+        120,
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
+      ),
+    ).toBe(90);
+    expect(
+      fractionalRealFramePriorityCap(
+        120,
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
+      ),
+    ).toBe(96);
+    expect(
+      fractionalRealFramePriorityChanges(
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
+      ),
+    ).toEqual({
+      adaptive_fractional_real_frame_priority:
+        ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
       dynamic_cadence_recovery: false,
     });
   });

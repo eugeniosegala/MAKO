@@ -1,8 +1,20 @@
 import type { ConfigurationEditorProps } from "./settings/types";
-import { PanelSectionRow, SliderField, ToggleField } from "@decky/ui";
 import {
+  Dropdown,
+  Field,
+  PanelSectionRow,
+  SliderField,
+  ToggleField,
+} from "@decky/ui";
+import {
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM,
+  ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
   ADAPTIVE_MINIMUM_BASE_FPS,
   ADAPTIVE_STABLE_CADENCE,
+  type AdaptiveFractionalRealFramePriority,
   FRAME_GENERATION_ENABLED,
   FRAME_GENERATION_PROVISIONED,
   getDefaults,
@@ -14,14 +26,13 @@ import {
 import {
   adaptiveModeChanges,
   fractionalAdaptivePresetChanges,
+  fractionalRealFramePriorityCap,
+  fractionalRealFramePriorityChanges,
   isFractionalAdaptivePresetEnabled,
   steadyBaseCapChanges,
 } from "../config/fractionalAdaptivePreset";
 import t from "../i18n/i18n";
-import {
-  MakoRestartLabel,
-  MakoSettingRelationship,
-} from "./MakoUi";
+import { MakoRestartLabel, MakoSettingRelationship } from "./MakoUi";
 
 const DEFAULT_CONFIGURATION = getDefaults();
 const GENERATION_MULTIPLIER_CHOICES = [0, 2, 3, 4, 5] as const;
@@ -69,6 +80,62 @@ export function FpsMultiplierControl({
   const automaticBaseFpsCapLabel = Number.isInteger(automaticBaseFpsCap)
     ? automaticBaseFpsCap.toFixed(0)
     : automaticBaseFpsCap.toFixed(1);
+  const fractionalAdaptive = isFractionalAdaptivePresetEnabled(config);
+  const fractionalPriority = (config.adaptive_fractional_real_frame_priority ??
+    ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO) as AdaptiveFractionalRealFramePriority;
+  const fractionalPriorityCap = fractionalRealFramePriorityCap(
+    targetFps,
+    fractionalPriority,
+  );
+  const fractionalPriorityCapLabel =
+    fractionalPriorityCap === undefined
+      ? undefined
+      : Number.isInteger(fractionalPriorityCap)
+        ? fractionalPriorityCap.toFixed(0)
+        : fractionalPriorityCap.toFixed(1);
+  const fractionalGeneratedFps =
+    fractionalPriorityCap === undefined
+      ? undefined
+      : targetFps - fractionalPriorityCap;
+  const fractionalGeneratedFpsLabel =
+    fractionalGeneratedFps === undefined
+      ? undefined
+      : Number.isInteger(fractionalGeneratedFps)
+        ? fractionalGeneratedFps.toFixed(0)
+        : fractionalGeneratedFps.toFixed(1);
+  const fractionalPriorityOptions = [
+    {
+      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
+      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_AUTO", "Automatic"),
+    },
+    {
+      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
+      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_LOW", "Low"),
+    },
+    {
+      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM,
+      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_MEDIUM", "Medium"),
+    },
+    {
+      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
+      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_HIGH", "High"),
+    },
+    {
+      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
+      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_VERY_HIGH", "Very High"),
+    },
+  ];
+  const fractionalPriorityRatio =
+    fractionalPriority === ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW
+      ? { real: 3, generated: 2 }
+      : fractionalPriority === ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM
+        ? { real: 2, generated: 1 }
+        : fractionalPriority === ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH
+          ? { real: 3, generated: 1 }
+          : fractionalPriority ===
+              ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH
+            ? { real: 4, generated: 1 }
+            : undefined;
 
   return (
     <>
@@ -82,12 +149,10 @@ export function FpsMultiplierControl({
               )}
             />
           }
-          description={
-            t(
-              "FRAME_GENERATION_PROVISIONED_DESC",
-              "Enable before starting the game. Loads and provisions MAKO Frame Generation. Turn it off when you only want Scaling or Shaders.",
-            )
-          }
+          description={t(
+            "FRAME_GENERATION_PROVISIONED_DESC",
+            "Enable before starting the game. Loads and provisions MAKO Frame Generation. Turn it off when you only want Scaling or Shaders.",
+          )}
           checked={frameGenerationProvisioned}
           bottomSeparator={frameGenerationProvisioned ? undefined : "none"}
           onChange={(value) =>
@@ -131,12 +196,66 @@ export function FpsMultiplierControl({
                       </MakoSettingRelationship>
                     </>
                   }
-                  checked={isFractionalAdaptivePresetEnabled(config)}
+                  checked={fractionalAdaptive}
                   onChange={(value) =>
                     onConfigUpdate(fractionalAdaptivePresetChanges(value))
                   }
                 />
               </PanelSectionRow>
+              {fractionalAdaptive && (
+                <PanelSectionRow>
+                  <Field
+                    label={t(
+                      "ADAPTIVE_REAL_FRAME_PRIORITY",
+                      "Real Frame Priority",
+                    )}
+                    description={
+                      <>
+                        <div>
+                          {t(
+                            "ADAPTIVE_REAL_FRAME_PRIORITY_DESC",
+                            "Selects a cadence-friendly real-frame cap above half of Target FPS. Higher priority keeps more real frames and may reduce latency and ghosting, but can feel less even.",
+                          )}
+                        </div>
+                        <MakoSettingRelationship>
+                          {fractionalPriorityRatio &&
+                          fractionalPriorityCapLabel !== undefined &&
+                          fractionalGeneratedFpsLabel !== undefined
+                            ? t(
+                                "ADAPTIVE_REAL_FRAME_PRIORITY_ACTIVE_RELATION",
+                                "Uses {real} real frames for every {generated} generated. At a {target} FPS target: up to {cap} real FPS and about {generated_fps} generated FPS. This overrides Base FPS Cap.",
+                                {
+                                  real: fractionalPriorityRatio.real,
+                                  generated: fractionalPriorityRatio.generated,
+                                  target: targetFps,
+                                  cap: fractionalPriorityCapLabel,
+                                  generated_fps: fractionalGeneratedFpsLabel,
+                                },
+                              )
+                            : t(
+                                "ADAPTIVE_REAL_FRAME_PRIORITY_AUTO_RELATION",
+                                "Automatic keeps Fractional Adaptive's current behavior. Base FPS Cap remains available.",
+                              )}
+                        </MakoSettingRelationship>
+                      </>
+                    }
+                    childrenLayout="below"
+                    childrenContainerWidth="max"
+                  >
+                    <Dropdown
+                      rgOptions={fractionalPriorityOptions}
+                      selectedOption={fractionalPriority}
+                      onChange={(option) =>
+                        onConfigUpdate(
+                          fractionalRealFramePriorityChanges(
+                            option.data as AdaptiveFractionalRealFramePriority,
+                          ),
+                        )
+                      }
+                    />
+                  </Field>
+                </PanelSectionRow>
+              )}
               <PanelSectionRow>
                 <SliderField
                   label={`${t("ADAPTIVE_TARGET_FPS", "Target FPS")} (${targetFps})`}

@@ -62,10 +62,11 @@ The CLI's `benchmark`, `debug`, `quality-regression`, and `combined-quality-regr
 | `base_fps_cap` | 0–1000 FPS | `0` | Caps real frames while generation is active; `0` disables the cap. The saved value is dormant while the Frame Generation factor is `0x`. |
 | `adaptive` | Boolean | `false` | Uses Adaptive rather than Fixed policy and varies the generated count toward `target_fps`. |
 | `adaptive_auto_base_fps_cap` | Boolean | `false` | Starts Adaptive with a half-target real-frame cap and may select a proven integer cadence with Smooth Cadence. Recovery can release only this automatic cap when it becomes the bottleneck. |
+| `adaptive_fractional_real_frame_priority` | `auto`, `low`, `medium`, `high`, `very-high` | `auto` | Optional Fractional Adaptive real-frame cap. `auto` preserves the existing Fractional policy and manual `base_fps_cap`. Explicit priorities use 3:2, 2:1, 3:1, and 4:1 real/generated ratios, respectively, and take precedence over the saved manual cap. Ignored outside Fractional Adaptive. |
 | `target_fps` | 10–1000 FPS | `120` | Adaptive output target. It is not a limiter for a game already above target and cannot override the multiplier ceiling. |
 | `adaptive_max_multiplier` | 2–5 | `3` | Maximum total multiplier Adaptive may select. Start at 2 for the lowest generated-frame share. |
 | `adaptive_stable_cadence` | Boolean | `true` | Allows a delivery-validated constant cadence in Adaptive. With confirmed fixed-refresh eligibility, Steady Adaptive and eligible Fixed mode may hand pacing to ordered Gamescope FIFO. Explicit requested or active VRR retains MAKO's target clock without changing the validated or configured multiplier. This may trade real-frame cadence and latency for smoother output. |
-| `dynamic_cadence_recovery` | Boolean | `false` | Periodically exposes native cadence on ordered SDR to detect a faster game mode hidden by FIFO backpressure. It is per-profile and automatically disables both manual and automatic base caps. |
+| `dynamic_cadence_recovery` | Boolean | `false` | Periodically exposes native cadence on ordered SDR to detect a faster game mode hidden by FIFO backpressure. It is per-profile and automatically disables both manual and automatic base caps and resets Fractional Real Frame Priority to `auto`. |
 | `dynamic_cadence_probe_interval_seconds` | 0.1–3.0 | `2.0` | Delay between optional cadence probes. Short values react faster but make rejected probes more frequent. |
 | `scaling_enabled` | Boolean | `false` | Provisions scaling at process start. Changing it requires a game restart. |
 | `scaling_method` | `native`, `mako`, `ls1`, `ls1-performance` | `ls1` | Selects Native Resolution linear scaling, MAKO Scaler, LS1 Quality, or LS1 Performance. LS1 failures fall back to MAKO Scaler for that swapchain. |
@@ -95,7 +96,7 @@ Outside Gamescope, MAKO does not infer the destination monitor size from an arbi
 
 | Boundary | Settings |
 | --- | --- |
-| Live policy | Frame Generation `0x`/active execution state, refresh threshold, supported Fixed/Adaptive mode changes, target, caps, Smooth Cadence, and Dynamic Cadence Recovery. |
+| Live policy | Frame Generation `0x`/active execution state, refresh threshold, supported Fixed/Adaptive mode changes, target, caps, Fractional Real Frame Priority, Smooth Cadence, and Dynamic Cadence Recovery. |
 | Private resource replacement | Scaler method, sharpness, Flow Scale, Lighter FG Model, and generated-output capacity when the current WSI pool has enough headroom. Method changes apply at the next present; continuous controls coalesce for 500 ms. |
 | Game-owned swapchain recreation | Effective Scale Factor or Quality Supersampling extent changes, and capacity growth that exceeds current WSI headroom. Eligible maintenance1 contexts may request one recreation; other paths wait for a natural recreation. |
 | Process restart | Frame Generation provisioning, Scaling enablement, Game Swapchain Images compatibility, DLL, FP16, GPU, Ultra Performance, layer membership, HDR exposure, and launcher compatibility. |
@@ -126,7 +127,9 @@ MAKO_CONFIG="$HOME/.config/mako-render/conf.toml" MAKO_PROFILE="My game" ~/.loca
 
 `DISABLE_MAKO=1` bypasses MAKO for every launch where that variable remains set. `mako-launch` otherwise selects the installed private MAKO manifests, disables competing LSFG-VK layers and Gamescope WSI in the child, and chooses the supported SDR boundary. If no profile matches, the Renderer remains dormant.
 
-To chain MAKO's private bundled vkBasalt after the Renderer for a native Steam or Proton game, opt in through the launcher:
+The Qt UI's **Shaders** group is per profile and uses the same compact settings as MAKO Decky: activation, one curated effect, CAS or DLS sharpening, sharpening and DLS-denoise strengths, and FXAA or SMAA. It reads and writes `~/.config/mako-render/profile-wrapper-settings.json`, so matching profiles configured in Decky populate the Qt controls and changes remain compatible in either direction. Steam-linked profiles reuse the app-ID-based config path recorded in `profile-metadata.json`; other saved profiles use the same stable short hash as Decky. The default `mako` profile uses vkBasalt's global config.
+
+The launch option displayed by Qt selects the exact Renderer profile and, when shaders are enabled, includes both `ENABLE_VKBASALT=1` and that profile's `VKBASALT_CONFIG_FILE`. To opt in manually through the launcher instead, use:
 
 ```text
 ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%
@@ -138,13 +141,13 @@ The complete vkBasalt configuration surface remains available through a per-game
 ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
 ```
 
-The config path is optional. Renderer `active_in` matching does not select a vkBasalt file; assign a distinct `VKBASALT_CONFIG_FILE` in each game's launch option for per-game settings. With an explicit file, FXAA, SMAA, CAS, DLS, sharpening strength, and DLS denoise changes apply live; activation and custom/advanced effects remain restart-bound. The launcher establishes the exact `MAKO Renderer -> vkBasalt` order using only MAKO's installed 64-bit and 32-bit private manifests. A missing architecture or unreadable selected config fails closed to MAKO alone instead of discovering a system copy. See [Optional graphics integrations](LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for ordering and support boundaries.
+The config path is optional for manual use. With an explicit file, FXAA, SMAA, CAS, DLS, sharpening strength, DLS denoise, and the compact controlled effect apply live; activation and manual custom/advanced effects remain restart-bound. Qt and Decky merge only those controlled fields and preserve advanced options and custom effects already present in the file. Renaming or deleting a Renderer profile updates only its matching Decky sidecar entries and isolated shader file; unrelated profiles and the global config are not removed. The launcher establishes the exact `MAKO Renderer -> vkBasalt` order using only MAKO's installed 64-bit and 32-bit private manifests. A missing architecture or unreadable selected config fails closed to MAKO alone instead of discovering a system copy. See [Optional graphics integrations](LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for ordering and support boundaries.
 
 The UI stores two optional, global process-start settings in `~/.config/mako-render/launcher.conf`: **Enable Zink for OpenGL (Restart)** and **Force ALSA Audio (Restart)**. The launcher accepts only its versioned allowlist; malformed, duplicate, unknown, or non-Boolean entries make all stored options inert for that launch. `MAKO_LAUNCH_CONFIG` may select another file for testing and is removed before the child starts.
 
 `MAKO_ALLOW_COMPETING_LAYERS=1` is an unsupported comparison escape hatch that stops the launcher from disabling another installed LSFG-VK layer. Do not use two frame-generation layers on one game.
 
-Steam Deck mode, Gamescope WSI compatibility, MangoHud controls, and the compact per-profile vkBasalt UI remain MAKO Decky features. Standalone users can use the private vkBasalt launcher path above and edit the full standard configuration file directly. See [WSI isolation](WSI-ISOLATION.md) and [Optional graphics integrations](LAYER-CHAINING.md).
+Steam Deck mode, Gamescope WSI compatibility, and MangoHud controls remain MAKO Decky features. The shared compact per-profile vkBasalt controls are available in both MAKO Decky and the standalone Qt UI; advanced users can edit the exact config path shown by either UI. See [WSI isolation](WSI-ISOLATION.md) and [Optional graphics integrations](LAYER-CHAINING.md).
 
 ## Environment-only configuration
 
@@ -152,7 +155,7 @@ Set `MAKO_ENV=1` to build one profile entirely from environment variables:
 
 - global: `MAKO_DLL_PATH`, `MAKO_NO_FP16`;
 - identity and Fixed policy: `MAKO_GPU`, `MAKO_MULTIPLIER`, `MAKO_FRAME_GENERATION_PROVISIONED`, `MAKO_FRAME_GENERATION_ENABLED`, `MAKO_FRAME_GENERATION_REFRESH_THRESHOLD`, `MAKO_BASE_FPS_CAP`;
-- Adaptive policy: `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`, `MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS`;
+- Adaptive policy: `MAKO_ADAPTIVE`, `MAKO_ADAPTIVE_AUTO_BASE_FPS_CAP`, `MAKO_ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY`, `MAKO_TARGET_FPS`, `MAKO_ADAPTIVE_MAX_MULTIPLIER`, `MAKO_ADAPTIVE_STABLE_CADENCE`, `MAKO_DYNAMIC_CADENCE_RECOVERY`, `MAKO_DYNAMIC_CADENCE_PROBE_INTERVAL_SECONDS`;
 - scaling: `MAKO_SCALING_ENABLED`, `MAKO_SCALING_METHOD`, `MAKO_SCALING_FACTOR`, `MAKO_SCALING_SUPERSAMPLING`, `MAKO_SCALING_SHARPNESS`, `MAKO_SWAPCHAIN_IMAGE_COUNT_COMPATIBILITY`; and
 - resource and pacing policy: `MAKO_ULTRA_PERFORMANCE`, `MAKO_FLOW_SCALE`, `MAKO_PERFORMANCE_MODE`, `MAKO_PACING`.
 

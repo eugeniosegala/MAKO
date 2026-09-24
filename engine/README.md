@@ -16,9 +16,17 @@ Frame Generation provisioning and Scaling must be selected before the game start
 
 ## Downloads
 
-Standalone Linux and Flatpak archives are published on the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.3.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>. Steam Deck and Steam Machine users who prefer a managed workflow should install the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a>.
+MAKO Renderer packages are published under **Assets** on the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.3.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>:
 
-Published archives target x86_64 Linux hosts and include Vulkan layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages require a separately built and validated Renderer and are not part of this release.
+| Release file | Choose it for | What it provides |
+| --- | --- | --- |
+| `MAKO-Renderer-v<version>-linux.tar.xz` | General Linux, including a direct user-local installation on SteamOS | The portable host archive with graphical install/uninstall launchers, CLI, configuration UI, desktop integration, and matching 64-bit/32-bit layers. It installs under `~/.local` by default. |
+| [`mako-renderer-bin-<version>-<pkgrel>-x86_64.pkg.tar.zst`](dist/arch/README.md#install-the-release-package) | Arch Linux or a traditional writable Arch-based distribution—not SteamOS—starting with MAKO Renderer 4.0 | The verified system-wide pacman package. Follow the linked Arch installation guide; pacman owns its files under `/usr`. Do not also run the archive's user-local installer for the same user. |
+| `MAKO-Renderer-v<version>-flatpaks.tar.xz` | Flatpak games, launchers, or emulators | An archive containing one MAKO Vulkan runtime extension for each supported Freedesktop runtime. It does not install the host CLI or configuration UI. |
+
+GitHub's automatically generated **Source code** ZIP and tarball contain the repository source, not ready-to-run Renderer packages. Steam Deck and Steam Machine users who prefer a managed workflow should instead install the <a href="https://github.com/eugeniosegala/MAKO/releases/latest" target="_blank" rel="noopener noreferrer">latest MAKO Decky release</a>.
+
+Published packages target x86_64 Linux hosts and include Vulkan layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages require a separately built and validated Renderer and are not part of this release.
 
 ## Installation
 
@@ -38,7 +46,7 @@ See the <a href="../README.md#install-and-use" target="_blank" rel="noopener nor
 
 Download and extract `MAKO-Renderer-v<version>-linux.tar.xz` from the <a href="https://github.com/eugeniosegala/MAKO/releases/tag/render-v3.3.0" target="_blank" rel="noopener noreferrer">latest MAKO Renderer release</a>, then run **Install MAKO Renderer**. It verifies the archive, preserves profiles, opens **MAKO Renderer Configuration**, and shows the Steam/Proton launch option. Run the installer again to update; use **Uninstall MAKO Renderer** to remove the shared native installation. The included `README.txt` contains offline instructions.
 
-On Arch Linux, the tracked [`mako-renderer-bin` recipe](dist/arch/README.md) repackages that same checksum-pinned host archive as a system-wide pacman package. It excludes the user-local installer and uninstaller, preserves profiles, and documents coexistence with MAKO Decky.
+Starting with MAKO Renderer 4.0, Arch Linux users can download the `mako-renderer-bin-X.Y.Z-1-x86_64.pkg.tar.zst` asset from the matching Renderer release and follow the [Arch installation guide](dist/arch/README.md#install-the-release-package). The tracked recipe repackages the same checksum-pinned host archive as that system-wide package. It excludes the user-local installer and uninstaller, preserves profiles, and documents coexistence with MAKO Decky.
 
 Close games using MAKO before updating. The installer validates and stages the complete payload before replacing files and restores the previous installation if a later step fails. It reports permission or storage failures without requesting root access. If restoration also fails, it retains recovery backups beside the affected files and reports their locations. Profiles and diagnostics remain untouched unless you explicitly choose to remove configuration during uninstall.
 
@@ -112,7 +120,9 @@ For a **direct desktop command**, pass the executable and its arguments to the s
 
 `mako-launch` enables MAKO only for that process and establishes the supported standalone Vulkan-layer boundary. Use one Frame Generation implementation per game. Gamescope WSI and MangoHud profile controls remain MAKO Decky features.
 
-To add MAKO's private bundled vkBasalt after the Renderer for a native Steam or Proton game, use:
+The Qt configuration window exposes the same compact, per-profile shader controls as MAKO Decky and shows the complete launch option for the selected profile. It reads and writes Decky's `~/.config/mako-render/profile-wrapper-settings.json`, so a profile already configured in Decky displays its existing shader choices in Qt. Each non-default profile uses an isolated config under `~/.config/mako-render/vkbasalt/`; the default `mako` profile uses vkBasalt's global config. Renaming or deleting a Renderer profile moves or removes only its attached sidecar entries and isolated shader file; unrelated profiles and the global config are preserved.
+
+To opt in manually to MAKO's private bundled vkBasalt after the Renderer for a native Steam or Proton game, use:
 
 ```text
 ENABLE_VKBASALT=1 ~/.local/bin/mako-launch %command%
@@ -124,7 +134,7 @@ For the complete vkBasalt option suite, create a normal vkBasalt configuration f
 ENABLE_VKBASALT=1 VKBASALT_CONFIG_FILE="$HOME/.config/vkBasalt/game-name.conf" ~/.local/bin/mako-launch %command%
 ```
 
-The config path is optional. Renderer `active_in` matching selects only the MAKO profile; for per-game vkBasalt settings, give each game's launch option its own `VKBASALT_CONFIG_FILE`. The launcher admits only the private 64-bit and 32-bit vkBasalt manifests installed with MAKO, establishes the exact `MAKO Renderer -> vkBasalt` order, and ignores a system-wide vkBasalt copy. If the complete private bundle or a selected config is unreadable, it reports the problem and safely launches with MAKO alone. FXAA, SMAA, CAS, DLS, sharpening strength, and DLS denoise changes in a selected config apply live; restart after changing layer membership or custom/advanced effects. See [Optional graphics integrations](docs/LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for the full contract; Flatpak applications use the [separate sandbox setup](docs/FLATPAK-GUIDE.md#optional-private-vkbasalt-chain).
+The config path is optional for manual use. The Qt UI generates `MAKO_PROFILE`, `ENABLE_VKBASALT`, and an isolated `VKBASALT_CONFIG_FILE` together so the selected Renderer and shader profiles cannot drift. The launcher admits only the private 64-bit and 32-bit vkBasalt manifests installed with MAKO, establishes the exact `MAKO Renderer -> vkBasalt` order, and ignores a system-wide vkBasalt copy. If the complete private bundle or a selected config is unreadable, it reports the problem and safely launches with MAKO alone. FXAA, SMAA, CAS, DLS, sharpening strength, DLS denoise, and the compact effect choice in a selected config apply live; restart after changing layer membership or manual custom/advanced effects. See [Optional graphics integrations](docs/LAYER-CHAINING.md#standalone-mako-renderer-with-vkbasalt) for the full contract; Flatpak applications use the [separate sandbox setup](docs/FLATPAK-GUIDE.md#optional-private-vkbasalt-chain).
 
 MAKO operates on Vulkan: native Vulkan and Proton games through DXVK or VKD3D-Proton are supported, while OpenGL requires the optional Zink launcher setting. If no profile matches the game process, MAKO remains dormant and presentation stays native.
 

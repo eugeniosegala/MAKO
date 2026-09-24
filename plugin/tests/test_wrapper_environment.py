@@ -1477,13 +1477,21 @@ class WrapperEnvironmentTests(unittest.TestCase):
 
     def test_adaptive_auto_cap_is_engine_owned_and_serialized(self):
         self.assertIn("adaptive_auto_base_fps_cap", ALL_FIELDS)
+        self.assertIn("adaptive_fractional_real_frame_priority", ALL_FIELDS)
         config = ConfigurationManager.get_defaults()
         self.assertTrue(config["adaptive_auto_base_fps_cap"])
+        self.assertEqual(
+            config["adaptive_fractional_real_frame_priority"], "auto"
+        )
         config["adaptive"] = True
         config["adaptive_auto_base_fps_cap"] = True
+        config["adaptive_fractional_real_frame_priority"] = "high"
         config["target_fps"] = 165
         toml = ConfigurationManager.generate_toml_content(config)
         self.assertIn("adaptive_auto_base_fps_cap = true", toml)
+        self.assertIn(
+            'adaptive_fractional_real_frame_priority = "high"', toml
+        )
         self.assertIn("target_fps = 165", toml)
         self.assertNotIn("ADAPTIVE_AUTO_BASE_FPS_CAP", "\n".join(
             get_script_generation_logic()(config)

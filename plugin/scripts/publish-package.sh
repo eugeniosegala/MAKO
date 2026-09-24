@@ -162,7 +162,7 @@ if [[ -n "$requested_version" ]]; then
   fi
 fi
 
-read -r archive_name engine_version package_version github_repository has_flatpak_bundle archive_url engine_release_tag flatpak_archive_name flatpak_archive_url < <(
+read -r archive_name engine_version package_version github_repository has_flatpak_bundle archive_url engine_release_tag flatpak_archive_name flatpak_archive_url has_arch_package arch_package_name arch_package_url < <(
   node -e '
     const manifest = require(process.argv[1]);
     const [binary] = manifest.remote_binary ?? [];
@@ -171,6 +171,7 @@ read -r archive_name engine_version package_version github_repository has_flatpa
       ?.replace(/^git\+https:\/\/github\.com\//, "")
       .replace(/\.git$/, "");
     const flatpak = binary?.flatpak_bundle;
+    const archPackage = binary?.arch_package;
     if (!binary?.name || !binary?.version || !manifest.version || !githubRepository) {
       process.exitCode = 1;
       throw new Error("package.json must define version, GitHub repository, and one versioned remote_binary entry");
@@ -186,7 +187,11 @@ read -r archive_name engine_version package_version github_repository has_flatpa
       process.exitCode = 1;
       throw new Error("flatpak_bundle must define name, url, and sha256hash when present");
     }
-    process.stdout.write(`${binary.name}\t${binary.version}\t${manifest.version}\t${githubRepository}\t${flatpak ? "true" : "false"}\t${binary.url ?? ""}\t${binary.release_tag ?? ""}\t${flatpak?.name ?? ""}\t${flatpak?.url ?? ""}\n`);
+    if (archPackage && (!archPackage.name || !archPackage.url || !archPackage.sha256hash)) {
+      process.exitCode = 1;
+      throw new Error("arch_package must define name, url, and sha256hash when present");
+    }
+    process.stdout.write(`${binary.name}\t${binary.version}\t${manifest.version}\t${githubRepository}\t${flatpak ? "true" : "false"}\t${binary.url ?? ""}\t${binary.release_tag ?? ""}\t${flatpak?.name ?? ""}\t${flatpak?.url ?? ""}\t${archPackage ? "true" : "false"}\t${archPackage?.name ?? ""}\t${archPackage?.url ?? ""}\n`);
   ' "$project_dir/package.json"
 )
 
@@ -201,12 +206,19 @@ expected_archive_name="MAKO-Renderer-v$engine_version-linux.tar.xz"
 expected_flatpak_archive_name="MAKO-Renderer-v$engine_version-flatpaks.tar.xz"
 expected_archive_url="https://github.com/$github_repository/releases/download/$expected_engine_release_tag/$expected_archive_name"
 expected_flatpak_archive_url="https://github.com/$github_repository/releases/download/$expected_engine_release_tag/$expected_flatpak_archive_name"
+expected_arch_package_pattern="^mako-renderer-bin-${engine_version//./\\.}-[1-9][0-9]*-x86_64\\.pkg\\.tar\\.zst$"
 if [[ "$engine_release_tag" != "$expected_engine_release_tag" ||
       "$archive_name" != "$expected_archive_name" ||
       "$archive_url" != "$expected_archive_url" ]]; then
   echo "Publishing MAKO Decky requires a pinned MAKO Renderer release from this repository." >&2
   echo "Expected: $expected_archive_url (tag $expected_engine_release_tag)" >&2
   echo "Update plugin/package.json after publishing the renderer track." >&2
+  exit 1
+fi
+if [[ "$has_arch_package" == "true" &&
+      ( ! "$arch_package_name" =~ $expected_arch_package_pattern ||
+        "$arch_package_url" != "https://github.com/$github_repository/releases/download/$expected_engine_release_tag/$arch_package_name" ) ]]; then
+  echo "Publishing MAKO Decky requires the matching MAKO Renderer Arch package asset." >&2
   exit 1
 fi
 if [[ "$has_flatpak_bundle" == "true" &&

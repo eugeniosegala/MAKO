@@ -112,6 +112,23 @@ renderer_archive="MAKO-Renderer-v$version-linux.tar.xz"
 flatpak_archive="MAKO-Renderer-v$version-flatpaks.tar.xz"
 decky_archive="MAKO-Decky-v$version.zip"
 
+refresh_arch_package_name() {
+  local arch_pkgver
+  local arch_pkgrel
+  arch_pkgver="$(sed -n 's/^pkgver=\(.*\)$/\1/p' engine/dist/arch/PKGBUILD | head -n 1)"
+  arch_pkgrel="$(sed -n 's/^pkgrel=\(.*\)$/\1/p' engine/dist/arch/PKGBUILD | head -n 1)"
+  if [[ -z "$arch_pkgver" || -z "$arch_pkgrel" ]]; then
+    echo "Could not read the Arch package identity from engine/dist/arch/PKGBUILD." >&2
+    exit 1
+  fi
+  if [[ "$arch_pkgver" != "$version" ]]; then
+    arch_pkgrel=1
+  fi
+  arch_package="mako-renderer-bin-${version}-${arch_pkgrel}-x86_64.pkg.tar.zst"
+}
+
+refresh_arch_package_name
+
 release_has_asset() {
   local tag="$1"
   local expected_asset="$2"
@@ -162,6 +179,7 @@ renderer_pin_matches() {
     const version = process.argv[2];
     const tagCommit = process.argv[3];
     const repository = process.argv[4];
+    const archName = process.argv[5];
     const binary = manifest.remote_binary?.[0];
     const tag = `render-v${version}`;
     const nativeName = `MAKO-Renderer-v${version}-linux.tar.xz`;
@@ -176,30 +194,36 @@ renderer_pin_matches() {
       sha256.test(binary?.sha256hash ?? "") &&
       binary?.flatpak_bundle?.name === flatpakName &&
       binary?.flatpak_bundle?.url === `${base}/${flatpakName}` &&
-      sha256.test(binary?.flatpak_bundle?.sha256hash ?? "");
+      sha256.test(binary?.flatpak_bundle?.sha256hash ?? "") &&
+      binary?.arch_package?.name === archName &&
+      binary?.arch_package?.url === `${base}/${archName}` &&
+      sha256.test(binary?.arch_package?.sha256hash ?? "");
     process.exit(valid ? 0 : 1);
-  ' plugin/package.json "$version" "$tag_commit" "$github_repository"
+  ' plugin/package.json "$version" "$tag_commit" "$github_repository" "$arch_package"
 }
 
 renderer_is_complete() {
   local native_checksum
   local flatpak_checksum
+  local arch_checksum
   [[ "$(tr -d '[:space:]' < engine/VERSION)" == "$version" ]] || return 1
   git show-ref --verify --quiet "refs/tags/$renderer_tag" || return 1
   gh release view "$renderer_tag" --repo "$github_repository" >/dev/null 2>&1 || return 1
   release_has_asset "$renderer_tag" "$renderer_archive" || return 1
   release_has_asset "$renderer_tag" "$flatpak_archive" || return 1
+  release_has_asset "$renderer_tag" "$arch_package" || return 1
   renderer_pin_matches "$(git rev-list -n 1 "$renderer_tag")" || return 1
   engine/dist/arch/check-release-pin.sh >/dev/null || return 1
-  read -r native_checksum flatpak_checksum < <(
+  read -r native_checksum flatpak_checksum arch_checksum < <(
     node -e '
       const { resolve } = require("node:path");
       const binary = require(resolve(process.argv[1])).remote_binary[0];
-      process.stdout.write(`${binary.sha256hash}\t${binary.flatpak_bundle.sha256hash}\n`);
+      process.stdout.write(`${binary.sha256hash}\t${binary.flatpak_bundle.sha256hash}\t${binary.arch_package.sha256hash}\n`);
     ' plugin/package.json
   )
   release_asset_checksum_matches "$renderer_tag" "$renderer_archive" "$native_checksum" || return 1
   release_asset_checksum_matches "$renderer_tag" "$flatpak_archive" "$flatpak_checksum" || return 1
+  release_asset_checksum_matches "$renderer_tag" "$arch_package" "$arch_checksum" || return 1
 }
 
 decky_is_complete() {
@@ -217,6 +241,7 @@ if renderer_is_complete; then
   renderer_verified=true
 else
   "$repository_root/engine/scripts/publish-package.sh" --version "$version"
+  refresh_arch_package_name
   if renderer_is_complete; then
     renderer_verified=true
   fi
@@ -272,6 +297,7 @@ fi
 rm -f -- \
   "$repository_root/engine/out/$renderer_archive" \
   "$repository_root/engine/out/$flatpak_archive" \
+  "$repository_root/engine/out/$arch_package" \
   "$repository_root/plugin/out/$decky_archive"
 cleanup_rm_args=(-rf)
 if [[ "$(uname -s)" == "Linux" ]]; then
