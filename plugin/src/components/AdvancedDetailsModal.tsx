@@ -1,4 +1,4 @@
-import { CSSProperties, useState, useEffect } from "react";
+import { CSSProperties, useEffect, useState } from "react";
 import {
   ModalRoot,
   DialogBody,
@@ -8,11 +8,10 @@ import {
   ButtonItem,
 } from "@decky/ui";
 import {
-  getDllStats,
-  DllStatsResult,
-  getConfigFileContent,
-  getLaunchScriptContent,
-  FileContentResult,
+  checkLosslessScalingDll,
+  checkMakoInstalled,
+  type DllDetectionResult,
+  type InstallationStatus,
 } from "../api/makoApi";
 import t from "../i18n/i18n";
 import {
@@ -31,114 +30,103 @@ interface AdvancedDetailsModalProps {
 export function AdvancedDetailsModal({
   closeModal,
 }: AdvancedDetailsModalProps) {
-  const [dllStats, setDllStats] = useState<DllStatsResult | null>(null);
-  const [configContent, setConfigContent] = useState<FileContentResult | null>(
+  const [installation, setInstallation] = useState<InstallationStatus | null>(
     null,
   );
-  const [scriptContent, setScriptContent] = useState<FileContentResult | null>(
-    null,
-  );
+  const [dll, setDll] = useState<DllDetectionResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const loadData = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-
-        // Load all data in parallel
-        const [dllResult, configResult, scriptResult] = await Promise.all([
-          getDllStats(),
-          getConfigFileContent(),
-          getLaunchScriptContent(),
-        ]);
-
-        setDllStats(dllResult);
-        setConfigContent(configResult);
-        setScriptContent(scriptResult);
-      } catch (err) {
-        setError(
-          err instanceof Error
-            ? err.message
-            : t("ADVANCED_DETAILS_FAILED_LOAD_DATA", "Failed to load data"),
-        );
-      } finally {
-        setLoading(false);
-      }
+    let active = true;
+    Promise.all([checkMakoInstalled(), checkLosslessScalingDll()])
+      .then(([installationResult, dllResult]) => {
+        if (active) {
+          setInstallation(installationResult);
+          setDll(dllResult);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          setError(
+            err instanceof Error
+              ? err.message
+              : t("ADVANCED_DETAILS_FAILED_LOAD_DATA", "Failed to load data"),
+          );
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
     };
-
-    loadData();
   }, []);
 
-  const formatSHA256 = (hash: string) => {
-    // Format SHA256 hash for better readability (add spaces every 8 characters)
-    return hash.replace(/(.{8})/g, "$1 ").trim();
-  };
-
-  const copyToClipboard = async (text: string) => {
+  const copyToClipboard = async (value: string) => {
     try {
-      await navigator.clipboard.writeText(text);
-      // Could add a toast notification here if desired
+      await navigator.clipboard.writeText(value);
     } catch (err) {
       console.error("Failed to copy to clipboard:", err);
     }
   };
 
-  const copyableValueStyle: CSSProperties = {
+  const valueStyle: CSSProperties = {
     display: "block",
+    boxSizing: "border-box",
     minWidth: 0,
+    width: "100%",
     maxWidth: "100%",
+    padding: "8px 10px",
     overflowWrap: "anywhere",
     wordBreak: "break-word",
-  };
-
-  const pathStyle: CSSProperties = {
-    ...copyableValueStyle,
-    marginBottom: "9px",
-    color: "#b9cbd0",
-    fontSize: "12px",
-    lineHeight: 1.35,
-  };
-
-  const detailLabelStyle: CSSProperties = {
-    marginBottom: "4px",
-    color: "#a9c4cb",
-    fontSize: "11px",
-    fontWeight: 600,
-    lineHeight: 1.3,
-    textTransform: "uppercase",
-    letterSpacing: "0.35px",
-  };
-
-  const detailValueStyle: CSSProperties = {
-    ...copyableValueStyle,
-    boxSizing: "border-box",
-    width: "100%",
-    padding: "12px 14px",
+    userSelect: "text",
+    border: "1px solid rgba(77, 170, 190, 0.18)",
+    borderRadius: "4px",
+    background: "rgba(0, 10, 18, 0.3)",
     color: "#edf8fb",
     fontSize: "13px",
     lineHeight: 1.4,
   };
-
-  const codeBlockStyle: CSSProperties = {
-    boxSizing: "border-box",
-    width: "100%",
-    maxWidth: "100%",
-    maxHeight: "180px",
-    margin: 0,
-    padding: "12px 14px",
-    overflow: "auto",
-    border: "1px solid rgba(77, 170, 190, 0.18)",
-    borderRadius: "4px",
-    background: "rgba(0, 10, 18, 0.42)",
-    color: "#dcecef",
-    fontSize: "0.8em",
-    lineHeight: 1.5,
-    whiteSpace: "pre-wrap",
-    overflowWrap: "anywhere",
-    wordBreak: "break-word",
+  const labelStyle: CSSProperties = {
+    marginBottom: "4px",
+    color: "#a9c4cb",
+    fontSize: "11px",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.35px",
   };
+  const detail = (label: string, value: string | null | undefined) => {
+    const displayedValue =
+      value || t("ADVANCED_DETAILS_NOT_AVAILABLE", "Not available");
+    return (
+      <div style={makoPanelItemStyle}>
+        <div style={labelStyle}>{label}</div>
+        <MakoFocusable
+          onClick={() => void copyToClipboard(displayedValue)}
+          onActivate={() => void copyToClipboard(displayedValue)}
+          style={valueStyle}
+        >
+          {displayedValue}
+        </MakoFocusable>
+      </div>
+    );
+  };
+
+  const installationSummary = installation?.error
+    ? installation.error
+    : installation?.host_architecture_supported === false
+      ? t("ADVANCED_DETAILS_UNSUPPORTED_HOST", "Unsupported host")
+      : installation?.installed
+        ? installation.engine_update_required
+          ? t("ADVANCED_DETAILS_UPDATE_REQUIRED", "Bundled update available")
+          : t("STATUS_ENGINE_INSTALLED", "MAKO Renderer installed")
+        : installation &&
+            (installation.lib_exists ||
+              installation.json_exists ||
+              installation.script_exists)
+          ? t("ADVANCED_DETAILS_INCOMPLETE", "Incomplete installation")
+          : t("STATUS_ENGINE_NOT_INSTALLED", "MAKO Renderer not installed");
 
   return (
     <ModalRoot closeModal={closeModal}>
@@ -148,24 +136,12 @@ export function AdvancedDetailsModal({
       <DialogBody>
         {loading && (
           <div
-            style={{
-              ...makoPanelStyle,
-              margin: "8px 0 18px",
-              padding: "18px",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: "9px",
-              color: "#dcecef",
-            }}
+            style={{ ...makoPanelStyle, margin: "8px 0 18px", padding: "18px" }}
           >
-            <MakoCompactSpinner />
-            <span>
-              {t("ADVANCED_DETAILS_LOADING", "Loading information...")}
-            </span>
+            <MakoCompactSpinner />{" "}
+            {t("ADVANCED_DETAILS_LOADING", "Loading information...")}
           </div>
         )}
-
         {error && (
           <div
             style={{
@@ -178,195 +154,73 @@ export function AdvancedDetailsModal({
             {t("ADVANCED_DETAILS_ERROR_PREFIX", "Error:")} {error}
           </div>
         )}
-
-        {!loading && !error && (
+        {!loading && !error && installation && dll && (
           <MakoFocusable flow-children="column">
             <div style={{ ...makoPanelStyle, margin: "8px 0 18px" }}>
-              {dllStats && (
-                <>
-                  <div style={makoPanelSectionHeaderStyle}>
-                    {t("ADVANCED_DETAILS_LIBRARY", "Lossless Scaling Library")}
-                  </div>
-                  {!dllStats.success ? (
-                    <div
-                      style={{
-                        ...makoPanelItemStyle,
-                        color: "#ffb3b9",
-                        overflowWrap: "anywhere",
-                      }}
-                    >
-                      {dllStats.error ||
-                        t(
-                          "ADVANCED_DETAILS_FAILED_DLL_STATS",
-                          "Failed to get DLL stats",
-                        )}
-                    </div>
-                  ) : (
-                    <>
-                      <div style={makoPanelItemStyle}>
-                        <div style={detailLabelStyle}>
-                          {t("ADVANCED_DETAILS_DLL_PATH", "DLL Path")}
-                        </div>
-                        <MakoFocusable
-                          onClick={() =>
-                            dllStats.dll_path &&
-                            copyToClipboard(dllStats.dll_path)
-                          }
-                          onActivate={() =>
-                            dllStats.dll_path &&
-                            copyToClipboard(dllStats.dll_path)
-                          }
-                          style={detailValueStyle}
-                        >
-                          {dllStats.dll_path ||
-                            t(
-                              "ADVANCED_DETAILS_NOT_AVAILABLE",
-                              "Not available",
-                            )}
-                        </MakoFocusable>
-                      </div>
-                      <div style={makoPanelItemStyle}>
-                        <div style={detailLabelStyle}>
-                          {t("ADVANCED_DETAILS_DLL_HASH", "DLL SHA256 Hash")}
-                        </div>
-                        <MakoFocusable
-                          onClick={() =>
-                            dllStats.dll_sha256 &&
-                            copyToClipboard(dllStats.dll_sha256)
-                          }
-                          onActivate={() =>
-                            dllStats.dll_sha256 &&
-                            copyToClipboard(dllStats.dll_sha256)
-                          }
-                          style={{
-                            ...detailValueStyle,
-                            fontFamily: "monospace",
-                            fontSize: "12px",
-                          }}
-                        >
-                          {dllStats.dll_sha256
-                            ? formatSHA256(dllStats.dll_sha256)
-                            : t(
-                                "ADVANCED_DETAILS_NOT_AVAILABLE",
-                                "Not available",
-                              )}
-                        </MakoFocusable>
-                      </div>
-                      {dllStats.dll_source && (
-                        <div style={makoPanelItemStyle}>
-                          <div style={detailLabelStyle}>
-                            {t(
-                              "ADVANCED_DETAILS_DETECTION_SOURCE",
-                              "Detection Source",
-                            )}
-                          </div>
-                          <div style={detailValueStyle}>
-                            {dllStats.dll_source}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </>
+              <div style={makoPanelSectionHeaderStyle}>
+                {t("ADVANCED_DETAILS_RENDERER", "MAKO Renderer")}
+              </div>
+              {detail(
+                t("ADVANCED_DETAILS_INSTALLATION", "Installation"),
+                installationSummary,
               )}
+              {detail(
+                t("ADVANCED_DETAILS_INSTALLED_VERSION", "Installed version"),
+                installation.installed && installation.engine_version_known
+                  ? installation.installed_engine_version
+                  : null,
+              )}
+              {detail(
+                t("ADVANCED_DETAILS_BUNDLED_VERSION", "Bundled version"),
+                installation.expected_engine_version,
+              )}
+              {detail(
+                t("ADVANCED_DETAILS_HOST_ARCHITECTURE", "Host architecture"),
+                installation.host_architecture,
+              )}
+              {installation.lib_exists &&
+                detail(
+                  t("ADVANCED_DETAILS_LAYER_PATH", "Renderer library"),
+                  installation.lib_path,
+                )}
+              {installation.json_exists &&
+                detail(
+                  t("ADVANCED_DETAILS_MANIFEST_PATH", "Vulkan manifest"),
+                  installation.json_path,
+                )}
+              {installation.script_exists &&
+                detail(
+                  t("ADVANCED_DETAILS_LAUNCHER_PATH", "Launch wrapper"),
+                  installation.script_path,
+                )}
 
-              {scriptContent && (
-                <>
-                  <div
-                    style={{
-                      ...makoPanelSectionHeaderStyle,
-                      borderTop: makoPanelDivider,
-                    }}
-                  >
-                    {t("ADVANCED_DETAILS_LAUNCH_SCRIPT", "Launch Script")}
-                  </div>
-                  <div style={makoPanelItemStyle}>
-                    {!scriptContent.success ? (
-                      <div
-                        style={{ color: "#ffb3b9", overflowWrap: "anywhere" }}
-                      >
-                        {t(
-                          "ADVANCED_DETAILS_SCRIPT_NOT_FOUND_PREFIX",
-                          "Script not found:",
-                        )}{" "}
-                        {scriptContent.error}
-                      </div>
-                    ) : (
-                      <div style={{ minWidth: 0 }}>
-                        <div style={pathStyle}>
-                          {t("ADVANCED_DETAILS_PATH_PREFIX", "Path:")}{" "}
-                          {scriptContent.path}
-                        </div>
-                        <MakoFocusable
-                          onClick={() =>
-                            scriptContent.content &&
-                            copyToClipboard(scriptContent.content)
-                          }
-                          onActivate={() =>
-                            scriptContent.content &&
-                            copyToClipboard(scriptContent.content)
-                          }
-                        >
-                          <pre style={codeBlockStyle}>
-                            {scriptContent.content ||
-                              t("ADVANCED_DETAILS_NO_CONTENT", "No content")}
-                          </pre>
-                        </MakoFocusable>
-                      </div>
-                    )}
-                  </div>
-                </>
+              <div
+                style={{
+                  ...makoPanelSectionHeaderStyle,
+                  borderTop: makoPanelDivider,
+                }}
+              >
+                {t("ADVANCED_DETAILS_LIBRARY", "Lossless Scaling Library")}
+              </div>
+              {detail(
+                t("ADVANCED_DETAILS_DETECTION", "Detection"),
+                dll.detected
+                  ? t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed")
+                  : dll.error ||
+                      t(
+                        "ADVANCED_DETAILS_DLL_NOT_DETECTED",
+                        "Lossless Scaling not detected",
+                      ),
               )}
-
-              {configContent && (
-                <>
-                  <div
-                    style={{
-                      ...makoPanelSectionHeaderStyle,
-                      borderTop: makoPanelDivider,
-                    }}
-                  >
-                    {t("ADVANCED_DETAILS_CONFIG_FILE", "Configuration File")}
-                  </div>
-                  <div style={makoPanelItemStyle}>
-                    {!configContent.success ? (
-                      <div
-                        style={{ color: "#ffb3b9", overflowWrap: "anywhere" }}
-                      >
-                        {t(
-                          "ADVANCED_DETAILS_CONFIG_NOT_FOUND_PREFIX",
-                          "Config not found:",
-                        )}{" "}
-                        {configContent.error}
-                      </div>
-                    ) : (
-                      <div style={{ minWidth: 0 }}>
-                        <div style={pathStyle}>
-                          {t("ADVANCED_DETAILS_PATH_PREFIX", "Path:")}{" "}
-                          {configContent.path}
-                        </div>
-                        <MakoFocusable
-                          onClick={() =>
-                            configContent.content &&
-                            copyToClipboard(configContent.content)
-                          }
-                          onActivate={() =>
-                            configContent.content &&
-                            copyToClipboard(configContent.content)
-                          }
-                        >
-                          <pre style={codeBlockStyle}>
-                            {configContent.content ||
-                              t("ADVANCED_DETAILS_NO_CONTENT", "No content")}
-                          </pre>
-                        </MakoFocusable>
-                      </div>
-                    )}
-                  </div>
-                </>
-              )}
+              {dll.detected &&
+                detail(t("ADVANCED_DETAILS_DLL_PATH", "DLL Path"), dll.path)}
+              {dll.detected &&
+                dll.source &&
+                detail(
+                  t("ADVANCED_DETAILS_DETECTION_SOURCE", "Detection Source"),
+                  dll.source,
+                )}
             </div>
-
             <DialogControlsSection>
               <PanelSectionRow>
                 <div className="Mako_BrandButton">
