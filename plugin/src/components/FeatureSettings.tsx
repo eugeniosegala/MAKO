@@ -30,9 +30,8 @@ export function FeatureSettings({
   onConfigChange,
   onConfigUpdate,
 }: FeatureSettingsProps) {
-  const [activeModality, setActiveModality] = useState<ModalityId>(
-    "frame-generation",
-  );
+  const [activeModality, setActiveModality] =
+    useState<ModalityId>("frame-generation");
   const activeModalityLabel =
     activeModality === "frame-generation"
       ? t("CONTENT_FPS_MULTIPLIER", "Frame Generation")
@@ -46,12 +45,14 @@ export function FeatureSettings({
         {t("CONTENT_IMAGE_PROCESSING", "Image Processing")}
       </MakoSectionHeader>
       <PanelSectionRow>
-        <MakoInlineTip tone="info">
-          {t(
-            "IMAGE_PROCESSING_PERFORMANCE_INFO",
-            "Combining Frame Generation, Scaling, and Shaders can affect performance. Test each game, disable features you do not need, and try both Windowed and Fullscreen modes.",
-          )}
-        </MakoInlineTip>
+        <div data-mako-image-processing-tip="true" style={{ marginTop: "3px" }}>
+          <MakoInlineTip tone="info">
+            {t(
+              "IMAGE_PROCESSING_PERFORMANCE_INFO",
+              "Combining Frame Generation, Scaling, and Shaders can affect performance. Test each game, disable features you do not need, and try both Windowed and Fullscreen modes.",
+            )}
+          </MakoInlineTip>
+        </div>
       </PanelSectionRow>
       <ModalityTabs
         activeModality={activeModality}
@@ -81,13 +82,9 @@ export function FeatureSettings({
           <ScalingControl
             config={config}
             disabled={disabled}
-            runtimeActivationSupported={
-              runtimeState.scalingActivationSupported
-            }
+            runtimeActivationSupported={runtimeState.scalingActivationSupported}
             runtimeInactiveReason={runtimeState.inactiveReason}
-            runtimeFactorCeiling={
-              runtimeState.nonSupersamplingFactorCeiling
-            }
+            runtimeFactorCeiling={runtimeState.nonSupersamplingFactorCeiling}
             modelCompatible={scalingModelCompatible}
             runtimeRequestedMethod={runtimeState.requestedMethod}
             runtimeActiveMethod={
@@ -106,6 +103,7 @@ export function FeatureSettings({
           <ShadersConfigurationGroup
             config={config}
             isDefaultProfile={profileName === DEFAULT_PROFILE_NAME}
+            profileName={profileName}
             vkBasaltConfigPath={vkBasaltConfigPath}
             onConfigChange={onConfigChange}
           />

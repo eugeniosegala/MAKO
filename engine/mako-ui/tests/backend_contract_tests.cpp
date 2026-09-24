@@ -456,11 +456,16 @@ void test_save_lifetime() {
                     managedShaderDirectory + QStringLiteral("/LevelsPlus.fx")),
             "UI did not install the selectable shader stack assets");
         QFile generatedShaderConfig(backend.getVkBasaltConfigPath());
-        require(generatedShaderConfig.open(QIODevice::ReadOnly) &&
-                generatedShaderConfig.readAll().contains(
+        require(generatedShaderConfig.open(QIODevice::ReadOnly),
+            "UI did not create a readable shader configuration");
+        const auto generatedShaderContent = generatedShaderConfig.readAll();
+        require(generatedShaderContent.contains(
                     (managedShaderDirectory + QStringLiteral("/Vibrance.fx"))
                         .toUtf8()),
             "UI did not reference the shared Decky-compatible shader directory");
+        require(generatedShaderContent.contains(
+                    "effects = fxaa:makoHDRLook:makoClarity:makoVibrance:makoLevelsPlus:dls"),
+            "UI did not preserve the ordered multi-effect chain in vkBasalt");
         const auto selectedProfile = backend.calculateProfileListModel()
             ->data(backend.calculateProfileListModel()->index(0, 0)).toString();
         require(backend.getLaunchOption().contains(
@@ -472,9 +477,18 @@ void test_save_lifetime() {
         QFile sidecar(directory.filePath(
             "profile-wrapper-settings.json"
         ));
-        require(sidecar.open(QIODevice::ReadOnly) &&
-                sidecar.readAll().contains("\"external_vulkan_layer\": \"vkbasalt\""),
-            "UI did not reuse Decky's profile wrapper settings sidecar");
+        require(sidecar.open(QIODevice::ReadOnly),
+            "UI did not create Decky's profile wrapper settings sidecar");
+        const auto storedProfiles = QJsonDocument::fromJson(sidecar.readAll())
+            .object().value(QStringLiteral("profiles")).toObject();
+        const auto storedProfile = storedProfiles
+            .value(selectedProfile).toObject();
+        require(storedProfile.value(QStringLiteral("external_vulkan_layer"))
+                    .toString() == QStringLiteral("vkbasalt") &&
+                storedProfile.value(QStringLiteral("vkbasalt_shader"))
+                    .toString() ==
+                    QStringLiteral("hdr_look:clarity:vibrance:levels_plus"),
+            "UI did not save the ordered effects in Decky's profile sidecar");
         const auto timestamp = std::filesystem::last_write_time(configPath);
         QTimer::singleShot(700, &events, &QEventLoop::quit);
         events.exec();

@@ -41,7 +41,7 @@ if ((${#renderer_paths[@]} != 8)); then
   echo "The shared Renderer path contract is incomplete." >&2
   exit 1
 fi
-if ((${#vkbasalt_paths[@]} != 5)); then
+if ((${#vkbasalt_paths[@]} != 6)); then
   echo "The shared vkBasalt path contract is incomplete." >&2
   exit 1
 fi
@@ -58,6 +58,7 @@ vkbasalt_library_relative_path="${vkbasalt_paths[1]}"
 vkbasalt_library32_relative_path="${vkbasalt_paths[2]}"
 vkbasalt_manifest_relative_path="${vkbasalt_paths[3]}"
 vkbasalt_manifest32_relative_path="${vkbasalt_paths[4]}"
+vkbasalt_shader_relative_path="${vkbasalt_paths[5]}"
 flatpak_runtime_summary="$(
   python3 "$project_dir/scripts/read_flatpak_runtime_contract.py" summary
 )"
@@ -560,6 +561,19 @@ if [[ "$deploy_backend" == true ]]; then
   find "$plugin_dir/py_modules" -type f \( -name '*.pyc' -o -name '*.pyo' \) -delete
   find "$plugin_dir/py_modules" -type d -name '__pycache__' -prune -exec rm -rf {} +
   echo "Deployed Decky Python backend and diagnostics helper."
+fi
+
+if [[ "$deploy_backend" == true || "$deploy_engine" == true ||
+      "$deploy_engine_32" == true ]]; then
+  installed_vkbasalt_shader_dir="$HOME/$vkbasalt_shader_relative_path"
+  source_vkbasalt_shader_dir="$project_dir/py_modules/mako_plugin/vkbasalt_shaders"
+  if [[ -d "$installed_vkbasalt_shader_dir" ]]; then
+    while IFS= read -r -d '' shader_asset; do
+      copy_file "$shader_asset" \
+        "$installed_vkbasalt_shader_dir/${shader_asset##*/}"
+    done < <(find "$source_vkbasalt_shader_dir" -maxdepth 1 -type f -print0)
+    echo "Deployed the complete private vkBasalt shader catalog."
+  fi
 fi
 
 if [[ -n "$built_layer_64" ]]; then

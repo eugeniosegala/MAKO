@@ -323,7 +323,7 @@ export function FpsMultiplierControl({
                     <span style={{ display: "block", paddingBottom: "2px" }}>
                       {t(
                         "ADAPTIVE_MAX_MULTIPLIER_DESC",
-                        "Use 0x to pause or resume Frame Generation live without unloading its resources. Otherwise this is the interpolation ceiling, not a fixed ratio; Adaptive may use lower or fractional multipliers. Test 2x–5x per game.",
+                        "Use 0x to pause or resume Frame Generation live without unloading its resources. Otherwise this is the interpolation ceiling, not a fixed ratio; Adaptive may use lower or fractional multipliers. Set it only as high as needed to reach Target FPS. Test 2x–5x per game.",
                       )}
                     </span>
                   }

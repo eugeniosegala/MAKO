@@ -14,6 +14,7 @@ import {
 } from "react";
 import { usePersistentCollapseState } from "../hooks/usePersistentCollapseState";
 import t from "../i18n/i18n";
+import { findFocusScrollContainer } from "../utils/focusScrollUtils";
 import { MakoFocusable, makoDialogButtonStyle } from "./MakoUi";
 import { InfoHiddenContext } from "./MakoInfo";
 
@@ -69,23 +70,6 @@ function adjacentControl(
     controls[controls.length - 1] ??
     null
   );
-}
-
-function scrollContainer(element: HTMLElement): HTMLElement | null {
-  const view = element.ownerDocument.defaultView;
-  for (
-    let parent = element.parentElement;
-    parent;
-    parent = parent.parentElement
-  ) {
-    if (
-      parent.scrollHeight > parent.clientHeight &&
-      /auto|scroll|overlay/.test(view?.getComputedStyle(parent).overflowY ?? "")
-    ) {
-      return parent;
-    }
-  }
-  return element.ownerDocument.scrollingElement as HTMLElement | null;
 }
 
 /** Keep help visibility local to the panel, independent of game profiles. */
@@ -180,7 +164,7 @@ export function InfoVisibility({ children }: { children: ReactNode }) {
         top: sourceTop ?? target.getBoundingClientRect().top,
         scroller: target.closest(ribbonSelector)
           ? null
-          : scrollContainer(target),
+          : findFocusScrollContainer(target),
       };
       target.focus({ preventScroll: true });
     }

@@ -1,8 +1,18 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@decky/ui", () => ({
+  GamepadButton: {
+    DIR_LEFT: 11,
+    DIR_RIGHT: 12,
+  },
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -118,14 +128,16 @@ vi.mock("@decky/ui", () => ({
   ButtonItem: ({
     children,
     onClick,
+    disabled,
   }: {
     children: React.ReactNode;
     onClick: () => void;
-  }) => <button onClick={onClick}>{children}</button>,
-  DialogHeader: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
-  DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  DialogButton: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <button onClick={onClick}>{children}</button>,
-  ModalRoot: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    disabled?: boolean;
+  }) => (
+    <button onClick={onClick} disabled={disabled}>
+      {children}
+    </button>
+  ),
   showModal: vi.fn(),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
@@ -156,7 +168,15 @@ vi.mock("../../src/components/MakoUi", () => ({
     children: React.ReactNode;
     tone?: string;
   }) => <div data-tone={tone}>{children}</div>,
-  MakoFocusable: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  MakoFocusable: ({
+    children,
+    onActivate: _onActivate,
+    "flow-children": _flowChildren,
+    ...props
+  }: React.HTMLAttributes<HTMLDivElement> & {
+    onActivate?: () => void;
+    "flow-children"?: string;
+  }) => <div {...props}>{children}</div>,
   MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
     <div data-mako-setting-relationship="true">{children}</div>
   ),
@@ -197,6 +217,7 @@ describe("Configuration controls", () => {
   beforeEach(() => {
     window.SP_REACT = React;
     localStorage.clear();
+    vi.clearAllMocks();
   });
 
   test("uses consistent spacing before configuration section headers", () => {
@@ -249,6 +270,7 @@ describe("Configuration controls", () => {
           vkbasalt_dls_denoise: 0.2,
         }}
         isDefaultProfile={false}
+        profileName="final-fantasy"
         vkBasaltConfigPath="/home/deck/.config/mako-render/vkbasalt/abc.conf"
         onConfigChange={vi.fn(async () => undefined)}
       />,
@@ -278,12 +300,36 @@ describe("Configuration controls", () => {
         .getAllByText(/^(Effects|Sharpening)$/)
         .map((element) => element.textContent),
     ).toEqual(["Effects", "Sharpening"]);
+    expect(screen.queryByRole("checkbox", { name: "Clarity" })).toBeNull();
     fireEvent.click(screen.getByText("Choose effects (0 selected)"));
-    const modal = vi.mocked(showModal).mock.lastCall?.[0];
-    expect(modal).toBeTruthy();
-    render(modal);
-    expect(screen.getByRole("button", { name: "Clarity" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "Levels Plus" })).toBeTruthy();
+    expect(showModal).not.toHaveBeenCalled();
+    expect(
+      screen.getByTestId("mako-effects-selector").style.paddingBottom,
+    ).toBe("8px");
+    const effectsList = screen.getByTestId("mako-effects-list");
+    expect(effectsList.style.overflowY).toBe("");
+    expect(screen.getByTestId("mako-effects-page").style.height).toBe("198px");
+    expect(screen.getAllByRole("checkbox")).toHaveLength(5);
+    expect(screen.getByRole("checkbox", { name: "Clarity" })).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "Levels Plus" })).toBeTruthy();
+    fireEvent.mouseEnter(screen.getByRole("checkbox", { name: "Clarity" }));
+    expect(
+      screen.getByRole("checkbox", { name: "Clarity" }).style.outline,
+    ).toContain("2px solid");
+    const pager = screen.getByRole("button", { name: "Effects" });
+    pager.focus();
+    expect(pager.style.outline).toContain("2px solid");
+    fireEvent.keyDown(pager, { key: "ArrowRight" });
+    expect(screen.queryByRole("checkbox", { name: "Clarity" })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Curves" })).toBeTruthy();
+    expect(document.activeElement).toBe(pager);
+    const clearAll = screen.getByRole("button", { name: "Clear all" });
+    fireEvent.focus(clearAll);
+    expect(clearAll.style.width).toBe("100%");
+    expect(clearAll.style.display).toBe("grid");
+    expect(clearAll.style.placeItems).toBe("center");
+    expect(clearAll.style.marginTop).toBe("8px");
+    expect(clearAll.style.outline).toContain("2px solid");
     expect(
       screen.getByText(
         "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. This file belongs to the selected profile and is removed when that profile is deleted.",
@@ -301,28 +347,154 @@ describe("Configuration controls", () => {
           vkbasalt_shader: "hdr_look:vibrance",
         }}
         isDefaultProfile={false}
+        profileName="final-fantasy"
         vkBasaltConfigPath="/home/deck/.config/mako-render/vkbasalt/abc.conf"
         onConfigChange={onConfigChange}
       />,
     );
 
     fireEvent.click(screen.getByText("Choose effects (2 selected)"));
-    const modal = vi.mocked(showModal).mock.lastCall?.[0];
-    expect(modal).toBeTruthy();
-    render(modal);
-    expect(screen.getByRole("button", { name: "1. HDR Look (SDR)" }).getAttribute("data-checked")).toBe("true");
-    expect(screen.getByRole("button", { name: "2. Vibrance" }).getAttribute("data-checked")).toBe("true");
-    fireEvent.click(screen.getByRole("button", { name: "Clarity" }));
+    expect(showModal).not.toHaveBeenCalled();
+    expect(
+      screen
+        .getByRole("checkbox", { name: "1. HDR Look (SDR)" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+    fireEvent.click(screen.getByRole("checkbox", { name: "Clarity" }));
     await waitFor(() =>
       expect(onConfigChange).toHaveBeenCalledWith(
         "vkbasalt_shader",
         "hdr_look:vibrance:clarity",
       ),
     );
-    fireEvent.click(screen.getByRole("button", { name: "1. HDR Look (SDR)" }));
-    await waitFor(() =>
-      expect(onConfigChange).toHaveBeenCalledWith("vkbasalt_shader", "vibrance:clarity"),
+    fireEvent.click(
+      screen.getByRole("checkbox", { name: "1. HDR Look (SDR)" }),
     );
+    await waitFor(() =>
+      expect(onConfigChange).toHaveBeenCalledWith(
+        "vkbasalt_shader",
+        "vibrance:clarity",
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    await waitFor(() =>
+      expect(onConfigChange).toHaveBeenCalledWith("vkbasalt_shader", "none"),
+    );
+    fireEvent.click(screen.getByText("Done"));
+    expect(screen.queryByTestId("mako-effects-list")).toBeNull();
+  });
+
+  test("closes the effects list when focus leaves the selector", async () => {
+    render(
+      <>
+        <button>Before effects</button>
+        <ShadersConfigurationGroup
+          config={{
+            ...getDefaults(),
+            external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+            vkbasalt_shader: "clarity",
+          }}
+          isDefaultProfile={false}
+          profileName="final-fantasy"
+          vkBasaltConfigPath="/home/deck/.config/mako-render/vkbasalt/abc.conf"
+          onConfigChange={vi.fn(async () => undefined)}
+        />
+        <button>After effects</button>
+      </>,
+    );
+
+    fireEvent.click(screen.getByText("Choose effects (1 selected)"));
+    const clarity = screen.getByRole("checkbox", { name: "1. Clarity" });
+    clarity.focus();
+    expect(screen.getByTestId("mako-effects-list")).toBeTruthy();
+
+    screen.getByRole("button", { name: "After effects" }).focus();
+    await waitFor(() =>
+      expect(screen.queryByTestId("mako-effects-list")).toBeNull(),
+    );
+  });
+
+  test("resets the inline effect editor when the selected profile changes", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const { rerender } = render(
+      <ShadersConfigurationGroup
+        config={{
+          ...getDefaults(),
+          external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+          vkbasalt_shader: "hdr_look:vibrance",
+        }}
+        isDefaultProfile={false}
+        profileName="first"
+        vkBasaltConfigPath="/home/deck/.config/mako-render/vkbasalt/first.conf"
+        onConfigChange={onConfigChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("Choose effects (2 selected)"));
+    expect(screen.getByTestId("mako-effects-list")).toBeTruthy();
+
+    rerender(
+      <ShadersConfigurationGroup
+        config={{
+          ...getDefaults(),
+          external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+          vkbasalt_shader: "clarity",
+        }}
+        isDefaultProfile={false}
+        profileName="second"
+        vkBasaltConfigPath="/home/deck/.config/mako-render/vkbasalt/second.conf"
+        onConfigChange={onConfigChange}
+      />,
+    );
+    expect(screen.queryByTestId("mako-effects-list")).toBeNull();
+    fireEvent.click(screen.getByText("Choose effects (1 selected)"));
+    expect(
+      screen
+        .getByRole("checkbox", { name: "1. Clarity" })
+        .getAttribute("aria-checked"),
+    ).toBe("true");
+  });
+
+  test("keeps the effects list open when the same profile's file path resolves", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    const config = {
+      ...getDefaults(),
+      external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+      vkbasalt_shader: "vibrance",
+    };
+    const { rerender } = render(
+      <ShadersConfigurationGroup
+        config={config}
+        isDefaultProfile
+        profileName="mako"
+        vkBasaltConfigPath=""
+        onConfigChange={onConfigChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("Choose effects (1 selected)"));
+
+    rerender(
+      <ShadersConfigurationGroup
+        config={config}
+        isDefaultProfile
+        profileName="mako"
+        vkBasaltConfigPath="/home/deck/.config/vkBasalt/vkBasalt.conf"
+        onConfigChange={onConfigChange}
+      />,
+    );
+    expect(screen.getByTestId("mako-effects-list")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "1. Vibrance" })).toBeTruthy();
+
+    rerender(
+      <ShadersConfigurationGroup
+        config={{ ...config, vkbasalt_shader: "vibrance:clarity" }}
+        isDefaultProfile
+        profileName="mako"
+        vkBasaltConfigPath="/home/deck/.config/vkBasalt/vkBasalt.conf"
+        onConfigChange={onConfigChange}
+      />,
+    );
+    expect(screen.getByTestId("mako-effects-list")).toBeTruthy();
+    expect(screen.getByRole("checkbox", { name: "2. Clarity" })).toBeTruthy();
   });
 
   test("shows the editable global file for Default without a mode selector", () => {
@@ -333,6 +505,7 @@ describe("Configuration controls", () => {
           external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
         }}
         isDefaultProfile
+        profileName="mako"
         vkBasaltConfigPath="/home/deck/.config/vkBasalt/vkBasalt.conf"
         onConfigChange={vi.fn(async () => undefined)}
       />,

@@ -87,6 +87,43 @@ class GameProfileTests(unittest.TestCase):
                     "vkbasalt_shader": value,
                 })
 
+    def test_qt_effect_stack_sidecar_round_trips_through_decky(self):
+        self.service.wrapper_profile_settings_path.write_text(
+            json.dumps({
+                "version": 1,
+                "profiles": {
+                    "mako": {
+                        "external_vulkan_layer": "vkbasalt",
+                        "vkbasalt_sharpening": "cas",
+                        "vkbasalt_antialiasing": "fxaa",
+                        "vkbasalt_shader": "technicolor2:clarity",
+                    },
+                },
+            }),
+            encoding="utf-8",
+        )
+
+        loaded = self.service.get_profile_config("mako")["config"]
+        self.assertEqual(loaded["vkbasalt_shader"], "technicolor2:clarity")
+        self.assertTrue(self.service.update_profile_config_fields(
+            "mako", {"vkbasalt_shader": "clarity:levels_plus"}
+        )["success"])
+        stored = json.loads(
+            self.service.wrapper_profile_settings_path.read_text(
+                encoding="utf-8"
+            )
+        )
+        self.assertEqual(
+            stored["profiles"]["mako"]["vkbasalt_shader"],
+            "clarity:levels_plus",
+        )
+        self.assertIn(
+            "effects = fxaa:makoClarity:makoLevelsPlus:cas",
+            self.service.vkbasalt_global_config_path.read_text(
+                encoding="utf-8"
+            ),
+        )
+
     def test_profile_save_failure_preserves_existing_renderer_config(self):
         original = self.service.config_file_path.read_text(encoding="utf-8")
         updated = ProfileData(

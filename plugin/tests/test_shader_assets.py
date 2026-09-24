@@ -78,6 +78,21 @@ class ShaderAssetTests(unittest.TestCase):
             r'\{"([^"]+)", "([^"]+)"\}', effect_block.group(1)
         ))
         self.assertEqual(qt_effects, profile_storage._VKBASALT_SHADER_EFFECTS)
+        qml = (
+            REPOSITORY_ROOT / "engine/mako-ui/rsc/UI.qml"
+        ).read_text(encoding="utf-8")
+        effect_ids = re.search(
+            r"property var effectIds: \[(.*?)\]", qml
+        )
+        self.assertIsNotNone(effect_ids)
+        self.assertEqual(
+            tuple(re.findall(r'"([^"]+)"', effect_ids.group(1))),
+            shared_config.VKBASALT_SHADER_VALUES,
+        )
+        self.assertIn(
+            'backend.vkbasalt_shader = next.length ? next.join(":") : "none"',
+            qml,
+        )
         for field in (
             'std::string sharpening{"cas"}',
             'float sharpness{0.5F}',

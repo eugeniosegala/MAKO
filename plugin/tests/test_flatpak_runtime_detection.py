@@ -38,6 +38,7 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     VKBASALT_LIB_FILENAME,
     VKBASALT_MANIFEST_FILENAME_32,
     VKBASALT_MANIFEST_FILENAME_64,
+    VKBASALT_SHADER_DIR,
 )
 from shared_config import SUPPORTED_FLATPAK_RUNTIME_VERSIONS  # noqa: E402
 
@@ -139,6 +140,7 @@ class FlatpakRuntimeDetectionTests(unittest.TestCase):
                 f"{VKBASALT_LIB32_DIR}/{VKBASALT_LIB_FILENAME}",
                 f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_64}",
                 f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_32}",
+                VKBASALT_SHADER_DIR,
             ],
         )
 

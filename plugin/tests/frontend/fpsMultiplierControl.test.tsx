@@ -247,6 +247,11 @@ describe("Frame Generation controls", () => {
         /^Use 0x to pause or resume Frame Generation live without unloading its resources. Otherwise this is/,
       ).style.paddingBottom,
     ).toBe("2px");
+    expect(
+      within(adaptiveMultiplierField as HTMLElement).getByText(
+        /Set it only as high as needed to reach Target FPS/,
+      ),
+    ).toBeTruthy();
     fireEvent.click(
       within(adaptiveMultiplierField as HTMLElement).getByText("Set 5x"),
     );

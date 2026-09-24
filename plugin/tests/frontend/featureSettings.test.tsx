@@ -97,6 +97,13 @@ describe("primary feature organization", () => {
     );
     expect(sharedPerformanceInfo.closest('[data-tone="info"]')).toBeTruthy();
     expect(
+      (
+        sharedPerformanceInfo.closest(
+          '[data-mako-image-processing-tip="true"]',
+        ) as HTMLElement
+      ).style.marginTop,
+    ).toBe("3px");
+    expect(
       screen.getByRole("tablist", { name: "Image Processing" }),
     ).toBeTruthy();
     expect(

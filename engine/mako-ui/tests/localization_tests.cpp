@@ -216,7 +216,9 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
     require(english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
             .contains(QStringLiteral("0x pauses generation live")) &&
             english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
-            .contains(QStringLiteral("interpolation ceiling")),
+            .contains(QStringLiteral("interpolation ceiling")) &&
+            english.value(QStringLiteral("maxAdaptiveMultiplierDesc")).toString()
+            .contains(QStringLiteral("only as high as needed to reach Target FPS")),
         "English Adaptive multiplier help does not explain its live choices");
     require(english.value(QStringLiteral("scalingMethod")).toString() ==
             QStringLiteral("Scaling Method"),
