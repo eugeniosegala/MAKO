@@ -323,6 +323,20 @@ describe("Configuration controls", () => {
     expect(screen.queryByRole("checkbox", { name: "Clarity" })).toBeNull();
     expect(screen.getByRole("checkbox", { name: "Curves" })).toBeTruthy();
     expect(document.activeElement).toBe(pager);
+    const technicolor2 = screen.getByRole("checkbox", {
+      name: "Technicolor 2",
+    });
+    technicolor2.focus();
+    fireEvent.keyDown(technicolor2, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(
+      screen.getByRole("checkbox", { name: "Monochrome" }),
+    );
+    const filmGrain = screen.getByRole("checkbox", { name: "Film Grain" });
+    filmGrain.focus();
+    fireEvent.keyDown(filmGrain, { key: "ArrowRight" });
+    expect(document.activeElement).toBe(
+      screen.getByRole("checkbox", { name: "Chromatic Aberration" }),
+    );
     const clearAll = screen.getByRole("button", { name: "Clear all" });
     fireEvent.focus(clearAll);
     expect(clearAll.style.width).toBe("100%");

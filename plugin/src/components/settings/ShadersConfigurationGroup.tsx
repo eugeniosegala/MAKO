@@ -99,6 +99,7 @@ function EffectsChecklist({
     top: number;
     scroller: HTMLElement | null;
   }>();
+  const pendingPageFocusRow = useRef<number>();
   const pendingSave = useRef(Promise.resolve());
   const selectionValue = initialSelection.join(":");
   const effects = options.filter(
@@ -123,6 +124,25 @@ function EffectsChecklist({
     }
     focusAnchor.current = undefined;
   }, [expanded]);
+
+  useLayoutEffect(() => {
+    const requestedRow = pendingPageFocusRow.current;
+    if (requestedRow === undefined) return;
+    const effectCount = Math.min(
+      EFFECTS_PER_PAGE,
+      Math.max(0, effects.length - page * EFFECTS_PER_PAGE),
+    );
+    if (effectCount === 0) {
+      pendingPageFocusRow.current = undefined;
+      return;
+    }
+    const targetRow = Math.min(requestedRow, effectCount - 1);
+    const target = checklistRef.current?.querySelector<HTMLElement>(
+      `[data-mako-effect-row="${targetRow}"]`,
+    );
+    target?.focus({ preventScroll: true });
+    pendingPageFocusRow.current = undefined;
+  }, [effects.length, page]);
 
   const updateSelection = (next: string[]) => {
     setSelected(next);
@@ -205,6 +225,28 @@ function EffectsChecklist({
     event.preventDefault();
     event.stopPropagation();
     changePage(event.detail.button === GamepadButton.DIR_LEFT ? -1 : 1);
+  };
+
+  const changePageFromEffect = (direction: -1 | 1, row: number) => {
+    const nextPage = Math.min(pageCount - 1, Math.max(0, page + direction));
+    if (nextPage === page) return;
+    pendingPageFocusRow.current = row;
+    setPage(nextPage);
+  };
+
+  const onEffectPageButtonDown = (event: GamepadEvent, row: number) => {
+    if (
+      event.detail.button !== GamepadButton.DIR_LEFT &&
+      event.detail.button !== GamepadButton.DIR_RIGHT
+    ) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    changePageFromEffect(
+      event.detail.button === GamepadButton.DIR_LEFT ? -1 : 1,
+      row,
+    );
   };
 
   return (
@@ -309,7 +351,7 @@ function EffectsChecklist({
               >
                 {effects
                   .slice(page * EFFECTS_PER_PAGE, (page + 1) * EFFECTS_PER_PAGE)
-                  .map((option) => {
+                  .map((option, row) => {
                     const order = selected.indexOf(option.data);
                     const enabled = order !== -1;
                     const highlighted =
@@ -326,6 +368,7 @@ function EffectsChecklist({
                         key={option.data}
                         role="checkbox"
                         tabIndex={0}
+                        data-mako-effect-row={row}
                         aria-checked={enabled}
                         aria-label={
                           enabled
@@ -334,6 +377,23 @@ function EffectsChecklist({
                         }
                         onClick={toggleEffect}
                         onActivate={toggleEffect}
+                        onButtonDown={(event) =>
+                          onEffectPageButtonDown(event, row)
+                        }
+                        onKeyDown={(event) => {
+                          if (
+                            event.key !== "ArrowLeft" &&
+                            event.key !== "ArrowRight"
+                          ) {
+                            return;
+                          }
+                          event.preventDefault();
+                          event.stopPropagation();
+                          changePageFromEffect(
+                            event.key === "ArrowLeft" ? -1 : 1,
+                            row,
+                          );
+                        }}
                         onFocus={() => setFocusedEffect(option.data)}
                         onBlur={() => setFocusedEffect(null)}
                         onGamepadFocus={() => setFocusedEffect(option.data)}
