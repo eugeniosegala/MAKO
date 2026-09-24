@@ -363,7 +363,20 @@ ApplicationWindow {
 
                         ComboBox {
                             Layout.fillWidth: true
-                            model: [t.automatic, t.low, t.medium, t.high, t.veryHigh]
+                            function priorityOption(label, id, target) {
+                                const cap = backend.fractionalRealFramePriorityCapFor(id)
+                                return t.realFramePriorityOption
+                                    .replace("{priority}", label)
+                                    .replace("{cap}", Number(cap.toFixed(1)))
+                                    .replace("{percent}", Math.round(cap / target * 100))
+                            }
+                            model: [
+                                t.automatic,
+                                priorityOption(t.low, "low", backend.target_fps),
+                                priorityOption(t.medium, "medium", backend.target_fps),
+                                priorityOption(t.high, "high", backend.target_fps),
+                                priorityOption(t.veryHigh, "very-high", backend.target_fps)
+                            ]
                             currentIndex: ["auto", "low", "medium", "high", "very-high"]
                                 .indexOf(backend.adaptive_fractional_real_frame_priority)
                             onActivated: index => backend.adaptive_fractional_real_frame_priority =
@@ -579,11 +592,59 @@ ApplicationWindow {
                         description: t.shaderEffectsDesc
                         visible: backend.enable_vkbasalt
 
-                        ComboBox {
+                        ColumnLayout {
+                            id: effectStack
                             Layout.fillWidth: true
-                            model: [t.off, "HDR Look (SDR)", "Vibrance", "Colourfulness", "Curves", "Deband", "Technicolor 2", "DPX / Cineon", "Bleach Bypass", "Noir", "Technicolor", "Monochrome", "Sepia", "Film Grain", "Vignette", "Cartoon", "Nostalgia", "Chromatic Aberration"]
-                            currentIndex: ["none", "hdr_look", "vibrance", "colourfulness", "curves", "deband", "technicolor2", "dpx", "bleach_bypass", "noir", "technicolor", "monochrome", "sepia", "film_grain", "vignette", "cartoon", "nostalgia", "chromatic_aberration"].indexOf(backend.vkbasalt_shader)
-                            onActivated: index => backend.vkbasalt_shader = ["none", "hdr_look", "vibrance", "colourfulness", "curves", "deband", "technicolor2", "dpx", "bleach_bypass", "noir", "technicolor", "monochrome", "sepia", "film_grain", "vignette", "cartoon", "nostalgia", "chromatic_aberration"][index]
+                            property var effectIds: ["none", "hdr_look", "clarity", "levels_plus", "vibrance", "colourfulness", "curves", "deband", "technicolor2", "dpx", "bleach_bypass", "noir", "technicolor", "monochrome", "sepia", "film_grain", "vignette", "cartoon", "nostalgia", "chromatic_aberration"]
+                            property var effectLabels: [t.off, "HDR Look (SDR)", "Clarity", "Levels Plus", "Vibrance", "Colourfulness", "Curves", "Deband", "Technicolor 2", "DPX / Cineon", "Bleach Bypass", "Noir", "Technicolor", "Monochrome", "Sepia", "Film Grain", "Vignette", "Cartoon", "Nostalgia", "Chromatic Aberration"]
+
+                            Button {
+                                Layout.fillWidth: true
+                                text: t.shaderEffects + " (" + (backend.vkbasalt_shader === "none" ? 0 : backend.vkbasalt_shader.split(":").length) + ")"
+                                onClicked: effectsDialog.open()
+                            }
+
+                            Dialog {
+                                id: effectsDialog
+                                parent: Overlay.overlay
+                                modal: true
+                                focus: true
+                                title: t.shaderEffects
+                                standardButtons: Dialog.Close
+                                width: Math.min(460, parent.width - 32)
+                                height: Math.min(600, parent.height - 32)
+                                x: (parent.width - width) / 2
+                                y: (parent.height - height) / 2
+
+                                contentItem: ScrollView {
+                                    clip: true
+                                    ColumnLayout {
+                                        width: effectsDialog.availableWidth
+                                        spacing: 2
+                                        Button {
+                                            Layout.fillWidth: true
+                                            text: t.off
+                                            onClicked: backend.vkbasalt_shader = "none"
+                                        }
+                                        Repeater {
+                                            model: effectStack.effectIds.slice(1)
+                                            delegate: CheckBox {
+                                                required property string modelData
+                                                Layout.fillWidth: true
+                                                text: (backend.vkbasalt_shader !== "none" && backend.vkbasalt_shader.split(":").indexOf(modelData) >= 0
+                                                    ? (backend.vkbasalt_shader.split(":").indexOf(modelData) + 1) + ". " : "")
+                                                    + effectStack.effectLabels[effectStack.effectIds.indexOf(modelData)]
+                                                checked: backend.vkbasalt_shader !== "none" && backend.vkbasalt_shader.split(":").indexOf(modelData) >= 0
+                                                onToggled: {
+                                                    const current = backend.vkbasalt_shader === "none" ? [] : backend.vkbasalt_shader.split(":")
+                                                    const next = checked ? current.concat(modelData) : current.filter(effect => effect !== modelData)
+                                                    backend.vkbasalt_shader = next.length ? next.join(":") : "none"
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 

@@ -26,8 +26,8 @@ constexpr std::array<std::string_view, 3> SHARPENING{
 constexpr std::array<std::string_view, 3> ANTIALIASING{
     "none", "fxaa", "smaa"
 };
-constexpr std::array<std::string_view, 18> SHADERS{
-    "none", "hdr_look", "vibrance", "colourfulness", "curves", "deband",
+constexpr std::array<std::string_view, 20> SHADERS{
+    "none", "hdr_look", "clarity", "levels_plus", "vibrance", "colourfulness", "curves", "deband",
     "technicolor2", "dpx", "bleach_bypass", "noir", "technicolor",
     "monochrome", "sepia", "film_grain", "vignette", "cartoon",
     "nostalgia", "chromatic_aberration"
@@ -51,6 +51,8 @@ const std::map<std::string_view, std::string_view> SHADER_EFFECTS{
     {"cartoon", "makoCartoon"},
     {"nostalgia", "makoNostalgia"},
     {"chromatic_aberration", "makoChromaticAberration"},
+    {"clarity", "makoClarity"},
+    {"levels_plus", "makoLevelsPlus"},
 };
 
 const std::map<std::string_view, std::string_view> SHADER_FILES{
@@ -70,6 +72,8 @@ const std::map<std::string_view, std::string_view> SHADER_FILES{
     {"makoCartoon", "Cartoon.fx"},
     {"makoNostalgia", "Nostalgia.fx"},
     {"makoChromaticAberration", "ChromaticAberration.fx"},
+    {"makoClarity", "Clarity.fx"},
+    {"makoLevelsPlus", "LevelsPlus.fx"},
 };
 
 template<typename Values>
@@ -123,8 +127,10 @@ std::vector<std::string> selectedEffects(const ls::VkBasaltConf& settings) {
     std::vector<std::string> effects;
     if (settings.antialiasing != "none")
         effects.push_back(settings.antialiasing);
-    if (settings.shader != "none")
-        effects.emplace_back(SHADER_EFFECTS.at(settings.shader));
+    if (settings.shader != "none") {
+        for (const auto& shader : splitEffects(settings.shader))
+            effects.emplace_back(SHADER_EFFECTS.at(shader));
+    }
     if (settings.sharpening != "none")
         effects.push_back(settings.sharpening);
     return effects;
@@ -178,7 +184,28 @@ bool ls::isVkBasaltAntialiasing(const std::string_view value) noexcept {
 }
 
 bool ls::isVkBasaltShader(const std::string_view value) noexcept {
-    return contains(SHADERS, value);
+    if (value == "none")
+        return true;
+    if (value.empty())
+        return false;
+    std::array<bool, SHADERS.size()> seen{};
+    size_t start = 0;
+    while (start < value.size()) {
+        const auto end = value.find(':', start);
+        const auto shader = value.substr(start,
+            end == std::string_view::npos ? value.size() - start : end - start);
+        const auto found = std::find(SHADERS.begin(), SHADERS.end(), shader);
+        if (shader == "none" || found == SHADERS.end())
+            return false;
+        const auto index = static_cast<size_t>(found - SHADERS.begin());
+        if (seen[index])
+            return false;
+        seen[index] = true;
+        if (end == std::string_view::npos)
+            return true;
+        start = end + 1;
+    }
+    return false;
 }
 
 std::filesystem::path ls::findVkBasaltConfigurationFile() {

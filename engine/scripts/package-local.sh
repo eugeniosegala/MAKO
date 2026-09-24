@@ -342,6 +342,9 @@ required_paths=(
     "share/mako-render/vulkan/implicit_layer.d/VkLayer_MAKO_render.json" \
     "share/mako-render/vulkan/spatial_scaling.d/VkLayer_MAKO_spatial_scaling.json" \
     "share/mako-render/vulkan/vkbasalt.d/vkBasalt.json" \
+    "share/mako-render/vkbasalt-shaders/Clarity.fx" \
+    "share/mako-render/vkbasalt-shaders/LevelsPlus.fx" \
+    "share/mako-render/vkbasalt-shaders/SOURCE.md" \
     "share/mako-render/vkbasalt-shaders/Vibrance.fx" \
     "share/mako-render/vkbasalt-shaders/LICENSE-SweetFX" \
     "share/doc/mako-render/vkbasalt/LICENSE" \

@@ -283,11 +283,16 @@ class ConfigurationManager:
             )
         validated["vkbasalt_antialiasing"] = vkbasalt_antialiasing
         vkbasalt_shader = validated["vkbasalt_shader"].strip().lower()
-        if vkbasalt_shader not in VKBASALT_SHADER_VALUES:
+        shader_effects = vkbasalt_shader.split(":")
+        if not shader_effects or any(
+                effect not in VKBASALT_SHADER_VALUES or
+                (effect == "none" and len(shader_effects) != 1)
+                for effect in shader_effects
+        ) or len(set(shader_effects)) != len(shader_effects):
             raise ValueError(
-                "vkbasalt_shader must be one of the supported shader values"
+                "vkbasalt_shader must be a unique ordered list of supported effects"
             )
-        validated["vkbasalt_shader"] = vkbasalt_shader
+        validated["vkbasalt_shader"] = ":".join(shader_effects)
         if validated["dynamic_cadence_recovery"]:
             validated["adaptive_auto_base_fps_cap"] = False
             validated["adaptive_fractional_real_frame_priority"] = (

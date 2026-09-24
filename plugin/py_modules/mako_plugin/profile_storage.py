@@ -20,12 +20,14 @@ from shared_config import (
     VKBASALT_SHADER_BLEACH_BYPASS,
     VKBASALT_SHADER_CARTOON,
     VKBASALT_SHADER_CHROMATIC_ABERRATION,
+    VKBASALT_SHADER_CLARITY,
     VKBASALT_SHADER_COLOURFULNESS,
     VKBASALT_SHADER_CURVES,
     VKBASALT_SHADER_DEBAND,
     VKBASALT_SHADER_DPX,
     VKBASALT_SHADER_FILM_GRAIN,
     VKBASALT_SHADER_HDR_LOOK,
+    VKBASALT_SHADER_LEVELS_PLUS,
     VKBASALT_SHADER_MONOCHROME,
     VKBASALT_SHADER_NOIR,
     VKBASALT_SHADER_NONE,
@@ -225,6 +227,8 @@ _VKBASALT_SHADER_EFFECTS = {
     VKBASALT_SHADER_CARTOON: "makoCartoon",
     VKBASALT_SHADER_NOSTALGIA: "makoNostalgia",
     VKBASALT_SHADER_CHROMATIC_ABERRATION: "makoChromaticAberration",
+    VKBASALT_SHADER_CLARITY: "makoClarity",
+    VKBASALT_SHADER_LEVELS_PLUS: "makoLevelsPlus",
 }
 _VKBASALT_CONTROLLED_EFFECTS = frozenset(
     effect.casefold()
@@ -248,9 +252,9 @@ def _selected_vkbasalt_effects(settings: WrapperSettingsData) -> list[str]:
     sharpening = settings["vkbasalt_sharpening"]
     if antialiasing != VKBASALT_ANTIALIASING_NONE:
         effects.append(antialiasing)
-    shader = settings["vkbasalt_shader"]
-    if shader != VKBASALT_SHADER_NONE:
-        effects.append(_VKBASALT_SHADER_EFFECTS[shader])
+    for shader in settings["vkbasalt_shader"].split(":"):
+        if shader != VKBASALT_SHADER_NONE:
+            effects.append(_VKBASALT_SHADER_EFFECTS[shader])
     if sharpening != VKBASALT_SHARPENING_NONE:
         effects.append(sharpening)
     return effects
@@ -317,6 +321,8 @@ def merge_vkbasalt_config_content(
         "makoCartoon": f'"{shader_directory / "Cartoon.fx"}"',
         "makoNostalgia": f'"{shader_directory / "Nostalgia.fx"}"',
         "makoChromaticAberration": f'"{shader_directory / "ChromaticAberration.fx"}"',
+        "makoClarity": f'"{shader_directory / "Clarity.fx"}"',
+        "makoLevelsPlus": f'"{shader_directory / "LevelsPlus.fx"}"',
     }
     if sharpening == VKBASALT_SHARPENING_CAS:
         desired_values["casSharpness"] = f"{settings['vkbasalt_sharpness']:.2f}"

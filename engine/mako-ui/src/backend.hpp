@@ -346,6 +346,16 @@ namespace mako::ui {
                 conf.target_fps
             );
         }
+        Q_INVOKABLE double fractionalRealFramePriorityCapFor(
+                const QString& priority) const {
+            VALIDATE_AND_GET_PROFILE(0.0)
+            const auto parsed = ls::adaptiveFractionalRealFramePriorityFromName(
+                priority.toStdString()
+            );
+            return parsed ? ls::adaptiveFractionalRealFramePriorityCap(
+                *parsed, conf.target_fps
+            ) : 0.0;
+        }
         [[nodiscard]] uint getTargetFPS() const {
             VALIDATE_AND_GET_PROFILE(ls::GameConfDefaults::targetFps)
             return conf.target_fps;

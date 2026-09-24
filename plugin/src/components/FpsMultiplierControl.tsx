@@ -108,22 +108,40 @@ export function FpsMultiplierControl({
       data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
       label: t("ADAPTIVE_REAL_FRAME_PRIORITY_AUTO", "Automatic"),
     },
-    {
-      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
-      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_LOW", "Low"),
-    },
-    {
-      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM,
-      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_MEDIUM", "Medium"),
-    },
-    {
-      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
-      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_HIGH", "High"),
-    },
-    {
-      data: ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
-      label: t("ADAPTIVE_REAL_FRAME_PRIORITY_VERY_HIGH", "Very High"),
-    },
+    ...(
+      [
+        [
+          ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
+          t("ADAPTIVE_REAL_FRAME_PRIORITY_LOW", "Low"),
+        ],
+        [
+          ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_MEDIUM,
+          t("ADAPTIVE_REAL_FRAME_PRIORITY_MEDIUM", "Medium"),
+        ],
+        [
+          ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
+          t("ADAPTIVE_REAL_FRAME_PRIORITY_HIGH", "High"),
+        ],
+        [
+          ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH,
+          t("ADAPTIVE_REAL_FRAME_PRIORITY_VERY_HIGH", "Very High"),
+        ],
+      ] as const
+    ).map(([data, priority]) => {
+      const cap = fractionalRealFramePriorityCap(targetFps, data)!;
+      return {
+        data,
+        label: t(
+          "ADAPTIVE_REAL_FRAME_PRIORITY_OPTION",
+          "{priority} — up to {cap} real FPS ({percent}% of target)",
+          {
+            priority,
+            cap: Number(cap.toFixed(1)),
+            percent: Math.round((cap / targetFps) * 100),
+          },
+        ),
+      };
+    }),
   ];
   const fractionalPriorityRatio =
     fractionalPriority === ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW
@@ -214,7 +232,7 @@ export function FpsMultiplierControl({
                         <div>
                           {t(
                             "ADAPTIVE_REAL_FRAME_PRIORITY_DESC",
-                            "Selects a cadence-friendly real-frame cap above half of Target FPS. Higher priority keeps more real frames and may reduce latency and ghosting, but can feel less even.",
+                            "The shown FPS values estimate real-frame caps from Target FPS, not rates a game is guaranteed to deliver. Higher priority allows more real frames and may reduce latency and ghosting, but can feel less even.",
                           )}
                         </div>
                         <MakoSettingRelationship>
@@ -223,7 +241,7 @@ export function FpsMultiplierControl({
                           fractionalGeneratedFpsLabel !== undefined
                             ? t(
                                 "ADAPTIVE_REAL_FRAME_PRIORITY_ACTIVE_RELATION",
-                                "Uses {real} real frames for every {generated} generated. At a {target} FPS target: up to {cap} real FPS and about {generated_fps} generated FPS. This overrides Base FPS Cap.",
+                                "At a {target} FPS target, the estimated split is {cap} real / {generated_fps} generated FPS (about {real}:{generated}) if the target is met. Actual rates vary. This overrides Base FPS Cap.",
                                 {
                                   real: fractionalPriorityRatio.real,
                                   generated: fractionalPriorityRatio.generated,

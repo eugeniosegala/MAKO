@@ -147,9 +147,13 @@ VKBASALT_SHADER_FILM_GRAIN = "film_grain"
 VKBASALT_SHADER_CARTOON = "cartoon"
 VKBASALT_SHADER_NOSTALGIA = "nostalgia"
 VKBASALT_SHADER_CHROMATIC_ABERRATION = "chromatic_aberration"
+VKBASALT_SHADER_CLARITY = "clarity"
+VKBASALT_SHADER_LEVELS_PLUS = "levels_plus"
 VKBASALT_SHADER_VALUES = (
     VKBASALT_SHADER_NONE,
     VKBASALT_SHADER_HDR_LOOK,
+    VKBASALT_SHADER_CLARITY,
+    VKBASALT_SHADER_LEVELS_PLUS,
     VKBASALT_SHADER_VIBRANCE,
     VKBASALT_SHADER_COLOURFULNESS,
     VKBASALT_SHADER_CURVES,
@@ -444,7 +448,7 @@ CONFIG_SCHEMA_DEF: Dict[str, ConfigFieldDefinition] = {
     "vkbasalt_shader": {
         "fieldType": ConfigFieldType.STRING,
         "default": VKBASALT_SHADER_NONE,
-        "description": "MAKO-managed vkBasalt shader effect selected from the bundled preset catalog",
+        "description": "Ordered colon-separated MAKO-managed vkBasalt effects from the bundled catalog, or none",
         "location": "script"
     },
 

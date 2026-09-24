@@ -130,6 +130,8 @@ export const VKBASALT_SHADER_FILM_GRAIN = "film_grain" as const;
 export const VKBASALT_SHADER_CARTOON = "cartoon" as const;
 export const VKBASALT_SHADER_NOSTALGIA = "nostalgia" as const;
 export const VKBASALT_SHADER_CHROMATIC_ABERRATION = "chromatic_aberration" as const;
+export const VKBASALT_SHADER_CLARITY = "clarity" as const;
+export const VKBASALT_SHADER_LEVELS_PLUS = "levels_plus" as const;
 export const VKBASALT_STRENGTH_MIN = 0.0 as const;
 export const VKBASALT_STRENGTH_MAX = 1.0 as const;
 
@@ -406,7 +408,7 @@ export const CONFIG_SCHEMA: Record<string, ConfigField> = {
     name: "vkbasalt_shader",
     fieldType: ConfigFieldType.STRING,
     default: "none",
-    description: "MAKO-managed vkBasalt shader effect selected from the bundled preset catalog"
+    description: "Ordered colon-separated MAKO-managed vkBasalt effects from the bundled catalog, or none"
   },
   disable_steamdeck_mode: {
     name: "disable_steamdeck_mode",

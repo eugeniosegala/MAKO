@@ -1,9 +1,16 @@
+import { useRef, useState } from "react";
 import {
+  ButtonItem,
+  DialogBody,
+  DialogButton,
+  DialogHeader,
   Dropdown,
   Field,
+  ModalRoot,
   PanelSectionRow,
   SliderField,
   ToggleField,
+  showModal,
 } from "@decky/ui";
 import {
   EXTERNAL_VULKAN_LAYER_NONE,
@@ -23,12 +30,14 @@ import {
   VKBASALT_SHADER_BLEACH_BYPASS,
   VKBASALT_SHADER_CARTOON,
   VKBASALT_SHADER_CHROMATIC_ABERRATION,
+  VKBASALT_SHADER_CLARITY,
   VKBASALT_SHADER_COLOURFULNESS,
   VKBASALT_SHADER_CURVES,
   VKBASALT_SHADER_DEBAND,
   VKBASALT_SHADER_DPX,
   VKBASALT_SHADER_FILM_GRAIN,
   VKBASALT_SHADER_HDR_LOOK,
+  VKBASALT_SHADER_LEVELS_PLUS,
   VKBASALT_SHADER_MONOCHROME,
   VKBASALT_SHADER_NOIR,
   VKBASALT_SHADER_NONE,
@@ -42,12 +51,80 @@ import {
   VKBASALT_STRENGTH_MIN,
 } from "../../config/configSchema";
 import t from "../../i18n/i18n";
-import { MakoExperimentalSettingLabel, MakoInlineTip } from "../MakoUi";
+import {
+  MakoExperimentalSettingLabel,
+  MakoFocusable,
+  MakoInlineTip,
+} from "../MakoUi";
 import type { ConfigurationControlProps } from "./types";
 
 interface ShadersConfigurationGroupProps extends ConfigurationControlProps {
   isDefaultProfile: boolean;
   vkBasaltConfigPath: string;
+}
+
+interface EffectOption {
+  data: string;
+  label: string;
+}
+
+function EffectsPickerModal({
+  options,
+  initialSelection,
+  onChange,
+  closeModal,
+}: {
+  options: EffectOption[];
+  initialSelection: string[];
+  onChange: (value: string) => Promise<void>;
+  closeModal?: () => void;
+}) {
+  const [selected, setSelected] = useState(initialSelection);
+  const pendingSave = useRef(Promise.resolve());
+  const updateSelection = (next: string[]) => {
+    setSelected(next);
+    const value = next.join(":") || VKBASALT_SHADER_NONE;
+    pendingSave.current = pendingSave.current.catch(() => {}).then(() => onChange(value));
+  };
+
+  return (
+    <ModalRoot closeModal={closeModal}>
+      <DialogHeader>{t("CONFIG_VKBASALT_SHADER", "Effects")}</DialogHeader>
+      <DialogBody>
+        <div style={{ padding: "8px 12px", maxHeight: "58vh", overflowY: "auto" }}>
+          <MakoFocusable flow-children="column">
+            {options.filter((option) => option.data !== VKBASALT_SHADER_NONE).map((option) => (
+              <ToggleField
+                key={option.data}
+                label={selected.includes(option.data)
+                  ? `${selected.indexOf(option.data) + 1}. ${option.label}`
+                  : option.label}
+                checked={selected.includes(option.data)}
+                onChange={(enabled) =>
+                  updateSelection(
+                    enabled
+                      ? [...selected, option.data]
+                      : selected.filter((effect) => effect !== option.data),
+                  )
+                }
+              />
+            ))}
+          </MakoFocusable>
+        </div>
+      </DialogBody>
+      <MakoFocusable
+        flow-children="row"
+        style={{ display: "flex", justifyContent: "flex-end", gap: "8px", padding: "12px" }}
+      >
+        <DialogButton onClick={() => updateSelection([])}>
+          {t("CONFIG_VKBASALT_EFFECTS_CLEAR", "Clear all")}
+        </DialogButton>
+        <DialogButton onClick={closeModal}>
+          {t("CONFIG_VKBASALT_EFFECTS_DONE", "Done")}
+        </DialogButton>
+      </MakoFocusable>
+    </ModalRoot>
+  );
 }
 
 export function ShadersConfigurationGroup({
@@ -65,6 +142,10 @@ export function ShadersConfigurationGroup({
     (isDefaultProfile
       ? "~/.config/vkBasalt/vkBasalt.conf"
       : "~/.config/mako-render/vkbasalt/<profile>.conf");
+  const selectedEffects =
+    config.vkbasalt_shader === VKBASALT_SHADER_NONE
+      ? []
+      : config.vkbasalt_shader.split(":");
   const sharpeningOptions = [
     {
       data: VKBASALT_SHARPENING_NONE,
@@ -101,6 +182,14 @@ export function ShadersConfigurationGroup({
     {
       data: VKBASALT_SHADER_HDR_LOOK,
       label: t("CONFIG_VKBASALT_SHADER_HDR_LOOK", "HDR Look (SDR)"),
+    },
+    {
+      data: VKBASALT_SHADER_CLARITY,
+      label: t("CONFIG_VKBASALT_SHADER_CLARITY", "Clarity"),
+    },
+    {
+      data: VKBASALT_SHADER_LEVELS_PLUS,
+      label: t("CONFIG_VKBASALT_SHADER_LEVELS_PLUS", "Levels Plus"),
     },
     {
       data: VKBASALT_SHADER_VIBRANCE,
@@ -205,18 +294,28 @@ export function ShadersConfigurationGroup({
               label={t("CONFIG_VKBASALT_SHADER", "Effects")}
               description={t(
                 "CONFIG_VKBASALT_SHADER_DESC",
-                "Choose one colour or finishing effect. HDR Look is an SDR visual effect and does not enable HDR.",
+                "Check any effects to combine them. They run in selection order; uncheck and recheck to move one to the end. HDR Look is an SDR visual effect, not HDR output.",
               )}
               childrenLayout="below"
               childrenContainerWidth="max"
             >
-              <Dropdown
-                rgOptions={shaderOptions}
-                selectedOption={config.vkbasalt_shader}
-                onChange={(option) =>
-                  onConfigChange(VKBASALT_SHADER, String(option.data))
+              <ButtonItem
+                layout="below"
+                bottomSeparator="none"
+                onClick={() =>
+                  showModal(
+                    <EffectsPickerModal
+                      options={shaderOptions}
+                      initialSelection={selectedEffects}
+                      onChange={(value) => onConfigChange(VKBASALT_SHADER, value)}
+                    />,
+                  )
                 }
-              />
+              >
+                {t("CONFIG_VKBASALT_EFFECTS_SELECTED", "Choose effects ({value} selected)", {
+                  value: selectedEffects.length,
+                })}
+              </ButtonItem>
             </Field>
           </PanelSectionRow>
 

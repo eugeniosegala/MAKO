@@ -4,7 +4,7 @@ Vibrance.fx, Curves.fx, Technicolor.fx, Sepia.fx, Monochrome.fx, Vignette.fx, Fa
 
 Colourfulness.fx is copied from crosire/reshade-shaders commit `4fee10cdac28f0a6d4fa5ddd778faf0016ab7b91`. It is copyright 2016–2018 bacondither and carries its complete permissive BSD-style license in both the source header and `LICENSE-Colourfulness`. MAKO makes only the same `ReShadeUI.fxh` annotation substitution described above.
 
-BleachBypass.fx and Noir.fx are original MAKO shaders distributed under GPL-3.0-or-later. They have no external textures or third-party shader dependencies beyond the bundled CC0 ReShade.fxh compatibility header.
+BleachBypass.fx, Noir.fx, Clarity.fx, and LevelsPlus.fx are original MAKO shaders distributed under GPL-3.0-or-later. They have no external textures or third-party shader dependencies beyond the bundled CC0 ReShade.fxh compatibility header. MAKO's Clarity and Levels Plus provide lightweight local contrast and levels adjustments; they are not copies of the similarly named third-party ReShade shaders and will not reproduce those presets exactly.
 
 ReShade.fxh is copied from crosire/reshade-shaders `slim` commit `6db142b4b1a05c764222e5b0bd9a644b7ccfe1dc` and declares `SPDX-License-Identifier: CC0-1.0`. The CC0-1.0 legal code is available from <https://creativecommons.org/publicdomain/zero/1.0/legalcode>.
 

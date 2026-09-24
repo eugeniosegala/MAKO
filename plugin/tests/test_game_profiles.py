@@ -70,6 +70,23 @@ class GameProfileTests(unittest.TestCase):
         )
         self.service._save_profile_data(self.profile_data)
 
+    def test_vkbasalt_effect_stack_validation(self):
+        defaults = ConfigurationManager.get_defaults()
+        valid = ConfigurationManager.validate_config({
+            **defaults,
+            "vkbasalt_shader": "HDR_LOOK:clarity:vibrance:levels_plus",
+        })
+        self.assertEqual(
+            valid["vkbasalt_shader"],
+            "hdr_look:clarity:vibrance:levels_plus",
+        )
+        for value in ("hdr_look:hdr_look", "none:vibrance", "clarity:", "unknown"):
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                ConfigurationManager.validate_config({
+                    **defaults,
+                    "vkbasalt_shader": value,
+                })
+
     def test_profile_save_failure_preserves_existing_renderer_config(self):
         original = self.service.config_file_path.read_text(encoding="utf-8")
         updated = ProfileData(
@@ -1248,6 +1265,8 @@ class GameProfileTests(unittest.TestCase):
             ("cartoon", "makoCartoon"),
             ("nostalgia", "makoNostalgia"),
             ("chromatic_aberration", "makoChromaticAberration"),
+            ("clarity", "makoClarity"),
+            ("levels_plus", "makoLevelsPlus"),
         ):
             with self.subTest(shader=shader):
                 self.service._write_wrapper_profile_settings({
@@ -1269,6 +1288,19 @@ class GameProfileTests(unittest.TestCase):
                 ).splitlines()[1]
                 self.assertIn(f"smaa:{effect}:cas", current_effects)
                 self.assertEqual(current_effects.count("mako"), 1)
+
+        self.service._write_wrapper_profile_settings({
+            "cool-game": {
+                "external_vulkan_layer": "vkbasalt",
+                "vkbasalt_sharpening": "cas",
+                "vkbasalt_antialiasing": "fxaa",
+                "vkbasalt_shader": "hdr_look:clarity:vibrance:levels_plus",
+            },
+        })
+        self.assertIn(
+            "effects = deband:fxaa:makoHDRLook:makoClarity:makoVibrance:makoLevelsPlus:cas # preserve order",
+            game_config_path.read_text(encoding="utf-8"),
+        )
 
         game_config_path.unlink()
         missing = self._run_wrapper("12345")

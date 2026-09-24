@@ -1,5 +1,5 @@
 import React from "react";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@decky/ui", () => ({
@@ -122,6 +122,11 @@ vi.mock("@decky/ui", () => ({
     children: React.ReactNode;
     onClick: () => void;
   }) => <button onClick={onClick}>{children}</button>,
+  DialogHeader: ({ children }: { children: React.ReactNode }) => <h2>{children}</h2>,
+  DialogBody: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  DialogButton: ({ children, onClick }: { children: React.ReactNode; onClick?: () => void }) => <button onClick={onClick}>{children}</button>,
+  ModalRoot: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  showModal: vi.fn(),
 }));
 vi.mock("../../src/components/MakoUi", () => ({
   MakoExperimentalSettingLabel: ({
@@ -151,6 +156,7 @@ vi.mock("../../src/components/MakoUi", () => ({
     children: React.ReactNode;
     tone?: string;
   }) => <div data-tone={tone}>{children}</div>,
+  MakoFocusable: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
     <div data-mako-setting-relationship="true">{children}</div>
   ),
@@ -175,6 +181,7 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { ConfigurationSection } from "../../src/components/ConfigurationSection";
+import { showModal } from "@decky/ui";
 import { ShadersConfigurationGroup } from "../../src/components/settings/ShadersConfigurationGroup";
 import {
   EXTERNAL_VULKAN_LAYER_VKBASALT,
@@ -271,37 +278,51 @@ describe("Configuration controls", () => {
         .getAllByText(/^(Effects|Sharpening)$/)
         .map((element) => element.textContent),
     ).toEqual(["Effects", "Sharpening"]);
-    expect(
-      screen
-        .getAllByTestId("cadence-probe-interval-dropdown")
-        .map((element) => element.getAttribute("data-options")),
-    ).toContain(
-      JSON.stringify([
-        "none",
-        "hdr_look",
-        "vibrance",
-        "colourfulness",
-        "curves",
-        "deband",
-        "technicolor2",
-        "dpx",
-        "bleach_bypass",
-        "noir",
-        "technicolor",
-        "monochrome",
-        "sepia",
-        "film_grain",
-        "vignette",
-        "cartoon",
-        "nostalgia",
-        "chromatic_aberration",
-      ]),
-    );
+    fireEvent.click(screen.getByText("Choose effects (0 selected)"));
+    const modal = vi.mocked(showModal).mock.lastCall?.[0];
+    expect(modal).toBeTruthy();
+    render(modal);
+    expect(screen.getByRole("button", { name: "Clarity" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Levels Plus" })).toBeTruthy();
     expect(
       screen.getByText(
         "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. This file belongs to the selected profile and is removed when that profile is deleted.",
       ),
     ).toBeTruthy();
+  });
+
+  test("adds and removes effects in a per-profile ordered stack", async () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    render(
+      <ShadersConfigurationGroup
+        config={{
+          ...getDefaults(),
+          external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+          vkbasalt_shader: "hdr_look:vibrance",
+        }}
+        isDefaultProfile={false}
+        vkBasaltConfigPath="/home/deck/.config/mako-render/vkbasalt/abc.conf"
+        onConfigChange={onConfigChange}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Choose effects (2 selected)"));
+    const modal = vi.mocked(showModal).mock.lastCall?.[0];
+    expect(modal).toBeTruthy();
+    render(modal);
+    expect(screen.getByRole("button", { name: "1. HDR Look (SDR)" }).getAttribute("data-checked")).toBe("true");
+    expect(screen.getByRole("button", { name: "2. Vibrance" }).getAttribute("data-checked")).toBe("true");
+    fireEvent.click(screen.getByRole("button", { name: "Clarity" }));
+    await waitFor(() =>
+      expect(onConfigChange).toHaveBeenCalledWith(
+        "vkbasalt_shader",
+        "hdr_look:vibrance:clarity",
+      ),
+    );
+    fireEvent.click(screen.getByRole("button", { name: "1. HDR Look (SDR)" }));
+    await waitFor(() =>
+      expect(onConfigChange).toHaveBeenCalledWith("vkbasalt_shader", "vibrance:clarity"),
+    );
   });
 
   test("shows the editable global file for Default without a mode selector", () => {

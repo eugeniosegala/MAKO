@@ -21,6 +21,7 @@ vi.mock("@decky/ui", () => ({
     <button
       data-testid="real-frame-priority-dropdown"
       data-options={JSON.stringify(rgOptions.map((option) => option.data))}
+      data-labels={JSON.stringify(rgOptions.map((option) => option.label))}
       onClick={() => onChange(rgOptions[2])}
     >
       {rgOptions.find((option) => option.data === selectedOption)?.label}
@@ -120,7 +121,15 @@ vi.mock("../../src/components/MakoUi", () => ({
   ),
 }));
 vi.mock("../../src/i18n/i18n", () => ({
-  default: (_key: string, fallback: string) => fallback,
+  default: (
+    _key: string,
+    fallback: string,
+    replacements: Record<string, string | number> = {},
+  ) =>
+    Object.entries(replacements).reduce(
+      (text, [name, value]) => text.split(`{${name}}`).join(String(value)),
+      fallback,
+    ),
 }));
 
 import { FpsMultiplierControl } from "../../src/components/FpsMultiplierControl";
@@ -302,6 +311,15 @@ describe("Frame Generation controls", () => {
     expect(
       JSON.parse(realFramePriority.getAttribute("data-options") || "[]"),
     ).toEqual(["auto", "low", "medium", "high", "very-high"]);
+    expect(
+      JSON.parse(realFramePriority.getAttribute("data-labels") || "[]"),
+    ).toEqual([
+      "Automatic",
+      "Low — up to 54 real FPS (60% of target)",
+      "Medium — up to 60 real FPS (67% of target)",
+      "High — up to 67.5 real FPS (75% of target)",
+      "Very High — up to 72 real FPS (80% of target)",
+    ]);
     fireEvent.click(realFramePriority);
     expect(onConfigUpdate).toHaveBeenCalledWith({
       adaptive_fractional_real_frame_priority: "medium",
@@ -345,6 +363,44 @@ describe("Frame Generation controls", () => {
       "frame_generation_enabled",
       false,
     );
+
+    rerender(
+      <FpsMultiplierControl
+        config={{ ...config, target_fps: 120 }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+    expect(
+      JSON.parse(
+        screen
+          .getByTestId("real-frame-priority-dropdown")
+          .getAttribute("data-labels") || "[]",
+      ),
+    ).toEqual([
+      "Automatic",
+      "Low — up to 72 real FPS (60% of target)",
+      "Medium — up to 80 real FPS (67% of target)",
+      "High — up to 90 real FPS (75% of target)",
+      "Very High — up to 96 real FPS (80% of target)",
+    ]);
+
+    rerender(
+      <FpsMultiplierControl
+        config={{
+          ...config,
+          target_fps: 120,
+          adaptive_fractional_real_frame_priority: "medium",
+        }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+    expect(
+      screen.getByText(
+        "At a 120 FPS target, the estimated split is 80 real / 40 generated FPS (about 2:1) if the target is met. Actual rates vary. This overrides Base FPS Cap.",
+      ),
+    ).toBeTruthy();
   });
 
   test("collapses Frame Generation controls only when provisioning is off", () => {

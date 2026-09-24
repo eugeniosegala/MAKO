@@ -52,6 +52,8 @@ LIVE_RELOAD_MARKERS = (
     b"makoCartoon",
     b"makoNostalgia",
     b"makoChromaticAberration",
+    b"makoClarity",
+    b"makoLevelsPlus",
 )
 
 

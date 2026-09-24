@@ -94,7 +94,7 @@ int main() {
     shaderSettings.sharpness = 0.75F;
     shaderSettings.dls_denoise = 0.4F;
     shaderSettings.antialiasing = "fxaa";
-    shaderSettings.shader = "vibrance";
+    shaderSettings.shader = "hdr_look:clarity:vibrance:levels_plus";
     const auto shaderDirectory = directory / "shaders";
     const std::string merged = ls::mergeVkBasaltConfiguration(
         "# custom\neffects = makoDeband:customEffect:cas # order\n"
@@ -102,7 +102,7 @@ int main() {
         shaderSettings,
         shaderDirectory
     );
-    expect(merged.find("effects = fxaa:makoVibrance:dls:customEffect # order\n") !=
+    expect(merged.find("effects = fxaa:makoHDRLook:makoClarity:makoVibrance:makoLevelsPlus:dls:customEffect # order\n") !=
             std::string::npos,
         "managed shader graph did not replace only controlled effects");
     expect(merged.find("customOption = keep\n") != std::string::npos,
@@ -114,6 +114,10 @@ int main() {
             "makoVibrance = \"" + (shaderDirectory / "Vibrance.fx").string() +
             "\"\n") != std::string::npos,
         "managed shader source path was not written");
+    expect(ls::isVkBasaltShader("clarity:levels_plus") &&
+            !ls::isVkBasaltShader("clarity:clarity") &&
+            !ls::isVkBasaltShader("none:vibrance"),
+        "ordered shader selection validation is inconsistent");
 
     setenv("MAKO_LAUNCH_CONFIG", canonicalPath.c_str(), 1);
     expect(ls::findLaunchConfigurationFile() == canonicalPath,

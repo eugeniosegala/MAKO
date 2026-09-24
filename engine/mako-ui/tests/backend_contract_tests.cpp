@@ -148,6 +148,9 @@ void test_fractional_adaptive_preset() {
     require_property(
         "adaptive_fractional_real_frame_priority_cap", "double", false, false
     );
+    require(mako::ui::Backend::staticMetaObject.indexOfMethod(
+                "fractionalRealFramePriorityCapFor(QString)") >= 0,
+        "Qt does not expose priority-cap previews to QML");
     require(ls::adaptiveFractionalRealFramePriorityCap(
                 ls::AdaptiveFractionalRealFramePriority::Auto, 120) == 0.0 &&
             ls::adaptiveFractionalRealFramePriorityCap(
@@ -200,7 +203,9 @@ void test_fractional_adaptive_preset() {
             "visible: backend.frame_generation_provisioned\n"
             "                            && backend.fractional_adaptive")) &&
             qml.contains(QStringLiteral(
-                "model: [t.automatic, t.low, t.medium, t.high, t.veryHigh]")) &&
+                "backend.fractionalRealFramePriorityCapFor(id)")) &&
+            qml.contains(QStringLiteral(
+                "priorityOption(t.high, \"high\", backend.target_fps)")) &&
             qml.contains(QStringLiteral(
                 "backend.adaptive_fractional_real_frame_priority !== \"auto\"")),
         "Fractional priority is not scoped to Fractional Adaptive or does not own its explicit cap");
@@ -411,14 +416,18 @@ void test_save_lifetime() {
     {
         mako::ui::Backend backend;
         backend.targetFPSUpdated(90);
+        require(backend.fractionalRealFramePriorityCapFor(QStringLiteral("low")) == 54.0,
+            "Priority preview did not follow the initial Target FPS");
         backend.targetFPSUpdated(144);
+        require(backend.fractionalRealFramePriorityCapFor(QStringLiteral("high")) == 108.0,
+            "Priority preview did not update with Target FPS");
         backend.enableZinkUpdated(true);
         backend.enableVkBasaltUpdated(true);
         backend.vkBasaltSharpeningUpdated(QStringLiteral("dls"));
         backend.vkBasaltSharpnessUpdated(0.75F);
         backend.vkBasaltDlsDenoiseUpdated(0.4F);
         backend.vkBasaltAntialiasingUpdated(QStringLiteral("fxaa"));
-        backend.vkBasaltShaderUpdated(QStringLiteral("vibrance"));
+        backend.vkBasaltShaderUpdated(QStringLiteral("hdr_look:clarity:vibrance:levels_plus"));
         require(!std::filesystem::exists(configPath), "UI edit was not debounced");
         QEventLoop events;
         QTimer::singleShot(700, &events, &QEventLoop::quit);
@@ -441,6 +450,11 @@ void test_save_lifetime() {
         require(QFileInfo::exists(
                     managedShaderDirectory + QStringLiteral("/Vibrance.fx")),
             "UI did not install the shared Decky-compatible shader assets");
+        require(QFileInfo::exists(
+                    managedShaderDirectory + QStringLiteral("/Clarity.fx")) &&
+                QFileInfo::exists(
+                    managedShaderDirectory + QStringLiteral("/LevelsPlus.fx")),
+            "UI did not install the selectable shader stack assets");
         QFile generatedShaderConfig(backend.getVkBasaltConfigPath());
         require(generatedShaderConfig.open(QIODevice::ReadOnly) &&
                 generatedShaderConfig.readAll().contains(
@@ -534,7 +548,7 @@ void test_decky_shader_profile_round_trip_and_owned_deletion() {
       "vkbasalt_sharpness": 0.65,
       "vkbasalt_dls_denoise": 0.35,
       "vkbasalt_antialiasing": "smaa",
-      "vkbasalt_shader": "technicolor2",
+      "vkbasalt_shader": "technicolor2:clarity",
       "future_setting": "keep"
     },
     "other-game": {
@@ -591,7 +605,7 @@ void test_decky_shader_profile_round_trip_and_owned_deletion() {
                 std::abs(backend.getVkBasaltSharpness() - 0.65F) < 0.001F &&
                 std::abs(backend.getVkBasaltDlsDenoise() - 0.35F) < 0.001F &&
                 backend.getVkBasaltAntialiasing() == QStringLiteral("smaa") &&
-                backend.getVkBasaltShader() == QStringLiteral("technicolor2"),
+                backend.getVkBasaltShader() == QStringLiteral("technicolor2:clarity"),
             "Qt did not load the selected profile's existing Decky shader settings");
         require(backend.getVkBasaltConfigPath().endsWith(
                     QStringLiteral("/steam-111.conf")),
