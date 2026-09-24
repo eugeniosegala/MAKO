@@ -48,6 +48,7 @@ from py_modules.mako_plugin.constants import (  # noqa: E402
     VKBASALT_LAYER_NAME_32,
     VKBASALT_MANIFEST_FILENAME_32,
     VKBASALT_LIB_FILENAME,
+    VKBASALT_SHADER_ASSET_FILENAMES,
     VKBASALT_LAYER_DISABLE_ENV,
     VKBASALT_LAYER_ENABLE_ENV,
     JSON32_FILENAME,
@@ -133,6 +134,9 @@ class DualArchInstallationTests(unittest.TestCase):
         self.service.vkbasalt_lib_dir = self.service.vkbasalt_lib_file.parent
         self.service.vkbasalt_lib32_dir = (
             self.service.vkbasalt_lib32_file.parent
+        )
+        self.service.renderer_vkbasalt_shader_dir = (
+            self.root / "share/mako-render/vkbasalt-shaders"
         )
         registered_dir = self.root / "registered/vulkan/implicit_layer.d"
         self.service.user_vulkan_layer_dir = registered_dir
@@ -231,6 +235,12 @@ class DualArchInstallationTests(unittest.TestCase):
                 }).encode("utf-8")
             ),
         }
+        members.update({
+            f"share/mako-render/vkbasalt-shaders/{filename}": (
+                f"shader:{filename}".encode("utf-8")
+            )
+            for filename in VKBASALT_SHADER_ASSET_FILENAMES
+        })
         if include_32bit:
             members.update({
                 f"lib32/{LIB_FILENAME}": (
@@ -283,6 +293,8 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.registered_json_file,
             self.service.vkbasalt_lib_file,
             self.service.vkbasalt_manifest,
+            *(self.service.renderer_vkbasalt_shader_dir / filename
+              for filename in VKBASALT_SHADER_ASSET_FILENAMES),
             self.service.mako_launch_script_path,
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -305,6 +317,8 @@ class DualArchInstallationTests(unittest.TestCase):
             self.service.registered_json_file,
             self.service.standalone_vkbasalt_lib_file,
             self.service.vkbasalt_manifest,
+            *(self.service.renderer_vkbasalt_shader_dir / filename
+              for filename in VKBASALT_SHADER_ASSET_FILENAMES),
             self.service.mako_launch_script_path,
         ):
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -405,6 +419,12 @@ class DualArchInstallationTests(unittest.TestCase):
             self.assertEqual(
                 manifest["layer"]["disable_environment"],
                 {VKBASALT_LAYER_DISABLE_ENV: "1"},
+            )
+        for filename in VKBASALT_SHADER_ASSET_FILENAMES:
+            self.assertEqual(
+                (self.service.renderer_vkbasalt_shader_dir / filename)
+                .read_bytes(),
+                f"shader:{filename}".encode("utf-8"),
             )
 
         registered64 = json.loads(

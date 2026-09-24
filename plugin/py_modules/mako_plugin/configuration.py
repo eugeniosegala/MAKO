@@ -29,6 +29,7 @@ from .constants import (
     MANGOHUD_MANIFEST_FILENAME_32,
     VKBASALT_MANIFEST_FILENAME_64,
     VKBASALT_MANIFEST_FILENAME_32,
+    VKBASALT_SHADER_ASSET_FILENAMES,
 )
 from .managed_files import write_managed_text_atomically
 from .process_detection import (
@@ -52,28 +53,7 @@ class ConfigurationService(BaseService):
     _PROFILE_METADATA_VERSION = 1
     _REQUIRED_WRAPPER_EXPORTS = wrapper_generation.REQUIRED_WRAPPER_EXPORTS
     _VKBASALT_SHADER_ASSET_DIR = Path(__file__).with_name("vkbasalt_shaders")
-    _VKBASALT_SHADER_ASSETS = (
-        "BleachBypass.fx",
-        "Cartoon.fx",
-        "ChromaticAberration.fx",
-        "Colourfulness.fx",
-        "Curves.fx",
-        "DPX.fx",
-        "FakeHDR.fx",
-        "FilmGrain.fx",
-        "LICENSE-Colourfulness",
-        "LICENSE-SweetFX",
-        "Monochrome.fx",
-        "Noir.fx",
-        "Nostalgia.fx",
-        "ReShade.fxh",
-        "Sepia.fx",
-        "SOURCE.md",
-        "Technicolor.fx",
-        "Technicolor2.fx",
-        "Vibrance.fx",
-        "Vignette.fx",
-    )
+    _VKBASALT_SHADER_ASSETS = VKBASALT_SHADER_ASSET_FILENAMES
 
     def __init__(
             self,

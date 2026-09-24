@@ -894,6 +894,7 @@ namespace mako::ui {
         std::filesystem::path m_profile_metadata_path;
         std::filesystem::path m_vkbasalt_profile_config_directory;
         std::filesystem::path m_vkbasalt_global_config_path;
+        std::filesystem::path m_vkbasalt_shader_source_directory;
         std::filesystem::path m_vkbasalt_shader_directory;
         QJsonObject m_wrapper_settings_root;
         QJsonObject m_profile_metadata_root;
@@ -905,6 +906,7 @@ namespace mako::ui {
         bool m_profile_metadata_dirty{false};
 
         void loadVkBasaltProfiles();
+        void writeVkBasaltShaderAssets() const;
         void writeVkBasaltProfiles() const;
         void writeProfileMetadata() const;
         void renameVkBasaltProfile(

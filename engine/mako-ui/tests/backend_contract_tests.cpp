@@ -406,7 +406,8 @@ void test_save_lifetime() {
     qputenv("MAKO_CONFIG", QByteArray::fromStdString(configPath));
     qputenv("MAKO_LAUNCH_CONFIG", QByteArray::fromStdString(launchPath));
     qputenv("XDG_CONFIG_HOME", directory.path().toUtf8());
-    qputenv("MAKO_VKBASALT_SHADER_DIR", directory.path().toUtf8());
+    qputenv("MAKO_VKBASALT_SHADER_DIR",
+        QByteArray(MAKO_UI_VKBASALT_SHADER_SOURCE_DIR));
     {
         mako::ui::Backend backend;
         backend.targetFPSUpdated(90);
@@ -434,6 +435,18 @@ void test_save_lifetime() {
                 std::filesystem::exists(
                     backend.getVkBasaltConfigPath().toStdString()),
             "UI did not create the selected profile's vkBasalt configuration");
+        const auto managedShaderDirectory = directory.filePath(
+            "vkbasalt/shaders"
+        );
+        require(QFileInfo::exists(
+                    managedShaderDirectory + QStringLiteral("/Vibrance.fx")),
+            "UI did not install the shared Decky-compatible shader assets");
+        QFile generatedShaderConfig(backend.getVkBasaltConfigPath());
+        require(generatedShaderConfig.open(QIODevice::ReadOnly) &&
+                generatedShaderConfig.readAll().contains(
+                    (managedShaderDirectory + QStringLiteral("/Vibrance.fx"))
+                        .toUtf8()),
+            "UI did not reference the shared Decky-compatible shader directory");
         const auto selectedProfile = backend.calculateProfileListModel()
             ->data(backend.calculateProfileListModel()->index(0, 0)).toString();
         require(backend.getLaunchOption().contains(
@@ -499,7 +512,8 @@ void test_decky_shader_profile_round_trip_and_owned_deletion() {
     qputenv("MAKO_CONFIG", QByteArray::fromStdString(configPath));
     qputenv("MAKO_LAUNCH_CONFIG", QByteArray::fromStdString(launchPath));
     qputenv("XDG_CONFIG_HOME", directory.path().toUtf8());
-    qputenv("MAKO_VKBASALT_SHADER_DIR", directory.path().toUtf8());
+    qputenv("MAKO_VKBASALT_SHADER_DIR",
+        QByteArray(MAKO_UI_VKBASALT_SHADER_SOURCE_DIR));
 
     ls::ConfigFile config;
     config.profiles().front().name = "decky-game";

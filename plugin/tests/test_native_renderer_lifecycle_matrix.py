@@ -22,6 +22,7 @@ sys.modules.setdefault("decky", SimpleNamespace(logger=_Logger()))
 from py_modules.mako_plugin.constants import (  # noqa: E402
     ACTIVE_RENDERER_OWNER_STANDALONE,
     ACTIVE_RENDERER_STATE_SCHEMA_VERSION,
+    VKBASALT_SHADER_ASSET_FILENAMES,
 )
 from py_modules.mako_plugin.installation import InstallationService  # noqa: E402
 from py_modules.mako_plugin import base_service as base_service_module  # noqa: E402
@@ -104,6 +105,8 @@ class NativeRendererLifecycleMatrixTests(unittest.TestCase):
             service.spatial_scaling_json_file,
             service.vkbasalt_manifest,
             service.registered_json_file,
+            *(service.renderer_vkbasalt_shader_dir / filename
+              for filename in VKBASALT_SHADER_ASSET_FILENAMES),
             prefix / (
                 "share/vulkan/implicit_layer.d/"
                 "VkLayer_MAKO_spatial_scaling.json"

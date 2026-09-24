@@ -6,6 +6,7 @@ import unittest
 
 import shared_config
 from py_modules.mako_plugin import profile_storage
+from py_modules.mako_plugin.constants import VKBASALT_SHADER_ASSET_FILENAMES
 
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[1]
@@ -30,6 +31,13 @@ SWEETFX_SHADERS = (
 
 
 class ShaderAssetTests(unittest.TestCase):
+    def test_installer_catalog_matches_bundled_shader_assets(self):
+        self.assertEqual(
+            tuple(sorted(VKBASALT_SHADER_ASSET_FILENAMES)),
+            tuple(sorted(path.name for path in SHADER_ROOT.iterdir()
+                         if path.is_file())),
+        )
+
     def test_qt_shader_adapter_matches_decky_contract(self):
         source = (
             REPOSITORY_ROOT

@@ -32,6 +32,7 @@ from .constants import (
     VKBASALT_LAYER_NAME_64, VKBASALT_MANIFEST_FILENAME_64,
     VKBASALT_LAYER_NAME_32, VKBASALT_MANIFEST_FILENAME_32,
     VKBASALT_LIB_FILENAME,
+    VKBASALT_SHADER_DIR, VKBASALT_SHADER_ASSET_FILENAMES,
     VKBASALT_LAYER_ENABLE_ENV, VKBASALT_LAYER_DISABLE_ENV,
     HOST_SYSTEM_IMPLICIT_LAYER_DIR,
     ARMADA_DEVICE_ENV,
@@ -127,6 +128,9 @@ class InstallationService(BaseService):
         )
         self.vkbasalt_lib32_file = (
             self.vkbasalt_lib32_dir / VKBASALT_LIB_FILENAME
+        )
+        self.renderer_vkbasalt_shader_dir = (
+            self.user_home / VKBASALT_SHADER_DIR
         )
         self.cli_file = self.user_home / CLI_DIR / CLI_FILENAME
         self.engine_state_file = self.local_lib_dir.parent / "installed-engine.json"
@@ -485,6 +489,8 @@ class InstallationService(BaseService):
             self.registered_json_file,
             vkbasalt_lib_file,
             self.vkbasalt_manifest,
+            *(self.renderer_vkbasalt_shader_dir / filename
+              for filename in VKBASALT_SHADER_ASSET_FILENAMES),
         )
         if not all(path.is_file() for path in required_files):
             return False
@@ -542,6 +548,11 @@ class InstallationService(BaseService):
                 self.vkbasalt_lib_file,
             f"share/mako-render/vulkan/vkbasalt.d/{VKBASALT_MANIFEST_FILENAME_64}":
                 self.vkbasalt_manifest,
+            **{
+                f"share/mako-render/vkbasalt-shaders/{filename}":
+                    self.renderer_vkbasalt_shader_dir / filename
+                for filename in VKBASALT_SHADER_ASSET_FILENAMES
+            },
         }
         optional_32bit_destinations = {
             f"lib32/{LIB_FILENAME}": self.lib32_file,
@@ -1339,6 +1350,8 @@ class InstallationService(BaseService):
             self.mangohud_manifest, self.mangohud_manifest32,
             self.vkbasalt_lib_file, self.vkbasalt_lib32_file,
             self.vkbasalt_manifest, self.vkbasalt_manifest32,
+            *(self.renderer_vkbasalt_shader_dir / filename
+              for filename in VKBASALT_SHADER_ASSET_FILENAMES),
             self.cli_file, self.engine_state_file,
             self.active_renderer_state_file,
             self.mako_script_path, self.diagnostics_script_path,

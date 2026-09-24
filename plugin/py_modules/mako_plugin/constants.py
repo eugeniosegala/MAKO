@@ -30,6 +30,29 @@ MANGOHUD_LAYER_DIR = f"{MAKO_ROOT}/vulkan/mangohud.d"
 VKBASALT_LAYER_DIR = f"{MAKO_ROOT}/vulkan/vkbasalt.d"
 VKBASALT_LIB_DIR = f"{LOCAL_LIB}/vkbasalt"
 VKBASALT_LIB32_DIR = f"{LOCAL_LIB32}/vkbasalt"
+VKBASALT_SHADER_DIR = f"{MAKO_ROOT}/vkbasalt-shaders"
+VKBASALT_SHADER_ASSET_FILENAMES = (
+    "BleachBypass.fx",
+    "Cartoon.fx",
+    "ChromaticAberration.fx",
+    "Colourfulness.fx",
+    "Curves.fx",
+    "DPX.fx",
+    "FakeHDR.fx",
+    "FilmGrain.fx",
+    "LICENSE-Colourfulness",
+    "LICENSE-SweetFX",
+    "Monochrome.fx",
+    "Noir.fx",
+    "Nostalgia.fx",
+    "ReShade.fxh",
+    "SOURCE.md",
+    "Sepia.fx",
+    "Technicolor.fx",
+    "Technicolor2.fx",
+    "Vibrance.fx",
+    "Vignette.fx",
+)
 USER_VULKAN_LAYER_DIR = ".local/share/vulkan/implicit_layer.d"
 CONFIG_DIR = ".config/mako-render"
 RUNTIME_STATE_DIRNAME = "runtime-state"
@@ -176,6 +199,8 @@ DECKY_NATIVE_RENDERER_RELATIVE_PATHS = (
     f"{MANGOHUD_LAYER_DIR}/{MANGOHUD_MANIFEST_FILENAME_32}",
     f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_64}",
     f"{VKBASALT_LAYER_DIR}/{VKBASALT_MANIFEST_FILENAME_32}",
+    *(f"{VKBASALT_SHADER_DIR}/{name}"
+      for name in VKBASALT_SHADER_ASSET_FILENAMES),
     f"{CLI_DIR}/{CLI_FILENAME}",
     f"{MAKO_ROOT}/installed-engine.json",
     f"{MAKO_ROOT}/{ACTIVE_RENDERER_STATE_FILENAME}",

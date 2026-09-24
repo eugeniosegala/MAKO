@@ -95,7 +95,10 @@ Backend::Backend(std::filesystem::path procRoot) : m_proc_root(std::move(procRoo
     this->m_profile_metadata_path = configDirectory / "profile-metadata.json";
     this->m_vkbasalt_profile_config_directory = configDirectory / "vkbasalt";
     this->m_vkbasalt_global_config_path = ls::findVkBasaltConfigurationFile();
-    this->m_vkbasalt_shader_directory = findBundledVkBasaltShaderDirectory();
+    this->m_vkbasalt_shader_source_directory =
+        findBundledVkBasaltShaderDirectory();
+    this->m_vkbasalt_shader_directory =
+        this->m_vkbasalt_profile_config_directory / "shaders";
     this->loadVkBasaltProfiles();
 
     // create gpu list
@@ -352,6 +355,7 @@ bool Backend::openVkBasaltConfig() {
     const auto path = this->vkBasaltConfigPath(index);
     if (!std::filesystem::is_regular_file(path)) {
         try {
+            this->writeVkBasaltShaderAssets();
             ls::writeVkBasaltConfiguration(
                 path,
                 this->m_vkbasalt_profiles.at(index),
@@ -367,6 +371,47 @@ bool Backend::openVkBasaltConfig() {
     return QDesktopServices::openUrl(QUrl::fromLocalFile(
         QString::fromStdString(path.string())
     ));
+}
+
+void Backend::writeVkBasaltShaderAssets() const {
+    const auto& sourceDirectory = this->m_vkbasalt_shader_source_directory;
+    const auto& destinationDirectory = this->m_vkbasalt_shader_directory;
+    if (!std::filesystem::is_directory(sourceDirectory))
+        throw std::runtime_error(
+            "the bundled vkBasalt shader directory is unavailable: " +
+            sourceDirectory.string()
+        );
+
+    std::filesystem::create_directories(destinationDirectory);
+    if (std::filesystem::equivalent(sourceDirectory, destinationDirectory))
+        return;
+
+    for (const auto& entry : std::filesystem::directory_iterator(sourceDirectory)) {
+        if (!entry.is_regular_file())
+            continue;
+
+        QFile source(QString::fromStdString(entry.path().string()));
+        if (!source.open(QIODevice::ReadOnly))
+            throw std::runtime_error(
+                "unable to read bundled vkBasalt shader asset: " +
+                entry.path().string()
+            );
+        const QByteArray contents = source.readAll();
+        const auto destinationPath = destinationDirectory / entry.path().filename();
+        QFile existing(QString::fromStdString(destinationPath.string()));
+        if (existing.open(QIODevice::ReadOnly) && existing.readAll() == contents)
+            continue;
+
+        QSaveFile destination(QString::fromStdString(destinationPath.string()));
+        if (!destination.open(QIODevice::WriteOnly) ||
+                destination.write(contents) != contents.size() ||
+                !destination.commit()) {
+            throw std::runtime_error(
+                "unable to install vkBasalt shader asset: " +
+                destinationPath.string()
+            );
+        }
+    }
 }
 
 void Backend::renameVkBasaltProfile(
@@ -530,6 +575,7 @@ void Backend::savePendingChanges() {
     }
     if (std::exchange(this->m_vkbasalt_dirty, false)) {
         try {
+            this->writeVkBasaltShaderAssets();
             for (size_t index = 0; index < this->m_profiles.size(); ++index) {
                 if (!this->m_vkbasalt_profiles.at(index).enabled)
                     continue;
