@@ -171,12 +171,39 @@ vi.mock("../../src/components/MakoUi", () => ({
   MakoFocusable: ({
     children,
     onActivate: _onActivate,
+    onButtonDown,
+    onCancel,
     "flow-children": _flowChildren,
     ...props
   }: React.HTMLAttributes<HTMLDivElement> & {
     onActivate?: () => void;
+    onButtonDown?: (event: CustomEvent<{ button: number }>) => void;
+    onCancel?: (event: CustomEvent) => void;
     "flow-children"?: string;
-  }) => <div {...props}>{children}</div>,
+  }) => {
+    const ref = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+      const element = ref.current!;
+      const handleButtonDown = (event: Event) =>
+        onButtonDown?.(event as CustomEvent<{ button: number }>);
+      const handleCancel = (event: Event) => {
+        if (!onCancel) return;
+        onCancel(event as CustomEvent);
+        event.stopPropagation();
+      };
+      element.addEventListener("vgp_onbuttondown", handleButtonDown);
+      element.addEventListener("vgp_oncancel", handleCancel);
+      return () => {
+        element.removeEventListener("vgp_onbuttondown", handleButtonDown);
+        element.removeEventListener("vgp_oncancel", handleCancel);
+      };
+    }, [onButtonDown, onCancel]);
+    return (
+      <div ref={ref} {...props}>
+        {children}
+      </div>
+    );
+  },
   MakoSettingRelationship: ({ children }: { children: React.ReactNode }) => (
     <div data-mako-setting-relationship="true">{children}</div>
   ),
@@ -301,8 +328,18 @@ describe("Configuration controls", () => {
         .map((element) => element.textContent),
     ).toEqual(["Effects", "Sharpening"]);
     expect(screen.queryByRole("checkbox", { name: "Clarity" })).toBeNull();
-    fireEvent.click(screen.getByText("Choose effects (0 selected)"));
+    const effectsSummary = screen.getByRole("button", {
+      name: "Choose effects (0 selected)",
+    });
+    fireEvent.focus(effectsSummary);
+    expect(effectsSummary.style.outline).not.toContain("transparent");
+    fireEvent.blur(effectsSummary);
+    fireEvent.click(effectsSummary);
     expect(showModal).not.toHaveBeenCalled();
+    const done = screen.getByRole("button", { name: "Done" });
+    fireEvent.mouseEnter(done);
+    expect(done.style.outline).not.toContain("transparent");
+    fireEvent.mouseLeave(done);
     expect(
       screen.getByTestId("mako-effects-selector").style.paddingBottom,
     ).toBe("8px");
@@ -312,10 +349,32 @@ describe("Configuration controls", () => {
     expect(screen.getAllByRole("checkbox")).toHaveLength(5);
     expect(screen.getByRole("checkbox", { name: "Clarity" })).toBeTruthy();
     expect(screen.getByRole("checkbox", { name: "Levels Plus" })).toBeTruthy();
-    fireEvent.mouseEnter(screen.getByRole("checkbox", { name: "Clarity" }));
-    expect(
-      screen.getByRole("checkbox", { name: "Clarity" }).style.outline,
-    ).toContain("2px solid");
+    const clarity = screen.getByRole("checkbox", { name: "Clarity" });
+    fireEvent.mouseEnter(clarity);
+    expect(clarity.style.outline).toContain("2px solid");
+    clarity.focus();
+    fireEvent(
+      clarity,
+      new CustomEvent("vgp_onbuttondown", {
+        bubbles: true,
+        cancelable: true,
+        detail: { button: 12 },
+      }),
+    );
+    const deband = screen.getByRole("checkbox", { name: "Deband" });
+    expect(deband).toBe(clarity);
+    expect(document.activeElement).toBe(deband);
+    expect(deband.style.outline).not.toContain("transparent");
+    fireEvent(
+      deband,
+      new CustomEvent("vgp_onbuttondown", {
+        bubbles: true,
+        cancelable: true,
+        detail: { button: 11 },
+      }),
+    );
+    expect(screen.getByRole("checkbox", { name: "Clarity" })).toBe(clarity);
+    expect(clarity.style.outline).not.toContain("transparent");
     const pager = screen.getByRole("button", { name: "Effects" });
     pager.focus();
     expect(pager.style.outline).toContain("2px solid");
@@ -328,9 +387,9 @@ describe("Configuration controls", () => {
     });
     technicolor2.focus();
     fireEvent.keyDown(technicolor2, { key: "ArrowRight" });
-    expect(document.activeElement).toBe(
-      screen.getByRole("checkbox", { name: "Monochrome" }),
-    );
+    const monochrome = screen.getByRole("checkbox", { name: "Monochrome" });
+    expect(monochrome).toBe(technicolor2);
+    expect(document.activeElement).toBe(monochrome);
     const filmGrain = screen.getByRole("checkbox", { name: "Film Grain" });
     filmGrain.focus();
     fireEvent.keyDown(filmGrain, { key: "ArrowRight" });
@@ -426,6 +485,59 @@ describe("Configuration controls", () => {
     await waitFor(() =>
       expect(screen.queryByTestId("mako-effects-list")).toBeNull(),
     );
+  });
+
+  test("Back collapses effects before returning to Decky's plugin list", () => {
+    const onDeckyBack = vi.fn();
+    document.addEventListener("vgp_oncancel", onDeckyBack);
+    try {
+      render(
+        <ShadersConfigurationGroup
+          config={{
+            ...getDefaults(),
+            external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+            vkbasalt_shader: "clarity",
+          }}
+          isDefaultProfile={false}
+          profileName="final-fantasy"
+          vkBasaltConfigPath="/home/deck/.config/mako-render/vkbasalt/abc.conf"
+          onConfigChange={vi.fn(async () => undefined)}
+        />,
+      );
+
+      fireEvent.click(screen.getByText("Choose effects (1 selected)"));
+      const clarity = screen.getByRole("checkbox", { name: "1. Clarity" });
+      clarity.focus();
+      expect(
+        fireEvent(
+          clarity,
+          new CustomEvent("vgp_oncancel", {
+            bubbles: true,
+            cancelable: true,
+          }),
+        ),
+      ).toBe(false);
+      expect(onDeckyBack).not.toHaveBeenCalled();
+      expect(screen.queryByTestId("mako-effects-list")).toBeNull();
+
+      const summary = screen.getByRole("button", {
+        name: "Choose effects (1 selected)",
+      });
+      expect(document.activeElement).toBe(summary);
+      expect(summary.style.outline).not.toContain("transparent");
+      expect(
+        fireEvent(
+          summary,
+          new CustomEvent("vgp_oncancel", {
+            bubbles: true,
+            cancelable: true,
+          }),
+        ),
+      ).toBe(true);
+      expect(onDeckyBack).toHaveBeenCalledOnce();
+    } finally {
+      document.removeEventListener("vgp_oncancel", onDeckyBack);
+    }
   });
 
   test("resets the inline effect editor when the selected profile changes", () => {

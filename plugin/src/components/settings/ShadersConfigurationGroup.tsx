@@ -71,7 +71,7 @@ const EFFECTS_PER_PAGE = 5;
 const EFFECT_ROW_HEIGHT = 38;
 const EFFECT_ROW_GAP = 2;
 
-type EffectsAction = "pager" | "clear";
+type EffectsAction = "summary" | "pager" | "clear";
 
 function EffectsChecklist({
   options,
@@ -230,7 +230,18 @@ function EffectsChecklist({
   const changePageFromEffect = (direction: -1 | 1, row: number) => {
     const nextPage = Math.min(pageCount - 1, Math.max(0, page + direction));
     if (nextPage === page) return;
-    pendingPageFocusRow.current = row;
+    const nextPageEffectCount = Math.min(
+      EFFECTS_PER_PAGE,
+      Math.max(0, effects.length - nextPage * EFFECTS_PER_PAGE),
+    );
+    const targetRow = Math.min(row, Math.max(0, nextPageEffectCount - 1));
+    const targetEffect = effects[nextPage * EFFECTS_PER_PAGE + targetRow];
+    if (!targetEffect) return;
+    if (targetRow !== row) {
+      pendingPageFocusRow.current = targetRow;
+    }
+    setFocusedEffect(targetEffect.data);
+    setHoveredEffect(null);
     setPage(nextPage);
   };
 
@@ -249,6 +260,24 @@ function EffectsChecklist({
     );
   };
 
+  const summaryHighlighted =
+    focusedAction === "summary" || hoveredAction === "summary";
+
+  const collapseToSummary = () => {
+    checklistRef.current
+      ?.querySelector<HTMLElement>('[data-mako-effects-summary="true"]')
+      ?.focus({ preventScroll: true });
+    setExpanded(false);
+    setFocusedEffect(null);
+    setFocusedAction("summary");
+  };
+
+  const handleExpandedCancel = (event: CustomEvent) => {
+    event.preventDefault();
+    event.stopPropagation();
+    collapseToSummary();
+  };
+
   return (
     <div
       ref={checklistRef}
@@ -265,20 +294,17 @@ function EffectsChecklist({
         focusWithinClassName="mako-effects-focus-within"
         onBlur={closeAfterFocusLeaves}
         onGamepadBlur={closeAfterFocusLeaves}
-        onCancel={(event) => {
-          if (!expanded) return;
-          event.preventDefault();
-          event.stopPropagation();
-          setExpanded(false);
-        }}
+        {...(expanded ? { onCancel: handleExpandedCancel } : {})}
         style={{ width: "100%" }}
       >
         <MakoFocusable
+          data-mako-effects-summary="true"
           role="button"
           tabIndex={0}
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
           onActivate={() => setExpanded(!expanded)}
+          {...actionFocusProps("summary")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -287,9 +313,17 @@ function EffectsChecklist({
             width: "100%",
             minHeight: "40px",
             padding: "7px 12px",
-            border: "1px solid rgba(77, 170, 190, 0.32)",
+            border: summaryHighlighted
+              ? "1px solid rgba(131, 191, 240, 0.8)"
+              : "1px solid rgba(77, 170, 190, 0.32)",
             borderRadius: "7px",
-            background: "rgba(18, 48, 65, 0.72)",
+            background: summaryHighlighted
+              ? "rgba(62, 130, 156, 0.62)"
+              : "rgba(18, 48, 65, 0.72)",
+            outline: summaryHighlighted
+              ? "2px solid #83bff0"
+              : "2px solid transparent",
+            outlineOffset: "-2px",
             color: "#edf8fb",
             fontSize: "14px",
           }}
@@ -365,7 +399,7 @@ function EffectsChecklist({
                       );
                     return (
                       <MakoFocusable
-                        key={option.data}
+                        key={row}
                         role="checkbox"
                         tabIndex={0}
                         data-mako-effect-row={row}

@@ -8,6 +8,8 @@ import {
 } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
+const navigationChildTakeFocus = vi.hoisted(() => vi.fn());
+
 vi.mock("@decky/ui", () => ({
   Dropdown: ({
     rgOptions,
@@ -82,6 +84,8 @@ vi.mock("@decky/ui", () => ({
     validValues,
     notchCount,
     notchTicksVisible,
+    className,
+    navRef,
     onChange,
   }: {
     label: React.ReactNode;
@@ -93,26 +97,69 @@ vi.mock("@decky/ui", () => ({
     validValues?: "steps" | "range" | ((value: number) => boolean);
     notchCount?: number;
     notchTicksVisible?: boolean;
+    className?: string;
+    navRef?: React.MutableRefObject<{
+      BFocusWithin(): boolean;
+      ChildTakeFocus(): boolean;
+      TakeFocus(): boolean;
+    } | null>;
     onChange?: (value: number) => void;
-  }) => (
-    <div
-      data-slider-field="true"
-      data-value={value}
-      data-min={min}
-      data-max={max}
-      data-step={step}
-      data-valid-values={
-        typeof validValues === "string" ? validValues : "callback"
-      }
-      data-notch-count={notchCount}
-      data-notch-ticks-visible={String(Boolean(notchTicksVisible))}
-    >
-      {description}
-      <span>{label}</span>
-      <button onClick={() => onChange?.(0)}>Set 0x</button>
-      <button onClick={() => onChange?.(4)}>Set 5x</button>
-    </div>
-  ),
+  }) => {
+    const mountedValue = React.useRef(value);
+    const container = React.useRef<HTMLDivElement>(null);
+    const stalePausedInstance = value === 0 && mountedValue.current !== 0;
+    React.useLayoutEffect(() => {
+      if (!navRef) return;
+      navRef.current = {
+        BFocusWithin: () =>
+          Boolean(
+            container.current?.contains(
+              container.current.ownerDocument.activeElement,
+            ),
+          ),
+        ChildTakeFocus: () => {
+          navigationChildTakeFocus();
+          container.current?.focus();
+          return true;
+        },
+        TakeFocus: () => false,
+      };
+      return () => {
+        navRef.current = null;
+      };
+    }, [navRef]);
+    return (
+      <div
+        ref={container}
+        role="slider"
+        tabIndex={0}
+        className={className}
+        data-slider-field="true"
+        data-value={value}
+        data-mounted-value={mountedValue.current}
+        data-min={min}
+        data-max={max}
+        data-step={step}
+        data-valid-values={
+          typeof validValues === "string" ? validValues : "callback"
+        }
+        data-notch-count={notchCount}
+        data-notch-ticks-visible={String(Boolean(notchTicksVisible))}
+      >
+        {description}
+        <span>{label}</span>
+        <button onClick={() => onChange?.(0)}>Set 0x</button>
+        <button
+          onClick={() => {
+            if (!stalePausedInstance) onChange?.(value + 1);
+          }}
+        >
+          D-pad right
+        </button>
+        <button onClick={() => onChange?.(4)}>Set 5x</button>
+      </div>
+    );
+  },
 }));
 vi.mock("../../src/components/MakoUi", () => ({
   MakoRestartLabel: ({ label }: { label: string }) => label,
@@ -135,7 +182,10 @@ vi.mock("../../src/i18n/i18n", () => ({
 import { FpsMultiplierControl } from "../../src/components/FpsMultiplierControl";
 import { getDefaults } from "../../src/config/configSchema";
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  navigationChildTakeFocus.mockClear();
+});
 
 describe("Frame Generation controls", () => {
   test("shows one 0x-capable multiplier slider for the selected mode", () => {
@@ -338,6 +388,13 @@ describe("Frame Generation controls", () => {
     expect(screen.queryByText(/Fixed Multiplier/)).toBeNull();
 
     fireEvent.click(
+      within(pausedAdaptiveMultiplier as HTMLElement).getByText("D-pad right"),
+    );
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      frame_generation_enabled: true,
+      adaptive_max_multiplier: 2,
+    });
+    fireEvent.click(
       within(pausedAdaptiveMultiplier as HTMLElement).getByText("Set 5x"),
     );
     expect(onConfigUpdate).toHaveBeenCalledWith({
@@ -406,6 +463,67 @@ describe("Frame Generation controls", () => {
         "At a 120 FPS target, the estimated split is 80 real / 40 generated FPS (about 2:1) if the target is met. Actual rates vary. This overrides Base FPS Cap.",
       ),
     ).toBeTruthy();
+  });
+
+  test("remounts Fixed at 0x and restores active slider input", () => {
+    window.SP_REACT = React;
+    const onConfigChange = vi.fn(async () => undefined);
+    const onConfigUpdate = vi.fn(async () => undefined);
+    const activeConfig = {
+      ...getDefaults(),
+      adaptive: false,
+      frame_generation_enabled: true,
+      multiplier: 2,
+    };
+    const { rerender } = render(
+      <FpsMultiplierControl
+        config={activeConfig}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+
+    const setZero = screen.getByText("Set 0x");
+    setZero.focus();
+    fireEvent.click(setZero);
+    expect(onConfigChange).toHaveBeenCalledWith(
+      "frame_generation_enabled",
+      false,
+    );
+    rerender(
+      <FpsMultiplierControl
+        config={{ ...activeConfig, frame_generation_enabled: false }}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+
+    const pausedMultiplier = screen
+      .getByText("Fixed Multiplier (0x)")
+      .closest<HTMLElement>('[data-slider-field="true"]');
+    expect(pausedMultiplier).toBeTruthy();
+    expect(pausedMultiplier?.getAttribute("data-mounted-value")).toBe("0");
+    expect(navigationChildTakeFocus).toHaveBeenCalledTimes(1);
+    expect(pausedMultiplier?.contains(document.activeElement)).toBe(true);
+    const dpadRight = screen.getByText("D-pad right");
+    dpadRight.focus();
+    fireEvent.click(dpadRight);
+    expect(onConfigUpdate).toHaveBeenCalledWith({
+      frame_generation_enabled: true,
+      multiplier: 2,
+    });
+    rerender(
+      <FpsMultiplierControl
+        config={activeConfig}
+        onConfigChange={onConfigChange}
+        onConfigUpdate={onConfigUpdate}
+      />,
+    );
+    const resumedMultiplier = screen
+      .getByText("Fixed Multiplier (2x)")
+      .closest<HTMLElement>('[data-slider-field="true"]');
+    expect(navigationChildTakeFocus).toHaveBeenCalledTimes(2);
+    expect(resumedMultiplier?.contains(document.activeElement)).toBe(true);
   });
 
   test("collapses Frame Generation controls only when provisioning is off", () => {

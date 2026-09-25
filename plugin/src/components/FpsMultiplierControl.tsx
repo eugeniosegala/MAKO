@@ -7,6 +7,13 @@ import {
   ToggleField,
 } from "@decky/ui";
 import {
+  useLayoutEffect,
+  useRef,
+  type ComponentProps,
+  type ComponentType,
+  type Ref,
+} from "react";
+import {
   ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_AUTO,
   ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_HIGH,
   ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_LOW,
@@ -38,6 +45,21 @@ const DEFAULT_CONFIGURATION = getDefaults();
 const GENERATION_MULTIPLIER_CHOICES = [0, 2, 3, 4, 5] as const;
 const GENERATION_MULTIPLIER_SLIDER_MAX =
   GENERATION_MULTIPLIER_CHOICES.length - 1;
+const GENERATION_MULTIPLIER_FOCUS_SELECTOR =
+  "[role='slider'], [role='button'], button, input, select, [tabindex]:not([tabindex='-1'])";
+
+interface SteamSliderNavigationHandle {
+  BFocusWithin(): boolean;
+  ChildTakeFocus(): boolean;
+  TakeFocus(): boolean;
+}
+
+type SteamSliderFieldProps = ComponentProps<typeof SliderField> & {
+  navRef?: Ref<SteamSliderNavigationHandle>;
+};
+
+// Steam supports navRef here even though Decky's SliderField type omits it.
+const SteamSliderField = SliderField as ComponentType<SteamSliderFieldProps>;
 
 function multiplierSliderPosition(multiplier: number): number {
   const position = GENERATION_MULTIPLIER_CHOICES.findIndex(
@@ -62,6 +84,13 @@ export function FpsMultiplierControl({
   onConfigChange,
   onConfigUpdate,
 }: ConfigurationEditorProps) {
+  const pendingMultiplierFocus = useRef<{
+    mode: "adaptive" | "fixed";
+    ownerDocument: Document;
+  }>();
+  const adaptiveMultiplierNavigation =
+    useRef<SteamSliderNavigationHandle>(null);
+  const fixedMultiplierNavigation = useRef<SteamSliderNavigationHandle>(null);
   const targetFps = config.target_fps;
   const adaptiveMaxMultiplier =
     config.adaptive_max_multiplier ??
@@ -154,6 +183,50 @@ export function FpsMultiplierControl({
               ADAPTIVE_FRACTIONAL_REAL_FRAME_PRIORITY_VERY_HIGH
             ? { real: 4, generated: 1 }
             : undefined;
+
+  useLayoutEffect(() => {
+    const pending = pendingMultiplierFocus.current;
+    if (!pending) return;
+    const navigation =
+      pending.mode === "adaptive"
+        ? adaptiveMultiplierNavigation.current
+        : fixedMultiplierNavigation.current;
+    if (navigation?.ChildTakeFocus() || navigation?.TakeFocus()) {
+      pendingMultiplierFocus.current = undefined;
+      return;
+    }
+    const container = pending.ownerDocument.querySelector<HTMLElement>(
+      `.Mako_GenerationMultiplierSlider--${pending.mode}`,
+    );
+    const target = container?.matches(GENERATION_MULTIPLIER_FOCUS_SELECTOR)
+      ? container
+      : container?.querySelector<HTMLElement>(
+          GENERATION_MULTIPLIER_FOCUS_SELECTOR,
+        );
+    target?.focus({ preventScroll: true });
+    pendingMultiplierFocus.current = undefined;
+  }, [frameGenerationEnabled]);
+
+  const retainMultiplierFocus = (
+    mode: "adaptive" | "fixed",
+    nextEnabled: boolean,
+  ) => {
+    if (nextEnabled === frameGenerationEnabled) return;
+    const navigation =
+      mode === "adaptive"
+        ? adaptiveMultiplierNavigation.current
+        : fixedMultiplierNavigation.current;
+    const activeElement = document.activeElement as HTMLElement | null;
+    const container = activeElement?.closest(
+      `.Mako_GenerationMultiplierSlider--${mode}`,
+    );
+    if (navigation?.BFocusWithin() || (container && activeElement)) {
+      pendingMultiplierFocus.current = {
+        mode,
+        ownerDocument: activeElement?.ownerDocument ?? document,
+      };
+    }
+  };
 
   return (
     <>
@@ -317,7 +390,10 @@ export function FpsMultiplierControl({
                 />
               </PanelSectionRow>
               <PanelSectionRow>
-                <SliderField
+                <SteamSliderField
+                  key={`adaptive-${frameGenerationEnabled ? "active" : "paused"}`}
+                  navRef={adaptiveMultiplierNavigation}
+                  className="Mako_GenerationMultiplierSlider Mako_GenerationMultiplierSlider--adaptive"
                   label={`${t("ADAPTIVE_MAX_MULTIPLIER", "Maximum Adaptive Multiplier")} (${frameGenerationEnabled ? adaptiveMaxMultiplier : 0}x)`}
                   description={
                     <span style={{ display: "block", paddingBottom: "2px" }}>
@@ -342,8 +418,10 @@ export function FpsMultiplierControl({
                   onChange={(position) => {
                     const value = multiplierAtSliderPosition(position);
                     if (value === 0) {
+                      retainMultiplierFocus("adaptive", false);
                       void onConfigChange(FRAME_GENERATION_ENABLED, false);
                     } else if (value !== undefined) {
+                      retainMultiplierFocus("adaptive", true);
                       void onConfigUpdate({
                         frame_generation_enabled: true,
                         adaptive_max_multiplier: value,
@@ -357,7 +435,10 @@ export function FpsMultiplierControl({
 
           {!config.adaptive && (
             <PanelSectionRow>
-              <SliderField
+              <SteamSliderField
+                key={`fixed-${frameGenerationEnabled ? "active" : "paused"}`}
+                navRef={fixedMultiplierNavigation}
+                className="Mako_GenerationMultiplierSlider Mako_GenerationMultiplierSlider--fixed"
                 label={`${t("FIXED_MULTIPLIER", "Fixed Multiplier")} (${frameGenerationEnabled ? fixedMultiplier : 0}x)`}
                 description={t(
                   "FIXED_MULTIPLIER_DESC",
@@ -378,8 +459,10 @@ export function FpsMultiplierControl({
                 onChange={(position) => {
                   const value = multiplierAtSliderPosition(position);
                   if (value === 0) {
+                    retainMultiplierFocus("fixed", false);
                     void onConfigChange(FRAME_GENERATION_ENABLED, false);
                   } else if (value !== undefined) {
+                    retainMultiplierFocus("fixed", true);
                     void onConfigUpdate({
                       frame_generation_enabled: true,
                       multiplier: value,
