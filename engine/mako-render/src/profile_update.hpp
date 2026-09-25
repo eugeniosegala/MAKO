@@ -485,6 +485,7 @@ namespace mako::layer {
             const bool orderedAcquireRecoveryActive,
             const std::optional<uint32_t> gamescopeRefreshHz,
             const AdaptiveSchedulerSnapshot& scheduler,
+            const GamescopePresentationFeedback& presentationFeedback = {},
             const bool handoffAlreadyActive = false) {
         const double targetFps = static_cast<double>(profile.target_fps);
         const double projectedOutputFps = scheduler.smoothedBaseFps * 2.0;
@@ -492,9 +493,11 @@ namespace mako::layer {
             projectedOutputFps >= targetFps * 0.98 &&
             projectedOutputFps <= targetFps * 1.02;
         // FIFO can return alternating short and long present intervals while
-        // preserving the average 2x output rate. Do not restore the CPU cap
-        // from that immediate estimator excursion; the scheduler still owns
-        // sustained cadence loss and delivery validation.
+        // preserving the average 2x output rate. Under VRR, do not restore
+        // the CPU cap from that immediate estimator excursion; the scheduler
+        // still owns sustained cadence loss and delivery validation.
+        const bool retainVrrHandoff = handoffAlreadyActive &&
+            !presentationFeedback.fixedRefreshPacingEligible();
         return profile.adaptive &&
             profile.adaptive_auto_base_fps_cap &&
             profile.adaptive_stable_cadence &&
@@ -507,7 +510,7 @@ namespace mako::layer {
             scheduler.phase == AdaptiveSchedulerPhase::StableCadence &&
             scheduler.stableCadenceLimit == 1 &&
             !scheduler.stableCadenceEvaluationActive &&
-            (entryCadenceMatched || handoffAlreadyActive);
+            (entryCadenceMatched || retainVrrHandoff);
     }
 
     /// Integer-cadence base-cap refinement is limited to the same ordered,
@@ -568,7 +571,7 @@ namespace mako::layer {
         if (smoothCadencePacerHandoffActive(
                     profile, privateOrderedTransport,
                     orderedAcquireRecoveryActive, gamescopeRefreshHz,
-                    scheduler, handoffAlreadyActive))
+                    scheduler, current, handoffAlreadyActive))
             return false;
         return smoothCadenceBaseCapEligible(
                     profile, privateOrderedTransport,

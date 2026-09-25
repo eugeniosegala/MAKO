@@ -769,6 +769,7 @@ void Swapchain::updateGamescopePresentationFeedback(
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz,
             schedulerSnapshot,
+            this->gamescopePresentationFeedback,
             this->smoothCadencePacerHandoff.active()
         ) || smoothCadenceBaseCapEligible(
             this->profile,
