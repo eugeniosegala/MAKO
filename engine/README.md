@@ -234,7 +234,7 @@ The pure scheduling, presentation, scaling, and transition policies retain their
 - <a href="docs/CONFIGURATION.md" target="_blank" rel="noopener noreferrer">Configuration</a>: profiles, frame-generation, scaling, and shader controls, Adaptive mode, and environment variables.
 - <a href="docs/SCALING.md" target="_blank" rel="noopener noreferrer">Spatial scaling architecture</a>: pipeline order, surface support, formats, resources, private transitions, and validation.
 - <a href="docs/RUNTIME-TRANSITIONS.md" target="_blank" rel="noopener noreferrer">Runtime configuration transitions</a>: live-safe updates, recreation, and restart boundaries.
-- <a href="docs/ADAPTIVE-VALIDATION.md" target="_blank" rel="noopener noreferrer">Adaptive validation</a>: scheduler behavior, frame plans, benchmarking, and game validation.
+- <a href="docs/ADAPTIVE-VALIDATION.md" target="_blank" rel="noopener noreferrer">Adaptive validation</a>: scheduler behavior, VRR and fixed-refresh pacing paths, frame plans, benchmarking, and game validation.
 - <a href="docs/WSI-ISOLATION.md" target="_blank" rel="noopener noreferrer">WSI isolation</a>: Vulkan discovery, Gamescope presentation ownership, and diagnostics.
 - <a href="docs/LAYER-CHAINING.md" target="_blank" rel="noopener noreferrer">Optional graphics integrations</a>: MAKO Decky external tools, manual chaining, and limits.
 - <a href="docs/FLATPAK-GUIDE.md" target="_blank" rel="noopener noreferrer">Flatpak guide</a>: runtime extensions and direct application overrides.

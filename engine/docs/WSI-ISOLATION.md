@@ -142,6 +142,8 @@ The same background reader samples Gamescope's explicit server-zero `GAMESCOPE_V
 
 This feedback changes only who owns the pacing clock, whether a validated higher Steady Adaptive rung requests its full generated batch under FIFO, and whether an already accepted constant Fractional rung hands pacing to FIFO. It does not promote a multiplier, qualify Adaptive work, start recovery, or request swapchain recreation. `GAMESCOPE_ALLOW_TEARING` is diagnostic transport context only: ordered SDR still owns FIFO delivery, so the Steam toggle does not replace MAKO's effective present mode. The incoming application present mode and effective transport mode are both recorded at swapchain creation. Sampling remains off the presentation thread and performs no per-frame X11 or Decky query.
 
+For the behavior of each Fixed, Steady Adaptive, and Fractional Adaptive pacing path under VRR and fixed refresh, see [VRR and fixed-refresh pacing paths](ADAPTIVE-VALIDATION.md#vrr-and-fixed-refresh-pacing-paths).
+
 ### Presentation evidence
 
 For an ordinary managed launch, loader and Renderer evidence must agree that Gamescope WSI is isolated, HDR exposure is disabled, the render role selected a profile and backend, and ordered SDR presentation owns delivery. The presentation-feedback record must identify the explicit VRR state and selected pacing owner when those properties are available. For an FG-only compatibility launch, `VK_LAYER_MAKO_render` must be above the architecture-correct Gamescope WSI identity. For scaling with WSI, the complete three-role order, lower Wayland provenance, authoritative create relay, active source/presentation split, one upper reconstruction owner, and correct generated/real delivery are all required.
