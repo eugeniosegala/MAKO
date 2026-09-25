@@ -443,7 +443,7 @@ namespace mako::layer {
 
     /// Ordered-SDR rescue can release an automatic cap after FIFO masks source
     /// headroom. Under explicit VRR, retain the configured automatic cap
-    /// outside the separate validated 2x FIFO handoff, without resetting the
+    /// outside a qualified FIFO handoff, without resetting the
     /// scheduler or discarding its validated multiplier.
     [[nodiscard]] inline double effectiveBaseFpsCap(
             const ls::GameConf& profile,
@@ -474,31 +474,50 @@ namespace mako::layer {
             *gamescopeRefreshHz > profile.frame_generation_refresh_threshold;
     }
 
-    /// Once Smooth Cadence has validated a constant 2x policy, ordered FIFO can
-    /// own the same pacing boundary as Fixed 2x. Handoff is deliberately
-    /// restricted to Steady Adaptive with confirmed target-matching refresh;
-    /// losing qualification or entering transport recovery restores the
-    /// explicit real-frame cap on the next present.
-    [[nodiscard]] inline bool smoothCadencePacerHandoffActive(
+    /// A proven 2x cadence keeps its established FIFO handoff. Under VRR, a
+    /// validated higher rung may also request a full integer batch once its
+    /// predicted FIFO backpressure costs at most 20% of current real FPS.
+    /// Probe, recovery, and transport guards restore target-clock pacing.
+    [[nodiscard]] inline std::optional<size_t>
+    smoothCadencePacerHandoffGenerationLimit(
             const ls::GameConf& profile,
             const bool privateOrderedTransport,
             const bool orderedAcquireRecoveryActive,
             const std::optional<uint32_t> gamescopeRefreshHz,
             const AdaptiveSchedulerSnapshot& scheduler,
             const GamescopePresentationFeedback& presentationFeedback = {},
-            const bool handoffAlreadyActive = false) {
+            const std::optional<size_t> activeGenerationLimit = std::nullopt) {
+        const size_t generationLimit = scheduler.stableCadenceLimit.value_or(
+            scheduler.validatedGenerationLimit
+        );
+        if (generationLimit == 0 ||
+                generationLimit >= profile.adaptive_max_multiplier)
+            return std::nullopt;
         const double targetFps = static_cast<double>(profile.target_fps);
-        const double projectedOutputFps = scheduler.smoothedBaseFps * 2.0;
+        const double projectedOutputFps = scheduler.smoothedBaseFps *
+            static_cast<double>(generationLimit + 1);
+        const bool higherVrrRung = generationLimit > 1 &&
+            presentationFeedback.variableRefreshRequested() &&
+            scheduler.validatedGenerationLimit >= generationLimit &&
+            (scheduler.phase == AdaptiveSchedulerPhase::Active ||
+             scheduler.phase == AdaptiveSchedulerPhase::StableCadence) &&
+            !scheduler.efficiencyProbeGenerationLimit &&
+            (!scheduler.stableCadenceEvaluationActive ||
+             activeGenerationLimit == generationLimit);
+        const bool provenTwoX = generationLimit == 1 &&
+            scheduler.phase == AdaptiveSchedulerPhase::StableCadence &&
+            !scheduler.stableCadenceEvaluationActive;
         const bool entryCadenceMatched =
             projectedOutputFps >= targetFps * 0.98 &&
-            projectedOutputFps <= targetFps * 1.02;
-        // FIFO can return alternating short and long present intervals while
-        // preserving the average 2x output rate. Under VRR, do not restore
-        // the CPU cap from that immediate estimator excursion; the scheduler
-        // still owns sustained cadence loss and delivery validation.
-        const bool retainVrrHandoff = handoffAlreadyActive &&
-            !presentationFeedback.fixedRefreshPacingEligible();
-        return profile.adaptive &&
+            projectedOutputFps <= targetFps *
+                (generationLimit == 1 ? 1.02 : 1.25);
+        // FIFO can move the immediate source estimator without changing its
+        // long-term output rate. Retain only the same VRR rung; the scheduler
+        // remains responsible for sustained cadence and delivery exits.
+        const bool retainVrrHandoff =
+            activeGenerationLimit == generationLimit &&
+            presentationFeedback.variableRefreshRequested();
+        const bool eligible = profile.adaptive &&
             profile.adaptive_auto_base_fps_cap &&
             profile.adaptive_stable_cadence &&
             effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
@@ -507,14 +526,13 @@ namespace mako::layer {
             adaptiveTargetMatchesRefresh(
                 profile.target_fps, gamescopeRefreshHz
             ) &&
-            scheduler.phase == AdaptiveSchedulerPhase::StableCadence &&
-            scheduler.stableCadenceLimit == 1 &&
-            !scheduler.stableCadenceEvaluationActive &&
+            (provenTwoX || higherVrrRung) &&
             (entryCadenceMatched || retainVrrHandoff);
+        return eligible ? std::optional<size_t>{generationLimit} : std::nullopt;
     }
 
     /// Integer-cadence base-cap refinement is limited to the same ordered,
-    /// target-matched Steady path as the 2x pacer handoff. Fractional Adaptive,
+    /// target-matched Steady path as the FIFO handoff. Fractional Adaptive,
     /// HDR transport, recovery, and unmatched displays retain their existing
     /// pacing policy.
     [[nodiscard]] inline bool smoothCadenceBaseCapEligible(
@@ -557,7 +575,7 @@ namespace mako::layer {
     }
 
     /// A compositor presentation update resets pacing only when it changes
-    /// Steady Adaptive's fixed-refresh cap eligibility. A validated 2x FIFO
+    /// Steady Adaptive's fixed-refresh cap eligibility. An eligible FIFO
     /// handoff and Fixed Smooth Cadence retain their owner under VRR.
     [[nodiscard]] inline bool gamescopePresentationPacingOwnerChanged(
             const ls::GameConf& profile,
@@ -565,13 +583,13 @@ namespace mako::layer {
             const bool orderedAcquireRecoveryActive,
             const std::optional<uint32_t> gamescopeRefreshHz,
             const AdaptiveSchedulerSnapshot& scheduler,
-            const bool handoffAlreadyActive,
+            const std::optional<size_t> activeGenerationLimit,
             const GamescopePresentationFeedback& previous,
             const GamescopePresentationFeedback& current) {
-        if (smoothCadencePacerHandoffActive(
+        if (smoothCadencePacerHandoffGenerationLimit(
                     profile, privateOrderedTransport,
                     orderedAcquireRecoveryActive, gamescopeRefreshHz,
-                    scheduler, current, handoffAlreadyActive))
+                    scheduler, current, activeGenerationLimit))
             return false;
         return smoothCadenceBaseCapEligible(
                     profile, privateOrderedTransport,

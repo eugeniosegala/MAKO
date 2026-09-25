@@ -1721,7 +1721,8 @@ __attribute__((flatten))
 #endif
 AdaptiveFramePlan AdaptiveScheduler::planFrame(
         const std::chrono::steady_clock::time_point now,
-        const bool generatedImageAcquireBackoff) {
+        const bool generatedImageAcquireBackoff,
+        const std::optional<size_t> orderedFifoGenerationLimit) {
     if (this->diagnosticsActive)
         this->state.pacingWindow.beginFrame();
     const auto cadence = this->observeCadence(
@@ -1780,10 +1781,30 @@ AdaptiveFramePlan AdaptiveScheduler::planFrame(
 
     this->advanceEfficiencyProbe(now, baseFps);
 
-    size_t generatedFrameCount = this->selectGeneratedFrameCount(
-        desiredOutputsPerRealFrame, cadence.rawIntervalSeconds,
-        maximumGeneratedFrameCount
-    );
+    // A VRR-only presentation handoff can let ordered FIFO pace a full
+    // validated higher rung. Recheck the scheduler after its frame stages:
+    // a same-frame ramp, probe, or capacity change must fall back to the
+    // ordinary target clock rather than forcing unvalidated generated work.
+    const bool fullOrderedFifoRung = orderedFifoGenerationLimit &&
+        *orderedFifoGenerationLimit >= 2 &&
+        *orderedFifoGenerationLimit <= maximumGeneratedFrameCount &&
+        this->config.stableCadence && this->config.automaticBaseFpsCap &&
+        this->config.recoveryPolicy == AdaptiveRecoveryPolicy::OrderedSdr &&
+        this->validatedGenerationLimit() >= *orderedFifoGenerationLimit &&
+        (!this->state.stableCadence.limit ||
+         this->state.stableCadence.limit == orderedFifoGenerationLimit) &&
+        !this->state.ramp.evaluationAt &&
+        !this->state.efficiencyProbe.evaluationAt &&
+        !this->state.nativeCadenceProbe.active &&
+        !this->state.rearm.required;
+    if (fullOrderedFifoRung)
+        this->state.outputPlanner.resetTargetClock();
+    size_t generatedFrameCount = fullOrderedFifoRung
+        ? *orderedFifoGenerationLimit
+        : this->selectGeneratedFrameCount(
+            desiredOutputsPerRealFrame, cadence.rawIntervalSeconds,
+            maximumGeneratedFrameCount
+        );
     if (this->config.dynamicCadenceRecovery) {
         const auto nativeCadenceProbe = this->advanceNativeCadenceProbe(
             now,

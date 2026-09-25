@@ -741,7 +741,10 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
     const auto adaptivePlan = schedulerEnabled &&
             !plan.historyWarmupActive
         ? this->adaptiveScheduler->planFrame(
-            presentNow, orderedAcquireRecoveryProbe
+            presentNow, orderedAcquireRecoveryProbe,
+            this->gamescopePresentationFeedback.variableRefreshRequested()
+                ? this->smoothCadencePacerHandoff.activeGenerationLimit()
+                : std::nullopt
         )
         : AdaptiveFramePlan{};
     const bool fixedSmoothCadenceFullMultiplier = !schedulerEnabled &&
@@ -1873,7 +1876,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
     const auto limiterArrival = DiagnosticsClock::now();
     this->applyGamescopeFocus(limiterArrival);
     AdaptiveSchedulerSnapshot schedulerSnapshot;
-    bool handoffEligible = false;
+    std::optional<size_t> handoffGenerationLimit;
     bool cadenceBaseCapEligible = false;
     bool automaticBaseCapSuppressed = false;
     if (this->adaptiveScheduler && !this->steamMenuSuspended) {
@@ -1891,14 +1894,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->gamescopeRefreshHz,
             this->gamescopePresentationFeedback
         ) && !automaticBaseCapSuppressed;
-        handoffEligible = smoothCadencePacerHandoffActive(
+        handoffGenerationLimit = smoothCadencePacerHandoffGenerationLimit(
             this->profile,
             this->privateOrderedTransport,
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz,
             schedulerSnapshot,
             this->gamescopePresentationFeedback,
-            this->smoothCadencePacerHandoff.active()
+            this->smoothCadencePacerHandoff.activeGenerationLimit()
         );
     }
     const auto cadenceBaseCap = this->smoothCadenceBaseCap.update(
@@ -1934,7 +1937,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         );
     }
     const auto handoff = this->smoothCadencePacerHandoff.update(
-        limiterArrival, handoffEligible
+        limiterArrival, handoffGenerationLimit
     );
     if (handoff.changed) {
         this->realFramePacer.reset();
@@ -1942,11 +1945,15 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             handoff.active
                 ? "adaptive-smooth-cadence-pacer-handoff"
                 : "adaptive-smooth-cadence-pacer-restored",
-            schedulerSnapshot.stableCadenceLimit.value_or(0),
+            handoff.generationLimit.value_or(
+                handoff.previousGenerationLimit.value_or(0)
+            ),
             schedulerSnapshot.smoothedBaseFps,
             schedulerSnapshot.smoothedBaseFps,
             handoff.active
-                ? "ordered-fifo-target-match"
+                ? (handoff.generationLimit == 1
+                    ? "ordered-fifo-target-match"
+                    : "ordered-vrr-full-rung")
                 : "guard-restored-long-retry"
         );
     }

@@ -753,7 +753,7 @@ void Swapchain::updateGamescopePresentationFeedback(
         this->recoveryState.orderedAcquireRecovery.active(),
         this->gamescopeRefreshHz,
         schedulerSnapshot,
-        this->smoothCadencePacerHandoff.active(),
+        this->smoothCadencePacerHandoff.activeGenerationLimit(),
         previous,
         this->gamescopePresentationFeedback
     );
@@ -763,14 +763,14 @@ void Swapchain::updateGamescopePresentationFeedback(
             this->privateOrderedTransport,
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz
-        ) || smoothCadencePacerHandoffActive(
+        ) || smoothCadencePacerHandoffGenerationLimit(
             this->profile,
             this->privateOrderedTransport,
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz,
             schedulerSnapshot,
             this->gamescopePresentationFeedback,
-            this->smoothCadencePacerHandoff.active()
+            this->smoothCadencePacerHandoff.activeGenerationLimit()
         ) || smoothCadenceBaseCapEligible(
             this->profile,
             this->privateOrderedTransport,
@@ -781,7 +781,7 @@ void Swapchain::updateGamescopePresentationFeedback(
     if (pacingOwnerChanged) {
         // The configured mode, multiplier and validated Adaptive level remain
         // authoritative. Only the fixed-refresh cap eligibility changes;
-        // validated 2x FIFO handoff remains active across VRR feedback.
+        // an eligible FIFO handoff remains active across VRR feedback.
         this->fixedRefreshBudget.reset();
         this->realFramePacer.reset();
         this->smoothCadenceBaseCap.reset();

@@ -669,39 +669,60 @@ int main() {
         "a rejected lower-load probe failed to restore its retained integer cap");
 
     SmoothCadencePacerHandoff pacerHandoff;
-    auto handoff = pacerHandoff.update(pacingStart, true);
-    expect(handoff.active && handoff.changed,
+    auto handoff = pacerHandoff.update(pacingStart, 1);
+    expect(handoff.active && handoff.changed && handoff.generationLimit == 1,
         "qualified Smooth Cadence did not hand pacing to ordered FIFO");
-    handoff = pacerHandoff.update(pacingStart + 1s, true);
+    handoff = pacerHandoff.update(pacingStart + 1s, 1);
     expect(handoff.active && !handoff.changed,
         "retained ordered-FIFO handoff reported a false transition");
-    handoff = pacerHandoff.update(pacingStart + 2s, false);
+    handoff = pacerHandoff.update(pacingStart + 2s, std::nullopt);
     expect(!handoff.active && handoff.changed,
         "lost Smooth Cadence qualification did not restore the base cap");
-    handoff = pacerHandoff.update(pacingStart + 30s, true);
+    handoff = pacerHandoff.update(pacingStart + 30s, 1);
     expect(!handoff.active && !handoff.changed,
         "failed pacing handoff retried before its long cooldown");
+    handoff = pacerHandoff.update(pacingStart + 30s, 2);
+    expect(handoff.active && handoff.changed && handoff.generationLimit == 2,
+        "2x pacing cooldown blocked a separately validated 3x rung");
+    handoff = pacerHandoff.update(pacingStart + 31s, std::nullopt);
+    expect(!handoff.active && handoff.changed &&
+            handoff.previousGenerationLimit == 2,
+        "lost 3x qualification did not restore the base cap");
+    handoff = pacerHandoff.update(pacingStart + 32s, 2);
+    expect(!handoff.active,
+        "failed 3x handoff retried before its own cooldown");
     handoff = pacerHandoff.update(
-        pacingStart + 2s + SmoothCadencePacerHandoff::retryDelay(), true
+        pacingStart + 2s + SmoothCadencePacerHandoff::retryDelay(), 1
     );
     expect(handoff.active && handoff.changed,
         "eligible pacing handoff did not retry after its cooldown");
     pacerHandoff.reset();
-    handoff = pacerHandoff.update(pacingStart + 3s, true);
+    handoff = pacerHandoff.update(pacingStart + 3s, 1);
     expect(handoff.active && handoff.changed,
         "explicit pacing-handoff reset retained stale cooldown state");
     pacerHandoff.pauseForExternalInterruption();
-    handoff = pacerHandoff.update(pacingStart + 4s, false);
+    handoff = pacerHandoff.update(pacingStart + 4s, std::nullopt);
     expect(!handoff.active && !handoff.changed,
         "menu suspension retained an active FIFO handoff");
-    handoff = pacerHandoff.update(pacingStart + 5s, true);
+    handoff = pacerHandoff.update(pacingStart + 5s, 1);
     expect(handoff.active && handoff.changed,
         "menu suspension invented a gameplay pacing cooldown");
-    static_cast<void>(pacerHandoff.update(pacingStart + 6s, false));
+    static_cast<void>(pacerHandoff.update(pacingStart + 6s, std::nullopt));
     pacerHandoff.pauseForExternalInterruption();
-    handoff = pacerHandoff.update(pacingStart + 7s, true);
+    handoff = pacerHandoff.update(pacingStart + 7s, 1);
     expect(!handoff.active,
         "menu suspension erased a genuine earlier pacing-failure cooldown");
+    pacerHandoff.reset();
+    handoff = pacerHandoff.update(pacingStart + 8s, 2);
+    expect(handoff.active && handoff.generationLimit == 2,
+        "validated 3x did not enter its VRR FIFO handoff before menu focus");
+    pacerHandoff.pauseForExternalInterruption();
+    handoff = pacerHandoff.update(pacingStart + 9s, std::nullopt);
+    expect(!handoff.active && !handoff.changed,
+        "Steam menu focus retained the 3x FIFO handoff");
+    handoff = pacerHandoff.update(pacingStart + 10s, 2);
+    expect(handoff.active && handoff.changed && handoff.generationLimit == 2,
+        "Steam menu return imposed a failure cooldown on validated 3x");
 
     for (size_t remaining = 0; remaining <= 3; ++remaining) {
         expect(historyWarmupFramesAfterRequest(remaining, 3, true) == 3,

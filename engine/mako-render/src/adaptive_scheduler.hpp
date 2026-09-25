@@ -191,7 +191,8 @@ namespace mako::layer {
             AdaptiveSchedulerDiagnostics* diagnostics = nullptr);
 
         [[nodiscard]] AdaptiveFramePlan planFrame(TimePoint now,
-            bool generatedImageAcquireBackoff);
+            bool generatedImageAcquireBackoff,
+            std::optional<size_t> orderedFifoGenerationLimit = std::nullopt);
 
         void resetTiming(TimePoint now);
         void updateDynamicCadenceProbeInterval(

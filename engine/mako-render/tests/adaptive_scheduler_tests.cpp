@@ -2888,6 +2888,59 @@ namespace {
             "nonblocking HDR transport allowed a 2x convergence probe");
     }
 
+    void testVrrFullFifoUsesOnlyValidatedHigherRung() {
+        Harness harness(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false, true
+        );
+        harness.start();
+        harness.runAtFps(60.0, 12s);
+        require(harness.scheduler.snapshot().validatedGenerationLimit == 1,
+            "3x FIFO precondition unexpectedly skipped its lower rung");
+        harness.runAtFps(50.0, 12s);
+        const auto snapshot = harness.scheduler.snapshot();
+        require(snapshot.validatedGenerationLimit == 2 &&
+                snapshot.phase == AdaptiveSchedulerPhase::Active,
+            "3x FIFO precondition did not validate a variable higher rung");
+
+        harness.now += 20ms;
+        const auto fifoPlan = harness.scheduler.planFrame(
+            harness.now, false, 2
+        );
+        require(fifoPlan.size() == 2 &&
+                harness.scheduler.snapshot().targetOutputClockActive == false,
+            "VRR FIFO did not request its complete validated 3x batch");
+        requireNear(fifoPlan[0], 1.0F / 3.0F, 0.0001F,
+            "VRR FIFO 3x did not evenly space its first generated frame");
+        requireNear(fifoPlan[1], 2.0F / 3.0F, 0.0001F,
+            "VRR FIFO 3x did not evenly space its second generated frame");
+
+        harness.now += 20ms;
+        static_cast<void>(harness.scheduler.planFrame(harness.now, false));
+        require(harness.scheduler.snapshot().targetOutputClockActive,
+            "leaving VRR FIFO did not resume the Adaptive target clock");
+
+        Harness fractional(
+            120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr,
+            false, 2s, 120, false, false
+        );
+        fractional.start();
+        fractional.runAtFps(50.0, 12s);
+        require(fractional.scheduler.snapshot().validatedGenerationLimit == 2,
+            "fractional control did not validate its higher rung");
+        bool fractionalCountObserved = false;
+        for (size_t frame = 0; frame < 20; ++frame) {
+            fractional.now += 20ms;
+            if (fractional.scheduler.planFrame(
+                    fractional.now, false, 2).size() == 1) {
+                fractionalCountObserved = true;
+                break;
+            }
+        }
+        require(fractionalCountObserved,
+            "Fractional policy accepted the Steady VRR FIFO override");
+    }
+
     void testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget() {
         Harness harness(
             120, 3, true, AdaptiveRecoveryPolicy::OrderedSdr
@@ -4048,6 +4101,7 @@ int main() {
         {"Smooth Cadence converges Fractional 2x on matching refresh", testSmoothCadenceConvergesFractionalTwoXOnMatchingRefresh},
         {"Smooth Cadence rejects unproven 2x convergence", testSmoothCadenceRejectsTwoXThatDoesNotConverge},
         {"Smooth Cadence convergence requires matching ordered FIFO", testSmoothCadenceConvergenceRequiresTargetMatchedOrderedFifo},
+        {"VRR FIFO uses only a validated higher rung", testVrrFullFifoUsesOnlyValidatedHigherRung},
         {"Smooth Cadence accepts target-preserving downshift", testSmoothCadenceDownshiftsWhenLowerLoadPreservesTarget},
         {"Smooth Cadence lets promising downshift recovery settle", testSmoothCadenceDownshiftAllowsPromisingRecoveryToSettle},
         {"Smooth Cadence rejects insufficient downshift", testSmoothCadenceRejectsInsufficientDownshiftAndBacksOff},

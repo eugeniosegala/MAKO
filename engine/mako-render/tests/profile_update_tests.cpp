@@ -219,48 +219,48 @@ int main() {
         .stableCadenceEvaluationActive = false,
         .smoothedBaseFps = 60.0,
     };
-    expect(smoothCadencePacerHandoffActive(
-            steadyPacing, true, false, 120, acceptedTwoX),
+    expect(smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedTwoX) == 1,
         "accepted target-matched Steady 2x did not hand pacing to ordered FIFO");
     const GamescopePresentationFeedback activeVrr{
         .vrrEnabled = true,
         .vrrCapable = true,
         .vrrActive = true,
     };
-    expect(!smoothCadencePacerHandoffActive(
+    expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 90, acceptedTwoX),
         "target-mismatched refresh incorrectly bypassed the Steady base cap");
     acceptedTwoX.stableCadenceEvaluationActive = true;
-    expect(!smoothCadencePacerHandoffActive(
+    expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedTwoX),
         "unproven Smooth Cadence evaluation bypassed the Steady base cap");
     acceptedTwoX.stableCadenceEvaluationActive = false;
-    expect(!smoothCadencePacerHandoffActive(
+    expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, true, 120, acceptedTwoX),
         "ordered-acquire recovery did not restore the Steady base cap");
-    expect(!smoothCadencePacerHandoffActive(
+    expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, false, false, 120, acceptedTwoX),
         "non-ordered transport received an ordered-FIFO pacing handoff");
     acceptedTwoX.smoothedBaseFps = 62.0;
-    expect(!smoothCadencePacerHandoffActive(
+    expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedTwoX),
         "Steady pacing handoff remained active outside its target window");
-    expect(smoothCadencePacerHandoffActive(
+    expect(smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedTwoX,
-            activeVrr, true),
+            activeVrr, 1) == 1,
         "active VRR FIFO handoff restored its cap from short return jitter");
-    expect(!smoothCadencePacerHandoffActive(
+    expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedTwoX,
-            activeVrr, false),
+            activeVrr, std::nullopt),
         "VRR FIFO handoff entered outside its qualified cadence window");
     const GamescopePresentationFeedback fixedRefresh{};
-    expect(!smoothCadencePacerHandoffActive(
+    expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedTwoX,
-            fixedRefresh, true),
+            fixedRefresh, 1),
         "fixed-refresh handoff changed its existing retention guard");
     acceptedTwoX.smoothedBaseFps = 60.0;
     steadyPacing.adaptive_auto_base_fps_cap = false;
-    expect(!smoothCadencePacerHandoffActive(
+    expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedTwoX),
         "Fractional Adaptive incorrectly bypassed a nonexistent Steady cap");
     steadyPacing.adaptive_auto_base_fps_cap = true;
@@ -308,23 +308,23 @@ int main() {
         .allowTearing = true,
     };
     expect(!gamescopePresentationPacingOwnerChanged(
-            fixedPacing, true, false, 120, acceptedTwoX, false,
+            fixedPacing, true, false, 120, acceptedTwoX, std::nullopt,
             vrrDisabled, activeVrr),
         "Fixed Smooth Cadence changed FIFO pacing owner under VRR");
     auto ordinaryFixed = fixedPacing;
     ordinaryFixed.adaptive_stable_cadence = false;
     expect(!gamescopePresentationPacingOwnerChanged(
-            ordinaryFixed, true, false, 120, acceptedTwoX, false,
+            ordinaryFixed, true, false, 120, acceptedTwoX, std::nullopt,
             vrrDisabled, activeVrr),
         "ordinary Fixed treated VRR feedback as a pacing-owner reset");
     auto fractionalAdaptive = steadyPacing;
     fractionalAdaptive.adaptive_stable_cadence = false;
     expect(!gamescopePresentationPacingOwnerChanged(
-            fractionalAdaptive, true, false, 120, acceptedTwoX, false,
+            fractionalAdaptive, true, false, 120, acceptedTwoX, std::nullopt,
             vrrDisabled, activeVrr),
         "Fractional Adaptive treated VRR feedback as a pacing-owner reset");
     expect(!gamescopePresentationPacingOwnerChanged(
-            steadyPacing, true, false, 120, acceptedTwoX, true,
+            steadyPacing, true, false, 120, acceptedTwoX, 1,
             vrrDisabled, activeVrr),
         "validated Steady 2x reset its FIFO pacing owner under VRR");
     auto acceptedThreeX = acceptedTwoX;
@@ -332,10 +332,75 @@ int main() {
     acceptedThreeX.validatedGenerationLimit = 2;
     acceptedThreeX.stableCadenceLimit = 2;
     acceptedThreeX.smoothedBaseFps = 40.0;
-    expect(gamescopePresentationPacingOwnerChanged(
-            steadyPacing, true, false, 120, acceptedThreeX, false,
+    expect(smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr) == 2,
+        "validated Steady 3x did not hand pacing to ordered FIFO under VRR");
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            fixedRefresh),
+        "Steady 3x FIFO handoff changed fixed-refresh pacing");
+    acceptedThreeX.stableCadenceLimit.reset();
+    acceptedThreeX.phase = AdaptiveSchedulerPhase::Active;
+    acceptedThreeX.smoothedBaseFps = 50.0;
+    expect(smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr) == 2,
+        "validated variable 3x did not qualify for the VRR FIFO test");
+    acceptedThreeX.smoothedBaseFps = 55.0;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr),
+        "VRR full 3x exceeded the bounded real-FPS tradeoff");
+    acceptedThreeX.smoothedBaseFps = 50.0;
+    acceptedThreeX.rampEvaluationActive = true;
+    acceptedThreeX.phase = AdaptiveSchedulerPhase::RampEvaluation;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr),
+        "unvalidated ramp used VRR full-rung FIFO");
+    acceptedThreeX.rampEvaluationActive = false;
+    acceptedThreeX.phase = AdaptiveSchedulerPhase::Active;
+    acceptedThreeX.efficiencyProbeGenerationLimit = 1;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr),
+        "lower-load efficiency probe used VRR full-rung FIFO");
+    acceptedThreeX.efficiencyProbeGenerationLimit.reset();
+    acceptedThreeX.stableCadenceLimit = 2;
+    acceptedThreeX.stableCadenceEvaluationActive = true;
+    acceptedThreeX.phase = AdaptiveSchedulerPhase::StableCadence;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr),
+        "unproven 3x Smooth Cadence entered VRR FIFO");
+    expect(smoothCadencePacerHandoffGenerationLimit(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr, 2) == 2,
+        "active 3x FIFO handoff did not survive its same-rung evaluation");
+    acceptedThreeX.stableCadenceEvaluationActive = false;
+    steadyPacing.adaptive_max_multiplier = 5;
+    for (size_t generationLimit = 2; generationLimit <= 4;
+            ++generationLimit) {
+        acceptedThreeX.generationLimit = generationLimit;
+        acceptedThreeX.validatedGenerationLimit = generationLimit;
+        acceptedThreeX.stableCadenceLimit = generationLimit;
+        acceptedThreeX.smoothedBaseFps =
+            120.0 / static_cast<double>(generationLimit + 1);
+        expect(smoothCadencePacerHandoffGenerationLimit(
+                steadyPacing, true, false, 120, acceptedThreeX,
+                activeVrr) == generationLimit,
+            "validated higher Steady rung did not select VRR FIFO");
+    }
+    steadyPacing.adaptive_max_multiplier = 3;
+    acceptedThreeX.generationLimit = 2;
+    acceptedThreeX.validatedGenerationLimit = 2;
+    acceptedThreeX.stableCadenceLimit = 2;
+    acceptedThreeX.smoothedBaseFps = 40.0;
+    expect(!gamescopePresentationPacingOwnerChanged(
+            steadyPacing, true, false, 120, acceptedThreeX, std::nullopt,
             vrrDisabled, activeVrr),
-        "Steady 3x did not reset its fixed-refresh cap eligibility under VRR");
+        "validated Steady 3x scheduled an unnecessary reset before VRR FIFO");
     fixedPacing.adaptive_stable_cadence = false;
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),

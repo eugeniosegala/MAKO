@@ -1112,10 +1112,9 @@ namespace mako::layer {
         double activeTargetFps{0.0};
     };
 
-    /// Guards the Steady Adaptive handoff from the explicit real-frame pacer
-    /// to ordered FIFO. A lost qualification restores the cap immediately and
-    /// applies a long retry delay so an unsuitable game cannot receive a
-    /// periodic pacing disturbance.
+    /// Guards each Steady Adaptive integer-rung handoff from the real-frame
+    /// pacer to ordered FIFO. A lost qualification restores the cap and backs
+    /// off that rung without delaying a separately validated higher rung.
     class SmoothCadencePacerHandoff {
     public:
         using Clock = std::chrono::steady_clock;
@@ -1124,37 +1123,54 @@ namespace mako::layer {
         struct Decision {
             bool active{false};
             bool changed{false};
+            std::optional<size_t> generationLimit;
+            std::optional<size_t> previousGenerationLimit;
         };
 
         [[nodiscard]] Decision update(const TimePoint now,
-                const bool eligible) {
-            if (this->handoffActive && !eligible) {
-                this->handoffActive = false;
-                this->retryAt = now + retryDelay();
-                return {.active = false, .changed = true};
+                const std::optional<size_t> eligibleGenerationLimit) {
+            const auto previous = this->activeLimit;
+            if (this->activeLimit != eligibleGenerationLimit) {
+                if (this->activeLimit && *this->activeLimit >= 1 &&
+                        *this->activeLimit <= this->retryAt.size()) {
+                    this->retryAt[*this->activeLimit - 1] = now + retryDelay();
+                }
+                this->activeLimit.reset();
             }
-            if (!this->handoffActive && eligible &&
-                    (!this->retryAt || now >= *this->retryAt)) {
-                this->handoffActive = true;
-                this->retryAt.reset();
-                return {.active = true, .changed = true};
+            if (!this->activeLimit && eligibleGenerationLimit &&
+                    *eligibleGenerationLimit >= 1 &&
+                    *eligibleGenerationLimit <= this->retryAt.size()) {
+                auto& retry = this->retryAt[*eligibleGenerationLimit - 1];
+                if (!retry || now >= *retry) {
+                    this->activeLimit = eligibleGenerationLimit;
+                    retry.reset();
+                }
             }
-            return {.active = this->handoffActive};
+            return {
+                .active = this->activeLimit.has_value(),
+                .changed = previous != this->activeLimit,
+                .generationLimit = this->activeLimit,
+                .previousGenerationLimit = previous,
+            };
         }
 
         void pauseForExternalInterruption() {
             // Losing focus is not a failed FIFO pacing experiment. Preserve
             // any genuine earlier failure's backoff without creating one.
-            this->handoffActive = false;
+            this->activeLimit.reset();
         }
 
         void reset() {
-            this->handoffActive = false;
-            this->retryAt.reset();
+            this->activeLimit.reset();
+            this->retryAt.fill(std::nullopt);
         }
 
         [[nodiscard]] bool active() const {
-            return this->handoffActive;
+            return this->activeLimit.has_value();
+        }
+
+        [[nodiscard]] std::optional<size_t> activeGenerationLimit() const {
+            return this->activeLimit;
         }
 
         [[nodiscard]] static constexpr std::chrono::seconds retryDelay() {
@@ -1162,8 +1178,8 @@ namespace mako::layer {
         }
 
     private:
-        bool handoffActive{false};
-        std::optional<TimePoint> retryAt;
+        std::optional<size_t> activeLimit;
+        std::array<std::optional<TimePoint>, 4> retryAt{};
     };
 
     /// Normally suppress synthetic frames that exceed confirmed refresh.
