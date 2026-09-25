@@ -1897,7 +1897,6 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz,
             schedulerSnapshot,
-            this->gamescopePresentationFeedback,
             this->smoothCadencePacerHandoff.active()
         );
     }

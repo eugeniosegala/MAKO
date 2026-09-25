@@ -246,18 +246,19 @@ int main() {
             steadyPacing, true, false, 120, acceptedTwoX),
         "Steady pacing handoff remained active outside its target window");
     expect(smoothCadencePacerHandoffActive(
-            steadyPacing, true, false, 120, acceptedTwoX,
-            activeVrr, true),
-        "active VRR FIFO handoff restored its cap from short return jitter");
+            steadyPacing, true, false, 120, acceptedTwoX, true),
+        "active fixed-refresh FIFO handoff restored its cap from short return jitter");
     expect(!smoothCadencePacerHandoffActive(
-            steadyPacing, true, false, 120, acceptedTwoX,
-            activeVrr, false),
-        "VRR FIFO handoff entered outside its qualified cadence window");
-    const GamescopePresentationFeedback fixedRefresh{};
+            steadyPacing, true, false, 120, acceptedTwoX, false),
+        "FIFO handoff entered outside its qualified cadence window");
     expect(!smoothCadencePacerHandoffActive(
-            steadyPacing, true, false, 120, acceptedTwoX,
-            fixedRefresh, true),
-        "fixed-refresh handoff changed its existing retention guard");
+            steadyPacing, true, true, 120, acceptedTwoX, true),
+        "active FIFO handoff ignored ordered-acquire recovery");
+    acceptedTwoX.phase = AdaptiveSchedulerPhase::RampEvaluation;
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX, true),
+        "active FIFO handoff ignored scheduler exit");
+    acceptedTwoX.phase = AdaptiveSchedulerPhase::StableCadence;
     acceptedTwoX.smoothedBaseFps = 60.0;
     steadyPacing.adaptive_auto_base_fps_cap = false;
     expect(!smoothCadencePacerHandoffActive(
