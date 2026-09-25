@@ -99,6 +99,14 @@ Adaptive ordered delivery preserves the established sequential acquire/present c
 
 Changes that need a new source/presentation pair use the game-owned recreation and safe-retirement rules in [Runtime configuration transitions](RUNTIME-TRANSITIONS.md). MAKO never destroys an active application swapchain merely to apply a profile setting.
 
+## Transport boundary and evolution
+
+MAKO owns the rendering graph: spatial scaling placement, shader order, generated-frame planning, synchronization, recovery, and resource lifetime. Gamescope remains the authority for compositor state such as the presentation target, refresh, focus, HDR output state, and VRR policy. The combined Renderer consumes only the Gamescope state and protocol operations required by its selected path; it does not delegate MAKO's scheduling decisions to the compositor.
+
+The current deployment paths already follow this ownership model: ordinary managed launches use MAKO's ordered SDR transport with Gamescope WSI isolated, the optional scaling surface adapter supplies the minimum verified Gamescope association and swapchain feedback needed for combined scaling, and the guarded Gamescope WSI profile provides a compatibility or split-scaling path. Gamescope WSI remains opt-in because it adds another presentation owner and is not available across every architecture, sandbox, session type, or host version.
+
+If transport-specific behavior grows, keep it behind explicit internal direct, Gamescope-native, and full-WSI compatibility boundaries selected from proven startup capabilities. Scheduling must remain above those boundaries. This separation does not by itself improve quality, latency, or performance; its value is containing compatibility failures to one transport, making each path independently testable, and allowing a Gamescope integration to change without rewriting scaling, shader, or Frame Generation policy. Do not create parallel scheduling implementations merely to name these boundaries.
+
 ## Supported concurrency boundary
 
 Renderer interception state currently supports one active Vulkan instance dispatch domain per process. Applications must externally synchronize each `VkQueue` as Vulkan requires. Multiple swapchains can exist in that instance, but a `VkPresentInfoKHR` batch containing more than one swapchain is rejected when any entry is managed by MAKO; shared binary waits and per-swapchain extension arrays do not yet have a safe fan-out owner.
