@@ -442,9 +442,9 @@ namespace mako::layer {
     }
 
     /// Ordered-SDR rescue can release an automatic cap after FIFO masks source
-    /// headroom. Once Gamescope explicitly selects variable refresh, FIFO no
-    /// longer owns that clock; retain the configured automatic cap without
-    /// resetting the scheduler or discarding its validated multiplier.
+    /// headroom. Under explicit VRR, retain the configured automatic cap
+    /// outside the separate validated 2x FIFO handoff, without resetting the
+    /// scheduler or discarding its validated multiplier.
     [[nodiscard]] inline double effectiveBaseFpsCap(
             const ls::GameConf& profile,
             const AdaptiveSchedulerSnapshot& scheduler,
@@ -485,24 +485,32 @@ namespace mako::layer {
             const bool orderedAcquireRecoveryActive,
             const std::optional<uint32_t> gamescopeRefreshHz,
             const AdaptiveSchedulerSnapshot& scheduler,
-            const GamescopePresentationFeedback& presentationFeedback = {}) {
+            const GamescopePresentationFeedback& presentationFeedback = {},
+            const bool handoffAlreadyActive = false) {
+        const double targetFps = static_cast<double>(profile.target_fps);
+        const double projectedOutputFps = scheduler.smoothedBaseFps * 2.0;
+        const bool entryCadenceMatched =
+            projectedOutputFps >= targetFps * 0.98 &&
+            projectedOutputFps <= targetFps * 1.02;
+        // FIFO can return alternating short and long present intervals while
+        // preserving the average 2x output rate. Under VRR, do not restore
+        // the CPU cap from that immediate estimator excursion; the scheduler
+        // still owns sustained cadence loss and delivery validation.
+        const bool retainVrrHandoff = handoffAlreadyActive &&
+            !presentationFeedback.fixedRefreshPacingEligible();
         return profile.adaptive &&
             profile.adaptive_auto_base_fps_cap &&
             profile.adaptive_stable_cadence &&
             effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
             privateOrderedTransport &&
             !orderedAcquireRecoveryActive &&
-            presentationFeedback.fixedRefreshPacingEligible() &&
             adaptiveTargetMatchesRefresh(
                 profile.target_fps, gamescopeRefreshHz
             ) &&
             scheduler.phase == AdaptiveSchedulerPhase::StableCadence &&
             scheduler.stableCadenceLimit == 1 &&
             !scheduler.stableCadenceEvaluationActive &&
-            scheduler.smoothedBaseFps * 2.0 >=
-                static_cast<double>(profile.target_fps) * 0.98 &&
-            scheduler.smoothedBaseFps * 2.0 <=
-                static_cast<double>(profile.target_fps) * 1.02;
+            (entryCadenceMatched || retainVrrHandoff);
     }
 
     /// Integer-cadence base-cap refinement is limited to the same ordered,
@@ -527,16 +535,16 @@ namespace mako::layer {
             );
     }
 
-    /// Fixed Smooth Cadence can let ordered FIFO pace a full multiplier instead
-    /// of sleeping in the application's present call. Explicit caps and
-    /// recovery retain their existing output budget; the caller also verifies
-    /// that the private output pool can deliver the selected multiplier.
+    /// Fixed Smooth Cadence lets ordered FIFO pace a full multiplier instead
+    /// of sleeping in the application's present call, including when
+    /// Gamescope requests VRR. Explicit caps and recovery retain their
+    /// existing output budget; the caller also verifies that the private
+    /// output pool can deliver the selected multiplier.
     [[nodiscard]] inline bool fixedSmoothCadenceFifoEligible(
             const ls::GameConf& profile,
             const bool privateOrderedTransport,
             const bool orderedAcquireRecoveryActive,
-            const std::optional<uint32_t> gamescopeRefreshHz,
-            const GamescopePresentationFeedback& presentationFeedback = {}) {
+            const std::optional<uint32_t> gamescopeRefreshHz) {
         return !profile.adaptive &&
             profile.adaptive_stable_cadence &&
             profile.base_fps_cap == 0 &&
@@ -545,56 +553,27 @@ namespace mako::layer {
             effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
             privateOrderedTransport &&
             !orderedAcquireRecoveryActive &&
-            presentationFeedback.fixedRefreshPacingEligible() &&
             gamescopeRefreshHz.has_value() && *gamescopeRefreshHz > 0;
     }
 
-    /// Fixed Smooth Cadence normally receives its real-frame clock from
-    /// ordered fixed-refresh FIFO back-pressure. Requested or active VRR makes
-    /// that boundary non-periodic, so pace real frames explicitly at one
-    /// configured multiplier below the confirmed output refresh instead.
-    [[nodiscard]] inline double fixedSmoothCadenceTargetClockBaseFps(
-            const ls::GameConf& profile,
-            const bool privateOrderedTransport,
-            const bool orderedAcquireRecoveryActive,
-            const std::optional<uint32_t> gamescopeRefreshHz,
-            const GamescopePresentationFeedback& presentationFeedback = {}) {
-        if (profile.adaptive ||
-                !profile.adaptive_stable_cadence ||
-                profile.base_fps_cap != 0 ||
-                profile.dynamic_cadence_recovery ||
-                profile.multiplier < 2 ||
-                !effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) ||
-                !privateOrderedTransport ||
-                orderedAcquireRecoveryActive ||
-                presentationFeedback.fixedRefreshPacingEligible() ||
-                !gamescopeRefreshHz || *gamescopeRefreshHz == 0) {
-            return 0.0;
-        }
-        return static_cast<double>(*gamescopeRefreshHz) /
-            static_cast<double>(profile.multiplier);
-    }
-
-    /// A compositor presentation update may reset pacing only when it changes
-    /// the active profile's eligibility for one of the fixed-refresh FIFO
-    /// handoff policies. Fractional Adaptive, ordinary Fixed, explicit caps,
-    /// and recovery paths do not acquire a new clock owner from this signal.
+    /// A compositor presentation update resets pacing only when it changes
+    /// Steady Adaptive's fixed-refresh cap eligibility. A validated 2x FIFO
+    /// handoff and Fixed Smooth Cadence retain their owner under VRR.
     [[nodiscard]] inline bool gamescopePresentationPacingOwnerChanged(
             const ls::GameConf& profile,
             const bool privateOrderedTransport,
             const bool orderedAcquireRecoveryActive,
             const std::optional<uint32_t> gamescopeRefreshHz,
+            const AdaptiveSchedulerSnapshot& scheduler,
+            const bool handoffAlreadyActive,
             const GamescopePresentationFeedback& previous,
             const GamescopePresentationFeedback& current) {
-        return fixedSmoothCadenceFifoEligible(
+        if (smoothCadencePacerHandoffActive(
                     profile, privateOrderedTransport,
                     orderedAcquireRecoveryActive, gamescopeRefreshHz,
-                    previous) !=
-                fixedSmoothCadenceFifoEligible(
-                    profile, privateOrderedTransport,
-                    orderedAcquireRecoveryActive, gamescopeRefreshHz,
-                    current) ||
-            smoothCadenceBaseCapEligible(
+                    scheduler, current, handoffAlreadyActive))
+            return false;
+        return smoothCadenceBaseCapEligible(
                     profile, privateOrderedTransport,
                     orderedAcquireRecoveryActive, gamescopeRefreshHz,
                     previous) !=

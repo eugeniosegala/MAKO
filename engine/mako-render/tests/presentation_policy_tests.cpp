@@ -783,6 +783,27 @@ int main() {
                 start + 1s, refreshHz, maximumGenerated, true
             ) == 0,
                 "FIFO-paced Fixed ignored a long timing discontinuity");
+
+            // FIFO backpressure can return slightly early. Keep the selected
+            // multiplier stable instead of dropping one output because the
+            // fractional refresh budget saw a short interval.
+            budget.reset();
+            expect(budget.plan(start, refreshHz, maximumGenerated, true) == 0,
+                "FIFO-paced Fixed generated on its first timing sample");
+            for (size_t frame = 1; frame <= 16; ++frame) {
+                const double seconds =
+                    static_cast<double>(frame * multiplier) /
+                        static_cast<double>(refreshHz) +
+                    (frame % 2 == 0 ? 0.001 : -0.001);
+                const auto when = start +
+                    std::chrono::duration_cast<
+                        std::chrono::steady_clock::duration
+                    >(std::chrono::duration<double>(seconds));
+                expect(budget.plan(
+                    when, refreshHz, maximumGenerated, true
+                ) == maximumGenerated,
+                    "FIFO timing jitter changed the Fixed multiplier");
+            }
         }
     }
 

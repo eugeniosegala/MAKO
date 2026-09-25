@@ -1153,6 +1153,10 @@ namespace mako::layer {
             this->retryAt.reset();
         }
 
+        [[nodiscard]] bool active() const {
+            return this->handoffActive;
+        }
+
         [[nodiscard]] static constexpr std::chrono::seconds retryDelay() {
             return std::chrono::seconds{60};
         }
@@ -1163,8 +1167,8 @@ namespace mako::layer {
     };
 
     /// Normally suppress synthetic frames that exceed confirmed refresh.
-    /// Fixed Smooth Cadence can instead request the full multiplier and let
-    /// ordered FIFO back-pressure presents without a timed CPU sleep.
+    /// Fixed Smooth Cadence can instead request the full multiplier when
+    /// ordered FIFO owns real-frame pacing, including under VRR.
     class FixedRefreshBudget {
     public:
         using TimePoint = std::chrono::steady_clock::time_point;
@@ -1172,7 +1176,7 @@ namespace mako::layer {
         [[nodiscard]] size_t plan(const TimePoint now,
                 const std::optional<uint32_t> refreshHz,
                 const size_t maximumGeneratedFrames,
-                const bool fifoPacedFullCadence = false) {
+                const bool fullMultiplierCadence = false) {
             if (!refreshHz || *refreshHz == 0 || maximumGeneratedFrames == 0) {
                 this->lastRealFrame = now;
                 return maximumGeneratedFrames;
@@ -1215,8 +1219,8 @@ namespace mako::layer {
             if (generated == maximumGeneratedFrames && this->outputCredit >= 1.0)
                 this->outputCredit = std::fmod(this->outputCredit, 1.0);
             // Keep the display budget warm for a later policy change, but
-            // allow ordered FIFO to back-pressure a full Fixed multiplier.
-            return fifoPacedFullCadence ? maximumGeneratedFrames : generated;
+            // retain full Fixed output under ordered FIFO pacing.
+            return fullMultiplierCadence ? maximumGeneratedFrames : generated;
         }
 
         void reset() {

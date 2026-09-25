@@ -744,11 +744,16 @@ void Swapchain::updateGamescopePresentationFeedback(
 
     const auto previous = this->gamescopePresentationFeedback;
     this->gamescopePresentationFeedback = feedback;
+    const auto schedulerSnapshot = this->adaptiveScheduler
+        ? this->adaptiveScheduler->snapshot()
+        : AdaptiveSchedulerSnapshot{};
     const bool pacingOwnerChanged = gamescopePresentationPacingOwnerChanged(
         this->profile,
         this->privateOrderedTransport,
         this->recoveryState.orderedAcquireRecovery.active(),
         this->gamescopeRefreshHz,
+        schedulerSnapshot,
+        this->smoothCadencePacerHandoff.active(),
         previous,
         this->gamescopePresentationFeedback
     );
@@ -757,8 +762,15 @@ void Swapchain::updateGamescopePresentationFeedback(
             this->profile,
             this->privateOrderedTransport,
             this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz
+        ) || smoothCadencePacerHandoffActive(
+            this->profile,
+            this->privateOrderedTransport,
+            this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz,
-            this->gamescopePresentationFeedback
+            schedulerSnapshot,
+            this->gamescopePresentationFeedback,
+            this->smoothCadencePacerHandoff.active()
         ) || smoothCadenceBaseCapEligible(
             this->profile,
             this->privateOrderedTransport,
@@ -768,8 +780,8 @@ void Swapchain::updateGamescopePresentationFeedback(
         );
     if (pacingOwnerChanged) {
         // The configured mode, multiplier and validated Adaptive level remain
-        // authoritative. Only pacing ownership changes between MAKO's target
-        // clock and the compositor's fixed-refresh FIFO boundary.
+        // authoritative. Only the fixed-refresh cap eligibility changes;
+        // validated 2x FIFO handoff remains active across VRR feedback.
         this->fixedRefreshBudget.reset();
         this->realFramePacer.reset();
         this->smoothCadenceBaseCap.reset();

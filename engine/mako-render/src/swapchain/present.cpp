@@ -744,14 +744,13 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             presentNow, orderedAcquireRecoveryProbe
         )
         : AdaptiveFramePlan{};
-    const bool fixedFifoPacedFullCadence = !schedulerEnabled &&
+    const bool fixedSmoothCadenceFullMultiplier = !schedulerEnabled &&
         fixedSmoothCadenceFifoEligible(
             this->profile,
             this->privateOrderedTransport,
             orderedAcquireRecoveryProbe ||
                 this->recoveryState.orderedAcquireRecovery.active(),
-            this->gamescopeRefreshHz,
-            this->gamescopePresentationFeedback
+            this->gamescopeRefreshHz
         ) && this->configuredFixedGeneratedFrames + 1 ==
             this->profile.multiplier;
     const size_t fixedGeneratedFrameCount = schedulerEnabled
@@ -759,7 +758,7 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
         : this->fixedRefreshBudget.plan(
             presentNow, this->gamescopeRefreshHz,
             this->configuredFixedGeneratedFrames,
-            fixedFifoPacedFullCadence
+            fixedSmoothCadenceFullMultiplier
         );
     // Fixed is a user-selected workload. Only explicit menu/lifecycle
     // transitions and direct transport failures may interrupt it; ordinary
@@ -1898,7 +1897,8 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             this->recoveryState.orderedAcquireRecovery.active(),
             this->gamescopeRefreshHz,
             schedulerSnapshot,
-            this->gamescopePresentationFeedback
+            this->gamescopePresentationFeedback,
+            this->smoothCadencePacerHandoff.active()
         );
     }
     const auto cadenceBaseCap = this->smoothCadenceBaseCap.update(
@@ -1950,24 +1950,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                 : "guard-restored-long-retry"
         );
     }
-    const double fixedSmoothTargetClockBaseFps =
-        fixedSmoothCadenceTargetClockBaseFps(
-            this->profile,
-            this->privateOrderedTransport,
-            this->recoveryState.orderedAcquireRecovery.active(),
-            this->gamescopeRefreshHz,
-            this->gamescopePresentationFeedback
-        );
     const double baseFpsCap = this->steamMenuSuspended || handoff.active
         ? 0.0
-        : fixedSmoothTargetClockBaseFps > 0.0
-            ? fixedSmoothTargetClockBaseFps
-            : cadenceBaseCap.framesPerSecond.value_or(
-                effectiveBaseFpsCap(
-                    this->profile, schedulerSnapshot,
-                    this->gamescopePresentationFeedback
-                )
-            );
+        : cadenceBaseCap.framesPerSecond.value_or(
+            effectiveBaseFpsCap(
+                this->profile, schedulerSnapshot,
+                this->gamescopePresentationFeedback
+            )
+        );
     const auto limiterDeadline = this->realFramePacer.schedule(
         limiterArrival, baseFpsCap
     );

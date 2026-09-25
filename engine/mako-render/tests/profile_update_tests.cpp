@@ -228,9 +228,6 @@ int main() {
         .vrrActive = true,
     };
     expect(!smoothCadencePacerHandoffActive(
-            steadyPacing, true, false, 120, acceptedTwoX, activeVrr),
-        "Steady Adaptive handed pacing to fixed-refresh FIFO under VRR");
-    expect(!smoothCadencePacerHandoffActive(
             steadyPacing, true, false, 90, acceptedTwoX),
         "target-mismatched refresh incorrectly bypassed the Steady base cap");
     acceptedTwoX.stableCadenceEvaluationActive = true;
@@ -248,6 +245,19 @@ int main() {
     expect(!smoothCadencePacerHandoffActive(
             steadyPacing, true, false, 120, acceptedTwoX),
         "Steady pacing handoff remained active outside its target window");
+    expect(smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX,
+            activeVrr, true),
+        "active VRR FIFO handoff restored its cap from short return jitter");
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX,
+            activeVrr, false),
+        "VRR FIFO handoff entered outside its qualified cadence window");
+    const GamescopePresentationFeedback fixedRefresh{};
+    expect(!smoothCadencePacerHandoffActive(
+            steadyPacing, true, false, 120, acceptedTwoX,
+            fixedRefresh, true),
+        "fixed-refresh handoff changed its existing retention guard");
     acceptedTwoX.smoothedBaseFps = 60.0;
     steadyPacing.adaptive_auto_base_fps_cap = false;
     expect(!smoothCadencePacerHandoffActive(
@@ -284,40 +294,48 @@ int main() {
     expect(fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),
         "ordered Fixed Smooth Cadence did not select FIFO pacing");
-    expect(!fixedSmoothCadenceFifoEligible(
-            fixedPacing, true, false, 120, activeVrr),
-        "Fixed Smooth Cadence assumed periodic FIFO pacing under VRR");
-    expect(fixedSmoothCadenceTargetClockBaseFps(
-            fixedPacing, true, false, 120, activeVrr) == 40.0,
-        "Fixed Smooth Cadence did not replace FIFO with its VRR target clock");
-    expect(fixedSmoothCadenceTargetClockBaseFps(
-            fixedPacing, true, false, 120) == 0.0,
-        "Fixed Smooth Cadence double-paced a fixed-refresh FIFO");
+    for (size_t multiplier = 2; multiplier <= 5; ++multiplier) {
+        fixedPacing.multiplier = multiplier;
+        expect(fixedSmoothCadenceFifoEligible(
+                fixedPacing, true, false, 120),
+            "ordered FIFO did not retain the full Fixed multiplier");
+    }
+    fixedPacing.multiplier = 3;
     const GamescopePresentationFeedback vrrDisabled{
         .vrrEnabled = false,
         .vrrCapable = true,
         .vrrActive = false,
         .allowTearing = true,
     };
-    expect(fixedSmoothCadenceFifoEligible(
-            fixedPacing, true, false, 120, vrrDisabled),
-        "Allow Tearing changed Fixed pacing while VRR was disabled");
-    expect(gamescopePresentationPacingOwnerChanged(
-            fixedPacing, true, false, 120, vrrDisabled, activeVrr),
-        "Fixed Smooth Cadence did not identify its VRR pacing-owner change");
+    expect(!gamescopePresentationPacingOwnerChanged(
+            fixedPacing, true, false, 120, acceptedTwoX, false,
+            vrrDisabled, activeVrr),
+        "Fixed Smooth Cadence changed FIFO pacing owner under VRR");
     auto ordinaryFixed = fixedPacing;
     ordinaryFixed.adaptive_stable_cadence = false;
     expect(!gamescopePresentationPacingOwnerChanged(
-            ordinaryFixed, true, false, 120, vrrDisabled, activeVrr),
+            ordinaryFixed, true, false, 120, acceptedTwoX, false,
+            vrrDisabled, activeVrr),
         "ordinary Fixed treated VRR feedback as a pacing-owner reset");
     auto fractionalAdaptive = steadyPacing;
     fractionalAdaptive.adaptive_stable_cadence = false;
     expect(!gamescopePresentationPacingOwnerChanged(
-            fractionalAdaptive, true, false, 120, vrrDisabled, activeVrr),
+            fractionalAdaptive, true, false, 120, acceptedTwoX, false,
+            vrrDisabled, activeVrr),
         "Fractional Adaptive treated VRR feedback as a pacing-owner reset");
+    expect(!gamescopePresentationPacingOwnerChanged(
+            steadyPacing, true, false, 120, acceptedTwoX, true,
+            vrrDisabled, activeVrr),
+        "validated Steady 2x reset its FIFO pacing owner under VRR");
+    auto acceptedThreeX = acceptedTwoX;
+    acceptedThreeX.generationLimit = 2;
+    acceptedThreeX.validatedGenerationLimit = 2;
+    acceptedThreeX.stableCadenceLimit = 2;
+    acceptedThreeX.smoothedBaseFps = 40.0;
     expect(gamescopePresentationPacingOwnerChanged(
-            steadyPacing, true, false, 120, vrrDisabled, activeVrr),
-        "Steady Adaptive did not identify its VRR pacing-owner change");
+            steadyPacing, true, false, 120, acceptedThreeX, false,
+            vrrDisabled, activeVrr),
+        "Steady 3x did not reset its fixed-refresh cap eligibility under VRR");
     fixedPacing.adaptive_stable_cadence = false;
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),
@@ -326,9 +344,6 @@ int main() {
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, std::nullopt),
         "Fixed selected full-cadence pacing without refresh feedback");
-    expect(fixedSmoothCadenceTargetClockBaseFps(
-            fixedPacing, true, false, std::nullopt, activeVrr) == 0.0,
-        "Fixed invented a VRR target clock without refresh feedback");
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, false, false, 120),
         "non-ordered transport enabled Fixed Smooth Cadence");
@@ -339,9 +354,6 @@ int main() {
     expect(!fixedSmoothCadenceFifoEligible(
             fixedPacing, true, false, 120),
         "Fixed Smooth Cadence overrode an explicit real-frame cap");
-    expect(fixedSmoothCadenceTargetClockBaseFps(
-            fixedPacing, true, false, 120, activeVrr) == 0.0,
-        "Fixed Smooth Cadence overrode an explicit cap under VRR");
     fixedPacing.base_fps_cap = 0;
     fixedPacing.dynamic_cadence_recovery = true;
     expect(!fixedSmoothCadenceFifoEligible(
