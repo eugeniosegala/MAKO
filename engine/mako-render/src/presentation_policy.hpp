@@ -1112,9 +1112,10 @@ namespace mako::layer {
         double activeTargetFps{0.0};
     };
 
-    /// Guards each Steady Adaptive integer-rung handoff from the real-frame
-    /// pacer to ordered FIFO. A lost qualification restores the cap and backs
-    /// off that rung without delaying a separately validated higher rung.
+    /// Guards each Adaptive integer-rung handoff from the real-frame pacer to
+    /// ordered FIFO. A lost qualification restores any cap and backs off that
+    /// rung without delaying a separately validated higher rung. A planned
+    /// higher-rung VRR efficiency probe pauses without a failure cooldown.
     class SmoothCadencePacerHandoff {
     public:
         using Clock = std::chrono::steady_clock;
@@ -1128,10 +1129,13 @@ namespace mako::layer {
         };
 
         [[nodiscard]] Decision update(const TimePoint now,
-                const std::optional<size_t> eligibleGenerationLimit) {
+                const std::optional<size_t> eligibleGenerationLimit,
+                const bool plannedProbePause = false) {
             const auto previous = this->activeLimit;
             if (this->activeLimit != eligibleGenerationLimit) {
-                if (this->activeLimit && *this->activeLimit >= 1 &&
+                if (!(plannedProbePause && !eligibleGenerationLimit) &&
+                        this->activeLimit &&
+                        *this->activeLimit >= 1 &&
                         *this->activeLimit <= this->retryAt.size()) {
                     this->retryAt[*this->activeLimit - 1] = now + retryDelay();
                 }

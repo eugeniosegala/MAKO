@@ -1936,8 +1936,18 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
                 : "scheduler-or-transport-guard-restored"
         );
     }
+    const bool plannedVrrProbePause = !handoffGenerationLimit &&
+        smoothCadencePacerHandoffPlannedProbe(
+            this->profile,
+            this->privateOrderedTransport,
+            this->recoveryState.orderedAcquireRecovery.active(),
+            this->gamescopeRefreshHz,
+            schedulerSnapshot,
+            this->gamescopePresentationFeedback,
+            this->smoothCadencePacerHandoff.activeGenerationLimit()
+        );
     const auto handoff = this->smoothCadencePacerHandoff.update(
-        limiterArrival, handoffGenerationLimit
+        limiterArrival, handoffGenerationLimit, plannedVrrProbePause
     );
     if (handoff.changed) {
         this->realFramePacer.reset();
@@ -1951,10 +1961,14 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
             schedulerSnapshot.smoothedBaseFps,
             schedulerSnapshot.smoothedBaseFps,
             handoff.active
-                ? (handoff.generationLimit == 1
-                    ? "ordered-fifo-target-match"
-                    : "ordered-vrr-full-rung")
-                : "guard-restored-long-retry"
+                ? (!this->profile.adaptive_auto_base_fps_cap
+                    ? "ordered-vrr-accepted-integer"
+                    : (handoff.generationLimit == 1
+                        ? "ordered-fifo-target-match"
+                        : "ordered-vrr-full-rung"))
+                : (plannedVrrProbePause
+                    ? "planned-vrr-efficiency-probe"
+                    : "guard-restored-long-retry")
         );
     }
     const double baseFpsCap = this->steamMenuSuspended || handoff.active

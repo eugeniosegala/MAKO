@@ -474,10 +474,10 @@ namespace mako::layer {
             *gamescopeRefreshHz > profile.frame_generation_refresh_threshold;
     }
 
-    /// A proven 2x cadence keeps its established FIFO handoff. Under VRR, a
-    /// validated higher rung may also request a full integer batch once its
-    /// predicted FIFO backpressure costs at most 20% of current real FPS.
-    /// Probe, recovery, and transport guards restore target-clock pacing.
+    /// A proven Steady 2x cadence keeps its established FIFO handoff. Under
+    /// VRR, Steady may request a validated higher full batch, while Fractional
+    /// may hand off only an already accepted constant integer cadence with no
+    /// competing real-frame cap. Probe and transport guards restore pacing.
     [[nodiscard]] inline std::optional<size_t>
     smoothCadencePacerHandoffGenerationLimit(
             const ls::GameConf& profile,
@@ -507,6 +507,18 @@ namespace mako::layer {
         const bool provenTwoX = generationLimit == 1 &&
             scheduler.phase == AdaptiveSchedulerPhase::StableCadence &&
             !scheduler.stableCadenceEvaluationActive;
+        const bool acceptedFractionalVrrInteger =
+            !profile.adaptive_auto_base_fps_cap &&
+            effectiveBaseFpsCap(profile) <= 0.0 &&
+            !profile.dynamic_cadence_recovery &&
+            presentationFeedback.variableRefreshRequested() &&
+            scheduler.phase == AdaptiveSchedulerPhase::StableCadence &&
+            scheduler.stableCadenceLimit == generationLimit &&
+            scheduler.validatedGenerationLimit >= generationLimit &&
+            scheduler.generationLimit >= generationLimit &&
+            !scheduler.stableCadenceEvaluationActive &&
+            !scheduler.efficiencyProbeGenerationLimit &&
+            !scheduler.targetOutputClockActive;
         const bool entryCadenceMatched =
             projectedOutputFps >= targetFps * 0.98 &&
             projectedOutputFps <= targetFps *
@@ -518,6 +530,32 @@ namespace mako::layer {
             activeGenerationLimit == generationLimit &&
             presentationFeedback.variableRefreshRequested();
         const bool eligible = profile.adaptive &&
+            profile.adaptive_stable_cadence &&
+            effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
+            privateOrderedTransport &&
+            !orderedAcquireRecoveryActive &&
+            adaptiveTargetMatchesRefresh(
+                profile.target_fps, gamescopeRefreshHz
+            ) &&
+            ((profile.adaptive_auto_base_fps_cap &&
+              (provenTwoX || higherVrrRung)) ||
+             acceptedFractionalVrrInteger) &&
+            (entryCadenceMatched || retainVrrHandoff);
+        return eligible ? std::optional<size_t>{generationLimit} : std::nullopt;
+    }
+
+    /// A lower-load probe deliberately releases a higher Steady VRR FIFO
+    /// handoff. Preserve its retry eligibility unless a transport or scheduler
+    /// safety guard also failed during the probe.
+    [[nodiscard]] inline bool smoothCadencePacerHandoffPlannedProbe(
+            const ls::GameConf& profile,
+            const bool privateOrderedTransport,
+            const bool orderedAcquireRecoveryActive,
+            const std::optional<uint32_t> gamescopeRefreshHz,
+            const AdaptiveSchedulerSnapshot& scheduler,
+            const GamescopePresentationFeedback& presentationFeedback,
+            const std::optional<size_t> activeGenerationLimit) {
+        return profile.adaptive &&
             profile.adaptive_auto_base_fps_cap &&
             profile.adaptive_stable_cadence &&
             effectiveFrameGenerationEnabled(profile, gamescopeRefreshHz) &&
@@ -526,9 +564,19 @@ namespace mako::layer {
             adaptiveTargetMatchesRefresh(
                 profile.target_fps, gamescopeRefreshHz
             ) &&
-            (provenTwoX || higherVrrRung) &&
-            (entryCadenceMatched || retainVrrHandoff);
-        return eligible ? std::optional<size_t>{generationLimit} : std::nullopt;
+            presentationFeedback.variableRefreshRequested() &&
+            activeGenerationLimit && *activeGenerationLimit > 1 &&
+            (scheduler.phase == AdaptiveSchedulerPhase::Active ||
+             scheduler.phase == AdaptiveSchedulerPhase::StableCadence) &&
+            scheduler.efficiencyProbeGenerationLimit &&
+            *scheduler.efficiencyProbeGenerationLimit <
+                *activeGenerationLimit &&
+            scheduler.validatedGenerationLimit >= *activeGenerationLimit &&
+            !scheduler.rampEvaluationActive &&
+            !scheduler.stableCadenceEvaluationActive &&
+            !scheduler.nativeCadenceProbeActive &&
+            !scheduler.rearmRequired &&
+            !scheduler.discontinuityRecoveryActive;
     }
 
     /// Integer-cadence base-cap refinement is limited to the same ordered,
@@ -575,8 +623,8 @@ namespace mako::layer {
     }
 
     /// A compositor presentation update resets pacing only when it changes
-    /// Steady Adaptive's fixed-refresh cap eligibility. An eligible FIFO
-    /// handoff and Fixed Smooth Cadence retain their owner under VRR.
+    /// Steady Adaptive's fixed-refresh cap eligibility. Eligible Steady or
+    /// Fractional FIFO handoffs and Fixed Smooth Cadence retain their owner.
     [[nodiscard]] inline bool gamescopePresentationPacingOwnerChanged(
             const ls::GameConf& profile,
             const bool privateOrderedTransport,

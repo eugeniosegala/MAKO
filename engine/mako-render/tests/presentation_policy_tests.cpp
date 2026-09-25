@@ -723,6 +723,34 @@ int main() {
     handoff = pacerHandoff.update(pacingStart + 10s, 2);
     expect(handoff.active && handoff.changed && handoff.generationLimit == 2,
         "Steam menu return imposed a failure cooldown on validated 3x");
+    handoff = pacerHandoff.update(pacingStart + 11s, std::nullopt, true);
+    expect(!handoff.active && handoff.changed &&
+            handoff.previousGenerationLimit == 2,
+        "planned VRR efficiency probe retained its previous FIFO handoff");
+    handoff = pacerHandoff.update(pacingStart + 12s, 2);
+    expect(handoff.active && handoff.changed,
+        "rejected VRR efficiency probe invented a 3x retry cooldown");
+    handoff = pacerHandoff.update(pacingStart + 13s, std::nullopt, true);
+    handoff = pacerHandoff.update(pacingStart + 14s, 1);
+    expect(handoff.active && handoff.generationLimit == 1,
+        "accepted efficiency probe did not hand off the lower 2x rung");
+    handoff = pacerHandoff.update(pacingStart + 15s, std::nullopt);
+    expect(!handoff.active && handoff.changed,
+        "genuine 2x qualification loss did not restore normal pacing");
+    handoff = pacerHandoff.update(pacingStart + 16s, 1);
+    expect(!handoff.active,
+        "planned 3x probe cleared the genuine 2x retry cooldown");
+    handoff = pacerHandoff.update(pacingStart + 16s, 2);
+    expect(handoff.active && handoff.generationLimit == 2,
+        "accepted 2x probe delayed a separately revalidated 3x rung");
+    pacerHandoff.reset();
+    static_cast<void>(pacerHandoff.update(pacingStart + 17s, 2));
+    handoff = pacerHandoff.update(pacingStart + 18s, 1, true);
+    expect(handoff.active && handoff.generationLimit == 1,
+        "planned-pause flag prevented an eligible rung transition");
+    handoff = pacerHandoff.update(pacingStart + 19s, 2);
+    expect(!handoff.active,
+        "planned-pause flag bypassed cooldown for an actual rung switch");
 
     for (size_t remaining = 0; remaining <= 3; ++remaining) {
         expect(historyWarmupFramesAfterRequest(remaining, 3, true) == 3,

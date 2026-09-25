@@ -780,8 +780,8 @@ void Swapchain::updateGamescopePresentationFeedback(
         );
     if (pacingOwnerChanged) {
         // The configured mode, multiplier and validated Adaptive level remain
-        // authoritative. Only the fixed-refresh cap eligibility changes;
-        // an eligible FIFO handoff remains active across VRR feedback.
+        // authoritative. Only affected pacing helpers reset; an eligible
+        // Steady or Fractional FIFO handoff survives VRR feedback.
         this->fixedRefreshBudget.reset();
         this->realFramePacer.reset();
         this->smoothCadenceBaseCap.reset();

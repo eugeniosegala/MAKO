@@ -259,6 +259,61 @@ int main() {
             fixedRefresh, 1),
         "fixed-refresh handoff changed its existing retention guard");
     acceptedTwoX.smoothedBaseFps = 60.0;
+    auto fractionalVrr = steadyPacing;
+    fractionalVrr.adaptive_auto_base_fps_cap = false;
+    expect(smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedTwoX,
+            activeVrr) == 1,
+        "accepted uncapped Fractional 2x did not hand pacing to VRR FIFO");
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedTwoX,
+            fixedRefresh),
+        "Fractional integer FIFO handoff changed fixed-refresh pacing");
+    auto unacceptedFractional = acceptedTwoX;
+    unacceptedFractional.stableCadenceLimit.reset();
+    unacceptedFractional.phase = AdaptiveSchedulerPhase::Active;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, unacceptedFractional,
+            activeVrr),
+        "variable Fractional planning entered the integer FIFO handoff");
+    fractionalVrr.base_fps_cap = 60;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedTwoX,
+            activeVrr),
+        "manual Fractional cap was bypassed by FIFO");
+    fractionalVrr.base_fps_cap = 0;
+    fractionalVrr.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::Low;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedTwoX,
+            activeVrr),
+        "Fractional Real Frame Priority was bypassed by FIFO");
+    fractionalVrr.adaptive_fractional_real_frame_priority =
+        ls::AdaptiveFractionalRealFramePriority::Auto;
+    fractionalVrr.dynamic_cadence_recovery = true;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedTwoX,
+            activeVrr),
+        "Dynamic Cadence Recovery entered the Fractional FIFO handoff");
+    fractionalVrr.dynamic_cadence_recovery = false;
+    acceptedTwoX.stableCadenceEvaluationActive = true;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedTwoX,
+            activeVrr),
+        "unaccepted Fractional cadence entered VRR FIFO");
+    acceptedTwoX.stableCadenceEvaluationActive = false;
+    acceptedTwoX.targetOutputClockActive = true;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedTwoX,
+            activeVrr),
+        "Fractional target clock was bypassed before constant-cadence planning");
+    acceptedTwoX.targetOutputClockActive = false;
+    acceptedTwoX.efficiencyProbeGenerationLimit = 0;
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedTwoX,
+            activeVrr),
+        "Fractional efficiency probe entered VRR FIFO");
+    acceptedTwoX.efficiencyProbeGenerationLimit.reset();
     steadyPacing.adaptive_auto_base_fps_cap = false;
     expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedTwoX),
@@ -336,6 +391,10 @@ int main() {
             steadyPacing, true, false, 120, acceptedThreeX,
             activeVrr) == 2,
         "validated Steady 3x did not hand pacing to ordered FIFO under VRR");
+    expect(smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedThreeX,
+            activeVrr) == 2,
+        "accepted uncapped Fractional 3x did not hand pacing to VRR FIFO");
     expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedThreeX,
             fixedRefresh),
@@ -347,6 +406,10 @@ int main() {
             steadyPacing, true, false, 120, acceptedThreeX,
             activeVrr) == 2,
         "validated variable 3x did not qualify for the VRR FIFO test");
+    expect(!smoothCadencePacerHandoffGenerationLimit(
+            fractionalVrr, true, false, 120, acceptedThreeX,
+            activeVrr),
+        "variable Fractional 3x request was forced into a full FIFO batch");
     acceptedThreeX.smoothedBaseFps = 55.0;
     expect(!smoothCadencePacerHandoffGenerationLimit(
             steadyPacing, true, false, 120, acceptedThreeX,
@@ -366,6 +429,42 @@ int main() {
             steadyPacing, true, false, 120, acceptedThreeX,
             activeVrr),
         "lower-load efficiency probe used VRR full-rung FIFO");
+    expect(smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr, 2),
+        "planned lower-load Steady VRR probe did not preserve 3x retry eligibility");
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            fixedRefresh, 2),
+        "fixed-refresh efficiency probe bypassed its existing retry behavior");
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            fractionalVrr, true, false, 120, acceptedThreeX,
+            activeVrr, 2),
+        "Fractional efficiency probe entered the Steady-only retry exception");
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, false, false, 120, acceptedThreeX,
+            activeVrr, 2),
+        "lost ordered transport bypassed the handoff retry guard");
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, true, 120, acceptedThreeX,
+            activeVrr, 2),
+        "ordered-acquire recovery bypassed the handoff retry guard");
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr, 1),
+        "2x handoff entered the higher-rung probe exception");
+    acceptedThreeX.rampEvaluationActive = true;
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr, 2),
+        "ramp evaluation bypassed the handoff retry guard");
+    acceptedThreeX.rampEvaluationActive = false;
+    acceptedThreeX.rearmRequired = true;
+    expect(!smoothCadencePacerHandoffPlannedProbe(
+            steadyPacing, true, false, 120, acceptedThreeX,
+            activeVrr, 2),
+        "scheduler rearm bypassed the handoff retry guard");
+    acceptedThreeX.rearmRequired = false;
     acceptedThreeX.efficiencyProbeGenerationLimit.reset();
     acceptedThreeX.stableCadenceLimit = 2;
     acceptedThreeX.stableCadenceEvaluationActive = true;
@@ -380,6 +479,7 @@ int main() {
         "active 3x FIFO handoff did not survive its same-rung evaluation");
     acceptedThreeX.stableCadenceEvaluationActive = false;
     steadyPacing.adaptive_max_multiplier = 5;
+    fractionalVrr.adaptive_max_multiplier = 5;
     for (size_t generationLimit = 2; generationLimit <= 4;
             ++generationLimit) {
         acceptedThreeX.generationLimit = generationLimit;
@@ -391,6 +491,10 @@ int main() {
                 steadyPacing, true, false, 120, acceptedThreeX,
                 activeVrr) == generationLimit,
             "validated higher Steady rung did not select VRR FIFO");
+        expect(smoothCadencePacerHandoffGenerationLimit(
+                fractionalVrr, true, false, 120, acceptedThreeX,
+                activeVrr) == generationLimit,
+            "accepted higher Fractional rung did not select VRR FIFO");
     }
     steadyPacing.adaptive_max_multiplier = 3;
     acceptedThreeX.generationLimit = 2;
