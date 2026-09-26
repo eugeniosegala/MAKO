@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build MAKO Renderer Local Release"
+  short_description: "Build every local Renderer release artifact"
+  default_prompt: "Use $mako-build-renderer-local-release to build and verify the complete local MAKO Renderer release artifact set."

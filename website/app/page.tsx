@@ -127,7 +127,7 @@ export default function Home() {
           <div className="hero-glow hero-glow-orange" />
           <div className="hero-copy">
             <p className="eyebrow"><span /> Frame generation + spatial scaling + shaders / Linux</p>
-            <h1>Frame generation.<br /><em>Scaling. On Linux.</em></h1>
+            <h1>Frames. Scaling.<br /><em>Shaders.</em></h1>
             <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. LSFG frame generation and LS1 require a separate Lossless Scaling purchase; the open MAKO Scaler and bundled shaders work without it.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
@@ -150,6 +150,7 @@ export default function Home() {
               <span><b>1-2×</b> LS1 or MAKO Scaler</span>
               <span><b>30-240</b> adaptive FPS target</span>
               <span><b>2-5×</b> generation ceiling</span>
+              <span><b>LIVE</b> per-game shader effects</span>
             </div>
           </div>
 
@@ -462,7 +463,7 @@ export default function Home() {
           <img src="assets/mako-logo.webp" alt="MAKO shark" width="260" height="260" draggable={false} />
           <div>
             <p className="eyebrow"><span /> Motion-Adaptive Kernel Orchestration</p>
-            <h2>Bring frame generation, scaling<br /><em>and shaders to Linux.</em></h2>
+            <h2>Play smoother.<br /><em>Look sharper.</em></h2>
             <p>Choose MAKO Decky for the managed SteamOS workflow or MAKO Renderer for a direct Linux installation.</p>
             <div className="hero-actions">
               <a className="button button-primary" href={links.deckyDownload} {...newTabProps}>Download MAKO <span>→</span></a>

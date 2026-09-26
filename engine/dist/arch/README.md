@@ -62,6 +62,16 @@ makepkg -si
 
 `makepkg` downloads the release archive, verifies `sha256sums`, and repackages the extracted payload. The package does not run a compiler.
 
+## Build the complete local Renderer artifact set
+
+From the repository root, build release-shaped host, Flatpak, and Arch artifacts from the current checkout with:
+
+```bash
+just package-renderer-local-release
+```
+
+The equivalent component command is `engine/scripts/package-local-release.sh`. It writes all three artifacts and `SHA256SUMS` under `engine/out/`, uses the same portable builders as publication, and verifies the pacman package against the newly built host archive. It synchronizes a disposable copy of this recipe, so the tracked public archive checksum, Decky Renderer pin, tags, and releases remain unchanged.
+
 ## Upgrade
 
 This package is not currently published through an official pacman repository or the AUR, so `pacman -Syu` alone cannot discover a new MAKO version. Download the newer `.pkg.tar.zst` from the matching GitHub release and run `sudo pacman -U` again. Pacman replaces all package-owned files under `/usr`. User profiles and configuration data are not package-owned and are never touched during an upgrade. The `pre_upgrade` hook re-reports any user-local MAKO install it detects.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Build MAKO Decky Tester ZIP"
+  short_description: "Build a portable MAKO Decky tester ZIP"
+  default_prompt: "Use $mako-build-decky-tester-zip to build and verify a complete portable tester ZIP from this MAKO checkout."

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Deploy MAKO Locally"
+  short_description: "Deploy and reload local Decky and Renderer"
+  default_prompt: "Use $mako-deploy-local to deploy this MAKO checkout to the installed Decky plugin and reload it."

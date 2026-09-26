@@ -176,6 +176,10 @@ package-engine:
 package-flatpaks:
     ./engine/scripts/package-flatpaks.sh
 
+# Build the complete release-shaped Renderer artifact set without publishing.
+package-renderer-local-release:
+    ./engine/scripts/package-local-release.sh
+
 # Build a complete Decky ZIP from the local engine checkout.
 package-plugin:
     pnpm --dir plugin run package:local-engine

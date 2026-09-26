@@ -96,7 +96,7 @@ Use `previous` for the immediately previous run, `previous-two` for the two prev
 
 Use `all` for the first report. Focused presets such as `startup`, `errors`, `scaling`, `adaptive`, `recovery`, `performance`, `layers`, and `hdr` are intended for requested follow-ups. Every preset retains the initial Gamescope VRR/Allow Tearing snapshot and live pacing-owner changes. The `recovery` and `performance` presets also include Gamescope focus changes for menu-related reports and retain recovery records from older builds. Run `/home/deck/.local/bin/mako-diagnostics --list` to see the complete preset list.
 
-For Scaling with Gamescope WSI disabled, the `scaling` preset retains `spatial scaling surface bridge` records. `transport=wayland; gamescope_wsi=isolated` identifies the minimal Gamescope surface association; check the active source/presentation split as well, since the association alone does not prove that scaling ran. `application_surface=x11; extent_contract=window` records that application capability queries preserve the X11 window-size contract while the private transport remains Wayland; this protects startup without a game-specific exception.
+With Gamescope WSI disabled, a `spatial scaling surface bridge` record only shows that MAKO associated the game with Gamescope. To confirm that scaling actually ran, check that the same session reports different active source and presentation resolutions.
 
 ## 4. Restore normal launch settings
 

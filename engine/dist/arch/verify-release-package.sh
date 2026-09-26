@@ -58,7 +58,7 @@ if (($# == 2)); then
     output_path="$output_dir/$output_name"
 fi
 
-if ! command -v makepkg >/dev/null 2>&1; then
+if ! command -v makepkg >/dev/null 2>&1 || ! command -v fakeroot >/dev/null 2>&1; then
     container_runtime=""
     if command -v docker >/dev/null 2>&1; then
         container_runtime="docker"
@@ -91,6 +91,9 @@ if ! command -v makepkg >/dev/null 2>&1; then
         archlinux:base-devel \
         bash -c '
             set -euo pipefail
+            if ! command -v fakeroot >/dev/null 2>&1; then
+                pacman -Syu --noconfirm --needed fakeroot
+            fi
             useradd --create-home mako-builder
             install -d -o mako-builder -g mako-builder /tmp/mako-arch-package-source
             cp \
@@ -106,7 +109,7 @@ if ! command -v makepkg >/dev/null 2>&1; then
                     "/tmp/mako-arch-package-source/$1" \
                     "/tmp/mako-arch-package-source/$3"
                 output_tmp="$2.tmp.$$"
-                trap 'rm -f -- "$output_tmp"' EXIT
+                trap "rm -f -- \"$output_tmp\"" EXIT
                 install -Dm644 "/tmp/mako-arch-package-source/$3" "$output_tmp"
                 mv -f -- "$output_tmp" "$2"
             else

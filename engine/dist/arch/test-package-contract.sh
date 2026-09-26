@@ -31,7 +31,14 @@ PY
 grep -Fq "'libx11'" "$script_dir/PKGBUILD"
 grep -Fq "'lib32-libx11'" "$script_dir/PKGBUILD"
 grep -Fq 'done < MAKO-Renderer-install-manifest.txt' "$script_dir/PKGBUILD"
+grep -Fq 'pacman -Syu --noconfirm --needed fakeroot' \
+    "$script_dir/verify-release-package.sh"
+grep -Fq 'command -v makepkg >/dev/null 2>&1 || ! command -v fakeroot' \
+    "$script_dir/verify-release-package.sh"
+grep -Fq 'trap "rm -f -- \"$output_tmp\"" EXIT' \
+    "$script_dir/verify-release-package.sh"
 bash -n "$script_dir/verify-release-package.sh"
+bash -n "$repo_root/engine/scripts/package-local-release.sh"
 
 fake_tools="$work_dir/fake-tools"
 mkdir -p "$fake_tools"
@@ -73,7 +80,11 @@ cat > "$fake_tools/bsdtar" <<'EOF'
 #!/bin/sh
 exec tar "$@"
 EOF
-chmod +x "$fake_tools/makepkg" "$fake_tools/bsdtar"
+cat > "$fake_tools/fakeroot" <<'EOF'
+#!/bin/sh
+exit 0
+EOF
+chmod +x "$fake_tools/makepkg" "$fake_tools/bsdtar" "$fake_tools/fakeroot"
 current_pkgver="$(sed -n 's/^pkgver=\(.*\)$/\1/p' "$script_dir/PKGBUILD")"
 current_pkgrel="$(sed -n 's/^pkgrel=\(.*\)$/\1/p' "$script_dir/PKGBUILD")"
 fake_archive="$work_dir/MAKO-Renderer-v${current_pkgver}-linux.tar.xz"
@@ -287,5 +298,65 @@ if grep -Fq 'hostile' "$hook_output"; then
     echo "Arch package hooks exposed an untrusted owner value" >&2
     exit 1
 fi
+
+local_release_fixture="$work_dir/local-release-fixture"
+local_release_output="$local_release_fixture/out"
+mkdir -p "$local_release_fixture/scripts" "$local_release_fixture/dist/arch"
+cp "$repo_root/engine/scripts/package-local-release.sh" \
+    "$local_release_fixture/scripts/package-local-release.sh"
+cp "$script_dir/PKGBUILD" "$local_release_fixture/dist/arch/PKGBUILD"
+cp "$script_dir/mako-renderer-bin.install" \
+    "$local_release_fixture/dist/arch/mako-renderer-bin.install"
+cp "$local_release_fixture/dist/arch/PKGBUILD" \
+    "$work_dir/local-release-original-PKGBUILD"
+printf '%s\n' 9.8.7 > "$local_release_fixture/VERSION"
+
+cat > "$local_release_fixture/scripts/package-local.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${MAKO_PORTABLE_PACKAGE:-0}" == "1" ]]
+mkdir -p "$(dirname "$1")"
+printf '%s\n' local-host-archive > "$1"
+EOF
+cat > "$local_release_fixture/scripts/package-flatpaks.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "${MAKO_PORTABLE_PACKAGE:-0}" == "1" ]]
+mkdir -p "$(dirname "$1")"
+printf '%s\n' local-flatpak-archive > "$1"
+EOF
+cat > "$local_release_fixture/dist/arch/verify-release-package.sh" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+archive="$1"
+output="$2"
+[[ "$(basename "$archive")" == "MAKO-Renderer-v9.8.7-linux.tar.xz" ]]
+[[ "$(basename "$output")" == "mako-renderer-bin-9.8.7-1-x86_64.pkg.tar.zst" ]]
+grep -Fqx 'pkgver=9.8.7' "$script_dir/PKGBUILD"
+grep -Fqx 'pkgrel=1' "$script_dir/PKGBUILD"
+checksum="$(sha256sum "$archive" | awk '{print $1}')"
+grep -Fqx "sha256sums=('$checksum')" "$script_dir/PKGBUILD"
+printf '%s\n' local-arch-package > "$output"
+EOF
+chmod +x \
+    "$local_release_fixture/scripts/package-local-release.sh" \
+    "$local_release_fixture/scripts/package-local.sh" \
+    "$local_release_fixture/scripts/package-flatpaks.sh" \
+    "$local_release_fixture/dist/arch/verify-release-package.sh"
+
+"$local_release_fixture/scripts/package-local-release.sh" \
+    "$local_release_output" >/dev/null
+[[ -f "$local_release_output/MAKO-Renderer-v9.8.7-linux.tar.xz" ]]
+[[ -f "$local_release_output/MAKO-Renderer-v9.8.7-flatpaks.tar.xz" ]]
+[[ -f "$local_release_output/mako-renderer-bin-9.8.7-1-x86_64.pkg.tar.zst" ]]
+[[ -f "$local_release_output/SHA256SUMS" ]]
+(
+    cd "$local_release_output"
+    sha256sum --check SHA256SUMS >/dev/null
+)
+cmp -s \
+    "$local_release_fixture/dist/arch/PKGBUILD" \
+    "$work_dir/local-release-original-PKGBUILD"
 
 printf '%s\n' "Arch package contract tests passed."
