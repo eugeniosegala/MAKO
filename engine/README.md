@@ -32,6 +32,16 @@ For Frame Generation or LS1, install the default public version of Lossless Scal
 
 MAKO Decky is the recommended SteamOS path. Install its ZIP, open **MAKO Decky**, and select **Install MAKO Renderer**. Follow the <a href="../README.md#install-and-use" target="_blank" rel="noopener noreferrer">main installation guide</a> for game and launcher setup.
 
+### Arch Linux package
+
+On a writable x86_64 Arch Linux system with the multilib repository enabled, download the matching `.pkg.tar.zst` release asset and install it with:
+
+```bash
+sudo pacman -U ./mako-renderer-bin-X.Y.Z-1-x86_64.pkg.tar.zst
+```
+
+See the [Arch guide](dist/arch/README.md#install-the-release-package) for launch options, upgrades, removal, and user-local installation conflicts.
+
 ### Direct Linux installation
 
 Extract `MAKO-Renderer-v<version>-linux.tar.xz` and run **Install MAKO Renderer**. The installer places MAKO under `~/.local`, preserves existing profiles, opens **MAKO Renderer Configuration**, and shows the required launch option. Run it again to update, or use **Uninstall MAKO Renderer** to remove the native installation.
