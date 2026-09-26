@@ -160,12 +160,22 @@ if [[ "$build_64_only" == true && -z "$local_engine_repo" ]]; then
   exit 2
 fi
 
-for command in curl node npm python3 strings tar zip unzip; do
+for command in curl node python3 strings tar zip unzip; do
   if ! command -v "$command" >/dev/null 2>&1; then
     echo "Required command not found: $command" >&2
     exit 1
   fi
 done
+
+package_runner=()
+if command -v pnpm >/dev/null 2>&1; then
+  package_runner=(pnpm --dir "$project_dir")
+elif command -v npm >/dev/null 2>&1; then
+  package_runner=(npm --prefix "$project_dir")
+else
+  echo "Required package manager not found: pnpm or npm" >&2
+  exit 1
+fi
 
 if command -v sha256sum >/dev/null 2>&1; then
   checksum_command=(sha256sum)
@@ -398,14 +408,14 @@ if [[ "${MAKO_RELEASE_SKIP_TESTS:-0}" == "1" ]]; then
   echo "Automated tests skipped by maintainer request; package verification remains enabled."
 else
   echo "Testing launch-wrapper environment..."
-  npm --prefix "$project_dir" test
+  "${package_runner[@]}" run test
 fi
 
 echo "Building frontend..."
 if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
-  MAKO_LOCAL_RELEASE_BUILD=1 npm --prefix "$project_dir" run build
+  MAKO_LOCAL_RELEASE_BUILD=1 "${package_runner[@]}" run build
 else
-  env -u MAKO_LOCAL_RELEASE_BUILD npm --prefix "$project_dir" run build
+  env -u MAKO_LOCAL_RELEASE_BUILD "${package_runner[@]}" run build
 fi
 
 mkdir -p "$package_dir/bin" "$package_dir/dist" "$package_dir/py_modules"

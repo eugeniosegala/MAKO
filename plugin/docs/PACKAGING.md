@@ -22,7 +22,7 @@ pnpm install --frozen-lockfile
 pnpm run package:local-engine
 ```
 
-For testing intended to qualify a public release, use `MAKO_PORTABLE_PACKAGE=1 pnpm run package:local-engine` so the native Renderer uses the publication builder. Retain build identity and artifact hashes, and invalidate the matching cached native archive if its builder or SDK changes; see [tester/release build alignment](../../HOW_TO_RELEASE.md#keep-tester-and-release-builds-aligned).
+For testing intended to qualify a public release, use `MAKO_PORTABLE_PACKAGE=1 pnpm run package:local-engine`. This uses the publication container builders for both the native Renderer and Flatpak bundles, selecting Docker or Podman automatically. Without that flag, Flatpak packaging uses host `flatpak-builder` when available and falls back to the same container path when it is absent. Retain build identity and artifact hashes, and invalidate the matching cached native archive if its builder or SDK changes; see [tester/release build alignment](../../HOW_TO_RELEASE.md#keep-tester-and-release-builds-aligned).
 
 The shared native and Flatpak Vulkan-Headers revision is owned by [`engine/vulkan-headers-revision.txt`](../../engine/vulkan-headers-revision.txt). MAKO Decky calls the Renderer packager, so standalone archives and Decky's native payload use the same pin and minimum header check. Flatpak payloads use that same generated header dependency while retaining their runtime SDK compilers and libraries; published Renderer archive pins in `package.json` remain release-owned artifact identities.
 
@@ -75,7 +75,7 @@ pnpm run dev:reload    # Reload only MAKO Decky
 
 The deployment commands write to `~/homebrew/plugins/Mako` and tell you when to reload; `dev:reload` only reloads the existing installation. Quit games before replacing the Renderer. Host deployments also validate and stage MAKO's pinned private vkBasalt build for the selected architectures. `dev:engine` and `dev:all` intentionally omit package verification, CLI/UI archives, 32-bit, and Flatpak unless their scope says otherwise. Use `dev:host` for 32-bit processes, `dev:flatpaks` for sandbox work, and `dev:e2e` before a complete local regression pass.
 
-Flatpak development commands place verified bundles in the installed plugin; use **Flatpak Setup > Update** to install one into an application. The supported runtime list is owned by `shared_config.py` and cross-checked against the Renderer matrix. Complete SteamOS host builds require `lib32-glibc`; Flatpak builds also require `flatpak-builder`. See the [source-build guide](../../engine/docs/BUILDING-FROM-SOURCE.md).
+Flatpak development commands place verified bundles in the installed plugin; use **Flatpak Setup > Update** to install one into an application. The supported runtime list is owned by `shared_config.py` and cross-checked against the Renderer matrix. Complete direct SteamOS host builds require `lib32-glibc`. Flatpak builds use host `flatpak-builder` when available or an automatically selected Docker/Podman container otherwise. See the [source-build guide](../../engine/docs/BUILDING-FROM-SOURCE.md).
 
 Set `DECKY_PLUGIN_DIR` for another installed path or pass `--engine-repo <path>` to `scripts/deploy-dev.sh`. Every direct deployment updates the plugin's development status box with source identity, scopes, and available artifact hashes. If the installed Decky manifest is protected, deployment leaves it unchanged and prints a warning; reinstall a verified ZIP to apply listing-name or manifest changes.
 

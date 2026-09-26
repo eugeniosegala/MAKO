@@ -25,26 +25,42 @@ if [[ -z "$version" ]]; then
     exit 1
 fi
 
-if [[ "$(uname -s)" != "Linux" ]]; then
-    if ! command -v docker >/dev/null 2>&1; then
-        echo "Flatpak packaging needs Linux. Install Docker Desktop or run this script on Linux." >&2
+portable_container="${MAKO_PORTABLE_PACKAGE:-0}"
+containerized_build="${MAKO_FLATPAK_CONTAINERIZED:-0}"
+needs_container=false
+if [[ "$(uname -s)" != "Linux" || "$portable_container" == "1" ]] ||
+        ! command -v flatpak >/dev/null 2>&1 ||
+        ! command -v flatpak-builder >/dev/null 2>&1; then
+    needs_container=true
+fi
+
+if [[ "$containerized_build" != "1" && "$needs_container" == true ]]; then
+    container_runtime=""
+    if command -v docker >/dev/null 2>&1; then
+        container_runtime="docker"
+    elif command -v podman >/dev/null 2>&1; then
+        container_runtime="podman"
+    else
+        echo "Flatpak packaging needs flatpak-builder or Docker/Podman." >&2
+        echo "Install one of those supported build paths and try again." >&2
         exit 1
     fi
 
     case "$output_path" in
         "$repo_root"/*) output_relative="${output_path#"$repo_root"/}" ;;
         *)
-            echo "On non-Linux hosts, the output path must be inside this repository." >&2
+            echo "For a containerized Flatpak build, the output path must be inside this repository." >&2
             exit 1
             ;;
     esac
 
-    echo "Using local linux/amd64 Docker Flatpak packaging environment..."
-    # Flatpak-builder starts a nested Bubblewrap sandbox. Docker's default seccomp
-    # profile blocks the filter setup needed by that nested sandbox on Docker Desktop.
-    exec docker run --rm --privileged --security-opt seccomp=unconfined --platform linux/amd64 \
+    echo "Using local linux/amd64 $container_runtime Flatpak packaging environment..."
+    # flatpak-builder starts a nested Bubblewrap sandbox. Container runtimes'
+    # default seccomp profiles can block the filter setup needed by that sandbox.
+    exec "$container_runtime" run --rm --privileged --security-opt seccomp=unconfined --platform linux/amd64 \
         -v "mako-flatpak-cache:/cache" \
         -e MAKO_DISABLE_BWRAP_SECCOMP=1 \
+        -e MAKO_FLATPAK_CONTAINERIZED=1 \
         -e MAKO_FLATPAK_CACHE_ROOT=/cache \
         -e MAKO_FLATPAK_WORK_ROOT=/cache \
         -v "$monorepo_root:/workspace" \

@@ -29,7 +29,7 @@ try {
     );
     if (trackedTranslations !== serializedTranslations) {
       throw new Error(
-        "src/i18n/languages.json is stale; run npm run generate:i18n",
+        "src/i18n/languages.json is stale; run pnpm run generate:i18n",
       );
     }
     console.log(

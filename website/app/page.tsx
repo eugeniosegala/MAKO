@@ -127,7 +127,7 @@ export default function Home() {
           <div className="hero-glow hero-glow-orange" />
           <div className="hero-copy">
             <p className="eyebrow"><span /> Frame generation + spatial scaling + shaders / Linux</p>
-            <h1>Lossless Scaling.<br /><em>On Linux.</em></h1>
+            <h1>Frame generation.<br /><em>Scaling. On Linux.</em></h1>
             <p className="hero-intro">MAKO is an independent Linux project, unaffiliated with Lossless Scaling. LSFG frame generation and LS1 require a separate Lossless Scaling purchase; the open MAKO Scaler and bundled shaders work without it.</p>
             <a className="open-source-sticker" href={`${links.repository}/blob/main/LICENSE.md`} {...newTabProps} aria-label="MAKO is free and open source under the GPL-3.0-or-later licence">
               <span className="open-source-sticker-mark" aria-hidden="true">OPEN</span>
@@ -432,7 +432,7 @@ export default function Home() {
           </div>
         </section>
 
-        <section className="faq-section section-shell">
+        <section className="faq-section section-shell" id="faq">
           <header>
             <p className="section-kicker"><span>08</span> Signal check</p>
             <h2>Before you<br /><em>make the jump.</em></h2>

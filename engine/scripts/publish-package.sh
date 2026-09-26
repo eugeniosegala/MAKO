@@ -150,7 +150,7 @@ fi
 # Host SDK selection must not change the compiled presentation contract.
 MAKO_PORTABLE_PACKAGE=1 scripts/package-local.sh "$archive"
 checksum="$("${checksum_command[@]}" "$archive" | awk '{print $1}')"
-scripts/package-flatpaks.sh "$flatpak_archive"
+MAKO_PORTABLE_PACKAGE=1 scripts/package-flatpaks.sh "$flatpak_archive"
 flatpak_checksum="$("${checksum_command[@]}" "$flatpak_archive" | awk '{print $1}')"
 
 pin_renderer_release() {

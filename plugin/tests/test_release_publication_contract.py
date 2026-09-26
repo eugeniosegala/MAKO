@@ -214,6 +214,20 @@ class ReleasePublisherSourceContractTests(unittest.TestCase):
             self.assertLess(commit_index, push_index)
             self.assertLess(push_index, package_index)
 
+    def test_renderer_publication_uses_portable_native_and_flatpak_builders(self):
+        source = (
+            REPOSITORY_ROOT / "engine/scripts/publish-package.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn(
+            'MAKO_PORTABLE_PACKAGE=1 scripts/package-local.sh "$archive"',
+            source,
+        )
+        self.assertIn(
+            'MAKO_PORTABLE_PACKAGE=1 scripts/package-flatpaks.sh '
+            '"$flatpak_archive"',
+            source,
+        )
+
     def test_paired_publisher_preflights_the_shared_codename(self):
         source = (
             REPOSITORY_ROOT / "scripts/publish-release.sh"

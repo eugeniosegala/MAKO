@@ -42,6 +42,9 @@ PLUGIN_DEPLOY_SCRIPT = PLUGIN_DIR / "scripts/deploy-dev.sh"
 VALIDATED_DEPLOY_SCRIPT = PLUGIN_DIR / "scripts/deploy-validated-package.py"
 DECKY_CLIENT_SOURCE = PLUGIN_DIR / "scripts/decky-loader-client.mjs"
 ENGINE_PACKAGE_SCRIPT = REPOSITORY_ROOT / "engine/scripts/package-local.sh"
+ENGINE_FLATPAK_PACKAGE_SCRIPT = (
+    REPOSITORY_ROOT / "engine/scripts/package-flatpaks.sh"
+)
 ENGINE_DEV_BUILD_SCRIPT = REPOSITORY_ROOT / "engine/scripts/build-steamos-dev.sh"
 ENGINE_LAUNCHER = REPOSITORY_ROOT / "engine/scripts/mako-launch"
 ENGINE_CMAKE = REPOSITORY_ROOT / "engine/CMakeLists.txt"
@@ -136,6 +139,32 @@ def _installer_archive_members() -> tuple[set[str], set[str]]:
 
 
 class PathAndPackageContractTests(unittest.TestCase):
+    def test_decky_packager_accepts_the_repository_package_manager(self):
+        plugin_package = _read(PLUGIN_PACKAGE_SCRIPT)
+        package_manifest = _read(PLUGIN_DIR / "package.json")
+        self.assertIn('command -v pnpm', plugin_package)
+        self.assertIn(
+            'package_runner=(pnpm --dir "$project_dir")', plugin_package
+        )
+        self.assertIn(
+            'package_runner=(npm --prefix "$project_dir")', plugin_package
+        )
+        self.assertNotIn('for command in curl node npm ', plugin_package)
+        self.assertIn('"${package_runner[@]}" run test', plugin_package)
+        self.assertIn('"${package_runner[@]}" run build', plugin_package)
+        self.assertNotIn('npm run ', package_manifest)
+
+    def test_flatpak_packager_has_a_portable_container_fallback(self):
+        flatpak_package = _read(ENGINE_FLATPAK_PACKAGE_SCRIPT)
+        self.assertIn(
+            'portable_container="${MAKO_PORTABLE_PACKAGE:-0}"',
+            flatpak_package,
+        )
+        self.assertIn('command -v flatpak-builder', flatpak_package)
+        self.assertIn('command -v docker', flatpak_package)
+        self.assertIn('command -v podman', flatpak_package)
+        self.assertIn('-e MAKO_FLATPAK_CONTAINERIZED=1', flatpak_package)
+
     def test_portable_engine_packager_installs_test_runtime_dependencies(self):
         engine_package = _read(ENGINE_PACKAGE_SCRIPT)
         portable_dependencies = engine_package.split(

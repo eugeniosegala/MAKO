@@ -10,9 +10,10 @@
     "dev": "vinext dev",
     "check:legal": "node scripts/check-legal-notices.mjs",
     "check:release-contract": "node scripts/check-release-contract.mjs",
+    "check:seo": "node scripts/check-seo.mjs",
     "build": "npm run check:release-contract && npm run check:legal && vinext build",
     "dev:pages": "vite --config vite.pages.config.ts",
-    "build:pages": "npm run check:release-contract && npm run check:legal && vite build --config vite.pages.config.ts",
+    "build:pages": "npm run check:release-contract && npm run check:legal && vite build --config vite.pages.config.ts && npm run check:seo",
     "start": "vinext start",
     "lint": "eslint . --ignore-pattern dist --ignore-pattern .next"
   },
