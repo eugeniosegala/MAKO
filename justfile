@@ -56,20 +56,20 @@ check-arch-package:
 # Build MAKO Renderer and the MAKO Decky plugin.
 build: build-engine build-plugin
 
-# Run the protected-input, Gym-selection, engine, plugin, and trace-producer test suites.
-test: test-protected-inputs test-gym-selection test-engine test-plugin test-trace-producer
+# Run the protected-input, release-candidate, engine, plugin, and trace-producer tests.
+test: test-protected-inputs test-release-candidate test-engine test-plugin test-trace-producer
 
 # Reject licensed inputs and disguised binary/model/archive payloads from Git.
 test-protected-inputs:
     ./scripts/test-protected-inputs.sh
 
+# Verify the local release-candidate checker with complete and incomplete ZIP fixtures.
+test-release-candidate:
+    ./scripts/test-release-candidate.sh
+
 # Exercise the private-archive producer without requiring private evidence.
 test-trace-producer:
     ./scripts/test-capture-trace.sh
-
-# Validate the explicit risk-based MAKO Gym hardware-selection contract.
-test-gym-selection:
-    ./scripts/test-gym-selection.sh
 
 # Configure and build MAKO Renderer in release mode.
 build-engine:
@@ -188,10 +188,6 @@ package-plugin:
 package-plugin-fast:
     pnpm --dir plugin run package:local-engine-fast
 
-# Run the release gate on a verified one-job SteamOS/AMD runner with an explicit Gym selection.
-validate-steamos-hardware *args:
-    ./scripts/run-steamos-hardware-validation.sh {{args}}
-
-# Inspect the scoped caches retained between SteamOS hardware jobs.
-inspect-hardware-cache:
-    ./scripts/prune-hardware-ci-cache.sh
+# Check an already-built complete local Decky ZIP against the pushed source commit.
+check-release-candidate archive:
+    ./scripts/check-release-candidate.sh {{archive}}

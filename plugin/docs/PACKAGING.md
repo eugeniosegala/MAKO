@@ -1,6 +1,6 @@
 # MAKO Decky packaging
 
-Run plugin commands from `plugin/`; run the hardware gate and publisher from the repository root.
+Run plugin commands from `plugin/`; run the release-candidate check and publisher from the repository root.
 
 | Need | Command | Result |
 | --- | --- | --- |
@@ -8,10 +8,10 @@ Run plugin commands from `plugin/`; run the hardware gate and publisher from the
 | Decky-only tester ZIP | `scripts/package-local.sh --local-plugin` | Self-contained ZIP using the pinned released Renderer; no native rebuild |
 | Fast native tester ZIP | `pnpm run package:local-engine-fast` | Verified native 64-bit package without 32-bit or Flatpak payloads; never publish |
 | Complete tester ZIP | `pnpm run package:local-engine` | Self-contained native 64/32-bit and Flatpak package |
-| Release candidate | `cd .. && ./scripts/run-steamos-hardware-validation.sh --gym-suite <affected-suite> --gym-reason '<why>'` | Clean SteamOS/AMD rebuild, selected hardware validation, and retained gate ZIP that is not promoted into the public release |
+| Release candidate | `MAKO_PORTABLE_PACKAGE=1 pnpm run package:local-engine`, then `cd .. && ./scripts/check-release-candidate.sh PATH-TO-ZIP` | One complete portable ZIP from the clean pushed commit, checked without a second build |
 | Release | `cd .. && ./scripts/publish-release.sh X.Y.Z` | Renderer publication and checksum pin followed by Decky publication |
 
-Local and retained CI ZIPs are not publication inputs; the publisher applies release-owned metadata commits and rebuilds. Add `--deploy-to-decky` to the release-candidate command only on the dedicated MAKO Decky test installation. After publishing, download and install the public Decky asset once. [Testing](../../TESTING.md) defines the evidence for each cycle; [How to release MAKO](../../HOW_TO_RELEASE.md) owns publication.
+The local candidate ZIP is not a publication input; the publisher applies release-owned metadata commits and rebuilds. MAKO Gym suites and local deployment are selected ad hoc for affected changes. After publishing, download and install the public Decky asset once. [Testing](../../TESTING.md) defines the evidence for each cycle; [How to release MAKO](../../HOW_TO_RELEASE.md) owns publication.
 
 ## Build a tester ZIP
 
@@ -52,7 +52,7 @@ scripts/package-local.sh \
 
 Local packages embed the Renderer archive under `bundled_renderer` and omit Decky's download metadata, so Decky cannot silently fetch another build. Package validation checks payloads, checksums, metadata, legal notices, dependency licences, and the frontend source map. The stable install slug remains `Mako/`, and the immutable Decky listing identity remains **MAKO - Frame Generation** so new packages replace existing installations.
 
-Artifacts are keyed by the Renderer commit and dirty-worktree fingerprint, allowing UI-only rebuilds to reuse a verified engine. The generated package records source identity, checksums, host ISA, and Vulkan process bitness. `host_architectures` currently declares x86_64; `architectures` declares 64/32-bit game-process layers. These are different contracts. Incompatible AArch64/Armada hosts fail closed as documented in [Armada support](ARMADA.md).
+Artifacts are keyed by the Renderer commit and dirty-worktree fingerprint, allowing UI-only rebuilds to reuse a verified engine. Local packages record the complete repository commit and dirty state as well as Renderer source identity, checksums, host ISA, and Vulkan process bitness; the release-candidate check uses that repository commit to reject an older ZIP. `host_architectures` currently declares x86_64; `architectures` declares 64/32-bit game-process layers. These are different contracts. Incompatible AArch64/Armada hosts fail closed as documented in [Armada support](ARMADA.md).
 
 Local package identity comes from the current component release notes without changing the tracked release pin. Package tests remain necessary because unit tests do not prove archive layout, manifest activation, permissions, or embedded checksums.
 
@@ -94,7 +94,7 @@ Add `-- --confirm` only when intentionally removing the corresponding repository
 
 ## Publish
 
-Use [How to release MAKO](../../HOW_TO_RELEASE.md). Update and commit both component release-note files, pass the SteamOS hardware gate and applicable game matrix, then run:
+Use [How to release MAKO](../../HOW_TO_RELEASE.md). Update and commit both component release-note files, check the complete local candidate ZIP and applicable game matrix, then run:
 
 ```bash
 cd .. && ./scripts/publish-release.sh 1.2.0

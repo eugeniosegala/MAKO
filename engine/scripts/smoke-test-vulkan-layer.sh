@@ -103,7 +103,7 @@ fi
 
 # When the host exposes a graphical compositor, cover the dormant no-profile
 # path through real swapchain creation and presentation as well as instance and
-# device creation. Headless CI still retains the vulkaninfo hardware gate.
+# device creation. Headless runs still retain the vulkaninfo activation check.
 if command -v vkcube >/dev/null 2>&1 &&
         [[ -n "${WAYLAND_DISPLAY:-}${DISPLAY:-}" ]]; then
     if ! env -u DISABLE_MAKO \

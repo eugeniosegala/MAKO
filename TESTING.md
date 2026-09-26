@@ -18,8 +18,8 @@ Portable MAKO tests must not require MAKO Gym, `Lossless.dll`, an AMD GPU, Games
 | --- | --- | --- |
 | Portable change gates | Deterministic Renderer, Decky, schema, package-policy, sanitizer, and producer behavior | Real Vulkan presentation, AMD image quality, or installation |
 | Direct device iteration | A focused change works on the current development installation | Archive layout, clean-checkout reproducibility, 32-bit, or Flatpak behavior unless selected |
-| Complete tester ZIP | Local source packages and installs as one self-contained build | A clean pushed commit, hardware release gate, or public asset |
-| SteamOS hardware gate | A pushed commit rebuilds the candidate and validates AMD loading, dual-bitness, Flatpak, package, and explicitly selected Gym boundaries | The complete commercial-game matrix or published download |
+| Complete tester ZIP | Local source packages as one self-contained build | A clean pushed commit, real game behavior, or public asset |
+| Local release-candidate check | The already-built complete ZIP matches the clean pushed commit and contains verified native and Flatpak payloads | GPU behavior, installation, or the published download |
 | Manual release-candidate matrix | Selected games survive relevant presentation, focus, overlay, hitch, and recreation scenarios | Untested games and hardware |
 | Published-package check | The exact GitHub host, Flatpak, and Arch assets match their recorded checksums and install through their user-facing paths | Universal compatibility |
 
@@ -33,7 +33,7 @@ The `Tests` workflow runs on every pull request and push to `main`:
 - MAKO Renderer CTest with GCC and Clang using the [native package Vulkan-Headers revision](engine/vulkan-headers-revision.txt) and its required-header check, including Qt, localization, synthetic model inspection, launch policy, generated-SPIR-V freshness, shared Flatpak-header module freshness/mutation checks, and the pinned vkBasalt release/generated-module contract;
 - the Arch package release-pin, alternative-package identity, non-mutating lifecycle-hook, automated release-sync, and exact-release build-wrapper contracts;
 - portable Renderer policy tests under ASan and UBSan;
-- protected-input, trace-producer, and Gym-selection contracts on their supported hosts; and
+- protected-input, trace-producer, and local release-candidate contracts on their supported hosts; and
 - Markdown formatting.
 
 The owning component tests remain authoritative for their detailed invariants.
@@ -42,7 +42,7 @@ Launcher exclusion freshness runs in Renderer CTest and Decky's generated-contra
 
 Decky's backend suite includes `plugin/tests/test_flatpak_override_integration.py`, which uses the real Linux `flatpak override` command in a temporary `FLATPAK_USER_DIR`. It checks preparation, repeated app-list refreshes, removal, and preservation of unrelated settings for Heroic, Lutris, and Dolphin. Application/runtime inventory is simulated; no installed apps, runtime downloads, licensed inputs, or GPU are required. The test skips when Linux or Flatpak is unavailable locally; the Decky CI job installs Flatpak before running it. Actual sandbox launches and rendering remain MAKO Gym evidence.
 
-Run `just test` for protected-input and Gym-selection contracts, Renderer CTest, Decky backend/frontend tests, and the trace producer. Add the checks below for the complete local portable gate:
+Run `just test` for protected-input and local release-candidate contracts, Renderer CTest, Decky backend/frontend tests, and the trace producer. Add the checks below for the complete local portable gate:
 
 ```bash
 just check-markdown-format
@@ -65,9 +65,9 @@ Use `-DMAKO_BUILD_UI=ON` when Qt 6 Base and Declarative development packages are
 
 ## Selecting MAKO Gym coverage
 
-MAKO Gym is an optional sibling checkout for local development and a required release-gate dependency. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.
+MAKO Gym is an optional sibling checkout for targeted hardware work. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.
 
-Gym contract version 19 adds the release-gated `pacing` suite for explicit Gamescope VRR feedback, pacing-owner transitions, and independent compositor-completion evidence while retaining defined-content benchmark inputs, performance baseline schema 4, and explicit CLI precision selection. Use a matching Gym checkout; older runners must not silently omit VRR pacing coverage or reinterpret an FP32 workload through the CLI default.
+Gym contract version 19 adds the `pacing` suite for explicit Gamescope VRR feedback, pacing-owner transitions, and independent compositor-completion evidence while retaining defined-content benchmark inputs, performance baseline schema 4, and explicit CLI precision selection. Use a matching Gym checkout; older runners must not silently omit VRR pacing coverage or reinterpret an FP32 workload through the CLI default.
 
 Before any hardware run, validate Gym's portable contracts with `(cd ../MAKO-Gym && ./scripts/check.sh)` or `just check` from its checkout.
 
@@ -80,9 +80,9 @@ The bridge exposes one selection pattern. `--list-suites` discovers suites, `--a
 ./engine/scripts/run-mako-gym.sh --suite recovery
 ```
 
-Run the smallest suite and filter that can observe a change. Complete hardware qualification additionally requires Gym's bounded `constraints` suite for the selected boundaries; the compact Gym hardware runner and the release gate enforce this automatically. Direct filtered suite runs remain development evidence and cannot substitute for that qualification. A filtered pass is evidence only for its selected rows. Widen to the complete affected suite when a shared production owner changes. A release does not automatically select every suite; run all suites only for a genuinely cross-cutting change or an explicit maintainer request.
+Run the smallest suite and filter that can observe a change. When claiming complete hardware qualification for a selected boundary, include Gym's bounded `constraints` suite with the relevant candidate CLI and launcher; Gym's compact hardware runner applies its own case mapping. A filtered pass is evidence only for its selected rows. Widen to the complete affected suite when a shared production owner changes. A release does not automatically select every suite; run all suites only for a genuinely cross-cutting change or an explicit maintainer request.
 
-Retained evidence may be reused instead of duplicated only when the exact gate-built Renderer/package identity and source commit, host and driver, Gym commit, configuration, and required rows match the candidate. Record the prior run identifier in the release rationale. A code, package, driver, scenario, or assertion change invalidates the affected evidence.
+Retained evidence may be reused when the exact Renderer/package identity and source commit, host and driver, Gym commit, configuration, and relevant rows match the candidate. Record the prior run identifier. A code, package, driver, scenario, or assertion change invalidates the affected evidence.
 
 | Change boundary | Start with |
 | --- | --- |
@@ -109,32 +109,11 @@ MAKO Gym's manifests and guides are authoritative for current rows, thresholds, 
 
 Spatial changes must also follow the surface, extent, queue, format, startup, live-transition, synchronization, and quality matrix in [Spatial scaling architecture](engine/docs/SCALING.md). Scheduler and presentation changes must follow [Adaptive validation](engine/docs/ADAPTIVE-VALIDATION.md). A successful `vulkaninfo` or finite `vkcube` run proves only its narrow loader or presentation boundary.
 
-## SteamOS hardware release gate
+## Local release-candidate check
 
-Before publishing, choose the affected Gym suites from the table above and run the gate against a clean, pushed commit on the dedicated SteamOS/AMD machine:
+Build one complete portable MAKO Decky ZIP from the clean pushed candidate and pass its printed path to `scripts/check-release-candidate.sh`. The check reuses the ZIP and verifies the package contract, source commit, 64-bit/32-bit host layers, and every supported Flatpak bundle. It does not create a GitHub runner, rebuild, install, or run MAKO Gym. [How to release MAKO](HOW_TO_RELEASE.md#prepare-the-release) gives the commands.
 
-```bash
-./scripts/run-steamos-hardware-validation.sh \
-  --gym-suite recovery \
-  --gym-suite gamescope-e2e \
-  --gym-reason 'Adaptive presentation and Gamescope lifecycle changed'
-```
-
-When an explicit maintainer request or genuinely cross-cutting change requires every hardware suite, use the release gate's aggregate mode so each suite receives its correct candidate CLI or packaged launcher inputs:
-
-```bash
-./scripts/run-steamos-hardware-validation.sh \
-  --all-gym-suites \
-  --gym-reason 'Explicit complete Renderer hardware audit'
-```
-
-Choose exactly one mode: repeat `--gym-suite`, use `--no-gym-suites` when no Renderer-facing boundary changed or exact evidence is reused, or use `--all-gym-suites` for a genuinely cross-cutting or explicitly requested audit. `--gym-reason` is always required and must identify reused evidence. Inventory validation is portable; only selected suites produce hardware evidence. The host still needs the package prerequisites, `vulkaninfo`, `vkcube`, Gamescope, a local licensed `Lossless.dll`, and a clean compatible MAKO Gym checkout.
-
-The selection validator adds `constraints` once to named Renderer hardware selections. The gate runs the applicable resource combinations with the exact packaged CLI and launcher and `--require-complete`; `--no-gym-suites` adds no hardware work. The bounded matrix covers normal execution, reduced CPU availability, competing GPU work, and live memory pressure only where relevant. Gym owns the case/profile mapping in `docs/RESOURCE-CONSTRAINTS.md`.
-
-The gate creates a disposable one-job GitHub Actions runner and always rebuilds the complete dual-bitness/Flatpak package. CLI suites use the clean source-built `mako-cli`; runtime suites use the extracted candidate package. Direct-desktop coverage must start from a graphical session outside Gamescope. The gate records the selection, rationale, Gym identity, and sanitized results, retains the evidence and ZIP for 14 days, then removes credentials and staging. Publication later makes its own release-version and pin commits and independently rebuilds in the enforced order rather than promoting this ZIP byte-for-byte, so the published-package check remains separate.
-
-Pass `--deploy-to-decky` only on the dedicated MAKO Decky test installation. It deploys the verified ZIP through the production installer. The gate does not replace the applicable manual game matrix or final published-package installation check.
+Run MAKO Gym separately when a changed boundary needs targeted hardware evidence. Use the table above to choose the suite and retain the package identity, source commit, host/driver, Gym commit, configuration, and results. Direct-desktop coverage must start from a graphical session outside Gamescope. Record unavailable or unselected rows as not tested; local game tests and the final published-package installation check remain separate.
 
 ## Real-game traces
 

@@ -35,7 +35,7 @@ Usage: engine/scripts/run-mako-gym.sh [bridge options] [Gym options]
 
 Bridge options:
   --gym-repo PATH  Use an explicit MAKO Gym checkout.
-  --require        Fail when MAKO Gym is absent; intended for release gates.
+  --require        Fail when MAKO Gym is absent; use for required hardware runs.
   --suite NAME     Select vulkan (default), quality, repeatability, performance,
                    spatial-performance, runtime-overhead, sync-validation, pacing, recovery,
                    external-recovery, gamescope-e2e, direct-desktop-e2e,

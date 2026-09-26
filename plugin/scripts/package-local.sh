@@ -29,6 +29,8 @@ local_engine_dirty=false
 local_engine_label=""
 local_plugin_label=""
 local_release_version=""
+local_package_source_commit=""
+local_package_worktree_dirty=false
 established_decky_identity="MAKO - Frame Generation"
 
 usage() {
@@ -366,6 +368,13 @@ if [[ "$local_plugin_mode" == true ]]; then
 fi
 
 if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
+  local_package_source_commit="$(git -C "$repository_root" rev-parse HEAD)"
+  if [[ -n "$(git -C "$repository_root" status --porcelain --untracked-files=normal)" ]]; then
+    local_package_worktree_dirty=true
+  fi
+fi
+
+if [[ "$local_engine_mode" == true || "$local_plugin_mode" == true ]]; then
   local_release_version="$(
     node "$project_dir/scripts/read-release-info.mjs" \
       "$project_dir/RELEASE_NOTES.md" "MAKO Decky" --version
@@ -580,7 +589,8 @@ if [[ "$local_engine_mode" == true ]]; then
     if (!binary) throw new Error("package.json has no remote_binary entry");
     const [archiveName, engineVersion, archiveChecksum, sourceCommit,
       sourceDirty, sourceLabel, flatpakName, flatpakChecksum,
-      localPluginLabel, build64Only, localReleaseVersion] = process.argv.slice(2);
+      localPluginLabel, build64Only, localReleaseVersion,
+      packageSourceCommit, packageWorktreeDirty] = process.argv.slice(2);
     const localLabel = sourceLabel;
     binary.name = archiveName;
     binary.version = `${engineVersion}-local.${localLabel}`;
@@ -600,17 +610,22 @@ if [[ "$local_engine_mode" == true ]]; then
     delete manifest.remote_binary;
     delete manifest.remote_binary_bundling;
     manifest.version = `${localReleaseVersion}.local.${localPluginLabel}`;
+    manifest.local_package_source_commit = packageSourceCommit;
+    manifest.local_package_worktree_dirty = packageWorktreeDirty === "true";
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
   ' "$package_dir/package.json" "$archive_name" "$archive_version" \
     "$archive_checksum" "$local_engine_commit" "$local_engine_dirty" \
     "$local_engine_label" "$flatpak_archive_name" "$flatpak_archive_checksum" \
-    "$local_plugin_label" "$build_64_only" "$local_release_version"
+    "$local_plugin_label" "$build_64_only" "$local_release_version" \
+    "$local_package_source_commit" "$local_package_worktree_dirty"
 elif [[ "$local_plugin_mode" == true ]]; then
   node -e '
     const fs = require("node:fs");
     const manifestPath = process.argv[1];
     const localPluginLabel = process.argv[2];
     const localReleaseVersion = process.argv[3];
+    const packageSourceCommit = process.argv[4];
+    const packageWorktreeDirty = process.argv[5];
     const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
     const [binary] = manifest.remote_binary ?? [];
     if (!binary) throw new Error("package.json has no remote_binary entry");
@@ -623,8 +638,11 @@ elif [[ "$local_plugin_mode" == true ]]; then
     delete manifest.remote_binary;
     delete manifest.remote_binary_bundling;
     manifest.version = `${localReleaseVersion}.local.${localPluginLabel}`;
+    manifest.local_package_source_commit = packageSourceCommit;
+    manifest.local_package_worktree_dirty = packageWorktreeDirty === "true";
     fs.writeFileSync(manifestPath, JSON.stringify(manifest, null, 2) + "\n");
-  ' "$package_dir/package.json" "$local_plugin_label" "$local_release_version"
+  ' "$package_dir/package.json" "$local_plugin_label" "$local_release_version" \
+    "$local_package_source_commit" "$local_package_worktree_dirty"
 fi
 cp -R "$project_dir/dist/." "$package_dir/dist/"
 cp -R "$project_dir/py_modules/." "$package_dir/py_modules/"

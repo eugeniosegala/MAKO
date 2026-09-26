@@ -33,9 +33,9 @@ jobs:
         run: ./scripts/test-protected-inputs.sh
       - name: Exercise safe capture staging and sanitization
         run: ./scripts/test-capture-trace.sh
-      - name: Validate explicit MAKO Gym hardware selections
-        run: ./scripts/test-gym-selection.sh
-
+      - name: Check local release-candidate verification
+        if: runner.os == 'Linux'
+        run: ./scripts/test-release-candidate.sh
   decky:
     name: MAKO Decky
     runs-on: ubuntu-latest

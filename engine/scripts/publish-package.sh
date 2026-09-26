@@ -146,7 +146,7 @@ if git rev-parse -q --verify "refs/tags/$tag" >/dev/null; then
     tag_exists=true
 fi
 
-# Match the native builder used by the SteamOS release gate on every host.
+# Match the native builder used by complete local release candidates on every host.
 # Host SDK selection must not change the compiled presentation contract.
 MAKO_PORTABLE_PACKAGE=1 scripts/package-local.sh "$archive"
 checksum="$("${checksum_command[@]}" "$archive" | awk '{print $1}')"
