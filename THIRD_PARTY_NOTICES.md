@@ -36,7 +36,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 
 ## Bundled vkBasalt Vulkan layer
 
-MAKO Renderer native archives and Flatpak extensions include 64-bit and 32-bit vkBasalt libraries from MAKO's maintained fork release [`mako-v0.3.2.10-5`](https://github.com/eugeniosegala/vkBasalt/releases/tag/mako-v0.3.2.10-5), source commit [`bc9fff8069447f24d8fbef7d784dfd3f4435de54`](https://github.com/eugeniosegala/vkBasalt/commit/bc9fff8069447f24d8fbef7d784dfd3f4435de54), based on upstream vkBasalt commit [`4f97f09ffe91900e6ca136cc26cf7966f8f6970d`](https://github.com/DadSchoorse/vkBasalt/commit/4f97f09ffe91900e6ca136cc26cf7966f8f6970d). [`engine/vkbasalt-release.json`](engine/vkbasalt-release.json) records the immutable asset and checksum used by packaging.
+MAKO Renderer native archives and Flatpak extensions include 64-bit and 32-bit vkBasalt libraries from [MAKO's maintained fork](https://github.com/eugeniosegala/vkBasalt), based on [upstream vkBasalt](https://github.com/DadSchoorse/vkBasalt). [`engine/vkbasalt-release.json`](engine/vkbasalt-release.json) records the current release tag, source and upstream commits, immutable asset URL, and checksum used by packaging.
 
 vkBasalt is copyright © 2019–2022 Georg Lehmann and is distributed under the zlib License. Its bundled ReShade shader headers are copyright © 2014 Patrick Mours and distributed under the BSD 3-Clause License. MAKO packages the complete notices as `share/doc/mako-render/vkbasalt/LICENSE` and `share/doc/mako-render/vkbasalt/RESHade-LICENSE.md`, plus exact source provenance and the MAKO pin. Those files remain part of every archive and runtime extension containing vkBasalt.
 

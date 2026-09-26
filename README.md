@@ -19,10 +19,7 @@
 </p>
 
 <!-- prettier-ignore -->
-> [!IMPORTANT]
-> **<a href="https://github.com/eugeniosegala/decky-lsfg-vk-experimental" target="_blank" rel="noopener noreferrer">Decky LSFG-VK Experimental</a> and <a href="https://github.com/eugeniosegala/lsfg-vk-experimental" target="_blank" rel="noopener noreferrer">LSFG-VK Experimental</a> are now MAKO.** This repository is their new home and continuation. Future development, releases, documentation, and issue tracking happen here.
-
-> **Independent project:** MAKO is not an official Lossless Scaling, Decky Loader, or lsfg-vk release. MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LSFG frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO Scaler and bundled shaders do not require it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
+> **Independent project:** MAKO is not an official Lossless Scaling, Decky Loader, lsfg-vk, vkBasalt, or ReShade release. MAKO does not contain or distribute Lossless Scaling, `Lossless.dll`, or extracted proprietary model payloads. LSFG frame generation and LS1 scaling read selected resources at runtime from a lawful, user-supplied <a href="https://store.steampowered.com/app/993090/Lossless_Scaling/" target="_blank" rel="noopener noreferrer">Lossless Scaling</a> installation; the open MAKO Scaler and bundled shaders do not require it. MAKO does not alter the user's DLL file, and translated resources remain process-local. Users are responsible for complying with the terms applicable to their copy. See <a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
 
 ## Downloads
 
@@ -159,14 +156,15 @@ Community creators have covered and tested the project on Steam Deck hardware. S
 
 ## Credits and project lineage
 
-MAKO is built on the work of two open-source projects and their communities:
+MAKO builds on and integrates work from these open-source projects and their communities:
 
 - **<a href="https://github.com/xXJSONDeruloXx/decky-lsfg-vk" target="_blank" rel="noopener noreferrer">Kurt Himebauch / xXJSONDeruloXx</a>** created the original Decky LSFG-VK plugin that formed the foundation of MAKO's Decky interface, installation workflow, and per-game controls.
 - **<a href="https://github.com/PancakeTAS/lsfg-vk" target="_blank" rel="noopener noreferrer">PancakeTAS</a>** and the **lsfg-vk contributors** created the GPL-3.0-or-later version 2 Vulkan layer and Linux integration from which MAKO Renderer descends. MAKO's direct upstream baseline is <a href="https://github.com/PancakeTAS/lsfg-vk/commit/8b0da2661c6f3473a7fccc8ba643880050e71642" target="_blank" rel="noopener noreferrer"><code>8b0da266</code></a>; the exact lineage and migration commits are recorded in <a href="LICENSE.md#lsfg-vk-renderer-lineage" target="_blank" rel="noopener noreferrer">LICENSE.md</a>.
+- **<a href="https://github.com/DadSchoorse/vkBasalt" target="_blank" rel="noopener noreferrer">Georg Lehmann / DadSchoorse</a>** and the **vkBasalt contributors** created the Vulkan post-processing layer that MAKO bundles through its maintained fork. Selected shader effects come from <a href="https://github.com/CeeJayDK/SweetFX" target="_blank" rel="noopener noreferrer">CeeJayDK/SweetFX</a> and <a href="https://github.com/crosire/reshade-shaders" target="_blank" rel="noopener noreferrer">crosire/reshade-shaders</a>; exact source and license details are in <a href="THIRD_PARTY_NOTICES.md" target="_blank" rel="noopener noreferrer">Third-party notices</a>.
 
 MAKO also thanks the **Lossless Scaling developers** for the LS1 and LSFG models accessed through each user's licensed installation, the **Wine/vkd3d developers** whose shader translator enables the Vulkan LS1 path, and the **Decky Loader team**, community contributors, testers, guide authors, and creators who helped make the project possible. The open MAKO Scaler is independently implemented in this repository.
 
-The original copyright and license notices are preserved in <a href="LICENSE.md" target="_blank" rel="noopener noreferrer">LICENSE.md</a>. MAKO is an independent community project and is not affiliated with or endorsed by Lossless Scaling, Decky Loader, or either upstream project.
+The original copyright and license notices are preserved in <a href="LICENSE.md" target="_blank" rel="noopener noreferrer">LICENSE.md</a>. MAKO is an independent community project and is not affiliated with or endorsed by Lossless Scaling, Decky Loader, or the credited upstream projects.
 
 ## License
 
@@ -175,3 +173,9 @@ MAKO is distributed under <a href="LICENSE.md" target="_blank" rel="noopener nor
 ## AI-assisted development
 
 MAKO uses coding agents as part of an evidence-driven engineering workflow while keeping architecture, review, validation, and release decisions under human ownership. See <a href="AI_USE.md" target="_blank" rel="noopener noreferrer">AI use in MAKO</a> for the full approach.
+
+## Contributors
+
+<a href="https://github.com/eugeniosegala/MAKO/graphs/contributors"><img src="https://contrib.rocks/image?repo=eugeniosegala/MAKO" alt="MAKO code contributors" /></a>
+
+The gallery updates from the repository's GitHub contributors. See <a href="CONTRIBUTING.md">Contributing</a> to get involved.
