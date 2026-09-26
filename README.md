@@ -176,6 +176,11 @@ MAKO uses coding agents as part of an evidence-driven engineering workflow while
 
 ## Contributors
 
-<a href="https://github.com/eugeniosegala/MAKO/graphs/contributors"><img src="https://contrib.rocks/image?repo=eugeniosegala/MAKO" alt="MAKO code contributors" /></a>
+MAKO thanks everyone whose commits or co-authored work is in this repository. This gallery is generated from the current branch's Git history; upstream projects and other forms of help are credited above.
 
-The gallery updates from the repository's GitHub contributors. See <a href="CONTRIBUTING.md">Contributing</a> to get involved.
+<!-- mako-contributors:start -->
+
+<a href="https://github.com/eugeniosegala"><img src="https://github.com/eugeniosegala.png?size=48" width="48" height="48" alt="@eugeniosegala" /></a> <a href="https://github.com/lordkaus"><img src="https://github.com/lordkaus.png?size=48" width="48" height="48" alt="@lordkaus" /></a> <a href="https://github.com/PJ568"><img src="https://github.com/PJ568.png?size=48" width="48" height="48" alt="@PJ568" /></a> <a href="https://github.com/Tak-attack"><img src="https://github.com/Tak-attack.png?size=48" width="48" height="48" alt="@Tak-attack" /></a> <a href="https://github.com/w169q169"><img src="https://github.com/w169q169.png?size=48" width="48" height="48" alt="@w169q169" /></a> <a href="https://github.com/WowOne987"><img src="https://github.com/WowOne987.png?size=48" width="48" height="48" alt="@WowOne987" /></a>
+<!-- mako-contributors:end -->
+
+See <a href="CONTRIBUTING.md">Contributing</a> to get involved.

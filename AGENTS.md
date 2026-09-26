@@ -103,6 +103,7 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 | --- | --- | --- |
 | Understand validation coverage | `TESTING.md` | `justfile`, `.github/workflows/tests.yml` |
 | Format Markdown or enable the commit hook | `AGENTS.md` | `just format-markdown`, `just check-markdown-format`, `just install-hooks` |
+| Update the README contributor gallery | `CONTRIBUTING.md` | `just update-contributors`, `just check-contributors` |
 | Change native installation or rollback | `INSTALLATION-TRANSACTIONS.md` | `plugin/py_modules/mako_plugin/installation.py`, `plugin/py_modules/mako_plugin/managed_files.py`, `engine/scripts/mako-installer` |
 | Build Renderer from source | `engine/docs/BUILDING-FROM-SOURCE.md` | `engine/CMakeLists.txt`, `engine/scripts/build-steamos-dev.sh` |
 | Run portable Renderer tests | `TESTING.md` | `engine/scripts/test-adaptive-scheduler.sh` |

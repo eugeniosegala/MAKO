@@ -18,6 +18,10 @@ For artwork, icons, screenshots, audio, generated media, and other non-code cont
 
 Generated files must be updated through their owning generator. Do not edit generated configuration bindings, localization bundles, embedded SPIR-V, or build outputs independently.
 
+## Contributor gallery
+
+The README gallery is generated from commit authors and `Co-authored-by` trailers on the current branch. After adding contributor work, add any new commit author or co-author name under its GitHub login in `scripts/contributors.json`, then run `python3 scripts/update-contributors.py` and include the README update. Multiple commit names can point to one account. The optional `additional_logins` list credits contributors who are not represented in Git history. Run `python3 scripts/update-contributors.py --check` to verify freshness; do not edit the generated gallery directly.
+
 ## Validation
 
 Follow [AGENTS.md](AGENTS.md) and [TESTING.md](TESTING.md) for architecture, formatting, test selection, package verification, and real-hardware evidence. A contribution should state what passed and what was not tested without presenting skipped hardware coverage as evidence.

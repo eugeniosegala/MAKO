@@ -20,6 +20,14 @@ format-markdown:
 check-markdown-format:
     pnpm --dir plugin run format:markdown:check
 
+# Update the README gallery from this branch's commit and co-author history.
+update-contributors:
+    python3 scripts/update-contributors.py
+
+# Check that the README gallery matches this branch's contributor history.
+check-contributors:
+    python3 scripts/update-contributors.py --check
+
 # Generate Renderer and Decky launcher lists from the documented shared registry.
 generate-launcher-exclusions:
     python3 scripts/generate-launcher-exclusions.py
