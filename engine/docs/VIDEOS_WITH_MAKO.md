@@ -27,7 +27,7 @@ tar -xJf MAKO-Renderer-v<version>-flatpaks.tar.xz
 flatpak install --user org.freedesktop.Platform.VulkanLayer.makorender-25.08.flatpak
 ```
 
-Use the actual branch reported by `flatpak info`. Then follow [Manual application override](FLATPAK-GUIDE.md#manual-application-override) with `APP_ID=io.mpv.Mpv`. Those app-scoped overrides provide the configuration and Steam-library mounts, select the MAKO extension, isolate implicit layers, and keep HDR exposure off. They do not enable MAKO for other Flatpak applications.
+Use the actual branch reported by `flatpak info`. Then follow [Manual application override](FLATPAK-GUIDE.md#manual-application-override) with `appid=io.mpv.Mpv`. Those app-scoped overrides provide the configuration and Steam-library mounts, select the MAKO extension, isolate implicit layers, and keep HDR exposure off. They do not enable MAKO for other Flatpak applications.
 
 Choose exactly one workflow below after completing the Flatpak preparation. The UI workflow uses automatic `mpv-bin` process matching plus persistent mpv settings so videos can be opened normally. The command-line workflow uses an explicit `MAKO_PROFILE` selection plus per-launch mpv arguments, so it does not need a matched process or persistent mpv settings.
 
@@ -72,7 +72,7 @@ Open a local DRM-free video normally from the file manager or mpv desktop applic
 Validate the saved Renderer configuration:
 
 ```bash
-mako-cli validate
+~/.local/bin/mako-cli validate
 ```
 
 With the video running, inspect the current session log:
@@ -102,10 +102,10 @@ scaling_enabled = false
 The command below uses `MAKO_PROFILE=Video`, so this profile does not need an `active_in` process match. Validate the file before starting mpv:
 
 ```bash
-mako-cli validate
+~/.local/bin/mako-cli validate
 ```
 
-`mako-cli` validates configuration and tests Renderer resources; it does not launch applications or attach MAKO to an existing process.
+`mako-cli validate` parses and validates the configuration file. It does not test GPU or model resources, launch applications, or attach MAKO to an existing process.
 
 ### 2. Launch Flatpak mpv
 
@@ -155,7 +155,7 @@ The native Vulkan context depends on the desktop session. Add `--gpu-context=way
 For a short Flatpak test, add `--env=MAKO_PRESENT_DIAGNOSTICS=1` to the `flatpak run` command above, before `io.mpv.Mpv`, and append `2>&1 | tee "$HOME/MAKO-mpv-video-session.log"` to capture its output. Let the clip play for at least 20 seconds, quit fully, then create a focused report:
 
 ```bash
-mako-diagnostics performance scaling --log "$HOME/MAKO-mpv-video-session.log" --lines 2000
+~/.local/bin/mako-diagnostics performance scaling --log "$HOME/MAKO-mpv-video-session.log" --lines 2000
 ```
 
 Let the clip run for at least 20 seconds. The log should report that the frame-generation backend and resources are available and show generated images being presented. The displayed rate is limited by the video's real cadence, the selected multiplier or Adaptive target, the display refresh rate, and available GPU headroom.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "MAKO Sync Services"
+  short_description: "Commit and push all coordinated MAKO repositories"
+  default_prompt: "Use $mako-sync-services to validate, commit, and push all coordinated MAKO repositories."

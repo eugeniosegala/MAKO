@@ -50,18 +50,18 @@ Inside Gamescope, selecting both Scaling and WSI preserves the Renderer → WSI 
 
 MAKO Decky stages and repairs the host’s 64-bit Gamescope WSI payload during Renderer installation. It supports direct 64-bit native Vulkan and Proton launches, plus prepared Heroic and EmuDeck Flatpaks. It does not support Desktop Mode, mismatched nested Wayland sessions, unprepared Flatpaks, 32-bit WSI presentation, or HDR.
 
-Test Fixed 2× before Adaptive and confirm generated delivery and active scaling through the final-output counter. The WSI toggle can be changed independently when pacing or output regresses. Restart and verify active scaling plus identical source/output sizes before comparing performance.
+Test Fixed 2× before Adaptive and confirm generated delivery and active scaling through the final-output counter. The WSI toggle can be changed independently when pacing or output regresses. Restart and verify active scaling, then keep the source and presentation sizes identical between WSI-on and WSI-off performance comparisons.
 
 MAKO Decky validates and stages exact architecture-specific manifests and available libraries. It does not expose the complete host implicit-layer directory. Invalid optional-tool evidence suppresses that tool. Missing staged WSI or spatial manifests keep the launch on the combined Renderer; missing surface or create evidence after a split chain starts keeps scaling native or rejects the invalid create. HDR remains disabled in every current managed chain.
 
-Layer membership cannot change after Vulkan starts. Restart the game after changing WSI, Scaling, MangoHud, or vkBasalt.
+Layer membership cannot change after Vulkan starts. Restart the game after changing WSI, Scaling, MangoHud, or Shaders.
 
-### Enable MangoHud or vkBasalt
+### Enable MangoHud or Shaders
 
 1. Install MangoHud on the SteamOS host if that is the selected tool. vkBasalt is already included with MAKO Renderer.
 2. Keep `/home/deck/.local/bin/mako-run %command%` as the Steam launch option.
 3. Select the default profile or save a profile for the running game.
-4. Enable exactly one tool under **External Tools**.
+4. Enable **Shaders** under **Image Processing**, or enable **MangoHud** under **External Tools**. The two choices are mutually exclusive.
 5. Restart the game.
 
 Host MangoHud is not enabled inside Flatpak games. Bundled vkBasalt is available to native games and prepared MAKO Flatpak runtimes.
@@ -84,7 +84,7 @@ For Flatpak games, install the matching MAKO extension and prepare the applicati
 
 ## Manual MangoHud diagnostic path
 
-The managed profile control is preferred. This manual path exists for a focused 64-bit native Vulkan or Proton experiment when **Enable MangoHud**, **Enable vkBasalt**, Gamescope WSI compatibility, and Scaling are all off.
+The managed profile control is preferred. This manual path exists for a focused 64-bit native Vulkan or Proton experiment when **Enable MangoHud**, **Enable Shaders**, Gamescope WSI compatibility, and Scaling are all off.
 
 In Steam Desktop Mode, set the complete launch option to:
 
