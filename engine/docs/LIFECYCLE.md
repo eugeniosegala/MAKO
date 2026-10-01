@@ -174,7 +174,7 @@ Explicit old-swapchain linkage is preferred. When an application omits it, MAKO 
 
 ### Destruction and retirement
 
-Application destruction immediately removes a context from live updates, but lower WSI destruction may be deferred. When maintenance fences and the default allocator permit it, MAKO retains the lower swapchain for at least 50 ms and until its image fences prove retirement. Later presents on the same surface advance this work without blocking.
+Application destruction immediately removes a context from live updates, but lower WSI destruction may be deferred. When maintenance fences and the default allocator permit it, MAKO retains the lower swapchain for at least 50 ms and until its image fences prove retirement. Later presents on the same surface advance this work through zero-time completion polls, including when the replacement fell back to native presentation. Collection skips a busy retirement mutex and retains the context while its backend, render, or spatial work is still in flight, so presentation does not enter the backend's 250 ms close wait. An idle context still incurs its normal resource-destruction cost when collected.
 
 If a matching null-old replacement arrives while an exact retained swapchain remains, MAKO completes and destroys the retained object before creating the replacement, but does not pass that retained handle back through Gamescope. Surface destruction is terminal and waits for same-surface retirement. Custom allocation callbacks require synchronous destruction because their callback data cannot safely outlive the application call.
 

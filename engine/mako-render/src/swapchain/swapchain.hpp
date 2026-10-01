@@ -201,7 +201,9 @@ namespace mako::layer {
 
         /// Wait for every layer-owned maintenance1 present fence associated
         /// with this swapchain. A zero timeout is a nonblocking retirement
-        /// poll; finite waits are used only at application destruction.
+        /// poll that also requires idle backend and application-device work
+        /// before context destruction; finite waits are used only at
+        /// application destruction.
         [[nodiscard]] bool waitForPresentRetirement(
             const vk::Vulkan& vk, uint64_t timeoutNs);
         [[nodiscard]] bool presentRetirementEnabled() const {

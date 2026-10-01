@@ -6,6 +6,7 @@
 #include <bit>
 #include <cstdint>
 #include <cstdlib>
+#include <future>
 #include <iostream>
 #include <string>
 #include <string_view>
@@ -193,6 +194,23 @@ int main() {
 
     expect(swapchainRetirementGracePeriod == std::chrono::milliseconds(50),
         "the compositor retirement grace contract changed unexpectedly");
+
+    std::mutex retirementMutex;
+    {
+        const auto owner = lockSwapchainRetirement(retirementMutex, UINT64_MAX);
+        expect(owner.owns_lock(),
+            "terminal retirement did not acquire mutex ownership");
+        auto presentationPoll = std::async(std::launch::async, [&]() {
+            return lockSwapchainRetirement(retirementMutex, 0).owns_lock();
+        });
+        expect(presentationPoll.wait_for(std::chrono::seconds(5)) ==
+                std::future_status::ready,
+            "presentation retirement waited behind a busy destruction boundary");
+        expect(!presentationPoll.get(),
+            "presentation retirement acquired an already-owned mutex");
+    }
+    expect(lockSwapchainRetirement(retirementMutex, 0).owns_lock(),
+        "presentation retirement could not resume after terminal ownership ended");
 
     const auto surfaceA = std::bit_cast<VkSurfaceKHR>(uint64_t{1});
     const auto surfaceB = std::bit_cast<VkSurfaceKHR>(uint64_t{2});

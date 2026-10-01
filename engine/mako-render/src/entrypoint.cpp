@@ -130,9 +130,11 @@ namespace {
     bool finalizeRetiredSwapchain(
             const VkSwapchainKHR swapchain, const uint64_t timeoutNs,
             const std::string_view trigger) {
-        const std::lock_guard retirementLock(
-            instance_info->retiredSwapchainsMutex
+        const auto retirementLock = lockSwapchainRetirement(
+            instance_info->retiredSwapchainsMutex, timeoutNs
         );
+        if (!retirementLock.owns_lock())
+            return false;
         const auto retired = instance_info->retiredSwapchains.find(swapchain);
         if (retired == instance_info->retiredSwapchains.end())
             return true;
@@ -220,16 +222,22 @@ namespace {
     }
 
     void collectRetiredSwapchainsAfterPresent(
-            const VkDevice device, const VkPresentInfoKHR& presentInfo) {
+            const VkQueue queue, const VkPresentInfoKHR& presentInfo) {
         if (instance_info->retiredSwapchainCount.load(
                 std::memory_order_acquire) == 0) {
             return;
         }
+        const auto queueIdentity = instance_info->queueIdentities.find(queue);
+        if (queueIdentity == instance_info->queueIdentities.end())
+            return;
+        const auto device = queueIdentity->second.device;
         std::vector<VkSwapchainKHR> candidates;
         {
-            const std::lock_guard retirementLock(
-                instance_info->retiredSwapchainsMutex
+            const auto retirementLock = lockSwapchainRetirement(
+                instance_info->retiredSwapchainsMutex, 0
             );
+            if (!retirementLock.owns_lock())
+                return;
             candidates.reserve(instance_info->retiredSwapchains.size());
             for (const auto& [retiredHandle, retired] :
                     instance_info->retiredSwapchains) {
@@ -2649,6 +2657,9 @@ namespace {
             }
             const VkResult nativeResult =
                 mapping->second.get().df().QueuePresentKHR(queue, info);
+            // A prior managed swapchain may still be retiring on this surface.
+            // Preserve native forwarding, then check its completion without waiting.
+            collectRetiredSwapchainsAfterPresent(queue, *info);
             return nativeResult;
         }
 
@@ -2864,11 +2875,7 @@ namespace {
                 swapchainOutOfDate = true;
         }
 
-        const auto queueIdentity = instance_info->queueIdentities.find(queue);
-        if (queueIdentity != instance_info->queueIdentities.end())
-            collectRetiredSwapchainsAfterPresent(
-                queueIdentity->second.device, *info
-            );
+        collectRetiredSwapchainsAfterPresent(queue, *info);
 
         // Preserve a genuine game/driver out-of-date result, or MAKO's guarded
         // one-shot live-scaling recreation request, across the present batch.

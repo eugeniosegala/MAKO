@@ -61,9 +61,11 @@ if(MAKO_BUILD_VK_LAYER OR MAKO_BUILD_CLI)
         VISIBILITY_INLINES_HIDDEN ON)
 endif()
 
-if(MAKO_BUILD_VK_LAYER)
+if(MAKO_BUILD_VK_LAYER OR BUILD_TESTING)
     find_package(Threads REQUIRED)
+endif()
 
+if(MAKO_BUILD_VK_LAYER)
     if(MAKO_REQUIRE_NATIVE_PACKAGE_HEADERS)
         # Run for each architecture even when tests are disabled. Compile the
         # actual filtering header with this build's compiler/include flags so
@@ -213,6 +215,8 @@ if(BUILD_TESTING)
 
     add_executable(mako-swapchain-retirement-tests
         "tests/swapchain_retirement_tests.cpp")
+    target_link_libraries(mako-swapchain-retirement-tests
+        PRIVATE Threads::Threads)
     target_include_directories(mako-swapchain-retirement-tests
         PRIVATE "src")
     add_test(NAME swapchain-retirement

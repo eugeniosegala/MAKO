@@ -6,7 +6,9 @@
 #include <array>
 #include <chrono>
 #include <cstddef>
+#include <cstdint>
 #include <cstring>
+#include <mutex>
 
 #include <vulkan/vulkan_core.h>
 
@@ -76,6 +78,19 @@ namespace mako::layer {
     // replacement presentation before the retired lower WSI is destroyed.
     inline constexpr auto swapchainRetirementGracePeriod =
         std::chrono::milliseconds(50);
+
+    /// Presentation polling must not wait behind a terminal retirement.
+    /// Nonzero timeouts belong to destruction boundaries and retain the
+    /// existing blocking mutex ownership before waiting for completion.
+    [[nodiscard]] inline std::unique_lock<std::mutex>
+    lockSwapchainRetirement(std::mutex& mutex, const uint64_t timeoutNs) {
+        std::unique_lock lock(mutex, std::defer_lock);
+        if (timeoutNs == 0)
+            static_cast<void>(lock.try_lock());
+        else
+            lock.lock();
+        return lock;
+    }
 
     /// Surface destruction is a terminal boundary only for lower swapchains
     /// created from that exact application-visible surface. A missing mapping

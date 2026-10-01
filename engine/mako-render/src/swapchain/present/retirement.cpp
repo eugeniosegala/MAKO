@@ -199,6 +199,28 @@ bool Swapchain::waitForPresentRetirement(
         }
         slot.associated = false;
     }
+    if (timeoutNs == 0) {
+        // Presentation can finish while history-only backend work is still
+        // running. Do not enter closeContext's bounded wait from a present.
+        try {
+            if (!this->sourceImages.empty() &&
+                    (!this->instance ||
+                     !this->instance->contextReady(this->ctx.get())))
+                return false;
+            if (this->frameState.renderFenceInFlight &&
+                    !this->renderFence->wait(vk, 0))
+                return false;
+            for (const auto& pass : this->spatialScalingPasses) {
+                if (pass.completionInFlight &&
+                        !pass.completionFence.wait(vk, 0))
+                    return false;
+            }
+        } catch (const std::exception& error) {
+            std::cerr << "MAKO Renderer: private work retirement poll failed: "
+                      << error.what() << '\n';
+            return false;
+        }
+    }
     return true;
 }
 
