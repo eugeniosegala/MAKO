@@ -37,8 +37,26 @@ using namespace mako::layer::present_detail;
 
 VkResult Swapchain::queuePresentWithRetirementFence(
         const vk::Vulkan& vk, const VkQueue queue,
-        const VkPresentInfoKHR& incomingPresentInfo) {
+        const VkPresentInfoKHR& incomingPresentInfo,
+        DiagnosticsClock::duration* const lowerPresentDuration) {
     VkPresentInfoKHR presentInfo = incomingPresentInfo;
+    if (lowerPresentDuration)
+        *lowerPresentDuration = {};
+    const bool measureLowerPresent = lowerPresentDuration &&
+        (presentDiagnosticsEnabled() ||
+         (this->privateOrderedTransport && this->gamescopeRefreshHz.value_or(0) > 0 &&
+          !this->gamescopePresentationFeedback.variableRefreshRequested()));
+    const auto present = [&](const VkPresentInfoKHR& info) {
+        // Measure only the driver/lower-layer call, after MAKO's timeline
+        // sleeps and retirement preparation. Recovery also needs this sample
+        // with logging disabled; unobserved paths pay no clock-read cost.
+        const auto started = measureLowerPresent
+            ? DiagnosticsClock::now() : DiagnosticsClock::time_point{};
+        const auto result = vk.df().QueuePresentKHR(queue, &info);
+        if (measureLowerPresent)
+            *lowerPresentDuration = DiagnosticsClock::now() - started;
+        return result;
+    };
     // Use the effective policy, not this frame's batch size: Fractional and
     // temporary native relief still belong to the active generated timeline.
     const bool generationEnabled = effectiveFrameGenerationEnabled(
@@ -70,7 +88,7 @@ VkResult Swapchain::queuePresentWithRetirementFence(
                         vk.dev(), presentInfo.pSwapchains[0])) {
                     this->wsiPresentTimingQuery = nullptr;
                     return this->queuePresentWithRetirementFence(
-                        vk, queue, incomingPresentInfo);
+                        vk, queue, incomingPresentInfo, lowerPresentDuration);
                 }
             }
             std::this_thread::sleep_until(slot->submitAt);
@@ -103,7 +121,7 @@ VkResult Swapchain::queuePresentWithRetirementFence(
     if (this->presentRetirementFences.empty() ||
             presentInfo.swapchainCount != 1 ||
             !presentInfo.pImageIndices) {
-        return vk.df().QueuePresentKHR(queue, &presentInfo);
+        return present(presentInfo);
     }
 
     if (const auto* upstreamFence =
@@ -119,7 +137,7 @@ VkResult Swapchain::queuePresentWithRetirementFence(
                          "recreation on protected final presents\n";
             this->externalPresentFenceLogged = true;
         }
-        const auto result = vk.df().QueuePresentKHR(queue, &presentInfo);
+        const auto result = present(presentInfo);
         this->lastLowerPresentRetirementProtected =
             upstreamPresentFenceProtectsSwapchain(upstreamFence) &&
             presentFenceWillSignal(result);
@@ -128,7 +146,7 @@ VkResult Swapchain::queuePresentWithRetirementFence(
 
     const uint32_t imageIndex = presentInfo.pImageIndices[0];
     if (imageIndex >= this->presentRetirementFences.size())
-        return vk.df().QueuePresentKHR(queue, &presentInfo);
+        return present(presentInfo);
 
     auto& slot = this->presentRetirementFences.at(imageIndex);
     try {
@@ -140,7 +158,7 @@ VkResult Swapchain::queuePresentWithRetirementFence(
                                  "this present will not trigger live recreation\n";
                     this->presentRetirementBusyLogged = true;
                 }
-                return vk.df().QueuePresentKHR(queue, &presentInfo);
+                return present(presentInfo);
             }
             slot.associated = false;
         }
@@ -150,7 +168,7 @@ VkResult Swapchain::queuePresentWithRetirementFence(
         std::cerr << "MAKO Renderer: presentation retirement fence preparation "
                      "failed; this present will not trigger live recreation: "
                   << error.what() << '\n';
-        return vk.df().QueuePresentKHR(queue, &presentInfo);
+        return present(presentInfo);
     }
 
     const VkFence fence = slot.fence.handle();
@@ -162,7 +180,7 @@ VkResult Swapchain::queuePresentWithRetirementFence(
     };
     auto protectedPresentInfo = presentInfo;
     protectedPresentInfo.pNext = &fenceInfo;
-    const auto result = vk.df().QueuePresentKHR(queue, &protectedPresentInfo);
+    const auto result = present(protectedPresentInfo);
     slot.used = true;
     slot.associated = presentFenceWillSignal(result);
     this->lastLowerPresentRetirementProtected = slot.associated;

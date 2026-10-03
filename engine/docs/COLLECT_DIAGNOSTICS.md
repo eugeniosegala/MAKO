@@ -89,6 +89,8 @@ The bridge timing record also separates `nonconsecutive_ids`, `repeated_timestam
 
 `--session previous`, `oldest`, `previous-two`, or `all` applies only when the selected base log has MAKO Decky's rotated session files. A standalone Steam console log has no such history.
 
+`ordered-transport-pressure` in the `recovery`, `performance`, or `all` preset means repeated slow successful acquire/present calls triggered bounded native relief on fixed-refresh ordered SDR. It reports `acquire_max_ms`, `lower_present_total_ms`, `refresh_hz`, `presented_outputs`, and `retry_ms`. Follow the existing `ordered-acquire-retry` and `ordered-acquire-recovered` records for the retry; pressure does not itself authorize swapchain recreation. Lower-present phase durations exclude MAKO’s intentional timeline and limiter waits.
+
 ## 4. Restore normal settings
 
 - Native Steam or Proton: restore `~/.local/bin/mako-launch %command%`.

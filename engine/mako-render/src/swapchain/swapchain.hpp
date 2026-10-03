@@ -562,7 +562,8 @@ namespace mako::layer {
             bool gamescopeHdrTransport);
         [[nodiscard]] VkResult queuePresentWithRetirementFence(
             const vk::Vulkan& vk, VkQueue queue,
-            const VkPresentInfoKHR& presentInfo);
+            const VkPresentInfoKHR& presentInfo,
+            std::chrono::steady_clock::duration* lowerPresentDuration = nullptr);
         VkResult retireAcquiredImagesAndPresent(const vk::Vulkan& vk,
             VkQueue queue, VkSwapchainKHR swapchain, const void* nextChain,
             uint32_t originalImageIndex,

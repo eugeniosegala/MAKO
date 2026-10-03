@@ -101,6 +101,26 @@ unrelated application output
 
 
 class DiagnosticsHelperTests(unittest.TestCase):
+    def test_pressure_and_shared_retry_records_survive_focused_presets(self):
+        records = (
+            "MAKO Renderer: present diagnostics: operation=ordered-transport-pressure "
+            "context=1 reason=repeated-successful-call-delay acquire_max_ms=30 "
+            "lower_present_total_ms=1 refresh_hz=120 presented_outputs=2 "
+            "retry_ms=250 action=native-drain\n"
+            "MAKO Renderer: present diagnostics: operation=ordered-acquire-retry "
+            "context=1 phase=history-warmup action=warm-history-before-one-frame-probe\n"
+            "MAKO Renderer: present diagnostics: operation=ordered-acquire-recovered "
+            "context=1 action=generated-resume\n"
+        )
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "diagnostics.log"
+            path.write_text(records, encoding="utf-8")
+            for preset in ("recovery", "performance", "all"):
+                with self.subTest(preset=preset):
+                    result = self._run("--log", str(path), preset)
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertEqual(result.stdout, records)
+
     def test_helper_uses_the_wrapper_log_contract(self):
         helper_source = HELPER.read_text(encoding="utf-8")
         self.assertIn(

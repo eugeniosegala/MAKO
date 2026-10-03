@@ -99,6 +99,16 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
 
     const auto limiterArrival = DiagnosticsClock::now();
     this->applyGamescopeFocus(limiterArrival);
+    if (this->recoveryState.orderedAcquireRecovery.updatePressureRefresh(
+            this->privateOrderedTransport &&
+                !this->gamescopePresentationFeedback.variableRefreshRequested()
+                ? this->gamescopeRefreshHz : std::nullopt)) {
+        // Do this before pacing and native-drain admission: that drain can
+        // otherwise prevent the next generated sample from observing VRR or
+        // a new refresh. Direct acquire-failure state remains authoritative.
+        this->ensureHistoryWarmup();
+        this->fixedRefreshBudget.reset();
+    }
     AdaptiveSchedulerSnapshot schedulerSnapshot;
     std::optional<size_t> handoffGenerationLimit;
     bool cadenceBaseCapEligible = false;
@@ -355,7 +365,7 @@ VkResult Swapchain::present(const vk::Vulkan& vk,
         if (recovery.bypassGeneration) {
             // Keep Adaptive's cadence clock current while freezing every
             // multiplier evaluation. No backend work or synthetic swapchain
-            // acquire is attempted until the direct-failure retry deadline.
+            // acquire is attempted until the transport-relief retry deadline.
             if (this->adaptiveScheduler) {
                 static_cast<void>(
                     this->adaptiveScheduler->planFrame(presentNow, true)
