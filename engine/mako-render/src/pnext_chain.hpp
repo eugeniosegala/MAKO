@@ -41,6 +41,29 @@ namespace mako::layer {
 #endif
     }
 
+    /// Read application completion pacing without changing its feature chain.
+    /// Both private-bridge feature negotiation and optional WSI timing use this
+    /// contract before creating the device; extension names alone do not enable it.
+    [[nodiscard]] inline bool requestsApplicationPresentWait(
+            const void* chain) noexcept {
+        while (chain) {
+            VkBaseInStructure node{};
+            std::memcpy(&node, chain, sizeof(node));
+            if (node.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR &&
+                    static_cast<const VkPhysicalDevicePresentWaitFeaturesKHR*>(chain)
+                        ->presentWait)
+                return true;
+#if defined(VK_KHR_present_wait2)
+            if (node.sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR &&
+                    static_cast<const VkPhysicalDevicePresentWait2FeaturesKHR*>(chain)
+                        ->presentWait2)
+                return true;
+#endif
+            chain = node.pNext;
+        }
+        return false;
+    }
+
     [[nodiscard]] inline bool hasPresentTiming(const void* chain) {
         while (chain) {
             VkBaseInStructure node{};

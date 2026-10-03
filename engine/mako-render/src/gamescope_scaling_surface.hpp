@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "pnext_chain.hpp"
+
 #include <cstddef>
 #include <memory>
 #include <optional>
@@ -39,26 +41,6 @@ namespace mako::layer {
                     ->presentWait2 = VK_FALSE;
 #endif
         }
-    }
-
-    /// Reject an explicit request for a feature we did not advertise. Never
-    /// silently rewrite the application's device-create chain or wait calls.
-    [[nodiscard]] inline bool requestsApplicationPresentWait(
-            const void* chain) noexcept {
-        for (auto* item = static_cast<const VkBaseInStructure*>(chain);
-                item; item = item->pNext) {
-            if (item->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR &&
-                    reinterpret_cast<const VkPhysicalDevicePresentWaitFeaturesKHR*>(item)
-                        ->presentWait)
-                return true;
-#if defined(VK_KHR_present_wait2)
-            if (item->sType == VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR &&
-                    reinterpret_cast<const VkPhysicalDevicePresentWait2FeaturesKHR*>(item)
-                        ->presentWait2)
-                return true;
-#endif
-        }
-        return false;
     }
 
     /// Headless probes and native Wayland instances need no X11 adapter.

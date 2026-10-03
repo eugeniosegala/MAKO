@@ -68,6 +68,58 @@ int main() {
         expect(!rendererOwnsDisplayTiming(appTimedDevice, true, true),
             "MAKO took an application's timing-feedback namespace");
     }
+    // A client can serialize source production on its real-frame present ID.
+    // Adding MAKO's future timestamp then feeds the generated-output lead back
+    // into the next source frame, even though the client owns no timing API.
+    // Extension availability alone does not enable that completion contract.
+    const std::array<const char*, 4> waitExtensions{
+        VK_KHR_SWAPCHAIN_EXTENSION_NAME, VK_KHR_PRESENT_ID_EXTENSION_NAME,
+        VK_KHR_PRESENT_WAIT_EXTENSION_NAME, "VK_KHR_present_wait2",
+    };
+    auto completionPacedDevice = untimedDevice;
+    completionPacedDevice.enabledExtensionCount =
+        static_cast<uint32_t>(waitExtensions.size());
+    completionPacedDevice.ppEnabledExtensionNames = waitExtensions.data();
+    expect(rendererOwnsDisplayTiming(completionPacedDevice, true, true),
+        "present-wait extension names alone disabled MAKO timing");
+    VkPhysicalDevicePresentWaitFeaturesKHR presentWait{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_FEATURES_KHR,
+        .presentWait = VK_TRUE,
+    };
+    VkPhysicalDeviceTimelineSemaphoreFeatures timeline{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_TIMELINE_SEMAPHORE_FEATURES,
+        .pNext = &presentWait,
+        .timelineSemaphore = VK_TRUE,
+    };
+    const VkPhysicalDeviceFeatures2 deviceFeatures{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+        .pNext = &timeline,
+    };
+    completionPacedDevice.pNext = &deviceFeatures;
+    expect(!rendererOwnsDisplayTiming(completionPacedDevice, true, true),
+        "WSI timestamps delayed an application's enabled present-wait contract");
+    expect(deviceFeatures.pNext == &timeline && timeline.pNext == &presentWait &&
+            timeline.timelineSemaphore == VK_TRUE &&
+            presentWait.presentWait == VK_TRUE && !presentWait.pNext,
+        "WSI eligibility rewrote the application's feature chain");
+    presentWait.presentWait = VK_FALSE;
+    expect(rendererOwnsDisplayTiming(completionPacedDevice, true, true),
+        "a disabled present-wait feature disabled MAKO timing");
+#if defined(VK_KHR_present_wait2)
+    VkPhysicalDevicePresentWait2FeaturesKHR presentWait2{
+        .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_PRESENT_WAIT_2_FEATURES_KHR,
+        .presentWait2 = VK_TRUE,
+    };
+    presentWait.pNext = &presentWait2;
+    expect(!rendererOwnsDisplayTiming(completionPacedDevice, true, true),
+        "WSI timestamps delayed an application's enabled present-wait2 contract");
+    expect(presentWait.pNext == &presentWait2 &&
+            presentWait2.presentWait2 == VK_TRUE && !presentWait2.pNext,
+        "WSI eligibility rewrote the application's present-wait2 feature");
+    presentWait2.presentWait2 = VK_FALSE;
+    expect(rendererOwnsDisplayTiming(completionPacedDevice, true, true),
+        "disabled completion features disabled asynchronous WSI timing");
+#endif
     for (const uint32_t pending : {0U, 1U, 127U, 128U, 10000U}) {
         pendingTimings = pending;
         timingCalls = 0;

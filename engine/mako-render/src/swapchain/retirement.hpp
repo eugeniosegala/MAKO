@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include "pnext_chain.hpp"
+
 #include <algorithm>
 #include <array>
 #include <chrono>
@@ -18,6 +20,11 @@ namespace mako::layer {
             const VkDeviceCreateInfo& createInfo,
             const bool gamescopeWsiEligible, const bool extensionSupported) {
         if (!gamescopeWsiEligible || !extensionSupported)
+            return false;
+        // A client may wait for its real present before producing the next
+        // source. Our generated-output lead would then throttle that source.
+        // Keep its wait contract and leave presentation timing to the client.
+        if (requestsApplicationPresentWait(createInfo.pNext))
             return false;
         for (uint32_t i = 0; i < createInfo.enabledExtensionCount; ++i) {
             const char* name = createInfo.ppEnabledExtensionNames[i];
