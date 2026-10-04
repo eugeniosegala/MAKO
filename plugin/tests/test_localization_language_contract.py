@@ -85,14 +85,12 @@ class LocalizationLanguageContractTests(unittest.TestCase):
         self.assertLessEqual(set(steam_aliases.values()), set(decky_metadata))
         self.assertEqual(steam_aliases["brazilian"], "pt-BR")
         self.assertEqual(steam_aliases["portuguese"], "pt-PT")
+        self.assertEqual(steam_aliases["german"], "de")
 
-    def test_japanese_shared_control_names_agree_across_independent_catalogs(self):
-        decky = json.loads(
-            (DECKY_I18N_ROOT / "ja.json").read_text(encoding="utf-8")
-        )
+    def test_shared_control_names_agree_across_independent_catalogs(self):
         renderer = json.loads(
             RENDERER_TRANSLATIONS.read_text(encoding="utf-8")
-        )["catalogs"]["ja"]
+        )["catalogs"]
         shared_controls = {
             "ADAPTIVE_TITLE": "adaptiveFrameGen",
             "FRACTIONAL_ADAPTIVE_PRESET": "fractionalAdaptive",
@@ -103,9 +101,13 @@ class LocalizationLanguageContractTests(unittest.TestCase):
             "SCALING_SUPERSAMPLING": "scalingSupersampling",
         }
 
-        for decky_key, renderer_key in shared_controls.items():
-            with self.subTest(control=decky_key):
-                self.assertEqual(decky[decky_key], renderer[renderer_key])
+        for language in ("ja", "de"):
+            decky = json.loads(
+                (DECKY_I18N_ROOT / f"{language}.json").read_text(encoding="utf-8")
+            )
+            for decky_key, renderer_key in shared_controls.items():
+                with self.subTest(language=language, control=decky_key):
+                    self.assertEqual(decky[decky_key], renderer[language][renderer_key])
 
 
 if __name__ == "__main__":

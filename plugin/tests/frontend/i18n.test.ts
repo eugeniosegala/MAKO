@@ -32,6 +32,10 @@ describe("i18n runtime", () => {
     expect(normalizeLanguage("pt-PT")).toBe("pt-PT");
     expect(normalizeLanguage("ukrainian")).toBe("uk");
     expect(normalizeLanguage("uk-UA")).toBe("uk");
+    expect(normalizeLanguage(" German ")).toBe("de");
+    expect(normalizeLanguage("de_DE")).toBe("de");
+    expect(normalizeLanguage("de-AT")).toBe("de");
+    expect(normalizeLanguage("de-CH")).toBe("de");
   });
 
   it("reports localized language names with a normalized fallback", () => {
@@ -39,6 +43,7 @@ describe("i18n runtime", () => {
     expect(getLanguageName("spanish")).toBe("Español");
     expect(getLanguageName("brazilian")).toBe("Português (Brasil)");
     expect(getLanguageName("ukrainian")).toBe("Українська");
+    expect(getLanguageName("german")).toBe("Deutsch");
   });
 
   it("uses the selected dictionary and replaces named placeholders", () => {
@@ -76,13 +81,39 @@ describe("i18n runtime", () => {
     );
   });
 
+  it.each(["german", "de_DE", "de-AT", "de-CH"])(
+    "uses German translations and placeholders for %s",
+    (locale) => {
+      setSteamLanguage(locale);
+      expect(getCurrentLanguage()).toBe("de");
+      expect(t("SCALING_ENABLED", "Enable Scaling (Restart)")).toBe(
+        "Skalierung aktivieren (Neustart)",
+      );
+      expect(
+        t("PROFILE_SAVE_RUNNING", "Save profile for {game}", {
+          game: "Portal 2",
+        }),
+      ).toBe("Profil für Portal 2 speichern");
+      expect(
+        t(
+          "LIVE_STATUS_SCALING_MEMORY_CONSTRAINED",
+          "Requested {requested}×; limited to {effective}× by this GPU's memory safety limit.",
+          { requested: 2, effective: 1.5 },
+        ),
+      ).toBe(
+        "Angefordert: 2×; durch die Speichersicherheitsgrenze dieser GPU auf 1.5× begrenzt.",
+      );
+      expect(t("NOT_A_REAL_KEY", "Safe fallback")).toBe("Safe fallback");
+    },
+  );
+
   it("uses the caller fallback for English, unknown languages, and unknown keys", () => {
     setSteamLanguage("english");
     expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
       "Frame Generation",
     );
 
-    setSteamLanguage("german");
+    setSteamLanguage("finnish");
     expect(t("CONTENT_FPS_MULTIPLIER", "Frame Generation")).toBe(
       "Frame Generation",
     );

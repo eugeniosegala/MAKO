@@ -174,6 +174,7 @@ test("uses localized restart markers only for process-start controls", async () 
   const { translations } = await auditI18n(pluginDirectory);
   const restartMarkers = {
     template: "(Restart)",
+    de: "(Neustart)",
     es: "(Reiniciar)",
     ja: "（再起動）",
     ko: "(재시작)",
