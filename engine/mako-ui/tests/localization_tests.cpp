@@ -28,7 +28,7 @@ QByteArray catalog_data() {
 void test_locale_selection(const QByteArray& catalog, const QString& temporary_path) {
     mako::ui::Localization brazil(catalog, temporary_path + "/brazil.ini", QLocale("pt_BR"));
     require(brazil.language() == QStringLiteral("pt-BR"), "Brazilian Portuguese was not detected");
-    require(brazil.language_names().size() == 8, "expected eight selectable languages");
+    require(brazil.language_names().size() == 9, "expected nine selectable languages");
     require(brazil.strings().value(QStringLiteral("language")).toString() == QStringLiteral("Idioma"),
             "Brazilian Portuguese catalog was not selected");
 
@@ -52,7 +52,12 @@ void test_locale_selection(const QByteArray& catalog, const QString& temporary_p
     mako::ui::Localization chinese(catalog, temporary_path + "/chinese.ini", QLocale("zh_CN"));
     require(chinese.language() == QStringLiteral("zh"), "Simplified Chinese was not detected");
 
-    mako::ui::Localization fallback(catalog, temporary_path + "/fallback.ini", QLocale("de_DE"));
+    mako::ui::Localization german(catalog, temporary_path + "/german.ini", QLocale("de_DE"));
+    require(german.language() == QStringLiteral("de"), "German was not detected");
+    require(german.strings().value(QStringLiteral("language")).toString() == QStringLiteral("Sprache"),
+            "German catalog was not selected");
+
+    mako::ui::Localization fallback(catalog, temporary_path + "/fallback.ini", QLocale("fi_FI"));
     require(fallback.language() == QStringLiteral("en"), "unsupported locales must use English");
 }
 
@@ -110,6 +115,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("ja"),
         QStringLiteral("uk"),
         QStringLiteral("zh"),
+        QStringLiteral("de"),
     };
     const QStringList restart_markers{
         QStringLiteral("(Restart)"),
@@ -120,6 +126,7 @@ void test_scaling_catalogs(const QByteArray& catalog, const QString& settings_fi
         QStringLiteral("（再起動）"),
         QStringLiteral("(перезапуск)"),
         QStringLiteral("（重启）"),
+        QStringLiteral("(Neustart)"),
     };
     const QStringList scaling_keys{
         QStringLiteral("scalingSettings"),
