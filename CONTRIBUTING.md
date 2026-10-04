@@ -22,6 +22,8 @@ Generated files must be updated through their owning generator. Do not edit gene
 
 The README gallery is generated from commit authors and `Co-authored-by` trailers on the current branch. After adding contributor work, add any new commit author or co-author name under its GitHub login in `scripts/contributors.json`, then run `python3 scripts/update-contributors.py` and include the README update. Multiple commit names can point to one account. The optional `additional_logins` list credits contributors who are not represented in Git history. Run `python3 scripts/update-contributors.py --check` to verify freshness; do not edit the generated gallery directly.
 
+Profile pictures use each contributor's GitHub avatar. To refresh cached pictures, increase `avatar_revision` in `scripts/contributors.json` (for example, to today's date as `YYYYMMDD`) and regenerate the gallery. Keep this revision fixed between refreshes so freshness checks remain deterministic.
+
 ## Validation
 
 Follow [AGENTS.md](AGENTS.md) and [TESTING.md](TESTING.md) for architecture, formatting, test selection, package verification, and real-hardware evidence. A contribution should state what passed and what was not tested without presenting skipped hardware coverage as evidence.

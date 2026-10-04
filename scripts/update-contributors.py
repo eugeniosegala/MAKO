@@ -56,8 +56,11 @@ def render():
     for login in logins:
         if not LOGIN.fullmatch(login):
             raise ValueError(f"Invalid GitHub login in scripts/contributors.json: {login!r}")
+    avatar_revision = config["avatar_revision"]
+    if type(avatar_revision) is not int or avatar_revision < 1:
+        raise ValueError("avatar_revision must be a positive integer")
     portraits = [
-        f'<a href="https://github.com/{login}"><img src="https://github.com/{login}.png?size=48" width="48" height="48" alt="@{login}" /></a>'
+        f'<a href="https://github.com/{login}"><img src="https://github.com/{login}.png?size=48&amp;v={avatar_revision}" width="48" height="48" alt="@{login}" /></a>'
         for login in sorted(logins, key=str.casefold)
     ]
     return START + "\n\n" + " ".join(portraits) + "\n" + END

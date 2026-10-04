@@ -38,7 +38,7 @@ Join the official <a href="https://discord.gg/NAVkyCq7Rc" target="_blank" rel="n
 
 Published Renderer packages currently target x86_64 Linux hosts and include layers for both 64-bit and 32-bit x86 game processes. Native AArch64/Armada packages are not included in this release.
 
-## ✨ Highlights
+## ✨ Feature Highlights
 
 - **Full-quality frame generation:** Lossless Scaling models from your licensed installation, with per-game quality and performance controls.
 - **Reduced ghosting:** Full-quality v2 with Lighter FG Model off can reduce ghosting; supported AMD GPUs gain extra safeguards. Results vary by game.
@@ -179,7 +179,7 @@ MAKO thanks everyone whose commits or co-authored work is in this repository. Th
 
 <!-- mako-contributors:start -->
 
-<a href="https://github.com/eugeniosegala"><img src="https://github.com/eugeniosegala.png?size=48" width="48" height="48" alt="@eugeniosegala" /></a> <a href="https://github.com/Hu2ki3"><img src="https://github.com/Hu2ki3.png?size=48" width="48" height="48" alt="@Hu2ki3" /></a> <a href="https://github.com/lordkaus"><img src="https://github.com/lordkaus.png?size=48" width="48" height="48" alt="@lordkaus" /></a> <a href="https://github.com/PJ568"><img src="https://github.com/PJ568.png?size=48" width="48" height="48" alt="@PJ568" /></a> <a href="https://github.com/Tak-attack"><img src="https://github.com/Tak-attack.png?size=48" width="48" height="48" alt="@Tak-attack" /></a> <a href="https://github.com/w169q169"><img src="https://github.com/w169q169.png?size=48" width="48" height="48" alt="@w169q169" /></a> <a href="https://github.com/WowOne987"><img src="https://github.com/WowOne987.png?size=48" width="48" height="48" alt="@WowOne987" /></a>
+<a href="https://github.com/eugeniosegala"><img src="https://github.com/eugeniosegala.png?size=48&amp;v=20261004" width="48" height="48" alt="@eugeniosegala" /></a> <a href="https://github.com/Hu2ki3"><img src="https://github.com/Hu2ki3.png?size=48&amp;v=20261004" width="48" height="48" alt="@Hu2ki3" /></a> <a href="https://github.com/lordkaus"><img src="https://github.com/lordkaus.png?size=48&amp;v=20261004" width="48" height="48" alt="@lordkaus" /></a> <a href="https://github.com/PJ568"><img src="https://github.com/PJ568.png?size=48&amp;v=20261004" width="48" height="48" alt="@PJ568" /></a> <a href="https://github.com/Tak-attack"><img src="https://github.com/Tak-attack.png?size=48&amp;v=20261004" width="48" height="48" alt="@Tak-attack" /></a> <a href="https://github.com/w169q169"><img src="https://github.com/w169q169.png?size=48&amp;v=20261004" width="48" height="48" alt="@w169q169" /></a> <a href="https://github.com/WowOne987"><img src="https://github.com/WowOne987.png?size=48&amp;v=20261004" width="48" height="48" alt="@WowOne987" /></a>
 <!-- mako-contributors:end -->
 
 See <a href="CONTRIBUTING.md">Contributing</a> to get involved.
