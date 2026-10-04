@@ -40,17 +40,17 @@ Published Renderer packages currently target x86_64 Linux hosts and include laye
 
 ## ✨ Highlights
 
-- 🖼️ **Full-quality frame generation:** Lossless Scaling models from your licensed installation, with per-game quality and performance controls.
-- 👻 **Reduced ghosting:** Full-quality v2 with Lighter FG Model off can reduce ghosting; supported AMD GPUs gain extra safeguards. Results vary by game.
-- 🔍 **Spatial scaling:** LS1 Quality, LS1 Performance, or the open MAKO Scaler, used alone or before frame generation.
-- 🎨 **Per-game shaders:** Live sharpening, anti-aliasing, colour, cinematic, and retro effects through bundled vkBasalt.
-- 🎯 **Adaptive Frame Generation:** Target 30–240 FPS with a selectable 2x–5x generation ceiling.
-- 🔄 **Display-aware pacing:** Adapts frame delivery to the presentation plan and Gamescope VRR state.
-- 🌈 **HDR groundwork:** HDR10/PQ and linear-scRGB foundations in MAKO Renderer; disabled in MAKO Decky pending validation.
-- 🧩 **64-bit and 32-bit x86 support:** Matching Vulkan layers for native and Flatpak games.
-- 🛡️ **Gamescope recovery:** Keeps native presentation running and resumes generation once game cadence stabilizes.
-- 🗂️ **Automatic profiles:** Saves per-game renderer and compatibility settings, matched by Steam app ID or process.
-- 🎮 **Launcher integration:** Per-game setup for Heroic, Lutris, and EmuDeck, including Steam shortcuts.
+- **Full-quality frame generation:** Lossless Scaling models from your licensed installation, with per-game quality and performance controls.
+- **Reduced ghosting:** Full-quality v2 with Lighter FG Model off can reduce ghosting; supported AMD GPUs gain extra safeguards. Results vary by game.
+- **Spatial scaling:** LS1 Quality, LS1 Performance, or the open MAKO Scaler, used alone or before frame generation.
+- **Per-game shaders:** Live sharpening, anti-aliasing, colour, cinematic, and retro effects through bundled vkBasalt.
+- **Adaptive Frame Generation:** Target 30–240 FPS with a selectable 2x–5x generation ceiling.
+- **Display-aware pacing:** Adapts frame delivery to the presentation plan and Gamescope VRR state.
+- **HDR groundwork:** HDR10/PQ and linear-scRGB foundations in MAKO Renderer; disabled in MAKO Decky pending validation.
+- **64-bit and 32-bit x86 support:** Matching Vulkan layers for native and Flatpak games.
+- **Gamescope recovery:** Keeps native presentation running and resumes generation once game cadence stabilizes.
+- **Automatic profiles:** Saves per-game renderer and compatibility settings, matched by Steam app ID or process.
+- **Launcher integration:** Per-game setup for Heroic, Lutris, and EmuDeck, including Steam shortcuts.
 
 ## What MAKO is
 
