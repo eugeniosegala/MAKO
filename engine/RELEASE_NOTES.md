@@ -17,5 +17,6 @@ Maelstrom improves Adaptive behavior in demanding scenes and compatibility with 
 - **Presentation recovery:** Swapchain retirement avoids blocking native fallback, and owned WSI timing feedback is drained in bounded batches.
 - **Steam menus in non-Steam games:** Better shortcut and Heroic/UMU recognition lets Steam and Quick Access menus pause generated frames on supported Game Mode launches, across Fixed and Adaptive modes.
 - **Flatpak VRR controls:** Standalone Flatpak games can use On/Off overrides during Frame Generation through the [host helper](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/FLATPAK-GUIDE.md#gamescope-vrr-overrides), without broader sandbox permissions. Requires Gamescope and a VRR-capable display; MAKO Decky starts discovery automatically.
+- **Shaders with Frame Generation:** The bundled vkBasalt checks its toggle key at most every 50 ms and keeps ReShade effect settings mapped, reducing CPU work on every generated and real frame. Effect GPU cost still scales with the multiplier.
 - **Correct Steam launch options:** The configuration app uses the installed launcher path, including `/usr/bin/mako-launch` for Arch packages.
 - **Scaling diagnostics:** Opt-in reports compare requested frame timing with compositor feedback to help investigate frame-delivery issues.
