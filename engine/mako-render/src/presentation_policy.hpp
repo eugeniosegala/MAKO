@@ -524,10 +524,11 @@ namespace mako::layer {
         size_t stableBatches{0};
     };
 
-    /// Ordered SDR acquire failures and sustained successful-call pressure
-    /// share bounded native relief and a fresh-history retry. Only an actual
-    /// acquire-budget failure after an explicit transition can authorize
-    /// recreation; elapsed time never asserts a Vulkan failure.
+    /// Recovers the ordered SDR transport only from explicit Vulkan acquire
+    /// failure. Successful calls are never reclassified from their duration,
+    /// FPS, device, resolution, or workload. An explicit menu return or live
+    /// generation-policy transition may authorize one recreation if the next
+    /// generated-image transport actually fails.
     class OrderedAcquireRecovery {
     public:
         using Clock = std::chrono::steady_clock;
@@ -619,8 +620,6 @@ namespace mako::layer {
                 const bool deadlineExceeded = false,
                 const bool boundedRecoveryProbe = false) {
             if (timedOut || deadlineExceeded) {
-                this->pressureRelief = false;
-                this->clearPressureSamples();
                 if (this->transitionRecreationArmed)
                     this->transitionTransportFailed = true;
                 return this->beginNativeDrain(
@@ -630,7 +629,6 @@ namespace mako::layer {
 
             const bool drainProbeRecovered = this->probePending;
             if (drainProbeRecovered) {
-                this->pressureRelief = false;
                 this->probePending = false;
                 this->retryAt.reset();
                 this->recoveryStartedAt.reset();
@@ -647,97 +645,6 @@ namespace mako::layer {
                 .consecutiveFailures = this->consecutiveFailures,
                 .bypassedFrames = this->bypassedFrames,
             };
-        }
-
-        /// Reconcile before deciding whether this present must bypass work.
-        /// VRR or a new refresh must not inherit fixed-refresh pressure, but
-        /// cannot clear a real acquire failure or a transition permission.
-        /// A cancelled relief episode requires fresh history before resuming.
-        [[nodiscard]] bool updatePressureRefresh(std::optional<uint32_t> refreshHz) {
-            if (refreshHz == 0)
-                refreshHz.reset();
-            if (this->pressureRefreshHz == refreshHz)
-                return false;
-            this->pressureRefreshHz = refreshHz;
-            this->clearPressureSamples();
-            this->pressureEpisodes = 0;
-            if (!this->pressureRelief)
-                return false;
-            this->pressureRelief = false;
-            this->retryAt.reset();
-            this->probePending = false;
-            this->recoveryStartedAt.reset();
-            this->consecutiveFailures = 0;
-            this->bypassedFrames = 0;
-            return true;
-        }
-
-        /// Call after observing a completed acquire batch and delivering its
-        /// real image. Inputs contain only Vulkan acquire/present call time:
-        /// no game interval, model work, limiter sleep, or MAKO timeline wait.
-        /// A missing fixed refresh disables this guard (including VRR).
-        [[nodiscard]] Observation observeSuccessfulPressure(
-                const TimePoint now,
-                const Duration maximumAcquireDuration,
-                const Duration totalPresentDuration,
-                const size_t presentedOutputs) {
-            if (!this->pressureRefreshHz || presentedOutputs < 2) {
-                this->clearPressureSamples();
-                this->pressureEpisodes = 0;
-                return {};
-            }
-            if (this->active())
-                return {};
-            if (this->lastPressureSampleAt &&
-                    now - *this->lastPressureSampleAt > std::chrono::seconds{1}) {
-                this->clearPressureSamples();
-            }
-            this->lastPressureSampleAt = now;
-
-            const auto periods = [this](const double count) {
-                return std::chrono::duration_cast<Duration>(
-                    std::chrono::duration<double>(count / *this->pressureRefreshHz));
-            };
-            const auto acquireThreshold = std::max<Duration>(
-                std::chrono::milliseconds{25}, periods(2));
-            // Allow a whole output batch plus one display period. Summing
-            // ordinary 3x-5x FIFO presents must not look like a stalled 2x.
-            const auto presentThreshold = std::max<Duration>(
-                std::chrono::milliseconds{50}, periods(presentedOutputs + 1));
-            const bool pressure = maximumAcquireDuration >= acquireThreshold ||
-                totalPresentDuration >= presentThreshold;
-            if (!pressure) {
-                if (!this->pressureHealthySince)
-                    this->pressureHealthySince = now;
-                if (now - *this->pressureHealthySince >= std::chrono::seconds{2})
-                    this->pressureEpisodes = 0;
-                return {};
-            }
-
-            this->pressureHealthySince.reset();
-            // Three slow batches in one second qualify even with healthy
-            // frames between them: periodic pressure can cause persistent
-            // stutter without ever producing consecutive slow calls.
-            const bool repeated = this->pressureSampleCount == this->pressureSamples.size() &&
-                now - this->pressureSamples.front() <= std::chrono::seconds{1};
-            if (this->pressureSampleCount < this->pressureSamples.size()) {
-                this->pressureSamples.at(this->pressureSampleCount++) = now;
-            } else {
-                this->pressureSamples.front() = this->pressureSamples.back();
-                this->pressureSamples.back() = now;
-            }
-            if (!repeated)
-                return {};
-
-            this->clearPressureSamples();
-            this->pressureEpisodes = std::min<size_t>(this->pressureEpisodes + 1, 7);
-            // A successful single-image probe cannot erase recurring pressure
-            // from the full workload. Reuse the finite acquire retry ladder,
-            // retaining its episode only until sustained healthy delivery.
-            this->consecutiveFailures = std::max(
-                this->consecutiveFailures, this->pressureEpisodes - 1);
-            this->pressureRelief = true;
-            return this->beginNativeDrain(now, false, false);
         }
 
         [[nodiscard]] bool active() const {
@@ -772,7 +679,6 @@ namespace mako::layer {
         reportNonblockingProbeUnavailable(
                 const TimePoint now) {
             if (this->probePending) {
-                this->pressureRelief = false;
                 this->bypassedFrames++;
                 if (this->transitionRecreationArmed)
                     this->transitionTransportFailed = true;
@@ -819,19 +725,9 @@ namespace mako::layer {
             this->bypassedFrames = 0;
             this->transitionRecreationArmed = false;
             this->transitionTransportFailed = false;
-            this->clearPressureSamples();
-            this->pressureEpisodes = 0;
-            this->pressureRelief = false;
-            this->pressureRefreshHz.reset();
         }
 
     private:
-        void clearPressureSamples() {
-            this->pressureSampleCount = 0;
-            this->pressureHealthySince.reset();
-            this->lastPressureSampleAt.reset();
-        }
-
         [[nodiscard]] Observation beginNativeDrain(const TimePoint now,
                 const bool timedOut, const bool deadlineExceeded) {
             if (!this->recoveryStartedAt)
@@ -875,13 +771,6 @@ namespace mako::layer {
         bool transitionRecreationArmed{false};
         bool transitionTransportFailed{false};
         bool recreationSignaled{false};
-        std::array<TimePoint, 2> pressureSamples{};
-        size_t pressureSampleCount{0};
-        std::optional<TimePoint> pressureHealthySince;
-        std::optional<TimePoint> lastPressureSampleAt;
-        size_t pressureEpisodes{0};
-        bool pressureRelief{false};
-        std::optional<uint32_t> pressureRefreshHz;
     };
 
     /// The configured application-present budget is the transport contract.

@@ -451,10 +451,11 @@ VkResult Swapchain::presentGeneratedFrames(
         else if (invocation.originalPresentDeadline)
             invocation.waitForOutput(*invocation.originalPresentDeadline);
         const auto generatedPresentStarted = startPresentDiagnostic();
-        auto oneGeneratedPresentDuration = DiagnosticsClock::duration::zero();
         result = this->queuePresentWithRetirementFence(
-            invocation.vk, invocation.queue, presentInfo,
-            &oneGeneratedPresentDuration
+            invocation.vk, invocation.queue, presentInfo
+        );
+        const auto oneGeneratedPresentDuration = finishPresentDiagnostic(
+            generatedPresentStarted
         );
         generatedPresentDuration += oneGeneratedPresentDuration;
         logSlowPresentOperation(
@@ -554,40 +555,6 @@ VkResult Swapchain::presentGeneratedFrames(
     this->reportAdaptiveDelivery(
         plan, plan.scheduledGeneratedFrames.size()
     );
-    if (!originalPresentRequestedRecreation) {
-        // Preflight already owns zero-wait admission or a bounded retry. Its
-        // diagnostic aggregate is not a maximum sequential acquire sample.
-        const auto pressureAcquireDuration = plan.generatedImagesPreacquired
-            ? DiagnosticsClock::duration::zero() : maximumAcquireDuration;
-        const auto pressure = this->recoveryState.orderedAcquireRecovery
-            .observeSuccessfulPressure(
-                DiagnosticsClock::now(),
-                pressureAcquireDuration,
-                generatedPresentDuration + originalPresentDuration,
-                plan.scheduledGeneratedFrames.size() + 1);
-        if (pressure.quarantined) {
-            this->fixedRefreshBudget.reset();
-            if (presentDiagnosticsEnabled()) {
-                std::cerr << "MAKO Renderer: present diagnostics: "
-                             "operation=ordered-transport-pressure"
-                          << " context=" << this->diagnosticsState.contextId
-                          << " reason=repeated-successful-call-delay"
-                          << " acquire_max_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 pressureAcquireDuration).count()
-                          << " lower_present_total_ms="
-                          << std::chrono::duration<double, std::milli>(
-                                 generatedPresentDuration + originalPresentDuration).count()
-                          << " refresh_hz=" << this->gamescopeRefreshHz.value_or(0)
-                          << " presented_outputs=" << plan.scheduledGeneratedFrames.size() + 1
-                          << " retry_ms="
-                          << std::chrono::duration<double, std::milli>(pressure.retryDelay).count()
-                          << " frame=" << this->frameState.realFrameIndex
-                          << " sequence=" << this->frameState.sequenceIndex
-                          << " action=native-drain\n";
-            }
-        }
-    }
     logSlowPresentBreakdown(
         this->diagnosticsState.contextId, this->frameState.realFrameIndex,
         this->frameState.sequenceIndex, presentWorkDuration,

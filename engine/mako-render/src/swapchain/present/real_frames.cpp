@@ -250,8 +250,10 @@ VkResult Swapchain::presentOriginalImage(
         invocation.waitForOutput(*invocation.originalPresentDeadline);
     const auto originalPresentStarted = startPresentDiagnostic();
     const auto result = this->queuePresentWithRetirementFence(
-        invocation.vk, invocation.queue, presentInfo, duration
+        invocation.vk, invocation.queue, presentInfo
     );
+    if (duration)
+        *duration = finishPresentDiagnostic(originalPresentStarted);
     logSlowPresentOperation(
         "present-original-image", this->frameState.realFrameIndex, this->frameState.sequenceIndex,
         originalPresentStarted, result, std::nullopt, invocation.imageIndex

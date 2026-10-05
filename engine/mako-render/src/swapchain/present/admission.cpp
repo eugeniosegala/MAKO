@@ -136,9 +136,9 @@ Swapchain::PresentationFramePlan Swapchain::prepareFramePlan(
             this->configuredFixedGeneratedFrames,
             fixedSmoothCadenceFullMultiplier
         );
-    // Fixed is a user-selected workload. Explicit menu/lifecycle transitions,
-    // transport failures, and measured transport pressure may interrupt it;
-    // ordinary gameplay cadence never infers a recovery episode.
+    // Fixed is a user-selected workload. Only explicit menu/lifecycle
+    // transitions and direct transport failures may interrupt it; ordinary
+    // gameplay cadence is never used to infer a recovery episode.
     if (!schedulerEnabled &&
             fixedGeneratedFrameCount <
                 this->configuredFixedGeneratedFrames) {

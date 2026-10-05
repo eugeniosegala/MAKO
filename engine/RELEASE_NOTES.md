@@ -14,7 +14,7 @@ Maelstrom improves Adaptive behavior in demanding scenes and compatibility with 
 
 - **Adaptive stability:** Steady and Fractional Adaptive remember unsuccessful Smooth Cadence multiplier reductions through brief stalls and menu returns. Sustained delivery at a lower generated load can qualify a fresh comparison when the scene changes.
 - **Frame pacing:** Capped Fractional output keeps its intended spacing, and ordered output retains GPU readiness time. Gamescope WSI timing respects applications that wait for frame presentation, while the private scaling bridge negotiates compatible completion pacing at startup.
-- **Presentation recovery:** Repeated slow image acquisition or presentation can trigger a temporary pause in generation with bounded retries. Swapchain retirement avoids blocking native fallback, and owned WSI timing feedback is drained in bounded batches.
+- **Presentation recovery:** Swapchain retirement avoids blocking native fallback, and owned WSI timing feedback is drained in bounded batches.
 - **Steam menus in non-Steam games:** Better shortcut and Heroic/UMU recognition lets Steam and Quick Access menus pause generated frames on supported Game Mode launches, across Fixed and Adaptive modes.
 - **Flatpak VRR controls:** Standalone Flatpak games can use On/Off overrides during Frame Generation through the [host helper](https://github.com/eugeniosegala/MAKO/blob/main/engine/docs/FLATPAK-GUIDE.md#gamescope-vrr-overrides), without broader sandbox permissions. Requires Gamescope and a VRR-capable display; MAKO Decky starts discovery automatically.
 - **Correct Steam launch options:** The configuration app uses the installed launcher path, including `/usr/bin/mako-launch` for Arch packages.
