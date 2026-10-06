@@ -17,10 +17,13 @@ import {
 } from "../../src/api/makoApi";
 vi.mock("@decky/ui", () => ({
   PanelSectionRow: ({ children }: any) => <div>{children}</div>,
-  ButtonItem: ({ children, onClick, disabled }: any) => (
-    <button onClick={onClick} disabled={disabled}>
-      {children}
-    </button>
+  ButtonItem: ({ children, description, onClick, disabled }: any) => (
+    <>
+      <button onClick={onClick} disabled={disabled}>
+        {children}
+      </button>
+      {description}
+    </>
   ),
 }));
 vi.mock("../../src/i18n/i18n", () => ({

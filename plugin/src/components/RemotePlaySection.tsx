@@ -164,6 +164,22 @@ export function RemotePlaySection({
               <ButtonItem
                 layout="below"
                 bottomSeparator="none"
+                description={
+                  <MakoInfo
+                    className="Mako_OptionDescription"
+                    style={{
+                      color: "#aebfc5",
+                      fontSize: "10px",
+                      fontWeight: 400,
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    {t(
+                      "REMOTE_PLAY_DESCRIPTION",
+                      "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+                    )}
+                  </MakoInfo>
+                }
                 onClick={() => void toggle()}
                 disabled={
                   !status?.success ||
@@ -179,20 +195,6 @@ export function RemotePlaySection({
                     : t("REMOTE_PLAY_INSTALL", "Override Remote Play")}
               </ButtonItem>
             </div>
-            <MakoInfo
-              className="Mako_OptionDescription"
-              style={{
-                color: "#aebfc5",
-                fontSize: "10px",
-                fontWeight: 400,
-                lineHeight: 1.4,
-              }}
-            >
-              {t(
-                "REMOTE_PLAY_DESCRIPTION",
-                "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
-              )}
-            </MakoInfo>
             <div
               data-mako-remote-play-status={state}
               style={{ ...makoPanelStyle, width: "100%" }}
