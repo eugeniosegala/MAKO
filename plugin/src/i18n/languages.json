@@ -406,7 +406,17 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   },
   "es": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -815,7 +825,17 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   },
   "ja": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "高度なオプションは {path} で編集できます。MAKO は上記のコントロールのみを統合し、その他の設定はすべて保持します。手動による高度な変更は次回の起動時に適用されます。デフォルトプロファイルはこのグローバルファイルを使用します。",
@@ -1224,7 +1244,17 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   },
   "ko": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -1633,7 +1663,17 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   },
   "language_metadata": {
     "en": {
@@ -2071,7 +2111,17 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   },
   "pt-PT": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -2480,7 +2530,17 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   },
   "steam_language_map": {
     "english": "en",
@@ -2903,7 +2963,17 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   },
   "uk": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -3312,7 +3382,17 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   },
   "zh": {
     "CONFIG_VKBASALT_ADVANCED_GLOBAL_NOTE": "Advanced options can be edited in {path}. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. The Default profile uses this global file.",
@@ -3721,6 +3801,16 @@
     "CONFIG_VKBASALT_CUSTOM_ADD": "Add Custom Shader",
     "CONFIG_VKBASALT_CUSTOM_REFRESH": "Refresh",
     "CONFIG_VKBASALT_CUSTOM_DELETE": "Delete selected custom shaders",
-    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+    "CONFIG_VKBASALT_CUSTOM_HELP": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+    "REMOTE_PLAY_TITLE": "Remote Play",
+    "REMOTE_PLAY_WORKING": "Working…",
+    "REMOTE_PLAY_REMOVE": "Remove Remote Play Override",
+    "REMOTE_PLAY_INSTALL": "Override Remote Play",
+    "REMOTE_PLAY_DESCRIPTION": "Uses the Remote Play profile for native Steam streams. Replaces Steam’s streaming client with a wrapper and preserves the original for removal. Close streams before changing it; Steam updates may require reinstalling the override. Steam Link and browser streaming are not supported.",
+    "REMOTE_PLAY_ACTIVE": "Remote Play — frame generation active",
+    "REMOTE_PLAY_RUNNING": "Remote Play running — frame generation inactive",
+    "REMOTE_PLAY_READY": "Override installed — waiting for a stream",
+    "REMOTE_PLAY_UNAVAILABLE": "Native Steam streaming client unavailable",
+    "REMOTE_PLAY_OFF": "Remote Play override not installed"
   }
 }

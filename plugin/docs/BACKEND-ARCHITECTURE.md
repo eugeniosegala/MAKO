@@ -11,6 +11,7 @@ MAKO Decky's Python backend translates UI requests into canonical profile data, 
 | Pure launcher generation | `py_modules/mako_plugin/wrapper_generation.py` | Emits the current wrapper format from normalized inputs; no runtime import from MAKO Renderer. |
 | Atomic replacement and rollback | `py_modules/mako_plugin/managed_files.py` and `installation.py` | The helper owns file primitives; installation owns the native payload transaction and selected Renderer identity. |
 | Flatpak setup | `py_modules/mako_plugin/flatpak_service.py` | Detects runtime extensions and manages application overrides outside the native installation transaction. |
+| Native Remote Play override | `py_modules/mako_plugin/remote_play.py` and `remote_play_launch.py` | Owns explicit Steam entry-point installation, verified restoration, exact client detection, and the self-contained launch payload; delegates feature and power policy to the existing `mako-run`. |
 | Runtime status | `py_modules/mako_plugin/runtime_state.py` | Validates and reads MAKO Renderer's atomic status records; it does not apply profile changes. |
 | Paths and stable identifiers | `py_modules/mako_plugin/base_service.py`, `constants.py`, and `package_paths.py` | Resolve the Decky user's paths, packaged payloads, and compatibility names. |
 
@@ -27,3 +28,7 @@ Keep orchestration in `ConfigurationService` and `InstallationService` when an o
 ## Flatpak VRR discovery lifecycle
 
 `plugin.py` starts and stops the installed Renderer `mako-vrr-lease --watch-flatpak` host monitor on plugin load/unload and Renderer install/uninstall. The helper owns bounded runtime-status discovery, namespace process validation, compositor verification, and detached game leases. Decky does not implement a second VRR writer; detached leases survive plugin reload to preserve exit restoration. Missing helpers or a different user identity leave discovery disabled.
+
+## Native Remote Play lifecycle
+
+`Plugin` coordinates `ConfigurationService.ensure_remote_play_profile()` and `RemotePlayService.install_locked()` under the configuration lock, a native-client launch lease, and one explicit file snapshot. Existing profiles and power tables survive reinstall; new profiles start with normal schema defaults and Fixed 2x streaming settings. Status and mutation RPCs run filesystem/process work off the async event loop. Uninstalled status avoids process and Renderer-status scanning. The wrapper inherits its shared lease through the exec chain, preserving installation/removal exclusion during launch preparation and the stream lifetime. Decky uninstall restores the Steam entry point first; failed restoration preserves Renderer files. See [Remote Play](REMOTE-PLAY.md) and [transaction boundaries](../../INSTALLATION-TRANSACTIONS.md#native-remote-play-override).

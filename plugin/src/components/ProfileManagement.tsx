@@ -101,6 +101,8 @@ interface ProfileManagementProps {
   editingProfile?: string;
   onProfileChange?: (profileName: string) => void | Promise<void>;
   mainRunningApp?: AppOverview;
+  sessionRunning?: boolean;
+  profileRevision?: number;
   topMargin?: CSSProperties["marginTop"];
 }
 
@@ -109,6 +111,8 @@ export function ProfileManagement({
   onProfileChange,
   mainRunningApp,
   topMargin,
+  sessionRunning = false,
+  profileRevision,
 }: ProfileManagementProps) {
   const [focusedAction, setFocusedAction] = useState<"edit" | "delete" | null>(
     null,
@@ -132,6 +136,7 @@ export function ProfileManagement({
     editingProfile,
     onProfileChange,
     mainRunningApp,
+    profileRevision,
   });
 
   const showRenameProfile = () => {
@@ -250,7 +255,7 @@ export function ProfileManagement({
                 rgOptions={profileOptions}
                 selectedOption={selectedProfile}
                 onChange={(option) => void switchProfile(String(option.data))}
-                disabled={isLoading || !!mainRunningApp}
+                disabled={isLoading || !!mainRunningApp || sessionRunning}
               />
             </Field>
           </PanelSectionRow>
@@ -346,7 +351,8 @@ export function ProfileManagement({
                   disabled={
                     isLoading ||
                     selectedProfile === DEFAULT_PROFILE_NAME ||
-                    !!mainRunningApp
+                    !!mainRunningApp ||
+                    sessionRunning
                   }
                 >
                   <RiEditLine size={16} />
@@ -375,7 +381,8 @@ export function ProfileManagement({
                   disabled={
                     isLoading ||
                     selectedProfile === DEFAULT_PROFILE_NAME ||
-                    !!mainRunningApp
+                    !!mainRunningApp ||
+                    sessionRunning
                   }
                 >
                   <RiDeleteBinLine size={16} />

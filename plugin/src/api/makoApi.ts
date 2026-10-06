@@ -171,6 +171,7 @@ export interface ProfileResult {
   changed?: Nullable<boolean>;
   game_running?: Nullable<boolean>;
   power_source?: string;
+  remote_play_running?: Nullable<boolean>;
   message: string;
   error: Nullable<string>;
 }
@@ -329,6 +330,22 @@ export const deleteProfileShaders = callable<[string, string[]], ConfigResult>(
 export const getRuntimeStatus = callable<[string?], RuntimeStatusResult>(
   "get_runtime_status",
 );
+export interface RemotePlayResult {
+  success: boolean;
+  message: string;
+  error: Nullable<string>;
+  installed: boolean;
+  managed: boolean;
+  available: boolean;
+  running: boolean;
+  frame_generation_active: boolean;
+  profile_name: string;
+  pids: number[];
+  conflict: boolean;
+}
+export const getRemotePlayStatus = callable<[], RemotePlayResult>("get_remote_play_status");
+export const installRemotePlayOverride = callable<[], RemotePlayResult>("install_remote_play_override");
+export const removeRemotePlayOverride = callable<[], RemotePlayResult>("remove_remote_play_override");
 export const getConfigSchema = callable<[], ConfigSchemaResult>(
   "get_config_schema",
 );

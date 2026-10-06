@@ -40,6 +40,7 @@ from py_modules.mako_plugin.types import (  # noqa: E402
     RuntimeProfileSnapshot,
     RuntimeSpatialScalingState,
     RuntimeStatusResponse,
+    RemotePlayResponse,
     ModelStatusResponse,
 )
 
@@ -150,6 +151,7 @@ class RpcContractTests(unittest.TestCase):
             RuntimeSpatialScalingState: "RuntimeSpatialScalingState",
             RuntimeContextState: "RuntimeContextState",
             RuntimeStatusResponse: "RuntimeStatusResult",
+            RemotePlayResponse: "RemotePlayResult",
             FlatpakApp: "FlatpakApp",
             FlatpakAppInfo: "FlatpakAppInfo",
             FlatpakOverrideResponse: "FlatpakOperationResult",

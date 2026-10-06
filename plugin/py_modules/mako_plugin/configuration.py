@@ -1042,6 +1042,44 @@ class ConfigurationService(BaseService):
             self.log.error(error_msg)
             return self._error_response(ProfileResponse, str(e), profile_name=None)
 
+    def ensure_remote_play_profile(self, profile_name: str) -> None:
+        """Create the dedicated native streaming profile without cloning power sets.
+
+        The caller holds the configuration lock and snapshots the canonical
+        files together with the Steam override installation transaction.
+        """
+        data = self._get_profile_data()
+        if profile_name not in data["profiles"]:
+            defaults = ConfigurationManager.get_defaults()
+            defaults.update(data["global_config"])
+            defaults.update({
+                "active_in": "streaming_client, streaming_client.mako-original",
+                "frame_generation_provisioned": True,
+                "frame_generation_enabled": True,
+                "multiplier": 2, "adaptive": False,
+                "base_fps_cap": 30, "target_fps": 60,
+                "scaling_enabled": False,
+            })
+            data["profiles"][profile_name] = ConfigurationManager.validate_config(defaults)
+            metadata = self._read_profile_metadata(data)
+            metadata[profile_name] = profile_storage.profile_metadata_entry(
+                "Remote Play", PROFILE_KIND_PROCESS,
+            )
+            settings = self._read_wrapper_profile_settings()
+            settings[profile_name] = self._normalize_wrapper_settings(defaults)
+            self._save_profile_data(data)
+            # New defaults have no shader integration to prepare. Persist only
+            # the sidecar, avoiding unrelated shader migrations outside this transaction.
+            profile_storage.write_wrapper_profile_settings(
+                self.config_dir, self.wrapper_profile_settings_path,
+                self._WRAPPER_PROFILE_SETTINGS_VERSION, settings,
+                self._write_file, self._normalize_wrapper_settings,
+            )
+            self._write_profile_metadata(metadata)
+        result = self.update_mako_script_from_profile_data(data)
+        if not result["success"]:
+            raise OSError(result.get("error") or "Could not prepare Remote Play launch wrapper")
+
     def delete_profile(self, profile_name: str) -> ProfileResponse:
         """Delete a profile
 
@@ -1333,9 +1371,11 @@ class ConfigurationService(BaseService):
             self.log.error(error_msg)
             return self._error_response(ProfileResponse, str(e), profile_name=None)
 
-    def sync_current_profile(self, app_id: str = "") -> ProfileResponse:
-        """Select the saved profile matching a live Steam app process.
+    def sync_current_profile(self, app_id: str = "", remote_profile: str = "") -> ProfileResponse:
+        """Select the saved profile matching a live game or native stream.
 
+        remote_profile is supplied internally after exact native-client detection;
+        it never comes from the public RPC caller or a Steam AppID guess.
         A Steam running-app record can outlive its game process briefly. Never
         retain or select a game profile from the app ID alone: require at least
         one live process carrying that ID, then prefer the previously captured
@@ -1354,8 +1394,9 @@ class ConfigurationService(BaseService):
                     normalized_app_id
                 )
 
-            target_profile = DEFAULT_PROFILE_NAME
-            if detected_processes:
+            remote_running = bool(remote_profile and remote_profile in profile_data["profiles"])
+            target_profile = remote_profile if remote_running else DEFAULT_PROFILE_NAME
+            if detected_processes and not remote_running:
                 target_profile = next((
                     profile_name
                     for profile_name in metadata
@@ -1417,7 +1458,8 @@ class ConfigurationService(BaseService):
                 profile_name=target_profile,
                 profile=detail,
                 changed=changed,
-                game_running=bool(detected_processes),
+                game_running=bool(detected_processes) or remote_running,
+                remote_play_running=remote_running,
                 power_source=detect_power_source(),
             )
         except (OSError, IOError, ValueError, TypeError, json.JSONDecodeError) as error:

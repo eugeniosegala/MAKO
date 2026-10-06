@@ -191,3 +191,25 @@ describe("profile runtime session", () => {
     expect(loadProfileConfig).toHaveBeenCalledWith("offline-profile");
   });
 });
+
+test("native streams without an AppID follow Remote Play and refresh its power set", async () => {
+  vi.useFakeTimers();
+  decky.router.MainRunningApp = undefined;
+  const loadProfileConfig = vi.fn(async()=>undefined);
+  const syncCurrentProfile = vi.fn().mockResolvedValue({success:true,game_running:true,remote_play_running:true,profile_name:"Remote-Play",power_source:"handheld"});
+  const {result,unmount}=renderHook(()=>useProfileSession({isInstalled:true,loadProfileConfig,syncCurrentProfile}));
+  await act(async()=>Promise.resolve());
+  expect(result.current.editingProfile).toBe("Remote-Play");
+  expect(result.current.remotePlayRunning).toBe(true);
+  expect(result.current.mainRunningApp).toBeUndefined();
+  loadProfileConfig.mockClear();
+  syncCurrentProfile.mockResolvedValue({success:true,game_running:true,remote_play_running:true,profile_name:"Remote-Play",power_source:"docked"});
+  await act(async()=>vi.advanceTimersByTimeAsync(2000));
+  expect(loadProfileConfig).toHaveBeenCalledWith("Remote-Play");
+  syncCurrentProfile.mockResolvedValue({success:true,game_running:false,remote_play_running:false,profile_name:"mako",power_source:"docked"});
+  await act(async()=>vi.advanceTimersByTimeAsync(2000));
+  expect(result.current.remotePlayRunning).toBe(false);
+  expect(result.current.editingProfile).toBe("mako");
+  unmount();
+  vi.useRealTimers();
+});

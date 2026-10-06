@@ -18,6 +18,8 @@ from .installation import InstallationService
 from .dll_detection import DllDetectionService
 from .configuration import ConfigurationService
 from .runtime_state import RuntimeStateService
+from .remote_play import RemotePlayService, REMOTE_PLAY_PROFILE
+from .managed_files import managed_install_transaction
 from .config_schema import ConfigurationManager, DEFAULT_PROFILE_NAME
 from .config_schema_generated import ConfigurationPatch
 from .flatpak_service import (
@@ -39,6 +41,7 @@ from .types import (
     ProfileResponse,
     ProfilesResponse,
     RuntimeStatusResponse,
+    RemotePlayResponse,
     ModelStatusResponse,
 )
 
@@ -58,6 +61,7 @@ class Plugin:
         self.dll_detection_service = DllDetectionService()
         self.configuration_service = ConfigurationService()
         self.runtime_state_service = RuntimeStateService()
+        self.remote_play_service = RemotePlayService()
         self.flatpak_service = FlatpakService()
         self._flatpak_vrr_monitor: asyncio.subprocess.Process | None = None
 
@@ -110,8 +114,50 @@ class Plugin:
         Returns:
             UninstallationResponse dict with success status and removed files
         """
+        try:
+            await asyncio.to_thread(self.remote_play_service.restore_before_uninstall)
+        except (OSError, ValueError) as error:
+            return self.installation_service._error_response(InstallationResult, str(error))
         await self._stop_flatpak_vrr_monitor()
         return self.installation_service.uninstall()
+
+    async def get_remote_play_status(self) -> RemotePlayResponse:
+        def read():
+            status = self.remote_play_service.get_status()
+            if not status["installed"] or not status["running"]:
+                return status
+            runtime = self.runtime_state_service.get_status(REMOTE_PLAY_PROFILE)
+            return self.remote_play_service.get_status(runtime["contexts"])
+        return await asyncio.to_thread(read)
+
+    def _install_remote_play_override(self) -> None:
+        remote = self.remote_play_service
+        configuration = self.configuration_service
+        with remote.mutation(), configuration._configuration_write_lock:
+            paths = [remote.client, remote.backup, remote.checksum, remote.state,
+                     configuration.config_file_path, configuration.profile_metadata_path,
+                     configuration.wrapper_profile_settings_path, configuration.mako_script_path]
+            with managed_install_transaction(paths, remote.log):
+                configuration.ensure_remote_play_profile(REMOTE_PLAY_PROFILE)
+                remote.install_locked()
+
+    async def install_remote_play_override(self) -> RemotePlayResponse:
+        try:
+            await asyncio.to_thread(self._install_remote_play_override)
+        except (OSError, ValueError, TypeError) as error:
+            result = await self.get_remote_play_status()
+            result.update(success=False, error=str(error), message=str(error))
+            return result
+        return await self.get_remote_play_status()
+
+    async def remove_remote_play_override(self) -> RemotePlayResponse:
+        try:
+            await asyncio.to_thread(self.remote_play_service.remove)
+        except (OSError, ValueError, TypeError) as error:
+            result = await self.get_remote_play_status()
+            result.update(success=False, error=str(error), message=str(error))
+            return result
+        return await self.get_remote_play_status()
 
     async def check_lossless_scaling_dll(self, dll: str = "") -> DllDetectionResponse:
         """Check the saved DLL path, or discover a copy when the path is empty.
@@ -343,7 +389,9 @@ class Plugin:
 
     async def sync_current_profile(self, app_id: str = "") -> ProfileResponse:
         """Select a live app's saved profile, or restore the default profile."""
-        return self.configuration_service.sync_current_profile(app_id)
+        remote = await asyncio.to_thread(self.remote_play_service.get_status)
+        remote_profile = REMOTE_PLAY_PROFILE if remote["installed"] and remote["running"] else ""
+        return self.configuration_service.sync_current_profile(app_id, remote_profile)
 
     async def update_profile_config(
             self, profile_name: str, config: Dict[str, Any]
@@ -707,6 +755,12 @@ class Plugin:
         decky.logger.info("MAKO Decky is being uninstalled")
 
         await self._stop_flatpak_vrr_monitor()
+
+        try:
+            await asyncio.to_thread(self.remote_play_service.restore_before_uninstall)
+        except (OSError, ValueError) as error:
+            decky.logger.error("MAKO Decky: Remote Play restoration blocked; preserving Renderer files: %s", error)
+            return
 
         # Clean up MAKO Renderer files when the plugin is uninstalled
         self.installation_service.cleanup_on_uninstall()

@@ -70,6 +70,34 @@ describe("profile editor model", () => {
     expect(mocks.captureGameProfile).not.toHaveBeenCalled();
   });
 
+  test("refreshes a newly installed process profile without changing the offline selection", async () => {
+    const { result, rerender } = renderHook(
+      ({ profileRevision }) =>
+        useProfileEditorModel({ editingProfile: "mako", profileRevision }),
+      { initialProps: { profileRevision: 0 } },
+    );
+    await waitFor(() => expect(result.current.profileOptions).toHaveLength(2));
+    mocks.getProfiles.mockResolvedValue({
+      success: true,
+      profiles: ["mako", "game-123", "Remote-Play"],
+      current_profile: "mako",
+      profile_details: [
+        defaultProfile,
+        gameProfile,
+        {
+          profile_name: "Remote-Play",
+          display_name: "Remote Play",
+          kind: "process",
+          processes: ["streaming_client"],
+        },
+      ],
+    });
+    rerender({ profileRevision: 1 });
+    await waitFor(() => expect(result.current.profileOptions).toHaveLength(3));
+    expect(result.current.selectedProfile).toBe("mako");
+    expect(mocks.setCurrentProfile).not.toHaveBeenCalled();
+  });
+
   test("rejects a profile that is absent from the refreshed editor list", async () => {
     const onProfileChange = vi.fn(async () => undefined);
     const { result } = renderHook(() =>

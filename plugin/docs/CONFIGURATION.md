@@ -32,6 +32,16 @@ Frame Generation, Scaling, GPU selection, and Renderer performance settings can 
 
 Decky and the standalone Qt UI use the same optional tables in `conf.toml`; use current matching MAKO Renderer and MAKO Decky versions. Older editors do not understand the tables and may remove them when saving. A Flatpak sandbox that cannot read system power supplies uses Base settings at startup. Shader configurations and launch options remain per profile.
 
+## Native Steam Remote Play
+
+**Remote Play** is an opt-in integration for Steam's native **Stream** action on the receiving x86_64 Linux device. With MAKO Renderer installed and streams closed, select **Override Remote Play**. This replaces Steam's `ubuntu12_64/streaming_client` entry point with a self-contained Python 3.11+ wrapper and retains the original executable and its SHA-256 beside it. It applies to all native Steam streams, independently of the profile currently being edited. Standalone Steam Link, Flatpak Steam, and browser streaming are outside this integration.
+
+The first installation creates a **Remote Play** process profile with Fixed 2x Frame Generation, a 30 FPS base cap, and a 60 FPS target. Existing settings are preserved on reinstall. Edit this profile before streaming, or let Decky select it automatically when the native client starts, including sessions without a Steam AppID. Supported live settings and optional AC/battery tables use the normal Renderer behavior; restart-only settings require closing and restarting the stream. MAKO Scaler and Shaders can also use the normal launch path without Lossless Scaling; Frame Generation and LS1 require it. The active indicator matches an active Frame Generation runtime context to the exact client PID; it does not measure visible interpolation or latency.
+
+Close streams and select **Remove Remote Play Override** to restore the verified original. The profile remains available. If Steam has already updated the native client, removal retires the stale backup while preserving Steam's replacement; enable the override again afterward. Removal refuses altered wrappers or corrupt backups and reports the conflict instead of overwriting them. Existing proof-of-concept wrappers or the experimental Remote Play Vulkan manifest must be removed using their original tools before enabling this integration.
+
+Decky's Renderer and plugin uninstall paths attempt restoration before removing Renderer files. Remove the override through Decky before standalone uninstall or configuration purge. If its configuration, runner, or launch lock disappears, the wrapper launches the checksum-verified original with MAKO disabled; a missing or corrupt original stops the launch. This provides launch-preparation recovery, not recovery after execution has transferred to `mako-run` or the native client. See the [implementation and review notes](REMOTE-PLAY.md) for the boundaries and remaining hardware validation.
+
 ## Frame Generation
 
 Turn on **Enable Frame-gen (Restart)** before starting the game.

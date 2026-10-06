@@ -78,6 +78,9 @@ vi.mock("../../src/components/StatusDisplay", () => ({ StatusDisplay: empty }));
 vi.mock("../../src/components/InstallationButton", () => ({
   InstallationButton: empty,
 }));
+vi.mock("../../src/components/RemotePlaySection", () => ({
+  RemotePlaySection: () => null,
+}));
 vi.mock("../../src/components/ConfigurationSection", () => ({
   ConfigurationSection: empty,
 }));

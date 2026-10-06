@@ -4,7 +4,7 @@ import {
   PanelSectionRow,
   showModal,
 } from "@decky/ui";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   useInstallationStatus,
   useDllDetection,
@@ -18,6 +18,7 @@ import { useProfileConfigWriter } from "../hooks/useProfileConfigWriter";
 import { PowerProfileControls } from "./PowerProfileControls";
 import { StatusDisplay } from "./StatusDisplay";
 import { InstallationButton } from "./InstallationButton";
+import { RemotePlaySection } from "./RemotePlaySection";
 import { ConfigurationSection } from "./ConfigurationSection";
 import { useModelStatus } from "../hooks/useModelStatus";
 import { effectiveScalingMethod } from "../config/ultraPerformancePreset";
@@ -37,6 +38,7 @@ import t from "../i18n/i18n";
 import { addProfileShader, deleteProfileShaders } from "../api/makoApi";
 
 export function Content() {
+  const [profileRevision, setProfileRevision] = useState(0);
   const {
     isInstalled,
     installationStatus,
@@ -94,6 +96,7 @@ export function Content() {
 
   const {
     mainRunningApp,
+    remotePlayRunning,
     powerSource: currentPowerSource,
     editingProfile,
     selectEditingProfile,
@@ -105,7 +108,7 @@ export function Content() {
   });
   const scalingRuntimeState = useRuntimeScalingStatus(
     editingProfile,
-    Boolean(isInstalled && mainRunningApp),
+    Boolean(isInstalled && (mainRunningApp || remotePlayRunning)),
   );
   const modelStatus = useModelStatus(config, isInstalled);
   const {
@@ -178,7 +181,9 @@ export function Content() {
   };
 
   const hasDevelopmentNotice = Boolean(localDevelopmentBuildInfo);
-  const hasRunningAppNotice = Boolean(isInstalled && mainRunningApp);
+  const hasRunningAppNotice = Boolean(
+    isInstalled && (mainRunningApp || remotePlayRunning),
+  );
   const hasEngineUpdateNotice = Boolean(isInstalled && engineUpdateRequired);
   const hasTopNotice =
     isInstalled ||
@@ -248,6 +253,8 @@ export function Content() {
         {isInstalled && (
           <ProfileManagement
             editingProfile={editingProfile}
+            sessionRunning={remotePlayRunning}
+            profileRevision={profileRevision}
             mainRunningApp={mainRunningApp}
             topMargin="18px"
             onProfileChange={async (profileName) => {
@@ -259,7 +266,7 @@ export function Content() {
 
         {isInstalled && (
           <>
-            {mainRunningApp && (
+            {(mainRunningApp || remotePlayRunning) && (
               <RuntimeStatusCard runtimeState={scalingRuntimeState} />
             )}
             <PowerProfileControls
@@ -307,6 +314,13 @@ export function Content() {
               includeAdvancedRendering={false}
             />
           </div>
+        )}
+
+        {isInstalled && (
+          <RemotePlaySection
+            onPrepare={flushConfigChanges}
+            onChanged={() => setProfileRevision((value) => value + 1)}
+          />
         )}
 
         <PanelSectionRow>

@@ -182,6 +182,19 @@ class ProfileResponse(ServiceResponse, total=False):
     changed: Optional[bool]
     game_running: Optional[bool]
     power_source: str
+    remote_play_running: Optional[bool]
+
+
+class RemotePlayResponse(ServiceResponse):
+    """Native Steam Remote Play override and exact-client runtime status."""
+    installed: bool
+    managed: bool
+    available: bool
+    running: bool
+    frame_generation_active: bool
+    profile_name: str
+    pids: List[int]
+    conflict: bool
 
 
 RuntimeApplicationPhase = Literal[

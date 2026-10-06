@@ -137,6 +137,7 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 | Change Decky or Qt translations | This file and the owning component README | `plugin/defaults/i18n/`, `plugin/scripts/i18n-contract.mjs`, `plugin/scripts/manage-i18n.mjs`, `engine/mako-ui/rsc/i18n/translations.json`, localization tests |
 | Review Armada/native AArch64 behavior | `plugin/docs/ARMADA.md` | `plugin/py_modules/mako_plugin/host_environment.py`, host/wrapper/Flatpak boundary tests |
 | Add or remove transitional compatibility | `CLEANUPS.md` | Owning migration/generator and its focused regression tests |
+| Change native Steam Remote Play override | `plugin/docs/REMOTE-PLAY.md`, `INSTALLATION-TRANSACTIONS.md` | `plugin/py_modules/mako_plugin/remote_play.py`, `remote_play_launch.py`, `configuration.py`, `plugin.py`, and focused Remote Play tests |
 | Deploy/reload a local Decky install | `plugin/docs/PACKAGING.md` | `plugin/scripts/deploy-dev.sh`, `plugin/scripts/reload-decky-plugin.mjs` |
 | Collect diagnostics | `COLLECT_DIAGNOSTICS.md` | `scripts/mako-diagnostics` |
 | Prepare release notes, artwork, and flavor text | `HOW_TO_RELEASE.md#notes-identity-and-artwork` | `.agents/skills/mako-prepare-release/SKILL.md` (`$mako-prepare-release`) |

@@ -16,6 +16,7 @@ interface ProfileEditorModelOptions {
   editingProfile?: string;
   onProfileChange?: (profileName: string) => void | Promise<void>;
   mainRunningApp?: AppOverview;
+  profileRevision?: number;
 }
 
 /**
@@ -30,6 +31,7 @@ export function useProfileEditorModel({
   editingProfile,
   onProfileChange,
   mainRunningApp,
+  profileRevision,
 }: ProfileEditorModelOptions) {
   const [profiles, setProfiles] = useState<string[]>([]);
   const [profileDetails, setProfileDetails] = useState<ProfileDetails[]>([]);
@@ -75,7 +77,7 @@ export function useProfileEditorModel({
 
   useEffect(() => {
     void loadProfiles(editingProfile || DEFAULT_PROFILE_NAME);
-  }, []);
+  }, [editingProfile, profileRevision]);
 
   useEffect(() => {
     if (editingProfile) {

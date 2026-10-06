@@ -30,6 +30,7 @@ export function useProfileSession({
     useState<string>(DEFAULT_PROFILE_NAME);
   const editingProfileRef = useRef<string>(DEFAULT_PROFILE_NAME);
   const gameWasRunningRef = useRef(false);
+  const [remotePlayRunning, setRemotePlayRunning] = useState(false);
   const lastPowerSource = useRef<string | undefined>(undefined);
   const [powerSource, setPowerSource] = useState<string | undefined>(undefined);
 
@@ -53,7 +54,11 @@ export function useProfileSession({
           runningApp ? String(runningApp.appid) : undefined,
         );
         if (!cancelled && result.success) {
-          const gameIsRunning = Boolean(result.game_running && runningApp);
+          const remoteRunning = Boolean(result.remote_play_running);
+          const gameIsRunning = Boolean(
+            result.game_running && (runningApp || remoteRunning),
+          );
+          setRemotePlayRunning(remoteRunning);
           const nextEditingProfile = gameIsRunning
             ? result.profile_name || DEFAULT_PROFILE_NAME
             : gameWasRunningRef.current
@@ -70,7 +75,9 @@ export function useProfileSession({
             editingProfileRef.current = nextEditingProfile;
             setEditingProfile(nextEditingProfile);
           }
-          setMainRunningApp(gameIsRunning ? runningApp : undefined);
+          setMainRunningApp(
+            gameIsRunning && !remoteRunning ? runningApp : undefined,
+          );
           gameWasRunningRef.current = gameIsRunning;
           if (gameIsRunning && editingProfileChanged && nextEditingProfile) {
             editingProfileRef.current = nextEditingProfile;
@@ -114,6 +121,7 @@ export function useProfileSession({
 
   return {
     mainRunningApp,
+    remotePlayRunning,
     powerSource,
     editingProfile,
     selectEditingProfile,
