@@ -323,6 +323,9 @@ export const getProfileConfig = callable<[string, string?], ConfigResult>(
 export const addProfileShader = callable<[string, string], ConfigResult>(
   "add_profile_shader",
 );
+export const deleteProfileShaders = callable<[string, string[]], ConfigResult>(
+  "delete_profile_shaders",
+);
 export const getRuntimeStatus = callable<[string?], RuntimeStatusResult>(
   "get_runtime_status",
 );

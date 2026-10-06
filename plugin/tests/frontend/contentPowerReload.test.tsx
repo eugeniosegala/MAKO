@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   getProfileConfig: vi.fn(),
   updateProfileConfigFields: vi.fn(),
   syncCurrentProfile: vi.fn(),
+  deleteProfileShaders: vi.fn(),
 }));
 function pass({ children }: { children: React.ReactNode }) {
   return <div>{children}</div>;
@@ -37,6 +38,7 @@ vi.mock("@decky/ui", () => ({
 vi.mock("../../src/api/makoApi", () => ({
   getMakoConfig: async () => ({ success: true, config: getDefaults() }),
   getProfileConfig: mocks.getProfileConfig,
+  deleteProfileShaders: mocks.deleteProfileShaders,
 }));
 vi.mock("../../src/hooks/useMakoHooks", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../src/hooks/useMakoHooks")>()),
@@ -114,9 +116,11 @@ vi.mock("../../src/components/FeatureSettings", () => ({
   FeatureSettings: ({
     config,
     onConfigChange,
+    onDeleteShaders,
   }: {
     config: ReturnType<typeof getDefaults>;
     onConfigChange: (field: string, value: number) => void;
+    onDeleteShaders: (ids: string[]) => Promise<void>;
   }) => (
     <>
       <input
@@ -127,6 +131,9 @@ vi.mock("../../src/components/FeatureSettings", () => ({
         }
       />
       <span>Native target: {config.target_fps}</span>
+      <button onClick={() => void onDeleteShaders(["custom/Tone"])}>
+        Delete custom
+      </button>
     </>
   ),
 }));
@@ -154,6 +161,7 @@ beforeEach(() => {
   mocks.powerSource = "handheld";
   mocks.sharpness = 0.5;
   mocks.saveGate = null;
+  mocks.deleteProfileShaders.mockResolvedValue({ success: true });
   mocks.getProfileConfig.mockImplementation(
     async (_name: string, mode?: string) => ({
       success: true,
@@ -186,6 +194,37 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.useRealTimers();
+});
+
+test("custom shader deletion waits for queued settings and reloads the selected power set", async () => {
+  render(<Content />);
+  await act(async () => {});
+  let finishSave!: () => void;
+  mocks.saveGate = new Promise<void>((resolve) => {
+    finishSave = resolve;
+  });
+  fireEvent.change(screen.getByLabelText("Shared shader sharpness"), {
+    target: { value: "0.73" },
+  });
+  fireEvent.click(screen.getByText("Delete custom"));
+  await act(async () => {});
+  expect(mocks.deleteProfileShaders).not.toHaveBeenCalled();
+  expect(mocks.updateProfileConfigFields).toHaveBeenCalledWith(
+    "mako",
+    { vkbasalt_sharpness: 0.73 },
+    "handheld",
+  );
+  await act(async () => {
+    finishSave();
+  });
+  expect(mocks.deleteProfileShaders).toHaveBeenCalledWith("mako", [
+    "custom/Tone",
+  ]);
+  expect(mocks.getProfileConfig).toHaveBeenLastCalledWith("mako", "handheld");
+  expect(
+    (screen.getByLabelText("Shared shader sharpness") as HTMLInputElement)
+      .value,
+  ).toBe("0.73");
 });
 
 test("manual power-set reload drains shared edits without copying native settings", async () => {

@@ -316,6 +316,12 @@ def _vkbasalt_value(value: str) -> str:
     return value
 
 
+def _is_custom_shader_name(name: str) -> bool:
+    return (name.casefold() not in _VKBASALT_CONTROLLED_EFFECTS
+            and name.casefold() not in {"none", "effects", "reshadeincludepath", "reshadetexturepath", "enableonlaunch", "togglekey", "cassharpness", "dlssharpness", "dlsdenoise"}
+            and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,127}", name) is not None)
+
+
 def custom_shader_effects(content: str) -> list[CustomShaderEffect]:
     """Discover FX definitions without treating bundled aliases as custom."""
     entries: dict[str, CustomShaderEffect] = {}
@@ -326,10 +332,7 @@ def custom_shader_effects(content: str) -> list[CustomShaderEffect]:
         _, name, value, _ = assignment
         entries.pop(name, None)
         value = _vkbasalt_value(value)
-        if (name.casefold() not in _VKBASALT_CONTROLLED_EFFECTS
-                and name.casefold() not in {"none", "effects", "reshadeincludepath", "reshadetexturepath", "enableonlaunch", "togglekey", "cassharpness", "dlssharpness", "dlsdenoise"}
-                and re.fullmatch(r"[A-Za-z][A-Za-z0-9_]{0,127}", name)
-                and value.lower().endswith(".fx")):
+        if _is_custom_shader_name(name) and value.lower().endswith(".fx"):
             entries[name] = {"id": "custom/" + name, "name": name, "path": value}
     return [entries[key] for key in sorted(entries)]
 
@@ -462,6 +465,28 @@ def merge_vkbasalt_config_content(
         if key not in seen:
             merged_lines.append(f"{key} = {value}")
     return "\n".join(merged_lines) + "\n"
+
+def remove_custom_shader_content(content: str, shader_ids: set[str]) -> str:
+    """Remove profile references, including duplicates and chain entries."""
+    if any(not shader_id.startswith("custom/") or not _is_custom_shader_name(shader_id[7:])
+           for shader_id in shader_ids):
+        raise ValueError("Only custom shader IDs can be deleted")
+    names = {shader_id[7:] for shader_id in shader_ids}
+    lines = []
+    for line in content.splitlines(keepends=True):
+        assignment = _assignment_parts(line.rstrip("\r\n"))
+        if assignment is not None:
+            prefix, key, value, suffix = assignment
+            if key in names and _vkbasalt_value(value).lower().endswith(".fx"):
+                continue
+            if key == "effects":
+                remaining = [effect.strip() for effect in _vkbasalt_value(value).split(":")
+                             if effect.strip() and effect.strip() not in names]
+                ending = line[len(line.rstrip("\r\n")):]
+                line = prefix + ":".join(remaining) + suffix + ending
+        lines.append(line)
+    return "".join(lines)
+
 
 def uses_vkbasalt(settings: WrapperSettingsData) -> bool:
     """Return whether a profile enables MAKO's private vkBasalt layer."""

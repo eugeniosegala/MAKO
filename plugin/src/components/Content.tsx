@@ -34,7 +34,7 @@ import { localDevelopmentBuildInfo } from "../config/devBuildInfo.generated";
 import { currentRelease } from "virtual:mako-release-info";
 import { MakoButtonTheme, MakoReleaseIdentity } from "./MakoUi";
 import t from "../i18n/i18n";
-import { addProfileShader } from "../api/makoApi";
+import { addProfileShader, deleteProfileShaders } from "../api/makoApi";
 
 export function Content() {
   const {
@@ -139,6 +139,17 @@ export function Content() {
     const result = await addProfileShader(profile, path);
     if (!result.success)
       throw new Error(result.error || "Unable to add shader");
+    if (getEditingProfile() === profile) {
+      await loadEditorConfig(profile, getEditingPowerMode());
+    }
+  };
+
+  const deleteShaders = async (shaderIds: string[]) => {
+    const profile = editingProfile;
+    await flushConfigChanges();
+    const result = await deleteProfileShaders(profile, shaderIds);
+    if (!result.success)
+      throw new Error(result.error || "Unable to delete custom shaders");
     if (getEditingProfile() === profile) {
       await loadEditorConfig(profile, getEditingPowerMode());
     }
@@ -275,6 +286,7 @@ export function Content() {
                 customShaderEffects={customShaderEffects}
                 onAddShader={addShader}
                 onRefreshShaders={refreshShaders}
+                onDeleteShaders={deleteShaders}
                 onConfigChange={handleConfigChange}
                 onConfigUpdate={handleConfigChanges}
               />

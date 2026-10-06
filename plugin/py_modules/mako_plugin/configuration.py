@@ -35,7 +35,7 @@ from .constants import (
     VKBASALT_SHADER_ASSET_FILENAMES,
 )
 from .host_environment import detect_power_source
-from .managed_files import write_managed_text_atomically
+from .managed_files import managed_install_transaction, write_managed_text_atomically
 from .process_detection import (
     detect_processes_for_steam_app,
     is_matchable_process_name,
@@ -594,6 +594,53 @@ class ConfigurationService(BaseService):
     def _profile_shader_content(self, profile_name: str, metadata: profile_storage.ProfileMetadata | None = None) -> str:
         path = self._vkbasalt_config_path(profile_name, metadata)
         return path.read_text(encoding="utf-8") if path.is_file() else ""
+
+    def delete_profile_shaders(self, profile_name: str, shader_ids: list[str]) -> ConfigurationResponse:
+        """Delete selected custom registrations without deleting external FX files."""
+        with self._configuration_write_lock:
+            try:
+                if not isinstance(shader_ids, list) or any(
+                        not isinstance(shader_id, str) or
+                        not re.fullmatch(r"custom/[A-Za-z][A-Za-z0-9_]{0,127}", shader_id)
+                        for shader_id in shader_ids):
+                    raise ValueError("Only custom shader IDs can be deleted")
+                # Reject bundled/reserved aliases through the storage owner,
+                # before profile discovery can migrate any persisted files.
+                profile_storage.remove_custom_shader_content("", set(shader_ids))
+                data = self._get_profile_data()
+                if profile_name not in data["profiles"]:
+                    raise ValueError(f"Profile '{profile_name}' does not exist")
+                metadata = self._read_profile_metadata(data)
+                config = self._config_for_profile(data, profile_name)
+                content = self._profile_shader_content(profile_name, metadata)
+                selection = profile_storage.vkbasalt_shader_selection(
+                    content, self._normalize_wrapper_settings(config)
+                ).split(":")
+                deleted = set(shader_ids).intersection(selection)
+                if not deleted:
+                    return self.get_profile_config(profile_name)
+                path = self._vkbasalt_config_path(profile_name, metadata)
+                # The normal settings writer also merges other profile files.
+                # Reuse the file rollback owner for the complete touched state.
+                paths = [self.config_file_path, self.wrapper_profile_settings_path,
+                         self.mako_script_path, *(
+                             self._vkbasalt_config_path(name, metadata)
+                             for name in data["profiles"]
+                         )]
+                with managed_install_transaction(paths, self.log):
+                    write_managed_text_atomically(path,
+                        profile_storage.remove_custom_shader_content(content, deleted),
+                        0o644, self.log)
+                    result = self._update_profile_config_fields(profile_name, {
+                        "vkbasalt_shader": ":".join(
+                            shader_id for shader_id in selection if shader_id not in deleted
+                        ) or "none",
+                    })
+                    if not result["success"]:
+                        raise ValueError(result.get("error") or "Unable to delete custom shaders")
+                return self.get_profile_config(profile_name)
+            except (OSError, ValueError, TypeError) as error:
+                return self._error_response(ConfigurationResponse, str(error), config=None)
 
     def add_profile_shader(self, profile_name: str, shader_path: str) -> ConfigurationResponse:
         """Register one FX file without enabling it or changing its source files."""

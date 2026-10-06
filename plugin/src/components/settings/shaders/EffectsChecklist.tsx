@@ -21,10 +21,12 @@ export function EffectsChecklist({
   options,
   initialSelection,
   onChange,
+  disabled = false,
 }: {
   options: EffectOption[];
   initialSelection: string[];
   onChange: (value: string) => Promise<void>;
+  disabled?: boolean;
 }) {
   const [selected, setSelected] = useState(initialSelection);
   const [expanded, setExpanded] = useState(false);
@@ -93,6 +95,7 @@ export function EffectsChecklist({
   }, [effects.length, page]);
 
   const updateSelection = (next: string[]) => {
+    if (disabled) return;
     setSelected(next);
     const value = next.join(":") || VKBASALT_SHADER_NONE;
     pendingSave.current = pendingSave.current
@@ -352,6 +355,7 @@ export function EffectsChecklist({
                         tabIndex={0}
                         data-mako-effect-row={row}
                         aria-checked={enabled}
+                        aria-disabled={disabled}
                         aria-label={
                           enabled
                             ? `${order + 1}. ${option.label}`
@@ -515,12 +519,12 @@ export function EffectsChecklist({
               <MakoFocusable
                 role="button"
                 tabIndex={0}
-                aria-disabled={selected.length === 0}
+                aria-disabled={disabled || selected.length === 0}
                 onClick={() => selected.length > 0 && updateSelection([])}
                 onActivate={() => selected.length > 0 && updateSelection([])}
                 {...actionFocusProps("clear")}
                 style={{
-                  ...actionStyle("clear", selected.length === 0),
+                  ...actionStyle("clear", disabled || selected.length === 0),
                   alignSelf: "stretch",
                   width: "100%",
                   marginTop: "8px",

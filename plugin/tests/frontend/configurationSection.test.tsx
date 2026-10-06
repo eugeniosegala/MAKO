@@ -504,6 +504,88 @@ describe("Configuration controls", () => {
     );
   });
 
+  test("deletes only selected custom shaders, locks selection while busy, and refreshes", async () => {
+    let finish!: () => void;
+    const onDeleteShaders = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const onConfigChange = vi.fn(async () => undefined);
+    const props = {
+      config: {
+        ...getDefaults(),
+        external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+        vkbasalt_shader: "vibrance:custom/Tone:custom/Missing",
+      },
+      isDefaultProfile: false,
+      profileName: "game",
+      vkBasaltConfigPath: "/tmp/game.conf",
+      customShaderEffects: [
+        { id: "custom/Tone", name: "Tone", path: "/tmp/tone.fx" },
+        { id: "custom/Other", name: "Other", path: "/tmp/other.fx" },
+      ],
+      onConfigChange,
+      onDeleteShaders,
+    };
+    const { rerender } = render(<ShadersConfigurationGroup {...props} />);
+    fireEvent.click(
+      screen.getByRole("button", { name: "Delete selected custom shaders" }),
+    );
+    expect(onDeleteShaders).toHaveBeenCalledWith([
+      "custom/Tone",
+      "custom/Missing",
+    ]);
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Delete selected custom shaders",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByText("Choose effects (3 selected)"));
+    fireEvent.click(screen.getByRole("button", { name: "Clear all" }));
+    expect(onConfigChange).not.toHaveBeenCalled();
+    finish();
+    await waitFor(() =>
+      expect(
+        (
+          screen.getByRole("button", {
+            name: "Delete selected custom shaders",
+          }) as HTMLButtonElement
+        ).disabled,
+      ).toBe(false),
+    );
+    rerender(
+      <ShadersConfigurationGroup
+        {...props}
+        config={{ ...props.config, vkbasalt_shader: "vibrance" }}
+        customShaderEffects={[props.customShaderEffects[1]]}
+      />,
+    );
+    fireEvent.click(screen.getByText("Done"));
+    await waitFor(() =>
+      expect(screen.getByText("Choose effects (1 selected)")).toBeTruthy(),
+    );
+    expect(
+      (
+        screen.getByRole("button", {
+          name: "Delete selected custom shaders",
+        }) as HTMLButtonElement
+      ).disabled,
+    ).toBe(true);
+    fireEvent.click(screen.getByText("Choose effects (1 selected)"));
+    for (let page = 0; page < 4; page++)
+      fireEvent.click(screen.getByTestId("mako-effects-next-page"));
+    expect(
+      screen.getByRole("checkbox", { name: "Custom: Other" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("checkbox", { name: /Custom: Tone|Custom: Missing/ }),
+    ).toBeNull();
+  });
+
   test("adds and removes effects in a per-profile ordered stack", async () => {
     const onConfigChange = vi.fn(async () => undefined);
     render(

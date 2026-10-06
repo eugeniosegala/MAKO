@@ -86,6 +86,8 @@ The note below the controls shows the active profile configuration file. Advance
 
 Select **Add Custom Shader** to choose a local vkBasalt-compatible ReShade `.fx` file, then enable its **Custom:** entry in **Effects**. Adding a file only registers it for the selected profile; it does not enable it. Custom and bundled effects share the same ordered list. Unchecking a custom effect or using **Clear all** retains its definition and options so it can be selected again.
 
+Select **Delete selected custom shaders** to remove the selected custom definitions from this profile and deselect them. The list updates immediately; bundled effects and unselected custom definitions remain available. The original `.fx` files, includes, textures, and advanced options stay on disk, and other profiles keep their own registrations. The button is disabled when no custom effect is selected. Restart the game to apply custom shader changes.
+
 MAKO references the original file instead of copying it. Keep its include files and textures available, and configure `reshadeIncludePath`, `reshadeTexturePath`, and shader-specific options in the displayed profile file when required. A shader designed for another ReShade runtime may use unsupported features. Flatpak games must be able to read the shader folder and its dependencies inside their sandbox.
 
 Existing `.fx` assignments in the profile file appear automatically when the profile loads. Before the first Effects edit, the file’s `effects` chain also supplies their initial selection. After that, choose activation and order in the UI. Use **Refresh** after editing the file externally. For example:

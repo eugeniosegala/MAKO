@@ -381,32 +381,25 @@ export function MakoCompactSpinner({ size = 18 }: { size?: number }) {
 
 export function makoDialogButtonStyle(
   isFocused: boolean,
-  variant: "normal" | "danger" | "neutral" = "normal",
+  variant: "normal" | "danger" = "normal",
 ): CSSProperties {
   const danger = variant === "danger";
-  const neutral = variant === "neutral";
-  const focusColor = danger ? "#e36a79" : neutral ? "#d6d7d9" : "#52d5e8";
+  const focusColor = danger ? "#e36a79" : "#52d5e8";
   return {
-    color: danger ? "#fff0f5" : neutral ? "#f0f0f0" : "#eefbfe",
+    color: danger ? "#fff0f5" : "#eefbfe",
     background: danger
       ? "linear-gradient(135deg, #3b1725 0%, #64253a 58%, #7d3048 100%)"
-      : neutral
-        ? "#3d3f43"
-        : "linear-gradient(135deg, #071f31 0%, #0a4358 58%, #0b5967 100%)",
+      : "linear-gradient(135deg, #071f31 0%, #0a4358 58%, #0b5967 100%)",
     border: danger
       ? "1px solid rgba(183, 82, 118, 0.62)"
-      : neutral
-        ? "1px solid #64666b"
-        : "1px solid rgba(65, 158, 178, 0.62)",
+      : "1px solid rgba(65, 158, 178, 0.62)",
     borderRadius: "4px",
     outline: isFocused ? `2px solid ${focusColor}` : "none",
     outlineOffset: "2px",
     boxShadow: isFocused
       ? danger
         ? "0 0 0 3px rgba(227, 106, 121, 0.2), 0 0 10px rgba(166, 48, 72, 0.34)"
-        : neutral
-          ? "0 0 0 3px rgba(214, 215, 217, 0.18)"
-          : "0 0 0 3px rgba(82, 213, 232, 0.2), 0 0 10px rgba(43, 142, 163, 0.32)"
+        : "0 0 0 3px rgba(82, 213, 232, 0.2), 0 0 10px rgba(43, 142, 163, 0.32)"
       : "inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 2px 5px rgba(0, 0, 0, 0.22)",
     transition: "background 120ms ease, box-shadow 120ms ease",
   };
@@ -427,13 +420,6 @@ export function MakoButtonTheme() {
         background: linear-gradient(135deg, #481b2c 0%, #732a43 58%, #913852 100%) !important;
         border-color: rgba(208, 102, 139, 0.78) !important;
         box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 0 9px rgba(170, 57, 98, 0.24) !important;
-      }
-
-      .Mako_DialogButton--neutral:not(.disabled):not([disabled]):not([aria-disabled="true"]):hover,
-      .Mako_DialogButton--neutral button:hover:not(:disabled) {
-        background: #505257 !important;
-        border-color: #85878c !important;
-        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12), 0 2px 5px rgba(0, 0, 0, 0.22) !important;
       }
 
       .Mako_BrandButton button {

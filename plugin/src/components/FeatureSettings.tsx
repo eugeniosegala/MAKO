@@ -21,6 +21,7 @@ interface FeatureSettingsProps extends ConfigurationEditorProps {
   customShaderEffects?: CustomShaderEffect[];
   onAddShader?: (path: string) => Promise<void>;
   onRefreshShaders?: () => Promise<void>;
+  onDeleteShaders?: (shaderIds: string[]) => Promise<void>;
 }
 
 export function FeatureSettings({
@@ -32,6 +33,7 @@ export function FeatureSettings({
   customShaderEffects,
   onAddShader,
   onRefreshShaders,
+  onDeleteShaders,
   onConfigChange,
   onConfigUpdate,
 }: FeatureSettingsProps) {
@@ -104,6 +106,7 @@ export function FeatureSettings({
             customShaderEffects={customShaderEffects}
             onAddShader={onAddShader}
             onRefreshShaders={onRefreshShaders}
+            onDeleteShaders={onDeleteShaders}
             onConfigChange={onConfigChange}
           />
         )}

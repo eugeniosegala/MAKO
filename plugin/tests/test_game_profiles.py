@@ -70,6 +70,87 @@ class GameProfileTests(unittest.TestCase):
         )
         self.service._save_profile_data(self.profile_data)
 
+    def test_delete_selected_custom_shaders_preserves_sources_and_other_profiles(self):
+        source = Path(self.temp_dir.name) / "tone.fx"
+        source.write_text("// user source", encoding="utf-8")
+        path = self.service._vkbasalt_config_path("mako")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            'effects = "Tone:makoVibrance:Other:cas" # chain\n'
+            'Tone = /tmp/old.fx\n' + f'Tone = "{source}" # duplicate\n'
+            'Other = /tmp/other.fx\n'
+            '# advanced\nreshadeIncludePath = /tmp/includes\ncustomOption = keep\n',
+            encoding="utf-8",
+        )
+        self.assertTrue(self.service.create_profile("clone", "mako")["success"])
+        clone_path = self.service._vkbasalt_config_path("clone")
+        clone_content = clone_path.read_text()
+        self.assertTrue(self.service.set_profile_power_modes("mako", True)["success"])
+        self.assertTrue(self.service.update_profile_config_fields("mako", {"target_fps": 60}, "handheld")["success"])
+        self.assertTrue(self.service.update_profile_config_fields("mako", {"target_fps": 144}, "docked")["success"])
+        result = self.service.delete_profile_shaders("mako", ["custom/Tone"])
+        self.assertTrue(result["success"], result)
+        self.assertEqual(result["config"]["vkbasalt_shader"], "vibrance:custom/Other")
+        self.assertEqual([effect["id"] for effect in result["custom_shader_effects"]], ["custom/Other"])
+        content = path.read_text()
+        self.assertNotIn("Tone", content)
+        self.assertIn("makoVibrance", content)
+        self.assertIn("# chain", content)
+        self.assertIn("# advanced\nreshadeIncludePath = /tmp/includes\ncustomOption = keep", content)
+        self.assertEqual(source.read_text(), "// user source")
+        self.assertEqual(clone_path.read_text(), clone_content)
+        for mode, target in [("handheld", 60), ("docked", 144)]:
+            config = self.service.get_profile_config("mako", mode)["config"]
+            self.assertEqual(config["target_fps"], target)
+            self.assertEqual(config["vkbasalt_shader"], "vibrance:custom/Other")
+        # Selected IDs whose definitions went missing can be cleaned up too.
+        self.service.update_profile_config_fields("mako", {"vkbasalt_shader": "custom/Missing:vibrance:custom/Other"})
+        result = self.service.delete_profile_shaders("mako", ["custom/Missing", "custom/Other"])
+        self.assertEqual(result["config"]["vkbasalt_shader"], "vibrance")
+        self.assertEqual(result["custom_shader_effects"], [])
+        # A missing FX definition must not turn an unrelated option into a file reference.
+        path.write_text(path.read_text() + 'FormerShader = disabled\n')
+        self.service.update_profile_config_fields("mako", {"vkbasalt_shader": "custom/FormerShader"})
+        result = self.service.delete_profile_shaders("mako", ["custom/FormerShader"])
+        self.assertEqual(result["config"]["vkbasalt_shader"], "none")
+        self.assertIn("FormerShader = disabled", path.read_text())
+
+    def test_shader_deletion_rejects_reserved_ids_and_ignores_unselected_entries(self):
+        path = self.service._vkbasalt_config_path("mako")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        content = 'Other = /tmp/other.fx\ncustomOption = keep\n'
+        path.write_text(content)
+        for ids in (["vibrance"], ["custom/makoVibrance"], ["custom/cas"],
+                    ["custom/reshadeIncludePath"], ["custom/customOption\n"], "custom/Other", [None]):
+            result = self.service.delete_profile_shaders("mako", ids)
+            self.assertFalse(result["success"], ids)
+            self.assertEqual(path.read_text(), content)
+        self.assertFalse(self.service.delete_profile_shaders("missing", ["custom/Other"])["success"])
+        for ids in ([], ["custom/Other"]):
+            self.assertTrue(self.service.delete_profile_shaders("mako", ids)["success"])
+            self.assertEqual(path.read_text(), content)
+
+    def test_shader_deletion_rolls_back_file_and_selection_after_sidecar_failure(self):
+        path = self.service._vkbasalt_config_path("mako")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text('effects = Tone:cas\nTone = /tmp/tone.fx\n')
+        self.service.update_profile_config_fields("mako", {"vkbasalt_shader": "custom/Tone"})
+        paths = [path, self.service.config_file_path,
+                 self.service.wrapper_profile_settings_path, self.service.mako_script_path]
+        original = {file: file.read_bytes() for file in paths}
+        real_write = self.service._write_file
+        def fail_sidecar(file, *args, **kwargs):
+            if file == self.service.wrapper_profile_settings_path:
+                raise OSError("injected sidecar failure")
+            return real_write(file, *args, **kwargs)
+        with patch.object(self.service, "_write_file", side_effect=fail_sidecar):
+            result = self.service.delete_profile_shaders("mako", ["custom/Tone"])
+        self.assertFalse(result["success"])
+        self.assertIn("injected sidecar failure", result["error"])
+        for file, content in original.items():
+            self.assertEqual(file.read_bytes(), content)
+        self.assertEqual(self.service.get_profile_config("mako")["config"]["vkbasalt_shader"], "custom/Tone")
+
     def test_custom_shaders_are_discovered_managed_and_copied_per_profile(self):
         content = ('# preserve\neffects = "Tone_A:makoVibrance:ToneB:cas" # selected\n'
                    'Tone_A = "/tmp/a # colour.fx" # source\nToneB = /tmp/b.FX\n'

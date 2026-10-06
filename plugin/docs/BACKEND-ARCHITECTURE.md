@@ -22,6 +22,8 @@ Native base and power-table serialization derives its field set from that schema
 
 Keep orchestration in `ConfigurationService` and `InstallationService` when an operation must coordinate several files. A shorter file is not a reason to create a second state owner or to move only half of a transaction. Follow [testing](../../TESTING.md) and the focused backend contract tests whenever an RPC, profile, wrapper, installation, or Flatpak boundary changes.
 
+`ConfigurationService.delete_profile_shaders()` removes only requested, currently selected custom registrations through `profile_storage` and the normal field-patch writer under the configuration lock. It reuses `managed_install_transaction()` for rollback of the touched profile configuration, shader files, sidecar, and generated wrapper if persistence fails; this is a profile edit, not a native installation. External FX files remain untouched. The frontend drains its existing save queue before deletion, locks effect selection while the action runs, and reloads the current editor power set afterward.
+
 ## Flatpak VRR discovery lifecycle
 
 `plugin.py` starts and stops the installed Renderer `mako-vrr-lease --watch-flatpak` host monitor on plugin load/unload and Renderer install/uninstall. The helper owns bounded runtime-status discovery, namespace process validation, compositor verification, and detached game leases. Decky does not implement a second VRR writer; detached leases survive plugin reload to preserve exit restoration. Missing helpers or a different user identity leave discovery disabled.

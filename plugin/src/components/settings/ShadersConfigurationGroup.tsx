@@ -65,6 +65,7 @@ interface ShadersConfigurationGroupProps extends ConfigurationControlProps {
   customShaderEffects?: CustomShaderEffect[];
   onAddShader?: (path: string) => Promise<void>;
   onRefreshShaders?: () => Promise<void>;
+  onDeleteShaders?: (shaderIds: string[]) => Promise<void>;
 }
 
 const customShaderButtonStyle: CSSProperties = {
@@ -76,9 +77,9 @@ const customShaderButtonStyle: CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  padding: "6px 8px",
+  padding: "4px 8px",
   margin: 0,
-  fontSize: "11px",
+  fontSize: "12px",
   lineHeight: 1.2,
   whiteSpace: "normal",
   overflowWrap: "anywhere",
@@ -92,13 +93,12 @@ export function ShadersConfigurationGroup({
   customShaderEffects = [],
   onAddShader,
   onRefreshShaders,
+  onDeleteShaders,
   onConfigChange,
 }: ShadersConfigurationGroupProps) {
   const [busy, setBusy] = useState(false);
   const [shaderError, setShaderError] = useState("");
-  const [focusedAction, setFocusedAction] = useState<"add" | "refresh" | null>(
-    null,
-  );
+  const [focusedAction, setFocusedAction] = useState<"delete" | null>(null);
   const runShaderAction = async (action: () => Promise<void>) => {
     setBusy(true);
     setShaderError("");
@@ -303,6 +303,7 @@ export function ShadersConfigurationGroup({
                   key={profileName}
                   options={shaderOptions}
                   initialSelection={selectedEffects}
+                  disabled={busy}
                   onChange={(value) => onConfigChange(VKBASALT_SHADER, value)}
                 />
                 <MakoInfo
@@ -337,16 +338,7 @@ export function ShadersConfigurationGroup({
                   >
                     {onAddShader && (
                       <DialogButton
-                        className="Mako_DialogButton Mako_DialogButton--neutral"
-                        style={{
-                          ...customShaderButtonStyle,
-                          ...makoDialogButtonStyle(
-                            focusedAction === "add",
-                            "neutral",
-                          ),
-                        }}
-                        onGamepadFocus={() => setFocusedAction("add")}
-                        onGamepadBlur={() => setFocusedAction(null)}
+                        style={customShaderButtonStyle}
                         disabled={busy}
                         onClick={() =>
                           runShaderAction(async () => {
@@ -370,16 +362,7 @@ export function ShadersConfigurationGroup({
                     )}
                     {onRefreshShaders && (
                       <DialogButton
-                        className="Mako_DialogButton Mako_DialogButton--neutral"
-                        style={{
-                          ...customShaderButtonStyle,
-                          ...makoDialogButtonStyle(
-                            focusedAction === "refresh",
-                            "neutral",
-                          ),
-                        }}
-                        onGamepadFocus={() => setFocusedAction("refresh")}
-                        onGamepadBlur={() => setFocusedAction(null)}
+                        style={customShaderButtonStyle}
                         disabled={busy}
                         onClick={() => runShaderAction(onRefreshShaders)}
                       >
@@ -396,8 +379,51 @@ export function ShadersConfigurationGroup({
                     )}
                   </MakoInlineTip>
                 </MakoInfo>
+                {onDeleteShaders && (
+                  <div
+                    style={{
+                      width: "100%",
+                      boxSizing: "border-box",
+                      padding: "4px 4px 8px",
+                    }}
+                  >
+                    <DialogButton
+                      className="Mako_DialogButton Mako_DialogButton--danger"
+                      style={{
+                        ...customShaderButtonStyle,
+                        width: "100%",
+                        ...makoDialogButtonStyle(
+                          focusedAction === "delete",
+                          "danger",
+                        ),
+                      }}
+                      onGamepadFocus={() => setFocusedAction("delete")}
+                      onGamepadBlur={() => setFocusedAction(null)}
+                      disabled={
+                        busy ||
+                        !selectedEffects.some((id) => id.startsWith("custom/"))
+                      }
+                      onClick={() =>
+                        runShaderAction(() =>
+                          onDeleteShaders(
+                            selectedEffects.filter((id) =>
+                              id.startsWith("custom/"),
+                            ),
+                          ),
+                        )
+                      }
+                    >
+                      {t(
+                        "CONFIG_VKBASALT_CUSTOM_DELETE",
+                        "Delete selected custom shaders",
+                      )}
+                    </DialogButton>
+                  </div>
+                )}
                 {shaderError && (
-                  <MakoInlineTip tone="warning">{shaderError}</MakoInlineTip>
+                  <MakoInlineTip tone="warning" alwaysVisible>
+                    {shaderError}
+                  </MakoInlineTip>
                 )}
               </MakoFocusable>
             </Field>

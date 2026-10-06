@@ -220,6 +220,9 @@ class Plugin:
     async def add_profile_shader(self, profile_name: str, shader_path: str) -> ConfigurationResponse:
         return self.configuration_service.add_profile_shader(profile_name, shader_path)
 
+    async def delete_profile_shaders(self, profile_name: str, shader_ids: list[str]) -> ConfigurationResponse:
+        return self.configuration_service.delete_profile_shaders(profile_name, shader_ids)
+
     async def get_config_schema(self) -> ConfigSchemaResponse:
         """Get configuration schema information for frontend
 
