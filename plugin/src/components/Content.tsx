@@ -266,9 +266,6 @@ export function Content() {
 
         {isInstalled && (
           <>
-            {(mainRunningApp || remotePlayRunning) && (
-              <RuntimeStatusCard runtimeState={scalingRuntimeState} />
-            )}
             <PowerProfileControls
               profileName={editingProfile}
               enabled={separatePowerModes}
@@ -278,6 +275,9 @@ export function Content() {
               flushConfigChanges={flushConfigChanges}
               loadProfileConfig={loadEditorConfig}
             />
+            {(mainRunningApp || remotePlayRunning) && (
+              <RuntimeStatusCard runtimeState={scalingRuntimeState} />
+            )}
             {isConfigLoading && (
               <PanelSectionRow>
                 {t("POWER_LOADING", "Loading profile settings...")}
