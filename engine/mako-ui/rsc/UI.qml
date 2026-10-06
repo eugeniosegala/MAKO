@@ -18,6 +18,20 @@ ApplicationWindow {
     visible: true
     onActiveChanged: if (active) backend.refreshLosslessScaling()
 
+    component ShaderActionButton: Button {
+        id: action
+        Layout.fillWidth: true
+        Layout.minimumWidth: 0
+        contentItem: Label {
+            text: action.text
+            font: action.font
+            color: action.palette.buttonText
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            wrapMode: Text.WordWrap
+        }
+    }
+
     RunningGamesDialog {
         id: running_games_dialog
         strings: t
@@ -664,38 +678,6 @@ ApplicationWindow {
                     }
 
                     GroupEntry {
-                        title: t.customShader
-                        description: t.customShaderHelp
-                        visible: backend.enable_vkbasalt
-
-                        ColumnLayout {
-                            Layout.fillWidth: true
-                            RowLayout {
-                                Button {
-                                    text: t.addCustomShader
-                                    onClicked: customShaderPicker.open()
-                                }
-                                Button {
-                                    text: t.refreshCustomShaders
-                                    onClicked: backend.refreshCustomShaders()
-                                }
-                            }
-                            Label {
-                                Layout.fillWidth: true
-                                visible: backend.shader_load_error.length > 0
-                                text: backend.shader_load_error
-                                wrapMode: Text.WordWrap
-                            }
-                            FileDialog {
-                                id: customShaderPicker
-                                title: t.addCustomShader
-                                nameFilters: ["ReShade (*.fx)"]
-                                onAccepted: backend.addCustomShader(selectedFile.toString())
-                            }
-                        }
-                    }
-
-                    GroupEntry {
                         title: t.shaderEffects
                         description: t.shaderEffectsDesc
                         visible: backend.enable_vkbasalt
@@ -717,6 +699,51 @@ ApplicationWindow {
                                 Layout.fillWidth: true
                                 text: t.shaderEffects + " (" + (backend.vkbasalt_shader === "none" ? 0 : backend.vkbasalt_shader.split(":").length) + ")"
                                 onClicked: effectsDialog.open()
+                            }
+
+                            RowLayout {
+                                Layout.fillWidth: true
+                                Layout.topMargin: 8
+                                spacing: 8
+                                ShaderActionButton {
+                                    Layout.preferredWidth: 1
+                                    text: t.addCustomShader
+                                    onClicked: customShaderPicker.open()
+                                }
+                                ShaderActionButton {
+                                    Layout.preferredWidth: 1
+                                    text: t.refreshCustomShaders
+                                    onClicked: backend.refreshCustomShaders()
+                                }
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                text: t.customShaderHelp
+                                wrapMode: Text.WordWrap
+                                font.pixelSize: 10
+                                color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                            }
+                            ShaderActionButton {
+                                Layout.topMargin: 8
+                                text: t.deleteSelectedCustomShaders
+                                enabled: backend.vkbasalt_shader.split(":").some(function(id) { return id.indexOf("custom/") === 0; })
+                                opacity: enabled ? 1.0 : 0.45
+                                palette.button: "#64253a"
+                                palette.buttonText: "#fff0f5"
+                                onClicked: backend.deleteSelectedCustomShaders()
+                            }
+                            Label {
+                                Layout.fillWidth: true
+                                visible: backend.shader_load_error.length > 0
+                                text: backend.shader_load_error
+                                wrapMode: Text.WordWrap
+                            }
+                            FileDialog {
+                                id: customShaderPicker
+                                title: t.addCustomShader
+                                nameFilters: ["ReShade (*.fx)"]
+                                onAccepted: backend.addCustomShader(selectedFile.toString())
                             }
 
                             Dialog {

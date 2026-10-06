@@ -127,6 +127,7 @@ namespace mako::ui {
         Q_INVOKABLE bool openVkBasaltConfig();
         Q_INVOKABLE bool addCustomShader(const QString& path);
         Q_INVOKABLE void refreshCustomShaders();
+        Q_INVOKABLE bool deleteSelectedCustomShaders();
         Q_INVOKABLE void refreshLosslessScaling();
         [[nodiscard]] bool isLosslessScalingMissing() const { return m_lossless_scaling_missing; }
 
@@ -979,7 +980,7 @@ namespace mako::ui {
 
         QStringList m_gpu_list;
 
-        void savePendingChanges();
+        bool savePendingChanges();
         std::filesystem::path m_config_path;
         std::filesystem::path m_launch_path;
         std::filesystem::path m_vkbasalt_profile_settings_path;

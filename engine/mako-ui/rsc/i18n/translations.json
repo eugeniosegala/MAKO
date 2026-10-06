@@ -197,8 +197,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "pt-BR": {
@@ -360,8 +361,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "pt-PT": {
@@ -523,8 +525,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "es": {
@@ -686,8 +689,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "ko": {
@@ -849,8 +853,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "ja": {
@@ -1012,8 +1017,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "uk": {
@@ -1175,8 +1181,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "zh": {
@@ -1338,8 +1345,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     },
     "de": {
@@ -1501,8 +1509,9 @@
       "powerDocked": "Docked (AC Power)",
       "customShader": "Custom Shader",
       "shaderDefinitionMissing": "definition missing",
-      "addCustomShader": "Add Custom Shader…",
-      "refreshCustomShaders": "Refresh Custom Shaders",
+      "addCustomShader": "Add Custom Shader",
+      "refreshCustomShaders": "Refresh",
+      "deleteSelectedCustomShaders": "Delete selected custom shaders",
       "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
     }
   }

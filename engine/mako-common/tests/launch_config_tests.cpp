@@ -180,6 +180,35 @@ int main() {
         "invalid shader imports must leave the profile file untouched");
 
     setenv("MAKO_LAUNCH_CONFIG", canonicalPath.c_str(), 1);
+    const std::string removalFixture =
+        "# preserved\r\neffects = \"Tone:makoVibrance:tone:cas:Missing\" # chain\r\n"
+        "Tone = /tmp/first.fx\r\nTone = \"/tmp/tone # local.FX\" # last\r\n"
+        "tone = /tmp/other.fx\r\nMissing = disabled\r\ncustomOption = keep";
+    const auto removed = ls::removeVkBasaltCustomShaders(removalFixture, {"custom/Tone", "custom/Missing"});
+    expect(ls::vkBasaltShaderSelection(removalFixture, ls::VkBasaltConf{}) == "custom/Tone:vibrance:custom/tone",
+        "legacy custom selection must resolve case-sensitive FX aliases in CRLF files");
+    expect(removed == "# preserved\r\neffects = makoVibrance:tone:cas # chain\r\n"
+            "tone = /tmp/other.fx\r\nMissing = disabled\r\ncustomOption = keep",
+        "shader deletion must preserve case, comments, line endings, bundled effects and non-FX options");
+    expect(ls::customVkBasaltShaders(removed).size() == 1 &&
+            ls::customVkBasaltShaders(removed).front().name == "tone",
+        "deleted duplicate definitions resurfaced in the catalog");
+    auto retainedSettings = ls::VkBasaltConf{};
+    retainedSettings.shader = "vibrance:custom/tone";
+    retainedSettings.manage_custom_shaders = true;
+    expect(ls::mergeVkBasaltConfiguration(removed, retainedSettings, shaderDirectory)
+            .find("effects = makoVibrance:tone:cas # chain\n") != std::string::npos,
+        "normal settings writes must merge the retained CRLF effect chain correctly");
+    expect(ls::removeVkBasaltCustomShaders(removalFixture, {}) == removalFixture,
+        "empty deletion changed advanced shader content");
+    for (const auto* id : {"vibrance", "custom/makoVibrance", "custom/cas", "custom/reshadeIncludePath", "custom/../unsafe"}) {
+        bool rejected = false;
+        try { static_cast<void>(ls::removeVkBasaltCustomShaders(removalFixture, {id})); }
+        catch (const std::exception&) { rejected = true; }
+        expect(rejected, "shader deletion accepted a bundled or invalid alias");
+    }
+    ls::writeVkBasaltConfiguration(customPath, removed);
+    expect(readText(customPath) == removed, "atomic shader deletion write changed its content");
     expect(ls::findLaunchConfigurationFile() == canonicalPath,
         "MAKO_LAUNCH_CONFIG must override launcher configuration discovery");
     unsetenv("MAKO_LAUNCH_CONFIG");

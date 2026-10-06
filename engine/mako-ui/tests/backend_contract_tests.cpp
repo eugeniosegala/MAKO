@@ -578,7 +578,8 @@ void test_shader_controls() {
     require_property("custom_shader_effects", "QVariantList", false, false);
     require_property("shader_load_error", "QString", false, false);
     require(mako::ui::Backend::staticMetaObject.indexOfMethod("addCustomShader(QString)") >= 0 &&
-            mako::ui::Backend::staticMetaObject.indexOfMethod("refreshCustomShaders()") >= 0,
+            mako::ui::Backend::staticMetaObject.indexOfMethod("refreshCustomShaders()") >= 0 &&
+            mako::ui::Backend::staticMetaObject.indexOfMethod("deleteSelectedCustomShaders()") >= 0,
         "Qt custom shader controls are not exposed");
     require(mako::ui::Backend::staticMetaObject.indexOfMethod(
                 "openVkBasaltConfig()") >= 0,
@@ -590,6 +591,10 @@ void test_shader_controls() {
     QFile file(QString::fromUtf8(MAKO_UI_QML_FILE));
     require(file.open(QIODevice::ReadOnly), "MAKO UI QML could not be opened");
     const QString qml = QString::fromUtf8(file.readAll());
+    require(qml.contains(QStringLiteral("text: t.deleteSelectedCustomShaders")) &&
+            qml.contains(QStringLiteral("onClicked: backend.deleteSelectedCustomShaders()")) &&
+            qml.contains(QStringLiteral("palette.button: \"#64253a\"")),
+        "Qt custom shader deletion action or danger styling is missing");
     require(qml.contains(QStringLiteral("name: t.shaderSettings")) &&
             qml.contains(QStringLiteral("checked: backend.enable_vkbasalt")) &&
             qml.contains(QStringLiteral("backend.vkbasalt_shader")) &&
@@ -769,6 +774,74 @@ void test_save_lifetime() {
             "unchecking a shader with a deleted definition left its alias active");
         removedDefinition.close();
         require(backend.addCustomShader(shaderPath), "custom shader could not be registered again");
+        backend.vkBasaltShaderUpdated(customId + QStringLiteral(":vibrance"));
+        backend.refreshCustomShaders();
+        const auto otherShaderPath = directory.filePath("other.fx");
+        QFile otherShader(otherShaderPath);
+        require(otherShader.open(QIODevice::WriteOnly), "unable to create unselected shader fixture");
+        otherShader.write("// unselected shader\n");
+        otherShader.close();
+        require(backend.addCustomShader(otherShaderPath), "unable to register unselected shader");
+        const auto originalProfile = backend.getProfileIndex();
+        backend.createProfile(QStringLiteral("Shader Isolation"));
+        require(backend.addCustomShader(shaderPath), "unable to register shader in another profile");
+        const auto isolatedPath = backend.getVkBasaltConfigPath().toStdString();
+        const auto isolatedContent = ls::readVkBasaltConfiguration(isolatedPath);
+        backend.profileSelected(originalProfile);
+        backend.separatePowerModesUpdated(true);
+        backend.powerModeSelected(1);
+        backend.targetFPSUpdated(60);
+        backend.powerModeSelected(2);
+        backend.targetFPSUpdated(144);
+        backend.powerModeSelected(0);
+        backend.vkBasaltShaderUpdated(customId + QStringLiteral(":vibrance:custom/Missing"));
+        backend.refreshCustomShaders();
+        const auto currentPath = backend.getVkBasaltConfigPath().toStdString();
+        const auto beforeFailure = ls::readVkBasaltConfiguration(currentPath);
+        const auto sidecarPath = directory.filePath("profile-wrapper-settings.json");
+        require(QFile::rename(sidecarPath, sidecarPath + QStringLiteral(".backup")) &&
+                QDir().mkdir(sidecarPath), "unable to inject sidecar replacement failure");
+        require(!backend.deleteSelectedCustomShaders() && !backend.getShaderLoadError().isEmpty(),
+            "Qt shader deletion must report sidecar failure");
+        require(ls::readVkBasaltConfiguration(currentPath) == beforeFailure &&
+                backend.getVkBasaltShader() == customId + QStringLiteral(":vibrance:custom/Missing"),
+            "failed shader deletion did not restore definitions and selections");
+        require(QDir().rmdir(sidecarPath) && QFile::rename(sidecarPath + QStringLiteral(".backup"), sidecarPath),
+            "unable to restore sidecar fixture");
+        backend.targetFPSUpdated(166);
+        QFile configFile(QString::fromStdString(configPath));
+        const auto permissions = configFile.permissions();
+        require(configFile.setPermissions(QFileDevice::ReadOwner), "unable to inject pending-save failure");
+        require(!backend.deleteSelectedCustomShaders() &&
+                ls::readVkBasaltConfiguration(currentPath) == beforeFailure,
+            "shader deletion continued after pending settings failed to save");
+        require(configFile.setPermissions(permissions), "unable to restore configuration permissions");
+        require(backend.deleteSelectedCustomShaders(), "Qt selected shader deletion failed");
+        require(backend.getVkBasaltShader() == QStringLiteral("vibrance") &&
+                backend.getCustomShaderEffects().size() == 1 &&
+                backend.getCustomShaderEffects().front().toMap().value(QStringLiteral("name")) == QStringLiteral("Customother"),
+            "deletion did not deselect selected custom entries or retain the unselected shader");
+        require(ls::ConfigFile(configPath).profiles().front().target_fps == 166,
+            "deletion did not retry and save the pending edit");
+        backend.powerModeSelected(1);
+        require(backend.getTargetFPS() == 60 && backend.getVkBasaltShader() == QStringLiteral("vibrance"),
+            "deletion changed Battery settings or failed to update shared shader selection");
+        backend.powerModeSelected(2);
+        require(backend.getTargetFPS() == 144 && backend.getVkBasaltShader() == QStringLiteral("vibrance"),
+            "deletion changed AC settings or failed to update shared shader selection");
+        backend.powerModeSelected(0);
+        require(ls::readVkBasaltConfiguration(isolatedPath) == isolatedContent &&
+                localShader.open(QIODevice::ReadOnly) && localShader.readAll() == "// synthetic shader fixture\n",
+            "deletion modified another profile or the external shader source");
+        localShader.close();
+        const auto afterDeletion = ls::readVkBasaltConfiguration(currentPath);
+        require(backend.deleteSelectedCustomShaders() && ls::readVkBasaltConfiguration(currentPath) == afterDeletion,
+            "deletion without selected custom shaders rewrote the profile");
+        // Remove the remaining fixture and restore the selection used by the reopen test.
+        backend.vkBasaltShaderUpdated(QStringLiteral("custom/Customother"));
+        require(backend.deleteSelectedCustomShaders() && backend.getVkBasaltShader() == QStringLiteral("none"),
+            "deleting the last custom effect did not select Off");
+        require(backend.addCustomShader(shaderPath), "deleted shader could not be registered again");
         backend.vkBasaltShaderUpdated(customId + QStringLiteral(":vibrance"));
         backend.refreshCustomShaders();
         const auto timestamp = std::filesystem::last_write_time(configPath);

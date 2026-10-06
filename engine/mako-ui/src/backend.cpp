@@ -449,6 +449,54 @@ void Backend::refreshCustomShaders() {
     emit this->refreshUI();
 }
 
+bool Backend::deleteSelectedCustomShaders() {
+    if (!isValidProfileIndex()) return false;
+    try {
+        if (!this->savePendingChanges())
+            throw std::runtime_error("unable to save pending settings; custom shaders were not deleted");
+        const auto index = static_cast<size_t>(this->m_profile_index);
+        const auto path = this->vkBasaltConfigPath(index);
+        const auto original = ls::readVkBasaltConfiguration(path);
+        const auto previous = this->m_vkbasalt_profiles.at(index);
+        auto updated = previous;
+        const auto selected = QString::fromStdString(ls::vkBasaltShaderSelection(original, previous)).split(':');
+        std::vector<std::string> deleted;
+        QStringList remaining;
+        for (const auto& id : selected) {
+            if (id.startsWith(QStringLiteral("custom/"))) deleted.push_back(id.toStdString());
+            else remaining.append(id);
+        }
+        if (!deleted.empty()) {
+            updated.shader = remaining.isEmpty() ? "none" : remaining.join(':').toStdString();
+            updated.manage_custom_shaders = true;
+            const auto content = ls::mergeVkBasaltConfiguration(
+                ls::removeVkBasaltCustomShaders(original, deleted), updated,
+                this->m_vkbasalt_shader_directory, selected.join(':').toStdString());
+            ls::writeVkBasaltConfiguration(path, content);
+            this->m_vkbasalt_profiles.at(index) = updated;
+            try {
+                this->writeVkBasaltProfiles();
+            } catch (const std::exception& error) {
+                this->m_vkbasalt_profiles.at(index) = previous;
+                try {
+                    ls::writeVkBasaltConfiguration(path, original);
+                } catch (const std::exception& restoreError) {
+                    throw std::runtime_error(std::string(error.what()) +
+                        "; unable to restore shader configuration: " + restoreError.what());
+                }
+                throw;
+            }
+        }
+        this->m_shader_load_error.clear();
+        emit this->refreshUI();
+        return true;
+    } catch (const std::exception& error) {
+        this->m_shader_load_error = QString::fromUtf8(error.what());
+        emit this->refreshUI();
+        return false;
+    }
+}
+
 bool Backend::openVkBasaltConfig() {
     if (!isValidProfileIndex())
         return false;
@@ -665,8 +713,9 @@ bool Backend::captureRunningGame(const int index, const bool create) {
     return true;
 }
 
-void Backend::savePendingChanges() {
+bool Backend::savePendingChanges() {
     this->m_save_timer.stop();
+    bool saved = true;
     if (std::exchange(this->m_config_dirty, false)) {
         try {
             ls::ConfigFile config{};
@@ -674,6 +723,8 @@ void Backend::savePendingChanges() {
             config.profiles() = this->m_profiles;
             config.write(this->m_config_path);
         } catch (const std::exception& error) {
+            saved = false;
+            this->m_config_dirty = true;
             std::cerr << "MAKO Renderer: unable to write configuration:\n- "
                 << error.what() << "\n";
         }
@@ -698,6 +749,8 @@ void Backend::savePendingChanges() {
             }
             this->writeVkBasaltProfiles();
         } catch (const std::exception& error) {
+            saved = false;
+            this->m_vkbasalt_dirty = true;
             std::cerr << "MAKO Renderer: unable to write vkBasalt configuration:\n- "
                 << error.what() << "\n";
         }
@@ -706,6 +759,8 @@ void Backend::savePendingChanges() {
         try {
             this->writeProfileMetadata();
         } catch (const std::exception& error) {
+            saved = false;
+            this->m_profile_metadata_dirty = true;
             std::cerr << "MAKO Renderer: unable to write Decky profile metadata:\n- "
                 << error.what() << "\n";
         }
@@ -716,8 +771,11 @@ void Backend::savePendingChanges() {
             config.settings() = this->m_launch;
             config.write(this->m_launch_path);
         } catch (const std::exception& error) {
+            saved = false;
+            this->m_launch_dirty = true;
             std::cerr << "MAKO Renderer: unable to write standalone launcher configuration:\n- "
                 << error.what() << "\n";
         }
     }
+    return saved;
 }

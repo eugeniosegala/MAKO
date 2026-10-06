@@ -187,6 +187,20 @@ std::vector<std::string> selectedEffects(const ls::VkBasaltConf& settings) {
     return effects;
 }
 
+bool customShaderName(const std::string& name) {
+    constexpr std::array<std::string_view, 9> reservedKeys{
+        "none", "effects", "reshadeincludepath", "reshadetexturepath",
+        "enableonlaunch", "togglekey", "cassharpness", "dlssharpness", "dlsdenoise"
+    };
+    const auto lowered = lowercase(name);
+    if (!customShaderId("custom/" + name) || contains(reservedKeys, lowered) ||
+            contains(SHARPENING, lowered) || contains(ANTIALIASING, lowered))
+        return false;
+    return std::none_of(SHADER_EFFECTS.begin(), SHADER_EFFECTS.end(), [&](const auto& effect) {
+        return lowered == lowercase(std::string(effect.second));
+    });
+}
+
 std::string mergeEffects(const std::string_view existing,
         const std::vector<std::string>& selected,
         const std::vector<ls::VkBasaltCustomShader>& custom,
@@ -272,22 +286,13 @@ std::vector<ls::VkBasaltCustomShader> ls::customVkBasaltShaders(const std::strin
     std::map<std::string, std::string> entries;
     std::istringstream input{std::string(content)};
     for (std::string line; std::getline(input, line);) {
+        if (line.ends_with('\r')) line.pop_back();
         std::smatch match;
         if (!std::regex_match(line, match, assignment)) continue;
         const auto name = match[1].str();
         entries.erase(name);
         auto value = configValue(match[2].str());
-        constexpr std::array<std::string_view, 9> reservedKeys{
-            "none", "effects", "reshadeincludepath", "reshadetexturepath",
-            "enableonlaunch", "togglekey", "cassharpness", "dlssharpness", "dlsdenoise"
-        };
-        bool reserved = contains(reservedKeys, lowercase(name)) || contains(SHARPENING, lowercase(name)) ||
-            contains(ANTIALIASING, lowercase(name));
-        for (const auto& [unused, effect] : SHADER_EFFECTS) {
-            static_cast<void>(unused);
-            reserved |= lowercase(name) == lowercase(std::string(effect));
-        }
-        if (!reserved && customShaderId("custom/" + name) &&
+        if (customShaderName(name) &&
                 lowercase(value).ends_with(".fx"))
             entries[name] = value;
     }
@@ -304,6 +309,7 @@ std::string ls::vkBasaltShaderSelection(const std::string_view content, const Vk
     std::istringstream input{std::string(content)};
     static const std::regex assignment(R"(^\s*effects\s*=\s*(.*)$)");
     for (std::string line; std::getline(input, line);) {
+        if (line.ends_with('\r')) line.pop_back();
         std::smatch match;
         if (std::regex_match(line, match, assignment)) effects = configValue(match[1].str());
     }
@@ -384,6 +390,51 @@ std::filesystem::path ls::findVkBasaltConfigurationFile() {
     return "/etc/vkBasalt.conf";
 }
 
+std::string ls::removeVkBasaltCustomShaders(const std::string_view content,
+        const std::vector<std::string>& shaderIds) {
+    std::unordered_set<std::string> names;
+    for (const auto& id : shaderIds) {
+        if (!customShaderId(id) || !customShaderName(id.substr(7)))
+            throw ls::error("only custom shader IDs can be deleted");
+        names.insert(id.substr(7));
+    }
+    static const std::regex assignment(R"(^(\s*([A-Za-z][A-Za-z0-9_]*)\s*=\s*)(.*)$)");
+    std::string result;
+    for (size_t start = 0; start < content.size();) {
+        const auto newline = content.find('\n', start);
+        const auto end = newline == std::string_view::npos ? content.size() : newline + 1;
+        const auto original = content.substr(start, end - start);
+        start = end;
+        const auto last = original.find_last_not_of("\r\n");
+        const auto length = last == std::string_view::npos ? 0 : last + 1;
+        const std::string line(original.substr(0, length));
+        std::smatch match;
+        if (std::regex_match(line, match, assignment)) {
+            const auto key = match[2].str();
+            const auto value = match[3].str();
+            if (names.contains(key) && lowercase(configValue(value)).ends_with(".fx"))
+                continue; // Remove every FX assignment so duplicates cannot resurface.
+            if (key == "effects") {
+                auto effects = splitEffects(configValue(value));
+                const auto removed = std::erase_if(effects, [&](const auto& effect) { return names.contains(effect); });
+                if (removed != 0) {
+                    const auto comment = commentPosition(value);
+                    result += match[1].str() + joinEffects(effects) +
+                        (comment == std::string_view::npos ? "" : value.substr(comment));
+                    result += original.substr(length);
+                    continue;
+                }
+            }
+        }
+        result += original;
+    }
+    return result;
+}
+
+void ls::writeVkBasaltConfiguration(const std::filesystem::path& path, const std::string_view content) {
+    detail::writeConfigurationAtomically(path, content);
+}
+
 std::string ls::mergeVkBasaltConfiguration(
         const std::string_view existing,
         const VkBasaltConf& settings,
@@ -426,8 +477,10 @@ std::string ls::mergeVkBasaltConfiguration(
     } else {
         std::istringstream input{std::string(existing)};
         std::string line;
-        while (std::getline(input, line))
+        while (std::getline(input, line)) {
+            if (line.ends_with('\r')) line.pop_back();
             lines.push_back(std::move(line));
+        }
     }
 
     const std::regex assignment(
@@ -488,7 +541,7 @@ void ls::writeVkBasaltConfiguration(
         const std::filesystem::path& shaderDirectory, const std::string_view previousSelection) {
     try {
         const auto existing = readVkBasaltConfiguration(path);
-        detail::writeConfigurationAtomically(
+        writeVkBasaltConfiguration(
             path,
             mergeVkBasaltConfiguration(existing, settings, shaderDirectory, previousSelection)
         );
