@@ -68,6 +68,7 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 | Decky backend service ownership | `plugin/docs/BACKEND-ARCHITECTURE.md` |
 | Decky frontend state and settings composition | `plugin/docs/FRONTEND-ARCHITECTURE.md` |
 | Native installation, atomic file replacement, and rollback | `INSTALLATION-TRANSACTIONS.md` |
+| Native Steam Remote Play shared owner and independent bindings | `plugin/docs/REMOTE-PLAY.md`, `engine/scripts/mako_remote_play/` |
 | Renderer configuration | `engine/docs/CONFIGURATION.md` |
 | Launcher executable exclusions shared by Renderer and Decky | `engine/docs/CONFIGURATION.md`, `engine/mako-common/launcher_exclusions.json` |
 | Renderer allocation, ownership, and memory accounting | `engine/docs/MEMORY-MANAGEMENT.md` |
@@ -137,7 +138,7 @@ Start with the root `README.md`, then read `engine/README.md` or `plugin/README.
 | Change Decky or Qt translations | This file and the owning component README | `plugin/defaults/i18n/`, `plugin/scripts/i18n-contract.mjs`, `plugin/scripts/manage-i18n.mjs`, `engine/mako-ui/rsc/i18n/translations.json`, localization tests |
 | Review Armada/native AArch64 behavior | `plugin/docs/ARMADA.md` | `plugin/py_modules/mako_plugin/host_environment.py`, host/wrapper/Flatpak boundary tests |
 | Add or remove transitional compatibility | `CLEANUPS.md` | Owning migration/generator and its focused regression tests |
-| Change native Steam Remote Play override | `plugin/docs/REMOTE-PLAY.md`, `INSTALLATION-TRANSACTIONS.md` | `plugin/py_modules/mako_plugin/remote_play.py`, `remote_play_launch.py`, `configuration.py`, `plugin.py`, and focused Remote Play tests |
+| Change native Steam Remote Play override | `plugin/docs/REMOTE-PLAY.md`, `INSTALLATION-TRANSACTIONS.md` | `engine/scripts/mako_remote_play/`, `engine/scripts/mako-remote-play`, `engine/scripts/generate-remote-play-bindings.py`, Qt/Decky adapters, `just generate-remote-play`, `just check-remote-play`, and focused Remote Play tests |
 | Deploy/reload a local Decky install | `plugin/docs/PACKAGING.md` | `plugin/scripts/deploy-dev.sh`, `plugin/scripts/reload-decky-plugin.mjs` |
 | Collect diagnostics | `COLLECT_DIAGNOSTICS.md` | `scripts/mako-diagnostics` |
 | Prepare release notes, artwork, and flavor text | `HOW_TO_RELEASE.md#notes-identity-and-artwork` | `.agents/skills/mako-prepare-release/SKILL.md` (`$mako-prepare-release`) |
@@ -174,6 +175,7 @@ Keep diagnostic operation names and fields machine-filterable. If a current log 
 - Treat `engine/{build,out}/`, `plugin/{dist,out,coverage,node_modules}/`, `website/{dist,dist-pages,.vinext,.next,node_modules}/`, package-manager stores, `__pycache__/`, and sibling `MAKO-Gym/out/` as generated local data. Do not hand-edit or commit them.
 - Renderer SPIR-V headers and hash manifests are generated from adjacent GLSL by `engine/scripts/generate-color-conversion-spirv.py` and `engine/scripts/generate-spatial-scaling-spirv.py`. Portable CTest runs their read-only `--check` modes; regeneration requires `glslangValidator`. Never edit embedded arrays or hashes independently.
 - `engine/mako-common/launcher_exclusions.json` owns the documented launcher executable exclusions for Renderer activation and Decky profile capture. `scripts/generate-launcher-exclusions.py` generates the component-local C++ and Python lists; use `just generate-launcher-exclusions` after source edits and `just check-launcher-exclusions` for read-only validation. Never edit the generated lists independently or add a runtime dependency between the components.
+- `engine/scripts/mako_remote_play/` owns shared Remote Play file safety, the self-contained launch template, and managed-file primitives. `engine/scripts/generate-remote-play-bindings.py` bundles byte-identical `remote_play_core.py`, `remote_play_launch.py`, and `managed_files.py` into Decky. Edit the canonical source and run `just generate-remote-play`; `just check-remote-play`, Decky freshness, and Renderer CTest validate copies without rewriting them. The native command uses its installed private package; neither component imports the other at runtime.
 - `plugin/shared_config.py` owns the Decky schema and stable identifiers. `plugin/scripts/generate_ts_schema.py` owns its generated Python and TypeScript bindings; use `npm run check:generated-config` from `plugin/` and never edit the outputs independently.
 - `plugin/defaults/i18n/` owns Decky's translation sources; `plugin/scripts/manage-i18n.mjs` validates them and generates `plugin/src/i18n/languages.json`. `plugin/src/config/devBuildInfo.generated.ts` is local build metadata. Do not edit either generated output directly.
 - `engine/vulkan-headers-revision.txt` also owns the generated `engine/dist/flatpak/mako-render/vulkan-headers.json` build-only dependency. Use `just generate-flatpak-headers` after changing the pin and `just check-flatpak-headers` for read-only validation; never edit that module independently.

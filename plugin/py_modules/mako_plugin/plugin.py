@@ -123,7 +123,7 @@ class Plugin:
     async def get_remote_play_status(self) -> RemotePlayResponse:
         def read():
             status = self.remote_play_service.get_status()
-            if not status["installed"] or not status["running"]:
+            if not status["installed"] or not status["running"] or status["conflict"]:
                 return status
             runtime = self.runtime_state_service.get_status(REMOTE_PLAY_PROFILE)
             return self.remote_play_service.get_status(runtime["contexts"])
@@ -133,6 +133,10 @@ class Plugin:
         remote = self.remote_play_service
         configuration = self.configuration_service
         with remote.mutation(), configuration._configuration_write_lock:
+            if remote.state.exists():
+                state = remote._read_state(update_paths=False)
+                if state['configuration_path'] != str(configuration.config_file_path):
+                    raise ValueError('Restore the Remote Play override before enabling it for a different configuration.')
             paths = [configuration.config_file_path, configuration.profile_metadata_path,
                      configuration.wrapper_profile_settings_path, configuration.mako_script_path]
             with remote.transaction(paths):
@@ -388,7 +392,7 @@ class Plugin:
     async def sync_current_profile(self, app_id: str = "") -> ProfileResponse:
         """Select a live app's saved profile, or restore the default profile."""
         remote = await asyncio.to_thread(self.remote_play_service.get_status)
-        remote_profile = REMOTE_PLAY_PROFILE if remote["installed"] and remote["running"] else ""
+        remote_profile = REMOTE_PLAY_PROFILE if remote["installed"] and remote["running"] and not remote["conflict"] else ""
         return self.configuration_service.sync_current_profile(app_id, remote_profile)
 
     async def update_profile_config(

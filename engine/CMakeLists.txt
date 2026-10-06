@@ -21,6 +21,11 @@ install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/../scripts/mako-diagnostics"
     DESTINATION "${CMAKE_INSTALL_BINDIR}")
 install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-installer"
     DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(PROGRAMS "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-remote-play"
+    DESTINATION "${CMAKE_INSTALL_BINDIR}")
+install(DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako_remote_play/"
+    DESTINATION "${CMAKE_INSTALL_DATAROOTDIR}/mako-render/mako_remote_play"
+    FILES_MATCHING PATTERN "*.py" PATTERN "__pycache__" EXCLUDE)
 
 file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/VERSION" MAKO_VERSION LIMIT_COUNT 1)
 string(STRIP "${MAKO_VERSION}" MAKO_VERSION)
@@ -113,6 +118,12 @@ if(BUILD_TESTING AND UNIX)
         COMMAND bash
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-mako-launch.sh"
             "${CMAKE_CURRENT_SOURCE_DIR}/scripts/mako-launch")
+    add_test(NAME remote-play-bindings
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/generate-remote-play-bindings.py" --check)
+    add_test(NAME remote-play-command
+        COMMAND "${MAKO_PYTHON3_EXECUTABLE}"
+            "${CMAKE_CURRENT_SOURCE_DIR}/scripts/test-mako-remote-play.py")
     set_tests_properties(standalone-launcher PROPERTIES
         LABELS "portable-policy")
 

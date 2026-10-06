@@ -330,6 +330,11 @@ required_paths=(
     "bin/mako-diagnostics" \
     "bin/mako-installer" \
     "bin/mako-launch" \
+    "bin/mako-remote-play" \
+    "share/mako-render/mako_remote_play/__init__.py" \
+    "share/mako-render/mako_remote_play/remote_play_core.py" \
+    "share/mako-render/mako_remote_play/remote_play_launch.py" \
+    "share/mako-render/mako_remote_play/managed_files.py" \
     "bin/mako-vrr-lease" \
     "bin/mako-ui" \
     "lib/libmako-render.so" \

@@ -19,6 +19,10 @@ def main() -> None:
          "--check"],
         check=True,
     )
+    subprocess.run(
+        [sys.executable, str(PLUGIN_ROOT.parent / 'engine/scripts/generate-remote-play-bindings.py'), '--check'],
+        check=True,
+    )
     expected_files = {
         PLUGIN_ROOT / "src/config/generatedConfigSchema.ts": (
             generate_typescript_schema()

@@ -14,6 +14,7 @@ This map identifies code owners and call boundaries. The behavior contracts rema
 | Spatial reconstruction | `mako-render/src/spatial_scaler.*` and `spatial_scaling_policy.hpp` | Chooses geometry and records private scaling work without changing scheduler evidence. |
 | Model execution | `mako-backend/` | Owns LSFG and LS1 resources and compute work behind the Renderer context. |
 | Shader effects | The optional vkBasalt layer selected by `mako-launch` and MAKO Decky wrappers | Runs as a separate Vulkan layer; Renderer scaling and Frame Generation do not own its effect chain. |
+| Native Steam Remote Play | `scripts/mako_remote_play/`, `scripts/mako-remote-play`, and `mako-ui/src/remote_play.cpp` | One Python owner handles Steam file safety. Qt invokes the packaged command asynchronously; Decky bundles byte-identical bindings. Existing launchers and Renderer configuration owners retain feature and live-update policy. |
 
 ## Presentation files
 

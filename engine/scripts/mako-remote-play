@@ -1,0 +1,43 @@
+#!/usr/bin/python3
+"""Manage the opt-in native Steam Remote Play entry point; never render frames."""
+import argparse
+import json
+import logging
+from pathlib import Path
+import sys
+
+directory = Path(__file__).resolve().parent
+installed = directory.parent / 'share/mako-render'
+sys.path.insert(0, str(installed if (installed / 'mako_remote_play').is_dir() else directory))
+from mako_remote_play.remote_play_core import RemotePlayOverride, RemotePlayResponse
+
+class RemotePlayCommandResponse(RemotePlayResponse):
+    configuration_path: str
+
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument('action', choices=('status', 'install', 'remove', 'refresh', 'restore-before-uninstall'))
+parser.add_argument('--launcher', type=Path)
+parser.add_argument('--config', type=Path)
+arguments = parser.parse_args()
+logging.basicConfig(level=logging.WARNING)
+home = Path.home()
+runner = arguments.launcher or directory / 'mako-launch'
+service = RemotePlayOverride(home, runner, config_file=arguments.config)
+try:
+    if arguments.action == 'install':
+        service.install()
+    elif arguments.action == 'remove':
+        service.remove()
+    elif arguments.action == 'refresh':
+        service.refresh_installed_payload()
+    elif arguments.action == 'restore-before-uninstall':
+        service.restore_before_uninstall()
+    if service.state.exists() or service.state.is_symlink():
+        service._read_state()
+    response = service.get_status()
+except (OSError, ValueError, TypeError) as error:
+    response = service.get_status()
+    response.update(success=False, error=str(error), message=str(error))
+response = RemotePlayCommandResponse(**response, configuration_path=str(service.config_file_path))
+print(json.dumps(response))
+sys.exit(0 if response['success'] else 1)

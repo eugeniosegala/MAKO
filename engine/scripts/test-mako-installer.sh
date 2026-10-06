@@ -14,6 +14,8 @@ bash -n "$installer"
 
 test_root="$(mktemp -d /tmp/mako-installer-contract.XXXXXX)"
 trap 'rm -rf -- "$test_root"' EXIT
+export HOME="$test_root/home"
+mkdir -p "$HOME"
 package_root="$test_root/package"
 install_prefix="$test_root/installed prefix"
 config_home="$test_root/config"
@@ -305,5 +307,40 @@ XDG_CONFIG_HOME="$purge_config_home" \
 "$purge_prefix/bin/mako-installer" --uninstall --purge-configuration >/dev/null
 [[ ! -e "$purge_config_home/mako-render" ]] ||
     fail "explicit configuration purge left profiles or diagnostics behind"
+
+# Remote Play restoration must precede every payload/configuration removal.
+remote_prefix="$test_root/remote-install"
+remote_config="$test_root/remote-config"
+MAKO_INSTALL_PREFIX="$remote_prefix" XDG_CONFIG_HOME="$remote_config" \
+    "$package_root/Install MAKO Renderer" --install >/dev/null
+mkdir -p "$remote_config/mako-render"
+printf '%s\n' '{}' > "$remote_config/mako-render/native-remote-play.json"
+if MAKO_INSTALL_PREFIX="$remote_prefix" XDG_CONFIG_HOME="$remote_config" \
+        "$remote_prefix/bin/mako-installer" --uninstall --purge-configuration >"$test_root/remote-blocked.log" 2>&1; then
+    fail "older Renderer uninstall ignored an existing Remote Play override"
+fi
+[[ -f "$remote_prefix/bin/mako-ui" && -f "$remote_config/mako-render/native-remote-play.json" ]] ||
+    fail "blocked restoration removed Renderer or configuration"
+# The shared override record remains under HOME even with a custom XDG path.
+mkdir -p "$HOME/.config/mako-render"
+mv "$remote_config/mako-render/native-remote-play.json" "$HOME/.config/mako-render/"
+if MAKO_INSTALL_PREFIX="$remote_prefix" XDG_CONFIG_HOME="$remote_config" \
+        "$remote_prefix/bin/mako-installer" --uninstall >"$test_root/remote-home-blocked.log" 2>&1; then
+    fail "older Renderer uninstall ignored the shared HOME override record"
+fi
+mv "$HOME/.config/mako-render/native-remote-play.json" "$remote_config/mako-render/"
+printf '%s\n' '#!/bin/sh' 'exit 1' > "$remote_prefix/bin/mako-remote-play"
+chmod 0755 "$remote_prefix/bin/mako-remote-play"
+if MAKO_INSTALL_PREFIX="$remote_prefix" XDG_CONFIG_HOME="$remote_config" \
+        "$remote_prefix/bin/mako-installer" --uninstall --purge-configuration >"$test_root/remote-failed.log" 2>&1; then
+    fail "Renderer uninstall ignored a restoration failure"
+fi
+[[ -f "$remote_prefix/bin/mako-ui" && -f "$remote_config/mako-render/native-remote-play.json" ]] ||
+    fail "failed restoration removed Renderer or configuration"
+printf '%s\n' '#!/bin/sh' 'test "$1" = restore-before-uninstall' > "$remote_prefix/bin/mako-remote-play"
+MAKO_INSTALL_PREFIX="$remote_prefix" XDG_CONFIG_HOME="$remote_config" \
+    "$remote_prefix/bin/mako-installer" --uninstall --purge-configuration >/dev/null
+[[ ! -e "$remote_prefix/bin/mako-ui" && ! -e "$remote_config/mako-render" ]] ||
+    fail "successful restoration did not allow uninstall"
 
 printf '%s\n' 'mako-installer contract test passed'

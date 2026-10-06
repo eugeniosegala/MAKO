@@ -78,6 +78,8 @@ When shaders are enabled, use the complete launch option shown by the UI; it inc
 
 ### Other launch types
 
+For native Steam Remote Play on the receiving x86_64 Linux device, close streams and select **Override Remote Play** under **Remote Play** in the configuration app. It starts disabled. **Edit Profile** opens the shared `Remote-Play` profile, including normal Shaders, Scaling, Frame Generation, and optional AC/battery settings. **Restore Steam Client** removes the override and retains the profile. The archive uninstaller restores it before removing Renderer dependencies; restore it in the UI before removing a system package or manually deleting files. Requires system Python 3.11 or newer. See [Remote Play](../plugin/docs/REMOTE-PLAY.md) for recovery and experimental hardware limits.
+
 | Game or application | How to start it |
 | --- | --- |
 | Direct desktop command | `~/.local/bin/mako-launch "/path/to/program"` |

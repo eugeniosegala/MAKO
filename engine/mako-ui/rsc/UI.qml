@@ -17,6 +17,8 @@ ApplicationWindow {
     minimumHeight: 400
     visible: true
     onActiveChanged: if (active) backend.refreshLosslessScaling()
+    Component.onCompleted: backend.refreshRemotePlay()
+    onClosing: function(close) { if (backend.remote_play_busy) close.accepted = false }
 
     component ShaderActionButton: Button {
         id: action
@@ -1055,6 +1057,46 @@ ApplicationWindow {
                             checked: backend.force_alsa_audio
                             onToggled: backend.force_alsa_audio = checked
                         }
+                    }
+                }
+
+                Group {
+                    name: t.remotePlay
+
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: t.remotePlayDesc
+                        color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        ShaderActionButton {
+                            Layout.preferredWidth: 1
+                            text: backend.remote_play_managed ? t.restoreSteamClient : t.overrideRemotePlay
+                            enabled: !backend.remote_play_busy && !backend.remote_play_running &&
+                                     (backend.remote_play_managed || backend.remote_play_available)
+                            onClicked: backend.setRemotePlayOverride(!backend.remote_play_managed)
+                        }
+                        ShaderActionButton {
+                            Layout.preferredWidth: 1
+                            text: t.editRemotePlayProfile
+                            enabled: !backend.remote_play_busy
+                            onClicked: backend.editRemotePlayProfile()
+                        }
+                        ShaderActionButton {
+                            Layout.preferredWidth: 1
+                            text: t.refreshRemotePlay
+                            enabled: !backend.remote_play_busy
+                            onClicked: backend.refreshRemotePlay()
+                        }
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        wrapMode: Text.WordWrap
+                        text: backend.remote_play_message || (backend.remote_play_busy ? t.remotePlayWorking :
+                              backend.remote_play_running ? t.remotePlayRunning :
+                              backend.remote_play_installed ? t.remotePlayEnabled : t.remotePlayDisabled)
                     }
                 }
 

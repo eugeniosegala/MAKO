@@ -36,6 +36,14 @@ generate-launcher-exclusions:
 check-launcher-exclusions:
     python3 scripts/generate-launcher-exclusions.py --check
 
+# Bundle the shared native Remote Play owner into independently installed Decky.
+generate-remote-play:
+    python3 engine/scripts/generate-remote-play-bindings.py
+
+# Reject stale shared Remote Play bindings without rewriting them.
+check-remote-play:
+    python3 engine/scripts/generate-remote-play-bindings.py --check
+
 # Generate Flatpak's build-only Vulkan-Headers module from the shared pin.
 generate-flatpak-headers:
     python3 engine/scripts/generate-flatpak-vulkan-headers.py

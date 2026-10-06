@@ -9,6 +9,7 @@
 #include <QTimer>
 #include <QThread>
 #include <QJsonObject>
+#include <QProcess>
 
 #include "process_detection.hpp"
 
@@ -42,6 +43,12 @@ namespace mako::ui {
         Q_PROPERTY(QVariantList running_games READ getRunningGames NOTIFY runningGamesChanged)
         Q_PROPERTY(bool scanning_games READ isScanningGames NOTIFY runningGamesChanged)
         Q_PROPERTY(bool capture_failed READ captureFailed NOTIFY runningGamesChanged)
+        Q_PROPERTY(bool remote_play_busy READ remotePlayBusy NOTIFY refreshUI)
+        Q_PROPERTY(bool remote_play_installed READ remotePlayInstalled NOTIFY refreshUI)
+        Q_PROPERTY(bool remote_play_managed READ remotePlayManaged NOTIFY refreshUI)
+        Q_PROPERTY(bool remote_play_available READ remotePlayAvailable NOTIFY refreshUI)
+        Q_PROPERTY(bool remote_play_running READ remotePlayRunning NOTIFY refreshUI)
+        Q_PROPERTY(QString remote_play_message READ remotePlayMessage NOTIFY refreshUI)
 
         Q_PROPERTY(QString dll READ getDll WRITE dllUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool lossless_scaling_missing READ isLosslessScalingMissing NOTIFY refreshUI)
@@ -116,12 +123,22 @@ namespace mako::ui {
         Q_PROPERTY(float maximum_vkbasalt_strength READ getMaximumVkBasaltStrength CONSTANT)
 
     public:
-        explicit Backend(std::filesystem::path procRoot = "/proc");
+        explicit Backend(std::filesystem::path procRoot = "/proc",
+                         QString remotePlayHelper = {});
         ~Backend() override;
 
         [[nodiscard]] QVariantList getRunningGames() const;
         [[nodiscard]] bool isScanningGames() const { return m_scanning_games; }
         [[nodiscard]] bool captureFailed() const { return m_capture_failed; }
+        [[nodiscard]] bool remotePlayBusy() const { return m_remote_play_process.state() != QProcess::NotRunning; }
+        [[nodiscard]] bool remotePlayInstalled() const { return m_remote_play_status.value("installed").toBool(); }
+        [[nodiscard]] bool remotePlayManaged() const { return m_remote_play_status.value("managed").toBool(); }
+        [[nodiscard]] bool remotePlayAvailable() const { return !m_remote_play_helper.isEmpty() && m_remote_play_status.value("available").toBool(); }
+        [[nodiscard]] bool remotePlayRunning() const { return m_remote_play_status.value("running").toBool(); }
+        [[nodiscard]] QString remotePlayMessage() const { return m_remote_play_message; }
+        Q_INVOKABLE void refreshRemotePlay();
+        Q_INVOKABLE void setRemotePlayOverride(bool enabled);
+        Q_INVOKABLE bool editRemotePlayProfile();
         Q_INVOKABLE void refreshRunningGames(bool includeAllApplications = false);
         Q_INVOKABLE bool captureRunningGame(int index, bool createProfile);
         Q_INVOKABLE bool openVkBasaltConfig();
@@ -966,6 +983,12 @@ namespace mako::ui {
         bool m_capture_failed{false};
 
         int m_power_mode{0};
+        QString m_remote_play_helper;
+        QProcess m_remote_play_process;
+        QJsonObject m_remote_play_status;
+        QString m_remote_play_message;
+        void runRemotePlayAction(const QString& action);
+        void initializeRemotePlay();
         ls::GlobalConf m_global;
         std::vector<ls::GameConf> m_profiles;
         ls::LaunchConf m_launch;

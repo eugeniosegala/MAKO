@@ -6,6 +6,8 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QElapsedTimer>
+#include <QThread>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
@@ -1024,6 +1026,72 @@ void test_decky_shader_profile_round_trip_and_owned_deletion() {
     else qputenv("MAKO_VKBASALT_SHADER_DIR", previousShaderDirectory);
 }
 
+void test_remote_play_shared_command_and_profile_preservation() {
+    QTemporaryDir directory;
+    require(directory.isValid(), "Remote Play fixture failed");
+    const auto previousHome = qgetenv("HOME");
+    const auto previousConfig = qgetenv("MAKO_CONFIG");
+    const auto previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    const auto previousConfigHome = qgetenv("XDG_CONFIG_HOME");
+    const auto config = directory.filePath(".config/mako-render/conf.toml");
+    const auto clientPath = directory.filePath(".local/share/Steam/ubuntu12_64/streaming_client");
+    require(QDir().mkpath(QFileInfo(clientPath).absolutePath()), "Remote Play Steam tree failed");
+    QByteArray original(24, '\0');
+    original.replace(0, 6, QByteArray("\x7f" "ELF\x02\x01", 6));
+    original[18] = '\x3e';
+    QFile client(clientPath);
+    require(client.open(QIODevice::WriteOnly) && client.write(original) == original.size(), "Remote Play original fixture failed");
+    client.close();
+    require(client.setPermissions(QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner), "Remote Play permissions failed");
+    qputenv("HOME", directory.path().toUtf8());
+    qputenv("MAKO_CONFIG", config.toUtf8());
+    qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launcher.conf").toUtf8());
+    qputenv("XDG_CONFIG_HOME", directory.filePath(".config").toUtf8());
+    {
+        mako::ui::Backend backend("/proc", QStringLiteral(MAKO_UI_REMOTE_PLAY_HELPER));
+        const auto wait = [&backend] {
+            QElapsedTimer elapsed;
+            elapsed.start();
+            while (backend.remotePlayBusy() && elapsed.elapsed() < 5000) {
+                QCoreApplication::processEvents(QEventLoop::AllEvents, 10);
+                QThread::msleep(1);
+            }
+            QCoreApplication::processEvents();
+            require(!backend.remotePlayBusy(), "Remote Play command did not finish asynchronously");
+        };
+        backend.refreshRemotePlay();
+        wait();
+        require(!backend.remotePlayInstalled() && backend.remotePlayAvailable(), "Remote Play was implicitly installed or unavailable");
+        require(backend.editRemotePlayProfile(), "Remote Play profile could not be prepared");
+        backend.separatePowerModesUpdated(true);
+        backend.powerModeSelected(1);
+        backend.targetFPSUpdated(72);
+        backend.setRemotePlayOverride(true);
+        wait();
+        if (!backend.remotePlayInstalled()) {
+            require(backend.remotePlayMessage().contains("Python 3.11"), "shared Remote Play installation failed");
+        } else {
+            require(backend.remotePlayMessage().isEmpty(), "successful Remote Play install reported an error");
+            backend.setRemotePlayOverride(false);
+            wait();
+            require(!backend.remotePlayManaged(), "Qt did not restore the shared Steam override");
+            const auto saved = ls::ConfigFile(config.toStdString());
+            const auto found = std::find_if(saved.profiles().begin(), saved.profiles().end(), [](const auto& profile) {
+                return profile.name == "Remote-Play";
+            });
+            require(found != saved.profiles().end() && found->power_profiles.size() == 2 &&
+                    found->power_profiles.front().target_fps == 72, "override removal reset existing power settings");
+        }
+        require(client.open(QIODevice::ReadOnly) && client.readAll() == original, "Qt did not preserve Steam's original client");
+        client.close();
+    }
+    for (const auto& entry : {std::pair{"HOME", previousHome}, std::pair{"MAKO_CONFIG", previousConfig},
+            std::pair{"MAKO_LAUNCH_CONFIG", previousLaunch}, std::pair{"XDG_CONFIG_HOME", previousConfigHome}}) {
+        if (entry.second.isNull()) qunsetenv(entry.first);
+        else qputenv(entry.first, entry.second);
+    }
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -1040,6 +1108,7 @@ int main(int argc, char* argv[]) {
         test_compact_restart_markers();
         test_save_lifetime();
         test_decky_shader_profile_round_trip_and_owned_deletion();
+        test_remote_play_shared_command_and_profile_preservation();
     } catch (const std::exception& error) {
         std::cerr << "mako-ui backend contract test failed: "
                   << error.what() << '\n';

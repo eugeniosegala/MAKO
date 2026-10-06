@@ -454,6 +454,19 @@ uninstall_payload() {
         exit 0
     fi
 
+    # Restore the shared native Remote Play override before deleting its launcher.
+    local remote_helper="$install_prefix/bin/mako-remote-play"
+    if [[ -x "$remote_helper" ]]; then
+        "$remote_helper" restore-before-uninstall || fail "Remote Play restoration failed; Renderer files were kept."
+    elif [[ -e "$config_dir/native-remote-play.json" || -L "$config_dir/native-remote-play.json" ||
+            -e "$HOME/.config/mako-render/native-remote-play.json" || -L "$HOME/.config/mako-render/native-remote-play.json" ||
+            -e "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original" ||
+            -L "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original" ||
+            -e "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original.sha256" ||
+            -L "$HOME/.local/share/Steam/ubuntu12_64/streaming_client.mako-original.sha256" ]]; then
+        fail "Remove the Remote Play override before uninstalling this older Renderer."
+    fi
+
     local line
     while IFS= read -r line || [[ -n "$line" ]]; do
         parse_manifest_line "$line"

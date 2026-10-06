@@ -4,6 +4,7 @@ set(UI_SOURCES
     "src/backend.cpp"
     "src/main.cpp"
     "src/process_detection.cpp"
+    "src/remote_play.cpp"
     "src/utils.cpp")
 
 set(UI_RESOURCES
@@ -59,7 +60,8 @@ if(BUILD_TESTING)
         "tests/process_detection_tests.cpp"
         "src/backend.cpp"
         "src/backend.hpp"
-        "src/process_detection.cpp")
+        "src/process_detection.cpp"
+        "src/remote_play.cpp")
     set_target_properties(mako-ui-process-detection-tests PROPERTIES AUTOMOC ON)
     target_include_directories(mako-ui-process-detection-tests PRIVATE "src")
     target_link_libraries(mako-ui-process-detection-tests PRIVATE mako-common Qt6::Core Qt6::Gui)
@@ -69,6 +71,7 @@ if(BUILD_TESTING)
         "tests/backend_contract_tests.cpp"
         "src/backend.cpp"
         "src/process_detection.cpp"
+        "src/remote_play.cpp"
         "src/backend.hpp")
     set_target_properties(mako-ui-backend-contract-tests PROPERTIES AUTOMOC ON)
     target_include_directories(mako-ui-backend-contract-tests PRIVATE "src")
@@ -79,6 +82,7 @@ if(BUILD_TESTING)
         PRIVATE Qt6::Gui)
     target_compile_definitions(mako-ui-backend-contract-tests PRIVATE
         MAKO_UI_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/UI.qml"
+        MAKO_UI_REMOTE_PLAY_HELPER="${CMAKE_CURRENT_SOURCE_DIR}/../scripts/mako-remote-play"
         MAKO_UI_GROUP_ENTRY_QML_FILE="${CMAKE_CURRENT_SOURCE_DIR}/rsc/panes/GroupEntry.qml"
         MAKO_UI_VKBASALT_SHADER_SOURCE_DIR="${MAKO_VKBASALT_SHADER_SOURCE_DIR}")
     add_test(NAME ui-backend-contract COMMAND mako-ui-backend-contract-tests)

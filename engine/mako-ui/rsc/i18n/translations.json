@@ -200,7 +200,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     },
     "pt-BR": {
       "activeIn": "Processos correspondentes",
@@ -364,7 +374,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     },
     "pt-PT": {
       "activeIn": "Processos correspondentes",
@@ -528,7 +548,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     },
     "es": {
       "activeIn": "Procesos coincidentes",
@@ -692,7 +722,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     },
     "ko": {
       "activeIn": "일치하는 프로세스",
@@ -856,7 +896,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     },
     "ja": {
       "activeIn": "一致するプロセス",
@@ -1020,7 +1070,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     },
     "uk": {
       "activeIn": "Відповідні процеси",
@@ -1184,7 +1244,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     },
     "zh": {
       "activeIn": "匹配进程",
@@ -1348,7 +1418,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     },
     "de": {
       "activeIn": "Zugeordnete Prozesse",
@@ -1512,7 +1592,17 @@
       "addCustomShader": "Add Custom Shader",
       "refreshCustomShaders": "Refresh",
       "deleteSelectedCustomShaders": "Delete selected custom shaders",
-      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart."
+      "customShaderHelp": "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+      "remotePlay": "Remote Play",
+      "remotePlayDesc": "Opt in on the receiving device to use MAKO with native Steam Remote Play. Close the stream before changing the override.",
+      "overrideRemotePlay": "Override Remote Play",
+      "restoreSteamClient": "Restore Steam Client",
+      "editRemotePlayProfile": "Edit Profile",
+      "refreshRemotePlay": "Refresh",
+      "remotePlayWorking": "Updating Remote Play…",
+      "remotePlayRunning": "Remote Play is running.",
+      "remotePlayEnabled": "Remote Play override enabled.",
+      "remotePlayDisabled": "Remote Play override off."
     }
   }
 }

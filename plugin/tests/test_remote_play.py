@@ -39,7 +39,7 @@ class RemotePlayTests(unittest.TestCase):
             'version=2\n[[profile]]\nname="mako"\n',
         ))
         self.service.mako_script_path.parent.mkdir(parents=True)
-        self.service.mako_script_path.write_text("#!/bin/sh\n")
+        self.service.mako_script_path.write_text("#!/bin/sh\n# MAKO_LAUNCH_RENDERER_REQUIRED\n")
         self.service.mako_script_path.chmod(0o755)
 
     def test_idempotent_install_and_restore_preserve_original_permissions(self):
@@ -106,6 +106,7 @@ class RemotePlayTests(unittest.TestCase):
                     self.service.state.unlink()
                 else:
                     self.service.state.write_text(content)
+                self.assertTrue(self.service.get_status()['conflict'])
                 self.service.remove()
                 self.assertEqual(ELF, self.service.client.read_bytes())
         self.service.install()
@@ -263,7 +264,7 @@ class RemotePlayTests(unittest.TestCase):
             self.configuration.ensure_remote_play_profile(REMOTE_PLAY_PROFILE)
         ready = self.home / "ready"
         self.service.mako_script_path.write_text(
-            "#!/bin/sh\n" + f"touch '{ready}'\nexec /usr/bin/sleep 30\n"
+            "#!/bin/sh\n# MAKO_LAUNCH_RENDERER_REQUIRED\n" + f"touch '{ready}'\nexec /usr/bin/sleep 30\n"
         )
         self.service.install()
         process = subprocess.Popen([str(self.service.client)], stderr=subprocess.PIPE)
@@ -300,7 +301,7 @@ class RemotePlayTests(unittest.TestCase):
         plugin.remote_play_service = self.service
         plugin.configuration_service = self.configuration
         before = self.configuration.config_file_path.read_bytes()
-        from py_modules.mako_plugin import remote_play
+        from py_modules.mako_plugin import remote_play_core as remote_play
         write = remote_play.write_managed_text_atomically
         updated = ELF + b"updated by Steam during install"
         def fail_after_update(path, *arguments, **keywords):
@@ -338,7 +339,7 @@ class RemotePlayTests(unittest.TestCase):
         self.assertEqual(updated, self.service.client.read_bytes())
 
     def test_original_permissions_and_dependencies_are_ready_before_wrapper_commit(self):
-        from py_modules.mako_plugin import remote_play
+        from py_modules.mako_plugin import remote_play_core as remote_play
         write = remote_play.write_managed_text_atomically
         def check_entry(path, *arguments, **keywords):
             if path == self.service.client:
@@ -359,7 +360,7 @@ class RemotePlayTests(unittest.TestCase):
         self.assertFalse(self.service.backup.exists())
 
     def test_destination_guard_catches_new_stream_and_updater_before_commit(self):
-        from py_modules.mako_plugin import remote_play
+        from py_modules.mako_plugin import remote_play_core as remote_play
         write = remote_play.write_managed_text_atomically
         def new_stream(path, *arguments, **keywords):
             if path == self.service.client:
@@ -372,7 +373,7 @@ class RemotePlayTests(unittest.TestCase):
         self.assertEqual(ELF, self.service.client.read_bytes())
 
     def test_late_install_failure_rolls_back_all_managed_files(self):
-        from py_modules.mako_plugin import remote_play
+        from py_modules.mako_plugin import remote_play_core as remote_play
         write = remote_play.write_managed_text_atomically
         def fail_entry(path, *arguments, **keywords):
             if path == self.service.client:
@@ -392,7 +393,7 @@ class RemotePlayTests(unittest.TestCase):
             self.service._digest(link)
         with self.assertRaisesRegex(ValueError, "identity changed"):
             self.service._digest(self.service.client, self.home.stat().st_uid + 1)
-        from py_modules.mako_plugin import remote_play
+        from py_modules.mako_plugin import remote_play_core as remote_play
         copy = remote_play.copy_managed_file_atomically
         with patch.object(remote_play, "copy_managed_file_atomically", wraps=copy) as copier:
             self.service.install()
@@ -431,6 +432,41 @@ class RemotePlayTests(unittest.TestCase):
         self.service.remove()
         plugin._install_remote_play_override()
         self.assertEqual(144, self.configuration.get_profile_config(REMOTE_PLAY_PROFILE, "docked")["config"]["target_fps"])
+
+    def test_qt_alternate_config_is_not_edited_as_the_decky_profile(self):
+        from py_modules.mako_plugin.remote_play_core import RemotePlayOverride
+        launcher = self.home / '.local/bin/mako-launch'
+        launcher.write_text('#!/bin/sh\n')
+        launcher.chmod(0o755)
+        config = self.home / 'alternate/conf.toml'
+        config.parent.mkdir()
+        config.write_text('version=2\n[[profile]]\nname="Remote-Play"\n')
+        owner = RemotePlayOverride(self.home, launcher, config_file=config)
+        owner.proc_root = self.service.proc_root
+        owner.install()
+        before = self.configuration.config_file_path.read_bytes()
+        with patch.object(self.service, 'running_pids', return_value=[123]):
+            status = self.service.get_status()
+            self.assertTrue(status['running'])
+            self.assertTrue(status['conflict'])
+            plugin = Plugin.__new__(Plugin)
+            plugin.remote_play_service = self.service
+            plugin.configuration_service = self.configuration
+            async def inline(function, *arguments):
+                return function(*arguments)
+            with patch.object(self.configuration, 'sync_current_profile') as sync, \
+                    patch('py_modules.mako_plugin.plugin.asyncio.to_thread', inline):
+                asyncio.run(plugin.sync_current_profile(''))
+                sync.assert_called_once_with('', '')
+        self.assertEqual(self.configuration.config_file_path, self.service.config_file_path)
+        with self.assertRaisesRegex(ValueError, 'different configuration'):
+            plugin._install_remote_play_override()
+        self.assertEqual(before, self.configuration.config_file_path.read_bytes())
+        self.service.remove()
+        self.service.install()
+        saved = json.loads(self.service.state.read_text())
+        self.assertEqual(str(self.home / '.local/bin/mako-run'), saved['launcher_path'])
+        self.assertEqual(str(self.configuration.config_file_path), saved['configuration_path'])
 
     def test_profile_preparation_does_not_rewrite_unrelated_shader_files(self):
         shader = self.configuration.vkbasalt_global_config_path
@@ -573,6 +609,26 @@ class RemoteFeatureLaunchTests(unittest.TestCase):
         self.assertEqual('1', values['MANGOHUD'])
         self.assertNotIn('DISABLE_MANGOHUD', values)
         self.assertNotIn('ENABLE_VKBASALT', values)
+
+    def test_qt_style_sidecar_edit_is_used_without_regenerating_the_launcher(self):
+        self.execute_profile({'external_vulkan_layer': 'vkbasalt', 'vkbasalt_shader': 'vibrance'})
+        self.execute_profile({'external_vulkan_layer': '', 'frame_generation_provisioned': False,
+                              'frame_generation_enabled': False, 'scaling_enabled': False})
+        before = self.configuration.mako_script_path.read_bytes()
+        settings = json.loads(self.configuration.wrapper_profile_settings_path.read_text())
+        settings['profiles'][REMOTE_PLAY_PROFILE]['external_vulkan_layer'] = 'vkbasalt'
+        self.configuration.wrapper_profile_settings_path.write_text(json.dumps(settings))
+        data = self.configuration._get_profile_data()
+        data['profiles'][REMOTE_PLAY_PROFILE]['scaling_enabled'] = True
+        self.configuration._save_profile_data(data)
+        result = subprocess.run([str(self.service.client), '-0'], capture_output=True,
+                                env={'PATH': '/usr/bin:/bin', 'HOME': str(self.home)}, timeout=5)
+        self.assertEqual(0, result.returncode, result.stderr.decode())
+        values = dict(item.decode().split('=', 1) for item in result.stdout.split(b'\0') if item)
+        self.assertEqual('1', values['ENABLE_VKBASALT'])
+        self.assertEqual('1', values['ENABLE_MAKO'])
+        self.assertEqual(before, self.configuration.mako_script_path.read_bytes())
+        self.assertFalse(any(key.startswith('MAKO_LAUNCH_') for key in values))
 
 
 class RemoteLaunchTests(unittest.TestCase):

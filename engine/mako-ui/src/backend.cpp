@@ -77,7 +77,8 @@ QString ui::launcherCommandForUiDirectory(const QString& directory) {
     return QStringLiteral("~/.local/bin/mako-launch");
 }
 
-Backend::Backend(std::filesystem::path procRoot) : m_proc_root(std::move(procRoot)) {
+Backend::Backend(std::filesystem::path procRoot, QString remotePlayHelper)
+        : m_proc_root(std::move(procRoot)), m_remote_play_helper(std::move(remotePlayHelper)) {
     // load configuration
     ls::ConfigFile config{};
 
@@ -154,6 +155,7 @@ Backend::Backend(std::filesystem::path procRoot) : m_proc_root(std::move(procRoo
     this->m_save_timer.setSingleShot(true);
     this->m_save_timer.setInterval(500);
     connect(&this->m_save_timer, &QTimer::timeout, this, &Backend::savePendingChanges);
+    initializeRemotePlay();
 }
 
 void Backend::refreshLosslessScaling() {

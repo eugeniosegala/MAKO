@@ -79,6 +79,10 @@ MAKO keeps known launcher and web-helper processes inactive while allowing their
 
 MAKO Decky and `mako-ui` share this configuration. Edit a profile in one UI at a time.
 
+### Native Steam Remote Play
+
+The Qt **Remote Play** controls and MAKO Decky manage one opt-in native Steam override on the receiving device. **Edit Profile** selects or creates the ordinary `Remote-Play` profile; enabling the override preserves an existing profile and its power tables. The native Renderer settings and live/restart lifetimes are unchanged. Shader and launcher settings remain shared across power modes. The override is installation state outside `conf.toml`, so editing the profile alone does not enable it. Close streams before enabling, restoring, or updating it. See [Remote Play](../../plugin/docs/REMOTE-PLAY.md) for the shared owner, launcher differences, and recovery limits.
+
 ## Profile settings
 
 ### Frame Generation

@@ -26,6 +26,8 @@ For testing intended to qualify a public release, use `MAKO_PORTABLE_PACKAGE=1 p
 
 The shared Vulkan-Headers revision is owned by [`engine/vulkan-headers-revision.txt`](../../engine/vulkan-headers-revision.txt). Direct SteamOS development and portable native archives use that exact revision and enforce the presentation header check. A default host archive uses installed Vulkan headers and enforces the same minimum check; it remains a separate test artifact. Flatpak payloads use the shared generated header dependency while retaining their runtime SDK compilers and libraries; published Renderer archive pins in `package.json` remain release-owned artifact identities.
 
+Native Remote Play's Python owner is [`engine/scripts/mako_remote_play/`](../../engine/scripts/mako_remote_play/). `generate-remote-play-bindings.py` bundles byte-identical core, launch-template, and managed-file modules into Decky; `check:generated-config` rejects stale copies. The native archive installs that package and `mako-remote-play` for Qt. Neither installed component imports the other. Qt Remote Play controls need a Renderer built from this source; a Decky-only ZIP using the older published Renderer does not supply those Qt controls or the standalone helper.
+
 `package:local` is an exact alias for `package:local-engine`. Use `pnpm run package:local-engine-fast` only for a native 64-bit focused package; it omits 32-bit and Flatpak payloads and cannot become a release candidate.
 
 For a frontend, backend, or wrapper change that does not need a new Renderer build, use the pinned released payloads:
