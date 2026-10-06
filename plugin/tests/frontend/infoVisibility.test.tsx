@@ -67,6 +67,7 @@ vi.mock("../../src/i18n/i18n", () => ({
 }));
 
 import { InfoVisibility } from "../../src/components/InfoVisibility";
+import { EffectsChecklist } from "../../src/components/settings/shaders/EffectsChecklist";
 import { MakoInfo } from "../../src/components/MakoInfo";
 import { ContentNotices } from "../../src/components/ContentNotices";
 import { UsageInstructions } from "../../src/components/UsageInstructions";
@@ -320,6 +321,43 @@ test("normal navigation scrolls only the latest focus and cancels work on unmoun
   expect(animationFrames.size).toBe(1);
   unmount();
   expect(animationFrames.size).toBe(0);
+});
+
+test("effects navigation keeps rows visible without recentering the whole panel", () => {
+  render(
+    <InfoVisibility>
+      <EffectsChecklist
+        options={[
+          { data: "clarity", label: "Clarity" },
+          { data: "vibrance", label: "Vibrance" },
+        ]}
+        initialSelection={[]}
+        onChange={vi.fn(async () => undefined)}
+      />
+      <button>After effects</button>
+    </InfoVisibility>,
+  );
+  fireEvent.click(screen.getByRole("button", { name: /^Choose effects/ }));
+  for (const effect of screen.getAllByRole("checkbox")) {
+    vi.mocked(effect.scrollIntoView).mockClear();
+    effect.focus();
+    flushAnimationFrames();
+    expect(effect.scrollIntoView).toHaveBeenCalledExactlyOnceWith({
+      block: "nearest",
+      inline: "nearest",
+      behavior: "auto",
+    });
+    expect(vi.mocked(effect.scrollIntoView).mock.contexts).toEqual([effect]);
+  }
+  const next = screen.getByRole("button", { name: "After effects" });
+  vi.mocked(next.scrollIntoView).mockClear();
+  next.focus();
+  flushAnimationFrames();
+  expect(next.scrollIntoView).toHaveBeenCalledExactlyOnceWith({
+    block: "center",
+    inline: "nearest",
+    behavior: "auto",
+  });
 });
 
 test("a disappearing info control moves to the next visible, enabled control", () => {

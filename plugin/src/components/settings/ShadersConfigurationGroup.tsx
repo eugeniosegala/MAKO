@@ -1,4 +1,9 @@
-import { useState, type CSSProperties } from "react";
+import {
+  useState,
+  type ComponentProps,
+  type ComponentType,
+  type CSSProperties,
+} from "react";
 import { FileSelectionType, openFilePicker } from "@decky/api";
 import type { CustomShaderEffect } from "../../api/makoApi";
 import {
@@ -67,6 +72,13 @@ interface ShadersConfigurationGroupProps extends ConfigurationControlProps {
   onRefreshShaders?: () => Promise<void>;
   onDeleteShaders?: (shaderIds: string[]) => Promise<void>;
 }
+
+type SteamEffectsFieldProps = ComponentProps<typeof Field> & {
+  scrollIntoViewWhenChildFocused?: boolean;
+};
+
+// Steam supports this navigation option, but Decky's Field type omits it.
+const SteamEffectsField = Field as ComponentType<SteamEffectsFieldProps>;
 
 const customShaderButtonStyle: CSSProperties = {
   flex: "1 1 0",
@@ -296,10 +308,11 @@ export function ShadersConfigurationGroup({
       {vkBasaltEnabled && (
         <>
           <PanelSectionRow>
-            <Field
+            <SteamEffectsField
               label={t("CONFIG_VKBASALT_SHADER", "Effects")}
               childrenLayout="below"
               childrenContainerWidth="max"
+              scrollIntoViewWhenChildFocused={false}
             >
               <EffectsChecklist
                 key={profileName}
@@ -308,7 +321,7 @@ export function ShadersConfigurationGroup({
                 disabled={busy}
                 onChange={(value) => onConfigChange(VKBASALT_SHADER, value)}
               />
-            </Field>
+            </SteamEffectsField>
           </PanelSectionRow>
           <PanelSectionRow>
             <MakoFocusable

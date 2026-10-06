@@ -126,13 +126,15 @@ export function InfoVisibility({ children }: { children: ReactNode }) {
     )
       return;
 
-    // Keep normal navigation centred, but never let an older request scroll
-    // away from a newer control or from the position restored by an R1 toggle.
+    // Keep ordinary settings centred and paged groups stable. Never let an
+    // older request scroll away from a newer focus or an R1-restored position.
     scrollFrame.current = requestAnimationFrame(() => {
       scrollFrame.current = undefined;
       if (target.isConnected && target.ownerDocument.activeElement === target) {
         target.scrollIntoView({
-          block: "center",
+          block: target.closest('[data-mako-focus-scroll="nearest"]')
+            ? "nearest"
+            : "center",
           inline: "nearest",
           behavior: "auto",
         });

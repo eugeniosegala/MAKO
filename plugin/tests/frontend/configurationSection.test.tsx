@@ -189,12 +189,16 @@ vi.mock("../../src/components/MakoUi", () => ({
     onActivate,
     onButtonDown,
     onCancel,
+    onGamepadFocus,
+    onGamepadBlur,
     "flow-children": _flowChildren,
     ...props
   }: React.HTMLAttributes<HTMLDivElement> & {
     onActivate?: () => void;
     onButtonDown?: (event: CustomEvent<{ button: number }>) => void;
     onCancel?: (event: CustomEvent) => void;
+    onGamepadFocus?: () => void;
+    onGamepadBlur?: () => void;
     "flow-children"?: string;
   }) => {
     const ref = React.useRef<HTMLDivElement>(null);
@@ -207,13 +211,19 @@ vi.mock("../../src/components/MakoUi", () => ({
         onCancel(event as CustomEvent);
         event.stopPropagation();
       };
+      const handleFocus = () => onGamepadFocus?.();
+      const handleBlur = () => onGamepadBlur?.();
       element.addEventListener("vgp_onbuttondown", handleButtonDown);
       element.addEventListener("vgp_oncancel", handleCancel);
+      element.addEventListener("vgp_onfocus", handleFocus);
+      element.addEventListener("vgp_onblur", handleBlur);
       return () => {
         element.removeEventListener("vgp_onbuttondown", handleButtonDown);
         element.removeEventListener("vgp_oncancel", handleCancel);
+        element.removeEventListener("vgp_onfocus", handleFocus);
+        element.removeEventListener("vgp_onblur", handleBlur);
       };
-    }, [onButtonDown, onCancel]);
+    }, [onButtonDown, onCancel, onGamepadFocus, onGamepadBlur]);
     return (
       // Steam uses onActivate as the mouse handler when onClick is absent.
       <div ref={ref} {...props} onClick={props.onClick ?? onActivate}>
@@ -425,6 +435,46 @@ describe("Configuration controls", () => {
         "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. This file belongs to the selected profile and is removed when that profile is deleted.",
       ),
     ).toBeTruthy();
+  });
+
+  test("controller focus clears stale hover and ignores a previous effect's late blur", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    render(
+      <ShadersConfigurationGroup
+        config={{
+          ...getDefaults(),
+          external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+        }}
+        isDefaultProfile
+        profileName="mako"
+        vkBasaltConfigPath=""
+        onConfigChange={onConfigChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("Choose effects (0 selected)"));
+    const previous = screen.getByRole("checkbox", { name: "Clarity" });
+    const next = screen.getByRole("checkbox", { name: "Levels Plus" });
+    fireEvent.mouseEnter(previous);
+    fireEvent(previous, new CustomEvent("vgp_onfocus", { bubbles: true }));
+    fireEvent(next, new CustomEvent("vgp_onfocus", { bubbles: true }));
+    expect(previous.style.outline).toContain("transparent");
+    expect(next.style.outline).not.toContain("transparent");
+    // Moving content under a parked pointer must not override D-pad focus.
+    fireEvent.mouseEnter(previous);
+    expect(previous.style.outline).toContain("transparent");
+    expect(next.style.outline).not.toContain("transparent");
+    fireEvent.mouseMove(previous);
+    expect(previous.style.outline).not.toContain("transparent");
+    expect(next.style.outline).toContain("transparent");
+    fireEvent(next, new CustomEvent("vgp_onfocus", { bubbles: true }));
+    fireEvent(previous, new CustomEvent("vgp_onblur", { bubbles: true }));
+    fireEvent.blur(previous);
+    expect(next.style.outline).not.toContain("transparent");
+    fireEvent(next, new CustomEvent("vgp_onblur", { bubbles: true }));
+    expect(next.style.outline).toContain("transparent");
+    fireEvent.mouseEnter(previous);
+    expect(previous.style.outline).not.toContain("transparent");
+    expect(onConfigChange).not.toHaveBeenCalled();
   });
 
   test("mouse arrows move exactly one effects page in either direction", () => {

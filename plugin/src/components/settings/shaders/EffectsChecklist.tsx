@@ -128,8 +128,12 @@ export function EffectsChecklist({
     }, 0);
   };
 
+  const hasNavigationFocus = focusedEffect !== null || focusedAction !== null;
+
   const actionStyle = (action: EffectsAction, disabled = false) => {
-    const highlighted = focusedAction === action || hoveredAction === action;
+    const highlighted =
+      focusedAction === action ||
+      (!hasNavigationFocus && hoveredAction === action);
     return {
       boxSizing: "border-box" as const,
       display: "grid",
@@ -151,14 +155,24 @@ export function EffectsChecklist({
     };
   };
 
-  const actionFocusProps = (action: EffectsAction) => ({
-    onFocus: () => setFocusedAction(action),
-    onBlur: () => setFocusedAction(null),
-    onGamepadFocus: () => setFocusedAction(action),
-    onGamepadBlur: () => setFocusedAction(null),
-    onMouseEnter: () => setHoveredAction(action),
-    onMouseLeave: () => setHoveredAction(null),
-  });
+  const actionFocusProps = (action: EffectsAction) => {
+    const focus = () => {
+      setFocusedAction(action);
+      setFocusedEffect(null);
+      setHoveredAction(null);
+      setHoveredEffect(null);
+    };
+    const blur = () =>
+      setFocusedAction((current) => (current === action ? null : current));
+    return {
+      onFocus: focus,
+      onBlur: blur,
+      onGamepadFocus: focus,
+      onGamepadBlur: blur,
+      onMouseEnter: () => setHoveredAction(action),
+      onMouseLeave: () => setHoveredAction(null),
+    };
+  };
 
   const changePage = (direction: -1 | 1) => {
     setPage((current) =>
@@ -212,7 +226,8 @@ export function EffectsChecklist({
   };
 
   const summaryHighlighted =
-    focusedAction === "summary" || hoveredAction === "summary";
+    focusedAction === "summary" ||
+    (!hasNavigationFocus && hoveredAction === "summary");
 
   const collapseToSummary = () => {
     checklistRef.current
@@ -233,6 +248,15 @@ export function EffectsChecklist({
     <div
       ref={checklistRef}
       data-testid="mako-effects-selector"
+      data-mako-focus-scroll="nearest"
+      onMouseMove={() => {
+        // Scrolling can move a row under a stationary cursor. Keep navigation
+        // focus until the pointer actually moves, then restore normal hover.
+        if (hasNavigationFocus) {
+          setFocusedEffect(null);
+          setFocusedAction(null);
+        }
+      }}
       style={{
         boxSizing: "border-box",
         width: "100%",
@@ -252,6 +276,7 @@ export function EffectsChecklist({
           data-mako-effects-summary="true"
           role="button"
           tabIndex={0}
+          noFocusRing
           aria-expanded={expanded}
           onClick={() => setExpanded(!expanded)}
           onActivate={() => setExpanded(!expanded)}
@@ -341,18 +366,29 @@ export function EffectsChecklist({
                     const enabled = order !== -1;
                     const highlighted =
                       focusedEffect === option.data ||
-                      hoveredEffect === option.data;
+                      (!hasNavigationFocus && hoveredEffect === option.data);
                     const toggleEffect = () =>
                       updateSelection(
                         enabled
                           ? selected.filter((effect) => effect !== option.data)
                           : [...selected, option.data],
                       );
+                    const focusEffect = () => {
+                      setFocusedEffect(option.data);
+                      setFocusedAction(null);
+                      setHoveredEffect(null);
+                      setHoveredAction(null);
+                    };
+                    const blurEffect = () =>
+                      setFocusedEffect((current) =>
+                        current === option.data ? null : current,
+                      );
                     return (
                       <MakoFocusable
                         key={row}
                         role="checkbox"
                         tabIndex={0}
+                        noFocusRing
                         data-mako-effect-row={row}
                         aria-checked={enabled}
                         aria-disabled={disabled}
@@ -380,10 +416,10 @@ export function EffectsChecklist({
                             row,
                           );
                         }}
-                        onFocus={() => setFocusedEffect(option.data)}
-                        onBlur={() => setFocusedEffect(null)}
-                        onGamepadFocus={() => setFocusedEffect(option.data)}
-                        onGamepadBlur={() => setFocusedEffect(null)}
+                        onFocus={focusEffect}
+                        onBlur={blurEffect}
+                        onGamepadFocus={focusEffect}
+                        onGamepadBlur={blurEffect}
                         onMouseEnter={() => setHoveredEffect(option.data)}
                         onMouseLeave={() => setHoveredEffect(null)}
                         style={{
@@ -447,6 +483,7 @@ export function EffectsChecklist({
               <MakoFocusable
                 role="button"
                 tabIndex={0}
+                noFocusRing
                 aria-label={t("CONFIG_VKBASALT_SHADER", "Effects")}
                 aria-description={`${page + 1} / ${pageCount}`}
                 onActivate={() => changePage(1)}
@@ -525,6 +562,7 @@ export function EffectsChecklist({
               <MakoFocusable
                 role="button"
                 tabIndex={0}
+                noFocusRing
                 aria-disabled={disabled || selected.length === 0}
                 onClick={() => selected.length > 0 && updateSelection([])}
                 onActivate={() => selected.length > 0 && updateSelection([])}
