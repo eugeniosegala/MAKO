@@ -301,139 +301,141 @@ export function ShadersConfigurationGroup({
               childrenLayout="below"
               childrenContainerWidth="max"
             >
-              <MakoFocusable
-                flow-children="column"
-                noFocusRing
-                style={{ width: "100%", minWidth: 0, paddingBottom: "6px" }}
+              <EffectsChecklist
+                key={profileName}
+                options={shaderOptions}
+                initialSelection={selectedEffects}
+                disabled={busy}
+                onChange={(value) => onConfigChange(VKBASALT_SHADER, value)}
+              />
+            </Field>
+          </PanelSectionRow>
+          <PanelSectionRow>
+            <MakoFocusable
+              flow-children="column"
+              noFocusRing
+              style={{ width: "100%", minWidth: 0, paddingBottom: "6px" }}
+            >
+              <MakoInfo
+                className="Mako_OptionDescription"
+                data-mako-info="true"
+                style={{
+                  marginTop: "8px",
+                  color: "#acb2b8",
+                  fontSize: "10px",
+                  lineHeight: "14px",
+                }}
               >
-                <EffectsChecklist
-                  key={profileName}
-                  options={shaderOptions}
-                  initialSelection={selectedEffects}
-                  disabled={busy}
-                  onChange={(value) => onConfigChange(VKBASALT_SHADER, value)}
-                />
-                <MakoInfo
-                  className="Mako_OptionDescription"
-                  data-mako-info="true"
+                {t(
+                  "CONFIG_VKBASALT_SHADER_DESC",
+                  "Effects run in selection order; uncheck and recheck to move one last. Stacking increases GPU load, especially with heavier effects such as HDR Look. Test per game and monitor GPU usage.",
+                )}
+              </MakoInfo>
+
+              {(onAddShader || onRefreshShaders) && (
+                <MakoFocusable
+                  flow-children="row"
+                  noFocusRing
                   style={{
-                    marginTop: "8px",
-                    color: "#acb2b8",
-                    fontSize: "10px",
-                    lineHeight: "14px",
+                    display: "flex",
+                    alignItems: "stretch",
+                    gap: "12px",
+                    width: "100%",
+                    minWidth: 0,
+                    boxSizing: "border-box",
+                    padding: "18px 4px 8px",
                   }}
                 >
-                  {t(
-                    "CONFIG_VKBASALT_SHADER_DESC",
-                    "Effects run in selection order; uncheck and recheck to move one last. Stacking increases GPU load, especially with heavier effects such as HDR Look. Test per game and monitor GPU usage.",
-                  )}
-                </MakoInfo>
-
-                {(onAddShader || onRefreshShaders) && (
-                  <MakoFocusable
-                    flow-children="row"
-                    noFocusRing
-                    style={{
-                      display: "flex",
-                      alignItems: "stretch",
-                      gap: "12px",
-                      width: "100%",
-                      minWidth: 0,
-                      boxSizing: "border-box",
-                      padding: "18px 4px 8px",
-                    }}
-                  >
-                    {onAddShader && (
-                      <DialogButton
-                        style={compactCustomShaderButtonStyle}
-                        disabled={busy}
-                        onClick={() =>
-                          runShaderAction(async () => {
-                            const file = await openFilePicker(
-                              FileSelectionType.FILE,
-                              "/home",
-                              true,
-                              true,
-                              undefined,
-                              ["fx"],
-                              false,
-                              false,
-                            ).catch(() => null);
-                            if (file?.realpath || file?.path)
-                              await onAddShader(file.realpath || file.path);
-                          })
-                        }
-                      >
-                        {t("CONFIG_VKBASALT_CUSTOM_ADD", "Add Custom Shader")}
-                      </DialogButton>
-                    )}
-                    {onRefreshShaders && (
-                      <DialogButton
-                        style={compactCustomShaderButtonStyle}
-                        disabled={busy}
-                        onClick={() => runShaderAction(onRefreshShaders)}
-                      >
-                        {t("CONFIG_VKBASALT_CUSTOM_REFRESH", "Refresh")}
-                      </DialogButton>
-                    )}
-                  </MakoFocusable>
-                )}
-                <MakoInfo style={{ width: "100%", paddingBottom: "8px" }}>
-                  <MakoInlineTip tone="info">
-                    {t(
-                      "CONFIG_VKBASALT_CUSTOM_HELP",
-                      "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
-                    )}
-                  </MakoInlineTip>
-                </MakoInfo>
-                {onDeleteShaders && (
-                  <div
-                    style={{
-                      width: "100%",
-                      boxSizing: "border-box",
-                      padding: "4px 4px 8px",
-                    }}
-                  >
+                  {onAddShader && (
                     <DialogButton
-                      className="Mako_DialogButton Mako_DialogButton--danger"
-                      style={{
-                        ...customShaderButtonStyle,
-                        width: "100%",
-                        ...makoDialogButtonStyle(
-                          focusedAction === "delete",
-                          "danger",
-                        ),
-                      }}
-                      onGamepadFocus={() => setFocusedAction("delete")}
-                      onGamepadBlur={() => setFocusedAction(null)}
-                      disabled={
-                        busy ||
-                        !selectedEffects.some((id) => id.startsWith("custom/"))
-                      }
+                      style={compactCustomShaderButtonStyle}
+                      disabled={busy}
                       onClick={() =>
-                        runShaderAction(() =>
-                          onDeleteShaders(
-                            selectedEffects.filter((id) =>
-                              id.startsWith("custom/"),
-                            ),
-                          ),
-                        )
+                        runShaderAction(async () => {
+                          const file = await openFilePicker(
+                            FileSelectionType.FILE,
+                            "/home",
+                            true,
+                            true,
+                            undefined,
+                            ["fx"],
+                            false,
+                            false,
+                          ).catch(() => null);
+                          if (file?.realpath || file?.path)
+                            await onAddShader(file.realpath || file.path);
+                        })
                       }
                     >
-                      {t(
-                        "CONFIG_VKBASALT_CUSTOM_DELETE",
-                        "Delete selected custom shaders",
-                      )}
+                      {t("CONFIG_VKBASALT_CUSTOM_ADD", "Add Custom Shader")}
                     </DialogButton>
-                  </div>
-                )}
-                {shaderError && (
-                  <MakoInlineTip tone="warning" alwaysVisible>
-                    {shaderError}
-                  </MakoInlineTip>
-                )}
-              </MakoFocusable>
-            </Field>
+                  )}
+                  {onRefreshShaders && (
+                    <DialogButton
+                      style={compactCustomShaderButtonStyle}
+                      disabled={busy}
+                      onClick={() => runShaderAction(onRefreshShaders)}
+                    >
+                      {t("CONFIG_VKBASALT_CUSTOM_REFRESH", "Refresh")}
+                    </DialogButton>
+                  )}
+                </MakoFocusable>
+              )}
+              <MakoInfo style={{ width: "100%", paddingBottom: "8px" }}>
+                <MakoInlineTip tone="info">
+                  {t(
+                    "CONFIG_VKBASALT_CUSTOM_HELP",
+                    "Add a vkBasalt-compatible ReShade .fx file, then select it in Effects. Keep its includes and textures accessible at their original paths. Refresh to discover entries added to this profile’s file. Custom shader changes require a game restart.",
+                  )}
+                </MakoInlineTip>
+              </MakoInfo>
+              {onDeleteShaders && (
+                <div
+                  style={{
+                    width: "100%",
+                    boxSizing: "border-box",
+                    padding: "4px 4px 8px",
+                  }}
+                >
+                  <DialogButton
+                    className="Mako_DialogButton Mako_DialogButton--danger"
+                    style={{
+                      ...customShaderButtonStyle,
+                      width: "100%",
+                      ...makoDialogButtonStyle(
+                        focusedAction === "delete",
+                        "danger",
+                      ),
+                    }}
+                    onGamepadFocus={() => setFocusedAction("delete")}
+                    onGamepadBlur={() => setFocusedAction(null)}
+                    disabled={
+                      busy ||
+                      !selectedEffects.some((id) => id.startsWith("custom/"))
+                    }
+                    onClick={() =>
+                      runShaderAction(() =>
+                        onDeleteShaders(
+                          selectedEffects.filter((id) =>
+                            id.startsWith("custom/"),
+                          ),
+                        ),
+                      )
+                    }
+                  >
+                    {t(
+                      "CONFIG_VKBASALT_CUSTOM_DELETE",
+                      "Delete selected custom shaders",
+                    )}
+                  </DialogButton>
+                </div>
+              )}
+              {shaderError && (
+                <MakoInlineTip tone="warning" alwaysVisible>
+                  {shaderError}
+                </MakoInlineTip>
+              )}
+            </MakoFocusable>
           </PanelSectionRow>
 
           <PanelSectionRow>

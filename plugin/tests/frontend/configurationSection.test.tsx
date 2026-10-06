@@ -93,7 +93,7 @@ vi.mock("@decky/ui", () => ({
     description?: React.ReactNode;
     children?: React.ReactNode;
   }) => (
-    <div>
+    <div data-testid={label === "Effects" ? "effects-field" : undefined}>
       <span>{label}</span>
       <span>{description}</span>
       {children}
@@ -452,6 +452,24 @@ describe("Configuration controls", () => {
         onRefreshShaders={onRefreshShaders}
       />,
     );
+    // Steam scrolls Field focus bounds into view. Keep the paged selector's
+    // bounds independent of the much taller custom-shader help and actions.
+    const effectsField = screen.getByTestId("effects-field");
+    expect(
+      effectsField.contains(screen.getByTestId("mako-effects-selector")),
+    ).toBe(true);
+    expect(effectsField.contains(screen.getByText("Add Custom Shader"))).toBe(
+      false,
+    );
+    expect(effectsField.contains(screen.getByText("Refresh"))).toBe(false);
+    fireEvent.click(screen.getByText("Choose effects (2 selected)"));
+    expect(
+      effectsField.contains(screen.getByRole("button", { name: "Clear all" })),
+    ).toBe(true);
+    fireEvent.mouseEnter(screen.getAllByRole("checkbox")[0]);
+    fireEvent.focus(screen.getAllByRole("checkbox")[1]);
+    expect(screen.getByTestId("mako-effects-page").style.height).toBe("198px");
+    fireEvent.click(screen.getByRole("button", { name: "Done" }));
     fireEvent.click(screen.getByText("Add Custom Shader"));
     await waitFor(() =>
       expect(onAddShader).toHaveBeenCalledWith("/tmp/tone.fx"),
