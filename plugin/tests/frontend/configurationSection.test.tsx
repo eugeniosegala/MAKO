@@ -186,7 +186,7 @@ vi.mock("../../src/components/MakoUi", () => ({
   }) => <div data-tone={tone}>{children}</div>,
   MakoFocusable: ({
     children,
-    onActivate: _onActivate,
+    onActivate,
     onButtonDown,
     onCancel,
     "flow-children": _flowChildren,
@@ -215,7 +215,8 @@ vi.mock("../../src/components/MakoUi", () => ({
       };
     }, [onButtonDown, onCancel]);
     return (
-      <div ref={ref} {...props}>
+      // Steam uses onActivate as the mouse handler when onClick is absent.
+      <div ref={ref} {...props} onClick={props.onClick ?? onActivate}>
         {children}
       </div>
     );
@@ -424,6 +425,50 @@ describe("Configuration controls", () => {
         "Advanced options can be edited in /home/deck/.config/mako-render/vkbasalt/abc.conf. MAKO merges only the controls above and preserves every other setting. Manual advanced changes apply on the next launch. This file belongs to the selected profile and is removed when that profile is deleted.",
       ),
     ).toBeTruthy();
+  });
+
+  test("mouse arrows move exactly one effects page in either direction", () => {
+    const onConfigChange = vi.fn(async () => undefined);
+    render(
+      <ShadersConfigurationGroup
+        config={{
+          ...getDefaults(),
+          external_vulkan_layer: EXTERNAL_VULKAN_LAYER_VKBASALT,
+        }}
+        isDefaultProfile
+        profileName="mako"
+        vkBasaltConfigPath=""
+        onConfigChange={onConfigChange}
+      />,
+    );
+    fireEvent.click(screen.getByText("Choose effects (0 selected)"));
+    const pager = screen.getByRole("button", { name: "Effects" });
+    const pageCount = Number(
+      pager.getAttribute("aria-description")?.split("/")[1],
+    );
+    expect(pageCount).toBeGreaterThan(1);
+    const expectPage = (page: number) =>
+      expect(pager.getAttribute("aria-description")).toBe(
+        `${page} / ${pageCount}`,
+      );
+    const previous = screen.getByTitle("Previous effects page");
+    const next = screen.getByTitle("Next effects page");
+
+    fireEvent.click(previous);
+    expectPage(1);
+    fireEvent.click(next);
+    expectPage(2);
+    fireEvent.click(previous);
+    expectPage(1);
+    for (let page = 2; page <= pageCount; page++) {
+      fireEvent.click(next);
+      expectPage(page);
+    }
+    fireEvent.click(next);
+    expectPage(pageCount);
+    fireEvent.click(previous);
+    expectPage(pageCount - 1);
+    expect(onConfigChange).not.toHaveBeenCalled();
   });
 
   test("shows custom definitions, retains missing selections, and uses the file picker", async () => {

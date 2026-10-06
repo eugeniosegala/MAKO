@@ -478,7 +478,10 @@ export function EffectsChecklist({
                     "CONFIG_VKBASALT_EFFECTS_PREVIOUS_PAGE",
                     "Previous effects page",
                   )}
-                  onClick={() => changePage(-1)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    changePage(-1);
+                  }}
                   style={{
                     display: "grid",
                     placeItems: "center",
@@ -503,7 +506,10 @@ export function EffectsChecklist({
                     "CONFIG_VKBASALT_EFFECTS_NEXT_PAGE",
                     "Next effects page",
                   )}
-                  onClick={() => changePage(1)}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    changePage(1);
+                  }}
                   style={{
                     display: "grid",
                     placeItems: "center",
