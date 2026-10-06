@@ -44,7 +44,7 @@ Follow the [installation guide](../README.md#install-and-use) to install Decky L
 
 Start the game normally. MAKO automatically selects a matching saved profile, or uses the Default profile when no match exists.
 
-For Heroic, Lutris, EmuDeck, and other Flatpak applications, follow the [launcher setup guide](docs/LAUNCHERS.md).
+For Heroic, Lutris, EmuDeck, Flatpak applications, and [other non-Steam games](docs/LAUNCHERS.md#other-non-steam-games), follow the [launcher setup guide](docs/LAUNCHERS.md).
 
 When updating, follow the [update guide](../README.md#updating-mako-decky) to replace MAKO Decky, its bundled Renderer, and any prepared Flatpak extensions.
 

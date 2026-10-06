@@ -101,6 +101,7 @@ MAKO Decky provides a per-profile **Gamescope WSI** option, host-installed Mango
 - [Lutris](plugin/docs/LAUNCHERS.md#lutris)
 - [EmuDeck](plugin/docs/LAUNCHERS.md#emudeck)
 - [Other Flatpak apps](plugin/docs/LAUNCHERS.md#manually-added-flatpak-shortcuts)
+- [Other non-Steam games](plugin/docs/LAUNCHERS.md#other-non-steam-games)
 
 For a step-by-step guide that creates a shareable report on the Desktop, see <a href="plugin/docs/COLLECT_DIAGNOSTICS.md" target="_blank" rel="noopener noreferrer">Collect MAKO Decky Diagnostics</a>.
 

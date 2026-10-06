@@ -6,6 +6,7 @@ Install MAKO Renderer through MAKO Decky first, then follow the guide for your l
 - [Lutris](#lutris)
 - [EmuDeck](#emudeck)
 - [Manually added Flatpak shortcuts](#manually-added-flatpak-shortcuts)
+- [Other non-Steam games](#other-non-steam-games)
 
 Flatpak Heroic and Lutris run MAKO from the selected game's wrapper inside their sandbox. Flatpak emulators instead need app-wide preparation. After updating MAKO Decky, use **Flatpak Setup > Update** for every prepared application's matching runtime extension, then restart that application.
 
@@ -102,3 +103,13 @@ Use this workflow only when a non-Steam shortcut's original **Target** is `/usr/
 The reference shown in **Flatpak Setup** does not modify Steam automatically; it only builds the correct Target from this device's installed wrapper path.
 
 For diagnostic logging, follow [Collect MAKO Decky Diagnostics](COLLECT_DIAGNOSTICS.md).
+
+## Other non-Steam games
+
+For a shortcut that directly launches a native Linux game or a Windows game through Proton, keep **Target** and **Start In** unchanged and set **Launch Options** to:
+
+```text
+/home/deck/.local/bin/mako-run %command%
+```
+
+Launch the game, configure its profile in MAKO Decky, then restart after enabling features. MAKO requires Vulkan: use DXVK/VKD3D-Proton for Direct3D games, or try **Zink** for OpenGL.
