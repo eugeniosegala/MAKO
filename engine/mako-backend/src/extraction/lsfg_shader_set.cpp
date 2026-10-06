@@ -65,6 +65,13 @@ mako::backend::LsfgShaderSet mako::backend::loadLsfgShaderSet(
                             continue;
                         for (const auto& spec : detail::lsfgShaderSpecs(mode)) {
                             const auto id = detail::lsfgDxbcResourceId(spec.logicalId, mode);
+                            // Preserve image preparation and final colour reconstruction.
+                            // Their coordinate/colour range is not the learned model's
+                            // FP16 arithmetic range; converting them can darken output.
+                            if (spec.logicalId == 255 || spec.logicalId == 256) {
+                                shaders->emplace(id, source.resource(archive, spec.logicalId, mode));
+                                continue;
+                            }
                             auto converted = detail::convertLsfgShaderToFp16(
                                 source.resource(archive, spec.logicalId, mode), spec.contract,
                                 "LSFG resource " + std::to_string(id));
