@@ -85,6 +85,47 @@ namespace {
                 right.power_profiles.begin(), sameGameConf);
     }
 
+    void testOptionalLosslessScaling(const std::filesystem::path& directory) {
+        const auto dll = directory / "removed-Lossless.dll";
+        const auto path = directory / "optional-lossless.toml";
+        ls::ConfigFile fixture;
+        fixture.global().dll = dll.string();
+        ls::GameConf game;
+        game.name = "open-scaling";
+        game.active_in = {"Game.exe"};
+        game.frame_generation_provisioned = false;
+        game.scaling_enabled = true;
+        game.scaling_method = ls::ScalingMethod::Mako;
+        fixture.profiles() = {game};
+        fixture.write(path);
+        for (const bool installed : {false, true, false}) {
+            if (installed) writeText(dll, "synthetic input");
+            else std::filesystem::remove(dll);
+            ls::ConfigFile parsed(path);
+            expect(parsed.global().dll == dll.string() && sameGameConf(parsed.profiles().front(), game),
+                "DLL removal must not invalidate or reset open-scaling profiles");
+            parsed.write(path);
+        }
+        ls::Identification identity;
+        identity.override = game.name;
+        expect(ls::findProfile(ls::ConfigFile(path), identity).has_value(),
+            "A missing DLL must not prevent native profile matching");
+        setenv("MAKO_ENV", "1", 1);
+        setenv("MAKO_DLL_PATH", dll.c_str(), 1);
+        setenv("MAKO_FRAME_GENERATION_PROVISIONED", "0", 1);
+        setenv("MAKO_SCALING_ENABLED", "1", 1);
+        setenv("MAKO_SCALING_METHOD", "mako", 1);
+        const ls::WatchedConfig environment;
+        expect(environment.get().global().dll == dll.string() &&
+                environment.get().profiles().front().scaling_method == ls::ScalingMethod::Mako,
+            "A missing environment DLL must not block open scaling");
+        unsetenv("MAKO_ENV");
+        unsetenv("MAKO_DLL_PATH");
+        unsetenv("MAKO_FRAME_GENERATION_PROVISIONED");
+        unsetenv("MAKO_SCALING_ENABLED");
+        unsetenv("MAKO_SCALING_METHOD");
+    }
+
     void testPowerProfiles(const std::filesystem::path& directory) {
         const auto root = directory / "power_supply";
         std::filesystem::create_directories(root / "AC");
@@ -295,6 +336,7 @@ int main() {
     std::filesystem::create_directories(directory);
 
     unsetenv("MAKO_ENV");
+    testOptionalLosslessScaling(directory);
     testPowerProfiles(directory);
 
     const auto defaultPath = directory / "default.toml";

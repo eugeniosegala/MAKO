@@ -15,7 +15,10 @@ import {
   type ConfigurationPatch,
   getDefaults,
 } from "../config/configSchema";
-import { RUNTIME_STATUS_POLL_INTERVAL_MS } from "../config/uiTiming";
+import {
+  MODEL_STATUS_POLL_INTERVAL_MS,
+  RUNTIME_STATUS_POLL_INTERVAL_MS,
+} from "../config/uiTiming";
 import {
   EMPTY_RUNTIME_SCALING_UI_STATE,
   runtimeScalingUiState,
@@ -92,43 +95,61 @@ export function useInstallationStatus() {
   };
 }
 
-export function useDllDetection() {
-  const [dllDetected, setDllDetected] = useState<boolean>(false);
-  const [dllDetectionStatus, setDllDetectionStatus] = useState<string>("");
-
-  const checkDllDetection = async () => {
-    try {
-      const result = await checkLosslessScalingDll();
-      setDllDetected(result.detected);
-      if (result.detected) {
-        setDllDetectionStatus(
-          t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed"),
-        );
-      } else {
-        setDllDetectionStatus(
-          t(
-            "STATUS_LOSSLESS_NOT_INSTALLED",
-            "Lossless Scaling not installed — required for Frame Generation and LS1; MAKO Scaler remains available",
-          ),
-        );
-      }
-    } catch (error) {
-      setDllDetectionStatus(
-        t(
-          "STATUS_LOSSLESS_NOT_INSTALLED",
-          "Lossless Scaling not installed — required for Frame Generation and LS1; MAKO Scaler remains available",
-        ),
-      );
-    }
-  };
+export function useDllDetection(dll = "") {
+  const [result, setResult] = useState<{
+    dll: string;
+    detected: boolean;
+    missing: boolean;
+    status: string;
+  } | null>(null);
 
   useEffect(() => {
-    checkDllDetection();
-  }, []);
+    let active = true;
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      try {
+        const response = await checkLosslessScalingDll(dll);
+        if (!active) return;
+        const missing = response.detected === false && !response.error;
+        setResult({
+          dll,
+          detected: response.detected,
+          missing,
+          status: response.detected
+            ? t("STATUS_LOSSLESS_INSTALLED", "Lossless Scaling installed")
+            : missing
+              ? t("STATUS_LOSSLESS_NOT_INSTALLED", "Lossless Scaling not found")
+              : t(
+                  "STATUS_LOSSLESS_UNKNOWN",
+                  "Unable to check Lossless Scaling.",
+                ),
+        });
+      } catch {
+        if (!active) return;
+        setResult({
+          dll,
+          detected: false,
+          missing: false,
+          status: t(
+            "STATUS_LOSSLESS_UNKNOWN",
+            "Unable to check Lossless Scaling.",
+          ),
+        });
+      }
+      if (active) timer = setTimeout(refresh, MODEL_STATUS_POLL_INTERVAL_MS);
+    };
+    void refresh();
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [dll]);
 
+  const current = result?.dll === dll ? result : null;
   return {
-    dllDetected,
-    dllDetectionStatus,
+    dllDetected: current?.detected ?? false,
+    dllMissing: current?.missing ?? false,
+    dllDetectionStatus: current?.status ?? "",
   };
 }
 

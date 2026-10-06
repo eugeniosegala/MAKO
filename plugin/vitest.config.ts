@@ -1,6 +1,19 @@
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  plugins: [
+    {
+      name: "mako-release-info-test-fixture",
+      resolveId: (id) =>
+        id === "virtual:mako-release-info"
+          ? "\0virtual:mako-release-info"
+          : null,
+      load: (id) =>
+        id === "\0virtual:mako-release-info"
+          ? 'export const currentRelease = { version: "test", codename: "test" };'
+          : null,
+    },
+  ],
   test: {
     environment: "jsdom",
     include: ["tests/frontend/**/*.test.{ts,tsx}"],

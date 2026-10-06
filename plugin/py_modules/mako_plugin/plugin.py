@@ -113,13 +113,15 @@ class Plugin:
         await self._stop_flatpak_vrr_monitor()
         return self.installation_service.uninstall()
 
-    async def check_lossless_scaling_dll(self) -> DllDetectionResponse:
-        """Check if Lossless Scaling DLL is available at the expected paths
+    async def check_lossless_scaling_dll(self, dll: str = "") -> DllDetectionResponse:
+        """Check the saved DLL path, or discover a copy when the path is empty.
 
         Returns:
             DllDetectionResponse dict with detection status and path info
         """
-        return self.dll_detection_service.check_lossless_scaling_dll()
+        return await asyncio.to_thread(
+            self.dll_detection_service.check_lossless_scaling_dll, dll,
+        )
 
     async def check_scaling_model(
         self, dll: str, method: str, sharpness: float, allow_fp16: bool = False,

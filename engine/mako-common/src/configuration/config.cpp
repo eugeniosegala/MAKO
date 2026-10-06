@@ -289,9 +289,8 @@ namespace {
             .allow_fp16 = tbl["allow_fp16"].value_or(true)
         };
 
-        if (conf.dll && !std::filesystem::exists(*conf.dll))
-            throw ls::error("path to dll is invalid");
-
+        // Availability belongs to LSFG/LS1 loading, not profile validity.
+        // Preserve missing paths so open scaling and shaders remain usable.
         return conf;
     }
     /// parse a game profile configuration
@@ -471,9 +470,6 @@ namespace {
         const char* no_fp16 = std::getenv("MAKO_NO_FP16");
         if (no_fp16 && *no_fp16 != '\0')
             conf.allow_fp16 = std::string(no_fp16) != "1";
-
-        if (conf.dll && !std::filesystem::exists(*conf.dll))
-            throw ls::error("path to dll is invalid");
 
         return conf;
     }

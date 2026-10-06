@@ -127,6 +127,70 @@ void test_scaling_properties() {
     require_property("maximum_scaling_sharpness", "float", false, true);
 }
 
+void test_lossless_scaling_is_optional() {
+    require_property("lossless_scaling_missing", "bool", false, false);
+    QTemporaryDir directory;
+    require(directory.isValid(), "optional Lossless Scaling fixture failed");
+    const auto previousConfig = qgetenv("MAKO_CONFIG");
+    const auto previousLaunch = qgetenv("MAKO_LAUNCH_CONFIG");
+    const auto previousConfigHome = qgetenv("XDG_CONFIG_HOME");
+    const auto previousShaders = qgetenv("MAKO_VKBASALT_SHADER_DIR");
+    qputenv("MAKO_CONFIG", directory.filePath("conf.toml").toUtf8());
+    qputenv("MAKO_LAUNCH_CONFIG", directory.filePath("launch.toml").toUtf8());
+    qputenv("XDG_CONFIG_HOME", directory.path().toUtf8());
+    qputenv("MAKO_VKBASALT_SHADER_DIR", QByteArray(MAKO_UI_VKBASALT_SHADER_SOURCE_DIR));
+    const auto dll = directory.filePath("Lossless.dll");
+    ls::ConfigFile fixture;
+    ls::GlobalConf global;
+    global.dll = dll.toStdString();
+    ls::GameConf game;
+    game.name = "optional";
+    fixture.global() = global;
+    fixture.profiles() = {game};
+    fixture.write(directory.filePath("conf.toml").toStdString());
+    {
+        mako::ui::Backend backend;
+        require(backend.isLosslessScalingMissing() && backend.isValidProfileIndex(),
+            "a missing DLL must not block the Qt profile editor");
+        backend.frameGenerationProvisionedUpdated(false);
+        backend.scalingEnabledUpdated(true);
+        backend.scalingMethodUpdated(QStringLiteral("mako"));
+        backend.enableVkBasaltUpdated(true);
+        backend.vkBasaltShaderUpdated(QStringLiteral("vibrance"));
+        require(backend.getScalingEnabled() && backend.getScalingMethod() == QStringLiteral("mako") &&
+                backend.getEnableVkBasalt() && backend.getVkBasaltShader() == QStringLiteral("vibrance"),
+            "model-free scaling and shaders must remain editable without a DLL");
+        QFile input(dll);
+        require(input.open(QIODevice::WriteOnly) && input.write("synthetic file") > 0,
+            "cannot create synthetic DLL availability fixture");
+        input.close();
+        backend.refreshLosslessScaling();
+        require(!backend.isLosslessScalingMissing(), "DLL installation was not detected");
+        backend.dllUpdated(dll + QStringLiteral(".missing"));
+        require(backend.isLosslessScalingMissing(), "a missing saved DLL path was not authoritative");
+        backend.dllUpdated(dll);
+        require(!backend.isLosslessScalingMissing(), "DLL path edit did not refresh availability");
+        require(input.remove() && QDir().mkdir(dll), "cannot create non-file DLL fixture");
+        backend.refreshLosslessScaling();
+        require(backend.isLosslessScalingMissing(), "a directory was accepted as a DLL");
+    }
+    const auto saved = ls::ConfigFile(directory.filePath("conf.toml").toStdString()).profiles().front();
+    require(saved.scaling_enabled && saved.scaling_method == ls::ScalingMethod::Mako && !saved.frame_generation_provisioned,
+        "model-free profile settings did not persist without Lossless Scaling");
+    {
+        mako::ui::Backend reopened;
+        require(reopened.getEnableVkBasalt() && reopened.getVkBasaltShader() == QStringLiteral("vibrance"),
+            "shader settings did not persist without Lossless Scaling");
+    }
+    for (const auto& entry : {std::pair{"MAKO_CONFIG", previousConfig},
+            std::pair{"MAKO_LAUNCH_CONFIG", previousLaunch},
+            std::pair{"XDG_CONFIG_HOME", previousConfigHome},
+            std::pair{"MAKO_VKBASALT_SHADER_DIR", previousShaders}}) {
+        if (entry.second.isNull()) qunsetenv(entry.first);
+        else qputenv(entry.first, entry.second);
+    }
+}
+
 void test_power_profile_editor() {
     require_property("adaptive_target_refresh_rate", "bool", true, false);
     require_property("separate_power_modes", "bool", true, false);
@@ -858,6 +922,7 @@ int main(int argc, char* argv[]) {
     try {
         test_installed_launcher_selection();
         test_scaling_properties();
+        test_lossless_scaling_is_optional();
         test_power_profile_editor();
         test_multiplier_limits();
         test_fractional_adaptive_preset();

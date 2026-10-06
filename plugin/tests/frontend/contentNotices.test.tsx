@@ -10,8 +10,13 @@ vi.mock("@decky/ui", () => ({
   DialogButton: ({
     children,
     onClick,
+    onGamepadFocus: _onGamepadFocus,
+    onGamepadBlur: _onGamepadBlur,
     ...props
-  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+  }: React.ButtonHTMLAttributes<HTMLButtonElement> & {
+    onGamepadFocus?: () => void;
+    onGamepadBlur?: () => void;
+  }) => (
     <button onClick={onClick} {...props}>
       {children}
     </button>
@@ -33,6 +38,7 @@ vi.mock("../../src/components/MakoUi", () => ({
   MakoInlineTip: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
+  makoDialogButtonStyle: () => ({}),
   MakoCompactSpinner: () => <span>Working</span>,
   makoPanelDivider: "1px solid",
   makoPanelStyle: {},
@@ -95,14 +101,22 @@ describe("content status notices", () => {
       />,
     );
     const warning = screen.getByRole("alert");
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(
+      warning.contains(
+        screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
+      ),
+    ).toBe(true);
+    expect(warning.textContent).toContain("LS1 unavailable for this model");
     expect(warning.textContent).toContain(
-      "LS1 is unavailable for the selected model setting",
+      "Frame Generation unavailable for this model/precision",
     );
-    expect(warning.textContent).toContain("Frame Generation is unavailable at the selected precision or model setting");
     expect(warning.compareDocumentPosition(screen.getByRole("note")) & 4).toBe(
       4,
     );
-    fireEvent.click(screen.getByText("Check for MAKO Decky updates"));
+    fireEvent.click(
+      screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
+    );
     expect(Navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
       "https://github.com/eugeniosegala/MAKO/releases/latest",
     );
@@ -119,7 +133,7 @@ describe("content status notices", () => {
     expect(screen.queryByRole("alert")).toBeNull();
   });
 
-  test("a missing DLL shows no model warning, while active LS1 fallback with a DLL still does", () => {
+  test("a missing DLL explains both unavailable and independent features", () => {
     const { rerender } = render(
       <ContentNotices
         {...baseProps}
@@ -128,8 +142,35 @@ describe("content status notices", () => {
         }}
       />,
     );
-    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.getByRole("alert").textContent).toContain("Not found:");
+    expect(screen.getByRole("alert").textContent).toContain(
+      "Frame Generation and LS1 unavailable",
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "MAKO Scaler and Shaders available",
+    );
     expect(screen.queryByText("Check for MAKO Decky updates")).toBeNull();
+    fireEvent.click(
+      screen.getByRole("button", { name: "Open Lossless Scaling in Steam" }),
+    );
+    expect(Navigation.NavigateToExternalWeb).toHaveBeenCalledWith(
+      "https://store.steampowered.com/app/993090/Lossless_Scaling/",
+    );
+    rerender(
+      <ContentNotices {...baseProps} modelStatus={{ dllMissing: true }} />,
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "MAKO Scaler and Shaders available",
+    );
+    rerender(
+      <ContentNotices
+        {...baseProps}
+        modelStatus={{ dllMissing: true, ls1RuntimeFallback: true }}
+      />,
+    );
+    expect(screen.getByRole("alert").textContent).not.toContain(
+      "MAKO Scaler active",
+    );
     rerender(
       <ContentNotices
         {...baseProps}
@@ -140,7 +181,7 @@ describe("content status notices", () => {
       />,
     );
     expect(screen.getByRole("alert").textContent).toContain(
-      "MAKO Scaler is active",
+      "MAKO Scaler active",
     );
     expect(screen.getByRole("alert").textContent).not.toContain(
       "LSFG model check failed",

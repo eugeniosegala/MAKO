@@ -48,8 +48,6 @@ export function Content() {
     checkInstallation,
   } = useInstallationStatus();
 
-  const { dllDetected, dllDetectionStatus } = useDllDetection();
-
   const {
     config,
     vkBasaltConfigPath,
@@ -64,6 +62,10 @@ export function Content() {
     replaceConfig,
     loadMakoConfig,
   } = useMakoConfig();
+
+  const { dllDetected, dllMissing, dllDetectionStatus } = useDllDetection(
+    config.dll,
+  );
 
   const { updateProfileConfigFields, syncCurrentProfile } =
     useProfileManagement();
@@ -180,6 +182,7 @@ export function Content() {
           onInstall={onInstall}
           modelStatus={{
             ...modelStatus,
+            dllMissing: isInstalled && dllMissing,
             ls1RuntimeFallback:
               isInstalled &&
               !config.disable_mako &&
@@ -252,7 +255,6 @@ export function Content() {
                 config={config}
                 disabled={engineUpdateRequired}
                 runtimeState={scalingRuntimeState}
-                scalingModelCompatible={modelStatus.ls1?.compatible ?? null}
                 profileName={editingProfile}
                 vkBasaltConfigPath={vkBasaltConfigPath}
                 customShaderEffects={customShaderEffects}

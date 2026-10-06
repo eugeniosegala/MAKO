@@ -44,6 +44,7 @@ namespace mako::ui {
         Q_PROPERTY(bool capture_failed READ captureFailed NOTIFY runningGamesChanged)
 
         Q_PROPERTY(QString dll READ getDll WRITE dllUpdated NOTIFY refreshUI)
+        Q_PROPERTY(bool lossless_scaling_missing READ isLosslessScalingMissing NOTIFY refreshUI)
         Q_PROPERTY(bool allow_fp16 READ getAllowFP16 WRITE allowFP16Updated NOTIFY refreshUI)
         Q_PROPERTY(bool enable_zink READ getEnableZink WRITE enableZinkUpdated NOTIFY refreshUI)
         Q_PROPERTY(bool force_alsa_audio READ getForceAlsaAudio WRITE forceAlsaAudioUpdated NOTIFY refreshUI)
@@ -126,6 +127,8 @@ namespace mako::ui {
         Q_INVOKABLE bool openVkBasaltConfig();
         Q_INVOKABLE bool addCustomShader(const QString& path);
         Q_INVOKABLE void refreshCustomShaders();
+        Q_INVOKABLE void refreshLosslessScaling();
+        [[nodiscard]] bool isLosslessScalingMissing() const { return m_lossless_scaling_missing; }
 
         [[nodiscard]] static bool isFractionalAdaptivePresetEnabled(
                 const ls::GameConf& conf) noexcept {
@@ -554,6 +557,7 @@ namespace mako::ui {
                 conf.dll = std::nullopt;
             else
                 conf.dll = dll.toStdString();
+            refreshLosslessScaling();
             MARK_DIRTY()
         }
         void allowFP16Updated(bool allow_fp16) {
@@ -967,6 +971,7 @@ namespace mako::ui {
         std::vector<ls::VkBasaltConf> m_vkbasalt_profiles;
 
         QStringListModel* m_profile_list_model;
+        bool m_lossless_scaling_missing{false};
         int m_profile_index{-1};
 
         std::vector<QStringListModel*> m_active_in_list_models;

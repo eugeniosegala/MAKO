@@ -16,6 +16,7 @@ ApplicationWindow {
     minimumWidth: 700
     minimumHeight: 400
     visible: true
+    onActiveChanged: if (active) backend.refreshLosslessScaling()
 
     RunningGamesDialog {
         id: running_games_dialog
@@ -194,6 +195,27 @@ ApplicationWindow {
             ColumnLayout {
                 width: settings_scroll.availableWidth
                 spacing: 12
+
+                Group {
+                    objectName: "lossless_scaling_warning"
+                    name: t.losslessWarningTitle
+                    visible: backend.lossless_scaling_missing
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Label {
+                            Layout.fillWidth: true
+                            text: "• " + t.losslessWarningRequired
+                            textFormat: Text.PlainText
+                            wrapMode: Text.WordWrap
+                        }
+                        Button {
+                            text: t.losslessWarningInstallAction
+                            Accessible.name: t.losslessWarningOpenSteam
+                            onClicked: Qt.openUrlExternally("https://store.steampowered.com/app/993090/Lossless_Scaling/")
+                        }
+                    }
+                }
 
                 Group {
                     name: t.globalSettings

@@ -132,10 +132,11 @@ class DllDetectionService(BaseService):
         finally:
             self._model_lock.release()
 
-    def check_lossless_scaling_dll(self) -> DllDetectionResponse:
+    def check_lossless_scaling_dll(self, dll: str = "") -> DllDetectionResponse:
         """Check if Lossless Scaling DLL is available at the expected paths
 
-        Search order:
+        A non-empty configured path is authoritative and skips discovery.
+        Otherwise, search in this order:
         1. MAKO_DLL_PATH environment variable
         2. XDG_DATA_HOME Steam directory
         3. HOME/.local/share Steam directory
@@ -145,6 +146,20 @@ class DllDetectionService(BaseService):
             DllDetectionResponse with detection status and path information
         """
         try:
+            if not isinstance(dll, str):
+                raise ValueError("DLL path must be a string")
+            # A saved path is authoritative, as in Renderer model inspection.
+            # Do not report a different Steam copy as usable for this profile.
+            if dll:
+                detected = Path(dll).is_file()
+                return {
+                    "detected": detected,
+                    "path": dll if detected else None,
+                    "source": "configuration",
+                    "message": "Configured Lossless Scaling DLL found" if detected
+                    else "Configured Lossless Scaling DLL not found",
+                    "error": None,
+                }
             dll_path = self._check_env_dll_path()
             if dll_path:
                 return dll_path

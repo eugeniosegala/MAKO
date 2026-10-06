@@ -54,6 +54,19 @@ describe("Decky RPC contract", () => {
     ]);
   });
 
+  test("preserves optional discovery while forwarding an explicit DLL path", async () => {
+    const api = await import("../../src/api/makoApi");
+    await api.checkLosslessScalingDll();
+    await api.checkLosslessScalingDll("/library/owned.dll");
+    const index = callableMock.mock.calls.findIndex(
+      ([method]) => method === "check_lossless_scaling_dll",
+    );
+    const binding = callableMock.mock.results[index]?.value as ReturnType<
+      typeof vi.fn
+    >;
+    expect(binding.mock.calls).toEqual([[], ["/library/owned.dll"]]);
+  });
+
   test("forwards a complete configuration object without reshaping it", async () => {
     const api = await import("../../src/api/makoApi");
     const config = (

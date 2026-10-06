@@ -527,7 +527,7 @@ test.each(["welcome", "development"])(
         .getAllByRole("button", { hidden: true })
         .map((button) => button.textContent),
     ).toEqual([
-      "Check for MAKO Decky updates",
+      "Updates",
       "Update MAKO Renderer",
       "Copy Launch Option",
       "R1Show info",
@@ -586,18 +586,17 @@ test.each<{ name: string; status: ModelWarningProps; message: string }>([
   {
     name: "LSFG",
     status: { lsfg: { compatible: false, reason: "lsfg-unavailable" } },
-    message:
-      "Frame Generation is unavailable at the selected precision or model setting.",
+    message: "Frame Generation unavailable for this model/precision.",
   },
   {
     name: "LS1",
     status: { ls1: { compatible: false, reason: "ls1-unavailable" } },
-    message: "LS1 is unavailable for the selected model setting.",
+    message: "LS1 unavailable for this model; MAKO Scaler fallback.",
   },
   {
     name: "runtime fallback",
     status: { ls1RuntimeFallback: true },
-    message: "LS1 is unavailable for this game.",
+    message: "LS1 unavailable; MAKO Scaler active.",
   },
 ])(
   "$name warning stays readable when reopening with info hidden",
@@ -612,9 +611,7 @@ test.each<{ name: string; status: ModelWarningProps; message: string }>([
     const warning = screen.getByRole("alert");
     expect(warning.textContent).toContain(message);
     expect(screen.getByRole("listitem").textContent).toContain(message);
-    expect(warning.textContent).toContain(
-      "Some Lossless Scaling features may be unavailable:",
-    );
+    expect(warning.textContent).not.toContain("Some Lossless Scaling features");
     expect(isDisplayed(warning.querySelector('[role="note"]')!)).toBe(true);
     expect(screen.queryByText("Optional advice")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Show info" }));
@@ -642,8 +639,8 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
   expect(
     screen.getAllByRole("listitem").map((item) => item.textContent),
   ).toEqual([
-    "LS1 is unavailable for the selected model setting. MAKO Scaler preserves the selected precision.",
-    "Frame Generation is unavailable at the selected precision or model setting. Use a supported public Lossless Scaling model, or turn FP16 off for an FP32-only model.",
+    "LS1 unavailable for this model; MAKO Scaler fallback.",
+    "Frame Generation unavailable for this model/precision.",
   ]);
   const update = screen.getByRole("button", {
     name: "Check for MAKO Decky updates",
@@ -663,10 +660,10 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
   expect(screen.getByRole("alert")).toBe(warning);
   expect(screen.getAllByRole("listitem")).toHaveLength(2);
   expect(warning.textContent).toContain(
-    "LS1 is unavailable for this game. MAKO Scaler is active.",
+    "LS1 unavailable; MAKO Scaler active. LS1 selection kept.",
   );
   expect(warning.textContent).not.toContain(
-    "LS1 is unavailable for the selected model setting.",
+    "LS1 unavailable for this model; MAKO Scaler fallback.",
   );
   expect(
     screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
@@ -674,7 +671,7 @@ test("one model warning updates its bullets as failures, fallback, and recovery 
 
   rerender(panel({ ls1: { compatible: true, reason: null }, lsfg: failed }));
   expect(screen.getByRole("listitem").textContent).toContain(
-    "Frame Generation is unavailable at the selected precision or model setting.",
+    "Frame Generation unavailable for this model/precision.",
   );
   rerender(
     panel({
@@ -709,28 +706,48 @@ test.each<{ name: string; status: ModelWarningProps }>([
       ls1RuntimeFallback: true,
     },
   },
-])("a missing DLL suppresses the entire warning for $name", ({ status }) => {
-  const panel = (modelStatus: ModelWarningProps) => (
-    <InfoVisibility>
-      <ModelWarning {...modelStatus} />
-    </InfoVisibility>
-  );
-  const { rerender } = render(panel(status));
-  expect(screen.queryByRole("alert")).toBeNull();
-  expect(screen.queryByTestId("navigation-row")).toBeNull();
-  expect(
-    screen.queryByRole("button", { name: "Check for MAKO Decky updates" }),
-  ).toBeNull();
-  fireEvent.click(screen.getByRole("button", { name: "Hide info" }));
-  expect(screen.queryByRole("alert")).toBeNull();
-  // Installing a DLL can expose a real model failure; removing it clears the
-  // warning again without preserving a stale update action or empty row.
-  rerender(panel({ lsfg: { compatible: false, reason: "lsfg-unavailable" } }));
-  expect(screen.getByRole("alert")).toBeTruthy();
-  rerender(panel(status));
-  expect(screen.queryByRole("alert")).toBeNull();
-  expect(screen.queryByTestId("navigation-row")).toBeNull();
-});
+])(
+  "a missing DLL keeps independent-feature guidance visible for $name",
+  ({ status }) => {
+    const panel = (modelStatus: ModelWarningProps) => (
+      <InfoVisibility>
+        <ModelWarning {...modelStatus} />
+      </InfoVisibility>
+    );
+    const { rerender } = render(panel(status));
+    expect(screen.getAllByRole("alert")).toHaveLength(1);
+    expect(screen.getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.getByRole("alert").textContent).toContain(
+      "MAKO Scaler and Shaders available",
+    );
+    expect(
+      screen.getByRole("button", { name: "Open Lossless Scaling in Steam" }),
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole("button", { name: "Check for MAKO Decky updates" }),
+    ).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Hide info" }));
+    expect(screen.getByRole("alert").getAttribute("data-mako-info")).not.toBe(
+      "true",
+    );
+    expect(screen.getByRole("alert").textContent).toContain(
+      "MAKO Scaler and Shaders available",
+    );
+    rerender(
+      panel({ lsfg: { compatible: false, reason: "lsfg-unavailable" } }),
+    );
+    expect(
+      screen.getByRole("button", { name: "Check for MAKO Decky updates" }),
+    ).toBeTruthy();
+    rerender(panel(status));
+    expect(
+      screen.getByRole("button", { name: "Open Lossless Scaling in Steam" }),
+    ).toBeTruthy();
+    rerender(panel({}));
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByTestId("navigation-row")).toBeNull();
+  },
+);
 
 test("the model-warning update action keeps focus across R1 and still opens updates", () => {
   render(
@@ -746,9 +763,7 @@ test("the model-warning update action keeps focus across R1 and still opens upda
     pressButton(update);
     expect(document.activeElement).toBe(update);
     expect(isDisplayed(update)).toBe(true);
-    expect(screen.getByRole("alert").textContent).toContain(
-      "verify Lossless Scaling files and collect diagnostics",
-    );
+    expect(screen.getByRole("alert").contains(update)).toBe(true);
   }
   fireEvent.click(update);
   expect(Navigation.NavigateToExternalWeb).toHaveBeenCalledWith(

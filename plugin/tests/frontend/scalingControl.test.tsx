@@ -3,6 +3,16 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("@decky/ui", () => ({
+  DialogButton: ({
+    children,
+    onClick,
+    "aria-label": label,
+  }: React.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button onClick={onClick} aria-label={label}>
+      {children}
+    </button>
+  ),
+  Navigation: { NavigateToExternalWeb: vi.fn() },
   PanelSectionRow: ({ children }: { children: React.ReactNode }) => (
     <div>{children}</div>
   ),
@@ -118,6 +128,7 @@ vi.mock("../../src/i18n/i18n", () => ({
   default: (_key: string, fallback: string) => fallback,
 }));
 
+import { ModelWarning } from "../../src/components/ModelWarning";
 import { ScalingControl } from "../../src/components/ScalingControl";
 import {
   SCALING_ENABLED,
@@ -135,7 +146,7 @@ afterEach(cleanup);
 
 describe("Scaling controls", () => {
   test.each(["ls1", "ls1-performance"])(
-    "shows fallback guidance only for unavailable saved %s selections",
+    "keeps saved %s controls alongside one shared Lossless Scaling warning",
     (method) => {
       window.SP_REACT = React;
       const saved = {
@@ -144,105 +155,30 @@ describe("Scaling controls", () => {
         scaling_method: method,
       };
       const onConfigChange = vi.fn(async () => undefined);
-      const { rerender } = render(
-        <ScalingControl
-          config={saved}
-          modelCompatible={false}
-          onConfigChange={onConfigChange}
-        />,
+      const { container } = render(
+        <>
+          <ModelWarning
+            ls1={{ compatible: false, reason: "ls1-unavailable" }}
+          />
+          <ScalingControl config={saved} onConfigChange={onConfigChange} />
+        </>,
       );
+      expect(screen.getAllByRole("alert")).toHaveLength(1);
+      expect(screen.getAllByRole("listitem")).toHaveLength(1);
+      expect(
+        container
+          .querySelector('[data-field-label="Scaling Method"]')
+          ?.querySelector('[data-tone="warning"]'),
+      ).toBeNull();
       expect(
         screen
           .getByRole("button", { name: "Scaling Method" })
           .getAttribute("data-selected"),
       ).toBe(method);
-      expect(
-        screen.getByText(/LS1 failed the availability check/),
-      ).toBeTruthy();
-      expect(onConfigChange).not.toHaveBeenCalled();
       expect(saved.scaling_method).toBe(method);
-      for (const modelCompatible of [true, null]) {
-        rerender(
-          <ScalingControl
-            config={saved}
-            modelCompatible={modelCompatible}
-            onConfigChange={onConfigChange}
-          />,
-        );
-        expect(
-          screen.queryByText(/Your LS1 selection is preserved/),
-        ).toBeNull();
-      }
+      expect(onConfigChange).not.toHaveBeenCalled();
     },
   );
-
-  test("distinguishes a live fallback from a host preflight and ignores a previous model", () => {
-    window.SP_REACT = React;
-    const props = {
-      config: {
-        ...getDefaults(),
-        scaling_enabled: true,
-        scaling_method: "ls1",
-      },
-      modelCompatible: true,
-      runtimeRequestedMethod: "ls1",
-      runtimeMakoFallback: true,
-      runtimeActiveMethod: "mako",
-      onConfigChange: vi.fn(async () => undefined),
-    };
-    const { rerender } = render(<ScalingControl {...props} />);
-    expect(screen.getByText(/MAKO Scaler is active/)).toBeTruthy();
-    rerender(
-      <ScalingControl
-        {...props}
-        config={{ ...props.config, scaling_method: "ls1-performance" }}
-      />,
-    );
-    expect(screen.queryByText(/MAKO Scaler is active/)).toBeNull();
-    expect(screen.queryByText(/Your LS1 selection is preserved/)).toBeNull();
-    rerender(
-      <ScalingControl
-        {...props}
-        modelCompatible={false}
-        runtimeMakoFallback={false}
-        runtimeActiveMethod="ls1"
-      />,
-    );
-    expect(screen.queryByText(/Your LS1 selection is preserved/)).toBeNull();
-    expect(props.onConfigChange).not.toHaveBeenCalled();
-  });
-
-  test("fallback notices follow Ultra Performance and disappear for model-free scaling", () => {
-    window.SP_REACT = React;
-    const props = {
-      config: {
-        ...getDefaults(),
-        scaling_enabled: true,
-        scaling_method: "mako",
-        ultra_performance: true,
-      },
-      modelCompatible: false,
-      onConfigChange: vi.fn(async () => undefined),
-    };
-    const { rerender } = render(<ScalingControl {...props} />);
-    expect(
-      screen
-        .getByRole("button", { name: "Scaling Method" })
-        .getAttribute("data-selected"),
-    ).toBe("ls1-performance");
-    expect(
-      screen.getByText(/LS1 failed the availability check/),
-    ).toBeTruthy();
-    rerender(
-      <ScalingControl
-        {...props}
-        config={{ ...props.config, ultra_performance: false }}
-      />,
-    );
-    expect(
-      screen.queryByText(/LS1 failed the availability check/),
-    ).toBeNull();
-  });
 
   test("the master toggle hides and shows every dependent control", () => {
     window.SP_REACT = React;
@@ -311,12 +247,12 @@ describe("Scaling controls", () => {
         /If the game sets window size, lower its resolution in-game first/,
       ),
     ).toBeTruthy();
-    expect(screen.getByText(/With fixed output, MAKO requests a smaller game image/)).toBeTruthy();
+    expect(
+      screen.getByText(/With fixed output, MAKO requests a smaller game image/),
+    ).toBeTruthy();
     expect(screen.queryByText(/guarded game-owned recreation/)).toBeNull();
     expect(
-      screen.getByText(
-        /MAKO: 0–100% of its 3x sharpening baseline/,
-      ),
+      screen.getByText(/MAKO: 0–100% of its 3x sharpening baseline/),
     ).toBeTruthy();
     expect(screen.queryByText(/private scaler rebuild/)).toBeNull();
     expect(
@@ -399,9 +335,7 @@ describe("Scaling controls", () => {
     const expanded = screen.getByText("Scale Factor (1.8x)");
     expect(expanded.getAttribute("data-maximum")).toBe("2");
     expect(
-      screen.getByText(
-        /MAKO may exceed an applicable Gamescope output limit/,
-      ),
+      screen.getByText(/MAKO may exceed an applicable Gamescope output limit/),
     ).toBeTruthy();
   });
 

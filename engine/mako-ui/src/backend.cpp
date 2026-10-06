@@ -19,6 +19,7 @@
 #include "backend.hpp"
 #include "utils.hpp"
 #include "mako-common/helpers/errors.hpp"
+#include "mako-common/helpers/paths.hpp"
 #include "mako-common/configuration/config.hpp"
 #include "mako-common/configuration/launch.hpp"
 #include "mako-common/configuration/vkbasalt.hpp"
@@ -97,6 +98,7 @@ Backend::Backend(std::filesystem::path procRoot) : m_proc_root(std::move(procRoo
 
     this->m_global = config.global();
     this->m_profiles = config.profiles();
+    this->refreshLosslessScaling();
 
     ls::LaunchConfigFile launchConfig{};
     const auto launchPath = ls::findLaunchConfigurationFile();
@@ -152,6 +154,25 @@ Backend::Backend(std::filesystem::path procRoot) : m_proc_root(std::move(procRoo
     this->m_save_timer.setSingleShot(true);
     this->m_save_timer.setInterval(500);
     connect(&this->m_save_timer, &QTimer::timeout, this, &Backend::savePendingChanges);
+}
+
+void Backend::refreshLosslessScaling() {
+    bool missing = false;
+    try {
+        const auto path = m_global.dll.has_value()
+            ? std::filesystem::path(*m_global.dll) : ls::findShaderDll();
+        std::error_code error;
+        const bool found = std::filesystem::is_regular_file(path, error);
+        missing = !found && (!error || error == std::errc::no_such_file_or_directory);
+    } catch (const ls::error&) {
+        missing = true;
+    } catch (const std::filesystem::filesystem_error&) {
+        // A filesystem failure is not proof that the installation is missing.
+    }
+    if (missing != m_lossless_scaling_missing) {
+        m_lossless_scaling_missing = missing;
+        emit refreshUI();
+    }
 }
 
 void Backend::loadVkBasaltProfiles() {

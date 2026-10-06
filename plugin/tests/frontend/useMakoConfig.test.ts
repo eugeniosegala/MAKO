@@ -36,6 +36,7 @@ vi.mock("../../src/i18n/i18n", () => ({
 
 import {
   useInstallationStatus,
+  useDllDetection,
   useMakoConfig,
 } from "../../src/hooks/useMakoHooks";
 
@@ -77,6 +78,64 @@ describe("native host installation boundary", () => {
     expect(result.current.installationStatus).toBe(
       "MAKO Renderer not installed",
     );
+  });
+});
+
+describe("Lossless Scaling availability", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    cleanup();
+    vi.useRealTimers();
+  });
+
+  test("checks the saved path, refreshes after install, and ignores stale profile results", async () => {
+    let finishOld!: (value: { detected: boolean; error: null }) => void;
+    mocks.checkLosslessScalingDll.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishOld = resolve;
+      }),
+    );
+    mocks.checkLosslessScalingDll.mockResolvedValue({
+      detected: false,
+      error: null,
+    });
+    const { result, rerender } = renderHook((dll) => useDllDetection(dll), {
+      initialProps: "/old.dll",
+    });
+    expect(result.current.dllMissing).toBe(false);
+    rerender("/new.dll");
+    await act(async () => {});
+    expect(mocks.checkLosslessScalingDll).toHaveBeenLastCalledWith("/new.dll");
+    expect(result.current.dllMissing).toBe(true);
+    expect(result.current.dllDetectionStatus).toContain(
+      "Lossless Scaling not found",
+    );
+    await act(async () => finishOld({ detected: true, error: null }));
+    expect(result.current.dllMissing).toBe(true);
+    mocks.checkLosslessScalingDll.mockResolvedValue({
+      detected: true,
+      error: null,
+    });
+    await act(() => vi.advanceTimersByTimeAsync(30000));
+    expect(result.current.dllMissing).toBe(false);
+    expect(result.current.dllDetected).toBe(true);
+  });
+
+  test("RPC and discovery failures stay unknown instead of claiming a missing installation", async () => {
+    mocks.checkLosslessScalingDll.mockRejectedValue(new Error("offline"));
+    const { result } = renderHook(() => useDllDetection());
+    await act(async () => {});
+    expect(result.current.dllMissing).toBe(false);
+    expect(result.current.dllDetectionStatus).toContain("Unable to check");
+    mocks.checkLosslessScalingDll.mockResolvedValue({
+      detected: false,
+      error: "permission denied",
+    });
+    await act(() => vi.advanceTimersByTimeAsync(30000));
+    expect(result.current.dllMissing).toBe(false);
   });
 });
 

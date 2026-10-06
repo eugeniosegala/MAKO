@@ -12,6 +12,10 @@ Use **MAKO Renderer Configuration** (`mako-ui`) or edit `~/.config/mako-render/c
 
 Options marked **Restart** apply on the next launch. See [Runtime transitions](RUNTIME-TRANSITIONS.md) for the complete live-update contract.
 
+## Lossless Scaling availability
+
+Lossless Scaling is optional. The Qt UI keeps profiles, Frame Generation, Scaling, and Shaders accessible when the DLL is missing and displays one compact **Lossless Scaling** notice with an availability bullet and an **Install** action. Turn Frame Generation off and choose **MAKO Scaler** and/or **Shaders** for a setup without it. Saved and environment DLL paths are retained even when their files are absent; availability is checked by the features that need the DLL rather than by configuration parsing. Install Lossless Scaling or correct its path for Frame Generation and LS1, then restart the game. The notice refreshes after a DLL path edit or when the Qt window becomes active.
+
 ## Profiles
 
 Profiles are selected automatically through `active_in`, which may contain Linux executables, Windows executables, process names, or executable-path suffixes. `MAKO_PROFILE` selects an exact profile name and takes priority over automatic matching.

@@ -12,6 +12,10 @@ MAKO Decky saves settings automatically. Options marked **Restart** apply the ne
 
 Test one feature at a time at first. If Frame Generation, Scaling, or Shaders do not work, try Fullscreen, Borderless Fullscreen, and Windowed; support varies by game. A display-mode change can also change the resolution MAKO processes. Try the game's V-Sync setting both on and off and keep whichever feels smoother for that game.
 
+## Lossless Scaling availability
+
+Lossless Scaling is optional. After installing MAKO Renderer, all Image Processing tabs and profiles remain accessible without it. One compact **Lossless Scaling** warning lists the current missing-DLL, model, or runtime fallback status. Its bullets update as availability changes; a missing DLL explains that Frame Generation and LS1 are unavailable while **MAKO Scaler** and **Shaders** remain available. **Install** or **Updates** appears in the warning header. For a setup without Lossless Scaling, turn Frame Generation off, choose MAKO Scaler under Scaling, and/or enable Shaders. A missing saved DLL path does not discard your profile or change your selections. Install Lossless Scaling or correct its DLL path to use its features; restart the game afterward. The panel rechecks availability while open.
+
 ## Profiles
 
 The **Default** profile applies when no saved game or process profile matches. Saving a game profile records its Steam app ID and safe process names so MAKO can select it automatically on later launches.

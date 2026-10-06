@@ -44,6 +44,27 @@ class ScalingModelStatusTests(unittest.TestCase):
     def check(self, method="ls1", sharpness=0.8):
         return self.service.check_scaling_model(str(self.dll), method, sharpness)
 
+    def test_availability_checks_configured_path_without_loading_models(self):
+        with patch.object(self.service, "_check_env_dll_path") as discovery:
+            result = self.service.check_lossless_scaling_dll(str(self.dll))
+            self.assertTrue(result["detected"])
+            self.assertEqual(result["path"], str(self.dll))
+            self.dll.unlink()
+            result = self.service.check_lossless_scaling_dll(str(self.dll))
+            self.assertFalse(result["detected"])
+            self.assertIsNone(result["error"])
+            self.dll.mkdir()
+            self.assertFalse(self.service.check_lossless_scaling_dll(str(self.dll))["detected"])
+            discovery.assert_not_called()
+        self.runner.assert_not_called()
+
+    def test_availability_errors_are_distinct_from_missing_dll(self):
+        with patch.object(Path, "is_file", side_effect=PermissionError("denied")):
+            result = self.service.check_lossless_scaling_dll(str(self.dll))
+            self.assertFalse(result["detected"])
+            self.assertIsNotNone(result["error"])
+        self.assertIsNotNone(self.service.check_lossless_scaling_dll(None)["error"])
+
     def test_selected_model_uses_runtime_inspector_and_does_not_modify_input(self):
         original = self.dll.read_bytes()
         for method in ("ls1", "ls1-performance"):

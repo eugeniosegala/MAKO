@@ -16,7 +16,6 @@ import { ModalityTabs, type ModalityId } from "./ModalityTabs";
 interface FeatureSettingsProps extends ConfigurationEditorProps {
   disabled?: boolean;
   runtimeState: RuntimeScalingUiState;
-  scalingModelCompatible?: boolean | null;
   profileName: string;
   vkBasaltConfigPath: string;
   customShaderEffects?: CustomShaderEffect[];
@@ -28,7 +27,6 @@ export function FeatureSettings({
   config,
   disabled = false,
   runtimeState,
-  scalingModelCompatible = null,
   profileName,
   vkBasaltConfigPath,
   customShaderEffects,
@@ -92,16 +90,6 @@ export function FeatureSettings({
             runtimeActivationSupported={runtimeState.scalingActivationSupported}
             runtimeInactiveReason={runtimeState.inactiveReason}
             runtimeFactorCeiling={runtimeState.nonSupersamplingFactorCeiling}
-            modelCompatible={scalingModelCompatible}
-            runtimeRequestedMethod={runtimeState.requestedMethod}
-            runtimeActiveMethod={
-              runtimeState.scalingActive ? runtimeState.activeMethod : null
-            }
-            runtimeMakoFallback={
-              runtimeState.scalingActive &&
-              runtimeState.activeMethod === "mako" &&
-              Boolean(runtimeState.fallbackReason)
-            }
             onConfigChange={onConfigChange}
           />
         )}

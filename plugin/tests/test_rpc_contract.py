@@ -108,6 +108,15 @@ class RpcContractTests(unittest.TestCase):
         self.assertEqual(len(frontend_bindings), len(set(frontend_bindings)))
         self.assertEqual(set(frontend_bindings), backend_methods)
 
+    def test_dll_availability_accepts_an_optional_authoritative_path(self):
+        from py_modules.mako_plugin.plugin import Plugin
+        import inspect
+        parameter = inspect.signature(Plugin.check_lossless_scaling_dll).parameters["dll"]
+        self.assertEqual(parameter.default, "")
+        self.assertIs(parameter.annotation, str)
+        frontend = (PLUGIN_ROOT / "src/api/makoApi.ts").read_text()
+        self.assertIn("checkLosslessScalingDll = callable<[string?], DllDetectionResult>", frontend)
+
     def test_shared_response_field_names_match_frontend_interfaces(self):
         frontend_source = (
             PLUGIN_ROOT / "src/api/makoApi.ts"

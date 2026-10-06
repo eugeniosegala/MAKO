@@ -30,10 +30,6 @@ interface ScalingControlProps extends ConfigurationControlProps {
   runtimeActivationSupported?: boolean | null;
   runtimeInactiveReason?: string | null;
   runtimeFactorCeiling?: number | null;
-  modelCompatible?: boolean | null;
-  runtimeRequestedMethod?: string | null;
-  runtimeMakoFallback?: boolean;
-  runtimeActiveMethod?: string | null;
 }
 
 export function ScalingControl({
@@ -42,21 +38,10 @@ export function ScalingControl({
   runtimeActivationSupported = null,
   runtimeInactiveReason = null,
   runtimeFactorCeiling = null,
-  modelCompatible = null,
-  runtimeRequestedMethod = null,
-  runtimeMakoFallback = false,
-  runtimeActiveMethod = null,
   onConfigChange,
 }: ScalingControlProps) {
   const effectiveScalingMethod = resolveScalingMethod(config);
   const scalerActive = effectiveScalingMethod !== SCALING_METHOD_NATIVE;
-  const ls1Selected =
-    effectiveScalingMethod === SCALING_METHOD_LS1 ||
-    effectiveScalingMethod === SCALING_METHOD_LS1_PERFORMANCE;
-  const activeFallback =
-    runtimeMakoFallback && runtimeRequestedMethod === effectiveScalingMethod;
-  const modelUnavailable =
-    modelCompatible === false && runtimeActiveMethod !== effectiveScalingMethod;
   const runningSurfaceUnsupported =
     runtimeActivationSupported === false ||
     runtimeInactiveReason === "gamescope-wsi-surface-unproven";
@@ -117,12 +102,10 @@ export function ScalingControl({
               badgeLabel={t("EXPERIMENTAL_LABEL", "Experimental")}
             />
           }
-          description={
-            t(
-              "SCALING_ENABLED_DESC",
-              "Enable before launch for Lossless Scaling or MAKO Scaler; off disables scaling. Test Fullscreen, Borderless Fullscreen, or Windowed if Scaling does not work.",
-            )
-          }
+          description={t(
+            "SCALING_ENABLED_DESC",
+            "Enable before launch for Lossless Scaling or MAKO Scaler; off disables scaling. Test Fullscreen, Borderless Fullscreen, or Windowed if Scaling does not work.",
+          )}
           checked={config.scaling_enabled}
           disabled={disabled}
           bottomSeparator={config.scaling_enabled ? undefined : "none"}
@@ -173,19 +156,6 @@ export function ScalingControl({
                   onConfigChange(SCALING_METHOD, String(option.data))
                 }
               />
-              {ls1Selected && (activeFallback || modelUnavailable) && (
-                <MakoInlineTip tone="warning">
-                  {activeFallback
-                    ? t(
-                        "SCALING_LS1_ACTIVE_FALLBACK",
-                        "LS1 is unavailable for this game. MAKO Scaler is active. Your LS1 selection is preserved.",
-                      )
-                    : t(
-                        "SCALING_LS1_UNAVAILABLE",
-                        "LS1 failed the availability check. MAKO Scaler takes over if LS1 cannot load; your selection stays saved.",
-                      )}
-                </MakoInlineTip>
-              )}
             </Field>
           </PanelSectionRow>
 

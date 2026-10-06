@@ -75,6 +75,8 @@ Adaptive display-refresh matching is covered by `profile-update`, native configu
 
 Custom shader UI coverage includes native FX discovery and registration in `standalone-launch-configuration`, Qt file-URL import and persistence in `ui-backend-contract`, and Decky game-profile, schema/RPC, catalog loading, and effect-selector tests. Fixtures cover quoted paths, comments, duplicate assignments, alias collisions, case-sensitive IDs, legacy chain preservation, mixed ordering, clearing without removing definitions, profile copies, and invalid imports. These use synthetic local files and do not prove shader compilation, pixel output, Flatpak filesystem access, or real game compatibility.
 
+Optional Lossless Scaling coverage includes file and environment profile parsing in `watched-configuration`, Qt missing-path detection and model-free setting persistence in `ui-backend-contract`, and Decky discovery, RPC, panel access, warning visibility, and availability-refresh tests. Synthetic files cover removal, configured-path precedence, directories, stale replies, and unknown discovery failures without loading licensed models. These tests do not prove actual MAKO Scaler or shader rendering, Gamescope, or Flatpak launches without Lossless Scaling; qualify those separately on hardware.
+
 ## Selecting MAKO Gym coverage
 
 MAKO Gym is an optional sibling checkout for targeted hardware work. The bridge skips clearly when Gym is absent unless `--require` is used; required mode also rejects a missing runner or incompatible `GYM_CONTRACT_VERSION`.

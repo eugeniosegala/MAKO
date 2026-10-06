@@ -303,7 +303,7 @@ export const uninstallMako = callable<[], InstallationResult>("uninstall_mako");
 export const checkMakoInstalled = callable<[], InstallationStatus>(
   "check_mako_installed",
 );
-export const checkLosslessScalingDll = callable<[], DllDetectionResult>(
+export const checkLosslessScalingDll = callable<[string?], DllDetectionResult>(
   "check_lossless_scaling_dll",
 );
 export const checkScalingModel = callable<
