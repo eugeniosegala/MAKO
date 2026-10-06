@@ -701,44 +701,6 @@ ApplicationWindow {
                                 onClicked: effectsDialog.open()
                             }
 
-                            RowLayout {
-                                Layout.fillWidth: true
-                                Layout.topMargin: 8
-                                spacing: 8
-                                ShaderActionButton {
-                                    Layout.preferredWidth: 1
-                                    text: t.addCustomShader
-                                    onClicked: customShaderPicker.open()
-                                }
-                                ShaderActionButton {
-                                    Layout.preferredWidth: 1
-                                    text: t.refreshCustomShaders
-                                    onClicked: backend.refreshCustomShaders()
-                                }
-                            }
-                            Label {
-                                Layout.fillWidth: true
-                                Layout.topMargin: 4
-                                text: t.customShaderHelp
-                                wrapMode: Text.WordWrap
-                                font.pixelSize: 10
-                                color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
-                            }
-                            ShaderActionButton {
-                                Layout.topMargin: 8
-                                text: t.deleteSelectedCustomShaders
-                                enabled: backend.vkbasalt_shader.split(":").some(function(id) { return id.indexOf("custom/") === 0; })
-                                opacity: enabled ? 1.0 : 0.45
-                                palette.button: "#64253a"
-                                palette.buttonText: "#fff0f5"
-                                onClicked: backend.deleteSelectedCustomShaders()
-                            }
-                            Label {
-                                Layout.fillWidth: true
-                                visible: backend.shader_load_error.length > 0
-                                text: backend.shader_load_error
-                                wrapMode: Text.WordWrap
-                            }
                             FileDialog {
                                 id: customShaderPicker
                                 title: t.addCustomShader
@@ -820,6 +782,52 @@ ApplicationWindow {
                                     }
                                 }
                             }
+                        }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        visible: backend.enable_vkbasalt
+                        spacing: 8
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+                            ShaderActionButton {
+                                Layout.preferredWidth: 1
+                                Layout.fillHeight: true
+                                text: t.addCustomShader
+                                onClicked: customShaderPicker.open()
+                            }
+                            ShaderActionButton {
+                                Layout.preferredWidth: 1
+                                Layout.fillHeight: true
+                                text: t.refreshCustomShaders
+                                onClicked: backend.refreshCustomShaders()
+                            }
+                            ShaderActionButton {
+                                Layout.preferredWidth: 1
+                                Layout.fillHeight: true
+                                text: t.deleteSelectedCustomShaders
+                                enabled: backend.vkbasalt_shader.split(":").some(function(id) { return id.indexOf("custom/") === 0; })
+                                opacity: enabled ? 1.0 : 0.45
+                                palette.button: "#64253a"
+                                palette.buttonText: "#fff0f5"
+                                onClicked: backend.deleteSelectedCustomShaders()
+                            }
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            text: t.customShaderHelp
+                            wrapMode: Text.WordWrap
+                            font.pixelSize: 10
+                            color: Qt.rgba(palette.text.r, palette.text.g, palette.text.b, 0.7)
+                        }
+                        Label {
+                            Layout.fillWidth: true
+                            visible: backend.shader_load_error.length > 0
+                            text: backend.shader_load_error
+                            wrapMode: Text.WordWrap
                         }
                     }
 
